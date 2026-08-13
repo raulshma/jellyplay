@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
@@ -108,6 +109,7 @@ class DetailViewModelTest {
     private lateinit var themeMusicPlayer: ThemeMusicPlayer
     private lateinit var tmdbApiClient: TmdbApiClient
     private lateinit var arrRepository: ArrRepository
+    private lateinit var syncPlayManager: SyncPlayManager
 
     private lateinit var viewModel: DetailViewModel
 
@@ -140,6 +142,7 @@ class DetailViewModelTest {
         themeMusicPlayer = mockk(relaxed = true)
         tmdbApiClient = mockk(relaxed = true)
         arrRepository = mockk(relaxed = true)
+        syncPlayManager = mockk(relaxed = true)
 
         every { projections.detailPreferences } returns MutableStateFlow(DetailPreferences())
         every { libraryStore.library } returns MutableStateFlow(LibrarySlice())
@@ -237,6 +240,7 @@ class DetailViewModelTest {
             themeMusicPlayer = themeMusicPlayer,
             tmdbApiClient = tmdbApiClient,
             arrRepository = arrRepository,
+            syncPlayManager = syncPlayManager,
         )
     }
 
@@ -393,7 +397,10 @@ class DetailViewModelTest {
         viewModel.loadItem("m1")
         advanceUntilIdle()
 
-        assertEquals("boom", viewModel.uiState.value.error)
+        val err = viewModel.uiState.value.loadState
+        assertTrue(err is DetailUiLoadState.Error)
+        assertEquals("boom", (err as DetailUiLoadState.Error).message)
+        assertFalse((err as DetailUiLoadState.Error).unavailableOffline)
         assertNull(viewModel.uiState.value.detail)
         // The flow was consumed.
         assertNotNull(flow)
@@ -407,8 +414,10 @@ class DetailViewModelTest {
         viewModel.loadItem("m1")
         advanceUntilIdle()
 
-        assertEquals("unavailable offline", viewModel.uiState.value.error)
-        assertFalse(viewModel.uiState.value.isAccessDenied)
+        val err = viewModel.uiState.value.loadState as DetailUiLoadState.Error
+        assertEquals("unavailable offline", err.message)
+        assertFalse(err.accessDenied)
+        assertTrue(err.unavailableOffline)
     }
 
     @Test
@@ -422,8 +431,10 @@ class DetailViewModelTest {
         viewModel.loadItem("m1")
         advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.isAccessDenied)
-        assertEquals("no access", viewModel.uiState.value.error)
+        val err = viewModel.uiState.value.loadState as DetailUiLoadState.Error
+        assertTrue(err.accessDenied)
+        assertEquals("no access", err.message)
+        assertFalse(err.unavailableOffline)
     }
 
     // The single SharedFlow<DetailMessage> must surface exactly one event per
@@ -472,7 +483,7 @@ class DetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { mediaDetailProvider.refresh(any()) }
-        assertFalse(viewModel.uiState.value.isRefreshing)
+        assertFalse(viewModel.uiState.value.loadState is DetailUiLoadState.Refreshing)
     }
 
     @Test
@@ -496,12 +507,12 @@ class DetailViewModelTest {
         // Unlike loadItem, the detail must stay on screen during the refresh —
         // no full-screen loading state, just the pull-to-refresh indicator.
         assertNotNull(viewModel.uiState.value.detail)
-        assertTrue(viewModel.uiState.value.isRefreshing)
-        assertFalse(viewModel.uiState.value.isLoading)
+        assertTrue(viewModel.uiState.value.loadState is DetailUiLoadState.Refreshing)
+        assertFalse(viewModel.uiState.value.loadState is DetailUiLoadState.Loading)
 
         gate.complete(Unit)
         advanceUntilIdle()
-        assertFalse(viewModel.uiState.value.isRefreshing)
+        assertFalse(viewModel.uiState.value.loadState is DetailUiLoadState.Refreshing)
         assertEquals("m1", viewModel.uiState.value.detail?.item?.id)
     }
 
@@ -521,7 +532,7 @@ class DetailViewModelTest {
 
         // The VM delegates invalidation + refetch to the provider (called once).
         coVerify(exactly = 1) { mediaDetailProvider.refresh("m1") }
-        assertFalse(viewModel.uiState.value.isRefreshing)
+        assertFalse(viewModel.uiState.value.loadState is DetailUiLoadState.Refreshing)
     }
 
     @Test
@@ -557,8 +568,9 @@ class DetailViewModelTest {
         viewModel.forceRefresh()
         advanceUntilIdle()
 
-        assertFalse(viewModel.uiState.value.isRefreshing)
-        assertEquals("boom", viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.loadState is DetailUiLoadState.Refreshing)
+        val err = viewModel.uiState.value.loadState as DetailUiLoadState.Error
+        assertEquals("boom", err.message)
     }
 
     @Test

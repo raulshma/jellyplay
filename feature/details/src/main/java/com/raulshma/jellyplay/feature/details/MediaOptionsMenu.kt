@@ -15,6 +15,7 @@ import com.composables.icons.tabler.outline.Playlist
 import com.composables.icons.tabler.outline.Share
 import com.composables.icons.tabler.outline.Stack2
 import com.composables.icons.tabler.outline.Trash
+import com.composables.icons.tabler.outline.Users
 import com.composables.icons.tabler.outline.WaveSine
 import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -83,6 +84,8 @@ internal fun rememberMediaOptions(
     onAddToPlaylist: () -> Unit,
     onAddToCollection: () -> Unit = {},
     onStartInstantMix: () -> Unit = {},
+    onStartWatchParty: () -> Unit = {},
+    canStartWatchParty: Boolean = false,
 ): List<MediaOption> {
     // Download status / progress, resolved once for both the label and the
     // enabled flag so the two menus stay in lock-step.
@@ -120,14 +123,15 @@ internal fun rememberMediaOptions(
     val labelAddToCollection = stringResource(R.string.detail_option_add_to_collection)
     val labelDeleteDownloads = stringResource(R.string.detail_option_delete_downloads)
     val labelInstantMix = stringResource(R.string.detail_option_instant_mix)
+    val labelWatchParty = stringResource(R.string.detail_option_watch_party)
 
     return remember(item, detail, itemId, isAudio, isSeries, seasons, preferences.showShareMediaOption,
         preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds, preferences.showDetailUpNext,
         activeDownload, isDownloading, isDownloadingSeries, isDownloadActive, isDownloadCompleted,
         downloadStatus, downloadProgress, canManageSeries, canDeleteDownloadedSeries, canEditMetadata,
-        canAddToPlaylist, canAddToCollection, canInstantMix, isOffline, labelManageSeries,
+        canAddToPlaylist, canAddToCollection, canInstantMix, canStartWatchParty, isOffline, labelManageSeries,
         labelAddToPlaylist, labelDeleteDownloads, labelInstantMix, labelAddToCollection,
-        labelHideDetailUpNext, labelShowDetailUpNext) {
+        labelHideDetailUpNext, labelShowDetailUpNext, labelWatchParty) {
         buildList {
             // Metadata editor is a remote-only action (feature matrix: local = No);
             // gated on remoteDiscovery so a local origin never offers a server
@@ -218,6 +222,16 @@ internal fun rememberMediaOptions(
             if (canInstantMix) {
                 add(MediaOption(labelInstantMix, Tabler.Outline.WaveSine) {
                     onClose(); onStartInstantMix()
+                })
+            }
+            // Watch Party: bootstraps a SyncPlay group for the current item and
+            // opens the player. Requires a working server + connectivity, gated
+            // on capabilities.remoteWorkAllowed (resolved in DetailContent). No
+            // invite link / share / deep-link — the player auto-detects the
+            // active session once the group is joined + the queue is seeded.
+            if (canStartWatchParty) {
+                add(MediaOption(labelWatchParty, Tabler.Outline.Users) {
+                    onClose(); onStartWatchParty()
                 })
             }
             if (isSeries || item?.seriesId != null) {

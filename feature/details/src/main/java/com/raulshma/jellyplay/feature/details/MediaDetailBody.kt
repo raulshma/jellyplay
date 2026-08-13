@@ -777,6 +777,7 @@ internal fun DetailContentBody(
                         getImageUrl = callbacks.getImageUrl,
                         currentItemId = if (item.mediaType == MediaType.EPISODE) item.id else null,
                         currentSeasonId = if (item.mediaType == MediaType.EPISODE) item.seasonId else null,
+                        persistedSeasonId = state.persistedSeasonId,
                         onEpisodePlayClick = { episode ->
                             val sourceId = null
                             val startPos = episode.playbackPositionTicks ?: 0L
@@ -788,6 +789,7 @@ internal fun DetailContentBody(
                         onEpisodeLongPress = callbacks.onMediaQuickActions,
                         onFocusedEpisodeChange = callbacks.onFocusedMediaItem,
                         onSeasonSelected = callbacks.onSeasonSelected,
+                        onSeasonPinned = callbacks.onSeasonPinned,
                         hideEpisodeThumbnails = effectiveHideThumbnails,
                         episodesDescending = effectiveEpisodesDescending,
                         onEpisodesDescendingChange = callbacks.onEpisodesDescendingChange,

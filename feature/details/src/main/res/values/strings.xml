@@ -144,6 +144,12 @@
     <string name="detail_instant_mix_empty">No mix available for this item</string>
     <string name="detail_instant_mix_failed">Couldn\'t start instant mix</string>
 
+    <!-- ── Watch Party (SyncPlay) ──────────────────────────────────────── -->
+    <string name="detail_option_watch_party">Start watch party</string>
+    <string name="detail_watch_party_default_name">Watch party</string>
+    <string name="detail_msg_watch_party_started">Watch party started</string>
+    <string name="detail_msg_watch_party_failed">Couldn\'t start watch party</string>
+
     <!-- ── Stream picker (audio / subtitle) ─────────────────────────────── -->
     <string name="detail_select_audio">Select Audio</string>
     <string name="detail_select_subtitle">Select Subtitle</string>

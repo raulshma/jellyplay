@@ -35,15 +35,19 @@ internal data class DetailContentState(
     val episodes: Map<String, List<MediaItem>>,
     val fetchedSeasonIds: Set<String>,
     val smartPlayTarget: DetailUiState.SmartPlayTarget?,
+    /**
+     * Season id the user last pinned for the current series (resolved by
+     * `MediaDetailScreen` from `DetailPreferences.lastViewedSeasonBySeries`).
+     * Fed into `SeasonsSection` as `persistedSeasonId`; an active resume still
+     * takes precedence. Null when nothing is pinned → prior behaviour.
+     */
+    val persistedSeasonId: String? = null,
     val selectedSubtitleIndex: Int?,
     val selectedAudioIndex: Int?,
     val isDownloading: Boolean,
     val isDownloadingSeries: Boolean,
     val activeDownload: DownloadItem?,
-    val isLoading: Boolean,
-    val isRefreshing: Boolean,
-    val error: String?,
-    val isAccessDenied: Boolean,
+    val loadState: DetailUiLoadState,
     val albumTracks: List<MediaItem>,
     val collectionItems: List<MediaItem>,
     val relatedItems: List<MediaItem>,
@@ -138,6 +142,11 @@ internal data class DetailContentCallbacks(
     val onSeeAllCast: () -> Unit = {},
     val onNavigateToSeries: (String) -> Unit,
     val onSeasonSelected: (String) -> Unit,
+    /**
+     * Persists the user's season-tab choice for the current series. Fires only
+     * on a user-initiated tab select (never from the init `LaunchedEffect`).
+     */
+    val onSeasonPinned: (String) -> Unit = {},
     val onEpisodesDescendingChange: (Boolean) -> Unit,
     val onCompactEpisodeListChange: (Boolean) -> Unit,
     val onBack: () -> Unit,
@@ -158,6 +167,11 @@ internal data class DetailContentCallbacks(
     val onAddToCollection: () -> Unit = {},
     /** Start an instant mix for the current audio item (fire-and-forget VM action). */
     val onStartInstantMix: () -> Unit = {},
+    /**
+     * Bootstrap a SyncPlay watch party for the current item and open the player
+     * (fire-and-forget VM action; success navigates via DetailMessage).
+     */
+    val onStartWatchParty: () -> Unit = {},
     /** Open the quick-action sheet for a row item */
     val onMediaQuickActions: (MediaItem) -> Unit = {},
     /** Track the TV-focused row item so the Menu key can open its quick actions. */

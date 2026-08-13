@@ -117,12 +117,15 @@ internal fun DetailBodyLandscape(
                     showActionButtons = false,
                 )
             }
-        } else if (state.error != null) {
-            ErrorScreen(
-                message = state.error,
-                onRetry = if (state.isAccessDenied) null else callbacks.onRetry,
-                modifier = Modifier.weight(1f),
-            )
+        } else {
+            val err = state.loadState as? DetailUiLoadState.Error
+            if (err != null) {
+                ErrorScreen(
+                    message = err.message,
+                    onRetry = if (err.accessDenied) null else callbacks.onRetry,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }
@@ -216,11 +219,14 @@ internal fun DetailBodyPortrait(
                     contentFocusRequester = contentFocusRequester,
                 )
             }
-        } else if (state.error != null) {
-            ErrorScreen(
-                message = state.error,
-                onRetry = if (state.isAccessDenied) null else callbacks.onRetry,
-            )
+        } else {
+            val err = state.loadState as? DetailUiLoadState.Error
+            if (err != null) {
+                ErrorScreen(
+                    message = err.message,
+                    onRetry = if (err.accessDenied) null else callbacks.onRetry,
+                )
+            }
         }
     }
 }

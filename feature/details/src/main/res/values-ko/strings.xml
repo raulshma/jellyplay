@@ -137,6 +137,12 @@
     <string name="detail_instant_mix_empty">이 항목에 사용할 믹스가 없습니다</string>
     <string name="detail_instant_mix_failed">인스턴트 믹스를 시작할 수 없습니다</string>
 
+    <!-- ── 함께 보기 (SyncPlay) ──────────────────────────────────────── -->
+    <string name="detail_option_watch_party">함께 보기 시작</string>
+    <string name="detail_watch_party_default_name">함께 보기</string>
+    <string name="detail_msg_watch_party_started">함께 보기를 시작했습니다</string>
+    <string name="detail_msg_watch_party_failed">함께 보기를 시작할 수 없습니다</string>
+
     <!-- ── Stream picker (audio / subtitle) ─────────────────────────────── -->
     <string name="detail_select_audio">오디오 선택</string>
     <string name="detail_select_subtitle">자막 선택</string>

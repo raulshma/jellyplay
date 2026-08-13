@@ -74,9 +74,10 @@ import com.raulshma.jellyplay.core.ui.R
  * every episode passed in is treated as deletable. The freed-space figure is
  * exact for any selection when [episodeSizeBytes] is supplied (per-episode
  * sizes); otherwise it falls back to the aggregate [totalSizeBytes], shown
- * only when the selection covers every episode. Callers without per-episode
- * sizes (e.g. the detail screen, whose episodes arrive as unified MediaItems)
- * omit the map and get the aggregate-only behaviour.
+ * only when the selection covers every episode. Both current callers (the
+ * detail screen, via `LocalSeriesAggregate.episodeSizeBytes`, and the home
+ * offline long-press) supply the per-episode map; the aggregate-only fallback
+ * remains for any future caller that lacks it.
  *
  * @param seasons season rows (for names + ordering); each should exist as a key
  *   in [episodes]. Only seasons with at least one downloaded episode.

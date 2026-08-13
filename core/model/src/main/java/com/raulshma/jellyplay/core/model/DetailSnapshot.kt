@@ -85,6 +85,12 @@ data class DownloadAttachment(
 data class LocalSeriesAggregate(
     val downloadedEpisodeCount: Int,
     val totalSizeBytes: Long,
+    /**
+     * Per-episode on-disk sizes keyed by episode item id, carried so the
+     * delete-downloaded-episodes sheet can compute an exact freed-space figure
+     * for partial selections. Only populated for a local series origin.
+     */
+    val episodeSizeBytes: Map<String, Long> = emptyMap(),
 )
 
 /**

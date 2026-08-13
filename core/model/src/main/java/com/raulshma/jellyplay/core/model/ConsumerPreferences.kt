@@ -68,6 +68,13 @@ data class DetailPreferences(
     val showExternalRatings: Boolean = true,
     val nextUpExcludedSeriesIds: Set<String> = emptySet(),
     val hiddenCwItemIds: Set<String> = emptySet(),
+    /**
+     * Per-series last-viewed season tab (seriesId → seasonId). Projected from
+     * `HomeDiscoveryStore.lastViewedSeasonBySeries`; the detail screen resolves
+     * the entry for the current series and passes it down as
+     * `SeasonsSection.persistedSeasonId`. Empty until the user picks a season.
+     */
+    val lastViewedSeasonBySeries: Map<String, String> = emptyMap(),
     val skipSpecials: Boolean = false,
     val hideEpisodeThumbnails: Boolean = false,
     val episodesDescending: Boolean = true,

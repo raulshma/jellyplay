@@ -14,6 +14,10 @@ import androidx.compose.runtime.Immutable
  * - [Text] is a fully-resolved string (caller already did resource lookup).
  * - [SeriesDownload] keeps the raw count/error so the screen can resolve the
  *   plural `detail_episodes_queued` resource, which only the UI layer can do.
+ * - [WatchPartyStarted] carries the item id of a freshly-bootstrapped SyncPlay
+ *   group so the screen can navigate to the player; the existing [SyncPlayBridge]
+ *   auto-detects the active session on attach. It is a dedicated variant rather
+ *   than a [Text] toast because it expresses navigation intent.
  *
  * The former `OpenOffline` navigation request has been removed: the
  * [com.raulshma.jellyplay.core.data.repository.MediaDetailProvider] now performs
@@ -25,4 +29,5 @@ import androidx.compose.runtime.Immutable
 sealed interface DetailMessage {
     data class Text(val text: String) : DetailMessage
     data class SeriesDownload(val queuedCount: Int, val error: String?) : DetailMessage
+    data class WatchPartyStarted(val itemId: String) : DetailMessage
 }

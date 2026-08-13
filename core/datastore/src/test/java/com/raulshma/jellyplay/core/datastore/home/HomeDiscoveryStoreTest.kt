@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
+import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -77,6 +78,44 @@ class HomeDiscoveryStoreTest {
         val types = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP)
         store.setEnabledHomeSectionTypes(types)
         assertEquals(types, store.homeDiscovery.first().enabledHomeSectionTypes)
+    }
+
+    @Test
+    fun `setLastViewedSeason round-trips two series`() = runTest {
+        store.setLastViewedSeason("seriesA", "season2")
+        store.setLastViewedSeason("seriesB", "season5")
+        val map = store.homeDiscovery.first().lastViewedSeasonBySeries
+        assertEquals("season2", map["seriesA"])
+        assertEquals("season5", map["seriesB"])
+        assertEquals(2, map.size)
+    }
+
+    @Test
+    fun `setLastViewedSeason overwrites the same series`() = runTest {
+        store.setLastViewedSeason("seriesA", "season1")
+        store.setLastViewedSeason("seriesA", "season3")
+        val map = store.homeDiscovery.first().lastViewedSeasonBySeries
+        assertEquals("season3", map["seriesA"])
+        assertEquals(1, map.size)
+    }
+
+    @Test
+    fun `setLastViewedSeason JSON survives a cold re-read`() = runTest {
+        store.setLastViewedSeason("seriesA", "season4")
+        store.setLastViewedSeason("seriesB", "season1")
+        // Read the raw on-disk value straight from the DataStore file and decode
+        // it exactly as a fresh store would, proving the persisted JSON format
+        // round-trips (deterministic — no stateIn initialValue race).
+        val raw = dataStore.data.first()[stringPreferencesKey("last_viewed_season_by_series")]
+        val decoded = PreferenceCodec.json.decodeFromString<Map<String, String>>(raw!!)
+        assertEquals("season4", decoded["seriesA"])
+        assertEquals("season1", decoded["seriesB"])
+        assertEquals(2, decoded.size)
+    }
+
+    @Test
+    fun `lastViewedSeasonBySeries defaults to empty`() = runTest {
+        assertTrue(store.homeDiscovery.first().lastViewedSeasonBySeries.isEmpty())
     }
 
     @Test

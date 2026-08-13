@@ -104,6 +104,12 @@ class HomeDiscoveryStore @Inject constructor(
         val NEXT_UP_REWATCHING = booleanPreferencesKey("next_up_rewatching")
         val NEXT_UP_EXCLUDED_SERIES_IDS = stringPreferencesKey("next_up_excluded_series_ids")
         val HIDDEN_CW_ITEM_IDS = stringPreferencesKey("hidden_cw_item_ids")
+        /**
+         * Per-series last-viewed season tab (seriesId → seasonId). Lets the
+         * series detail screen reopen on the season the user was browsing
+         * instead of always the smart-play default. Stored as a JSON map.
+         */
+        val LAST_VIEWED_SEASON_BY_SERIES = stringPreferencesKey("last_viewed_season_by_series")
         val SHOW_CLOCK_ON_HOME = booleanPreferencesKey("show_clock_on_home")
         val SHOW_SETTINGS_IN_HOME_SEARCH = booleanPreferencesKey("show_settings_in_home_search")
         val HIDE_TOP_HEADER_ON_SCROLL = booleanPreferencesKey("hide_top_header_on_scroll")
@@ -116,6 +122,7 @@ class HomeDiscoveryStore @Inject constructor(
     private var cachedHomeLayoutPresets = ParsedCache<List<HomeLayoutPreset>>(null, emptyList())
     private var cachedNextUpExcludedSeriesIds = ParsedCache<Set<String>>(null, emptySet())
     private var cachedHiddenCwItemIds = ParsedCache<Set<String>>(null, emptySet())
+    private var cachedLastViewedSeasonBySeries = ParsedCache<Map<String, String>>(null, emptyMap())
 
     private val sharedPrefs: Flow<Preferences> = dataStore.data
         .catch { _ -> emptyPreferences() }
@@ -144,6 +151,7 @@ class HomeDiscoveryStore @Inject constructor(
         nextUpRewatching = PreferenceCodec.readBool(prefs, Keys.NEXT_UP_REWATCHING, "next_up_rewatching", false),
         nextUpExcludedSeriesIds = readNextUpExcludedSeriesIds(prefs),
         hiddenCwItemIds = readHiddenCwItemIds(prefs),
+        lastViewedSeasonBySeries = readLastViewedSeasonBySeries(prefs),
         showClockOnHome = PreferenceCodec.readBool(prefs, Keys.SHOW_CLOCK_ON_HOME, "show_clock_on_home", false),
         showSettingsInHomeSearch = PreferenceCodec.readBool(prefs, Keys.SHOW_SETTINGS_IN_HOME_SEARCH, "show_settings_in_home_search", true),
         hideTopHeaderOnScroll = PreferenceCodec.readBool(prefs, Keys.HIDE_TOP_HEADER_ON_SCROLL, "hide_top_header_on_scroll", false),
@@ -234,25 +242,50 @@ class HomeDiscoveryStore @Inject constructor(
         } else cachedHomeLayoutPresets.value
     }
 
-    private fun readNextUpExcludedSeriesIds(prefs: Preferences): Set<String> {
-        val raw = prefs[Keys.NEXT_UP_EXCLUDED_SERIES_IDS]
-        return if (raw != cachedNextUpExcludedSeriesIds.raw) {
-            try {
-                raw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
-            } catch (_: Exception) { emptySet() }
-                .also { cachedNextUpExcludedSeriesIds = ParsedCache(raw, it) }
-        } else cachedNextUpExcludedSeriesIds.value
+    /**
+     * Shared cached JSON decode for the simple map/set readers. Returns the
+     * cached value when [raw] is unchanged; otherwise decodes via [parse]
+     * (falling back to [default] on null or decode failure), publishes the new
+     * [ParsedCache] through [cacheRef], and returns the value. Collapses the
+     * per-key "compare-raw → try/decode → update-cache" boilerplate that the
+     * JSON list/map readers would otherwise each repeat verbatim.
+     */
+    private fun <T : Any> cachedJson(
+        raw: String?,
+        cache: ParsedCache<T>,
+        default: T,
+        parse: (String) -> T,
+        cacheRef: (ParsedCache<T>) -> Unit,
+    ): T {
+        if (raw == cache.raw) return cache.value
+        val value = try { raw?.let(parse) ?: default } catch (_: Exception) { default }
+        cacheRef(ParsedCache(raw, value))
+        return value
     }
 
-    private fun readHiddenCwItemIds(prefs: Preferences): Set<String> {
-        val raw = prefs[Keys.HIDDEN_CW_ITEM_IDS]
-        return if (raw != cachedHiddenCwItemIds.raw) {
-            try {
-                raw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
-            } catch (_: Exception) { emptySet() }
-                .also { cachedHiddenCwItemIds = ParsedCache(raw, it) }
-        } else cachedHiddenCwItemIds.value
-    }
+    private fun readNextUpExcludedSeriesIds(prefs: Preferences): Set<String> = cachedJson(
+        raw = prefs[Keys.NEXT_UP_EXCLUDED_SERIES_IDS],
+        cache = cachedNextUpExcludedSeriesIds,
+        default = emptySet(),
+        parse = { json.decodeFromString<Set<String>>(it) },
+        cacheRef = { cachedNextUpExcludedSeriesIds = it },
+    )
+
+    private fun readHiddenCwItemIds(prefs: Preferences): Set<String> = cachedJson(
+        raw = prefs[Keys.HIDDEN_CW_ITEM_IDS],
+        cache = cachedHiddenCwItemIds,
+        default = emptySet(),
+        parse = { json.decodeFromString<Set<String>>(it) },
+        cacheRef = { cachedHiddenCwItemIds = it },
+    )
+
+    private fun readLastViewedSeasonBySeries(prefs: Preferences): Map<String, String> = cachedJson(
+        raw = prefs[Keys.LAST_VIEWED_SEASON_BY_SERIES],
+        cache = cachedLastViewedSeasonBySeries,
+        default = emptyMap(),
+        parse = { json.decodeFromString<Map<String, String>>(it) },
+        cacheRef = { cachedLastViewedSeasonBySeries = it },
+    )
 
     // ------------------------------------------------------------------
     // Setters
@@ -404,6 +437,20 @@ class HomeDiscoveryStore @Inject constructor(
         }
     }
 
+    /**
+     * Pins the last-viewed season for [seriesId] so the series detail screen
+     * reopens on that season tab. Read-modify-write: copies the existing
+     * series→season map and upserts the entry (overwrites if already present).
+     */
+    suspend fun setLastViewedSeason(seriesId: String, seasonId: String) {
+        dataStore.edit { prefs ->
+            val current = prefs[Keys.LAST_VIEWED_SEASON_BY_SERIES]?.let {
+                try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
+            } ?: emptyMap()
+            prefs[Keys.LAST_VIEWED_SEASON_BY_SERIES] = json.encodeToString(current + (seriesId to seasonId))
+        }
+    }
+
     suspend fun setHiddenCwItemIds(ids: Set<String>) {
         dataStore.edit { it[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(ids) }
     }
@@ -460,30 +507,19 @@ class HomeDiscoveryStore @Inject constructor(
         Keys.HIDDEN_CW_ITEM_IDS, Keys.PINNED_HOME_SECTIONS,
         Keys.HOME_LAYOUT_PRESETS, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR,
         Keys.SHOW_CLOCK_ON_HOME, Keys.SHOW_SETTINGS_IN_HOME_SEARCH,
-        Keys.HIDE_TOP_HEADER_ON_SCROLL,
+        Keys.HIDE_TOP_HEADER_ON_SCROLL, Keys.LAST_VIEWED_SEASON_BY_SERIES,
     )
 
     /**
      * Category reset participation: every key owned here sits in the single
-     * legacy `HOME_DISCOVERY` bucket (the home section of the legacy
-     * category map; the library/nav keys that shared that category are owned by
-     * `LibraryStore` / `NavigationStore`). The legacy `HOME_HIDDEN_LIBRARY_SECTION_IDS`
-     * key is included so a reset also drops the one-shot migration source.
+     * legacy `HOME_DISCOVERY` bucket (the home section of the legacy category
+     * map; the library/nav keys that shared that category are owned by
+     * `LibraryStore` / `NavigationStore`). Delegates to [resetKeys] so the owned
+     * key list lives in exactly one place — the legacy
+     * `HOME_HIDDEN_LIBRARY_SECTION_IDS` migration source is included via it.
      */
     internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.HOME_DISCOVERY -> listOf(
-            Keys.HOME_MODE, Keys.HOME_HERO_ENABLED, Keys.HOME_BACKDROP_ENABLED,
-            Keys.HOME_ENABLED_SECTION_TYPES, Keys.HOME_SECTION_ORDER,
-            Keys.HOME_LIBRARY_SECTION_OVERRIDES, Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS,
-            Keys.SHOW_UNWATCHED_BADGE, Keys.HIDE_WATCHED_ITEMS,
-            Keys.SHOW_WATCHED_CHECKMARK, Keys.SHOW_EXTERNAL_RATINGS,
-            Keys.MERGE_CONTINUE_WATCHING_NEXT_UP, Keys.NEXT_UP_MAX_DAYS,
-            Keys.NEXT_UP_REWATCHING, Keys.NEXT_UP_EXCLUDED_SERIES_IDS,
-            Keys.HIDDEN_CW_ITEM_IDS, Keys.PINNED_HOME_SECTIONS,
-            Keys.HOME_LAYOUT_PRESETS, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR,
-            Keys.SHOW_CLOCK_ON_HOME, Keys.SHOW_SETTINGS_IN_HOME_SEARCH,
-            Keys.HIDE_TOP_HEADER_ON_SCROLL,
-        )
+        PreferenceResetCategory.HOME_DISCOVERY -> resetKeys
         else -> emptyList()
     }
 
@@ -550,6 +586,7 @@ class HomeDiscoveryStore @Inject constructor(
             it[Keys.SHOW_CLOCK_ON_HOME] = slice.showClockOnHome
             it[Keys.SHOW_SETTINGS_IN_HOME_SEARCH] = slice.showSettingsInHomeSearch
             it[Keys.HIDE_TOP_HEADER_ON_SCROLL] = slice.hideTopHeaderOnScroll
+            it[Keys.LAST_VIEWED_SEASON_BY_SERIES] = json.encodeToString(slice.lastViewedSeasonBySeries)
         }
     }
 }
@@ -579,6 +616,14 @@ data class HomeDiscoverySlice(
     val nextUpRewatching: Boolean = false,
     val nextUpExcludedSeriesIds: Set<String> = emptySet(),
     val hiddenCwItemIds: Set<String> = emptySet(),
+    /**
+     * Per-series last-viewed season tab (seriesId → seasonId). Empty until the
+     * user selects a season tab on a series detail screen; projected into
+     * [com.raulshma.jellyplay.core.model.DetailPreferences] so the screen can
+     * reopen on the browsed season. An active resume still takes precedence
+     * (resolved in `SeasonStartResolver`).
+     */
+    val lastViewedSeasonBySeries: Map<String, String> = emptyMap(),
     val showClockOnHome: Boolean = false,
     val showSettingsInHomeSearch: Boolean = true,
     /**

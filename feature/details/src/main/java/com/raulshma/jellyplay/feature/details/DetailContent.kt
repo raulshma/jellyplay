@@ -134,6 +134,7 @@ internal fun DetailContent(
         canAddToPlaylist = state.capabilities.remoteDiscovery,
         canAddToCollection = state.capabilities.remoteDiscovery,
         canInstantMix = isAudio && state.capabilities.remoteDiscovery,
+        canStartWatchParty = state.capabilities.remoteWorkAllowed,
         isOffline = state.origin?.isLocal == true,
         onClose = { /* menus close themselves */ },
         onEditClick = callbacks.onEditClick,
@@ -153,6 +154,7 @@ internal fun DetailContent(
         onAddToPlaylist = callbacks.onAddToPlaylist,
         onAddToCollection = callbacks.onAddToCollection,
         onStartInstantMix = callbacks.onStartInstantMix,
+        onStartWatchParty = callbacks.onStartWatchParty,
     )
 
     val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current
@@ -178,21 +180,34 @@ internal fun DetailContent(
                 },
             ),
     ) {
-        // While the detail is still loading (contentVisible == false) show a loading surface.
-        // On TV it must be focusable (LoadingScreen grabs focus) so the D-pad isn't orphaned
-        // until data arrives; on touch we use a delayed spinner so fast loads don't flicker.
-        if (!contentVisible && state.error == null) {
-            if (isTv) {
-                LoadingScreen(modifier = Modifier.fillMaxSize())
-            } else {
-                DelayedLoadingScreen(modifier = Modifier.fillMaxSize())
+        // Loading / error overlays are only painted while there is no content yet
+        // (contentVisible == false). Once detail resolves the content tree renders and any
+        // subsequent Refreshing / Loaded / silent-failure state is invisible underneath it.
+        // On TV the loading surface must be focusable (LoadingScreen grabs focus) so the
+        // D-pad isn't orphaned until data arrives; on touch a delayed spinner keeps fast
+        // loads from flickering.
+        when (val loadState = state.loadState) {
+            is DetailUiLoadState.Loading -> {
+                if (!contentVisible) {
+                    if (isTv) {
+                        LoadingScreen(modifier = Modifier.fillMaxSize())
+                    } else {
+                        DelayedLoadingScreen(modifier = Modifier.fillMaxSize())
+                    }
+                }
             }
-        } else if (state.error != null && !contentVisible) {
-            com.raulshma.jellyplay.core.ui.components.ScreenErrorState(
-                message = state.error,
-                onRetry = callbacks.onRetry,
-                modifier = Modifier.fillMaxSize(),
-            )
+            is DetailUiLoadState.Error -> {
+                if (!contentVisible) {
+                    com.raulshma.jellyplay.core.ui.components.ScreenErrorState(
+                        message = loadState.message,
+                        onRetry = if (loadState.accessDenied) null else callbacks.onRetry,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+            DetailUiLoadState.Refreshing, DetailUiLoadState.Loaded -> {
+                // Content renders below; overlays stay hidden.
+            }
         }
 
         DetailBackdrop(
@@ -212,7 +227,7 @@ internal fun DetailContent(
         // the outermost modifier there.
         if (!isTv) {
             PullToRefreshBox(
-                isRefreshing = state.isRefreshing,
+                isRefreshing = state.loadState is DetailUiLoadState.Refreshing,
                 onRefresh = callbacks.onRefresh,
                 modifier = Modifier.fillMaxSize(),
             ) {

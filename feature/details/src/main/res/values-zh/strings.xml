@@ -137,6 +137,12 @@
     <string name="detail_instant_mix_empty">此项目没有可用的混音</string>
     <string name="detail_instant_mix_failed">无法开始即时混音</string>
 
+    <!-- ── 观影派对 (SyncPlay) ──────────────────────────────────────── -->
+    <string name="detail_option_watch_party">开始观影派对</string>
+    <string name="detail_watch_party_default_name">观影派对</string>
+    <string name="detail_msg_watch_party_started">观影派对已开始</string>
+    <string name="detail_msg_watch_party_failed">无法开始观影派对</string>
+
     <!-- ── Stream picker (audio / subtitle) ─────────────────────────────── -->
     <string name="detail_select_audio">选择音频</string>
     <string name="detail_select_subtitle">选择字幕</string>

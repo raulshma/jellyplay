@@ -95,11 +95,27 @@ internal fun SeasonsSection(
     getImageUrl: (String) -> String,
     currentItemId: String? = null,
     currentSeasonId: String? = null,
+    /**
+     * The season id the user last pinned for this series (persisted across
+     * navigation). Fed into [SeasonStartResolver]; an active resume still wins.
+     * Null when nothing is persisted (or the screen is for a non-series item),
+     * in which case resolution behaves exactly as it did before this feature.
+     */
+    persistedSeasonId: String? = null,
     onEpisodePlayClick: (MediaItem) -> Unit,
     onEpisodeDetailClick: (MediaItem) -> Unit,
     onEpisodeLongPress: (MediaItem) -> Unit = {},
     onFocusedEpisodeChange: (MediaItem) -> Unit = {},
     onSeasonSelected: (seasonId: String) -> Unit = {},
+    /**
+     * Fires ONLY on a user-initiated season-tab select (the split-button
+     * leading onClick). Distinct from [onSeasonSelected], which the init
+     * `LaunchedEffect` also calls with the computed default. Routing the
+     * persistence through this callback (and never through [onSeasonSelected])
+     * is what stops the default/smart-play season from overwriting the user's
+     * real pinned choice on every screen open.
+     */
+    onSeasonPinned: (seasonId: String) -> Unit = {},
     hideEpisodeThumbnails: Boolean = false,
     episodesDescending: Boolean = true,
     onEpisodesDescendingChange: (Boolean) -> Unit = {},
@@ -131,16 +147,12 @@ internal fun SeasonsSection(
     // local origin: offline episodes load in canonical ascending playback order
     // (same as online), so reversing to newest-first is a meaningful choice.
     // ─────────────────────────────────────────────────────────────────────────
-    val smartTargetSeasonId = smartPlayTarget?.episode?.seasonId
-    val initialSeasonIndex = when {
-        smartTargetSeasonId != null -> {
-            seasons.indexOfFirst { it.id == smartTargetSeasonId }.coerceAtLeast(0)
-        }
-        currentSeasonId != null -> {
-            seasons.indexOfFirst { it.id == currentSeasonId }.coerceAtLeast(0)
-        }
-        else -> 0
-    }
+    val initialSeasonIndex = SeasonStartResolver.resolveInitialSeasonIndex(
+        seasons = seasons,
+        smartTargetEpisode = smartPlayTarget?.episode,
+        currentSeasonId = currentSeasonId,
+        persistedSeasonId = persistedSeasonId,
+    )
     var selectedSeasonIndex by remember { mutableStateOf(initialSeasonIndex) }
     // Episode sort order within a season. Persisted app-wide (see
     // [DetailViewModel.setEpisodesDescending]) so the choice carries across
@@ -279,7 +291,15 @@ internal fun SeasonsSection(
                     SplitButtonLayout(
                         leadingButton = {
                             SplitButtonDefaults.LeadingButton(
-                                onClick = { selectedSeasonIndex = index },
+                                onClick = {
+                                    selectedSeasonIndex = index
+                                    // Persist the user's tab choice. This fires
+                                    // ONLY on a real tab select — never from the
+                                    // init LaunchedEffect (which calls only
+                                    // onSeasonSelected) — so the smart-play /
+                                    // default season can't overwrite the pin.
+                                    onSeasonPinned(season.id)
+                                },
                                 colors = seasonColors,
                                 shapes = SplitButtonDefaults.leadingButtonShapesFor(containerHeight),
                                 contentPadding = SplitButtonDefaults.leadingButtonContentPaddingFor(containerHeight),

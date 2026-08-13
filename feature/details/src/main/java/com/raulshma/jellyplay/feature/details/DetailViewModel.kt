@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
@@ -114,6 +115,7 @@ class DetailViewModel @Inject constructor(
     private val themeMusicPlayer: com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer,
     private val tmdbApiClient: TmdbApiClient,
     private val arrRepository: ArrRepository,
+    private val syncPlayManager: SyncPlayManager,
 ) : JellyPlayViewModel() {
 
     /** Media-detail preference fields, projected centrally off the store slices. */
@@ -368,6 +370,12 @@ class DetailViewModel @Inject constructor(
         expandSeason = mediaDetailProvider::expandSeason,
         messageSink = { _messages.tryEmit(it) },
     )
+    private val watchPartyActions = WatchPartyActions(
+        mediaRepository = mediaRepository,
+        syncPlayManager = syncPlayManager,
+        context = context,
+        messageSink = { _messages.tryEmit(it) },
+    )
 
     fun selectSubtitle(index: Int?) {
         _uiState.update { it.copy(selectedSubtitleIndex = index) }
@@ -471,7 +479,8 @@ class DetailViewModel @Inject constructor(
      * the per-type cache invalidation (detail, seasons/episodes, album, collection)
      * and re-resolves the snapshot. Unlike [loadItem] the current content stays
      * on screen (the full-screen loading state is skipped); the pull-to-refresh
-     * indicator is driven by [DetailUiState.isRefreshing] instead.
+     * indicator is driven by [DetailUiLoadState.Refreshing] (via
+     * [DetailUiState.loadState]) instead.
      */
     fun forceRefresh() {
         val itemId = _uiState.value.detail?.item?.id ?: return
@@ -495,10 +504,7 @@ class DetailViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     detail = if (refresh) it.detail else null,
-                    isLoading = !refresh,
-                    isRefreshing = refresh,
-                    error = null,
-                    isAccessDenied = false,
+                    loadState = if (refresh) DetailUiLoadState.Refreshing else DetailUiLoadState.Loading,
                     origin = null,
                     detailContext = null,
                     capabilities = DetailUiState.DefaultCapabilities,
@@ -552,7 +558,7 @@ class DetailViewModel @Inject constructor(
                 // The provider owns per-type cache invalidation + the remote refetch.
                 // Suspend until the new generation lands so the collector that follows
                 // observes the refreshed snapshot rather than a stale replay; the detail
-                // stays visible (kept above) under the isRefreshing indicator meanwhile.
+                // stays visible (kept above) under the Refreshing indicator meanwhile.
                 mediaDetailProvider.refresh(itemId)
             }
             mediaDetailProvider.observe(itemId).collect { state ->
@@ -584,8 +590,7 @@ class DetailViewModel @Inject constructor(
                 // prior detail stays visible until the next Loaded replaces it.
                 _uiState.update {
                     it.copy(
-                        isLoading = it.detail == null,
-                        error = null,
+                        loadState = if (it.detail == null) DetailUiLoadState.Loading else DetailUiLoadState.Loaded,
                     )
                 }
             }
@@ -609,10 +614,11 @@ class DetailViewModel @Inject constructor(
                 }
                 _uiState.update {
                     it.copy(
-                        error = message,
-                        isAccessDenied = accessDenied,
-                        isLoading = false,
-                        isRefreshing = false,
+                        loadState = DetailUiLoadState.Error(
+                            message = message,
+                            accessDenied = accessDenied,
+                            unavailableOffline = e.isUnavailableOffline,
+                        ),
                     )
                 }
             }
@@ -689,10 +695,7 @@ class DetailViewModel @Inject constructor(
                 // from the previous item never survives a resolution change.
                 smartPlayTarget = null,
                 contentGeneration = snapshot.contentGeneration,
-                isLoading = false,
-                isRefreshing = false,
-                error = null,
-                isAccessDenied = false,
+                loadState = DetailUiLoadState.Loaded,
             )
         }
         lastAppliedGeneration = snapshot.contentGeneration
@@ -888,6 +891,34 @@ class DetailViewModel @Inject constructor(
      * [InstantMixActions]; see that class for the fetch + queue-build contract.
      */
     fun startInstantMix() = instantMixActions.startInstantMix()
+
+    // ── Watch party ────────────────────────────────────────────────────
+    // Delegated to [watchPartyActions] (WatchPartyActions). The VM resolves the
+    // current item into the bootstrap params (id / group title / default media
+    // source) and launches the coroutine; the helper owns the create→join→queue
+    // sequence and emits success/failure via DetailMessage.
+
+    /**
+     * Bootstraps a SyncPlay watch party for the current item and opens the
+     * player on success. The group is named after the item (falling back to a
+     * generic label) and seeded with the item's default media source at position
+     * 0. The player is opened by [MediaDetailScreen] on
+     * [DetailMessage.WatchPartyStarted]; the existing SyncPlayBridge then
+     * auto-detects the active session. Fire-and-forget from the UI's standpoint
+     * — success/failure flow back as one-shot messages.
+     */
+    fun startWatchParty() {
+        val detail = _uiState.value.detail ?: return
+        val item = detail.item
+        val itemId = item.id
+        val title = item.name.orEmpty().ifBlank {
+            context.getString(R.string.detail_watch_party_default_name)
+        }
+        val mediaSourceId = detail.mediaSources.firstOrNull()?.id
+        launch {
+            watchPartyActions.start(itemId, title, mediaSourceId)
+        }
+    }
 
     /**
      * Plays a single LOCAL-origin album track.
@@ -1172,6 +1203,18 @@ class DetailViewModel @Inject constructor(
         launch {
             homeDiscoveryStore.unhideCwItem(item.id)
             _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_shown_in_continue_watching)))
+        }
+    }
+
+    /**
+     * Silently pins the last-viewed season for [seriesId] so the series detail
+     * screen reopens on that season tab. Mirrors [hideFromNextUp]'s launch shape
+     * but emits NO user-facing message (a background preference write). The
+     * value flows back reactively via [preferences].
+     */
+    fun setLastViewedSeason(seriesId: String, seasonId: String) {
+        launch {
+            homeDiscoveryStore.setLastViewedSeason(seriesId, seasonId)
         }
     }
 

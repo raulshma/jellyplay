@@ -681,6 +681,50 @@ class UnifiedMediaDetailProviderImplTest {
     }
 
     @Test
+    fun `local SERIES aggregate episodeSizeBytes is keyed by episode id and sums to totalSizeBytes`() = runTest {
+        // The per-episode size map rides alongside the aggregate so the
+        // delete-downloaded-episodes sheet can report an exact freed-space figure
+        // for partial selections, not just a whole-series total.
+        val localSeries = OfflineMediaItem(
+            id = "s1",
+            name = "Series",
+            mediaType = MediaType.SERIES,
+            downloadPath = "/data/offline/s1/series",
+        )
+        wireStubs("s1", mode = OfflineMode.OFFLINE_MANUAL, localItem = localSeries)
+        coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(
+            seriesCatalogueSnapshot(seriesId = "s1", seasonIds = listOf("season1"), episodesPerSeason = 0),
+        )
+        val seasonRow = OfflineMediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON)
+        val ep1 = OfflineMediaItem(
+            id = "season1-ep1",
+            name = "Pilot",
+            mediaType = MediaType.EPISODE,
+            totalSizeBytes = 2_000L,
+        )
+        val ep2 = OfflineMediaItem(
+            id = "season1-ep2",
+            name = "E2",
+            mediaType = MediaType.EPISODE,
+            totalSizeBytes = 3_000L,
+        )
+        every { offlineRepository.getSeasonsForSeries("s1") } returns MutableStateFlow(listOf(seasonRow))
+        every { offlineRepository.getEpisodesForSeason("season1") } returns MutableStateFlow(listOf(ep1, ep2))
+
+        val snapshot = (firstResolved(buildProvider(), "s1") as DetailLoadState.Loaded).snapshot
+
+        val aggregate = snapshot.context.seriesAggregate
+        assertNotNull(aggregate)
+        val episodeSizes = aggregate!!.episodeSizeBytes
+        // Keyed by episode id with each episode's on-disk size.
+        assertEquals(2_000L, episodeSizes["season1-ep1"])
+        assertEquals(3_000L, episodeSizes["season1-ep2"])
+        // The per-episode values sum to the aggregate total — same single pass
+        // over the offline rows, so the two stay consistent.
+        assertEquals(aggregate.totalSizeBytes, episodeSizes.values.sum())
+    }
+
+    @Test
     fun `local non-series snapshot carries no series aggregate`() = runTest {
         // A local MOVIE is not a series — the aggregate is null even with a row.
         wireStubs("m1", mode = OfflineMode.OFFLINE_MANUAL, localItem = localMovie())

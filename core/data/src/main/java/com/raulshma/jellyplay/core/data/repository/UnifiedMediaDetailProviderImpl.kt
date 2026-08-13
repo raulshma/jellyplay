@@ -643,6 +643,7 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
             LocalSeriesAggregate(
                 downloadedEpisodeCount = seriesEpisodes.size,
                 totalSizeBytes = seriesEpisodes.sumOf { it.totalSizeBytes },
+                episodeSizeBytes = seriesEpisodes.associate { it.id to it.totalSizeBytes },
             )
         } else {
             null

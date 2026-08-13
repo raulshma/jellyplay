@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +28,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
+import kotlinx.coroutines.launch
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
@@ -114,6 +116,7 @@ fun MediaDetailScreen(
     var showDeleteEpisodesSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarContext = LocalContext.current
+    val screenScope = rememberCoroutineScope()
 
     // ── Unified-provider action dialog state. Delete / resync /
     // re-download get the same TV/mobile focus, back, and snackbar handling as
@@ -180,6 +183,21 @@ fun MediaDetailScreen(
                         snackbarContext.getString(R.string.detail_msg_no_episodes_queued)
                     }
                     snackbarHostState.showSnackbar(text)
+                }
+                is DetailMessage.WatchPartyStarted -> {
+                    // Fire-and-forget confirmation; navigation (below) is the
+                    // primary feedback. Launched on screenScope so it does not
+                    // block the navigate-to-player handoff.
+                    screenScope.launch {
+                        snackbarHostState.showSnackbar(
+                            snackbarContext.getString(R.string.detail_msg_watch_party_started)
+                        )
+                    }
+                    // Open the player, reusing the SAME Route.VideoPlayer builder
+                    // the play button uses (DetailsNavigation wires onPlayClick →
+                    // Route.VideoPlayer). startPositionTicks = 0 = fresh group
+                    // start; the SyncPlayBridge auto-detects the active session.
+                    onPlayClick(message.itemId, null, 0L, null, null)
                 }
             }
         }
@@ -282,15 +300,17 @@ fun MediaDetailScreen(
                     episodes = uiState.episodes,
                     fetchedSeasonIds = uiState.fetchedSeasonIds,
                     smartPlayTarget = uiState.smartPlayTarget,
+                    // Resolve the user's last-pinned season for this series from
+                    // the projected preferences. An active resume still wins
+                    // (decided in SeasonStartResolver); null when nothing is
+                    // pinned → prior behaviour.
+                    persistedSeasonId = preferences.lastViewedSeasonBySeries[seriesIdForSeasons],
                     selectedSubtitleIndex = uiState.selectedSubtitleIndex,
                     selectedAudioIndex = uiState.selectedAudioIndex,
                     isDownloading = uiState.isDownloading,
                     isDownloadingSeries = uiState.isDownloadingSeries,
                     activeDownload = activeDownload,
-                    isLoading = uiState.isLoading,
-                    isRefreshing = uiState.isRefreshing,
-                    error = uiState.error,
-                    isAccessDenied = uiState.isAccessDenied,
+                    loadState = uiState.loadState,
                     albumTracks = uiState.albumTracks,
                     collectionItems = uiState.collectionItems,
                     relatedItems = uiState.relatedItems,
@@ -430,6 +450,9 @@ fun MediaDetailScreen(
                         onSeasonSelected = { seasonId: String ->
                             viewModel.loadEpisodesForSeason(seriesIdForSeasons, seasonId)
                         },
+                        onSeasonPinned = { seasonId: String ->
+                            viewModel.setLastViewedSeason(seriesIdForSeasons, seasonId)
+                        },
                         onEpisodesDescendingChange = { descending: Boolean ->
                             viewModel.setEpisodesDescending(descending)
                         },
@@ -452,6 +475,7 @@ fun MediaDetailScreen(
                         onAddToPlaylist = { viewModel.openPlaylistPicker() },
                         onAddToCollection = { viewModel.openCollectionPicker() },
                         onStartInstantMix = { viewModel.startInstantMix() },
+                        onStartWatchParty = { viewModel.startWatchParty() },
                         onMediaQuickActions = { item -> quickActionController.show(item) },
                         onFocusedMediaItem = { item -> tvFocusedItem = item },
                         onDeleteDownload = {
@@ -645,6 +669,7 @@ fun MediaDetailScreen(
                     seasons = downloadableSeasons,
                     episodes = downloadedEpisodesBySeason,
                     totalSizeBytes = totalSizeBytes,
+                    episodeSizeBytes = uiState.detailContext?.seriesAggregate?.episodeSizeBytes ?: emptyMap(),
                     onDelete = { episodeIds ->
                         showDeleteEpisodesSheet = false
                         viewModel.deleteOfflineEpisodes(episodeIds.toList())

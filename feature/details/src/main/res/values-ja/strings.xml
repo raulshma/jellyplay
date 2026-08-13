@@ -137,6 +137,12 @@
     <string name="detail_instant_mix_empty">このアイテムにはミックスがありません</string>
     <string name="detail_instant_mix_failed">インスタントミックスを開始できませんでした</string>
 
+    <!-- ── ウォッチパーティー (SyncPlay) ──────────────────────────────── -->
+    <string name="detail_option_watch_party">ウォッチパーティーを開始</string>
+    <string name="detail_watch_party_default_name">ウォッチパーティー</string>
+    <string name="detail_msg_watch_party_started">ウォッチパーティーを開始しました</string>
+    <string name="detail_msg_watch_party_failed">ウォッチパーティーを開始できませんでした</string>
+
     <!-- ── Stream picker (audio / subtitle) ─────────────────────────────── -->
     <string name="detail_select_audio">音声を選択</string>
     <string name="detail_select_subtitle">字幕を選択</string>

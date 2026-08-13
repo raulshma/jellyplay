@@ -140,6 +140,12 @@
     <string name="detail_instant_mix_empty">Nenhuma mixagem disponível para este item</string>
     <string name="detail_instant_mix_failed">Não foi possível iniciar a mixagem instantânea</string>
 
+    <!-- ── Watch Party (SyncPlay) ──────────────────────────────────────── -->
+    <string name="detail_option_watch_party">Iniciar watch party</string>
+    <string name="detail_watch_party_default_name">Watch party</string>
+    <string name="detail_msg_watch_party_started">Watch party iniciada</string>
+    <string name="detail_msg_watch_party_failed">Não foi possível iniciar a watch party</string>
+
     <!-- ── Stream picker (audio / subtitle) ─────────────────────────────── -->
     <string name="detail_select_audio">Selecionar áudio</string>
     <string name="detail_select_subtitle">Selecionar legenda</string>

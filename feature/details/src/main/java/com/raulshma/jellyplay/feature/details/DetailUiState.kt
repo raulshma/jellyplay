@@ -32,18 +32,13 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
  */
 @Immutable
 data class DetailUiState(
-    // Core load state
+    // Core load state — `detail` drives content visibility; [loadState] drives
+    // the loading / refreshing / error overlays (only painted when there is no
+    // content yet, per [com.raulshma.jellyplay.feature.details.DetailContent]).
     val detail: MediaDetail? = null,
-    val isLoading: Boolean = false,
-    // True while a pull-to-refresh is in flight. Unlike [isLoading], the
-    // current content stays visible while this is set — only the
-    // pull-to-refresh indicator spins.
-    val isRefreshing: Boolean = false,
-    val error: String? = null,
-    // True when the item load failed because the user lacks permission (HTTP
-    // 401/403). Lets the screen render a dedicated "no access" treatment
-    // instead of a generic network-error string.
-    val isAccessDenied: Boolean = false,
+    // Sealed load state for the core fetch. Default [DetailUiLoadState.Loaded]
+    // matches the former all-false default (no loading, no refreshing, no error).
+    val loadState: DetailUiLoadState = DetailUiLoadState.Loaded,
     // One-shot snackbar feedback for favorite / watched / download actions is
     // surfaced via [DetailViewModel.messages] (SharedFlow<DetailMessage>), not
     // here — see [DetailMessage].
@@ -196,4 +191,26 @@ data class DetailUiState(
             chapters = false,
         )
     }
+}
+
+/**
+ * Sealed load state for [DetailUiState.loadState]. Collapses the former
+ * `isLoading` / `isRefreshing` / `error` / `isAccessDenied` field soup into a
+ * single mutually-exclusive state so the screen renders exactly one overlay
+ * treatment. [DetailUiState.detail] stays a separate field and remains the
+ * single authority for content visibility — a load state is only surfaced when
+ * there is no content yet.
+ */
+sealed interface DetailUiLoadState {
+    /** Full-screen loading — no content yet. */
+    data object Loading : DetailUiLoadState
+    /** Pull-to-refresh; content stays visible underneath. */
+    data object Refreshing : DetailUiLoadState
+    data class Error(
+        val message: String,
+        val accessDenied: Boolean,
+        val unavailableOffline: Boolean = false,
+    ) : DetailUiLoadState
+    /** Load complete (incl. LOCAL_REMOTE_FAILURE origin — rendered silently, by decision). */
+    data object Loaded : DetailUiLoadState
 }

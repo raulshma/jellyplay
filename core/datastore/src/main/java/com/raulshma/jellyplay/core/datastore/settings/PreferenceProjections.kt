@@ -563,6 +563,7 @@ class PreferenceProjections @Inject constructor(
             showExternalRatings = home.showExternalRatings,
             nextUpExcludedSeriesIds = home.nextUpExcludedSeriesIds,
             hiddenCwItemIds = home.hiddenCwItemIds,
+            lastViewedSeasonBySeries = home.lastViewedSeasonBySeries,
             skipSpecials = library.skipSpecials,
             hideEpisodeThumbnails = library.hideEpisodeThumbnails,
             episodesDescending = library.episodesDescending,
