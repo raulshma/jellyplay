@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.details
+package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -54,41 +54,35 @@ import com.raulshma.jellyplay.core.designsystem.theme.defaultSpatialSpring
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
-import com.raulshma.jellyplay.core.ui.components.SheetHeader
-import com.raulshma.jellyplay.core.ui.components.rememberMultiEpisodeSelectionForDelete
+import com.raulshma.jellyplay.core.ui.R
 
 /**
- * Multi-select delete sheet for a downloaded series, rendered inside the
- * unified media-detail tree. Mirrors the layout of [SeriesDownloadSheet] — a
- * header, a select-all pill, a per-season LazyColumn with tri-state season
- * checkboxes and expandable episode rows, and a footer action row — but every
- * selection is destructive and styled with the error color scheme.
+ * Multi-select delete sheet for a downloaded series. A header, a select-all
+ * pill, a per-season LazyColumn with tri-state season checkboxes and
+ * expandable episode rows, and a footer action row — every selection is
+ * destructive and styled with the error color scheme.
  *
  * Users can mix-and-match: whole series (Select All), whole seasons (season
  * checkbox), or individual episodes across seasons (episode checkbox). The
  * footer button reports the selected count, and an explicit "delete entire
- * series" action offers the whole-series path. Both route through the merged
- * [DetailViewModel] offline-delete methods, which collapse a fully-selected
- * season into a single `deleteOfflineSeason` transaction.
+ * series" action offers the whole-series path.
  *
- * Data note: the unified detail snapshot projects offline episodes to
- * [MediaItem] via `OfflineMediaItem.toMediaItem()`, which drops per-episode
- * `totalSizeBytes`. The freed-space figure therefore uses the aggregate
- * [totalSizeBytes] (from `LocalSeriesAggregate`) and is only shown when the
- * selection covers every downloadable episode — the one case where the freed
- * total is exactly known. Partial selections show a count-only summary,
- * matching the original sheet's count-only fallback.
+ * Shared by the media-detail screen and the offline home's series long-press.
+ * Callers wrap it in [TvSafeSheet].
  *
- * @param seasons season rows (for names + ordering); each must exist as a key
- *   in [episodes] (possibly mapped to an empty list). Only seasons with at
- *   least one downloaded episode should be passed.
- * @param episodes downloaded episodes keyed by season id. Every episode here
- *   is treated as deletable (the caller pre-filters to downloaded episodes).
- * @param totalSizeBytes aggregate on-disk size of the series' downloads
- *   (`LocalSeriesAggregate.totalSizeBytes`); 0 hides the freed-space figure.
+ * Data note: callers must pre-filter [episodes] to downloaded episodes only —
+ * every episode passed in is treated as deletable. The freed-space figure uses
+ * the aggregate [totalSizeBytes] and is only shown when the selection covers
+ * every episode (the one case where the freed total is exactly known); partial
+ * selections show a count-only summary.
+ *
+ * @param seasons season rows (for names + ordering); each should exist as a key
+ *   in [episodes]. Only seasons with at least one downloaded episode.
+ * @param episodes downloaded episodes keyed by season id.
+ * @param totalSizeBytes aggregate on-disk size of the series' downloads; 0
+ *   hides the freed-space figure.
  * @param onDelete invoked with the flat set of episode ids to remove.
- * @param onDeleteEntireSeries invoked to drop the whole series in one
- *   transaction (`DetailViewModel.deleteOfflineSeries`).
+ * @param onDeleteEntireSeries invoked to drop the whole series in one go.
  * @param onDismiss closes the sheet.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

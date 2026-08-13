@@ -704,4 +704,23 @@
     <string name="core_show_password">Show password</string>
     <string name="core_hide_password">Hide password</string>
 
+
+    <!-- DeleteDownloadedEpisodesSheet (shared by media detail + offline home). -->
+    <string name="detail_delete_downloads_title">Delete downloads</string>
+    <string name="detail_select_episodes_to_remove">Select episodes to remove from your device.</string>
+    <string name="detail_select_all">Select All</string>
+    <string name="detail_deselect_all">Deselect All</string>
+    <string name="detail_episodes_selected">%1$d of %2$d episodes selected</string>
+    <string name="detail_episodes_selected_with_freed">%1$d of %2$d episodes selected · %3$s</string>
+    <string name="detail_season_default">Season %1$d</string>
+    <string name="detail_cd_collapse">Collapse</string>
+    <string name="detail_cd_expand">Expand</string>
+    <string name="detail_delete_entire_series">Delete entire series</string>
+    <string name="detail_cancel">Cancel</string>
+    <string name="detail_delete_count">Delete %1$d</string>
+    <string name="detail_delete_count_with_freed">Delete %1$d · %2$s</string>
+<plurals name="detail_episode_count">
+    <item quantity="one">%1$d episode</item>
+    <item quantity="other">%1$d episodes</item>
+    </plurals>
 </resources>

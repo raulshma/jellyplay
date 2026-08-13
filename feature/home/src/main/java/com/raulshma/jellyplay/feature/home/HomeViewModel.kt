@@ -728,6 +728,69 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Opens the advanced "delete downloaded episodes" sheet for a series card
+     * on the offline home. Loads the series' seasons and downloaded episodes
+     * (the same [OfflineRepository] calls the detail provider uses) and exposes
+     * them via [HomeUiState.seriesDelete] for the sheet to render.
+     * `getEpisodesForSeason` reads the offline store, so the resulting episode
+     * map is already pre-filtered to downloaded episodes — exactly what the
+     * sheet expects.
+     */
+    fun requestSeriesDelete(series: MediaItem) {
+        _uiState.update {
+            it.copy(seriesDelete = HomeSeriesDeleteState(series.id, emptyList(), emptyMap(), 0L, isLoading = true))
+        }
+        launch {
+            val seasonsOff = offlineRepository.getSeasonsForSeries(series.id).first()
+            val episodesOffBySeason = seasonsOff.associate { season ->
+                season.id to offlineRepository.getEpisodesForSeason(season.id).first()
+            }
+            val downloadedBySeason = episodesOffBySeason.filterValues { it.isNotEmpty() }
+            val seasons = seasonsOff.filter { it.id in downloadedBySeason }.map { it.toMediaItem() }
+            val episodesBySeason = downloadedBySeason.mapValues { (_, eps) -> eps.map { it.toMediaItem() } }
+            val totalSizeBytes = episodesOffBySeason.values.flatten().sumOf { it.totalSizeBytes }
+            _uiState.update {
+                it.copy(seriesDelete = HomeSeriesDeleteState(series.id, seasons, episodesBySeason, totalSizeBytes, isLoading = false))
+            }
+        }
+    }
+
+    fun dismissSeriesDelete() {
+        _uiState.update { it.copy(seriesDelete = null) }
+    }
+
+    /**
+     * Deletes the selected downloaded episodes for the open series sheet,
+     * collapsing any fully-selected season into a single [deleteOfflineSeason]
+     * transaction and falling back to per-episode [deleteOfflineItem] — the
+     * same logic as the detail screen's `OfflineDeleteActions`. Clears the
+     * sheet immediately so it dismisses while the deletes run.
+     */
+    fun deleteOfflineEpisodes(episodeIds: Set<String>) {
+        if (episodeIds.isEmpty()) return
+        val state = _uiState.value.seriesDelete ?: return
+        dismissSeriesDelete()
+        launch {
+            val collapsedSeasonEpisodeIds = mutableSetOf<String>()
+            state.episodesBySeason.forEach { (seasonId, episodes) ->
+                val ids = episodes.map { it.id }
+                if (ids.isNotEmpty() && ids.all { it in episodeIds }) {
+                    offlineRepository.deleteOfflineSeason(seasonId)
+                    collapsedSeasonEpisodeIds.addAll(ids)
+                }
+            }
+            episodeIds.filterNot { it in collapsedSeasonEpisodeIds }
+                .forEach { offlineRepository.deleteOfflineItem(it) }
+        }
+    }
+
+    fun deleteOfflineSeries(seriesId: String) {
+        dismissSeriesDelete()
+        launch { offlineRepository.deleteOfflineSeries(seriesId) }
+    }
+
+
     private fun setItemPlayed(item: MediaItem, played: Boolean) {
         launch {
             val result = if (played) mediaRepository.markPlayed(item.id)

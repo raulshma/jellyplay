@@ -93,6 +93,29 @@ data class HomeUiState(
      * Configure Libraries semantics.
      */
     val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
+    /**
+     * Non-null while the offline home's advanced "delete downloaded episodes"
+     * sheet is open for a series card. Carries the seasons/episodes loaded for
+     * the targeted series (only downloaded episodes), the aggregate size, and a
+     * brief loading flag while that data is being read from the offline store.
+     * Rendered by [MainHomeContent] as a `DeleteDownloadedEpisodesSheet`.
+     */
+    val seriesDelete: HomeSeriesDeleteState? = null,
+)
+
+/**
+ * Data backing the offline home's series delete-episodes sheet (the same
+ * `DeleteDownloadedEpisodesSheet` the media-detail screen uses). [episodes]
+ * holds only downloaded episodes keyed by season id; [totalSizeBytes] is the
+ * aggregate on-disk size used for the freed-space summary.
+ */
+@Immutable
+data class HomeSeriesDeleteState(
+    val seriesId: String,
+    val seasons: List<MediaItem>,
+    val episodesBySeason: Map<String, List<MediaItem>>,
+    val totalSizeBytes: Long,
+    val isLoading: Boolean,
 )
 
 @Immutable

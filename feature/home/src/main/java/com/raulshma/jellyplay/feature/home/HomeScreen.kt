@@ -5,17 +5,22 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.focusGroup
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -64,6 +69,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
+import com.raulshma.jellyplay.core.ui.components.DeleteDownloadedEpisodesSheet
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
@@ -72,6 +78,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.UndoSnackbarOverlay
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
@@ -285,8 +292,13 @@ private fun MainHomeContent(
                     QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item)
                     QuickAction.MARK_UNWATCHED -> viewModel.markItemUnplayed(item)
                     QuickAction.DETAILS -> mediaOnItemClick(item)
-                    // Capture for the delete-confirm dialog (rendered below).
-                    QuickAction.DELETE -> pendingDelete = item
+                    // Series opens the advanced delete-episodes sheet
+                    // (select episodes / seasons / entire series); anything
+                    // else (movie/music) opens the simple confirm dialog below.
+                    QuickAction.DELETE -> {
+                        if (item.mediaType == MediaType.SERIES) viewModel.requestSeriesDelete(item)
+                        else pendingDelete = item
+                    }
                     else -> Unit
                 }
             }
@@ -666,6 +678,18 @@ private fun MainHomeContent(
         )
     }
 
+    // Advanced series delete-episodes sheet — the same one the media-detail
+    // screen uses. Shown when a series card's quick-action Delete is tapped;
+    // the ViewModel loads the series' seasons/downloaded episodes.
+    state.seriesDelete?.let { sd ->
+        HomeSeriesDeleteSheet(
+            state = sd,
+            onDelete = viewModel::deleteOfflineEpisodes,
+            onDeleteEntireSeries = { viewModel.deleteOfflineSeries(sd.seriesId) },
+            onDismiss = viewModel::dismissSeriesDelete,
+        )
+    }
+
     state.seerrRequestState.requestItem?.let { item ->
         androidx.compose.runtime.LaunchedEffect(item.id) {
             viewModel.onEvent(HomeUiEvent.LoadSeerrServiceDetails(item.mediaType))
@@ -774,6 +798,44 @@ private data class SectionConfigTarget(
     val type: HomeSectionType,
     val libraryId: String? = null,
 )
+
+/**
+ * The offline home's series delete-episodes sheet — wraps the shared
+ * [DeleteDownloadedEpisodesSheet] (the same one the media-detail screen uses)
+ * in a [TvSafeSheet]. Renders a centered spinner while the series'
+ * seasons/episodes are loading, then the selectable sheet.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeSeriesDeleteSheet(
+    state: HomeSeriesDeleteState,
+    onDelete: (Set<String>) -> Unit,
+    onDeleteEntireSeries: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    TvSafeSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        if (state.isLoading) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 48.dp),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+        } else {
+            DeleteDownloadedEpisodesSheet(
+                seasons = state.seasons,
+                episodes = state.episodesBySeason,
+                totalSizeBytes = state.totalSizeBytes,
+                onDelete = onDelete,
+                onDeleteEntireSeries = onDeleteEntireSeries,
+                onDismiss = onDismiss,
+            )
+        }
+    }
+}
 
 /**
  * Leaf composable that owns the scroll-coupled app-bar icon colors.

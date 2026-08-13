@@ -685,4 +685,23 @@
     <string name="a11y_mode_video">Modalità video</string>
     <string name="a11y_mode_music">Modalità musica</string>
 
+
+    <!-- DeleteDownloadedEpisodesSheet (shared by media detail + offline home). -->
+    <string name="detail_delete_downloads_title">Elimina download</string>
+    <string name="detail_select_episodes_to_remove">Seleziona gli episodi da rimuovere dal dispositivo.</string>
+    <string name="detail_select_all">Seleziona tutto</string>
+    <string name="detail_deselect_all">Deseleziona tutto</string>
+    <string name="detail_episodes_selected">%1$d di %2$d episodi selezionati</string>
+    <string name="detail_episodes_selected_with_freed">%1$d di %2$d episodi selezionati · %3$s</string>
+    <string name="detail_season_default">Stagione %1$d</string>
+    <string name="detail_cd_collapse">Comprimi</string>
+    <string name="detail_cd_expand">Espandi</string>
+    <string name="detail_delete_entire_series">Elimina l\'intera serie</string>
+    <string name="detail_cancel">Annulla</string>
+    <string name="detail_delete_count">Elimina %1$d</string>
+    <string name="detail_delete_count_with_freed">Elimina %1$d · %2$s</string>
+<plurals name="detail_episode_count">
+    <item quantity="one">%1$d episodio</item>
+    <item quantity="other">%1$d episodi</item>
+    </plurals>
 </resources>
