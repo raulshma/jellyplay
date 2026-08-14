@@ -57,6 +57,7 @@
     <string name="core_media_music_video">ミュージックビデオ</string>
     <string name="core_media_collection">コレクション</string>
     <string name="core_media_photo">写真</string>
+    <string name="core_media_photo_album">フォトアルバム</string>
     <string name="core_media_live_tv">ライブテレビ</string>
     <string name="core_media_channel">チャンネル</string>
     <string name="core_media_unknown">アイテム</string>
@@ -72,6 +73,7 @@
     <string name="core_media_music_video_plural">ミュージックビデオ</string>
     <string name="core_media_collection_plural">コレクション</string>
     <string name="core_media_photo_plural">写真</string>
+    <string name="core_media_photo_album_plural">フォトアルバム</string>
     <string name="core_media_live_tv_plural">ライブテレビ</string>
     <string name="core_media_channel_plural">チャンネル</string>
     <string name="core_media_unknown_plural">不明</string>

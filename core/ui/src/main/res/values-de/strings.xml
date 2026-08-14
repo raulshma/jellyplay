@@ -57,6 +57,7 @@
     <string name="core_media_music_video">Musikvideo</string>
     <string name="core_media_collection">Sammlung</string>
     <string name="core_media_photo">Foto</string>
+    <string name="core_media_photo_album">Fotoalbum</string>
     <string name="core_media_live_tv">Live-TV</string>
     <string name="core_media_channel">Sender</string>
     <string name="core_media_unknown">Eintrag</string>
@@ -72,6 +73,7 @@
     <string name="core_media_music_video_plural">Musikvideos</string>
     <string name="core_media_collection_plural">Sammlungen</string>
     <string name="core_media_photo_plural">Fotos</string>
+    <string name="core_media_photo_album_plural">Fotoalben</string>
     <string name="core_media_live_tv_plural">Live-TV</string>
     <string name="core_media_channel_plural">Sender</string>
     <string name="core_media_unknown_plural">Unbekannt</string>

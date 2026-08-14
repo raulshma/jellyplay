@@ -57,6 +57,7 @@
     <string name="core_media_music_video">音乐视频</string>
     <string name="core_media_collection">合集</string>
     <string name="core_media_photo">照片</string>
+    <string name="core_media_photo_album">相册</string>
     <string name="core_media_live_tv">直播电视</string>
     <string name="core_media_channel">频道</string>
     <string name="core_media_unknown">项目</string>
@@ -72,6 +73,7 @@
     <string name="core_media_music_video_plural">音乐视频</string>
     <string name="core_media_collection_plural">合集</string>
     <string name="core_media_photo_plural">照片</string>
+    <string name="core_media_photo_album_plural">相册</string>
     <string name="core_media_live_tv_plural">直播电视</string>
     <string name="core_media_channel_plural">频道</string>
     <string name="core_media_unknown_plural">未知</string>

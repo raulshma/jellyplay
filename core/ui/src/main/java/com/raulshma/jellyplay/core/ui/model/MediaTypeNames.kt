@@ -31,7 +31,8 @@ fun MediaType.mediaTypeDisplayNameRes(): Int = when (this) {
     MediaType.ARTIST -> R.string.core_media_artist
     MediaType.MUSIC_VIDEO -> R.string.core_media_music_video
     MediaType.COLLECTION -> R.string.core_media_collection
-    MediaType.PHOTO, MediaType.PHOTO_FOLDER -> R.string.core_media_photo
+    MediaType.PHOTO -> R.string.core_media_photo
+    MediaType.PHOTO_FOLDER -> R.string.core_media_photo_album
     MediaType.LIVE_TV -> R.string.core_media_live_tv
     MediaType.CHANNEL -> R.string.core_media_channel
     MediaType.UNKNOWN -> R.string.core_media_unknown
@@ -49,7 +50,8 @@ fun MediaType.mediaTypeDisplayNamePluralRes(): Int = when (this) {
     MediaType.ARTIST -> R.string.core_media_artist_plural
     MediaType.MUSIC_VIDEO -> R.string.core_media_music_video_plural
     MediaType.COLLECTION -> R.string.core_media_collection_plural
-    MediaType.PHOTO, MediaType.PHOTO_FOLDER -> R.string.core_media_photo_plural
+    MediaType.PHOTO -> R.string.core_media_photo_plural
+    MediaType.PHOTO_FOLDER -> R.string.core_media_photo_album_plural
     MediaType.LIVE_TV -> R.string.core_media_live_tv_plural
     MediaType.CHANNEL -> R.string.core_media_channel_plural
     MediaType.UNKNOWN -> R.string.core_media_unknown_plural
