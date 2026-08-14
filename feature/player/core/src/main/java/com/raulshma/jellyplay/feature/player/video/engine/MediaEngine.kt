@@ -262,6 +262,7 @@ data class EngineVideoStats(
 @Immutable
 data class PlaybackMetadataSnapshot(
     val videoCodec: String? = null,
+    val videoResolution: String? = null,
     val videoHdrType: String? = null,
     val audioCodec: String? = null,
     val audioChannels: Int? = null,

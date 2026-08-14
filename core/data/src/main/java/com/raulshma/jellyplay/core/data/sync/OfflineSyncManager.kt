@@ -263,9 +263,10 @@ class OfflineSyncManager @Inject constructor(
                         comparator.isSubtitleChanged(baseline.subtitleSignature, detail)
                     if (subsChanged) {
                         setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_SUBTITLES)
-                        // The writer filters to deliverable SUBTITLE streams and
-                        // clears the subtitles dir when none remain, so a
-                        // server-side removal is mirrored to disk.
+                        // The writer mirrors a genuine server-side removal (no
+                        // deliverable streams) by clearing the dir, but leaves
+                        // existing sidecars untouched when fetches fail and
+                        // returns false so the baseline rolls back and retries.
                         subtitlesOk = writer.downloadExternalSubtitles(
                             itemId, freshSource.id, freshSource.mediaStreams, downloadPath,
                         )

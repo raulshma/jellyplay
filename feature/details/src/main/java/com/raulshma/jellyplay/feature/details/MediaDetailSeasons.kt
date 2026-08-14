@@ -42,6 +42,7 @@ import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -149,17 +150,25 @@ internal fun SeasonsSection(
     // ─────────────────────────────────────────────────────────────────────────
     val initialSeasonIndex = SeasonStartResolver.resolveInitialSeasonIndex(
         seasons = seasons,
-        smartTargetEpisode = smartPlayTarget?.episode,
+        smartPlayTarget = smartPlayTarget,
         currentSeasonId = currentSeasonId,
         persistedSeasonId = persistedSeasonId,
     )
-    var selectedSeasonIndex by remember { mutableStateOf(initialSeasonIndex) }
+    var userSelectedSeasonId by remember(seriesItem.id) { mutableStateOf<String?>(null) }
+    val selectedSeasonIndex = remember(seasons, userSelectedSeasonId, initialSeasonIndex) {
+        if (userSelectedSeasonId != null) {
+            val userIdx = seasons.indexOfFirst { it.id == userSelectedSeasonId }
+            if (userIdx >= 0) userIdx else initialSeasonIndex
+        } else {
+            initialSeasonIndex
+        }
+    }
     // Episode sort order within a season. Persisted app-wide (see
     // [DetailViewModel.setEpisodesDescending]) so the choice carries across
     // every series detail screen — the previous local `remember` reset it to
     // "newest first" on each navigation.
 
-    LaunchedEffect(selectedSeasonIndex) {
+    LaunchedEffect(selectedSeasonIndex, seasons) {
         val season = seasons.getOrNull(selectedSeasonIndex)
         if (season != null) {
             onSeasonSelected(season.id)
@@ -292,7 +301,7 @@ internal fun SeasonsSection(
                         leadingButton = {
                             SplitButtonDefaults.LeadingButton(
                                 onClick = {
-                                    selectedSeasonIndex = index
+                                    userSelectedSeasonId = season.id
                                     // Persist the user's tab choice. This fires
                                     // ONLY on a real tab select — never from the
                                     // init LaunchedEffect (which calls only
@@ -375,7 +384,11 @@ internal fun SeasonsSection(
         }
 
         AnimatedContent(
-            targetState = Triple(selectedSeasonIndex, seasonEpisodes?.size ?: 0, useCompactList),
+            targetState = SeasonEpisodesTargetState(
+                seasonIndex = selectedSeasonIndex,
+                isLoading = isLoading,
+                isCompact = useCompactList,
+            ),
             transitionSpec = {
                 fadeIn(
                     animationSpec = seasonFadeIn,
@@ -384,7 +397,9 @@ internal fun SeasonsSection(
                 )
             },
             label = "seasonEpisodes",
-        ) { (seasonIdx, episodeCount, isCompact) ->
+        ) { target ->
+            val seasonIdx = target.seasonIndex
+            val isCompact = target.isCompact
             val sharedTransitionScope = LocalSharedTransitionScope.current
             val animatedVisibilityScope = this
             // Memoize the sort + reverse so a recomposition triggered by an
@@ -396,7 +411,7 @@ internal fun SeasonsSection(
                     ?.let { sorted -> if (episodesDescending) sorted.reversed() else sorted }
             }
             val currentIsFetched = seasons.getOrNull(seasonIdx)?.id?.let { fetchedSeasonIds.contains(it) } ?: false
-            val currentIsLoading = currentEpisodes == null && seasons.getOrNull(seasonIdx) != null && !currentIsFetched
+            val currentIsLoading = target.isLoading || (currentEpisodes == null && seasons.getOrNull(seasonIdx) != null && !currentIsFetched)
 
             when {
                 currentIsLoading -> {
@@ -1113,3 +1128,10 @@ private fun episodeScrimColor(isPlayed: Boolean): Color =
 private fun Modifier.playedAlpha(isPlayed: Boolean, alpha: Float): Modifier =
     if (isPlayed) graphicsLayer { this.alpha = alpha } else this
 // endregion
+
+@Immutable
+private data class SeasonEpisodesTargetState(
+    val seasonIndex: Int,
+    val isLoading: Boolean,
+    val isCompact: Boolean,
+)

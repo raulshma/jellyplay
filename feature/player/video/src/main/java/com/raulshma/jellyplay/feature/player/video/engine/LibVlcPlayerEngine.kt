@@ -94,6 +94,11 @@ class LibVlcPlayerEngine(
             MediaPlayer.Event.Playing -> {
                 _isPlaying.value = true
                 _playbackState.value = EnginePlaybackState.READY
+                // Apply saved subtitle delay after tracks are initialized.
+                // LibVLC resets SPU state during playback startup, so
+                // setSpuDelay() called before play() has no effect.
+                // VLC Android does the same in PlaylistManager.loadMediaMeta().
+                mediaPlayer?.let { applySpuDelay(it) }
             }
             MediaPlayer.Event.Paused -> {
                 _isPlaying.value = false
@@ -267,7 +272,10 @@ class LibVlcPlayerEngine(
 
         // Apply pre-set speed
         mp.rate = 1f
-        mp.setSpuDelay(currentConfig.subtitleDelayMs * 1000L) // microseconds
+        // Note: subtitle delay (setSpuDelay) is NOT applied here — LibVLC
+        // resets SPU state when it initialises tracks during mp.play().
+        // The delay is applied in the MediaPlayer.Event.Playing callback
+        // after tracks are loaded (matching VLC Android behaviour).
 
         pendingPlay = true
         
@@ -366,7 +374,17 @@ class LibVlcPlayerEngine(
             // a reload below (subtitle style does; the rest require the user
             // to back out and re-enter the player). Documented here so future
             // contributors don't assume the toggle is silently dropped.
-            if (oldConfig.subtitleStyle != newConfig.subtitleStyle || oldConfig.videoEffects != newConfig.videoEffects) {
+            //
+            // Subtitle delay is excluded from this reload decision: it rides on
+            // SubtitleStyle.offsetMs (mirrored into subtitleDelayMs by
+            // EngineConfigBuilder), but is applied live via setSpuDelay() above,
+            // so a delay-only change must NOT rebuild the media. This mirrors
+            // VLC for Android, which calls MediaPlayer.setSpuDelay() at runtime
+            // without reloading (see scratch vlc-android: PlayerController/
+            // PlaylistManager setSpuDelay — no stop/seek).
+            if (styleChangedExcludingDelay(oldConfig.subtitleStyle, newConfig.subtitleStyle) ||
+                oldConfig.videoEffects != newConfig.videoEffects
+            ) {
                 reloadMediaForSubtitleStyleChange()
             }
         } catch (_: Exception) {}
@@ -521,10 +539,29 @@ class LibVlcPlayerEngine(
     }
 
     override fun applySubtitleStyle(style: SubtitleStyle) {
-        if (currentConfig.subtitleStyle != style) {
-            currentConfig = currentConfig.copy(subtitleStyle = style)
+        // Always keep currentConfig in sync with the incoming style so the
+        // engine's snapshot matches the ViewModel's, but only rebuild the
+        // Media object for genuine visual-style changes (font/color/margins).
+        // Delay-only changes are applied live via setSpuDelay() in
+        // onConfigChanged — they must NOT trigger a reload here.
+        if (currentConfig.subtitleStyle == style) return
+        val needsReload = styleChangedExcludingDelay(currentConfig.subtitleStyle, style)
+        currentConfig = currentConfig.copy(subtitleStyle = style)
+        if (needsReload) {
             reloadMediaForSubtitleStyleChange()
         }
+    }
+
+    /**
+     * Re-asserts the configured subtitle delay on [mp]. Playback startup and
+     * media rebuilds reset LibVLC's SPU state, so every site that starts play
+     * or reassigns the Media must call this afterwards. No-op while the saved
+     * delay is zero; the live route for user edits (delay != old delay) is
+     * [onConfigChanged]'s direct `setSpuDelay`, which must also propagate 0.
+     */
+    private fun applySpuDelay(mp: MediaPlayer) {
+        if (currentConfig.subtitleDelayMs == 0L) return
+        try { mp.setSpuDelay(currentConfig.subtitleDelayMs * 1000L) } catch (_: Exception) {}
     }
 
     private fun reloadMediaForSubtitleStyleChange() {
@@ -547,6 +584,12 @@ class LibVlcPlayerEngine(
             }
             mp.media = media
             media.release()
+            // Re-assert the subtitle delay after rebuilding the Media: the spu
+            // delay is a player-level setting that may not survive the media
+            // reassignment, so a saved correction would otherwise reset to zero
+            // on a genuine style/font change. Delay-only changes never reach
+            // this path (onConfigChanged routes them through setSpuDelay live).
+            applySpuDelay(mp)
             if (currentPositionMs > 0) {
                 try { mp.time = currentPositionMs } catch (_: Exception) {}
             }

@@ -178,6 +178,34 @@ class EpisodeCatalogueImplTest {
     }
 
     @Test
+    fun `loadSeasonEpisodes merges empty season into snapshot and marks it fetched`() = runTest {
+        coEvery { apiClient.getSeasons("series-1") } returns Result.success(
+            listOf(seasonItem("season-1"), seasonItem("season-2"))
+        )
+        coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(
+            listOf(episode("e1", seasonId = "season-1"))
+        )
+        coEvery { apiClient.getEpisodes("series-1", "season-2") } returns Result.success(emptyList())
+
+        catalogue.loadSeriesEpisodes("series-1")
+        val seasonTwo = catalogue.loadSeasonEpisodes("series-1", "season-2")
+
+        assertTrue(seasonTwo.isSuccess)
+        assertTrue(seasonTwo.getOrNull()!!.isEmpty())
+        coVerify(exactly = 1) { apiClient.getEpisodes("series-1", "season-2") }
+
+        // Second load must serve the empty list from cache without refetching
+        val seasonTwoCached = catalogue.loadSeasonEpisodes("series-1", "season-2")
+        assertTrue(seasonTwoCached.isSuccess)
+        assertTrue(seasonTwoCached.getOrNull()!!.isEmpty())
+        coVerify(exactly = 1) { apiClient.getEpisodes("series-1", "season-2") }
+
+        val snapshot = catalogue.loadSeriesEpisodes("series-1").getOrNull()!!
+        assertTrue("season-2 must be in fetchedSeasonIds", "season-2" in snapshot.fetchedSeasonIds)
+        assertEquals(emptyList<MediaItem>(), snapshot.episodesBySeason["season-2"])
+    }
+
+    @Test
     fun `concurrent per-season fetches do not clobber each other in the shared snapshot`() = runTest {
         // Port of the MediaRepositoryImpl "getEpisodes merges multiple seasons
         // into the grouped cache" clobber fix: two per-season fetches landing

@@ -69,4 +69,51 @@ class PlaybackMetadataRowTest {
         }
         composeTestRule.onNodeWithText("Sub Delay -0.5s").assertIsDisplayed()
     }
+
+    @Test
+    fun playbackMetadataRow_showsResolutionAndCodec() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                PlaybackMetadataRow(
+                    playMethod = "Direct Play",
+                    isDirectPlayForced = false,
+                    hdrType = "dolbyvision",
+                    mediaStreams = listOf(
+                        com.raulshma.jellyplay.core.model.MediaStream(
+                            index = 0,
+                            type = com.raulshma.jellyplay.core.model.StreamType.VIDEO,
+                            width = 3840,
+                            height = 2160,
+                            codec = "hevc",
+                        ),
+                    ),
+                    videoStats = PlaybackMetadataSnapshot(),
+                    audioTracks = emptyList(),
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("4K").assertIsDisplayed()
+        composeTestRule.onNodeWithText("HEVC").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Dolby Vision").assertIsDisplayed()
+    }
+
+    @Test
+    fun playbackMetadataRow_showsMeteredBadge() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                PlaybackMetadataRow(
+                    playMethod = "Transcode",
+                    isDirectPlayForced = false,
+                    hdrType = null,
+                    mediaStreams = emptyList(),
+                    videoStats = PlaybackMetadataSnapshot(),
+                    audioTracks = emptyList(),
+                    isConnectionMetered = true,
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Transcode").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Metered").assertIsDisplayed()
+    }
 }
+

@@ -40,6 +40,7 @@ import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.OfflineSubtitleEntry
 import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
 import com.raulshma.jellyplay.core.model.TrickplayInfo
+import com.raulshma.jellyplay.core.model.isImageSubtitleCodec
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -602,10 +603,27 @@ class DownloadRepositoryImpl @Inject constructor(
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             val parentDir = File(downloadPath).parentFile ?: return@withContext false
-            val subtitleStreams = mediaStreams.filter { it.isBundleableSubtitle }
-            if (subtitleStreams.isEmpty()) return@withContext true
+            // Drop streams the URL builders can never serve — an external
+            // image-codec sub (PGS/VOBSUB) has no delivery endpoint, so
+            // fetching it fails on every pass. Without this pre-filter an
+            // image-only inventory would report failure forever and the resync
+            // would retry a permanently-unfetchable list each sync.
+            val subtitleStreams = mediaStreams
+                .filter { it.isBundleableSubtitle }
+                .filterNot { it.isExternal && it.deliveryUrl.isNullOrBlank() && isImageSubtitleCodec(it.codec) }
+            val subtitlesDir = File(parentDir, DownloadArtifacts.subtitlesDir(itemId))
 
-            val subtitlesDir = File(parentDir, DownloadArtifacts.subtitlesDir(itemId)).apply { mkdirs() }
+            // Nothing deliverable remains — either a genuine server-side
+            // removal or an inventory of never-fetchable streams. Mirror that
+            // to disk and report success (the baseline seeds as empty). Doing
+            // this here — not on fetch failure — means a server change is
+            // reflected without wiping sidecars on a transient error.
+            if (subtitleStreams.isEmpty()) {
+                if (subtitlesDir.exists()) subtitlesDir.deleteRecursively()
+                return@withContext true
+            }
+
+            subtitlesDir.mkdirs()
             val entries = mutableListOf<OfflineSubtitleEntry>()
 
             for (stream in subtitleStreams) {
@@ -640,15 +658,19 @@ class DownloadRepositoryImpl @Inject constructor(
                 }
             }
 
-            // Only persist a manifest when at least one subtitle was saved.
-            // Otherwise remove the dir so the player never reads a stale manifest.
             if (entries.isNotEmpty()) {
+                // Persist a manifest describing exactly what landed on disk.
                 File(subtitlesDir, DownloadArtifacts.SUBTITLE_MANIFEST_FILE)
                     .writeText(json.encodeToString(OfflineSubtitleManifest(entries)))
-            } else if (subtitlesDir.exists()) {
-                subtitlesDir.deleteRecursively()
+                true
+            } else {
+                // Deliverable streams existed but none fetched (transient
+                // network/auth/delivery-URL failure). Leave the existing dir and
+                // manifest untouched and report failure so the resync baseline
+                // rolls its subtitle axis back and the next sync retries — instead
+                // of destroying working sidecars and seeding the baseline as synced.
+                false
             }
-            true
         } catch (e: Exception) {
             Log.d(TAG, "Failed to download external subtitles for $itemId", e)
             false

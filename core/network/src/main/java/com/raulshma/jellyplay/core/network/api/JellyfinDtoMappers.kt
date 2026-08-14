@@ -61,7 +61,7 @@ internal fun BaseItemDto.toMediaItem() = MediaItem(
     tags = tags ?: emptyList(),
     parentId = parentId?.toString(),
     seriesId = seriesId?.toString(),
-    seasonId = seasonId?.toString(),
+    seasonId = seasonId?.toString() ?: (if (type == BaseItemKind.EPISODE) parentId?.toString() else null),
     seriesName = seriesName,
     seasonNumber = parentIndexNumber,
     episodeNumber = indexNumber,

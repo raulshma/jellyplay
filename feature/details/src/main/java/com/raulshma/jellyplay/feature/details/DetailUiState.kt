@@ -168,7 +168,13 @@ data class DetailUiState(
         // Primary image URL for the targeted episode, precomputed in the VM so the
         // Up Next card can render a thumbnail without an image-url dependency.
         val primaryImageUrl: String? = null,
-    )
+        val labelKind: LabelKind? = null,
+    ) {
+        val isNextUpOrResume: Boolean
+            get() = labelKind == LabelKind.RESUME_EPISODE ||
+                labelKind == LabelKind.NEXT_UP_EPISODE ||
+                (startPositionTicks > 0L && !episode.isPlayed)
+    }
 
     companion object {
         /**

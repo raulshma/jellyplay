@@ -2151,10 +2151,12 @@ class VideoPlayerViewModel @Inject constructor(
         playerSessionManager.sessionState.value.currentItemId?.let { itemId ->
             launch { subtitleStore.setSubtitleDelayForItem(itemId, ms) }
         }
-        // Debounce the engine apply: a delay change forces ExoPlayer/LibVLC to
-        // reload the media item to re-parse cues through the offset wrapper (a
-        // rebuffer). Coalesce a burst of fine-tune nudges into a single reload —
-        // the readout already reflects the live in-memory value instantly.
+        // Debounce the engine apply: a delay change forces ExoPlayer to reload
+        // the media item to re-parse cues through the offset wrapper (a
+        // rebuffer). mpv and libVLC apply the delay live (sub-delay /
+        // setSpuDelay) with no reload, but ExoPlayer benefits from coalescing a
+        // burst of fine-tune nudges into a single reload — the readout already
+        // reflects the live in-memory value instantly.
         subtitleDelayApplyJob?.cancel()
         subtitleDelayApplyJob = launch {
             delay(SUBTITLE_DELAY_APPLY_DEBOUNCE_MS)

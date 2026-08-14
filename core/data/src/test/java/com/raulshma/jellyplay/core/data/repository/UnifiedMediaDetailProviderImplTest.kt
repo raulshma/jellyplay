@@ -508,6 +508,32 @@ class UnifiedMediaDetailProviderImplTest {
     }
 
     @Test
+    fun `expandSeason merges an empty season, updates fetchedSeasonIds, and re-emits`() = runTest {
+        val initial = seriesCatalogueSnapshot(seasonIds = listOf("season1"), episodesPerSeason = 2)
+        wireStubs("s1", mode = OfflineMode.ONLINE)
+        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(seriesDetail())
+        coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(initial)
+        coEvery { episodeCatalogue.loadSeasonEpisodes("s1", "season2", any()) } returns Result.success(emptyList())
+
+        val provider = buildProvider()
+        val states = mutableListOf<DetailLoadState>()
+        val job = launch { provider.observe("s1").collect { states += it } }
+        advanceUntilIdle()
+
+        val before = states.filterIsInstance<DetailLoadState.Loaded>().last()
+        assertFalse(before.snapshot.fetchedSeasonIds.contains("season2"))
+
+        val returned = provider.expandSeason("s1", "season2")
+        advanceUntilIdle()
+
+        assertTrue(returned.isEmpty())
+        val after = states.filterIsInstance<DetailLoadState.Loaded>().last()
+        assertTrue("season2 must be marked as fetched", after.snapshot.fetchedSeasonIds.contains("season2"))
+        assertEquals(emptyList<MediaItem>(), after.snapshot.episodesBySeason["season2"])
+        job.cancel()
+    }
+
+    @Test
     fun `canonicalEpisodeIds serves from a loaded session without a cold load`() = runTest {
         val snapshot = seriesCatalogueSnapshot()
         wireStubs("s1", mode = OfflineMode.ONLINE)

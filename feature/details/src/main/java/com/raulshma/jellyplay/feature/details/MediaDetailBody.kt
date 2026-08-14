@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -327,9 +328,9 @@ internal fun DetailContentBody(
 
                 Spacer(Modifier.height(12.dp))
                 FadingItem {
-                    Row(
+                    FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
                     ) {
                         item.year?.let {
                             Text(
@@ -351,7 +352,7 @@ internal fun DetailContentBody(
                                 modifier = Modifier
                                     .clip(ShapeCache.smooth4)
                                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
                             ) {
                                 Text(
                                     text = it,
@@ -367,7 +368,7 @@ internal fun DetailContentBody(
                                     Tabler.Outline.Heart,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(16.dp),
                                 )
                                 Spacer(Modifier.width(4.dp))
                                 Text(
@@ -385,7 +386,7 @@ internal fun DetailContentBody(
                                         Tabler.Outline.Star,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.tertiary,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(16.dp),
                                     )
                                     Spacer(Modifier.width(4.dp))
                                     Text(
@@ -396,6 +397,10 @@ internal fun DetailContentBody(
                                 }
                             }
                         }
+                        SegmentAvailabilityChip(
+                            hasIntro = state.hasIntroSegment,
+                            hasCredits = state.hasCreditSegment,
+                        )
                     }
                 }
 

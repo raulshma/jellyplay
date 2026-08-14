@@ -951,12 +951,11 @@ class DetailViewModel @Inject constructor(
     private fun computeSeriesSmartPlayTarget() {
         launch(Dispatchers.Default) {
             val state = _uiState.value
-            // Check pending seasons BEFORE reading the sorted list — a season
-            // not yet in fetchedSeasonIds means episodes are incomplete and
-            // smart-play would target the wrong episode.
-            val seasonsPending = state.seasons.any { s -> !state.fetchedSeasonIds.contains(s.id) }
-            if (seasonsPending) return@launch
-            val sorted = state.sortedEpisodes.takeIf { it.isNotEmpty() } ?: return@launch
+            val sorted = state.sortedEpisodes.takeIf { it.isNotEmpty() }
+            if (sorted == null) {
+                _uiState.update { it.copy(smartPlayTarget = null) }
+                return@launch
+            }
             val result = SmartPlayResolver.resolveSeries(sorted)
             if (result == null) {
                 _uiState.update { it.copy(smartPlayTarget = null) }
@@ -997,6 +996,7 @@ class DetailViewModel @Inject constructor(
             label = label,
             startPositionTicks = startPositionTicks,
             primaryImageUrl = imageUrlProvider.getImageUrl(episode.id),
+            labelKind = this.label,
         )
     }
 

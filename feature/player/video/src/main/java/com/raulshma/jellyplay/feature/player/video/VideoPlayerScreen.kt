@@ -116,6 +116,7 @@ import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
+import com.raulshma.jellyplay.feature.player.video.engine.styleChangedExcludingDelay
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
@@ -1143,9 +1144,18 @@ fun VideoPlayerScreen(
                         },
                         update = { view ->
                             val currentStyle = uiState.subtitleStyle
-                            if (lastAppliedSubtitleStyle != currentStyle) {
+                            // Only call applySubtitleStyle for visual style
+                            // changes (font/color/margins). Delay changes are
+                            // applied live via the engine config path
+                            // (setSpuDelay), not through the style-reload path.
+                            val lastStyle = lastAppliedSubtitleStyle
+                            if (lastStyle == null || styleChangedExcludingDelay(lastStyle, currentStyle)) {
                                 lastAppliedSubtitleStyle = currentStyle
                                 viewModel.applySubtitleStyle()
+                            } else if (lastStyle != currentStyle) {
+                                // Delay-only change: update the snapshot but
+                                // don't trigger the style reload path.
+                                lastAppliedSubtitleStyle = currentStyle
                             }
                         },
                         modifier = Modifier
@@ -1660,6 +1670,7 @@ fun VideoPlayerScreen(
                 audioTracks = uiState.audioTracks,
                 isConnectionMetered = uiState.isConnectionMetered,
                 subtitleDelayMs = uiState.subtitleStyle.offsetMs,
+                onSubtitleDelayClick = { showDelayOverlay = true },
                 showPlaybackMetadata = uiState.showPlaybackMetadata,
                 showClock = uiState.showClock,
                 showTimeRemaining = uiState.showTimeRemaining,

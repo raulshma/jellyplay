@@ -34,12 +34,37 @@ class SeasonStartResolverTest {
     }
 
     @Test
-    fun `no resume and persisted present returns persisted index`() {
-        // Smart target is a non-resume (next-up) on s1; persisted is s2 → s2 wins.
+    fun `next up target wins over persisted season`() {
+        // Smart target is next-up on s1; persisted is s2 → next-up wins.
         val nextUp = episode(seasonId = "s1", positionTicks = 0L, played = false)
+        val target = DetailUiState.SmartPlayTarget(
+            episode = nextUp,
+            label = "Next up: S1 E1",
+            startPositionTicks = 0L,
+            labelKind = LabelKind.NEXT_UP_EPISODE,
+        )
         val idx = SeasonStartResolver.resolveInitialSeasonIndex(
             seasons = seasons,
-            smartTargetEpisode = nextUp,
+            smartPlayTarget = target,
+            currentSeasonId = null,
+            persistedSeasonId = "s2",
+        )
+        assertEquals(0, idx) // s1
+    }
+
+    @Test
+    fun `unstarted play target lets persisted season win`() {
+        // Series unstarted (PLAY_EPISODE) on s1; persisted is s2 → persisted s2 wins.
+        val playEp = episode(seasonId = "s1", positionTicks = 0L, played = false)
+        val target = DetailUiState.SmartPlayTarget(
+            episode = playEp,
+            label = "Play S1 E1",
+            startPositionTicks = 0L,
+            labelKind = LabelKind.PLAY_EPISODE,
+        )
+        val idx = SeasonStartResolver.resolveInitialSeasonIndex(
+            seasons = seasons,
+            smartPlayTarget = target,
             currentSeasonId = null,
             persistedSeasonId = "s2",
         )
@@ -70,13 +95,18 @@ class SeasonStartResolverTest {
     }
 
     @Test
-    fun `played smart target is not a resume so persisted wins`() {
-        // Position > 0 but episode is fully played → not a resume (matches
-        // SmartPlayResolver.hasResumeProgress: `> 0 && !isPlayed`).
+    fun `played replay smart target is not next up or resume so persisted wins`() {
+        // Position > 0 but episode is fully played → not a resume or next-up.
         val replay = episode(seasonId = "s1", positionTicks = 9_000_000L, played = true)
+        val target = DetailUiState.SmartPlayTarget(
+            episode = replay,
+            label = "Replay S1 E1",
+            startPositionTicks = 0L,
+            labelKind = LabelKind.REPLAY_EPISODE,
+        )
         val idx = SeasonStartResolver.resolveInitialSeasonIndex(
             seasons = seasons,
-            smartTargetEpisode = replay,
+            smartPlayTarget = target,
             currentSeasonId = null,
             persistedSeasonId = "s2",
         )
@@ -92,6 +122,19 @@ class SeasonStartResolverTest {
             persistedSeasonId = null,
         )
         assertEquals(1, idx) // s2
+    }
+
+    @Test
+    fun `persisted season wins over currentSeasonId`() {
+        // No resume in play: the user's pinned season outranks the season the
+        // screen was incidentally opened from.
+        val idx = SeasonStartResolver.resolveInitialSeasonIndex(
+            seasons = seasons,
+            smartTargetEpisode = null,
+            currentSeasonId = "s2",
+            persistedSeasonId = "s3",
+        )
+        assertEquals(2, idx) // s3
     }
 
     @Test
@@ -142,6 +185,55 @@ class SeasonStartResolverTest {
             persistedSeasonId = null,
         )
         assertEquals(0, idx) // coerceAtLeast(0)
+    }
+
+    @Test
+    fun `smart target matching by parentId resolves season index`() {
+        val nextUp = MediaItem(
+            id = "ep_1",
+            name = "Episode 1",
+            mediaType = MediaType.EPISODE,
+            parentId = "s2",
+            seasonId = null,
+        )
+        val target = DetailUiState.SmartPlayTarget(
+            episode = nextUp,
+            label = "Next up: S2 E1",
+            startPositionTicks = 0L,
+            labelKind = LabelKind.NEXT_UP_EPISODE,
+        )
+        val idx = SeasonStartResolver.resolveInitialSeasonIndex(
+            seasons = seasons,
+            smartPlayTarget = target,
+        )
+        assertEquals(1, idx) // s2
+    }
+
+    @Test
+    fun `smart target matching by seasonNumber resolves season index`() {
+        val seasonsWithNumber = listOf(
+            MediaItem(id = "s_a", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1),
+            MediaItem(id = "s_b", name = "Season 2", mediaType = MediaType.SEASON, indexNumber = 2),
+        )
+        val nextUp = MediaItem(
+            id = "ep_1",
+            name = "Episode 1",
+            mediaType = MediaType.EPISODE,
+            seasonNumber = 2,
+            seasonId = null,
+            parentId = null,
+        )
+        val target = DetailUiState.SmartPlayTarget(
+            episode = nextUp,
+            label = "Next up: S2 E1",
+            startPositionTicks = 0L,
+            labelKind = LabelKind.NEXT_UP_EPISODE,
+        )
+        val idx = SeasonStartResolver.resolveInitialSeasonIndex(
+            seasons = seasonsWithNumber,
+            smartPlayTarget = target,
+        )
+        assertEquals(1, idx) // s_b
     }
 
     @Test

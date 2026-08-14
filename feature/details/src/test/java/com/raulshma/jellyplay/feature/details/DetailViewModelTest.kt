@@ -669,6 +669,36 @@ class DetailViewModelTest {
         assertEquals("e1", target.episode.id)
     }
 
+    @Test
+    fun smartPlay_seriesWithPendingOrEmptySeason_stillResolvesSmartPlayTarget() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val s0 = MediaItem(id = "season0", name = "Specials", mediaType = MediaType.SEASON, indexNumber = 0)
+        val s1 = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+        val ep1 = episode("e1", 1, 1, isPlayed = false)
+        val detail = MediaDetail(item = MediaItem(id = "s1", name = "Show", mediaType = MediaType.SERIES))
+        val comparator = playbackOrderComparator()
+        val sorted = listOf(ep1).sortedWith(comparator)
+        // season0 is in seasons, but NOT in fetchedSeasonIds (e.g. empty or not yet fetched)
+        stubProvider(
+            "s1",
+            remoteSnapshot(
+                detail = detail,
+                seasons = listOf(s0, s1),
+                episodesBySeason = mapOf(s1.id to listOf(ep1)),
+                fetchedSeasonIds = setOf(s1.id),
+                sortedEpisodes = sorted,
+            ),
+        )
+
+        viewModel.loadItem("s1")
+        advanceUntilIdle()
+
+        val target = viewModel.uiState.value.smartPlayTarget
+        assertNotNull("SmartPlayTarget must not be null even if some season is pending/empty", target)
+        assertEquals("Play S1:E1", target!!.label)
+        assertEquals("e1", target.episode.id)
+    }
+
     // ---- Item-level mark played / unplayed ----------------------------------
 
     @Test
@@ -1164,6 +1194,44 @@ class DetailViewModelTest {
 
             assertEquals(setOf("season1"), viewModel.uiState.value.fetchedSeasonIds)
             assertEquals(eps, viewModel.uiState.value.episodes["season1"])
+        }
+
+    @Test
+    fun episodes_emptySeason_updatesFetchedSeasonIdsAndEmptyList() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+            val flow = stubProvider(
+                "s1",
+                remoteSnapshot(
+                    MediaDetail(item = MediaItem(id = "s1", name = "Show", mediaType = MediaType.SERIES)),
+                    seasons = listOf(season),
+                    episodesBySeason = emptyMap(),
+                    fetchedSeasonIds = emptySet(),
+                ),
+            )
+            coEvery { mediaDetailProvider.expandSeason("s1", "season1") } answers {
+                val current = (flow.value as DetailLoadState.Loaded).snapshot
+                flow.value = DetailLoadState.Loaded(
+                    current.copy(
+                        episodesBySeason = current.episodesBySeason + ("season1" to emptyList()),
+                        fetchedSeasonIds = current.fetchedSeasonIds + "season1",
+                        contentGeneration = current.contentGeneration + 1,
+                    ),
+                )
+                emptyList()
+            }
+
+            viewModel.loadItem("s1")
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.uiState.value.fetchedSeasonIds.contains("season1"))
+
+            viewModel.loadEpisodesForSeason("s1", "season1")
+            advanceUntilIdle()
+
+            assertEquals(setOf("season1"), viewModel.uiState.value.fetchedSeasonIds)
+            assertEquals(emptyList<MediaItem>(), viewModel.uiState.value.episodes["season1"])
         }
 
     // ── LOCAL-origin snapshot computes smart-play but suppresses remote discovery ──

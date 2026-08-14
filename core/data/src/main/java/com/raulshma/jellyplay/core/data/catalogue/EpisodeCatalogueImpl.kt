@@ -339,14 +339,16 @@ class EpisodeCatalogueImpl @Inject constructor(
         seasons: List<MediaItem>,
         epochAtStart: Long,
     ): EpisodeCatalogueSnapshot {
-        val grouped = mutableMapOf<String, List<MediaItem>>()
+        val grouped = java.util.concurrent.ConcurrentHashMap<String, List<MediaItem>>()
         coroutineScope {
             seasons.forEach { season ->
                 launch {
                     seasonSemaphore.withPermit {
-                        val episodes = apiClient.getEpisodes(seriesId, season.id).getOrDefault(emptyList())
-                        if (epoch.get() == epochAtStart && episodes.isNotEmpty()) {
-                            grouped[season.id] = episodes
+                        val episodesResult = apiClient.getEpisodes(seriesId, season.id)
+                        if (epoch.get() == epochAtStart) {
+                            episodesResult.onSuccess { episodes ->
+                                grouped[season.id] = episodes
+                            }
                         }
                     }
                 }

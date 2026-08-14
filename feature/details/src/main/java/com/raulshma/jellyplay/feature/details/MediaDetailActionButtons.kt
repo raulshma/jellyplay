@@ -41,6 +41,7 @@ import com.composables.icons.tabler.outline.Eye
 import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.PlayerTrackNext
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.isAudioType
@@ -82,14 +83,14 @@ internal fun DetailActionButtons(
     val target = if (isSeriesOrEpisode) state.smartPlayTarget else null
     val itemProgressFraction = item.progressFraction()
     val hasProgress = itemProgressFraction != null && itemProgressFraction > 0f
-    val allSeasonsFetched = state.seasons.isNotEmpty() && state.fetchedSeasonIds.size >= state.seasons.size
+    val allSeasonsFetched = state.seasons.isEmpty() || state.seasons.all { it.id in state.fetchedSeasonIds }
     val allEpisodesEmpty = remember(state.seasons, state.episodes) {
         state.seasons.isNotEmpty() && state.episodes.values.all { it.isEmpty() }
     }
     val isResolvingSeriesTarget = isSeries &&
         target == null &&
         !allSeasonsFetched
-    val hasNoEpisodes = isSeries && allSeasonsFetched && allEpisodesEmpty
+    val hasNoEpisodes = isSeries && allSeasonsFetched && (allEpisodesEmpty || state.episodes.isEmpty())
     // A series with no episodes has no valid play target — never let the primary button
     // dispatch play on the series root item. The button already dims when this is false.
     val canPlayPrimary = isAudio || !isSeries || target != null
@@ -171,10 +172,6 @@ internal fun DetailActionButtons(
                     onClick = onPlay,
                 )
             }
-            SegmentAvailabilityChip(
-                hasIntro = state.hasIntroSegment,
-                hasCredits = state.hasCreditSegment,
-            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -205,16 +202,12 @@ internal fun DetailActionButtons(
             }
         }
     } else {
-        Column(
+        Row(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.Start),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.Start),
-            ) {
             val playHFocusState = rememberTvFocusState(focusedScale = 1.05f)
             val markHFocusState = rememberTvFocusState(focusedScale = 1.08f)
             val favoriteHFocusState = rememberTvFocusState(focusedScale = 1.08f)
@@ -253,11 +246,6 @@ internal fun DetailActionButtons(
                     onClick = callbacks.onToggleFavorite,
                 )
             }
-            }
-            SegmentAvailabilityChip(
-                hasIntro = state.hasIntroSegment,
-                hasCredits = state.hasCreditSegment,
-            )
         }
     }
 }
@@ -416,17 +404,16 @@ private fun FavoriteButton(
 }
 
 /**
- * Small informational pill near the Play button advertising that intro/credits
- * skip points are available for this item. Rendered only when at least one
- * segment resolved. Static (non-focusable) so it never competes with the Play
- * button for TV focus. Styled like the Up-Next pill: tinted primary background
- * at low alpha with a bold `labelSmall` caption.
+ * Informational badge advertising that intro/credits skip points are available
+ * for this item. Rendered alongside primary metadata (year, runtime, rating)
+ * only when at least one segment resolved. Static (non-focusable) with a subtle
+ * primary-tinted container and track-skip icon.
  *
  * @param hasIntro true when an INTRO segment was resolved.
  * @param hasCredits true when an OUTRO (credits) segment was resolved.
  */
 @Composable
-private fun SegmentAvailabilityChip(
+internal fun SegmentAvailabilityChip(
     hasIntro: Boolean,
     hasCredits: Boolean,
     modifier: Modifier = Modifier,
@@ -441,13 +428,25 @@ private fun SegmentAvailabilityChip(
         modifier = modifier
             .clip(ShapeCache.smooth8)
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .padding(horizontal = 7.dp, vertical = 2.5.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                Tabler.Outline.PlayerTrackNext,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(13.dp),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }

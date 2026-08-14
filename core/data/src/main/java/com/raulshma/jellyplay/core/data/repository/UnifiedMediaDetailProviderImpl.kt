@@ -447,9 +447,8 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
         suspend fun expandSeason(seasonId: String): List<MediaItem> {
             val seriesId = (content.value as? ContentResolution.Resolved)
                 ?.detail?.item?.seriesIdForDetail ?: return emptyList()
-            val episodes = episodeCatalogue.loadSeasonEpisodes(seriesId, seasonId)
-                .getOrDefault(emptyList())
-            if (episodes.isEmpty()) return emptyList()
+            val result = episodeCatalogue.loadSeasonEpisodes(seriesId, seasonId)
+            val episodes = result.getOrElse { return emptyList() }
             resolveMutex.withLock {
                 val current = content.value
                 if (current !is ContentResolution.Resolved) return@withLock

@@ -27,7 +27,7 @@ internal data class SmartPlayResult(
  * Which localized label the smart-play button should show. The VM resolves each
  * to a `R.string.detail_*` resource formatted with the season/episode numbers.
  */
-internal enum class LabelKind { RESUME_EPISODE, NEXT_UP_EPISODE, PLAY_EPISODE, REPLAY_EPISODE }
+enum class LabelKind { RESUME_EPISODE, NEXT_UP_EPISODE, PLAY_EPISODE, REPLAY_EPISODE }
 
 internal object SmartPlayResolver {
 
@@ -84,7 +84,13 @@ internal object SmartPlayResolver {
             label = if (currentEpisode.hasResumeProgress()) LabelKind.RESUME_EPISODE else LabelKind.PLAY_EPISODE,
             startPositionTicks = currentEpisode.playbackPositionTicks ?: 0L,
         )
-
-    private fun MediaItem.hasResumeProgress(): Boolean =
-        (playbackPositionTicks ?: 0L) > 0L && !isPlayed
 }
+
+/**
+ * The single definition of "this episode is mid-playback": a positive resume
+ * position on an episode not yet fully watched. Shared by [SmartPlayResolver]
+ * and [SeasonStartResolver] so the smart-play and season-tab decisions can't
+ * drift apart on what counts as a resume.
+ */
+internal fun MediaItem.hasResumeProgress(): Boolean =
+    (playbackPositionTicks ?: 0L) > 0L && !isPlayed

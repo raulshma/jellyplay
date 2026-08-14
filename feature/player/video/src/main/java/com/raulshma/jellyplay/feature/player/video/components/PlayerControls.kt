@@ -239,6 +239,7 @@ internal fun PlayerControls(
     audioTracks: List<TrackOption> = emptyList(),
     isConnectionMetered: Boolean = false,
     subtitleDelayMs: Long = 0L,
+    onSubtitleDelayClick: () -> Unit = {},
     showPlaybackMetadata: Boolean = true,
     showClock: Boolean = false,
     showTimeRemaining: Boolean = false,
@@ -269,6 +270,7 @@ internal fun PlayerControls(
         derivedStateOf {
             PlaybackMetadataSnapshot(
                 videoCodec = videoStats.videoCodec,
+                videoResolution = videoStats.videoResolution,
                 videoHdrType = videoStats.videoHdrType,
                 audioCodec = videoStats.audioCodec,
                 audioChannels = videoStats.audioChannels,
@@ -545,7 +547,8 @@ internal fun PlayerControls(
                         audioTracks = audioTracks,
                         isConnectionMetered = isConnectionMetered,
                         subtitleDelayMs = subtitleDelayMs,
-                        modifier = Modifier.padding(bottom = 6.dp)
+                        onSubtitleDelayClick = onSubtitleDelayClick,
+                        modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
 
