@@ -5,11 +5,16 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.RetryPolicy
+import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -28,6 +33,7 @@ class JellyfinApiEngine @Inject constructor(
     val jellyfin: Jellyfin,
     val okHttpClient: OkHttpClient,
     private val deviceProfileProvider: DeviceProfileProvider,
+    private val addressRouter: ServerAddressRouter,
 ) {
     private val _currentServer = MutableStateFlow<ServerInfo?>(null)
     val currentServer: StateFlow<ServerInfo?> = _currentServer.asStateFlow()
@@ -41,11 +47,33 @@ class JellyfinApiEngine @Inject constructor(
     private var _api: ApiClient? = null
     val api: ApiClient? get() = _api
 
+    /**
+     * The address all server traffic should use right now: the router's active
+     * endpoint (primary when reachable, else an alternate), falling back to
+     * the server's primary address when routing is not configured.
+     */
+    val activeServerAddress: String?
+        get() = addressRouter.activeAddress.value ?: _currentServer.value?.address
+
+    private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        // Rebuild the ApiClient whenever the router moves to another endpoint
+        // (failover to an alternate, or back to the primary) so SDK-generated
+        // URLs — REST, images via imageApi — follow the active address too.
+        engineScope.launch {
+            addressRouter.activeAddress.drop(1).collect { address ->
+                if (address != null) rebuildApiFor(address)
+            }
+        }
+    }
+
     fun requireApi(): ApiClient =
         _api ?: throw IllegalStateException("Not connected to server")
 
     fun updateServer(server: ServerInfo?) {
         _currentServer.value = server
+        if (server == null) addressRouter.clear() else addressRouter.configure(server)
     }
 
     fun updateUser(user: UserInfo?) {
@@ -54,6 +82,23 @@ class JellyfinApiEngine @Inject constructor(
 
     fun updateApi(api: ApiClient?) {
         _api = api
+    }
+
+    /**
+     * Swaps the ApiClient's base URL to [address], keeping the current user's
+     * access token (both addresses belong to the same server, so the token
+     * stays valid) and mirroring the address into the published user so
+     * URL-building consumers see the active endpoint. Only retargets an
+     * existing client — creating one from here would race setUser's
+     * authoritative construction.
+     */
+    private fun rebuildApiFor(address: String) {
+        if (_api == null) return
+        val user = _currentUser.value
+        _api = user?.let { jellyfin.createApi(baseUrl = address, accessToken = it.accessToken) }
+        if (user != null) {
+            _currentUser.value = user.copy(serverAddress = address)
+        }
     }
 
     suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
@@ -74,7 +119,20 @@ class JellyfinApiEngine @Inject constructor(
         maxRetries: Int = RetryPolicy.DEFAULT_MAX_RETRIES,
         block: suspend () -> T,
     ): Result<T> = RetryPolicy.executeWithRetry(maxRetries = maxRetries) {
-        apiResult(block)
+        apiResult(block).onFailure { e ->
+            // A retryable failure with no HTTP status means we could not talk
+            // to the server at all. Before burning a retry against the same
+            // dead endpoint, re-run address selection: if the active endpoint
+            // died (e.g. the user just left home), the router fails over to
+            // an alternate and the retry transparently uses it. Throttled so
+            // a burst of parallel failures triggers one probe round, not N.
+            if (e is ApiException && e.isRetryable && e.httpCode == null && addressRouter.hasAlternates) {
+                // Swallow probe errors but never cancellation — the caller's
+                // cancellation must keep propagating through the retry path.
+                runCatching { addressRouter.reselectActiveEndpoint(minIntervalMs = RESELECT_THROTTLE_MS) }
+                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+            }
+        }
     }
 
     val currentMaxParentalRating: Int?
@@ -110,6 +168,10 @@ class JellyfinApiEngine @Inject constructor(
 
     companion object {
         val sharedJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+        /** Minimum spacing between failure-triggered address re-selections. */
+        private const val RESELECT_THROTTLE_MS = 5_000L
+
         private val SUPPORTED_REMOTE_COMMANDS = listOf(
             GeneralCommandType.SET_VOLUME,
             GeneralCommandType.VOLUME_UP,

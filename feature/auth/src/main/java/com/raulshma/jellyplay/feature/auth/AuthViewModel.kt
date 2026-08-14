@@ -64,30 +64,36 @@ class AuthViewModel @Inject constructor(
     }
 
     /**
-     * Pings each saved server once and publishes per-address [ServerHealth]
-     * into [serverHealth]. Safe to call repeatedly; concurrent calls are
+     * Pings each saved server once and publishes per-server [ServerHealth]
+     * into [serverHealth] (keyed by the server's primary address, which the
+     * server list renders). A server counts as reachable when ANY of its
+     * addresses answers — primary first, then alternates — mirroring the
+     * app's address failover. Safe to call repeatedly; concurrent calls are
      * guarded by cancelling any in-flight batch.
      */
     private var healthCheckJob: Job? = null
-    fun checkServersHealth(addresses: List<String>) {
+    fun checkServersHealth(servers: List<ServerInfo>) {
         healthCheckJob?.cancel()
-        if (addresses.isEmpty()) {
+        if (servers.isEmpty()) {
             _serverHealth.set(emptyMap())
             return
         }
         // Immediately mark everything as Checking so the UI can render a dot.
-        _serverHealth.set(addresses.associateWith { ServerHealth.Checking })
+        _serverHealth.set(servers.associate { it.address to ServerHealth.Checking })
         healthCheckJob = launch {
-            addresses.forEach { address ->
+            servers.forEach { server ->
                 val startTime = System.currentTimeMillis()
-                val result = apiClient.getServerInfo(address)
+                val addresses = listOf(server.address) + server.alternateAddresses
+                val reachable = addresses.any { address ->
+                    apiClient.getServerInfo(address).isSuccess
+                }
                 val latency = System.currentTimeMillis() - startTime
-                val health = if (result.isSuccess) {
+                val health = if (reachable) {
                     ServerHealth.Healthy(latencyMs = latency)
                 } else {
                     ServerHealth.Unreachable
                 }
-                _serverHealth.update { it + (address to health) }
+                _serverHealth.update { it + (server.address to health) }
             }
         }
     }

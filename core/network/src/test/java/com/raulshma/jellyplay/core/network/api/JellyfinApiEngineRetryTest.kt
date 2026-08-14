@@ -28,7 +28,7 @@ class JellyfinApiEngineRetryTest {
     private val jellyfin: Jellyfin = mockk(relaxed = true)
     private val okHttpClient: OkHttpClient = mockk(relaxed = true)
 
-    private fun newEngine() = JellyfinApiEngine(context, jellyfin, okHttpClient, DeviceProfileProvider(DeviceCodecCapabilities()))
+    private fun newEngine() = JellyfinApiEngine(context, jellyfin, okHttpClient, DeviceProfileProvider(DeviceCodecCapabilities()), com.raulshma.jellyplay.core.network.failover.ServerAddressRouter())
 
     @Test
     fun `apiResult wraps SocketTimeoutException into retryable ApiException`() = runBlocking {

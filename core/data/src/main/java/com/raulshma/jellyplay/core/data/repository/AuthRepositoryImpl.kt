@@ -96,6 +96,11 @@ class AuthRepositoryImpl @Inject constructor(
         val server = serverEntity.toServerInfo()
         apiClient.disconnect()
         apiClient.setServer(server)
+        // Prefer the primary when reachable, else fail over to an alternate so
+        // a server tapped while away from its LAN address still connects.
+        // Defensive: a probe crash must not fail the switch — the primary
+        // address still works as before.
+        runCatching { apiClient.selectReachableAddress() }
 
         val userEntity = userDao.getMostRecentUserForServer(serverId)
             ?: serverEntity.userId?.let { userDao.getUserById(it) }
@@ -260,6 +265,14 @@ class AuthRepositoryImpl @Inject constructor(
             }
             val server = serverEntity.toServerInfo()
             apiClient.setServer(server)
+            // Address failover: if the primary (e.g. a LAN URL) is unreachable
+            // but an alternate answers (e.g. the outside URL), route all
+            // traffic to the alternate BEFORE the API client is created, so
+            // the very first request already uses a working address. When no
+            // alternates exist this is a no-op and offline/cached use is
+            // unchanged. Re-selection runs again periodically (health monitor)
+            // and switches back to the primary once it is reachable.
+            runCatching { apiClient.selectReachableAddress() }
 
             val userEntity = userDao.getUserById(userId)
             if (userEntity == null) {
@@ -372,6 +385,9 @@ class AuthRepositoryImpl @Inject constructor(
         val server = serverDao.getServerById(userEntity.serverId) ?: return Result.success(Unit)
         apiClient.disconnect()
         apiClient.setServer(server.toServerInfo())
+        // Re-run endpoint selection so the user's first request does not race
+        // a dead primary address.
+        runCatching { apiClient.selectReachableAddress() }
         apiClient.setUser(userEntity.toUserInfo(server.address))
         serverIdentityStore.setActiveSession(server.id, userId)
         database.withTransaction {

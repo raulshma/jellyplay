@@ -147,6 +147,23 @@ class AuthRepositoryImplTest {
 
         assertTrue(result.isSuccess)
         coVerify { apiClient.setServer(any()) }
+        coVerify { apiClient.selectReachableAddress() }
+        coVerify { apiClient.setUser(any()) }
+    }
+
+    @Test
+    fun `restoreSession tolerates address selection failures`() = runTest {
+        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
+        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        coEvery { serverDao.getServerById("server-1") } returns testServerEntity
+        coEvery { userDao.getUserById("user-1") } returns testUserEntity
+        coEvery { apiClient.selectReachableAddress() } throws RuntimeException("probe blew up")
+
+        val result = repository.restoreSession()
+
+        // A selection crash must not break session restore — the primary
+        // address is still wired and offline/cached use is unaffected.
+        assertTrue(result.isSuccess)
         coVerify { apiClient.setUser(any()) }
     }
 

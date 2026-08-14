@@ -47,6 +47,7 @@ class PlaybackApiClientImplTest {
             jellyfin = jellyfin,
             okHttpClient = okHttpClient,
             deviceProfileProvider = DeviceProfileProvider(DeviceCodecCapabilities()),
+            addressRouter = com.raulshma.jellyplay.core.network.failover.ServerAddressRouter(),
         )
         engine.updateServer(testServer.copy(address = baseUrl))
         engine.updateUser(testUser.copy(serverAddress = baseUrl))

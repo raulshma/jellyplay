@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -16,6 +17,7 @@ class AuthApiClientImplTest {
 
     private lateinit var engine: JellyfinApiEngine
     private lateinit var authClient: AuthApiClientImpl
+    private lateinit var addressRouter: ServerAddressRouter
 
     private val testServer = ServerInfo(
         id = "server-1",
@@ -35,14 +37,16 @@ class AuthApiClientImplTest {
     fun setup() {
         val jellyfin = mockk<Jellyfin>(relaxed = true)
         val okHttpClient = OkHttpClient()
+        addressRouter = ServerAddressRouter()
         engine = JellyfinApiEngine(
             context = mockk(relaxed = true),
             jellyfin = jellyfin,
             okHttpClient = okHttpClient,
             deviceProfileProvider = DeviceProfileProvider(DeviceCodecCapabilities()),
+            addressRouter = addressRouter,
         )
         val libraryClient = LibraryApiClientImpl(engine, mockk(relaxed = true))
-        authClient = AuthApiClientImpl(engine, libraryClient)
+        authClient = AuthApiClientImpl(engine, libraryClient, addressRouter)
     }
 
     @Test

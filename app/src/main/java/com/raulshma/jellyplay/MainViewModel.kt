@@ -280,8 +280,12 @@ class MainViewModel @Inject constructor(
                         serverHealthMonitor.startMonitoring(server.address)
                         val deviceId = serverIdentityStore.ensureDeviceId()
                         val deviceName = buildDeviceName(user.name)
+                        // Connect to the *active* endpoint — after address
+                        // selection this is the reachable address (primary
+                        // when available, else an alternate), avoiding a
+                        // doomed first handshake against a dead primary.
                         webSocketClient.connect(
-                            serverAddress = server.address,
+                            serverAddress = apiClient.getServerUrl() ?: server.address,
                             accessToken = user.accessToken,
                             device = deviceId,
                             deviceName = deviceName,

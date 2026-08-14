@@ -77,7 +77,14 @@ class ServerHealthMonitor @Inject constructor(
 
         monitorJob = scope.launch {
             while (true) {
-                checkHealth(serverAddress)
+                // Re-run address selection first: this both fails over to an
+                // alternate when the active endpoint died and switches back to
+                // the primary once it answers again (primary is always probed
+                // first). Health is then reported for the endpoint actually
+                // in use.
+                runCatching { apiClient.selectReachableAddress() }
+                val activeAddress = apiClient.getServerUrl()?.takeIf { it.isNotBlank() } ?: serverAddress
+                runCatching { checkHealth(activeAddress) }
                 delay(HEALTH_CHECK_INTERVAL_MS)
             }
         }

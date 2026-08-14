@@ -94,7 +94,7 @@ fun ServerListScreen(
 
     // One-shot reachability ping per saved server on screen entry.
     LaunchedEffect(servers.map { it.address }) {
-        viewModel.checkServersHealth(servers.map { it.address })
+        viewModel.checkServersHealth(servers)
     }
 
     Scaffold(

@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.RetryPolicy
+import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.withLock
@@ -22,10 +23,28 @@ import javax.inject.Singleton
 class AuthApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
     private val libraryClient: LibraryApiClient,
+    private val addressRouter: ServerAddressRouter,
 ) : AuthApiClient {
 
     override val currentServer: Flow<ServerInfo?> = engine.currentServer
     override val currentUser: Flow<UserInfo?> = engine.currentUser
+
+    /**
+     * Probes exactly [address] via the router's dedicated probe client. This
+     * bypasses the failover interceptor on purpose: reachability checks must
+     * test THE address, never be silently rerouted to the active alternate.
+     */
+    private suspend fun probeServerInfo(address: String): ServerInfo {
+        val probe = addressRouter.probe(address)
+        if (!probe.reachable) {
+            throw probe.error ?: java.io.IOException("Server at $address is unreachable")
+        }
+        return ServerInfo(
+            id = probe.serverId ?: java.util.UUID.randomUUID().toString(),
+            name = probe.serverName ?: "Jellyfin Server",
+            address = address,
+        )
+    }
 
     override suspend fun connectToServer(address: String): Result<ServerInfo> {
         val normalizedAddress = address.trim().trimEnd('/').let {
@@ -42,13 +61,7 @@ class AuthApiClientImpl @Inject constructor(
             runCatching {
                 withContext(Dispatchers.IO) {
                     try {
-                        val client = engine.jellyfin.createApi(normalizedAddress)
-                        val systemInfo = client.systemApi.getPublicSystemInfo().content
-                        val info = ServerInfo(
-                            id = systemInfo.id?.toString() ?: java.util.UUID.randomUUID().toString(),
-                            name = systemInfo.serverName ?: "Jellyfin Server",
-                            address = normalizedAddress,
-                        )
+                        val info = probeServerInfo(normalizedAddress)
                         engine.authMutex.withLock { engine.updateServer(info) }
                         info
                     } catch (e: Exception) {
@@ -65,19 +78,24 @@ class AuthApiClientImpl @Inject constructor(
             if (it.startsWith("http://") || it.startsWith("https://")) it
             else "https://$it"
         }
-        return RetryPolicy.executeWithRetry(maxRetries = 2) {
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    val client = engine.jellyfin.createApi(normalizedAddress)
-                    val systemInfo = client.systemApi.getPublicSystemInfo().content
-                    ServerInfo(
-                        id = systemInfo.id?.toString() ?: java.util.UUID.randomUUID().toString(),
-                        name = systemInfo.serverName ?: "Jellyfin Server",
-                        address = normalizedAddress,
-                    )
-                }
-            }
+        return runCatching {
+            withContext(Dispatchers.IO) { probeServerInfo(normalizedAddress) }
         }
+    }
+
+    /**
+     * Re-runs endpoint selection for the active server: probes the primary
+     * first, then alternates, and routes all traffic to the first reachable
+     * address. Callers use this at session restore so an unreachable primary
+     * (user away from home) never becomes the client's base URL. Returns the
+     * selected address, or null when no server is configured.
+     */
+    override suspend fun selectReachableAddress(): String? {
+        if (!addressRouter.hasAlternates) {
+            return engine.activeServerAddress
+        }
+        addressRouter.reselectActiveEndpoint()
+        return engine.activeServerAddress
     }
 
     override suspend fun authenticateUser(
@@ -146,8 +164,11 @@ class AuthApiClientImpl @Inject constructor(
             // initial fetch), so do not publish it until requests can use this
             // user's API client. Publishing first made a user switch issue its
             // first request with the previous user's client or no client.
+            // Build against the router's active endpoint — after address
+            // selection this is the reachable address, not necessarily the
+            // server's primary one.
             engine.updateApi(engine.jellyfin.createApi(
-                baseUrl = server.address,
+                baseUrl = engine.activeServerAddress ?: server.address,
                 accessToken = userInfo.accessToken,
             ))
             engine.updateUser(userInfo)
@@ -251,7 +272,7 @@ class AuthApiClientImpl @Inject constructor(
         engine.requireApi().quickConnectApi.authorizeQuickConnect(code = code).content
     }
 
-    override fun getServerUrl(): String? = engine.currentServer.value?.address
+    override fun getServerUrl(): String? = engine.activeServerAddress
 
     override fun getAccessToken(): String? = engine.currentUser.value?.accessToken
 }

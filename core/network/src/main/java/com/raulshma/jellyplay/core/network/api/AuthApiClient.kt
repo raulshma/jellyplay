@@ -14,6 +14,14 @@ interface AuthApiClient {
 
     suspend fun getServerInfo(address: String): Result<ServerInfo>
 
+    /**
+     * Re-runs endpoint selection for the active server (probe the primary
+     * first, then alternates; first reachable wins, falling back to the
+     * current selection when nothing answers). Returns the selected address,
+     * or null when no server is configured.
+     */
+    suspend fun selectReachableAddress(): String?
+
     suspend fun authenticateUser(
         serverAddress: String,
         username: String,

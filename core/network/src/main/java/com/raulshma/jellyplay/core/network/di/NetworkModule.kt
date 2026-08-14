@@ -39,6 +39,8 @@ import com.raulshma.jellyplay.core.network.api.ResilientTmdbApiClient
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.network.api.TmdbApiClientImpl
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
+import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
+import com.raulshma.jellyplay.core.network.failover.ServerFailoverInterceptor
 import com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor
 import dagger.Binds
 import dagger.Module
@@ -242,6 +244,7 @@ abstract class NetworkModule {
             @ApplicationContext context: Context,
             okHttpConfigProvider: OkHttpConfigProvider,
             bandwidthInterceptor: BandwidthInterceptor,
+            serverAddressRouter: ServerAddressRouter,
         ): OkHttpClient {
             // Read config synchronously via StateFlow.value — no runBlocking.
             // On a cold start the Eagerly-shared StateFlow may still hold the
@@ -300,6 +303,12 @@ abstract class NetworkModule {
                 .connectionPool(ConnectionPool(16, 15, TimeUnit.MINUTES))
                 .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
                 .retryOnConnectionFailure(true)
+                // Outermost interceptor: every derived client (SDK, Coil,
+                // streaming, downloads, WebSocket) inherits it, so requests
+                // targeting an unreachable primary address are transparently
+                // rerouted to the active alternate. Must sit outside the
+                // timeout interceptor so logging sees the final URL.
+                .addInterceptor(ServerFailoverInterceptor(serverAddressRouter))
                 .addInterceptor { chain ->
                     val currentConfig = okHttpConfigProvider.config.value
                     val timeoutPreset = currentConfig.networkTimeoutPreset
