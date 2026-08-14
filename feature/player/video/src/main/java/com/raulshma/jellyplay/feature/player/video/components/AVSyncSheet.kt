@@ -161,6 +161,13 @@ internal fun formatDelayLabel(delayMs: Long): String {
     }
 }
 
+/**
+ * Whole-millisecond delay label, VLC-style: "0 ms", "50 ms", "-200 ms" — no
+ * sign on positives, no decimals. Used by the subtitle-delay overlay and the
+ * hub's Delay tab so both surfaces show the same value for the same delay.
+ */
+internal fun formatDelayLabelMs(delayMs: Long): String = "$delayMs ms"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DelayRow(

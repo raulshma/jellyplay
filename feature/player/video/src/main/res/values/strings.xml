@@ -233,10 +233,10 @@
     <string name="player_video_subtitle_delay">Subtitle Delay</string>
     <string name="player_video_subtitle_delay_close">Close subtitle delay</string>
     <string name="player_video_subtitle_delay_reset">Reset</string>
-    <string name="player_video_subtitle_delay_decrease_coarse">Delay subtitles 1 second</string>
-    <string name="player_video_subtitle_delay_decrease_fine">Delay subtitles 0.1 seconds</string>
-    <string name="player_video_subtitle_delay_increase_fine">Advance subtitles 0.1 seconds</string>
-    <string name="player_video_subtitle_delay_increase_coarse">Advance subtitles 1 second</string>
+    <string name="player_video_subtitle_delay_decrease">Decrease subtitle delay</string>
+    <string name="player_video_subtitle_delay_increase">Increase subtitle delay</string>
+    <string name="player_video_subtitle_delay_voice_heard">Voice heard</string>
+    <string name="player_video_subtitle_delay_text_seen">Text seen</string>
     <string name="player_video_subtitle_delay_show_controls">Show delay controls</string>
     <string name="player_video_subtitle_delay_hub_hint">Adjust the timing of subtitles against the video. Use the overlay so you can see the subtitles shift as you tweak.</string>
     <string name="player_video_picture_in_picture">Picture in Picture</string>

@@ -383,6 +383,37 @@ class EpisodeCatalogueImplTest {
         coVerify(exactly = 0) { apiClient.getEpisodes(any(), any()) }
     }
 
+    @Test
+    fun `offline season with zero downloaded episodes is marked fetched and renders empty`() = runTest {
+        // Reproduces the detail-screen bug where removing every downloaded
+        // episode of a season left it spinning forever + the play button stuck on
+        // "Finding Episode": loadOffline dropped emptied seasons from the grouped
+        // map, so they were indistinguishable from a not-yet-fetched season.
+        // Offline fully resolves every season by its real id (no ""-key edge), so
+        // an emptied season must be "fetched with an empty list", not "loading".
+        val season1 = offlineSeason("season-1", seriesId = "series-1")
+        val season2 = offlineSeason("season-2", seriesId = "series-1")
+        val s2Episode = offlineEpisode("e3", seriesId = "series-1", seasonId = "season-2")
+        every { offlineRepository.getSeasonsForSeries("series-1") } returns flowOf(listOf(season1, season2))
+        every { offlineRepository.getEpisodesForSeason("season-1") } returns flowOf(emptyList())
+        every { offlineRepository.getEpisodesForSeason("season-2") } returns flowOf(listOf(s2Episode))
+
+        val snapshot = catalogue.loadSeriesEpisodes("series-1", offline = true).getOrNull()!!
+
+        // Both seasons present in the canonical list...
+        assertEquals(listOf("season-1", "season-2"), snapshot.seasons.map { it.id })
+        // ...and BOTH marked fetched so neither renders a loading spinner and the
+        // series play button stops waiting on a season that will never load.
+        assertEquals(setOf("season-1", "season-2"), snapshot.fetchedSeasonIds)
+        // The emptied season carries an empty list (not absence) so the UI shows
+        // its empty state — episodes[id] must not be null.
+        assertTrue("season-1 must hold an empty list, not be absent", "season-1" in snapshot.episodesBySeason)
+        assertEquals(emptyList<String>(), snapshot.seasonEpisodes("season-1").map { it.id })
+        assertEquals(listOf("e3"), snapshot.seasonEpisodes("season-2").map { it.id })
+        // Sorted episodes skip the emptied season (no phantom entries).
+        assertEquals(listOf("e3"), snapshot.sortedEpisodes.map { it.id })
+    }
+
     // ── updateSeasonEpisodes optimistic rewrite ─────────────────────────
 
     @Test

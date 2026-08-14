@@ -223,10 +223,10 @@
     <string name="player_video_subtitle_delay">자막 지연</string>
     <string name="player_video_subtitle_delay_close">자막 지연 닫기</string>
     <string name="player_video_subtitle_delay_reset">재설정</string>
-    <string name="player_video_subtitle_delay_decrease_coarse">자막 1초 지연</string>
-    <string name="player_video_subtitle_delay_decrease_fine">자막 0.1초 지연</string>
-    <string name="player_video_subtitle_delay_increase_fine">자막 0.1초 앞당기기</string>
-    <string name="player_video_subtitle_delay_increase_coarse">자막 1초 앞당기기</string>
+    <string name="player_video_subtitle_delay_decrease">자막 지연 감소</string>
+    <string name="player_video_subtitle_delay_increase">자막 지연 증가</string>
+    <string name="player_video_subtitle_delay_voice_heard">음성 들음</string>
+    <string name="player_video_subtitle_delay_text_seen">자막 봄</string>
     <string name="player_video_subtitle_delay_show_controls">지연 조정</string>
     <string name="player_video_subtitle_delay_hub_hint">비디오에 대한 자막 타이밍을 조정합니다. 오버레이를 사용하면 조정하는 동안 자막이 이동하는 것을 볼 수 있습니다.</string>
     <string name="player_video_av_sync_audio_helper">음수: 오디오가 빨라집니다. 양수: 오디오가 느려집니다.</string>

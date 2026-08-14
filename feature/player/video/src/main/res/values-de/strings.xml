@@ -223,10 +223,10 @@
     <string name="player_video_subtitle_delay">Untertitelverzögerung</string>
     <string name="player_video_subtitle_delay_close">Untertitelverzögerung schließen</string>
     <string name="player_video_subtitle_delay_reset">Zurücksetzen</string>
-    <string name="player_video_subtitle_delay_decrease_coarse">Untertitel 1 Sekunde verzögern</string>
-    <string name="player_video_subtitle_delay_decrease_fine">Untertitel 0,1 Sekunden verzögern</string>
-    <string name="player_video_subtitle_delay_increase_fine">Untertitel 0,1 Sekunden vorziehen</string>
-    <string name="player_video_subtitle_delay_increase_coarse">Untertitel 1 Sekunde vorziehen</string>
+    <string name="player_video_subtitle_delay_decrease">Untertitelverzögerung verringern</string>
+    <string name="player_video_subtitle_delay_increase">Untertitelverzögerung erhöhen</string>
+    <string name="player_video_subtitle_delay_voice_heard">Stimme gehört</string>
+    <string name="player_video_subtitle_delay_text_seen">Text gesehen</string>
     <string name="player_video_subtitle_delay_show_controls">Verzögerung einstellen</string>
     <string name="player_video_subtitle_delay_hub_hint">Passe das Timing der Untertitel zum Video an. Nutze das Overlay, damit du die Untertitel beim Anpassen sehen kannst.</string>
     <string name="player_video_av_sync_audio_helper">Negativ: Audio früher. Positiv: Audio später.</string>

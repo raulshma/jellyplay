@@ -27,10 +27,15 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -45,6 +50,7 @@ import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -63,6 +69,9 @@ class VideoPlayerViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
 
     private lateinit var viewModel: VideoPlayerViewModel
+    private lateinit var mediaRepository: MediaRepository
+    private lateinit var aggregateStore: VideoPlayerAggregateStore
+    private lateinit var jellyfinRemotePlayCastStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var offlinePlaybackFacade: com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
@@ -73,7 +82,7 @@ class VideoPlayerViewModelTest {
         Dispatchers.setMain(testDispatcher)
 
         val context = mockk<Context>(relaxed = true)
-        val mediaRepository = mockk<MediaRepository>(relaxed = true)
+        mediaRepository = mockk<MediaRepository>(relaxed = true)
         val playbackRepository = mockk<PlaybackRepository>(relaxed = true)
         val imageUrlProvider = mockk<ImageUrlProvider>(relaxed = true)
         downloadRepository = mockk(relaxed = true)
@@ -81,7 +90,7 @@ class VideoPlayerViewModelTest {
         offlinePlaybackFacade = mockk(relaxed = true)
         playbackSourceResolver = mockk(relaxed = true)
         val itemPlaybackPreferenceRepository = mockk<ItemPlaybackPreferenceRepository>(relaxed = true)
-        val aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
+        aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
         val engineStore = mockk<PlayerEngineStore>(relaxed = true)
         val subtitleStore = mockk<SubtitleLanguageStore>(relaxed = true)
         val securityStore = mockk<SecurityStore>(relaxed = true)
@@ -95,7 +104,7 @@ class VideoPlayerViewModelTest {
         val networkOfflineStore = mockk<NetworkOfflineStore>(relaxed = true)
         val sessionManager = mockk<PlaybackSessionManager>(relaxed = true)
         val castManager = mockk<CastManager>(relaxed = true)
-        val jellyfinRemotePlayCastStrategy = mockk<com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy>(relaxed = true)
+        jellyfinRemotePlayCastStrategy = mockk<com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy>(relaxed = true)
         val syncPlayManager = mockk<SyncPlayManager>(relaxed = true)
         val okHttpClient = mockk<OkHttpClient>(relaxed = true)
         val adaptiveBitrateManager = mockk<AdaptiveBitrateManager>(relaxed = true)
@@ -216,6 +225,48 @@ class VideoPlayerViewModelTest {
         viewModel.seekTo(2_000L)
         viewModel.seekTo(3_000L)
         assertEquals(3_000L, viewModel.currentPositionMs.value)
+    }
+
+    @Test
+    fun initialize_seedsResumePositionAndDurationBeforeEngineTick() {
+        // Regression for the #122 follow-up (v0.10.3): the progress-reset fix
+        // left resumed media showing 0 until the engine's first *playing* tick
+        // (20-30s with MPV + slow buffering). Opening a resumed item must seed
+        // the seek-bar display flows with the resume position and total runtime
+        // immediately, before any engine tick. EXTERNAL short-circuits engine
+        // creation (PlayerSessionManager returns after populating mediaDetail),
+        // so we assert the pre-tick state with no real player.
+        every { aggregateStore.aggregate } returns MutableStateFlow(
+            VideoPlayerAggregate(playback = PlaybackSlice(preferredPlayer = PlayerType.EXTERNAL))
+        )
+        every { aggregateStore.aggregateRaw } returns flowOf(
+            VideoPlayerAggregate(playback = PlaybackSlice(preferredPlayer = PlayerType.EXTERNAL))
+        )
+        // Relaxed mock's StateFlow<Boolean>.value returns an Object that won't
+        // cast to Boolean — stub it so the "Play On" routing check is skipped.
+        every { jellyfinRemotePlayCastStrategy.isConnected } returns MutableStateFlow(false)
+        val resumeTicks = 10_290_000_000L // 17:09, the reporter's example
+        val runtimeTicks = 54_000_000_000L // 90 min total runtime
+        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(
+            MediaDetail(
+                item = MediaItem(
+                    id = "item-1",
+                    name = "Test Movie",
+                    mediaType = MediaType.MOVIE,
+                    runTimeTicks = runtimeTicks,
+                )
+            )
+        )
+
+        viewModel.initialize("item-1", null, resumeTicks)
+
+        // Position is seeded synchronously at load — before any engine tick.
+        assertEquals(resumeTicks / 10_000, viewModel.currentPositionMs.value)
+        // Duration is seeded from the resolved item's runTimeTicks once loaded.
+        assertEquals(runtimeTicks / 10_000, viewModel.durationMs.value)
+        // The loading screen lifts once the load completes, so the seek bar's
+        // first paint (with both values seeded) is the resume fraction.
+        assertFalse(viewModel.uiState.value.isInitializing)
     }
 
     @Test

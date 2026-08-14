@@ -1437,6 +1437,9 @@ class VideoPlayerViewModel @Inject constructor(
                 audioStreamIndex = audioStreamIndex,
                 subtitleStreamIndex = subtitleStreamIndex,
             )
+            // Local player isn't loading — clear the flag so a later local UI
+            // mount never shows a stuck loading screen.
+            _uiState.update { it.copy(isInitializing = false) }
             return
         }
 
@@ -1468,6 +1471,9 @@ class VideoPlayerViewModel @Inject constructor(
 
         val reclaimed = videoMiniPlayerState.tryReclaimEngine(itemId) as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
         if (reclaimed != null) {
+            // Reclaim promotes an already-playing mini-player engine to
+            // fullscreen — playback is continuous, so no load screen.
+            _uiState.update { it.copy(isInitializing = false) }
             loadJob = launch {
                 val detailResult = mediaRepository.getMediaDetail(itemId)
                 val detail = detailResult.getOrNull()
@@ -1491,7 +1497,23 @@ class VideoPlayerViewModel @Inject constructor(
 
         videoMiniPlayerState.release()
 
+        // Raise the loading screen across the state reset + fresh load so the
+        // seek bar never paints a stale/zero fraction during the transition. It
+        // lifts once position & duration are seeded (in the load coroutine
+        // below), so the bar's first paint is already at the resume fraction.
+        _uiState.update { it.copy(isInitializing = true) }
         releaseInternals()
+        // Pre-seed the playhead with the resume position so the seek bar
+        // reflects where playback will resume the instant the new item opens
+        // — instead of staying at 0 until the engine emits its first position
+        // tick while playing (which for MPV + slow buffering can take 20-30s,
+        // and with duration == 0 the bar renders its empty branch anyway).
+        // Mirrors seekTo()'s synchronous display write. Display-only: written
+        // directly, not via the progress reporter, so it reports nothing to
+        // the server before playback actually begins.
+        if (startPositionTicks > 0) {
+            _currentPositionMs.value = startPositionTicks / 10_000
+        }
         // Restore the server session id after process death (if this is the
         // same item) so the eventual stop-report pairs with the start-report
         // instead of orphaning it. Otherwise allocate a fresh session id.
@@ -1512,6 +1534,7 @@ class VideoPlayerViewModel @Inject constructor(
         }
 
         loadJob = launch {
+         try {
             val currentGroup = syncPlayManager.currentGroup
             val groupPlayingId = currentGroup?.playingItemId
             if (syncPlayManager.isInSyncPlaySession && groupPlayingId != null && groupPlayingId != itemId) {
@@ -1669,8 +1692,23 @@ class VideoPlayerViewModel @Inject constructor(
             createVideoMediaSession(itemId, sessionState.title, sessionState.subtitle)
 
             if (detail != null) {
+                // Pre-seed the seek-bar denominator from the server-reported
+                // runtime so the playhead fraction is correct from open — the
+                // playhead reads position/duration and renders its empty branch
+                // while duration == 0. Guarded so a value already set by the
+                // engine (e.g. ExoPlayer resolving duration on prepare) is
+                // never clobbered. Same field PlayerSessionManager uses for
+                // PlaybackRequest.serverDurationMs.
+                if (_durationMs.value == 0L) {
+                    val runtimeMs = (detail.item.runTimeTicks ?: 0L) / 10_000
+                    if (runtimeMs > 0L) _durationMs.value = runtimeMs
+                }
                 applyMediaDetail(detail)
             }
+
+            // Position & duration are now seeded; lift the loading screen so the
+            // seek bar's first paint is the correct resume fraction (no 0-flicker).
+            _uiState.update { it.copy(isInitializing = false) }
 
             source?.trickplayInfo?.let { info ->
                 val downloadPath = offlinePlaybackFacade.getDownloadPath(itemId)
@@ -1737,6 +1775,13 @@ class VideoPlayerViewModel @Inject constructor(
                     launch { loadSeriesEpisodes(detail) }
                 }
             }
+         } finally {
+            // Guarantee the loading screen lifts even if the load throws or
+            // takes the cinema-intro early return — otherwise the player is
+            // stranded behind a permanent black overlay. A no-op on the happy
+            // path (the early lift above already cleared it before trickplay).
+            _uiState.update { it.copy(isInitializing = false) }
+         }
         }
     }
 

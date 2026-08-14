@@ -223,10 +223,10 @@
     <string name="player_video_subtitle_delay">字幕延迟</string>
     <string name="player_video_subtitle_delay_close">关闭字幕延迟</string>
     <string name="player_video_subtitle_delay_reset">重置</string>
-    <string name="player_video_subtitle_delay_decrease_coarse">字幕延迟1秒</string>
-    <string name="player_video_subtitle_delay_decrease_fine">字幕延迟0.1秒</string>
-    <string name="player_video_subtitle_delay_increase_fine">字幕提前0.1秒</string>
-    <string name="player_video_subtitle_delay_increase_coarse">字幕提前1秒</string>
+    <string name="player_video_subtitle_delay_decrease">减少字幕延迟</string>
+    <string name="player_video_subtitle_delay_increase">增加字幕延迟</string>
+    <string name="player_video_subtitle_delay_voice_heard">听到语音</string>
+    <string name="player_video_subtitle_delay_text_seen">看到文本</string>
     <string name="player_video_subtitle_delay_show_controls">调整延迟</string>
     <string name="player_video_subtitle_delay_hub_hint">调整字幕相对于视频的时间。使用覆盖层，以便在调整时看到字幕移动。</string>
     <string name="player_video_av_sync_audio_helper">负值：音频提前。正值：音频延后。</string>

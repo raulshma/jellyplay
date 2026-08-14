@@ -310,7 +310,7 @@ private fun SubtitleDelayLauncherSection(
             Text(
                 stringResource(
                     R.string.player_video_subtitle_offset,
-                    formatDelayLabel(currentDelayMs),
+                    formatDelayLabelMs(currentDelayMs),
                 ),
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.primary,

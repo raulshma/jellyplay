@@ -298,6 +298,7 @@ class DetailViewModel @Inject constructor(
         offlineRepository = offlineRepository,
         episodesProvider = { _uiState.value.episodes },
         seasonsProvider = { _uiState.value.seasons },
+        onContentMutated = ::refreshAfterOfflineMutation,
     )
     private val resyncActions = ResyncActions(
         scope = scope,
@@ -1446,6 +1447,27 @@ class DetailViewModel @Inject constructor(
     // [DetailUiState.detailContext] attachment for capability gating and act on
     // the current item or the passed ids. Per-item write actions route through
     // the offline-aware PlayedStateSync / playback outbox (mirroring today).
+
+    /**
+     * Called by [OfflineDeleteActions] after each delete transaction lands. The
+     * provider only re-resolves content on a refresh tick, and the reducer
+     * short-circuits same-generation attachment ticks — so without this the
+     * screen would keep showing the pre-delete episodes (or, after a re-resolve,
+     * a stuck loading spinner / "Finding Episode" on an emptied season) until
+     * the next navigation. Drop the now-stale series catalogue and re-resolve
+     * the current view. The refresh is gated to local views: a remote view's
+     * server episode list is unchanged by a download delete (the attachment
+     * flow already refreshes download badges), so refreshing it would only
+     * wastefully refetch from the server.
+     */
+    private fun refreshAfterOfflineMutation() {
+        val seriesId = currentSeriesId ?: return
+        mediaDetailProvider.invalidate(seriesId)
+        val itemId = currentItemId ?: return
+        if (_uiState.value.origin?.isLocal == true) {
+            launch { mediaDetailProvider.refresh(itemId) }
+        }
+    }
 
     /** Deletes a single downloaded item by id. Delegates to [OfflineDeleteActions]. */
     fun deleteOfflineItem(id: String) = offlineDeleteActions.deleteOfflineItem(id)

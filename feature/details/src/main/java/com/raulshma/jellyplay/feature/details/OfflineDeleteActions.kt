@@ -7,8 +7,11 @@ import kotlinx.coroutines.launch
 
 /**
  * Offline-deletion actions extracted from [DetailViewModel]. Fire-and-forget:
- * holds no state of its own — the UI observes the offline repository's
- * reactivity (and the provider snapshot) for the post-delete refresh.
+ * holds no state of its own. After each delete transaction lands, [onContentMutated]
+ * fires so the ViewModel can invalidate the series catalogue + re-resolve the
+ * detail snapshot — otherwise the screen keeps showing the pre-delete episodes
+ * until the next navigation (the provider only re-resolves content on a refresh
+ * tick, and the reducer short-circuits same-generation attachment ticks).
  *
  * [deleteOfflineEpisodes] reads the current seasons/episodes off the injected
  * providers to classify whole-season vs partial selections, mirroring the
@@ -19,16 +22,14 @@ internal class OfflineDeleteActions(
     private val offlineRepository: OfflineRepository,
     private val episodesProvider: () -> Map<String, List<MediaItem>>,
     private val seasonsProvider: () -> List<MediaItem>,
+    private val onContentMutated: () -> Unit,
 ) {
     /** Deletes a single downloaded item by id. */
-    fun deleteOfflineItem(id: String) {
-        scope.launch { offlineRepository.deleteOfflineItem(id) }
-    }
+    fun deleteOfflineItem(id: String) = deleteAndNotify { offlineRepository.deleteOfflineItem(id) }
 
     /** Deletes a single downloaded episode by id. */
-    fun deleteOfflineEpisode(episodeId: String) {
-        scope.launch { offlineRepository.deleteOfflineItem(episodeId) }
-    }
+    fun deleteOfflineEpisode(episodeId: String) =
+        deleteAndNotify { offlineRepository.deleteOfflineItem(episodeId) }
 
     /**
      * Deletes a batch of downloaded episodes. Ports
@@ -47,7 +48,7 @@ internal class OfflineDeleteActions(
         // partial selections.
         val currentEpisodes = episodesProvider()
         val currentSeasons = seasonsProvider()
-        scope.launch {
+        deleteAndNotify {
             val remainingEpisodeIds = mutableSetOf<String>()
             currentSeasons.forEach { season ->
                 val seasonEpisodeIds = currentEpisodes[season.id].orEmpty().map { it.id }.toSet()
@@ -66,12 +67,22 @@ internal class OfflineDeleteActions(
     }
 
     /** Drops an entire downloaded season (one DB transaction + artifact cleanup). */
-    fun deleteOfflineSeason(seasonId: String) {
-        scope.launch { offlineRepository.deleteOfflineSeason(seasonId) }
-    }
+    fun deleteOfflineSeason(seasonId: String) =
+        deleteAndNotify { offlineRepository.deleteOfflineSeason(seasonId) }
 
     /** Drops an entire downloaded series and all its seasons/episodes. */
-    fun deleteOfflineSeries(seriesId: String) {
-        scope.launch { offlineRepository.deleteOfflineSeries(seriesId) }
+    fun deleteOfflineSeries(seriesId: String) =
+        deleteAndNotify { offlineRepository.deleteOfflineSeries(seriesId) }
+
+    /**
+     * Runs [delete] on [scope], then signals [onContentMutated] exactly once so
+     * the ViewModel re-resolves the now-stale detail snapshot. Centralizing the
+     * launch+notify keeps the per-method bodies at the delete logic only.
+     */
+    private fun deleteAndNotify(delete: suspend () -> Unit) {
+        scope.launch {
+            delete()
+            onContentMutated()
+        }
     }
 }

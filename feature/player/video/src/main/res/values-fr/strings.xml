@@ -223,10 +223,10 @@
     <string name="player_video_subtitle_delay">Retard des sous-titres</string>
     <string name="player_video_subtitle_delay_close">Fermer le retard des sous-titres</string>
     <string name="player_video_subtitle_delay_reset">Réinitialiser</string>
-    <string name="player_video_subtitle_delay_decrease_coarse">Retarder les sous-titres d\'1 seconde</string>
-    <string name="player_video_subtitle_delay_decrease_fine">Retarder les sous-titres de 0,1 seconde</string>
-    <string name="player_video_subtitle_delay_increase_fine">Avancer les sous-titres de 0,1 seconde</string>
-    <string name="player_video_subtitle_delay_increase_coarse">Avancer les sous-titres d\'1 seconde</string>
+    <string name="player_video_subtitle_delay_decrease">Réduire le retard des sous-titres</string>
+    <string name="player_video_subtitle_delay_increase">Augmenter le retard des sous-titres</string>
+    <string name="player_video_subtitle_delay_voice_heard">Voix entendue</string>
+    <string name="player_video_subtitle_delay_text_seen">Texte vu</string>
     <string name="player_video_subtitle_delay_show_controls">Régler le retard</string>
     <string name="player_video_subtitle_delay_hub_hint">Ajustez le timing des sous-titres par rapport à la vidéo. Utilisez l\'overlay pour voir les sous-titres se déplacer pendant le réglage.</string>
     <string name="player_video_av_sync_audio_helper">Négatif : audio plus tôt. Positif : audio plus tard.</string>

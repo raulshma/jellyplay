@@ -1770,6 +1770,22 @@ fun VideoPlayerScreen(
                     durationMs = duration,
                 )
             }
+
+            // Full-screen loading overlay during the initial media load. Covers
+            // the surface + controls so the seek bar never paints a transient 0
+            // fraction — its first paint (once this lifts) is the correct resume
+            // fraction. Declared last → drawn on top of every sibling. Lifts
+            // when isInitializing flips false (position & duration seeded).
+            if (uiState.isInitializing) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    JellyPlayLoadingIndicator(color = playerOnScrim())
+                }
+            }
         }
     }
 

@@ -223,10 +223,10 @@
     <string name="player_video_subtitle_delay">Atraso das legendas</string>
     <string name="player_video_subtitle_delay_close">Fechar atraso das legendas</string>
     <string name="player_video_subtitle_delay_reset">Repor</string>
-    <string name="player_video_subtitle_delay_decrease_coarse">Atrasar legendas 1 segundo</string>
-    <string name="player_video_subtitle_delay_decrease_fine">Atrasar legendas 0,1 segundos</string>
-    <string name="player_video_subtitle_delay_increase_fine">Adiantar legendas 0,1 segundos</string>
-    <string name="player_video_subtitle_delay_increase_coarse">Adiantar legendas 1 segundo</string>
+    <string name="player_video_subtitle_delay_decrease">Reduzir atraso das legendas</string>
+    <string name="player_video_subtitle_delay_increase">Aumentar atraso das legendas</string>
+    <string name="player_video_subtitle_delay_voice_heard">Voz ouvida</string>
+    <string name="player_video_subtitle_delay_text_seen">Texto visto</string>
     <string name="player_video_subtitle_delay_show_controls">Ajustar atraso</string>
     <string name="player_video_subtitle_delay_hub_hint">Ajuste o tempo das legendas em relação ao vídeo. Use a sobreposição para ver as legendas deslocarem-se enquanto ajusta.</string>
     <string name="player_video_av_sync_audio_helper">Negativo: áudio mais cedo. Positivo: áudio mais tarde.</string>

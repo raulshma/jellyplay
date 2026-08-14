@@ -82,6 +82,14 @@ data class VideoPlayerUiState(
     val subtitle: String = "",
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
+    /**
+     * True during the initial media load (detail fetch + engine init), before
+     * the seek bar's position/duration are seeded. The screen renders a
+     * full-screen loading overlay while this is true so the bar's first paint
+     * is already at the correct (resume) fraction — no 0→resume flicker.
+     * Lifted once the load completes; [isBuffering] covers mid-playback stalls.
+     */
+    val isInitializing: Boolean = true,
     val currentPosition: Long = 0L,
     val duration: Long = 0L,
     val playbackSpeed: Float = 1.0f,

@@ -9,6 +9,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -20,11 +21,13 @@ class OfflineDeleteActionsTest {
         scope: TestScope,
         episodes: Map<String, List<MediaItem>> = emptyMap(),
         seasons: List<MediaItem> = emptyList(),
+        onContentMutated: () -> Unit = {},
     ): OfflineDeleteActions = OfflineDeleteActions(
         scope = scope,
         offlineRepository = offlineRepository,
         episodesProvider = { episodes },
         seasonsProvider = { seasons },
+        onContentMutated = onContentMutated,
     )
 
     private fun episode(id: String) = MediaItem(
@@ -137,6 +140,36 @@ class OfflineDeleteActionsTest {
         advanceUntilIdle()
 
         coVerify { offlineRepository.deleteOfflineSeries("series1") }
+    }
+    // endregion
+
+    // region post-delete refresh signal
+    @Test
+    fun `deleteOfflineEpisode signals content mutation after the delete lands`() = runTest {
+        var mutations = 0
+        val actions = actions(this, onContentMutated = { mutations++ })
+
+        actions.deleteOfflineEpisode("ep1")
+        advanceUntilIdle()
+
+        coVerify { offlineRepository.deleteOfflineItem("ep1") }
+        // Exactly one refresh signal, and only after the repository delete ran.
+        assertEquals(1, mutations)
+    }
+
+    @Test
+    fun `deleteOfflineEpisodes signals content mutation once after the batch`() = runTest {
+        var mutations = 0
+        val episodes = mapOf("season1" to listOf(episode("e1"), episode("e2")))
+        val seasons = listOf(season("season1"))
+        val actions = actions(this, episodes, seasons, onContentMutated = { mutations++ })
+
+        actions.deleteOfflineEpisodes(listOf("e1", "e2"))
+        advanceUntilIdle()
+
+        // Whole-season drop + a single mutation signal (not one per episode).
+        coVerify { offlineRepository.deleteOfflineSeason("season1") }
+        assertEquals(1, mutations)
     }
     // endregion
 }
