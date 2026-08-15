@@ -319,8 +319,6 @@
     <string name="ss_audio_delay_subtitle">Ajusta el desfase de latencia de audio (ms)</string>
     <string name="ss_live_stream_option_title">Transmisión de TV en directo</string>
     <string name="ss_live_stream_option_subtitle">Transmisión directa o transcodificación de canales de TV en directo (HTSP / entrega por sintonizador)</string>
-    <string name="ss_hold_speed_title">Mantener para saltar</string>
-    <string name="ss_hold_speed_subtitle">Mantén pulsado para avanzar o retroceder rápidamente</string>
     <string name="ss_hold_speed_multiplier_title">Velocidad al mantener pulsado</string>
     <string name="ss_hold_speed_multiplier_subtitle">Velocidad de reproducción mientras se mantiene pulsado</string>
     <string name="ss_android_tv_watch_next_title">Fila Ver a continuación (Android TV)</string>

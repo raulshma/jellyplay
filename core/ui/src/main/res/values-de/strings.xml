@@ -323,8 +323,6 @@
     <string name="ss_audio_delay_subtitle">Audio-Sync-Latenz-Offset anpassen (ms)</string>
     <string name="ss_live_stream_option_title">Live-TV-Stream</string>
     <string name="ss_live_stream_option_subtitle">Live-TV-Sender direkt streamen oder transcodieren (HTSP-/Tuner-Auslieferung)</string>
-    <string name="ss_hold_speed_title">Gedrückt halten zum Spulen</string>
-    <string name="ss_hold_speed_subtitle">Lange drücken, um vor- oder zurückzuspulen</string>
     <string name="ss_hold_speed_multiplier_title">Hold-to-Seek-Geschwindigkeit</string>
     <string name="ss_hold_speed_multiplier_subtitle">Wiedergabegeschwindigkeit beim Halten</string>
     <string name="ss_android_tv_watch_next_title">Als Nächstes-Reihe (Android TV)</string>

@@ -1085,20 +1085,11 @@ object SettingsSearchRegistry {
             isAdvanced = true
         ),
         SettingsSearchItem(
-            id = "hold_speed",
-            titleRes = R.string.ss_hold_speed_title,
-            subtitleRes = R.string.ss_hold_speed_subtitle,
-            categoryRes = R.string.ss_cat_playback,
-            keywords = listOf("hold", "seek", "fast forward", "rewind", "long press"),
-            route = Route.PlaybackSettings(),
-            icon = Tabler.Outline.RewindForward30
-        ),
-        SettingsSearchItem(
             id = "hold_speed_multiplier",
             titleRes = R.string.ss_hold_speed_multiplier_title,
             subtitleRes = R.string.ss_hold_speed_multiplier_subtitle,
             categoryRes = R.string.ss_cat_playback,
-            keywords = listOf("hold", "seek", "speed", "multiplier", "fast"),
+            keywords = listOf("hold", "seek", "speed", "multiplier", "fast", "fast forward", "rewind", "long press", "off", "disable"),
             route = Route.PlaybackSettings(),
             icon = Tabler.Outline.Rocket
         ),

@@ -905,6 +905,12 @@ fun LibraryScreen(
                                                             imageUrl = cardImage.imageUrl,
                                                             fallbackUrls = cardImage.fallbackUrls,
                                                             onClick = memoizedClick,
+                                                            // Intrinsic Primary ratio of the image this card
+                                                            // actually shows — this is what makes masonry
+                                                            // stagger: square and portrait posters get
+                                                            // different card heights instead of all being
+                                                            // forced to the 2:3 grid shape.
+                                                            aspectRatio = cardImage.aspectRatio,
                                                             showProgress = itemProgress != null && itemProgress > 0f,
                                                             progressPercent = itemProgress ?: 0f,
                                                             blurHash = cardImage.blurHash,

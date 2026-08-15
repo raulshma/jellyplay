@@ -55,6 +55,10 @@ internal fun BaseItemDto.toMediaItem() = MediaItem(
     playbackPositionTicks = userData?.playbackPositionTicks,
     isPlayed = userData?.played == true,
     isFavorite = userData?.isFavorite == true,
+    // Server-computed width/height of the Primary image; drives the masonry
+    // view's per-card height. Falls back to the poster 2:3 default when the
+    // server omits it.
+    posterAspectRatio = primaryImageAspectRatio?.toFloat()?.takeIf { it > 0f } ?: (2f / 3f),
     premiereDate = premiereDate?.toString(),
     genres = genres ?: emptyList(),
     studios = studios?.mapNotNull { it.name } ?: emptyList(),

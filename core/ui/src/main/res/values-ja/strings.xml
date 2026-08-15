@@ -323,8 +323,6 @@
     <string name="ss_audio_delay_subtitle">オーディオ同期の遅延オフセットを調整します (ms)</string>
     <string name="ss_live_stream_option_title">ライブテレビストリーム</string>
     <string name="ss_live_stream_option_subtitle">ライブテレビチャンネルを直接ストリームまたはトランスコードします (HTSP / チューナー配信)</string>
-    <string name="ss_hold_speed_title">長押しシーク</string>
-    <string name="ss_hold_speed_subtitle">長押しで早送りまたは巻き戻しします</string>
     <string name="ss_hold_speed_multiplier_title">長押しシーク速度</string>
     <string name="ss_hold_speed_multiplier_subtitle">長押し中の再生速度</string>
     <string name="ss_android_tv_watch_next_title">「次に視聴」行 (Android TV)</string>

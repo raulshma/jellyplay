@@ -343,8 +343,6 @@
     <string name="settings_default_speed">默认速度</string>
     <string name="settings_default_speed_subtitle">初始播放速度</string>
     <string name="settings_default_speed_value">默认速度：%1$s</string>
-    <string name="settings_hold_to_seek">长按跳转</string>
-    <string name="settings_hold_to_seek_on">长按以快进/快退</string>
     <string name="settings_hold_to_seek_speed">长按跳转速度</string>
     <string name="settings_hold_to_seek_speed_subtitle">长按时的播放速度</string>
     <string name="settings_default_aspect">默认宽高比</string>

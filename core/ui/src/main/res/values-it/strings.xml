@@ -323,8 +323,6 @@
     <string name="ss_audio_delay_subtitle">Regola l\'offset di latenza di sincronia audio (ms)</string>
     <string name="ss_live_stream_option_title">Stream TV in diretta</string>
     <string name="ss_live_stream_option_subtitle">Stream diretto o transcodifica dei canali TV in diretta (erogazione HTSP / tuner)</string>
-    <string name="ss_hold_speed_title">Tieni premuto per cercare</string>
-    <string name="ss_hold_speed_subtitle">Pressione prolungata per avanzare o riavvolgere</string>
     <string name="ss_hold_speed_multiplier_title">Velocità tieni premuto per cercare</string>
     <string name="ss_hold_speed_multiplier_subtitle">Velocità di riproduzione mentre si tiene premuto</string>
     <string name="ss_android_tv_watch_next_title">Riga Guarda dopo (Android TV)</string>

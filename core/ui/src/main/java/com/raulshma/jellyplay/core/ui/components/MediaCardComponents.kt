@@ -286,6 +286,9 @@ fun PosterCard(
     fallbackUrls: List<String> = emptyList(),
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    // 2:3 for the uniform grid; the masonry view passes the item's intrinsic
+    // Primary aspect ratio so each card's height is sized independently.
+    aspectRatio: Float = 2f / 3f,
     showProgress: Boolean = false,
     progressPercent: Float = 0f,
     blurHash: String? = null,
@@ -360,16 +363,18 @@ fun PosterCard(
                     modifier = imageModifier,
                     contentScale = ContentScale.Crop,
                     crossfade = false,
-                    // Poster cards fill a dynamic column width at a 2:3 aspect ratio.
-                    // ~360×540 px covers ~2× density for typical grid card sizes
-                    // (≤180 dp wide) without the over-decode of the 512×512 default.
-                    size = CoilSize(360, 540),
+                    // Poster cards fill a dynamic column width. Decode bounds
+                    // follow the card's aspect ratio (~2× density for typical
+                    // grid card sizes ≤180 dp wide) without the over-decode of
+                    // the 512×512 default; clamped so extreme ratios can't
+                    // request huge decodes.
+                    size = CoilSize(360, (360 / aspectRatio).toInt().coerceIn(240, 810)),
                 )
             }
         },
         title = titleText,
         modifier = modifier,
-        aspectRatio = 2f / 3f,
+        aspectRatio = aspectRatio,
         clipToShape = clipToShape,
         onPlayClick = onPlayClick,
         playButtonDominantColor = dominantColor,

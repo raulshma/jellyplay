@@ -153,7 +153,7 @@ fun PlaybackSettingsScreen(
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId, showAdvanced) {
         val playerGroup = listOf(
-            "player_engine", "seek_duration", "orientation", "gestures", "default_speed", "hold_speed",
+            "player_engine", "seek_duration", "orientation", "gestures", "default_speed",
             "hold_speed_multiplier", "default_aspect", "video_autoplay_next", "autoplay_countdown",
             "controls_timeout", "skip_back_on_resume", "pass_out_protection", "autoplay_trailers",
             "cinema_mode", "android_tv_watch_next", "tv_zoom_mode", "episode_browser", "playback_metadata",
@@ -346,30 +346,34 @@ fun PlaybackSettingsScreen(
                             )
                         },
                     )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.RewindForward30,
-                        title = stringResource(R.string.settings_hold_to_seek),
-                        subtitle = if (preferences.videoHoldSpeedEnabled) stringResource(R.string.settings_hold_to_seek_on) else stringResource(R.string.settings_disabled),
-                        checked = preferences.videoHoldSpeedEnabled,
-                        highlighted = highlightSettingId == "hold_speed",
-                        onCheckedChange = { viewModel.setVideoHoldSpeedEnabled(it) },
-                    )
-                    val holdToSeekSpeedTitle = stringResource(R.string.settings_hold_to_seek_speed)
+                    val holdSpeedTitle = stringResource(R.string.settings_hold_to_seek_speed)
+                    val holdSpeedOffLabel = stringResource(R.string.settings_off)
+                    val holdSpeedOffSubtitle = stringResource(R.string.settings_disabled)
                     SettingListItem(
                         icon = Tabler.Outline.Rocket,
-                        title = stringResource(R.string.settings_hold_to_seek_speed),
+                        title = holdSpeedTitle,
                         subtitle = stringResource(R.string.settings_hold_to_seek_speed_subtitle),
-                        trailingText = "${preferences.videoHoldSpeedMultiplier}x",
+                        trailingText = if (preferences.videoHoldSpeedEnabled) "${preferences.videoHoldSpeedMultiplier}x" else holdSpeedOffLabel,
                         highlighted = highlightSettingId == "hold_speed_multiplier",
                         onClick = {
-                            val multipliers = listOf(1.5f, 2.0f, 2.5f, 3.0f, 4.0f)
-                            activePicker = pickerChip(
-                                title = holdToSeekSpeedTitle,
-                                values = multipliers,
-                                current = preferences.videoHoldSpeedMultiplier,
-                                label = { "${it}x" },
-                                defaultIndex = 1,
-                                onSelect = viewModel::setVideoHoldSpeedMultiplier,
+                            // 0f encodes "Off" — selecting it replaces the former Hold-to-Seek toggle
+                            val speeds = listOf(0f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f)
+                            activePicker = PickerState.List(
+                                title = holdSpeedTitle,
+                                items = speeds,
+                                label = { if (it == 0f) holdSpeedOffLabel else "${it}x" },
+                                subtitle = { if (it == 0f) holdSpeedOffSubtitle else "" },
+                                isSelected = { speed ->
+                                    if (preferences.videoHoldSpeedEnabled) speed == preferences.videoHoldSpeedMultiplier else speed == 0f
+                                },
+                                onSelect = { speed ->
+                                    if (speed == 0f) {
+                                        viewModel.setVideoHoldSpeedEnabled(false)
+                                    } else {
+                                        viewModel.setVideoHoldSpeedEnabled(true)
+                                        viewModel.setVideoHoldSpeedMultiplier(speed)
+                                    }
+                                },
                             )
                         },
                     )

@@ -323,8 +323,6 @@
     <string name="ss_audio_delay_subtitle">오디오 싱크 지연 오프셋을 조정합니다(ms)</string>
     <string name="ss_live_stream_option_title">실시간 TV 스트림</string>
     <string name="ss_live_stream_option_subtitle">실시간 TV 채널을 다이렉트 스트림 또는 트랜스코드합니다(HTSP/튜너 전송)</string>
-    <string name="ss_hold_speed_title">길게 눌러 탐색</string>
-    <string name="ss_hold_speed_subtitle">길게 눌러 빨리 감기 또는 되감기합니다</string>
     <string name="ss_hold_speed_multiplier_title">길게 눌러 탐색 속도</string>
     <string name="ss_hold_speed_multiplier_subtitle">누르고 있는 동안의 재생 속도입니다</string>
     <string name="ss_android_tv_watch_next_title">다음 시청 행(Android TV)</string>

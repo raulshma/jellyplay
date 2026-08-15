@@ -320,8 +320,6 @@
     <string name="ss_audio_delay_subtitle">Ajuster le décalage de synchronisation audio (ms)</string>
     <string name="ss_live_stream_option_title">Flux TV en direct</string>
     <string name="ss_live_stream_option_subtitle">Flux direct ou transcodage des chaînes TV en direct (HTSP / livraison par tuner)</string>
-    <string name="ss_hold_speed_title">Maintenir pour chercher</string>
-    <string name="ss_hold_speed_subtitle">Appui long pour avancer ou rembobiner rapidement</string>
     <string name="ss_hold_speed_multiplier_title">Vitesse de maintenir pour chercher</string>
     <string name="ss_hold_speed_multiplier_subtitle">Vitesse de lecture pendant le maintien</string>
     <string name="ss_android_tv_watch_next_title">Ligne À regarder (Android TV)</string>

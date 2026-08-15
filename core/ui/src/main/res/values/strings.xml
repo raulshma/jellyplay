@@ -333,8 +333,6 @@
     <string name="ss_audio_delay_subtitle">Adjust audio sync latency offset (ms)</string>
     <string name="ss_live_stream_option_title">Live TV Stream</string>
     <string name="ss_live_stream_option_subtitle">Direct Stream or Transcode live TV channels (HTSP / tuner delivery)</string>
-    <string name="ss_hold_speed_title">Hold-to-Seek</string>
-    <string name="ss_hold_speed_subtitle">Long-press to fast-forward or rewind</string>
     <string name="ss_hold_speed_multiplier_title">Hold-to-Seek Speed</string>
     <string name="ss_hold_speed_multiplier_subtitle">Playback speed while holding</string>
     <string name="ss_android_tv_watch_next_title">Watch Next Row (Android TV)</string>

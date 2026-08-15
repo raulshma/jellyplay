@@ -7,12 +7,20 @@ import com.raulshma.jellyplay.core.model.MediaType
 
 /**
  * Resolved image inputs for a [PosterCard]. See [rememberEpisodeCardImage].
+ *
+ * @param aspectRatio aspect ratio of the image [imageUrl] actually points at —
+ *   the item's own [MediaItem.posterAspectRatio] when the card shows the item's
+ *   Primary, or the typical shape of the series art when an episode falls back
+ *   to it (the item's own ratio describes the landscape episode still, not the
+ *   portrait poster being shown). Uniform layouts ignore this; the masonry view
+ *   uses it to size each card from its image.
  */
 data class PosterCardImage(
     val imageUrl: String,
     val fallbackUrls: List<String>,
     val blurHash: String?,
     val showSeriesBadge: Boolean,
+    val aspectRatio: Float = 2f / 3f,
 )
 
 /**
@@ -103,6 +111,7 @@ fun rememberEpisodeCardImage(
                 fallbackUrls = if (itemImageUrl.isNotBlank()) listOf(itemImageUrl) + fallbackImageUrls else fallbackImageUrls,
                 blurHash = null,
                 showSeriesBadge = true,
+                aspectRatio = 2f / 3f,
             )
             isEpisode && seriesBackdrop.isNotBlank() -> PosterCardImage(
                 // Series has a Backdrop but no Primary (common for freshly-added
@@ -113,6 +122,7 @@ fun rememberEpisodeCardImage(
                 fallbackUrls = if (itemImageUrl.isNotBlank()) listOf(itemImageUrl) + fallbackImageUrls else fallbackImageUrls,
                 blurHash = null,
                 showSeriesBadge = true,
+                aspectRatio = 16f / 9f,
             )
             isEpisode -> PosterCardImage(
                 // No series poster or backdrop available — keep the episode still
@@ -121,6 +131,7 @@ fun rememberEpisodeCardImage(
                 fallbackUrls = fallbackImageUrls,
                 blurHash = item.blurHashes.primary,
                 showSeriesBadge = true,
+                aspectRatio = item.posterAspectRatio,
             )
             isSeason && itemImageUrl.isBlank() && seriesPoster.isNotBlank() -> PosterCardImage(
                 // No season artwork at all — show the series poster outright.
@@ -134,6 +145,7 @@ fun rememberEpisodeCardImage(
                 fallbackUrls = fallbackImageUrls,
                 blurHash = null,
                 showSeriesBadge = false,
+                aspectRatio = 16f / 9f,
             )
             isSeason -> PosterCardImage(
                 // Season poster first; the parent series poster/backdrop are the
@@ -146,12 +158,14 @@ fun rememberEpisodeCardImage(
                 },
                 blurHash = item.blurHashes.primary,
                 showSeriesBadge = false,
+                aspectRatio = item.posterAspectRatio,
             )
             else -> PosterCardImage(
                 imageUrl = itemImageUrl,
                 fallbackUrls = fallbackImageUrls,
                 blurHash = item.blurHashes.primary,
                 showSeriesBadge = showEpisodeSeriesBadge,
+                aspectRatio = item.posterAspectRatio,
             )
         }
     }
