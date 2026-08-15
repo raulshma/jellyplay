@@ -12,7 +12,7 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.feature.music.R
+import com.raulshma.jellyplay.feature.music.toMixErrorMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.SharingStarted
@@ -77,7 +77,7 @@ class AlbumDetailViewModel @Inject constructor(
 
     fun addToQueue(track: MediaItem) {
         launch {
-            audioQueueFacade.enqueueTracks(listOf(track), albumFallback = detail?.item?.name)
+            audioQueueFacade.enqueueTrack(track, albumFallback = detail?.item?.name)
         }
     }
 
@@ -85,11 +85,11 @@ class AlbumDetailViewModel @Inject constructor(
         launch {
             _isStartingMix.value = true
             _error.value = null
-            when (val outcome = audioQueueFacade.startInstantMix(albumId, albumFallback = detail?.item?.name)) {
-                is AudioQueueOutcome.Started -> _mixFirstTrackId.value = outcome.queue.first().id
-                AudioQueueOutcome.Empty -> _error.value = context.getString(R.string.music_mix_unavailable)
-                AudioQueueOutcome.Suppressed -> Unit
-                is AudioQueueOutcome.Failed -> _error.value = outcome.cause.message ?: "Failed to start Instant Mix"
+            val outcome = audioQueueFacade.startInstantMix(albumId, albumFallback = detail?.item?.name)
+            if (outcome is AudioQueueOutcome.Started) {
+                _mixFirstTrackId.value = outcome.queue.first().id
+            } else {
+                outcome.toMixErrorMessage(context)?.let { _error.value = it }
             }
             _isStartingMix.value = false
         }

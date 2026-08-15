@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice
 import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
-import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.AudioPlayerUiPreferences
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -412,20 +411,6 @@ class AudioPlayerViewModelTest {
     }
 
     // ─── Queue operations ──────────────────────────────────────────────────────
-
-    @Test
-    fun playQueue_delegatesToManager() {
-        val items = listOf<AudioQueueItem>()
-        viewModel.playQueue(items, startIndex = 2)
-        verify { audioPlaybackManager.playQueue(items, 2) }
-    }
-
-    @Test
-    fun addToQueue_delegatesToManager() {
-        val item = mockk<AudioQueueItem>()
-        viewModel.addToQueue(item)
-        verify { audioPlaybackManager.addToQueue(item) }
-    }
 
     @Test
     fun removeFromQueue_delegatesToManager() {

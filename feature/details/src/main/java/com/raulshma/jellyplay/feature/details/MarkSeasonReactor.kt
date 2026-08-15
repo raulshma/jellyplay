@@ -26,11 +26,12 @@ internal class MarkSeasonReactor(
     private val seriesIdProvider: () -> String? = { null },
 ) {
     /**
-     * Last targeted state (in-flight or successful) by screen item/season,
-     * used while UI emissions catch up — the provider's re-emission is reduced
-     * by the VM asynchronously, so the guard cannot trust the episode snapshot
-     * alone. Entries are recorded pre-call (dedup of rapid same-direction
-     * taps) and removed again when the mutation fails.
+     * Last successful target by screen item/season, used while UI emissions
+     * catch up — the provider's re-emission is reduced by the VM
+     * asynchronously, so the guard cannot trust the episode snapshot alone.
+     * Entries are recorded on success only, matching the mutator's
+     * "flip only on success" contract (plan 03): a failed write records
+     * nothing, so a retry of the same direction is never swallowed.
      */
     private val lastSuccessfulSeasonStates = mutableMapOf<Pair<String, String>, Boolean>()
     private var lastItemId: String? = null
@@ -71,12 +72,6 @@ internal class MarkSeasonReactor(
                 ?: currentEpisodes.all { it.isPlayed == played }
             if (alreadyInTargetState) return@launch
 
-            // Record the target now, not on success: a rapid second tap of the
-            // same direction must dedup against this in-flight call, and the
-            // module mutex only serializes the writes — this guard runs before
-            // it. Rolled back on failure so a retry is never wrongly skipped.
-            lastSuccessfulSeasonStates[stateKey] = played
-
             // The series screen knows both ids, so the season-aware mutation
             // owns the parent-series scope (a bare mutation cannot resolve the
             // parent — seasons are never detail-cached). Null seriesId falls
@@ -85,8 +80,8 @@ internal class MarkSeasonReactor(
             // (defensive) and at worst drops one extra catalogue entry.
             val seriesId = seriesIdProvider() ?: itemId
             userDataMutator.setSeasonPlayed(seriesId, seasonId, played)
+                .onSuccess { lastSuccessfulSeasonStates[stateKey] = played }
                 .onFailure {
-                    lastSuccessfulSeasonStates.remove(stateKey)
                     messageSink(
                         DetailMessage.Text(
                             context.getString(

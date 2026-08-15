@@ -8,7 +8,6 @@ import androidx.media3.common.Player
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
@@ -371,14 +370,6 @@ class AudioPlayerViewModel @Inject constructor(
                     _uiState.update { it.copy(albumArtBlurHash = hash) }
                 }
         }
-    }
-
-    fun playQueue(items: List<AudioQueueItem>, startIndex: Int = 0) {
-        audioPlaybackManager.playQueue(items, startIndex)
-    }
-
-    fun addToQueue(item: AudioQueueItem) {
-        audioPlaybackManager.addToQueue(item)
     }
 
     fun removeFromQueue(index: Int) {

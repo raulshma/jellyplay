@@ -450,6 +450,62 @@ class UnifiedMediaDetailProviderImplTest {
     }
 
     @Test
+    fun `applyOptimisticSeasonRewrite succeeds and emits updated snapshot when catalogue update returns null`() = runTest {
+        val snapshot = seriesCatalogueSnapshot() // 1 season, 2 episodes, all unplayed
+        wireStubs("s1", mode = OfflineMode.ONLINE)
+        coEvery { mediaRepository.getMediaDetail("s1", any()) } returns Result.success(seriesDetail())
+        coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(snapshot)
+        // Simulate catalogue cache having been invalidated by repository write prior to rewrite
+        coEvery { episodeCatalogue.updateSeasonEpisodes("s1", "season1", any()) } returns null
+
+        val provider = buildProvider()
+        val states = mutableListOf<DetailLoadState>()
+        val job = launch { provider.observe("s1").collect { states += it } }
+        advanceUntilIdle()
+
+        clearMocks(episodeCatalogue, answers = false, recordedCalls = true, childMocks = false)
+
+        provider.applyOptimisticSeasonRewrite("s1", "season1") { episodes ->
+            episodes.map { it.copy(isPlayed = true) }
+        }
+        advanceUntilIdle()
+
+        val after = states.filterIsInstance<DetailLoadState.Loaded>().last()
+        assertTrue(after.snapshot.episodesBySeason["season1"]?.all { it.isPlayed } ?: false)
+        coVerify(exactly = 1) { episodeCatalogue.invalidateSeries("s1") }
+        job.cancel()
+    }
+
+    @Test
+    fun `applyOptimisticSeasonRewrite finds session when observing episode and rewritten by seriesId`() = runTest {
+        val episodeItem = MediaDetail(
+            item = MediaItem(id = "e1", name = "Ep 1", seriesId = "s1", mediaType = MediaType.EPISODE),
+            studios = emptyList(),
+        )
+        val snapshot = seriesCatalogueSnapshot()
+        wireStubs("e1", mode = OfflineMode.ONLINE)
+        coEvery { mediaRepository.getMediaDetail("e1", any()) } returns Result.success(episodeItem)
+        coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(snapshot)
+
+        val provider = buildProvider()
+        val states = mutableListOf<DetailLoadState>()
+        val job = launch { provider.observe("e1").collect { states += it } }
+        advanceUntilIdle()
+
+        clearMocks(episodeCatalogue, answers = false, recordedCalls = true, childMocks = false)
+
+        provider.applyOptimisticSeasonRewrite("s1", "season1") { episodes ->
+            episodes.map { it.copy(isPlayed = true) }
+        }
+        advanceUntilIdle()
+
+        val after = states.filterIsInstance<DetailLoadState.Loaded>().last()
+        assertTrue(after.snapshot.episodesBySeason["season1"]?.all { it.isPlayed } ?: false)
+        coVerify(exactly = 1) { episodeCatalogue.invalidateSeries("s1") }
+        job.cancel()
+    }
+
+    @Test
     fun `applyOptimisticSeasonRewrite is a no-op when the season has no episodes`() = runTest {
         val snapshot = seriesCatalogueSnapshot(seasonIds = listOf("season1"))
         wireStubs("s1", mode = OfflineMode.ONLINE)

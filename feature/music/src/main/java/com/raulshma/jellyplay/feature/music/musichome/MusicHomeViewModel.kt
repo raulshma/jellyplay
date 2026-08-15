@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.music.musichome
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
+import com.raulshma.jellyplay.core.data.playback.TrackWithAlbumFallback
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -231,7 +232,7 @@ class MusicHomeViewModel @Inject constructor(
      * its own album fallback (the source album's name) so the facade can map
      * per-album naming before concatenation — plan 04 risk 2.
      */
-    private suspend fun fetchAlbumTracksParallel(albums: List<MediaItem>): List<Pair<MediaItem, String?>> {
+    private suspend fun fetchAlbumTracksParallel(albums: List<MediaItem>): List<TrackWithAlbumFallback> {
         return coroutineScope {
             albums.map { album ->
                 async {
@@ -239,7 +240,7 @@ class MusicHomeViewModel @Inject constructor(
                         mediaRepository.getAlbumTracks(album.id)
                         .getOrNull()
                         .orEmpty()
-                        .map { track -> track to album.name }
+                        .map { track -> TrackWithAlbumFallback(track, album.name) }
                     }
                 }
             }.awaitAll().flatten()

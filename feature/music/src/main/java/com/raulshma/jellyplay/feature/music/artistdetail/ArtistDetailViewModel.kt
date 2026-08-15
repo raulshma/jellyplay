@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.feature.music.R
+import com.raulshma.jellyplay.feature.music.toMixErrorMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
@@ -80,11 +80,11 @@ class ArtistDetailViewModel @Inject constructor(
             _error.value = null
             // No album fallback: the former `track.album` fallback was a no-op
             // (the mapper keeps the track's own album whenever it is set).
-            when (val outcome = audioQueueFacade.startInstantMix(artistId)) {
-                is AudioQueueOutcome.Started -> _mixFirstTrackId.value = outcome.queue.first().id
-                AudioQueueOutcome.Empty -> _error.value = context.getString(R.string.music_mix_unavailable)
-                AudioQueueOutcome.Suppressed -> Unit
-                is AudioQueueOutcome.Failed -> _error.value = outcome.cause.message ?: "Failed to start Instant Mix"
+            val outcome = audioQueueFacade.startInstantMix(artistId)
+            if (outcome is AudioQueueOutcome.Started) {
+                _mixFirstTrackId.value = outcome.queue.first().id
+            } else {
+                outcome.toMixErrorMessage(context)?.let { _error.value = it }
             }
             _isStartingMix.value = false
         }

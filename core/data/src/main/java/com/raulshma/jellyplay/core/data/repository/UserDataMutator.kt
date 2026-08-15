@@ -161,12 +161,8 @@ class UserDataMutatorImpl @Inject constructor(
         containers: List<UserDataContainer>,
         seriesId: String?,
     ): Result<AppliedMutation> = userDataMutationMutex.withLock {
-        val write = if (played) {
-            mediaRepository.get().markPlayed(itemId)
-        } else {
-            mediaRepository.get().markUnplayed(itemId)
-        }
-        write.map { AppliedMutation(itemId = itemId, played = played) }
+        writePlayed(itemId, played)
+            .map { AppliedMutation(itemId = itemId, played = played) }
             .onSuccess { applied -> applyOptimistically(itemId, applied, mode, containers, seriesId) }
     }
 
@@ -186,13 +182,9 @@ class UserDataMutatorImpl @Inject constructor(
         seasonId: String,
         played: Boolean,
     ): Result<AppliedMutation> = userDataMutationMutex.withLock {
-        val write = if (played) {
-            mediaRepository.get().markSeasonPlayed(seasonId, seriesId)
-        } else {
-            mediaRepository.get().markSeasonUnplayed(seasonId, seriesId)
-        }
         val applied = AppliedMutation(itemId = seasonId, played = played)
-        write.map { applied }
+        writeSeasonPlayed(seriesId, seasonId, played)
+            .map { applied }
             .onSuccess {
                 // The whole-season flip is one catalogue-level fact, not a
                 // per-item one: the provider's season rewrite re-emits every
@@ -204,6 +196,16 @@ class UserDataMutatorImpl @Inject constructor(
                 }
             }
     }
+
+    /** Repository call for the played direction, shared by [setPlayed] and [setSeasonPlayed]. */
+    private suspend fun writePlayed(itemId: String, played: Boolean): Result<Unit> =
+        if (played) mediaRepository.get().markPlayed(itemId)
+        else mediaRepository.get().markUnplayed(itemId)
+
+    /** Season variant of [writePlayed] — the server recurses into the season's children. */
+    private suspend fun writeSeasonPlayed(seriesId: String, seasonId: String, played: Boolean): Result<Unit> =
+        if (played) mediaRepository.get().markSeasonPlayed(seasonId, seriesId)
+        else mediaRepository.get().markSeasonUnplayed(seasonId, seriesId)
 
     /**
      * Post-success optimistic pass, in the order callers used to hand-assemble:

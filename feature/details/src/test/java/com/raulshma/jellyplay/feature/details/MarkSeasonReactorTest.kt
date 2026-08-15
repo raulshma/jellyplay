@@ -18,8 +18,8 @@ import org.junit.Test
  * protocol (write, serialization, provider season rewrite, series-catalogue
  * drop) moved into [com.raulshma.jellyplay.core.data.repository.UserDataMutator]
  * and is pinned by its own suite; what stays pinned here is the reactor's
- * screen-stateful part — the idempotence guard (in-flight + last successful
- * target), the episodes-on-screen early-exit, and the failure message.
+ * screen-stateful part — the idempotence guard (last successful target), the
+ * episodes-on-screen early-exit, and the failure message.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MarkSeasonReactorTest {
@@ -113,8 +113,8 @@ class MarkSeasonReactorTest {
         assertTrue(message is DetailMessage.Text)
         assertEquals("couldn't mark", (message as DetailMessage.Text).text)
 
-        // The guard entry was rolled back: a retry of the same direction must
-        // not be swallowed as "already in target state".
+        // Nothing was recorded (success-only): a retry of the same direction
+        // must not be swallowed as "already in target state".
         reactor.markSeasonPlayed("season1")
         advanceUntilIdle()
         assertEquals(2, mutator.seasonCalls.size)
@@ -174,8 +174,8 @@ class MarkSeasonReactorTest {
         reactor.markSeasonUnplayed("season1")
         advanceUntilIdle()
 
-        // The in-flight guard must not swallow the inverse toggle (the UI
-        // snapshot is still pre-mutation) — both mutations land, in order.
+        // The guard must not swallow the inverse toggle (the UI snapshot is
+        // still pre-mutation) — both mutations land, in order.
         assertEquals(
             listOf(Triple("s1", "season1", true), Triple("s1", "season1", false)),
             mutator.seasonCalls,
@@ -183,7 +183,7 @@ class MarkSeasonReactorTest {
     }
 
     @Test
-    fun `rapid same-direction taps are deduped by the in-flight guard`() = runTest {
+    fun `rapid same-direction taps are deduped by the success-recorded guard`() = runTest {
         val currentEpisodes = listOf(episode("e1", played = false))
         val reactor = MarkSeasonReactor(
             scope = this,
@@ -198,8 +198,9 @@ class MarkSeasonReactorTest {
         reactor.markSeasonPlayed("season1")
         advanceUntilIdle()
 
-        // The second tap dedups against the recorded (in-flight) target while
-        // the UI emission has not caught up — one mutation, not two.
+        // The second tap dedups against the record written by the first tap's
+        // success (the fake resolves synchronously, so the record is in place
+        // when the second tap's guard runs) — one mutation, not two.
         assertEquals(listOf(Triple("s1", "season1", true)), mutator.seasonCalls)
     }
     // endregion

@@ -161,6 +161,16 @@ class AudioQueueFacadeTest {
     }
 
     @Test
+    fun `enqueueTrack appends the single item and reports Started with no start index`() = runTest(testDispatcher) {
+        val outcome = facade.enqueueTrack(track("t1"))
+
+        val started = outcome as AudioQueueOutcome.Started
+        assertEquals(-1, started.startIndex)
+        assertEquals(listOf("t1"), started.queue.map { it.id })
+        verify(exactly = 1) { queueManager.addToQueue(match { it.id == "t1" }) }
+    }
+
+    @Test
     fun `startInstantMix plays the fetched mix at index 0 with the fallback applied`() = runTest(testDispatcher) {
         val guardThreads = CopyOnWriteArrayList<String>()
         coEvery { mediaRepository.getInstantMix("seed") } returns Result.success(

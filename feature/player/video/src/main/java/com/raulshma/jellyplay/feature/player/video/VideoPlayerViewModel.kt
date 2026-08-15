@@ -306,6 +306,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val fontProvider: FontProvider,
     private val savedStateHandle: SavedStateHandle,
     private val subtitlePreviewRepository: com.raulshma.jellyplay.feature.player.video.subtitle.SubtitlePreviewRepository,
+    private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(VideoPlayerUiState())
@@ -681,7 +682,10 @@ class VideoPlayerViewModel @Inject constructor(
                 if (cachedAggregate.videoPlayer.incognitoModeEnabled) {
                     offlinePlaybackFacade.recordPlayed(itemId)
                 } else {
-                    mediaRepository.markPlayed(itemId)
+                    // Silent mode (plan 03): the player is not a detail surface —
+                    // no in-place flip, the repository write (PlayedStateSync
+                    // fan-out + self-invalidation) is all this path needs.
+                    userDataMutator.setPlayed(itemId, played = true)
                 }
             }
         },
@@ -2560,7 +2564,7 @@ class VideoPlayerViewModel @Inject constructor(
             // branch below, which bypasses [initialize] and its stopped-position
             // report.
             if (!cachedAggregate.videoPlayer.incognitoModeEnabled) {
-                runCatching { mediaRepository.markPlayed(currentItemId) }
+                runCatching { userDataMutator.setPlayed(currentItemId, played = true) }
             }
 
             if (syncPlayManager.isInSyncPlaySession) {

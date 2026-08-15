@@ -61,7 +61,8 @@ object PlaybackHostRouter {
         route is Route.LiveTvChannelPlayer && preferredPlayer == PlayerType.EXTERNAL ->
             HostDecision.ExternalPlayer(route.channelId, null, 0L)
 
-        // Known gap (tracked follow-up, deliberately NOT handled here):
+        // Known gap (deliberately NOT handled here — decision item recorded
+        // in docs/architecture/plans/10-playback-host-seam.md, "PIN-lock"):
         // PlayerActivity performs no PIN/biometric check. With a lock enabled,
         // a media-notification tap opens PlayerActivity directly via its
         // class-name PendingIntent and reaches full playback without

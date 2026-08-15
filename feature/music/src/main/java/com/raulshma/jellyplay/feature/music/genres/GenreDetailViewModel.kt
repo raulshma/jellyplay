@@ -38,7 +38,7 @@ class GenreDetailViewModel @Inject constructor(
 
     fun addToQueue(track: MediaItem) {
         launch {
-            audioQueueFacade.enqueueTracks(listOf(track), imageMaxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH)
+            audioQueueFacade.enqueueTrack(track, imageMaxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH)
         }
     }
 

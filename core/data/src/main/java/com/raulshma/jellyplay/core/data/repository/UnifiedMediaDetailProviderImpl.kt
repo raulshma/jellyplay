@@ -120,7 +120,9 @@ internal class UnifiedMediaDetailProviderImpl @Inject constructor(
         seasonId: String,
         transform: (List<MediaItem>) -> List<MediaItem>,
     ) {
-        val session = sessions[itemId] ?: return
+        val session = sessions[itemId]
+            ?: sessions.values.firstOrNull { it.matchesSeriesOrSeason(itemId) || it.matchesSeriesOrSeason(seasonId) }
+            ?: return
         val seriesIdToInvalidate = session.rewriteSeason(seasonId, transform) ?: return
         // Drop the catalogue cache for re-entry freshness, outside the session
         // resolve lock so a concurrent resolution isn't blocked on the (fast)
@@ -255,6 +257,14 @@ internal class UnifiedMediaDetailProviderImpl @Inject constructor(
                 }
         }
 
+        fun matchesSeriesOrSeason(seriesOrSeasonId: String): Boolean {
+            val current = content.value as? ContentResolution.Resolved ?: return false
+            return current.detail.item.id == seriesOrSeasonId ||
+                current.detail.item.seriesIdForDetail == seriesOrSeasonId ||
+                current.seasons.any { it.id == seriesOrSeasonId } ||
+                current.episodesBySeason.containsKey(seriesOrSeasonId)
+        }
+
         fun start() {
             if (started) return
             started = true
@@ -310,11 +320,14 @@ internal class UnifiedMediaDetailProviderImpl @Inject constructor(
         /**
          * Optimistic in-place rewrite of one season's episodes, serialized
          * against [resolveMutex] so it cannot race a concurrent content
-         * re-resolution. Mirrors the rewrite through the catalogue to reuse
-         * [EpisodeCatalogueSnapshot.withSeasonEpisodes]'s canonical re-sort, then
+         * re-resolution. Rebuilds the season's episodes and sorted playback
+         * order in-place from the session's active content resolution, then
          * projects the rebuilt sections into this session's content with a
          * bumped content generation. The content flow re-emits, so the consumer
          * adopts the rewritten content sections via its normal reducer path.
+         *
+         * Also performs a best-effort update of the episode catalogue cache if
+         * present.
          *
          * Returns the series id (so the caller drops the catalogue cache for
          * re-entry freshness), or null if there was nothing to rewrite: session
@@ -329,22 +342,24 @@ internal class UnifiedMediaDetailProviderImpl @Inject constructor(
             val seriesId = current.detail.item.seriesIdForDetail ?: return@withLock null
             val currentEpisodes = current.episodesBySeason[seasonId]
             if (currentEpisodes.isNullOrEmpty()) return@withLock null
-            // updateSeasonEpisodes returns the rebuilt snapshot (sortedEpisodes
-            // included); the cache write is undone by the caller's invalidate,
-            // so this is effectively using it as a pure rebuild over the
-            // canonical re-sort owned by EpisodeCatalogueSnapshot.
-            val rebuilt = episodeCatalogue.updateSeasonEpisodes(seriesId, seasonId, transform)
-                ?: return@withLock null
+
+            val updatedEpisodes = transform(currentEpisodes)
+            val updatedEpisodesBySeason = current.episodesBySeason + (seasonId to updatedEpisodes)
+            val updatedSortedEpisodes = updatedEpisodesBySeason.values.flatten().distinctBy { it.id }.sortedByPlaybackOrder()
+
+            // Best-effort update to episodeCatalogue cache if present
+            episodeCatalogue.updateSeasonEpisodes(seriesId, seasonId, transform)
+
             // Optimistically reconcile the series-header watched state from the
             // rebuilt episode set so the header (not just the episode cards)
             // reflects the flip on the current screen. Only when every season is
             // loaded, so a partial fetch can't push a misleading unplayed count.
             // A subsequent re-entry re-resolve (see acquireSession) authoritatively
             // reconciles it regardless.
-            val allSeasonsLoaded = rebuilt.seasons.isNotEmpty() &&
-                rebuilt.seasons.all { it.id in rebuilt.fetchedSeasonIds }
-            val updatedDetail = if (allSeasonsLoaded && rebuilt.sortedEpisodes.isNotEmpty()) {
-                val unplayed = rebuilt.sortedEpisodes.count { !it.isPlayed }
+            val allSeasonsLoaded = current.seasons.isNotEmpty() &&
+                current.seasons.all { it.id in current.fetchedSeasonIds }
+            val updatedDetail = if (allSeasonsLoaded && updatedSortedEpisodes.isNotEmpty()) {
+                val unplayed = updatedSortedEpisodes.count { !it.isPlayed }
                 current.detail.copy(
                     item = current.detail.item.copy(
                         isPlayed = unplayed == 0,
@@ -358,10 +373,10 @@ internal class UnifiedMediaDetailProviderImpl @Inject constructor(
             content.value = current.copy(
                 contentGen = targetGen,
                 detail = updatedDetail,
-                seasons = rebuilt.seasons,
-                episodesBySeason = rebuilt.episodesBySeason,
-                fetchedSeasonIds = rebuilt.fetchedSeasonIds,
-                sortedEpisodes = rebuilt.sortedEpisodes,
+                seasons = current.seasons,
+                episodesBySeason = updatedEpisodesBySeason,
+                fetchedSeasonIds = current.fetchedSeasonIds,
+                sortedEpisodes = updatedSortedEpisodes,
             )
             seriesId
         }

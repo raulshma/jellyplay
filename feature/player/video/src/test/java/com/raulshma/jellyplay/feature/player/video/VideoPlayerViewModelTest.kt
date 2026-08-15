@@ -204,6 +204,7 @@ class VideoPlayerViewModelTest {
             fontProvider = mockk(relaxed = true),
             savedStateHandle = androidx.lifecycle.SavedStateHandle(),
             subtitlePreviewRepository = mockk(relaxed = true),
+            userDataMutator = mockk(relaxed = true),
         )
     }
 

@@ -65,14 +65,14 @@ class TracksViewModelTest {
 
     @Test
     fun addToQueue_delegatesSingleTrackWithMusicMaxWidth() = runTest(mainDispatcherRule.testDispatcher) {
-        coEvery { audioQueueFacade.enqueueTracks(any(), any(), any()) } returns
+        coEvery { audioQueueFacade.enqueueTrack(any(), any(), any()) } returns
             AudioQueueOutcome.Started(emptyList(), -1)
 
         viewModel.addToQueue(tracks.first())
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
-            audioQueueFacade.enqueueTracks(listOf(tracks.first()), null, ImageUrlProvider.MUSIC_MAX_WIDTH)
+            audioQueueFacade.enqueueTrack(tracks.first(), null, ImageUrlProvider.MUSIC_MAX_WIDTH)
         }
     }
 }

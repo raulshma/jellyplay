@@ -15,6 +15,18 @@ import javax.inject.Singleton
  * design, so `Empty` / `Failed(cause)` are the typed concept each feature
  * resolves once at the edge.
  */
+/**
+ * A track paired with the album name to fall back to when the track's own
+ * `album` is null. Travels as one type instead of a raw `Pair` so the
+ * multi-album batch path ([AudioQueueFacade.playTracks] pairs overload) can't
+ * mix up the two halves — the fallback is per-track there because each track
+ * belongs to a different album.
+ */
+data class TrackWithAlbumFallback(
+    val track: MediaItem,
+    val albumFallback: String?,
+)
+
 sealed interface AudioQueueOutcome {
     /**
      * Playback (or enqueue) happened. Exposes the built queue so callers can
@@ -88,7 +100,7 @@ interface AudioQueueFacade {
      * concatenated one-shot `playQueue` ordering exactly.
      */
     suspend fun playTracks(
-        pairs: List<Pair<MediaItem, String?>>,
+        pairs: List<TrackWithAlbumFallback>,
         startIndex: Int = 0,
         shuffled: Boolean = false,
         imageMaxWidth: Int? = ImageUrlProvider.DEFAULT_MAX_WIDTH,
@@ -100,6 +112,17 @@ interface AudioQueueFacade {
      */
     suspend fun enqueueTracks(
         tracks: List<MediaItem>,
+        albumFallback: String? = null,
+        imageMaxWidth: Int? = ImageUrlProvider.DEFAULT_MAX_WIDTH,
+    ): AudioQueueOutcome
+
+    /**
+     * Appends a single [track] to the current queue. Convenience for the
+     * per-track "add to queue" menu action the list screens expose — the
+     * single-item case of [enqueueTracks] without the `listOf()` wrapper.
+     */
+    suspend fun enqueueTrack(
+        track: MediaItem,
         albumFallback: String? = null,
         imageMaxWidth: Int? = ImageUrlProvider.DEFAULT_MAX_WIDTH,
     ): AudioQueueOutcome
@@ -153,7 +176,7 @@ class DefaultAudioQueueFacade @Inject constructor(
     ) { it.toQueueItem(albumFallback, imageMaxWidth) }
 
     override suspend fun playTracks(
-        pairs: List<Pair<MediaItem, String?>>,
+        pairs: List<TrackWithAlbumFallback>,
         startIndex: Int,
         shuffled: Boolean,
         imageMaxWidth: Int?,
@@ -174,6 +197,18 @@ class DefaultAudioQueueFacade @Inject constructor(
         return withContext(Dispatchers.Main) {
             items.forEach(queueManager::addToQueue)
             AudioQueueOutcome.Started(items, startIndex = -1)
+        }
+    }
+
+    override suspend fun enqueueTrack(
+        track: MediaItem,
+        albumFallback: String?,
+        imageMaxWidth: Int?,
+    ): AudioQueueOutcome {
+        val item = withContext(Dispatchers.Default) { track.toQueueItem(albumFallback, imageMaxWidth) }
+        return withContext(Dispatchers.Main) {
+            queueManager.addToQueue(item)
+            AudioQueueOutcome.Started(listOf(item), startIndex = -1)
         }
     }
 

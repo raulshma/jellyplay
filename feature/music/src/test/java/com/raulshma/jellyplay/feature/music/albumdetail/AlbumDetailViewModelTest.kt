@@ -161,14 +161,14 @@ class AlbumDetailViewModelTest {
     fun addToQueue_delegatesSingleTrackWithDetailNameFallback() = runTest(mainDispatcherRule.testDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        coEvery { audioQueueFacade.enqueueTracks(any(), any(), any()) } returns
+        coEvery { audioQueueFacade.enqueueTrack(any(), any(), any()) } returns
             AudioQueueOutcome.Started(emptyList(), -1)
 
         viewModel.addToQueue(albumTracks.first())
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
-            audioQueueFacade.enqueueTracks(listOf(albumTracks.first()), "Album", ImageUrlProvider.DEFAULT_MAX_WIDTH)
+            audioQueueFacade.enqueueTrack(albumTracks.first(), "Album", ImageUrlProvider.DEFAULT_MAX_WIDTH)
         }
     }
 }
