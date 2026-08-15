@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.library
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
@@ -39,6 +40,7 @@ private data class ViewModePrefs(
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
+    private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore,
@@ -114,13 +116,13 @@ class LibraryViewModel @Inject constructor(
             .distinctUntilChanged()
 
     /**
-     * Marks the item played/unplayed on the server. Intentionally silent: the
-     * paged grid is left untouched so the user keeps their scroll position —
-     * the badge updates on the next natural data refresh.
+     * Marks the item played/unplayed. Intentionally silent (the mutator's
+     * default): the paged grid is left untouched so the user keeps their scroll
+     * position — the badge updates on the next natural data refresh.
      */
     fun markItemPlayed(item: MediaItem, played: Boolean) {
         launch {
-            if (played) mediaRepository.markPlayed(item.id) else mediaRepository.markUnplayed(item.id)
+            userDataMutator.setPlayed(item.id, played)
         }
     }
 
@@ -262,10 +264,10 @@ class LibraryViewModel @Inject constructor(
         launch { libraryStore.setLibraryGroupBy(groupBy) }
     }
 
-    private fun loadFolders() {
+    private fun loadFolders(force: Boolean = false) {
         launch {
             _isLoading.set(true)
-            mediaRepository.getLibraryFolders()
+            mediaRepository.getLibraryFolders(force = force)
                 .onSuccess { folders ->
                     _folders.set(folders)
                     // Clear any stale error once folders load successfully.
@@ -286,11 +288,11 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    private fun loadGenres() {
+    private fun loadGenres(force: Boolean = false) {
         launch {
             // Retry once after a short delay so a transient network blip doesn't
             // leave the filter sheet permanently missing its Genres section.
-            loadListWithRetry(mediaRepository::getGenres) { _genres.set(it) }
+            loadListWithRetry({ mediaRepository.getGenres(force = force) }) { _genres.set(it) }
         }
     }
 
@@ -432,9 +434,10 @@ class LibraryViewModel @Inject constructor(
 
     fun refresh() {
         launch {
-            mediaRepository.invalidateCaches()
-            loadFolders()
-            loadGenres()
+            // Manual refresh bypasses the caches for the queries this screen
+            // shows (folders + genres); tags are an uncached passthrough.
+            loadFolders(force = true)
+            loadGenres(force = true)
             loadTags()
             // Increment the trigger to force flatMapLatest to create a new Pager,
             // which avoids the duplicate-key crash that occurs when pagedItems.refresh()

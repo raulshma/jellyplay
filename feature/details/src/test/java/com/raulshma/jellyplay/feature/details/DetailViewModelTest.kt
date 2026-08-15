@@ -5,9 +5,11 @@ import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
+import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.repository.AppliedMutation
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
 import com.raulshma.jellyplay.core.data.repository.DetailLoadError
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -67,6 +69,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
@@ -88,6 +91,7 @@ class DetailViewModelTest {
     private lateinit var context: Context
     private lateinit var mediaRepository: MediaRepository
     private lateinit var mediaDetailProvider: MediaDetailProvider
+    private lateinit var userDataMutator: FakeUserDataMutator
     private lateinit var offlineSyncManager: OfflineSyncManager
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -106,6 +110,7 @@ class DetailViewModelTest {
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var seerrRequestDelegate: SeerrRequestDelegate
     private lateinit var audioPlaybackManager: AudioPlaybackManager
+    private lateinit var audioQueueFacade: AudioQueueFacade
     private lateinit var themeMusicPlayer: ThemeMusicPlayer
     private lateinit var tmdbApiClient: TmdbApiClient
     private lateinit var arrRepository: ArrRepository
@@ -139,6 +144,7 @@ class DetailViewModelTest {
         seerrRepository = mockk(relaxed = true)
         seerrRequestDelegate = mockk(relaxed = true)
         audioPlaybackManager = mockk(relaxed = true)
+        audioQueueFacade = mockk()
         themeMusicPlayer = mockk(relaxed = true)
         tmdbApiClient = mockk(relaxed = true)
         arrRepository = mockk(relaxed = true)
@@ -206,6 +212,10 @@ class DetailViewModelTest {
         every { context.getString(R.string.detail_error_access_denied) } returns "no access"
         every { context.getString(R.string.detail_error_unavailable_offline) } returns "unavailable offline"
 
+        // Behavior fake (see FakeUserDataMutator): mirrors the real module's
+        // success path so mutation tests drive the same observable sequence.
+        userDataMutator = FakeUserDataMutator(mediaDetailProvider)
+
         buildViewModel()
     }
 
@@ -218,6 +228,7 @@ class DetailViewModelTest {
         viewModel = DetailViewModel(
             context = context,
             mediaRepository = mediaRepository,
+            userDataMutator = userDataMutator,
             mediaDetailProvider = mediaDetailProvider,
             offlineSyncManager = offlineSyncManager,
             playbackRepository = playbackRepository,
@@ -237,6 +248,7 @@ class DetailViewModelTest {
             seerrRepository = seerrRepository,
             seerrRequestDelegate = seerrRequestDelegate,
             audioPlaybackManager = audioPlaybackManager,
+            audioQueueFacade = audioQueueFacade,
             themeMusicPlayer = themeMusicPlayer,
             tmdbApiClient = tmdbApiClient,
             arrRepository = arrRepository,
@@ -711,7 +723,6 @@ class DetailViewModelTest {
             playbackPositionTicks = 5_000_000_000L,
         )
         stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
-        coEvery { mediaRepository.markPlayed("movie-1") } returns Result.success(Unit)
 
         viewModel.loadItem("movie-1")
         advanceUntilIdle()
@@ -734,7 +745,6 @@ class DetailViewModelTest {
             playbackPositionTicks = 5_000_000_000L,
         )
         stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
-        coEvery { mediaRepository.markUnplayed("movie-1") } returns Result.success(Unit)
 
         viewModel.loadItem("movie-1")
         advanceUntilIdle()
@@ -756,7 +766,7 @@ class DetailViewModelTest {
             isFavorite = true,
         )
         val flow = stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
-        coEvery { mediaRepository.toggleFavorite("movie-1") } returns Result.success(false)
+        userDataMutator.favoriteResult = { Result.success(AppliedMutation("movie-1", favorite = false)) }
         stubOptimisticItemState("movie-1", flow)
 
         viewModel.loadItem("movie-1")
@@ -786,9 +796,9 @@ class DetailViewModelTest {
             )
             stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
             var calls = 0
-            coEvery { mediaRepository.toggleFavorite("movie-1") } coAnswers {
+            userDataMutator.favoriteResult = {
                 calls += 1
-                Result.success(calls == 2)
+                Result.success(AppliedMutation("movie-1", favorite = calls == 2))
             }
 
             viewModel.loadItem("movie-1")
@@ -801,6 +811,36 @@ class DetailViewModelTest {
             // result must not be overwritten by a stale captured boolean.
             assertTrue(viewModel.uiState.value.detail!!.item.isFavorite)
             assertEquals(2, calls)
+            // Both taps routed through the mutator in order.
+            assertEquals(listOf("movie-1" to null, "movie-1" to null), userDataMutator.favoriteCalls)
+        }
+
+    // Item-level failure must surface the localized snackbar and leave every
+    // projection untouched (no flip without a successful write).
+    @Test
+    fun toggleFavorite_failure_emitsMessageAndLeavesStateIntact() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val item = MediaItem(
+                id = "movie-1",
+                name = "Movie",
+                mediaType = MediaType.MOVIE,
+                isFavorite = true,
+            )
+            stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
+            userDataMutator.favoriteResult = { Result.failure(RuntimeException("boom")) }
+            every { context.getString(R.string.detail_msg_couldnt_update_favorite) } returns "couldn't update"
+
+            viewModel.loadItem("movie-1")
+            advanceUntilIdle()
+
+            viewModel.toggleFavorite()
+
+            val message = withTimeout(1_000) { viewModel.messages.first() }
+            assertTrue(message is DetailMessage.Text)
+            assertEquals("couldn't update", (message as DetailMessage.Text).text)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.detail!!.item.isFavorite)
         }
 
     @Test
@@ -808,7 +848,6 @@ class DetailViewModelTest {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val item = MediaItem(id = "movie-1", name = "Movie", mediaType = MediaType.MOVIE)
         val flow = stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
-        coEvery { mediaRepository.markPlayed("movie-1") } returns Result.success(Unit)
         stubOptimisticItemState("movie-1", flow)
 
         viewModel.loadItem("movie-1")
@@ -834,7 +873,6 @@ class DetailViewModelTest {
             isPlayed = true,
         )
         val flow = stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
-        coEvery { mediaRepository.markUnplayed("movie-1") } returns Result.success(Unit)
         stubOptimisticItemState("movie-1", flow)
 
         viewModel.loadItem("movie-1")
@@ -866,7 +904,6 @@ class DetailViewModelTest {
                 fetchedSeasonIds = setOf("season-1"),
             ),
         )
-        coEvery { mediaRepository.markPlayed("episode-1") } returns Result.success(Unit)
         stubOptimisticItemState("episode-1", flow)
 
         viewModel.loadItem("series-1")
@@ -898,7 +935,6 @@ class DetailViewModelTest {
                 fetchedSeasonIds = setOf("season-1"),
             ),
         )
-        coEvery { mediaRepository.markPlayed("episode-1") } returns Result.success(Unit)
         stubOptimisticItemState("episode-1", flow)
 
         viewModel.loadItem("series-1")
@@ -913,6 +949,8 @@ class DetailViewModelTest {
 
         assertTrue(viewModel.uiState.value.episodes["season-1"]!!.single().isPlayed)
         assertTrue((flow.value as DetailLoadState.Loaded).snapshot.sortedEpisodes.single().isPlayed)
+        // Routed through the mutator with the row item's series scope.
+        assertEquals(listOf(Triple("episode-1", true, "s1")), userDataMutator.playedCalls)
     }
 
     // ---- Season-level mark played / unplayed --------------------------------
@@ -929,7 +967,6 @@ class DetailViewModelTest {
             val ep1 = episode("e1", 1, 1, isPlayed = false)
             val ep2 = episode("e2", 1, 2, isPlayed = false)
             stubSeries("s1", season, listOf(ep1, ep2))
-            coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
 
             viewModel.loadItem("s1")
             advanceUntilIdle()
@@ -950,7 +987,9 @@ class DetailViewModelTest {
             // Every episode now played → smart-play falls back to a replay of S1:E1.
             val target = awaitSmartPlayTarget { it.label == "Replay S1:E1" }
             assertEquals("Replay S1:E1", target.label)
-            io.mockk.coVerify(exactly = 1) { mediaRepository.markPlayed("season1") }
+            // The reactor delegated to the mutator's season variant with the
+            // screen's series scope.
+            assertEquals(listOf(Triple("s1", "season1", true)), userDataMutator.seasonCalls)
         }
 
     // markSeasonPlayed only affects the targeted season — episodes in a sibling
@@ -964,7 +1003,6 @@ class DetailViewModelTest {
             val s1e1 = episode("e1", 1, 1, isPlayed = false).copy(seasonId = "season1")
             val s2e1 = episode("e2", 2, 1, isPlayed = false).copy(seasonId = "season2")
             stubTwoSeasonSeries("s1", s1, s2, s1e1, s2e1)
-            coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
 
             viewModel.loadItem("s1")
             advanceUntilIdle()
@@ -988,7 +1026,6 @@ class DetailViewModelTest {
             val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
             val ep1 = episode("e1", 1, 1, isPlayed = false)
             stubSeries("s1", season, listOf(ep1))
-            coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
 
             viewModel.loadItem("s1")
             advanceUntilIdle()
@@ -996,9 +1033,9 @@ class DetailViewModelTest {
             viewModel.markSeasonPlayed("season1")
             advanceUntilIdle()
 
-            io.mockk.coVerify(exactly = 1) { mediaRepository.markPlayed("season1") }
-            // The VM routes through the provider; the provider owns the
-            // catalogue invalidation internally (asserted in the provider test).
+            assertEquals(listOf(Triple("s1", "season1", true)), userDataMutator.seasonCalls)
+            // The VM routes through the mutator; the mutator/provider owns the
+            // catalogue invalidation internally (asserted in their own tests).
             io.mockk.coVerify(exactly = 1) {
                 mediaDetailProvider.applyOptimisticSeasonRewrite("s1", "season1", any())
             }
@@ -1013,7 +1050,7 @@ class DetailViewModelTest {
             val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
             val ep1 = episode("e1", 1, 1, isPlayed = false)
             stubSeries("s1", season, listOf(ep1))
-            coEvery { mediaRepository.markPlayed("season1") } returns Result.failure(RuntimeException("boom"))
+            userDataMutator.seasonResult = { _, _, _ -> Result.failure(RuntimeException("boom")) }
             every { context.getString(R.string.detail_msg_couldnt_mark_played) } returns "couldn't mark"
 
             viewModel.loadItem("s1")
@@ -1040,7 +1077,6 @@ class DetailViewModelTest {
             val ep1 = episode("e1", 1, 1, isPlayed = true, positionTicks = 5_000_000_000L)
             val ep2 = episode("e2", 1, 2, isPlayed = true, positionTicks = 5_000_000_000L)
             stubSeries("s1", season, listOf(ep1, ep2))
-            coEvery { mediaRepository.markUnplayed("season1") } returns Result.success(Unit)
 
             viewModel.loadItem("s1")
             advanceUntilIdle()
@@ -1070,7 +1106,6 @@ class DetailViewModelTest {
             val ep1 = episode("e1", 1, 1, isPlayed = true)
             val ep2 = episode("e2", 1, 2, isPlayed = true)
             stubSeries("s1", season, listOf(ep1, ep2))
-            coEvery { mediaRepository.markUnplayed("season1") } returns Result.success(Unit)
 
             viewModel.loadItem("s1")
             advanceUntilIdle()
@@ -1099,7 +1134,9 @@ class DetailViewModelTest {
             viewModel.markSeasonPlayed("season1")
             advanceUntilIdle()
 
-            io.mockk.coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+            // The idempotence guard short-circuited before reaching the mutator.
+            assertTrue(userDataMutator.seasonCalls.isEmpty())
+            io.mockk.coVerify(exactly = 0) { mediaRepository.getMediaDetail("s1") }
         }
 
     // Regression: loadSeerrData must read isSeerrConnected/isSeerrRecommendationsEnabled
@@ -1560,13 +1597,13 @@ class DetailViewModelTest {
     }
 
     // ── Instant Mix ───────────────────────────────────────────────────────
-    // startInstantMix fetches a Jellyfin mix off the current audio item and hands
-    // it to AudioPlaybackManager.playQueue at index 0. The mix build runs on
-    // Dispatchers.Default (not the test dispatcher), so the success test polls a
-    // captured call list instead of relying on advanceUntilIdle() alone.
+    // startInstantMix delegates the whole concern (mix fetch, queue build,
+    // dispatcher hop, navigation-drift guard) to AudioQueueFacade; these tests
+    // pin the VM-side contract only: the seed/fallback arguments, the guard,
+    // and the outcome → DetailMessage mapping.
 
     @Test
-    fun startInstantMix_success_playsQueueWithMappedItems() =
+    fun startInstantMix_success_delegatesToFacadeWithSeedAndFallback() =
         runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val album = MediaItem(
@@ -1576,33 +1613,36 @@ class DetailViewModelTest {
                 album = "Album",
             )
             stubProvider("album1", remoteSnapshot(MediaDetail(item = album)))
-            val mixTracks = listOf(
-                MediaItem(id = "t1", name = "Track 1", mediaType = MediaType.AUDIO),
-                MediaItem(id = "t2", name = "Track 2", mediaType = MediaType.AUDIO),
-            )
-            coEvery { mediaRepository.getInstantMix(any(), any()) } returns Result.success(mixTracks)
-            val playedPair = CompletableDeferred<Pair<List<AudioQueueItem>, Int>>()
-            every { audioPlaybackManager.playQueue(any(), any()) } answers {
-                playedPair.complete(firstArg<List<AudioQueueItem>>() to secondArg<Int>())
-            }
+            coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns
+                AudioQueueOutcome.Started(emptyList(), 0)
 
             viewModel.loadItem("album1")
             advanceUntilIdle()
 
             viewModel.startInstantMix()
-            // playQueue runs on Dispatchers.Default; poll the deferred (safe publication).
-            val deadline = System.currentTimeMillis() + 2_000
-            while (System.currentTimeMillis() < deadline && !playedPair.isCompleted) {
-                delay(10)
-                advanceUntilIdle()
-            }
+            advanceUntilIdle()
 
-            assertTrue("playQueue was not invoked", playedPair.isCompleted)
-            val (queue, startIndex) = playedPair.await()
-            assertEquals(0, startIndex)
-            assertEquals(listOf("t1", "t2"), queue.map { it.id })
-            // Tracks carry no album, so albumFallback (the detail item's album) wins.
-            assertEquals("Album", queue.first().album)
+            coVerify(exactly = 1) { audioQueueFacade.startInstantMix("album1", "Album", any()) }
+            io.mockk.verify(exactly = 0) { context.getString(R.string.detail_instant_mix_empty) }
+            io.mockk.verify(exactly = 0) { context.getString(R.string.detail_instant_mix_failed) }
+        }
+
+    @Test
+    fun startInstantMix_success_fallsBackToItemNameWhenAlbumMissing() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val track = MediaItem(id = "t1", name = "Track", mediaType = MediaType.AUDIO)
+            stubProvider("t1", remoteSnapshot(MediaDetail(item = track)))
+            coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns
+                AudioQueueOutcome.Started(emptyList(), 0)
+
+            viewModel.loadItem("t1")
+            advanceUntilIdle()
+
+            viewModel.startInstantMix()
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { audioQueueFacade.startInstantMix("t1", "Track", any()) }
         }
 
     @Test
@@ -1611,26 +1651,24 @@ class DetailViewModelTest {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val album = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)
             stubProvider("album1", remoteSnapshot(MediaDetail(item = album)))
-            coEvery { mediaRepository.getInstantMix(any(), any()) } returns Result.success(emptyList())
+            coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Empty
             val firstMessage = CompletableDeferred<DetailMessage>()
-            backgroundScope.launch { viewModel.messages.collect { firstMessage.complete(it) } }
+            // Unconfined so the collector subscribes immediately (replay = 0 — an
+            // emission before subscription is dropped); backgroundScope so the
+            // never-completing collector is cancelled when the test body ends.
+            backgroundScope.launch(UnconfinedTestDispatcher(mainDispatcherRule.testDispatcher.scheduler)) {
+                viewModel.messages.collect { firstMessage.complete(it) }
+            }
             every { context.getString(R.string.detail_instant_mix_empty) } returns "no mix"
 
             viewModel.loadItem("album1")
             advanceUntilIdle()
-            advanceUntilIdle() // ensure the messages collector is subscribed (replay = 0)
 
             viewModel.startInstantMix()
-            // The mix build runs on Dispatchers.Default; poll the deferred (safe publication).
-            val deadline = System.currentTimeMillis() + 2_000
-            while (System.currentTimeMillis() < deadline && !firstMessage.isCompleted) {
-                delay(10)
-                advanceUntilIdle()
-            }
+            advanceUntilIdle()
 
             assertTrue("instant mix empty message was not emitted", firstMessage.isCompleted)
             assertEquals("no mix", (firstMessage.await() as DetailMessage.Text).text)
-            io.mockk.verify(exactly = 0) { audioPlaybackManager.playQueue(any(), any()) }
         }
 
     @Test
@@ -1639,30 +1677,51 @@ class DetailViewModelTest {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val album = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)
             stubProvider("album1", remoteSnapshot(MediaDetail(item = album)))
-            coEvery { mediaRepository.getInstantMix(any(), any()) } returns
-                Result.failure(RuntimeException("boom"))
+            coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns
+                AudioQueueOutcome.Failed(RuntimeException("boom"))
             val firstMessage = CompletableDeferred<DetailMessage>()
-            backgroundScope.launch { viewModel.messages.collect { firstMessage.complete(it) } }
+            // Unconfined so the collector subscribes immediately (replay = 0); see
+            // the empty-mix test above for the pattern rationale.
+            backgroundScope.launch(UnconfinedTestDispatcher(mainDispatcherRule.testDispatcher.scheduler)) {
+                viewModel.messages.collect { firstMessage.complete(it) }
+            }
             every { context.getString(R.string.detail_instant_mix_failed) } returns "failed mix"
 
             viewModel.loadItem("album1")
             advanceUntilIdle()
-            advanceUntilIdle() // ensure the messages collector is subscribed (replay = 0)
 
             viewModel.startInstantMix()
-            // The mix build runs on Dispatchers.Default; poll the deferred (safe publication).
-            val deadline = System.currentTimeMillis() + 2_000
-            while (System.currentTimeMillis() < deadline && !firstMessage.isCompleted) {
-                delay(10)
-                advanceUntilIdle()
-            }
+            advanceUntilIdle()
 
-            // Diagnostics: confirm the repo was hit and onFailure resolved the string.
-            coVerify(exactly = 1) { mediaRepository.getInstantMix(any(), any()) }
-            io.mockk.verify(atLeast = 1) { context.getString(R.string.detail_instant_mix_failed) }
             assertTrue("instant mix failure message was not emitted", firstMessage.isCompleted)
             assertEquals("failed mix", (firstMessage.await() as DetailMessage.Text).text)
-            io.mockk.verify(exactly = 0) { audioPlaybackManager.playQueue(any(), any()) }
+            io.mockk.verify(exactly = 0) { context.getString(R.string.detail_instant_mix_empty) }
+        }
+
+    @Test
+    fun startInstantMix_suppressedByGuard_emitsNoMessage() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val album = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)
+            stubProvider("album1", remoteSnapshot(MediaDetail(item = album)))
+            coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Suppressed
+            val firstMessage = CompletableDeferred<DetailMessage>()
+            // Unconfined so the collector subscribes immediately (replay = 0); see
+            // the empty-mix test above for the pattern rationale.
+            backgroundScope.launch(UnconfinedTestDispatcher(mainDispatcherRule.testDispatcher.scheduler)) {
+                viewModel.messages.collect { firstMessage.complete(it) }
+            }
+
+            viewModel.loadItem("album1")
+            advanceUntilIdle()
+
+            viewModel.startInstantMix()
+            advanceUntilIdle()
+
+            // A suppressed start (navigation drift) is silent by design.
+            assertFalse(firstMessage.isCompleted)
+            io.mockk.verify(exactly = 0) { context.getString(R.string.detail_instant_mix_empty) }
+            io.mockk.verify(exactly = 0) { context.getString(R.string.detail_instant_mix_failed) }
         }
 
     @Test
@@ -1680,9 +1739,8 @@ class DetailViewModelTest {
             viewModel.startInstantMix()
             advanceUntilIdle()
 
-            // Non-audio items short-circuit before the repository is touched.
-            coVerify(exactly = 0) { mediaRepository.getInstantMix(any(), any()) }
-            io.mockk.verify(exactly = 0) { audioPlaybackManager.playQueue(any(), any()) }
+            // Non-audio items short-circuit before the facade is touched.
+            coVerify(exactly = 0) { audioQueueFacade.startInstantMix(any(), any(), any()) }
         }
 
     @Test

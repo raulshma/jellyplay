@@ -42,6 +42,7 @@ import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
+import com.raulshma.jellyplay.navigation.playbackhost.PlayerActivityArgs
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -70,6 +71,12 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class PlayerActivity : FragmentActivity() {
 
+    // PlayerActivity is the SOLE driver of the shared PlayerLifecycleManager
+    // @Singleton (onPause/onResume/onTopResumed/onStop below). MainActivity
+    // deliberately stopped calling it: the singleton has one @Volatile
+    // activeCallbacks slot with no owner identity, so a second host pausing
+    // here would reach across Activities into this activity's engine. Keep it
+    // that way until per-host engine scoping lands (see Plan 01/02).
     @Inject
     lateinit var playerLifecycleManager: PlayerLifecycleManager
 
@@ -80,14 +87,15 @@ class PlayerActivity : FragmentActivity() {
     lateinit var preferenceProjections: PreferenceProjections
 
     /**
-     * Hoisted launch arguments read from the start/new Intent. [onNewIntent]
-     * (re-selection while this `singleTask` activity is already alive — e.g.
-     * picking another item from the browse UI while in PiP) updates this so the
-     * Compose tree recomposes with the new `itemId` and re-fires the screen's
-     * `LaunchedEffect(itemId)` → `initialize()`, instead of the new extras being
-     * silently dropped.
+     * Hoisted launch arguments read from the start/new Intent via
+     * [PlayerActivityArgs.fromIntent]. [onNewIntent] (re-selection while this
+     * `singleTask` activity is already alive — e.g. picking another item from
+     * the browse UI while in PiP) updates this so the Compose tree recomposes
+     * with the new `itemId` and re-fires the screen's
+     * `LaunchedEffect(itemId)` → `initialize()`, instead of the new extras
+     * being silently dropped.
      */
-    private val launchArgs = mutableStateOf<PlayerLaunchArgs?>(null)
+    private val launchArgs = mutableStateOf<PlayerActivityArgs?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -102,7 +110,7 @@ class PlayerActivity : FragmentActivity() {
         )
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        launchArgs.value = parsePlayerArgs(intent) ?: run {
+        launchArgs.value = PlayerActivityArgs.fromIntent(intent) ?: run {
             Log.w(TAG, "No itemId extra; finishing.")
             finish()
             return
@@ -206,7 +214,7 @@ class PlayerActivity : FragmentActivity() {
         // that handles "play another media while in PiP" — without it the live
         // instance expands out of PiP but the new extras are dropped and the
         // old item keeps playing.
-        parsePlayerArgs(intent)?.let { launchArgs.value = it }
+        PlayerActivityArgs.fromIntent(intent)?.let { launchArgs.value = it }
     }
 
     override fun onDestroy() {
@@ -545,31 +553,6 @@ class PlayerActivity : FragmentActivity() {
         }
     }
 
-    /**
-     * Parsed launch arguments shared by [onCreate] and [onNewIntent] so both the
-     * initial start and a re-selection while in PiP feed the player identically.
-     */
-    private data class PlayerLaunchArgs(
-        val itemId: String,
-        val mediaSourceId: String?,
-        val startPositionTicks: Long,
-        val subtitleStreamIndex: Int?,
-        val audioStreamIndex: Int?,
-    )
-
-    private fun parsePlayerArgs(intent: Intent): PlayerLaunchArgs? {
-        val itemId = intent.getStringExtra(EXTRA_ITEM_ID) ?: return null
-        return PlayerLaunchArgs(
-            itemId = itemId,
-            mediaSourceId = intent.getStringExtra(EXTRA_MEDIA_SOURCE_ID),
-            startPositionTicks = intent.getLongExtra(EXTRA_START_POSITION_TICKS, 0L),
-            subtitleStreamIndex = intent.getIntExtra(EXTRA_SUBTITLE_STREAM_INDEX, -1)
-                .takeIf { it >= 0 },
-            audioStreamIndex = intent.getIntExtra(EXTRA_AUDIO_STREAM_INDEX, -1)
-                .takeIf { it >= 0 },
-        )
-    }
-
     companion object {
         const val TAG = "PlayerActivity"
         const val PIP_ACTION_BROADCAST = "com.raulshma.jellyplay.PIP_ACTION"
@@ -580,10 +563,7 @@ class PlayerActivity : FragmentActivity() {
         const val PIP_ACTION_SKIP_BACK = 4
         const val PIP_ACTION_NEXT = 5
 
-        const val EXTRA_ITEM_ID = "player_item_id"
-        const val EXTRA_MEDIA_SOURCE_ID = "player_media_source_id"
-        const val EXTRA_START_POSITION_TICKS = "player_start_position_ticks"
-        const val EXTRA_SUBTITLE_STREAM_INDEX = "player_subtitle_stream_index"
-        const val EXTRA_AUDIO_STREAM_INDEX = "player_audio_stream_index"
+        // Launch extras live in PlayerActivityArgs — the single build/parse
+        // adapter for this activity's intent contract.
     }
 }

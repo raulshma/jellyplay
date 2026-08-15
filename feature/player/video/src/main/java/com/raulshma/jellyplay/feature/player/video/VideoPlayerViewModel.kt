@@ -3028,7 +3028,10 @@ class VideoPlayerViewModel @Inject constructor(
             stopReportedForSession = sessionId
             launch {
                 playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
-                invalidatePlaybackCaches(itemId)
+                // No manual cache invalidation (plan 08): the end-of-item
+                // auto-advance path marks the episode played, which evicts
+                // inside the repository; a same-item reload re-reads through
+                // the provider; detail-screen re-entry force re-resolves.
             }
         }
     }
@@ -3195,33 +3198,12 @@ class VideoPlayerViewModel @Inject constructor(
                         )
                     }
                 }
-                // Drop the MediaRepository detail + series caches so the detail
-                // screen re-fetches the episode's resume position / played state
-                // after returning from the player. The stop report above writes
-                // the authoritative progress server-side, but the repo's 2-min TTL
-                // caches (detailCache / seasonsCache / episodesCache) would
-                // otherwise serve the pre-playback snapshot when loadItem re-fires
-                // on back-navigation, leaving the episode card's progress bar and
-                // watched badge stale until the TTL expires. Best-effort: a failure
-                // here only means the caches serve stale data until their TTL.
-                invalidatePlaybackCaches(itemId)
+                // No manual cache invalidation here (plan 08): the detail
+                // screen's re-entry freshness comes from the provider's forced
+                // re-resolve (requestRevalidate) and the auto-advance path
+                // already evicts via markPlayed inside the repository — the
+                // old invalidateUserDataCaches call duplicated both.
             }
-        }
-    }
-
-    /**
-     * Drops the [MediaRepository] caches touched by playback so the detail screen
-     * reflects the post-playback resume position / played state. Called after a
-     * Stop report lands. The episode's [seriesId] resolves the series-scoped
-     * seasons/episodes caches; when absent (e.g. a standalone movie), only the
-     * item's own detail cache is dropped. The auto-advance path already calls
-     * [markPlayed], which invalidates these same caches internally.
-     */
-    private suspend fun invalidatePlaybackCaches(itemId: String) {
-        runCatching {
-            // One operation owns the series-resolution rule — no need to
-            // re-derive "is this item part of a series?" at the call site.
-            mediaRepository.invalidateUserDataCaches(itemId)
         }
     }
 

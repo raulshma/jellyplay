@@ -13,6 +13,9 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.AppliedMutation
+import com.raulshma.jellyplay.core.data.repository.UserDataContainer
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
@@ -63,6 +66,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -91,6 +95,7 @@ class HomeViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var userDataMutator: FakeUserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var photoFolderPrefetcher: PhotoFolderPrefetcher
     private lateinit var downloadRepository: DownloadRepository
@@ -134,6 +139,7 @@ class HomeViewModelTest {
     @Before
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
+        userDataMutator = FakeUserDataMutator()
         imageUrlProvider = mockk(relaxed = true)
         photoFolderPrefetcher = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
@@ -183,6 +189,7 @@ class HomeViewModelTest {
     private fun buildViewModel(): HomeViewModel = HomeViewModel(
         appContext = mockk<Context>(relaxed = true),
         mediaRepository = mediaRepository,
+        userDataMutator = userDataMutator,
         orderHomeSections = OrderHomeSectionsUseCase(),
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
@@ -234,6 +241,48 @@ class HomeViewModelTest {
         // CONTINUE_WATCHING before LATEST_MEDIA — so ordering should apply.
         assertEquals(HomeSectionType.CONTINUE_WATCHING, sections.first().type)
         assertEquals(2, sections.size)
+        stopPeriodicRefresh()
+    }
+
+    /**
+     * The plan-03 two-sections test: the same item can appear in several home
+     * sections, and the container adapter must flip EVERY occurrence (plus
+     * zero the resume position) — while non-matching items keep their exact
+     * instances. Mutation is optimistic through the fake mutator, mirroring
+     * the real module's success path.
+     */
+    @Test
+    fun markItemPlayed_flipsItemInEverySectionWhereItAppears() = runTest {
+        val shared = item("cw1").copy(playbackPositionTicks = 5_000_000_000L)
+        val other = item("other")
+        coEvery {
+            mediaRepository.getHomeSections(any())
+        } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(
+                    section(HomeSectionType.CONTINUE_WATCHING, items = listOf(shared, other)),
+                    section(HomeSectionType.LATEST_MEDIA, items = listOf(item("cw1"))),
+                ),
+            ),
+        )
+        viewModel = buildViewModel()
+        userFlow.value = userInfo("u1")
+        runCurrent()
+
+        viewModel.markItemPlayed(item("cw1"))
+        runCurrent()
+
+        assertEquals(listOf(Triple("cw1", true, null)), userDataMutator.playedCalls)
+        val sections = viewModel.uiState.value.sections
+        val firstOccurrence = sections[0].items.first { it.id == "cw1" }
+        val secondOccurrence = sections[1].items.single { it.id == "cw1" }
+        assertTrue(firstOccurrence.isPlayed)
+        assertTrue(secondOccurrence.isPlayed)
+        // Server clears resume on manual mark; the patch mirrors it.
+        assertEquals(0L, firstOccurrence.playbackPositionTicks)
+        assertEquals(0L, secondOccurrence.playbackPositionTicks)
+        // The sibling card in the first section is untouched.
+        assertSame(other, sections[0].items.last())
         stopPeriodicRefresh()
     }
 
@@ -696,7 +745,7 @@ class HomeViewModelTest {
     @Test
     fun refresh_resetsScrollAndFetchesSections() = runTest {
         coEvery {
-            mediaRepository.getHomeSections(any())
+            mediaRepository.getHomeSections(any(), any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
         viewModel = buildViewModel()
         viewModel.saveHomeScrollPosition(5, 100)
@@ -707,14 +756,15 @@ class HomeViewModelTest {
         val pos = viewModel.getHomeScrollPosition()
         assertEquals(0, pos.firstVisibleItemIndex)
         assertEquals(0, pos.firstVisibleItemScrollOffset)
-        coVerify { mediaRepository.getHomeSections(any()) }
+        // Manual refresh bypasses the home-sections cache (force read).
+        coVerify { mediaRepository.getHomeSections(any(), force = true) }
         stopPeriodicRefresh()
     }
 
     @Test
     fun pullToRefresh_invalidatesDiscoverCache_andRefetches() = runTest {
         coEvery {
-            mediaRepository.getHomeSections(any())
+            mediaRepository.getHomeSections(any(), any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
         viewModel = buildViewModel()
 
@@ -722,7 +772,8 @@ class HomeViewModelTest {
         runCurrent()
 
         assertFalse(viewModel.uiState.value.isRefreshing)
-        coVerify { mediaRepository.getHomeSections(any()) }
+        // Pull-to-refresh bypasses the home-sections cache (force read).
+        coVerify { mediaRepository.getHomeSections(any(), force = true) }
         stopPeriodicRefresh()
     }
 
@@ -858,5 +909,44 @@ class HomeViewModelTest {
     private class FakeTimeSource : TimeSource {
         override fun nowEpochMillis(): Long = 1_000L
         override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
+    }
+
+    /**
+     * Behavior fake for [UserDataMutator]: records calls and mimics the real
+     * module's success path (container rewrite via the resolved
+     * [AppliedMutation] patch) so the home container adapter's flip is driven
+     * exactly as in production. The protocol itself is pinned by
+     * UserDataMutatorTest in :core:data.
+     */
+    private class FakeUserDataMutator : UserDataMutator {
+        val playedCalls = mutableListOf<Triple<String, Boolean, String?>>()
+
+        override suspend fun setPlayed(
+            itemId: String,
+            played: Boolean,
+            mode: UserDataMutator.FlipMode,
+            containers: List<UserDataContainer>,
+            seriesId: String?,
+        ): Result<AppliedMutation> {
+            playedCalls += Triple(itemId, played, seriesId)
+            val applied = AppliedMutation(itemId = itemId, played = played)
+            if (mode == UserDataMutator.FlipMode.Optimistic) {
+                containers.forEach { it.rewrite(itemId, applied::patch) }
+            }
+            return Result.success(applied)
+        }
+
+        override suspend fun setFavorite(
+            itemId: String,
+            mode: UserDataMutator.FlipMode,
+            containers: List<UserDataContainer>,
+            seriesId: String?,
+        ): Result<AppliedMutation> = Result.success(AppliedMutation(itemId = itemId, favorite = true))
+
+        override suspend fun setSeasonPlayed(
+            seriesId: String,
+            seasonId: String,
+            played: Boolean,
+        ): Result<AppliedMutation> = Result.success(AppliedMutation(itemId = seasonId, played = played))
     }
 }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -27,17 +28,19 @@ class CollectionDetailViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var userDataMutator: FakeUserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var viewModel: CollectionDetailViewModel
 
     @Before
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
+        userDataMutator = FakeUserDataMutator()
         imageUrlProvider = mockk(relaxed = true)
         every { imageUrlProvider.getImageUrl(any()) } returns "img"
         every { imageUrlProvider.getBackdropUrl(any()) } returns "backdrop"
 
-        viewModel = CollectionDetailViewModel(mediaRepository, imageUrlProvider)
+        viewModel = CollectionDetailViewModel(mediaRepository, userDataMutator, imageUrlProvider)
     }
 
     @Test
@@ -124,6 +127,40 @@ class CollectionDetailViewModelTest {
     @Test
     fun `initial state is Loading`() {
         assertEquals(CollectionDetailUiState.Loading, viewModel.uiState.value)
+    }
+
+    /**
+     * The one container-adapter test (plan 03): a successful optimistic
+     * mutation flips ONLY the matching item — resume zeroed by the resolved
+     * patch — and leaves non-matching items referentially equal.
+     */
+    @Test
+    fun `markItemPlayed flips only the matching item in the success items`() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val withProgress = MediaItem(
+            id = "m1",
+            name = "Movie 1",
+            mediaType = MediaType.MOVIE,
+            playbackPositionTicks = 5_000_000_000L,
+        )
+        val untouched = MediaItem(id = "m2", name = "Movie 2", mediaType = MediaType.MOVIE)
+        coEvery { mediaRepository.getMediaDetail("c1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION)),
+        )
+        coEvery { mediaRepository.getCollectionItems("c1", any(), any()) } returns Result.success(
+            SearchResult(items = listOf(withProgress, untouched), totalRecordCount = 2, startIndex = 0),
+        )
+        viewModel.loadCollection("c1")
+        advanceUntilIdle()
+
+        viewModel.markItemPlayed(withProgress, played = true)
+        advanceUntilIdle()
+
+        assertEquals(listOf(Triple("m1", true, null)), userDataMutator.playedCalls)
+        val items = (viewModel.uiState.value as CollectionDetailUiState.Success).items
+        assertTrue(items.first { it.id == "m1" }.isPlayed)
+        assertEquals(0L, items.first { it.id == "m1" }.playbackPositionTicks)
+        assertSame(untouched, items.last())
     }
 
     @Test

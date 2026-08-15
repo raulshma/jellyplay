@@ -35,6 +35,7 @@
     <string name="music_move_down">Mover para baixo</string>
     <string name="music_instant_mix">Mix instantâneo</string>
     <string name="music_creating_mix">Criando mix…</string>
+    <string name="music_mix_unavailable">Nenhuma faixa de mix disponível</string>
     <string name="music_now_playing">Reproduzindo agora</string>
     <string name="music_download_album">Baixar álbum</string>
     <string name="music_download_track">Baixar faixa</string>

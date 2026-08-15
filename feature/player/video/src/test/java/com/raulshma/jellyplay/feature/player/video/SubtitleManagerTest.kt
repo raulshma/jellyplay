@@ -153,7 +153,7 @@ class SubtitleManagerTest {
         // it rather than re-fetching, so a transient server outage mid-search
         // never reaches getMediaDetail.
         currentDetail = mediaDetail("item-1")
-        coEvery { mediaRepository.getMediaDetail(any()) } returns Result.failure(RuntimeException("offline"))
+        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("offline"))
         coEvery {
             subtitleProviderRepository.searchAllStreaming(any(), "item-1", "eng", any())
         } returns MergedSubtitleSearch(results = emptyList(), errors = emptyMap())
@@ -161,7 +161,7 @@ class SubtitleManagerTest {
         manager.searchAllProviders("eng")
 
         // Network detail fetch never happens when the in-memory snapshot exists.
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
         assertTrue(state.value.hasSearchedSubtitles)
         assertFalse(state.value.isSearchingSubtitles)
     }
@@ -175,7 +175,7 @@ class SubtitleManagerTest {
         // providers run; the Jellyfin failure surfaces only as an empty merge,
         // never as a hard abort.
         currentDetail = null
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.failure(RuntimeException("offline"))
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.failure(RuntimeException("offline"))
         val wyzieResult = SubtitleSearchResult(
             provider = SubtitleProviderKind.WYZIE,
             id = "w1",
@@ -215,7 +215,7 @@ class SubtitleManagerTest {
             language = "eng",
             displayName = "Wyzie EN",
         )
-        coEvery { mediaRepository.getMediaDetail(any()) } returns Result.failure(RuntimeException("offline"))
+        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("offline"))
         coEvery {
             subtitleProviderRepository.searchAllStreaming(any(), "item-1", "eng", any())
         } coAnswers {
@@ -282,15 +282,16 @@ class SubtitleManagerTest {
             // first cache-busted poll.
             val detail = mediaDetailWithSubtitle("item-1", streamIndex = 2, language = "eng")
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
-            coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(detail)
+            coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(detail)
 
             managerInScope(this).downloadSubtitle(
                 RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"),
             )
 
             coVerify(exactly = 1) { playbackRepository.downloadSubtitle("item-1", "s1") }
-            // The poll must bust the stale detail cache before each fetch.
-            io.mockk.verify(atLeast = 1) { mediaRepository.invalidateDetailCache("item-1") }
+            // The poll must bypass the stale detail cache on every fetch (the
+            // force-read freshness seam).
+            io.mockk.coVerify(atLeast = 1) { mediaRepository.getMediaDetail("item-1", force = true) }
             assertEquals(listOf(detail), refreshedDetails)
             assertEquals(
                 SubtitleDownloadState.DOWNLOADED,
@@ -303,7 +304,7 @@ class SubtitleManagerTest {
         runTest(UnconfinedTestDispatcher()) {
             // The stream never surfaces (server still queued) → soft DELAYED.
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
-            coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(mediaDetail("item-1"))
+            coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(mediaDetail("item-1"))
 
             managerInScope(this).downloadSubtitle(
                 RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"),
@@ -348,7 +349,7 @@ class SubtitleManagerTest {
             )
             val detail = mediaDetailWithSubtitle("item-1", streamIndex = 2, language = "eng")
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
-            coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(detail)
+            coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(detail)
 
             managerInScope(this).downloadSubtitle(
                 RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"),
@@ -373,7 +374,7 @@ class SubtitleManagerTest {
             // point is that a status entry exists for the id (DOWNLOADING was set
             // synchronously on entry, then transitioned through the poll).
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
-            coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(mediaDetail("item-1"))
+            coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(mediaDetail("item-1"))
 
             managerInScope(this).downloadSubtitle(
                 RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"),

@@ -2,8 +2,7 @@ package com.raulshma.jellyplay.feature.music.tracks
 
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -22,7 +21,7 @@ import javax.inject.Inject
 class TracksViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    val audioPlaybackManager: AudioPlaybackManager,
+    private val audioQueueFacade: AudioQueueFacade,
 ) : JellyPlayViewModel() {
 
     private val _selectedSort = composeState(MusicSortOption.NAME)
@@ -49,18 +48,13 @@ class TracksViewModel @Inject constructor(
 
     fun addToQueue(track: MediaItem) {
         launch {
-            val imageUrl = getImageUrl(track.id)
-            val queueItem = track.toAudioQueueItem(imageUrl = imageUrl)
-            audioPlaybackManager.addToQueue(queueItem)
+            audioQueueFacade.enqueueTracks(listOf(track), imageMaxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH)
         }
     }
 
     fun playAll(tracks: List<MediaItem>, startIndex: Int) {
         launch {
-            val queueItems = tracks.map { track ->
-                track.toAudioQueueItem(imageUrl = getImageUrl(track.id))
-            }
-            audioPlaybackManager.playQueue(queueItems, startIndex)
+            audioQueueFacade.playTracks(tracks, startIndex = startIndex, imageMaxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH)
         }
     }
 }

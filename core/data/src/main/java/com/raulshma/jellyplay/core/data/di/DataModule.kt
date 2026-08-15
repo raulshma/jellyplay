@@ -97,6 +97,17 @@ abstract class DataModule {
     @Singleton
     abstract fun bindMediaRepository(impl: MediaRepositoryImpl): MediaRepository
 
+    // Plan 08: module-internal cache-maintenance view of the same
+    // MediaRepositoryImpl singleton. The per-type invalidation dispatch
+    // (MediaRepositoryCacheInvalidation.invalidateFor) lives behind this
+    // narrow seam so the detail provider never sees the repository's cache
+    // machinery — same instance, not a second set of caches.
+    @Binds
+    @Singleton
+    internal abstract fun bindMediaRepositoryCacheInvalidation(
+        impl: MediaRepositoryImpl,
+    ): com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
+
     // The deep "Episode Catalogue" seam: the single owner of the series
     // seasons/episodes snapshot. See EpisodeCatalogue kdoc — depends on
     // JellyfinApiClient + OfflineRepository only (never MediaRepository), so
@@ -108,6 +119,17 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindPlayedStateSync(impl: PlayedStateSyncImpl): PlayedStateSync
+
+    // The single seam for user-data mutations (watched / favorite): owns the
+    // serialize → write → optimistic-rewrite protocol so feature screens only
+    // supply a container adapter. Adapter over MediaRepository (the write) and
+    // MediaDetailProvider (the active-session rewrite), both Lazy — see
+    // UserDataMutatorImpl.
+    @Binds
+    @Singleton
+    abstract fun bindUserDataMutator(
+        impl: com.raulshma.jellyplay.core.data.repository.UserDataMutatorImpl,
+    ): com.raulshma.jellyplay.core.data.repository.UserDataMutator
 
     @Binds
     @Singleton
@@ -147,10 +169,12 @@ abstract class DataModule {
 
     // The single external seam for media-detail resolution. Owns the remote/local
     // source policy, the source-dependent read graph, and capability derivation.
-    // See the MediaDetailProvider kdoc for the source policy.
+    // See the MediaDetailProvider kdoc for the source policy. Internal impl:
+    // it takes the module-internal cache-maintenance seam (plan 08), so only
+    // the MediaDetailProvider surface is public.
     @Binds
     @Singleton
-    abstract fun bindMediaDetailProvider(
+    internal abstract fun bindMediaDetailProvider(
         impl: com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl,
     ): com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 
@@ -162,6 +186,24 @@ abstract class DataModule {
     abstract fun bindPlaybackSourceResolver(
         impl: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolverImpl,
     ): com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
+
+    // The narrow queue interface AudioPlaybackManager already implements
+    // (playQueue/addToQueue/...). Bound so the audio queue facade (and its
+    // tests) depend on the seam, not the 1642-line concrete manager graph.
+    @Binds
+    @Singleton
+    abstract fun bindAudioQueueManager(
+        impl: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager,
+    ): com.raulshma.jellyplay.core.data.playback.AudioQueueManager
+
+    // The single seam feature modules use to build and play audio queues
+    // (plan 04): owns image-URL resolution, album fallbacks, the dispatcher
+    // hop, and instant-mix fetching behind one small interface.
+    @Binds
+    @Singleton
+    abstract fun bindAudioQueueFacade(
+        impl: com.raulshma.jellyplay.core.data.playback.DefaultAudioQueueFacade,
+    ): com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 
     @Binds
     @Singleton

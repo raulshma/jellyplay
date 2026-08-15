@@ -6,7 +6,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.HomeSectionQuery
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -32,7 +32,11 @@ import kotlinx.coroutines.flow.firstOrNull
 class UserDataSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val mediaRepository: MediaRepository,
+    // The concrete impl (same Gradle module) so the worker can reach the
+    // module-internal wholesale invalidateCaches — plan 08 demoted it off the
+    // public MediaRepository interface; the identity observer in the impl is
+    // its only other caller.
+    private val mediaRepository: MediaRepositoryImpl,
     private val playbackStore: PlaybackStore,
     private val serverIdentityStore: ServerIdentityStore,
 ) : CoroutineWorker(context, params) {

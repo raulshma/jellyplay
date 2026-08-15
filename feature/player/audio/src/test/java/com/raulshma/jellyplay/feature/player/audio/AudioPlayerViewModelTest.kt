@@ -45,6 +45,7 @@ class AudioPlayerViewModelTest {
     private lateinit var audioStore: AudioStore
     private lateinit var audioEffectsStore: AudioEffectsStore
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var downloadIntake: DownloadIntake
     private lateinit var sleepTimerManager: SleepTimerManager
@@ -60,6 +61,7 @@ class AudioPlayerViewModelTest {
         audioStore = mockk(relaxed = true)
         audioEffectsStore = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
+        userDataMutator = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
         downloadIntake = mockk(relaxed = true)
         sleepTimerManager = mockk(relaxed = true)
@@ -75,6 +77,7 @@ class AudioPlayerViewModelTest {
             audioStore = audioStore,
             audioEffectsStore = audioEffectsStore,
             mediaRepository = mediaRepository,
+            userDataMutator = userDataMutator,
             downloadRepository = downloadRepository,
             downloadIntake = downloadIntake,
             sleepTimerManager = sleepTimerManager,
@@ -115,6 +118,31 @@ class AudioPlayerViewModelTest {
     fun seekTo_delegatesToManager() {
         viewModel.seekTo(12_000L)
         verify { audioPlaybackManager.seekTo(12_000L) }
+    }
+
+    /** Plan 03: the favorite toggle routes through the mutator; the resolved target drives the scalar flip. */
+    @Test
+    fun toggleFavorite_delegatesToMutatorAndFlipsScalarFromResolvedTarget() {
+        every { audioPlaybackManager.currentPlayingItemId } returns MutableStateFlow("track-1")
+        io.mockk.coEvery {
+            userDataMutator.setFavorite("track-1")
+        } returns kotlin.Result.success(
+            com.raulshma.jellyplay.core.data.repository.AppliedMutation("track-1", favorite = true),
+        )
+
+        viewModel.toggleFavorite()
+
+        io.mockk.coVerify(exactly = 1) { userDataMutator.setFavorite("track-1") }
+        assertTrue(viewModel.uiState.value.isFavorite)
+    }
+
+    @Test
+    fun toggleFavorite_withoutCurrentItem_isNoOp() {
+        every { audioPlaybackManager.currentPlayingItemId } returns MutableStateFlow(null)
+
+        viewModel.toggleFavorite()
+
+        io.mockk.coVerify(exactly = 0) { userDataMutator.setFavorite(any()) }
     }
 
     @Test

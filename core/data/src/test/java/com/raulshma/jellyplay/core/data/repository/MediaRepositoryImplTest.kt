@@ -281,28 +281,28 @@ class MediaRepositoryImplTest {
     }
 
     @Test
-    fun `getMediaDetail re-fetches after invalidateDetailCache`() = runTest {
+    fun `getMediaDetail with force re-fetches instead of serving the cached entry`() = runTest {
         coEvery { apiClient.getMediaDetail("item-1") } returns Result.success(
             mockk(relaxed = true)
         )
 
         repository.getMediaDetail("item-1")
-        repository.invalidateDetailCache("item-1")
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = true)
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("item-1") }
     }
 
     // ------------------------------------------------------------------
     // detailCacheEpoch stale-snapshot guard: a slow fetch that completes AFTER
-    // a concurrent invalidateDetailCache must NOT re-insert its (now stale)
-    // snapshot into the cache. Otherwise the next read would serve pre-mutation
-    // user-data for the full TTL. This is the highest-risk correctness property
-    // of the single-flight cache and is otherwise untested.
+    // a concurrent invalidation (user-data mutation) must NOT re-insert its
+    // (now stale) snapshot into the cache. Otherwise the next read would serve
+    // pre-mutation user-data for the full TTL. This is the highest-risk
+    // correctness property of the single-flight cache and is otherwise
+    // untested.
     // ------------------------------------------------------------------
 
     @Test
-    fun `getMediaDetail does not cache a fetch that raced an invalidation`() = runTest {
+    fun `getMediaDetail does not cache a fetch that raced a user-data mutation`() = runTest {
         val fetchStarted = CompletableDeferred<Unit>()
         val releaseFetch = CompletableDeferred<Unit>()
         coEvery { apiClient.getMediaDetail("item-1") } coAnswers {
@@ -313,9 +313,10 @@ class MediaRepositoryImplTest {
 
         val first = async { repository.getMediaDetail("item-1") }
         fetchStarted.await()
-        // Invalidation lands while the fetch is in flight: epoch bumps, so the
-        // completing fetch must skip the cache write.
-        repository.invalidateDetailCache("item-1")
+        // A user-data mutation lands while the fetch is in flight: its
+        // internal eviction bumps detailCacheEpoch, so the completing fetch
+        // must skip the cache write.
+        repository.markUnplayed("item-1")
         releaseFetch.complete(Unit)
         assertTrue(first.await().isSuccess)
 
@@ -352,7 +353,7 @@ class MediaRepositoryImplTest {
     }
 
     @Test
-    fun `invalidateDetailCache evicts every similar-items limit variant`() = runTest {
+    fun `markPlayed evicts every similar-items limit variant`() = runTest {
         coEvery { apiClient.getSimilarItems("item-1", any()) } returns Result.success(
             listOf(mediaItem("s1"))
         )
@@ -399,14 +400,22 @@ class MediaRepositoryImplTest {
     }
 
     @Test
-    fun `invalidateSeriesCache drops seasons so next call re-fetches`() = runTest {
+    fun `markUnplayed on a series drops seasons so next call re-fetches`() = runTest {
+        // Plan 08 step 2: the seasons/episodes cache is dropped through the
+        // mutation itself (was: invalidateSeriesCache, which had no production
+        // callers outside this funnel).
+        coEvery { apiClient.getMediaDetail("series-1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "series-1", name = "Show", mediaType = MediaType.SERIES))
+        )
         coEvery { apiClient.getSeasons("series-1") } returns Result.success(
             listOf(seasonItem("s1"))
         )
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
+        coEvery { apiClient.markUnplayed("series-1") } returns Result.success(Unit)
 
+        repository.getMediaDetail("series-1")
         repository.getSeasons("series-1")
-        repository.invalidateSeriesCache("series-1")
+        repository.markUnplayed("series-1")
         repository.getSeasons("series-1")
 
         coVerify(exactly = 2) { apiClient.getSeasons("series-1") }
@@ -445,14 +454,21 @@ class MediaRepositoryImplTest {
     }
 
     @Test
-    fun `invalidateSeriesCache drops grouped episodes so next call re-fetches`() = runTest {
+    fun `markUnplayed on an episode drops grouped episodes so next call re-fetches`() = runTest {
+        coEvery { apiClient.getMediaDetail("episode-1") } returns Result.success(
+            MediaDetail(
+                item = episodeItem("episode-1", seriesId = "series-1", seasonId = "season-1"),
+            )
+        )
         coEvery { apiClient.getSeasons("series-1") } returns Result.success(emptyList())
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(
             listOf(episodeItem("e1", seriesId = "series-1", seasonId = "season-1"))
         )
+        coEvery { apiClient.markUnplayed("episode-1") } returns Result.success(Unit)
 
+        repository.getMediaDetail("episode-1")
         repository.getAllEpisodesGrouped("series-1")
-        repository.invalidateSeriesCache("series-1")
+        repository.markUnplayed("episode-1")
         repository.getAllEpisodesGrouped("series-1")
 
         coVerify(exactly = 2) { apiClient.getAllEpisodes("series-1") }
@@ -597,8 +613,9 @@ class MediaRepositoryImplTest {
 
         val first = async { repository.getAlbumTracks("album-1") }
         fetchStarted.await()
-        // Invalidation lands while the fetch is in flight → epoch bumps.
-        repository.invalidateDetailCache("album-1")
+        // A user-data mutation lands while the fetch is in flight → its
+        // internal eviction bumps detailCacheEpoch.
+        repository.markUnplayed("album-1")
         releaseFetch.complete(Unit)
         assertTrue(first.await().isSuccess)
 
@@ -739,8 +756,9 @@ class MediaRepositoryImplTest {
 
         val first = async { repository.getSimilarItems("item-1", limit = 12) }
         fetchStarted.await()
-        // Invalidation lands while the fetch is in flight → epoch bumps.
-        repository.invalidateDetailCache("item-1")
+        // A user-data mutation lands while the fetch is in flight → its
+        // internal eviction bumps detailCacheEpoch.
+        repository.markUnplayed("item-1")
         releaseFetch.complete(Unit)
         assertTrue(first.await().isSuccess)
 
@@ -878,15 +896,15 @@ class MediaRepositoryImplTest {
     }
 
     // ------------------------------------------------------------------
-    // Broad invalidation: invalidateDetailCache(null) must drop the similar
-    // cache alongside the detail cache (the per-item branch evicts by prefix,
-    // the null branch clears wholesale). invalidateCaches must additionally
-    // drop the series-scoped caches so a user/server switch cannot leak one
-    // user's seasons/episodes/album-tracks into another's session.
+    // Broad invalidation: invalidateCaches (the module-internal wholesale
+    // drop, reached from the identity observer and the sync worker) must drop
+    // the similar cache alongside the detail cache, and additionally the
+    // series-scoped caches, so a user/server switch cannot leak one user's
+    // seasons/episodes/album-tracks into another's session.
     // ------------------------------------------------------------------
 
     @Test
-    fun `invalidateDetailCache with null clears the similar cache wholesale`() = runTest {
+    fun `invalidateCaches clears the similar cache wholesale`() = runTest {
         coEvery { apiClient.getSimilarItems("item-1", 12) } returns Result.success(
             listOf(mediaItem("s1"))
         )
@@ -894,8 +912,9 @@ class MediaRepositoryImplTest {
         repository.getSimilarItems("item-1", limit = 12)
         coVerify(exactly = 1) { apiClient.getSimilarItems("item-1", 12) }
 
-        // null itemId → wholesale clear (logout / user switch path).
-        repository.invalidateDetailCache(null)
+        // Wholesale invalidation (logout / user switch path drops every
+        // detail + similar entry).
+        repository.invalidateCaches()
         repository.getSimilarItems("item-1", limit = 12)
 
         coVerify(exactly = 2) { apiClient.getSimilarItems("item-1", 12) }
@@ -964,6 +983,236 @@ class MediaRepositoryImplTest {
     fun `parseLrc returns empty list for invalid input`() {
         val lines = parseLrc("no timestamps here")
         assertEquals(0, lines.size)
+    }
+
+    // ------------------------------------------------------------------
+    // Plan 08 step 0 — characterization pins for self-invalidation
+    // (docs/architecture/plans/08-mediarepository-self-invalidation.md).
+    //
+    // The two original pins asserted the *future* mutation-owned invalidation
+    // and were @Ignore'd against the bare-passthrough mutations; steps 1 and 3
+    // un-ignored them (season marks own the parent-series drop; collection
+    // edits drop their items cache). The suite below keeps both assertions as
+    // permanent regression guards.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `markSeasonPlayed drops the series catalogue so re-entry re-fetches`() = runTest {
+        // Plan 08 step 0 pin, un-ignored by step 1: the series screen supplies
+        // both ids, so the season-aware mutation owns the parent-series
+        // invalidation the reactor used to perform by hand.
+        coEvery { apiClient.getSeasons("series-1") } returns Result.success(
+            listOf(seasonItem("season-1"))
+        )
+        coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(
+            listOf(episodeItem("e1", seriesId = "series-1", seasonId = "season-1"))
+        )
+        coEvery { apiClient.markPlayed("season-1") } returns Result.success(Unit)
+
+        repository.getSeasons("series-1")
+        repository.markSeasonPlayed("season-1", seriesId = "series-1")
+        repository.getSeasons("series-1")
+
+        coVerify(exactly = 2) { apiClient.getSeasons("series-1") }
+    }
+
+    @Test
+    fun `markSeasonUnplayed drops the series detail so re-entry re-fetches`() = runTest {
+        coEvery { apiClient.getMediaDetail("series-1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "series-1", name = "Show", mediaType = MediaType.SERIES))
+        )
+        coEvery { apiClient.markUnplayed("season-1") } returns Result.success(Unit)
+
+        repository.getMediaDetail("series-1")
+        repository.markSeasonUnplayed("season-1", seriesId = "series-1")
+        repository.getMediaDetail("series-1")
+
+        coVerify(exactly = 2) { apiClient.getMediaDetail("series-1") }
+    }
+
+    @Test
+    fun `addItemsToCollection then getCollectionItems re-fetches`() = runTest {
+        // Plan 08 step 0 pin, un-ignored by step 3: the mutation self-
+        // invalidates, so DetailViewModel's manual compensation is gone.
+        coEvery { apiClient.getCollectionItems("col-1", 0, 50) } returns Result.success(
+            SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0)
+        )
+        coEvery { apiClient.addItemsToCollection("col-1", listOf("m1")) } returns Result.success(Unit)
+
+        repository.getCollectionItems("col-1")
+        repository.addItemsToCollection("col-1", listOf("m1"))
+        repository.getCollectionItems("col-1")
+
+        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 50) }
+    }
+
+    @Test
+    fun `addItemsToCollection drops collection items but not an unrelated item's detail`() = runTest {
+        coEvery { apiClient.getCollectionItems("col-1", 0, 50) } returns Result.success(
+            SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0)
+        )
+        coEvery { apiClient.getMediaDetail("movie-1") } returns Result.success(
+            MediaDetail(item = mediaItem("movie-1"))
+        )
+        coEvery { apiClient.addItemsToCollection("col-1", listOf("m1")) } returns Result.success(Unit)
+
+        repository.getCollectionItems("col-1")
+        repository.getMediaDetail("movie-1")
+        repository.addItemsToCollection("col-1", listOf("m1"))
+        repository.getCollectionItems("col-1")
+        repository.getMediaDetail("movie-1")
+
+        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 50) }
+        // The unrelated item's detail was untouched.
+        coVerify(exactly = 1) { apiClient.getMediaDetail("movie-1") }
+    }
+
+    @Test
+    fun `createCollection invalidates the new collection's items cache`() = runTest {
+        coEvery { apiClient.getCollectionItems("col-new", 0, 50) } returns Result.success(
+            SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0)
+        )
+        coEvery { apiClient.createCollection("My Set", listOf("m1")) } returns Result.success("col-new")
+
+        repository.getCollectionItems("col-new")
+        repository.createCollection("My Set", listOf("m1"))
+        repository.getCollectionItems("col-new")
+
+        coVerify(exactly = 2) { apiClient.getCollectionItems("col-new", 0, 50) }
+    }
+
+    // ------------------------------------------------------------------
+    // Playlist edits self-invalidate (plan 08 step 3): getPlaylistItems is an
+    // uncached passthrough, so the one cached projection of a playlist is its
+    // detail entry — one drop per edit covers the playlist screen's refresh.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `removeItemsFromPlaylist invalidates the playlist's detail cache`() = runTest {
+        coEvery { apiClient.getMediaDetail("pl-1") } returns Result.success(
+            MediaDetail(item = mediaItem("pl-1"))
+        )
+        coEvery { apiClient.removeItemsFromPlaylist("pl-1", listOf("e1")) } returns Result.success(Unit)
+
+        repository.getMediaDetail("pl-1")
+        repository.removeItemsFromPlaylist("pl-1", listOf("e1"))
+        repository.getMediaDetail("pl-1")
+
+        coVerify(exactly = 2) { apiClient.getMediaDetail("pl-1") }
+    }
+
+    @Test
+    fun `addItemsToPlaylist invalidates the playlist's detail cache`() = runTest {
+        coEvery { apiClient.getMediaDetail("pl-1") } returns Result.success(
+            MediaDetail(item = mediaItem("pl-1"))
+        )
+        coEvery { apiClient.addItemsToPlaylist("pl-1", listOf("m1")) } returns Result.success(Unit)
+
+        repository.getMediaDetail("pl-1")
+        repository.addItemsToPlaylist("pl-1", listOf("m1"))
+        repository.getMediaDetail("pl-1")
+
+        coVerify(exactly = 2) { apiClient.getMediaDetail("pl-1") }
+    }
+
+    @Test
+    fun `movePlaylistItem invalidates the playlist's detail cache`() = runTest {
+        coEvery { apiClient.getMediaDetail("pl-1") } returns Result.success(
+            MediaDetail(item = mediaItem("pl-1"))
+        )
+        coEvery { apiClient.movePlaylistItem("pl-1", "e1", 2) } returns Result.success(Unit)
+
+        repository.getMediaDetail("pl-1")
+        repository.movePlaylistItem("pl-1", "e1", 2)
+        repository.getMediaDetail("pl-1")
+
+        coVerify(exactly = 2) { apiClient.getMediaDetail("pl-1") }
+    }
+
+    // ------------------------------------------------------------------
+    // invalidateFor: the single per-type dispatch (plan 08 step 3) that
+    // absorbed the provider's invalidateByType table. One encoding of the
+    // "what did this detail's type affect" rule, asserted per branch.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `invalidateFor on a series drops its detail and catalogue`() = runTest {
+        coEvery { apiClient.getMediaDetail("series-1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "series-1", name = "Show", mediaType = MediaType.SERIES))
+        )
+        coEvery { apiClient.getSeasons("series-1") } returns Result.success(listOf(seasonItem("s1")))
+        coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
+
+        val detail = repository.getMediaDetail("series-1").getOrThrow()
+        repository.getSeasons("series-1")
+
+        repository.invalidateFor(detail)
+
+        repository.getMediaDetail("series-1")
+        repository.getSeasons("series-1")
+
+        coVerify(exactly = 2) { apiClient.getMediaDetail("series-1") }
+        coVerify(exactly = 2) { apiClient.getSeasons("series-1") }
+    }
+
+    @Test
+    fun `invalidateFor on an episode drops the parent series catalogue`() = runTest {
+        coEvery { apiClient.getSeasons("series-1") } returns Result.success(listOf(seasonItem("s1")))
+        coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
+
+        repository.getSeasons("series-1")
+        repository.invalidateFor(
+            MediaDetail(item = episodeItem("e1", seriesId = "series-1", seasonId = "season-1"))
+        )
+        repository.getSeasons("series-1")
+
+        coVerify(exactly = 2) { apiClient.getSeasons("series-1") }
+    }
+
+    @Test
+    fun `invalidateFor on an album drops its detail and tracks`() = runTest {
+        coEvery { apiClient.getMediaDetail("album-1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "album-1", name = "Album", mediaType = MediaType.ALBUM))
+        )
+        coEvery { apiClient.getAlbumTracks("album-1") } returns Result.success(listOf(mediaItem("track-1")))
+
+        val detail = repository.getMediaDetail("album-1").getOrThrow()
+        repository.getAlbumTracks("album-1")
+
+        repository.invalidateFor(detail)
+
+        repository.getMediaDetail("album-1")
+        repository.getAlbumTracks("album-1")
+
+        coVerify(exactly = 2) { apiClient.getMediaDetail("album-1") }
+        coVerify(exactly = 2) { apiClient.getAlbumTracks("album-1") }
+    }
+
+    @Test
+    fun `invalidateFor on a collection drops its items cache`() = runTest {
+        coEvery { apiClient.getCollectionItems("col-1", 0, 50) } returns Result.success(
+            SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0)
+        )
+
+        repository.getCollectionItems("col-1")
+        repository.invalidateFor(
+            MediaDetail(item = MediaItem(id = "col-1", name = "Box Set", mediaType = MediaType.COLLECTION))
+        )
+        repository.getCollectionItems("col-1")
+
+        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 50) }
+    }
+
+    @Test
+    fun `invalidateFor on a movie touches no series cache`() = runTest {
+        coEvery { apiClient.getSeasons("series-1") } returns Result.success(listOf(seasonItem("s1")))
+        coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
+
+        repository.getSeasons("series-1")
+        repository.invalidateFor(MediaDetail(item = mediaItem("movie-1")))
+        repository.getSeasons("series-1")
+
+        coVerify(exactly = 1) { apiClient.getSeasons("series-1") }
     }
 
     // ── Played-state propagation to offline store ─────────────────────

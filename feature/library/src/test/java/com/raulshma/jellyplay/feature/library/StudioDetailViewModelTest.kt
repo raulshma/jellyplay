@@ -2,13 +2,18 @@ package com.raulshma.jellyplay.feature.library
 
 import androidx.lifecycle.SavedStateHandle
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -21,11 +26,13 @@ class StudioDetailViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var userDataMutator: UserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
 
     @Before
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
+        userDataMutator = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
 
         every { imageUrlProvider.getImageUrl(any(), any()) } returns "https://example.com/image.jpg"
@@ -44,6 +51,7 @@ class StudioDetailViewModelTest {
         return StudioDetailViewModel(
             savedStateHandle = savedStateHandle,
             mediaRepository = mediaRepository,
+            userDataMutator = userDataMutator,
             imageUrlProvider = imageUrlProvider,
         )
     }
@@ -91,6 +99,20 @@ class StudioDetailViewModelTest {
                 studioIds = any(),
                 filters = match { it.sortBy == SortOption.SORT_NAME },
             )
+        }
+    }
+
+    /** Delegation one-liner (plan 03): silent grid mutations route through the mutator. */
+    @Test
+    fun `markItemPlayed delegates to the mutator silently`() = runTest {
+        val viewModel = createViewModel()
+        val item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)
+
+        viewModel.markItemPlayed(item, played = false)
+        advanceUntilIdle()
+
+        coVerify {
+            userDataMutator.setPlayed("m1", false, UserDataMutator.FlipMode.Silent, emptyList(), null)
         }
     }
 }

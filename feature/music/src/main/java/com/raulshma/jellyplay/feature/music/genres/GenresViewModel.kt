@@ -24,10 +24,10 @@ class GenresViewModel @Inject constructor(
         loadGenres()
     }
 
-    private fun loadGenres() {
+    private fun loadGenres(force: Boolean = false) {
         launch {
             _isLoading.set(true)
-            mediaRepository.getGenres()
+            mediaRepository.getGenres(force = force)
                 .onSuccess { _genres.set(it) }
                 .onFailure { _error.set(it.message ?: "Failed to load genres") }
             _isLoading.set(false)
@@ -36,8 +36,7 @@ class GenresViewModel @Inject constructor(
 
     fun refresh() {
         launch {
-            mediaRepository.invalidateCaches()
-            loadGenres()
+            loadGenres(force = true)
         }
     }
 }

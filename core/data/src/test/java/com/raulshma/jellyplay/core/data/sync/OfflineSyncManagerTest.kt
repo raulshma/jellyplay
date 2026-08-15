@@ -69,7 +69,7 @@ class OfflineSyncManagerTest {
         val downloadFile = File(tempDir, "video.mkv")
         downloadFile.createNewFile()
         every { offlineModeManager.isOffline } returns false
-        coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(detail())
+        coEvery { mediaRepository.getMediaDetail(itemId, any()) } returns Result.success(detail())
         coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity()
         coEvery { offlineMediaDao.getLocalImagePaths(itemId) } returns null
         coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns
@@ -220,8 +220,7 @@ class OfflineSyncManagerTest {
 
         val result = manager.checkForUpdates(itemId)
 
-        coVerify(exactly = 0) { mediaRepository.invalidateDetailCache(itemId) }
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
         // Returns the persisted state unchanged.
         assertEquals(com.raulshma.jellyplay.core.model.SyncStatus.CURRENT, result.state.status)
     }
@@ -233,7 +232,7 @@ class OfflineSyncManagerTest {
             segmentsSignature = "prior-seg-sig",
             lastSyncedAt = 0L, // force TTL expiry
         )
-        coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(detail())
+        coEvery { mediaRepository.getMediaDetail(itemId, any()) } returns Result.success(detail())
 
         manager.checkForUpdates(itemId)
 

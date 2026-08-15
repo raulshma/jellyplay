@@ -62,6 +62,7 @@ private const val SEARCH_DEBOUNCE_MS: Long = 300
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
+    private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
@@ -350,14 +351,13 @@ class SearchViewModel @Inject constructor(
         imageUrlProvider.getImageUrl(itemId)
 
     /**
-     * Marks a result item played/unplayed on the server.
-     * Intentionally silent: the paged results are left untouched so the user
-     * keeps their scroll position — the badge updates on the next natural data
-     * refresh.
+     * Marks a result item played/unplayed. Intentionally silent (the mutator's
+     * default): the paged results are left untouched so the user keeps their
+     * scroll position — the badge updates on the next natural data refresh.
      */
     fun markItemPlayed(item: MediaItem, played: Boolean) {
         launch {
-            if (played) mediaRepository.markPlayed(item.id) else mediaRepository.markUnplayed(item.id)
+            userDataMutator.setPlayed(item.id, played)
         }
     }
 

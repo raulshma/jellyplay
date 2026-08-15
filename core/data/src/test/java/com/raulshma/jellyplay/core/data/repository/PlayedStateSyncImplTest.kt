@@ -154,13 +154,13 @@ class PlayedStateSyncImplTest {
         val result = sync.reconcileOfflineRow("item-1")
 
         assertEquals(null, result)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
     }
 
     @Test
     fun `reconcile resets local to played when server reports played`() = runTest {
         coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = false)
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
             mediaDetail(mediaItem(isPlayed = true))
         )
 
@@ -180,7 +180,7 @@ class PlayedStateSyncImplTest {
     @Test
     fun `reconcile mirrors unplayed when local played but server unplayed`() = runTest {
         coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = true)
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
             mediaDetail(mediaItem(isPlayed = false))
         )
 
@@ -200,7 +200,7 @@ class PlayedStateSyncImplTest {
             lastPlayedDate = "2020-01-01T00:00:00Z",
             runTimeTicks = 600_000_000L,
         )
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
             mediaDetail(
                 mediaItem(
                     isPlayed = false,
@@ -227,7 +227,7 @@ class PlayedStateSyncImplTest {
     @Test
     fun `reconcile noop when server has no lastPlayedDate`() = runTest {
         coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = false)
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
             mediaDetail(mediaItem(isPlayed = false, lastPlayedDate = null))
         )
 
@@ -240,7 +240,7 @@ class PlayedStateSyncImplTest {
     fun `reconcile noop guards against future-dated server clock`() = runTest {
         val futureIso = java.time.OffsetDateTime.now().plusMinutes(5).toString()
         coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = false)
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
             mediaDetail(mediaItem(isPlayed = false, lastPlayedDate = futureIso))
         )
 

@@ -43,7 +43,7 @@ class PlayerLifecycleManager @Inject constructor(
         activeCallbacks = null
     }
 
-    // Called by the host Activity (PlayerActivity / LiveTvPlayerActivity).
+    // Called by the host Activity (PlayerActivity — the sole playback host).
     // Delegates directly to the active engine's callbacks. Every engine
     // overrides both: ExoPlayer, MPV and LibVLC each remember play state on
     // pause and resume playback on resume (unless background audio is on).

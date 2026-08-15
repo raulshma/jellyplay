@@ -3,7 +3,12 @@ package com.raulshma.jellyplay.core.data.playback
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlaylistItem
 
-fun MediaItem.toAudioQueueItem(
+/**
+ * Queue-item mapping is facade-internal (plan 04 step 7): after the
+ * AudioQueueFacade migration no code outside core/data builds queue items,
+ * and the `internal` visibility keeps it that way.
+ */
+internal fun MediaItem.toAudioQueueItem(
     imageUrl: String?,
     albumFallback: String? = null,
 ): AudioQueueItem = AudioQueueItem(
@@ -17,7 +22,7 @@ fun MediaItem.toAudioQueueItem(
     normalizationGain = normalizationGain,
 )
 
-fun PlaylistItem.toAudioQueueItem(): AudioQueueItem = AudioQueueItem(
+internal fun PlaylistItem.toAudioQueueItem(): AudioQueueItem = AudioQueueItem(
     id = id,
     name = name,
     artist = artist ?: "",

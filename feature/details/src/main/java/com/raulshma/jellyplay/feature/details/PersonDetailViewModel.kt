@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataContainer
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.network.RetryPolicy
@@ -17,6 +19,7 @@ import javax.inject.Inject
 @HiltViewModel
 class PersonDetailViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
+    private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 
@@ -58,31 +61,35 @@ class PersonDetailViewModel @Inject constructor(
         imageUrlProvider.getImageUrl(itemId)
 
     /**
-     * Marks a filmography item played/unplayed on the server
-     * and flips it in-place in [PersonDetailUiState.Success.filmography] so the
-     * card's badge updates immediately; the next load reconciles the server
-     * truth.
+     * The screen's container adapter: where the filmography's exposed items
+     * live. Everything else about the mutation (write, ordering, resume rule)
+     * is owned by [UserDataMutator]; the next load reconciles the server truth.
+     */
+    private val itemContainer = UserDataContainer { itemId, patch ->
+        _uiState.update { state ->
+            if (state is PersonDetailUiState.Success) {
+                state.copy(
+                    filmography = state.filmography.map { if (it.id == itemId) patch(it) else it },
+                )
+            } else {
+                state
+            }
+        }
+    }
+
+    /**
+     * Marks a filmography item played/unplayed and flips it in-place in
+     * [PersonDetailUiState.Success.filmography] so the card's badge updates
+     * immediately.
      */
     fun markItemPlayed(item: MediaItem, played: Boolean) {
         launch {
-            val result = if (played) mediaRepository.markPlayed(item.id)
-            else mediaRepository.markUnplayed(item.id)
-            result.onSuccess {
-                _uiState.update { state ->
-                    if (state is PersonDetailUiState.Success) {
-                        state.copy(
-                            filmography = state.filmography.map {
-                                if (it.id == item.id) it.copy(
-                                    isPlayed = played,
-                                    playbackPositionTicks = 0L,
-                                ) else it
-                            },
-                        )
-                    } else {
-                        state
-                    }
-                }
-            }
+            userDataMutator.setPlayed(
+                itemId = item.id,
+                played = played,
+                mode = UserDataMutator.FlipMode.Optimistic,
+                containers = listOf(itemContainer),
+            )
         }
     }
 }

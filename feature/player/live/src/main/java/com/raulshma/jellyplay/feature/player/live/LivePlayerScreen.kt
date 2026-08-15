@@ -66,7 +66,6 @@ fun LivePlayerScreen(
     audioStreamIndex: Int?,
     subtitleStreamIndex: Int?,
     onBack: () -> Unit,
-    onEnterPip: () -> Unit = {},
     viewModel: LiveTvPlayerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()

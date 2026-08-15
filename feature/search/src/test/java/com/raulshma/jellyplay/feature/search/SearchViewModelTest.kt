@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrServiceDetailsResult
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -56,6 +57,9 @@ class SearchViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: MediaRepository
+
+    /** Plan 03: silent grid mutations delegate here; relaxed mock is enough. */
+    private val userDataMutator: UserDataMutator = mockk(relaxed = true)
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var seerrRequestDelegate: SeerrRequestDelegate
@@ -94,6 +98,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository,
+            userDataMutator,
             imageUrlProvider,
             seerrRepository,
             seerrRequestDelegate,
@@ -165,7 +170,7 @@ class SearchViewModelTest {
         )
         // Recreate so the init-time suggestion load picks up the stub.
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )
@@ -209,7 +214,7 @@ class SearchViewModelTest {
         coEvery { mediaRepository.getGenres(any()) } returns Result.success(genres)
 
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )
@@ -228,7 +233,7 @@ class SearchViewModelTest {
         )
 
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )
@@ -245,7 +250,7 @@ class SearchViewModelTest {
         coEvery { mediaRepository.getTags(any(), any(), any()) } returns Result.success(tags)
 
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )
@@ -263,7 +268,7 @@ class SearchViewModelTest {
             SeerrPreferences(serverUrl = "https://seerr.example")
         )
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )
@@ -279,7 +284,7 @@ class SearchViewModelTest {
             SeerrPreferences(serverUrl = "https://seerr.example", searchEnabled = true)
         )
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )
@@ -301,7 +306,7 @@ class SearchViewModelTest {
             SeerrSearchResponse(results = items, totalResults = items.size)
         )
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )
@@ -324,7 +329,7 @@ class SearchViewModelTest {
         )
         coEvery { seerrRepository.search(any(), any()) } returns Result.failure(RuntimeException("500"))
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )
@@ -342,7 +347,7 @@ class SearchViewModelTest {
     fun `seerr search no-op when not connected`() = runTest(mainDispatcherRule.testDispatcher) {
         every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )
@@ -366,7 +371,7 @@ class SearchViewModelTest {
             SeerrSearchResponse(results = listOf(SeerrSearchItem(id = 1, title = "X")))
         )
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )
@@ -399,7 +404,7 @@ class SearchViewModelTest {
         )
         coEvery { offlineRepository.searchOffline(any(), any()) } returns offline
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )
@@ -416,7 +421,7 @@ class SearchViewModelTest {
     fun `search swallows offline failures and clears offline results`() = runTest(mainDispatcherRule.testDispatcher) {
         coEvery { offlineRepository.searchOffline(any(), any()) } throws RuntimeException("db locked")
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )
@@ -451,7 +456,7 @@ class SearchViewModelTest {
     fun `clearHistory no-ops when there is no active user`() = runTest(mainDispatcherRule.testDispatcher) {
         every { serverIdentityStore.activeUserId } returns flowOf(null)
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )
@@ -471,7 +476,7 @@ class SearchViewModelTest {
         coEvery { searchHistoryRepository.getRecent(any(), any()) } returns flowOf(history)
 
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )
@@ -487,7 +492,7 @@ class SearchViewModelTest {
         coEvery { searchHistoryRepository.getRecent(any(), any()) } returns flowOf(history)
 
         viewModel = SearchViewModel(
-            mediaRepository, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
             searchHistoryRepository, offlineRepository, experimentalStore, serverIdentityStore,
             searchFiltersStore,
         )

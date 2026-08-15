@@ -46,6 +46,8 @@ import org.junit.Test
 class UnifiedMediaDetailProviderImplTest {
 
     private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository = mockk(relaxed = true)
+    private val cacheInvalidation: com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation =
+        mockk(relaxed = true)
     private val offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository = mockk(relaxed = true)
     private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository = mockk(relaxed = true)
     private val episodeCatalogue: EpisodeCatalogue = mockk(relaxed = true)
@@ -55,6 +57,7 @@ class UnifiedMediaDetailProviderImplTest {
 
     private fun TestScope.buildProvider() = UnifiedMediaDetailProviderImpl(
         mediaRepository = mediaRepository,
+        cacheInvalidation = cacheInvalidation,
         offlineRepository = offlineRepository,
         downloadRepository = downloadRepository,
         episodeCatalogue = episodeCatalogue,
@@ -164,7 +167,7 @@ class UnifiedMediaDetailProviderImplTest {
     @Test
     fun `remote wins over a completed download while online`() = runTest {
         wireStubs("m1", mode = OfflineMode.ONLINE, localItem = localMovie(), download = completedDownload())
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+        coEvery { mediaRepository.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
 
         val state = firstResolved(buildProvider(), "m1")
 
@@ -189,13 +192,13 @@ class UnifiedMediaDetailProviderImplTest {
             DetailOrigin.LOCAL_OFFLINE_MODE,
             (state as DetailLoadState.Loaded).snapshot.context.origin,
         )
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
     }
 
     @Test
     fun `remote failure falls back in place to local detail`() = runTest {
         wireStubs("m1", mode = OfflineMode.ONLINE, localItem = localMovie())
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.failure(
+        coEvery { mediaRepository.getMediaDetail("m1", any()) } returns Result.failure(
             ApiException(isRetryable = false, message = "boom"),
         )
 
@@ -216,13 +219,13 @@ class UnifiedMediaDetailProviderImplTest {
 
         assertTrue(state is DetailLoadState.Error)
         assertTrue((state as DetailLoadState.Error).error.isUnavailableOffline)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
     }
 
     @Test
     fun `remote failure with no local row preserves access-denied classification`() = runTest {
         wireStubs("m1", mode = OfflineMode.ONLINE, localItem = null)
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.failure(
+        coEvery { mediaRepository.getMediaDetail("m1", any()) } returns Result.failure(
             ApiException(isRetryable = false, httpCode = 403, isAccessDenied = true, message = "forbidden"),
         )
 
@@ -301,7 +304,7 @@ class UnifiedMediaDetailProviderImplTest {
         coEvery { downloadRepository.loadLocalSubtitleManifest(any(), any()) } returns null
 
         var attempts = 0
-        coEvery { mediaRepository.getMediaDetail("m1") } answers {
+        coEvery { mediaRepository.getMediaDetail("m1", any()) } answers {
             attempts++
             if (attempts == 1) Result.failure(ApiException(isRetryable = false, message = "net"))
             else Result.success(movieDetail())
@@ -326,7 +329,7 @@ class UnifiedMediaDetailProviderImplTest {
             DetailOrigin.REMOTE,
             states.filterIsInstance<DetailLoadState.Loaded>().last().snapshot.context.origin,
         )
-        coVerify(atLeast = 2) { mediaRepository.getMediaDetail("m1") }
+        coVerify(atLeast = 2) { mediaRepository.getMediaDetail("m1", any()) }
         job.cancel()
     }
 
@@ -338,7 +341,7 @@ class UnifiedMediaDetailProviderImplTest {
     fun `applyOptimisticSeasonRewrite re-emits rewritten episodes and invalidates the series`() = runTest {
         val snapshot = seriesCatalogueSnapshot()
         wireStubs("s1", mode = OfflineMode.ONLINE)
-        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(seriesDetail())
+        coEvery { mediaRepository.getMediaDetail("s1", any()) } returns Result.success(seriesDetail())
         coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(snapshot)
         // The catalogue rewrites the season + rebuilds sortedEpisodes; mirror that.
         val rewritten = snapshot.copy(
@@ -383,7 +386,7 @@ class UnifiedMediaDetailProviderImplTest {
         // current screen, not only after the next re-entry re-resolve.
         val snapshot = seriesCatalogueSnapshot() // 1 season, 2 episodes, all unplayed
         wireStubs("s1", mode = OfflineMode.ONLINE)
-        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(seriesDetail())
+        coEvery { mediaRepository.getMediaDetail("s1", any()) } returns Result.success(seriesDetail())
         coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(snapshot)
         val rewritten = snapshot.copy(
             episodesBySeason = snapshot.episodesBySeason.mapValues { (_, eps) ->
@@ -418,7 +421,7 @@ class UnifiedMediaDetailProviderImplTest {
         val full = seriesCatalogueSnapshot(seasonIds = listOf("season1", "season2"), episodesPerSeason = 2)
         val partial = full.copy(fetchedSeasonIds = setOf("season1"))
         wireStubs("s1", mode = OfflineMode.ONLINE)
-        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(seriesDetail())
+        coEvery { mediaRepository.getMediaDetail("s1", any()) } returns Result.success(seriesDetail())
         coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(partial)
         val rewritten = partial.copy(
             episodesBySeason = partial.episodesBySeason.mapValues { (_, eps) ->
@@ -450,7 +453,7 @@ class UnifiedMediaDetailProviderImplTest {
     fun `applyOptimisticSeasonRewrite is a no-op when the season has no episodes`() = runTest {
         val snapshot = seriesCatalogueSnapshot(seasonIds = listOf("season1"))
         wireStubs("s1", mode = OfflineMode.ONLINE)
-        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(seriesDetail())
+        coEvery { mediaRepository.getMediaDetail("s1", any()) } returns Result.success(seriesDetail())
         coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(snapshot)
 
         val provider = buildProvider()
@@ -474,7 +477,7 @@ class UnifiedMediaDetailProviderImplTest {
     fun `expandSeason merges a new season, re-emits, and returns its episodes`() = runTest {
         val initial = seriesCatalogueSnapshot(seasonIds = listOf("season1"), episodesPerSeason = 2)
         wireStubs("s1", mode = OfflineMode.ONLINE)
-        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(seriesDetail())
+        coEvery { mediaRepository.getMediaDetail("s1", any()) } returns Result.success(seriesDetail())
         coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(initial)
         val season2Episodes = listOf(
             MediaItem(
@@ -511,7 +514,7 @@ class UnifiedMediaDetailProviderImplTest {
     fun `expandSeason merges an empty season, updates fetchedSeasonIds, and re-emits`() = runTest {
         val initial = seriesCatalogueSnapshot(seasonIds = listOf("season1"), episodesPerSeason = 2)
         wireStubs("s1", mode = OfflineMode.ONLINE)
-        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(seriesDetail())
+        coEvery { mediaRepository.getMediaDetail("s1", any()) } returns Result.success(seriesDetail())
         coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(initial)
         coEvery { episodeCatalogue.loadSeasonEpisodes("s1", "season2", any()) } returns Result.success(emptyList())
 
@@ -537,7 +540,7 @@ class UnifiedMediaDetailProviderImplTest {
     fun `canonicalEpisodeIds serves from a loaded session without a cold load`() = runTest {
         val snapshot = seriesCatalogueSnapshot()
         wireStubs("s1", mode = OfflineMode.ONLINE)
-        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(seriesDetail())
+        coEvery { mediaRepository.getMediaDetail("s1", any()) } returns Result.success(seriesDetail())
         coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(snapshot)
 
         val provider = buildProvider()
@@ -580,7 +583,7 @@ class UnifiedMediaDetailProviderImplTest {
         val local = localMovie().copy(totalSizeBytes = 5_000L)
         val download = completedDownload().copy(totalSizeBytes = 0L, downloadedBytes = 0L)
         wireStubs("m1", mode = OfflineMode.ONLINE, localItem = local, download = download)
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+        coEvery { mediaRepository.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
 
         val snapshot = (firstResolved(buildProvider(), "m1") as DetailLoadState.Loaded).snapshot
 
@@ -592,7 +595,7 @@ class UnifiedMediaDetailProviderImplTest {
         val local = localMovie().copy(totalSizeBytes = 5_000L)
         val download = completedDownload().copy(totalSizeBytes = 3_000L, downloadedBytes = 3_000L)
         wireStubs("m1", mode = OfflineMode.ONLINE, localItem = local, download = download)
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+        coEvery { mediaRepository.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
 
         val snapshot = (firstResolved(buildProvider(), "m1") as DetailLoadState.Loaded).snapshot
 
@@ -603,7 +606,7 @@ class UnifiedMediaDetailProviderImplTest {
     fun `attachment createdAtEpochMillis is sourced from the local row`() = runTest {
         val local = localMovie().copy(createdAt = 1_700_000_000_000L)
         wireStubs("m1", mode = OfflineMode.ONLINE, localItem = local, download = completedDownload())
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+        coEvery { mediaRepository.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
 
         val snapshot = (firstResolved(buildProvider(), "m1") as DetailLoadState.Loaded).snapshot
 
@@ -615,7 +618,7 @@ class UnifiedMediaDetailProviderImplTest {
         // A remote-only item (no local row) attaches a download but has no
         // creation timestamp to source — must default to 0, never a fake value.
         wireStubs("m1", mode = OfflineMode.ONLINE, localItem = null, download = completedDownload())
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+        coEvery { mediaRepository.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
 
         val snapshot = (firstResolved(buildProvider(), "m1") as DetailLoadState.Loaded).snapshot
 
@@ -631,7 +634,7 @@ class UnifiedMediaDetailProviderImplTest {
     @Test
     fun `remote ALBUM snapshot loads album tracks from the server`() = runTest {
         wireStubs("a1", mode = OfflineMode.ONLINE)
-        coEvery { mediaRepository.getMediaDetail("a1") } returns Result.success(albumDetail())
+        coEvery { mediaRepository.getMediaDetail("a1", any()) } returns Result.success(albumDetail())
         val tracks = listOf(
             MediaItem(id = "t1", name = "Track 1", mediaType = MediaType.AUDIO),
             MediaItem(id = "t2", name = "Track 2", mediaType = MediaType.AUDIO),
@@ -768,7 +771,7 @@ class UnifiedMediaDetailProviderImplTest {
         val withStudios = movieDetail().copy(
             studios = listOf(com.raulshma.jellyplay.core.model.StudioInfo(name = "Studio A", id = "st-1")),
         )
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(withStudios)
+        coEvery { mediaRepository.getMediaDetail("m1", any()) } returns Result.success(withStudios)
 
         val snapshot = (firstResolved(buildProvider(), "m1") as DetailLoadState.Loaded).snapshot
 
@@ -793,7 +796,7 @@ class UnifiedMediaDetailProviderImplTest {
     @Test
     fun `refresh re-resolves and invalidates the detail cache`() = runTest {
         wireStubs("m1", mode = OfflineMode.ONLINE)
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+        coEvery { mediaRepository.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
 
         val provider = buildProvider()
         val job = launch { provider.observe("m1").collect { } }
@@ -807,9 +810,9 @@ class UnifiedMediaDetailProviderImplTest {
         provider.refresh("m1")
         advanceUntilIdle()
 
-        // refresh forces a re-resolution → cache invalidation + a fresh fetch.
-        coVerify(atLeast = 1) { mediaRepository.invalidateDetailCache("m1") }
-        coVerify(atLeast = 1) { mediaRepository.getMediaDetail("m1") }
+        // refresh forces a re-resolution → the force-read seam bypasses the
+        // detail cache + the repo-internal per-type dispatch runs.
+        coVerify(atLeast = 1) { mediaRepository.getMediaDetail("m1", force = true) }
         job.cancel()
     }
 
@@ -821,7 +824,7 @@ class UnifiedMediaDetailProviderImplTest {
     @Test
     fun `re-observing an already-loaded item forces a re-resolve instead of replaying stale state`() = runTest {
         wireStubs("m1", mode = OfflineMode.ONLINE)
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+        coEvery { mediaRepository.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
 
         val provider = buildProvider()
         val firstJob = launch { provider.observe("m1").collect { } }
@@ -837,8 +840,7 @@ class UnifiedMediaDetailProviderImplTest {
         val secondJob = launch { provider.observe("m1").collect { } }
         advanceUntilIdle()
 
-        coVerify(atLeast = 1) { mediaRepository.invalidateDetailCache("m1") }
-        coVerify(atLeast = 1) { mediaRepository.getMediaDetail("m1") }
+        coVerify(atLeast = 1) { mediaRepository.getMediaDetail("m1", force = true) }
         firstJob.cancel()
         secondJob.cancel()
     }
@@ -849,7 +851,7 @@ class UnifiedMediaDetailProviderImplTest {
     fun `expandSeason is idempotent for an already-fetched season`() = runTest {
         val initial = seriesCatalogueSnapshot(seasonIds = listOf("season1"), episodesPerSeason = 2)
         wireStubs("s1", mode = OfflineMode.ONLINE)
-        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(seriesDetail())
+        coEvery { mediaRepository.getMediaDetail("s1", any()) } returns Result.success(seriesDetail())
         coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(initial)
         coEvery { episodeCatalogue.loadSeasonEpisodes("s1", "season2", any()) } returns Result.success(
             listOf(

@@ -35,6 +35,7 @@
     <string name="music_move_down">下移</string>
     <string name="music_instant_mix">即时混音</string>
     <string name="music_creating_mix">正在创建混音…</string>
+    <string name="music_mix_unavailable">没有可用的混音曲目</string>
     <string name="music_now_playing">正在播放</string>
     <string name="music_download_album">下载专辑</string>
     <string name="music_download_track">下载曲目</string>

@@ -73,6 +73,7 @@ class SearchViewModelHistoryTest {
 
         viewModel = SearchViewModel(
             mediaRepository,
+            mockk(relaxed = true),
             imageUrlProvider,
             seerrRepository,
             seerrRequestDelegate,

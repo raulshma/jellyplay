@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 /**
  * Owns the "Start watch party" concern for the detail screen. A plain helper
  * class (no `@Inject`) constructed by [DetailViewModel], structurally a mirror
- * of [InstantMixActions] / [PlaylistActions]: user-facing messages push through
+ * of [PlaylistActions]: user-facing messages push through
  * [messageSink] so the helper owns no message channel of its own.
  *
  * Unlike the fire-and-forget helpers, this bootstrap is a four-step

@@ -149,10 +149,11 @@ internal class SubtitleManager(
      * very next read. Without this poll the row would flip to "done" while the
      * subtitle is still invisible to the player — so we wait, bounded.
      *
-     * [invalidateDetailCache] before each fetch is load-bearing: [getMediaDetail]
-     * is a single-flight cached read with a TTL, so without invalidation the poll
-     * would keep returning the stale pre-download detail and never see the new
-     * stream. The budget ([SUBTITLE_APPEAR_MAX_ATTEMPTS] × inter-attempt
+     * The forced [getMediaDetail] read is load-bearing:
+     * [getMediaDetail] is a single-flight cached read with a TTL, so without
+     * the force flag the poll would keep returning the stale pre-download
+     * detail and never see the new stream. The budget
+     * ([SUBTITLE_APPEAR_MAX_ATTEMPTS] × inter-attempt
      * [SUBTITLE_APPEAR_POLL_DELAY_MS]) is deliberately short (~9 s); on expiry we
      * mark the row DELAYED (not FAILED) — the server may still finish — and let
      * the user retry.
@@ -164,10 +165,9 @@ internal class SubtitleManager(
     ) {
         val subtitleId = subtitleInfo.id
         repeat(SUBTITLE_APPEAR_MAX_ATTEMPTS) { attempt ->
-            // Bust the cache so a stale single-flight read can't mask the new
-            // stream the server has just attached.
-            mediaRepository.invalidateDetailCache(itemId)
-            val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
+            // Force the read so a stale single-flight cache hit can't mask the
+            // new stream the server has just attached.
+            val detail = mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
             currentCoroutineContext().ensureActive()
             if (detail != null && subtitleHasAppeared(detail, subtitleInfo, preDownloadStreamIndices)) {
                 onMediaDetailRefreshed(detail)
@@ -520,15 +520,15 @@ internal class SubtitleManager(
                             ensureActive()
                             uploadResult.fold(
                                 onSuccess = {
-                                    // Invalidate the detail cache and re-fetch so the
-                                    // freshly attached stream lands in the cached
-                                    // media detail (and thus in buildExternalSubtitles
-                                    // on the next playback) and in the track picker
-                                    // now — getMediaDetail is a single-flight cached
-                                    // read, so without invalidation it would keep
-                                    // returning the pre-upload snapshot.
-                                    mediaRepository.invalidateDetailCache(itemId)
-                                    mediaRepository.getMediaDetail(itemId).getOrNull()?.let { detail ->
+                                    // Force a re-fetch so the freshly attached
+                                    // stream lands in the cached media detail
+                                    // (and thus in buildExternalSubtitles on the
+                                    // next playback) and in the track picker
+                                    // now — getMediaDetail is a single-flight
+                                    // cached read, so without the force flag it
+                                    // would keep returning the pre-upload
+                                    // snapshot.
+                                    mediaRepository.getMediaDetail(itemId, force = true).getOrNull()?.let { detail ->
                                         onMediaDetailRefreshed(detail)
                                     }
                                     userMessageBus.info("Subtitle added")

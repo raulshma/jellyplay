@@ -1,9 +1,7 @@
 package com.raulshma.jellyplay.feature.music.playlists
 
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.ui.components.UndoableAction
 import com.raulshma.jellyplay.core.ui.components.undoActionChannel
@@ -15,8 +13,7 @@ import javax.inject.Inject
 @HiltViewModel
 class PlaylistDetailViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
-    val audioPlaybackManager: AudioPlaybackManager,
+    private val audioQueueFacade: AudioQueueFacade,
 ) : JellyPlayViewModel() {
 
     private val _items = composeState<List<PlaylistItem>>(emptyList())
@@ -42,7 +39,7 @@ class PlaylistDetailViewModel @Inject constructor(
     private val _undoActions = undoActionChannel()
     val undoActions = _undoActions.receiveAsFlow()
 
-    fun load(playlistId: String, playlistName: String? = null) {
+    fun load(playlistId: String, playlistName: String? = null, force: Boolean = false) {
         _playlistId.value = playlistId
         launch {
             _isLoading.value = true
@@ -56,7 +53,7 @@ class PlaylistDetailViewModel @Inject constructor(
                 }
                 .onFailure { _error.value = it.message }
             if (playlistName == null) {
-                mediaRepository.getMediaDetail(playlistId)
+                mediaRepository.getMediaDetail(playlistId, force = force)
                     .onSuccess { _playlistName.value = it.item.name }
             }
             _isLoading.value = false
@@ -65,19 +62,16 @@ class PlaylistDetailViewModel @Inject constructor(
 
     fun refreshPlaylist(playlistId: String) {
         launch {
-            mediaRepository.invalidateDetailCache(playlistId)
-            load(playlistId, playlistName.takeIf { it.isNotEmpty() })
+            load(playlistId, playlistName.takeIf { it.isNotEmpty() }, force = true)
         }
     }
 
     fun addToQueue(item: PlaylistItem) {
-        val queueItem = item.toAudioQueueItem()
-        audioPlaybackManager.addToQueue(queueItem)
+        launch { audioQueueFacade.enqueuePlaylistItem(item) }
     }
 
     fun playAll(startIndex: Int = 0) {
-        val queueItems = items.map { item -> item.toAudioQueueItem() }
-        audioPlaybackManager.playQueue(queueItems, startIndex)
+        launch { audioQueueFacade.playPlaylist(items, startIndex = startIndex) }
     }
 
     fun removeFromPlaylist(item: PlaylistItem) {

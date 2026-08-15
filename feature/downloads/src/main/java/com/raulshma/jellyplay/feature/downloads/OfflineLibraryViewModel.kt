@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.lifecycle.SavedStateHandle
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
@@ -42,7 +42,7 @@ data class StorageSummary(val totalBytes: Long, val itemCount: Int)
 @HiltViewModel
 class OfflineLibraryViewModel @Inject constructor(
     private val offlineRepository: OfflineRepository,
-    private val mediaRepository: MediaRepository,
+    private val userDataMutator: UserDataMutator,
     @Suppress("unused") savedStateHandle: SavedStateHandle,
 ) : JellyPlayViewModel() {
 
@@ -137,26 +137,25 @@ class OfflineLibraryViewModel @Inject constructor(
 
     /**
      * Toggles played state for a downloaded item from the long-press quick-action
-     * sheet. Routes through [MediaRepository.markPlayed]/[MediaRepository.markUnplayed]
-     * so the change is applied to the local offline DB AND enqueued into the
-     * playback outbox for server sync on reconnect (or pushed immediately when
-     * online) — mirroring the unified DetailViewModel.markSeasonPlayed.
+     * sheet. Routes through [UserDataMutator.setPlayed] (silent — the reactive
+     * [offlineLibrary] Room flow refreshes on its own) so the change is applied
+     * to the local offline DB AND enqueued into the playback outbox for server
+     * sync on reconnect (or pushed immediately when online).
      */
     fun markItemPlayed(item: MediaItem, played: Boolean) {
         launch {
-            if (played) mediaRepository.markPlayed(item.id)
-            else mediaRepository.markUnplayed(item.id)
+            userDataMutator.setPlayed(item.id, played)
         }
     }
 
     /**
      * Toggles favorite for a downloaded item. Routes through
-     * [PlayedStateSync.toggleFavorite], so it works fully offline: the flip is
+     * [UserDataMutator.setFavorite], so it works fully offline: the flip is
      * applied to the local offline store immediately and staged in the playback
-     * outbox for delivery on reconnect.
+     * outbox for delivery on reconnect. Silent — Room refreshes the badge.
      */
     fun toggleFavorite(item: MediaItem) {
-        launch { mediaRepository.toggleFavorite(item.id) }
+        launch { userDataMutator.setFavorite(item.id) }
     }
 
     /**

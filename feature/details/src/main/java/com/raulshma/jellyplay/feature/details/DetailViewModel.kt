@@ -12,6 +12,8 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataContainer
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
@@ -45,7 +47,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
-import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
+import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
@@ -69,8 +72,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -79,6 +80,13 @@ import javax.inject.Inject
 class DetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
+    /**
+     * The single seam for user-data mutations (watched / favorite). The VM
+     * supplies only the container adapter below (which projections of an item
+     * exist on this screen); the mutator owns serialization, the write, the
+     * provider-session rewrite, and the series-catalogue drop.
+     */
+    private val userDataMutator: UserDataMutator,
     /**
      * The single external seam for media-detail resolution. Owns the
      * remote/local source decision, the projected [MediaDetail], seasons/
@@ -112,6 +120,7 @@ class DetailViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager,
+    private val audioQueueFacade: AudioQueueFacade,
     private val themeMusicPlayer: com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer,
     private val tmdbApiClient: TmdbApiClient,
     private val arrRepository: ArrRepository,
@@ -270,8 +279,6 @@ class DetailViewModel @Inject constructor(
     private var currentSeriesId: String? = null
     private var seerrDataLoaded = false
     private var seerrDataGeneration = 0L
-    /** Serializes user-data mutations so rapid taps resolve in input order. */
-    private val userDataMutationMutex = Mutex()
     /**
      * The [MediaDetailSnapshot.contentGeneration] of the last snapshot whose
      * *content* sections (detail, seasons, episodes, album tracks, subtitles,
@@ -311,22 +318,12 @@ class DetailViewModel @Inject constructor(
     )
     private val markSeasonReactor = MarkSeasonReactor(
         scope = scope,
-        mediaRepository = mediaRepository,
+        userDataMutator = userDataMutator,
         context = context,
         itemIdProvider = { currentItemId },
         episodesProvider = { _uiState.value.episodes },
-        applyRewrite = mediaDetailProvider::applyOptimisticSeasonRewrite,
         messageSink = { _messages.tryEmit(it) },
         seriesIdProvider = { currentSeriesId },
-        onItemPlayed = { itemId, played, seriesId ->
-            updatePlayedStateInUi(itemId, played)
-            applyOptimisticItemMutation(
-                itemId = itemId,
-                isPlayed = played,
-                seriesId = seriesId,
-            )
-        },
-        mutationMutex = userDataMutationMutex,
     )
     private val playlistActions = PlaylistActions(
         scope = scope,
@@ -345,16 +342,6 @@ class DetailViewModel @Inject constructor(
         detailProvider = { _uiState.value.detail },
         sortedEpisodesProvider = { _uiState.value.sortedEpisodes },
         canonicalEpisodeIds = mediaDetailProvider::canonicalEpisodeIds,
-        messageSink = { _messages.tryEmit(it) },
-    )
-    private val instantMixActions = InstantMixActions(
-        scope = scope,
-        mediaRepository = mediaRepository,
-        playbackRepository = playbackRepository,
-        audioPlaybackManager = audioPlaybackManager,
-        context = context,
-        detailProvider = { _uiState.value.detail },
-        currentItemProvider = { currentItemId },
         messageSink = { _messages.tryEmit(it) },
     )
     private val downloadLifecycleActions = DownloadLifecycleActions(
@@ -868,30 +855,50 @@ class DetailViewModel @Inject constructor(
         val tracks = _uiState.value.albumTracks
         if (tracks.isEmpty()) return
         val albumName = _uiState.value.detail?.item?.name
-        // Queue construction builds N image URLs + N queue items; move it off
-        // the Main dispatcher (the click handler is a non-suspend call) so a
-        // 50–100-track album doesn't block the UI thread before playQueue.
-        launch(Dispatchers.Default) {
-            val queueItems = tracks.map { track ->
-                track.toAudioQueueItem(
-                    imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
-                    albumFallback = albumName,
-                )
-            }
-            audioPlaybackManager.playQueue(queueItems, startIndex)
+        // Queue construction (N image URLs + N queue items) runs on
+        // Dispatchers.Default and the playQueue mutation hops to Main inside
+        // the facade — the AudioQueueManager thread contract, in one place.
+        launch {
+            audioQueueFacade.playTracks(tracks, startIndex = startIndex, albumFallback = albumName)
         }
     }
 
     // ── Instant mix ────────────────────────────────────────────────────
-    // Delegated to [instantMixActions] (InstantMixActions). The VM keeps a thin
-    // pass-through so callers/tests stay stable; the helper owns the mix fetch
-    // + queue build + navigation-drift guard.
+    // One facade call: the mix fetch, queue build, and dispatcher hop all live
+    // in [AudioQueueFacade]; the VM keeps only the audio-type gate, the
+    // navigation-drift guard, and the outcome → [DetailMessage] mapping.
 
     /**
-     * Starts a Jellyfin instant mix for the current audio item. Delegates to
-     * [InstantMixActions]; see that class for the fetch + queue-build contract.
+     * Starts a Jellyfin instant mix for the current audio item. Fetches the
+     * mix seeded off the current item and plays it at index 0 via
+     * [AudioQueueFacade.startInstantMix]. Fire-and-forget: success is implicit
+     * (playback starts) and the only UI feedback is the empty / failure
+     * snackbar emitted via [DetailMessage]. The guard vetoes a mix that
+     * resolved after the user navigated away, so playback cannot start on the
+     * wrong screen.
      */
-    fun startInstantMix() = instantMixActions.startInstantMix()
+    fun startInstantMix() {
+        val detail = _uiState.value.detail ?: return
+        val item = detail.item
+        if (!item.mediaType.isAudioType) return
+        val itemId = item.id
+        launch {
+            when (
+                val outcome = audioQueueFacade.startInstantMix(
+                    itemId,
+                    albumFallback = item.album ?: item.name,
+                    guard = { currentItemId == itemId },
+                )
+            ) {
+                is AudioQueueOutcome.Started -> Unit
+                AudioQueueOutcome.Empty ->
+                    _messages.tryEmit(DetailMessage.Text(context.getString(R.string.detail_instant_mix_empty)))
+                AudioQueueOutcome.Suppressed -> Unit
+                is AudioQueueOutcome.Failed ->
+                    _messages.tryEmit(DetailMessage.Text(context.getString(R.string.detail_instant_mix_failed)))
+            }
+        }
+    }
 
     // ── Watch party ────────────────────────────────────────────────────
     // Delegated to [watchPartyActions] (WatchPartyActions). The VM resolves the
@@ -1000,19 +1007,49 @@ class DetailViewModel @Inject constructor(
         )
     }
 
+    /**
+     * The Detail screen's container adapter: applies a resolved mutation to
+     * every visible projection of an item. Detail actions can target the
+     * current item, a related/collection card, or an episode card; keeping
+     * these projections together prevents one card from replaying the old
+     * state until the next full detail load. Folds the former
+     * `updatePlayedStateInUi` / `updateFavoriteStateInUi` pair — the patch
+     * (resume-zeroing on played flips, favorite-only flips) is derived from
+     * the [com.raulshma.jellyplay.core.data.repository.AppliedMutation] the
+     * mutator resolved.
+     */
+    private val detailItemContainer = UserDataContainer { itemId, patch ->
+        var shouldRecomputeSmartPlay = false
+        _uiState.update { state ->
+            val currentDetail = state.detail
+            val isCurrentDetail = currentDetail?.item?.id == itemId
+            shouldRecomputeSmartPlay = isCurrentDetail || state.sortedEpisodes.any { it.id == itemId }
+            state.copy(
+                detail = currentDetail?.let { detail ->
+                    if (isCurrentDetail) detail.copy(item = patch(detail.item)) else detail
+                },
+                relatedItems = state.relatedItems.map { if (it.id == itemId) patch(it) else it },
+                collectionItems = state.collectionItems.map { if (it.id == itemId) patch(it) else it },
+                episodes = state.episodes.mapValues { (_, episodes) ->
+                    episodes.map { if (it.id == itemId) patch(it) else it }
+                },
+                sortedEpisodes = state.sortedEpisodes.map { if (it.id == itemId) patch(it) else it },
+            )
+        }
+        if (shouldRecomputeSmartPlay) maybeComputeSmartPlayTarget()
+    }
+
     fun toggleFavorite() {
         launch {
-            userDataMutationMutex.withLock {
-                val itemId = _uiState.value.detail?.item?.id ?: return@withLock
-                mediaRepository.toggleFavorite(itemId)
-                .onSuccess {
-                    val targetIsFavorite = it
-                    applyFavoriteMutation(itemId, targetIsFavorite)
-                }
-                .onFailure {
-                    // Don't leave the user guessing why the heart didn't flip.
-                    _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_update_favorite)))
-                }
+            val itemId = _uiState.value.detail?.item?.id ?: return@launch
+            userDataMutator.setFavorite(
+                itemId = itemId,
+                mode = UserDataMutator.FlipMode.Optimistic,
+                containers = listOf(detailItemContainer),
+                seriesId = seriesIdForItem(itemId),
+            ).onFailure {
+                // Don't leave the user guessing why the heart didn't flip.
+                _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_update_favorite)))
             }
         }
     }
@@ -1025,83 +1062,37 @@ class DetailViewModel @Inject constructor(
      * Shared optimistic watched-toggle for the detail item. Jellyfin clears a
      * manually (un)watched item's resume point, so both directions mirror that
      * immediately — the detail UI cannot retain an in-progress bar while the
-     * queued/offline mutation syncs.
+     * queued/offline mutation syncs (the resume rule lives in
+     * [com.raulshma.jellyplay.core.data.repository.AppliedMutation.patch]).
      */
     private fun setPlayed(played: Boolean) {
         launch {
-            userDataMutationMutex.withLock {
-                val itemId = _uiState.value.detail?.item?.id ?: return@withLock
-                val result = if (played) mediaRepository.markPlayed(itemId)
-                else mediaRepository.markUnplayed(itemId)
-                result.onSuccess {
-                    updatePlayedStateInUi(itemId, played)
-                    applyOptimisticItemMutation(
-                        itemId = itemId,
-                        isPlayed = played,
-                    )
-                }.onFailure {
-                    _messages.emit(
-                        DetailMessage.Text(
-                            context.getString(
-                                if (played) R.string.detail_msg_couldnt_mark_played
-                                else R.string.detail_msg_couldnt_mark_unplayed
-                            )
+            val itemId = _uiState.value.detail?.item?.id ?: return@launch
+            userDataMutator.setPlayed(
+                itemId = itemId,
+                played = played,
+                mode = UserDataMutator.FlipMode.Optimistic,
+                containers = listOf(detailItemContainer),
+                seriesId = seriesIdForItem(itemId),
+            ).onFailure {
+                _messages.emit(
+                    DetailMessage.Text(
+                        context.getString(
+                            if (played) R.string.detail_msg_couldnt_mark_played
+                            else R.string.detail_msg_couldnt_mark_unplayed
                         )
                     )
-                }
+                )
             }
         }
     }
 
     /**
-     * Applies a played flip to every visible projection of an item. Detail
-     * actions can target the current item, a related/collection card, or an
-     * episode card; keeping these projections together prevents one card from
-     * replaying the old state until the next full detail load.
+     * Resolves the series an item belongs to from the screen's current
+     * projections, for the mutator's series-catalogue drop: an episode card's
+     * parent series, the current detail's series (a series resolves to
+     * itself), or null when the item is not series-scoped.
      */
-    private fun updatePlayedStateInUi(itemId: String, played: Boolean) {
-        var shouldRecomputeSmartPlay = false
-        _uiState.update { state ->
-            val currentDetail = state.detail
-            val isCurrentDetail = currentDetail?.item?.id == itemId
-            shouldRecomputeSmartPlay = isCurrentDetail || state.sortedEpisodes.any { it.id == itemId }
-            val updateItem: (MediaItem) -> MediaItem = { item ->
-                if (item.id == itemId) item.copy(isPlayed = played, playbackPositionTicks = 0L) else item
-            }
-            state.copy(
-                detail = currentDetail?.let { detail ->
-                    if (isCurrentDetail) detail.copy(item = updateItem(detail.item)) else detail
-                },
-                relatedItems = state.relatedItems.map(updateItem),
-                collectionItems = state.collectionItems.map(updateItem),
-                episodes = state.episodes.mapValues { (_, episodes) -> episodes.map(updateItem) },
-                sortedEpisodes = state.sortedEpisodes.map(updateItem),
-            )
-        }
-        if (shouldRecomputeSmartPlay) maybeComputeSmartPlayTarget()
-    }
-
-    /** Updates the active provider snapshot and invalidates any parent series cache. */
-    private suspend fun applyOptimisticItemMutation(
-        itemId: String,
-        isFavorite: Boolean? = null,
-        isPlayed: Boolean? = null,
-        seriesId: String? = null,
-    ) {
-        mediaDetailProvider.applyOptimisticItemState(
-            itemId = itemId,
-            isFavorite = isFavorite,
-            isPlayed = isPlayed,
-        )
-        (seriesId ?: seriesIdForItem(itemId))?.let(mediaDetailProvider::invalidate)
-        currentItemId?.takeIf { it != itemId }?.let { parentItemId ->
-            // Related/collection cards are loaded through parent-keyed caches,
-            // so invalidating only the mutated item's detail is insufficient.
-            mediaRepository.invalidateDetailCache(parentItemId)
-            mediaRepository.invalidateCollectionItemsCache(parentItemId)
-        }
-    }
-
     private fun seriesIdForItem(itemId: String): String? {
         val state = _uiState.value
         val episodeSeriesId = state.episodes.values
@@ -1115,51 +1106,22 @@ class DetailViewModel @Inject constructor(
             ?.seriesIdForDetail
     }
 
-    /** Keeps every visible projection of an item aligned after a favorite flip. */
-    private fun updateFavoriteStateInUi(itemId: String, favorite: Boolean) {
-        _uiState.update { state ->
-            val currentDetail = state.detail
-            val isCurrentDetail = currentDetail?.item?.id == itemId
-            val updateItem: (MediaItem) -> MediaItem = { item ->
-                if (item.id == itemId) item.copy(isFavorite = favorite) else item
-            }
-            state.copy(
-                detail = currentDetail?.let { detail ->
-                    if (isCurrentDetail) detail.copy(item = updateItem(detail.item)) else detail
-                },
-                relatedItems = state.relatedItems.map(updateItem),
-                collectionItems = state.collectionItems.map(updateItem),
-                episodes = state.episodes.mapValues { (_, episodes) -> episodes.map(updateItem) },
-                sortedEpisodes = state.sortedEpisodes.map(updateItem),
-            )
-        }
-    }
-
-    private suspend fun applyFavoriteMutation(itemId: String, favorite: Boolean) {
-        updateFavoriteStateInUi(itemId, favorite)
-        applyOptimisticItemMutation(itemId = itemId, isFavorite = favorite)
-    }
-
     /**
      * Marks a row item (related/collection/episode) played or
      * unplayed without switching the screen's current detail item. Flips the
-     * item in-place across all visible projections and invalidates the parent
-     * content/catalogue caches so re-entry cannot replay the old state.
+     * item in-place across all visible projections; the mutator rewrites the
+     * provider session and drops the parent catalogue so re-entry cannot
+     * replay the old state.
      */
     fun markRowItemPlayed(item: MediaItem, played: Boolean) {
         launch {
-            userDataMutationMutex.withLock {
-                val result = if (played) mediaRepository.markPlayed(item.id)
-                else mediaRepository.markUnplayed(item.id)
-                result.onSuccess {
-                    updatePlayedStateInUi(item.id, played)
-                    applyOptimisticItemMutation(
-                        itemId = item.id,
-                        isPlayed = played,
-                        seriesId = item.seriesId,
-                    )
-                }
-            }
+            userDataMutator.setPlayed(
+                itemId = item.id,
+                played = played,
+                mode = UserDataMutator.FlipMode.Optimistic,
+                containers = listOf(detailItemContainer),
+                seriesId = item.seriesId ?: seriesIdForItem(item.id),
+            )
         }
     }
 
@@ -1514,13 +1476,22 @@ class DetailViewModel @Inject constructor(
     fun redownloadMedia() = resyncActions.redownloadMedia()
 
     /**
-     * Marks a single episode played/unplayed (offline-aware + outboxed). Does NOT
-     * refetch the server — the provider snapshot is rewritten optimistically and
-     * the parent catalogue is invalidated for re-entry. Delegates to
-     * [MarkSeasonReactor.markEpisodePlayed].
+     * Marks a single episode played/unplayed (offline-aware + outboxed via the
+     * mutator). Does NOT refetch the server — the mutator rewrites the provider
+     * session optimistically and drops the parent catalogue for re-entry, and
+     * the container adapter flips every visible projection of the episode.
      */
-    fun markEpisodePlayed(episodeId: String, played: Boolean) =
-        markSeasonReactor.markEpisodePlayed(episodeId, played)
+    fun markEpisodePlayed(episodeId: String, played: Boolean) {
+        launch {
+            userDataMutator.setPlayed(
+                itemId = episodeId,
+                played = played,
+                mode = UserDataMutator.FlipMode.Optimistic,
+                containers = listOf(detailItemContainer),
+                seriesId = seriesIdForItem(episodeId),
+            )
+        }
+    }
 
     /**
      * Per-item favorite toggle (offline-aware + outboxed). Distinct from the
@@ -1528,11 +1499,12 @@ class DetailViewModel @Inject constructor(
      */
     fun toggleFavorite(itemId: String) {
         launch {
-            userDataMutationMutex.withLock {
-                mediaRepository.toggleFavorite(itemId).onSuccess { targetIsFavorite ->
-                    applyFavoriteMutation(itemId, targetIsFavorite)
-                }
-            }
+            userDataMutator.setFavorite(
+                itemId = itemId,
+                mode = UserDataMutator.FlipMode.Optimistic,
+                containers = listOf(detailItemContainer),
+                seriesId = seriesIdForItem(itemId),
+            )
         }
     }
 

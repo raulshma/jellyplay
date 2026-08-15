@@ -202,6 +202,9 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
+    // PlayerActivityArgs round-trip test exercises android.content.Intent
+    // extras on the JVM (same setup as the nine modules already using it).
+    testImplementation(libs.robolectric)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 

@@ -89,4 +89,16 @@ class RoutePredicatesTest {
     fun `count of fullscreen routes matches the documented set`() {
         assertEquals(6, fullScreenRoutes.size)
     }
+
+    @Test
+    fun `subtitle tester and top-level routes are not fullscreen`() {
+        // Pins the exclusion side of the membership. SubtitleTester
+        // intentionally overlays a fullscreen host (the player) instead of
+        // being one, and the MainNavDisplay padding decorator relies on
+        // isFullScreen to decide which hosts skip the mini-player bottom
+        // padding — SubtitleTester must keep that padding.
+        assertFalse(Route.SubtitleTester.isFullScreen)
+        assertFalse(Route.Home.isFullScreen)
+        assertFalse(Route.Settings.isFullScreen)
+    }
 }

@@ -18,7 +18,6 @@ import com.raulshma.jellyplay.feature.player.live.LivePlayerScreen
  */
 fun EntryProviderScope<NavKey>.livePlayerSection(
     navigator: Navigator,
-    onEnterPip: () -> Unit = {},
 ) {
     entry<Route.LiveTvChannelPlayer> { key ->
         LivePlayerScreen(
@@ -27,7 +26,6 @@ fun EntryProviderScope<NavKey>.livePlayerSection(
             audioStreamIndex = key.audioStreamIndex,
             subtitleStreamIndex = key.subtitleStreamIndex,
             onBack = { navigator.goBack() },
-            onEnterPip = onEnterPip,
         )
     }
 }

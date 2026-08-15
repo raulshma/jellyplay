@@ -3,6 +3,7 @@
 package com.raulshma.jellyplay.feature.library
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
@@ -12,6 +13,7 @@ import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LibrarySectionContext
 import com.raulshma.jellyplay.core.model.LibraryViewMode
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
@@ -35,6 +37,7 @@ class LibraryViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var userDataMutator: UserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var photoFolderPrefetcher: PhotoFolderPrefetcher
     private lateinit var libraryStore: LibraryStore
@@ -43,6 +46,7 @@ class LibraryViewModelTest {
     @Before
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
+        userDataMutator = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         photoFolderPrefetcher = mockk(relaxed = true)
         libraryStore = mockk(relaxed = true)
@@ -61,6 +65,7 @@ class LibraryViewModelTest {
 
     private fun createViewModel(): LibraryViewModel = LibraryViewModel(
         mediaRepository = mediaRepository,
+        userDataMutator = userDataMutator,
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
         libraryStore = libraryStore,
@@ -383,5 +388,19 @@ class LibraryViewModelTest {
         // Leaving the section restores the default browsing view.
         vm.clearSectionMode()
         assertNull(vm.state().sectionContext)
+    }
+
+    /** Delegation one-liner (plan 03): silent grid mutations route through the mutator. */
+    @Test
+    fun `markItemPlayed delegates to the mutator silently`() = runTest {
+        val vm = createViewModel()
+        val item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)
+
+        vm.markItemPlayed(item, played = true)
+        advanceUntilIdle()
+
+        coVerify {
+            userDataMutator.setPlayed("m1", true, UserDataMutator.FlipMode.Silent, emptyList(), null)
+        }
     }
 }

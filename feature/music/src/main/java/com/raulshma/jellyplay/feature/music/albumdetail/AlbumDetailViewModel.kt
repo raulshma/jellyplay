@@ -1,18 +1,20 @@
 package com.raulshma.jellyplay.feature.music.albumdetail
 
+import android.content.Context
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
+import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.music.R
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -21,10 +23,10 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AlbumDetailViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val audioPlaybackManager: AudioPlaybackManager,
+    private val audioQueueFacade: AudioQueueFacade,
     private val downloadRepository: DownloadRepository,
     private val downloadIntake: DownloadIntake,
 ) : JellyPlayViewModel() {
@@ -47,11 +49,11 @@ class AlbumDetailViewModel @Inject constructor(
     private val _mixFirstTrackId = composeState<String?>(null)
     val mixFirstTrackId: String? get() = _mixFirstTrackId.value
 
-    fun loadAlbum(albumId: String) {
+    fun loadAlbum(albumId: String, force: Boolean = false) {
         launch {
             _isLoading.value = true
             _error.value = null
-            mediaRepository.getMediaDetail(albumId)
+            mediaRepository.getMediaDetail(albumId, force = force)
                 .onSuccess { _detail.value = it }
                 .onFailure { _error.value = it.message ?: "Failed to load album" }
             mediaRepository.getAlbumTracks(albumId)
@@ -63,50 +65,32 @@ class AlbumDetailViewModel @Inject constructor(
 
     fun refreshAlbum(albumId: String) {
         launch {
-            mediaRepository.invalidateDetailCache(albumId)
-            loadAlbum(albumId)
+            loadAlbum(albumId, force = true)
         }
     }
 
     fun playAlbum(tracks: List<MediaItem>, startIndex: Int = 0) {
-        if (tracks.isEmpty()) return
-        val queueItems = tracks.map { track ->
-            track.toAudioQueueItem(
-                imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = ImageUrlProvider.DEFAULT_MAX_WIDTH),
-                albumFallback = detail?.item?.name,
-            )
+        launch {
+            audioQueueFacade.playTracks(tracks, startIndex = startIndex, albumFallback = detail?.item?.name)
         }
-        audioPlaybackManager.playQueue(queueItems, startIndex)
     }
 
     fun addToQueue(track: MediaItem) {
-        val queueItem = track.toAudioQueueItem(
-            imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = ImageUrlProvider.DEFAULT_MAX_WIDTH),
-            albumFallback = detail?.item?.name,
-        )
-        audioPlaybackManager.addToQueue(queueItem)
+        launch {
+            audioQueueFacade.enqueueTracks(listOf(track), albumFallback = detail?.item?.name)
+        }
     }
 
     fun startInstantMix(albumId: String) {
         launch {
             _isStartingMix.value = true
             _error.value = null
-            mediaRepository.getInstantMix(albumId)
-                .onSuccess { mix ->
-                    if (mix.isEmpty()) {
-                        _error.value = "No mix tracks available for this album"
-                    } else {
-                        val queueItems = mix.map { track ->
-                            track.toAudioQueueItem(
-                                imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = ImageUrlProvider.DEFAULT_MAX_WIDTH),
-                                albumFallback = detail?.item?.name,
-                            )
-                        }
-                        audioPlaybackManager.playQueue(queueItems, 0)
-                        _mixFirstTrackId.value = mix.first().id
-                    }
-                }
-                .onFailure { _error.value = it.message ?: "Failed to start Instant Mix" }
+            when (val outcome = audioQueueFacade.startInstantMix(albumId, albumFallback = detail?.item?.name)) {
+                is AudioQueueOutcome.Started -> _mixFirstTrackId.value = outcome.queue.first().id
+                AudioQueueOutcome.Empty -> _error.value = context.getString(R.string.music_mix_unavailable)
+                AudioQueueOutcome.Suppressed -> Unit
+                is AudioQueueOutcome.Failed -> _error.value = outcome.cause.message ?: "Failed to start Instant Mix"
+            }
             _isStartingMix.value = false
         }
     }

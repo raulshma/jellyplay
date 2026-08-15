@@ -137,7 +137,7 @@ class PlaybackSyncWorker @AssistedInject constructor(
         }
         // Only reconcile after the push so the server's view reflects the
         // locally-recorded progress for these items. The reconciliation does a
-        // network fetch per item (invalidateDetailCache + getMediaDetail), so a
+        // network fetch per item (a forced getMediaDetail read), so a
         // large outbox (e.g. a long offline music session with many distinct
         // item ids) would otherwise fire N serial detail fetches in this
         // foreground worker. Bound the batch size and run the fetches with

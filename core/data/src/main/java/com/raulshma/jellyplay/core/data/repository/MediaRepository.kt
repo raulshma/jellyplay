@@ -15,8 +15,14 @@ import kotlinx.coroutines.flow.Flow
 
 interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepository, PlaylistRepository, LyricsRepository {
 
+    /**
+     * The home screen's section payload. Pass [force] to bypass the in-memory
+     * home-sections cache for this read (manual refresh / pull-to-refresh —
+     * the sanctioned freshness lever; narrower than a global cache drop).
+     */
     suspend fun getHomeSections(
         query: HomeSectionQuery = HomeSectionQuery(),
+        force: Boolean = false,
     ): Result<HomeSectionsResult>
 
     /**
@@ -29,7 +35,8 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         query: HomeSectionQuery = HomeSectionQuery(),
     ): HomeSectionsResult?
 
-    suspend fun getLibraryFolders(): Result<List<LibraryFolder>>
+    /** Library folders. [force] bypasses the folders cache for this read. */
+    suspend fun getLibraryFolders(force: Boolean = false): Result<List<LibraryFolder>>
 
     suspend fun getLatestMedia(
         parentId: String,
@@ -52,7 +59,14 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
     ): Result<SearchResult>
 
-    suspend fun getMediaDetail(itemId: String): Result<MediaDetail>
+    /**
+     * Fetches the detail for [itemId]. Pass [force] to bypass the in-memory
+     * detail cache for this read (the sanctioned freshness lever for
+     * pull-to-refresh and re-fetch-after-write flows): the repository drops
+     * the cached entry for [itemId] first, then fetches — exactly the
+     * drop-then-read sequence callers used to run by hand.
+     */
+    suspend fun getMediaDetail(itemId: String, force: Boolean = false): Result<MediaDetail>
 
     /**
      * Cinema Mode intros. Returns the list of trailers/intros configured on the
@@ -102,7 +116,8 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         filters: LibraryFilters = LibraryFilters(),
     ): Flow<PagingData<MediaItem>>
 
-    suspend fun getGenres(parentId: String? = null): Result<List<Genre>>
+    /** Genres for a library ([parentId], or server-wide when null). [force] bypasses the genres cache for this read. */
+    suspend fun getGenres(parentId: String? = null, force: Boolean = false): Result<List<Genre>>
 
     suspend fun getStudios(parentId: String? = null): Result<List<Studio>>
 
@@ -189,43 +204,18 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
     suspend fun markUnplayed(itemId: String): Result<Unit>
 
     /**
-     * Drop in-memory caches so the next repository call fetches fresh user-data
-     * (favorites, played state, playback positions) from the server. Used by the
-     * background user-data sync worker to keep this device's view of the library
-     * in sync with changes made on other clients.
+     * Marks every episode in [seasonId] played (Jellyfin's mark-played endpoint
+     * recurses into a season's children). The repository cannot resolve a
+     * season's parent series on its own — seasons are never detail-cached — so
+     * the series screen, which knows both ids by construction, supplies
+     * [seriesId]; the mutation then owns dropping the series' detail +
+     * seasons/episodes caches itself (same double-evict contract as
+     * [markPlayed]).
      */
-    suspend fun invalidateCaches()
+    suspend fun markSeasonPlayed(seasonId: String, seriesId: String): Result<Unit>
 
-    fun invalidateDetailCache(itemId: String? = null)
-
-    /**
-     * Drops the TTL-cached seasons/episodes entries for the given series so the
-     * next call re-fetches fresh user-data (played state, playback positions)
-     * from the server. Used after user-data mutations on an episode or the
-     * series itself.
-     */
-    fun invalidateSeriesCache(seriesId: String)
-
-    /**
-     * Drops the TTL-cached collection-items entries for the given collection so
-     * the next call re-fetches fresh data from the server. Used by the detail
-     * screen's pull-to-refresh, which must bypass every in-memory cache.
-     */
-    fun invalidateCollectionItemsCache(collectionId: String)
-
-    /**
-     * Single operation for "user data for [itemId] changed" (favorite flip,
-     * played/unplayed, playback position). Owns the series-resolution rule:
-     * drops the item's detail cache, its album tracks, and — if the item
-     * belongs to a series — that series' seasons/episodes caches.
-     *
-     * Prefer this over calling [invalidateDetailCache] +
-     * [invalidateSeriesCache] separately at a call site, which re-derives the
-     * "is this item part of a series?" rule locally. Callers that only have a
-     * series id (no item detail cached) should still call
-     * [invalidateSeriesCache] directly.
-     */
-    fun invalidateUserDataCaches(itemId: String)
+    /** Unplayed mirror of [markSeasonPlayed]. */
+    suspend fun markSeasonUnplayed(seasonId: String, seriesId: String): Result<Unit>
 
     suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int = 4): List<String>
 }

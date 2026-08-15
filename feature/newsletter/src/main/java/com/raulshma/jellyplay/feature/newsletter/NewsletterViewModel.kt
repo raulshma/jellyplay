@@ -69,9 +69,9 @@ class NewsletterViewModel @Inject constructor(
                 )
             }
 
-            if (isPullToRefresh) {
-                mediaRepository.invalidateCaches()
-            }
+            // Pull-to-refresh needs no cache bypass (plan 08): newsletter data
+            // is not cached by this repository, so the old global
+            // invalidateCaches() call was a no-op for this screen.
 
             val sinceDate = LocalDate.now()
                 .minusDays(7)

@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -27,19 +28,53 @@ class PersonDetailViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var userDataMutator: FakeUserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var viewModel: PersonDetailViewModel
 
     @Before
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
+        userDataMutator = FakeUserDataMutator()
         imageUrlProvider = mockk(relaxed = true)
-        viewModel = PersonDetailViewModel(mediaRepository, imageUrlProvider)
+        viewModel = PersonDetailViewModel(mediaRepository, userDataMutator, imageUrlProvider)
     }
 
     @Test
     fun `initial state is Loading`() {
         assertEquals(PersonDetailUiState.Loading, viewModel.uiState.value)
+    }
+
+    /**
+     * The one container-adapter test (plan 03): a successful optimistic
+     * mutation flips ONLY the matching filmography item — resume zeroed by the
+     * resolved patch — and leaves non-matching items referentially equal.
+     */
+    @Test
+    fun `markItemPlayed flips only the matching item in the filmography`() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN, overview = "An actor.")
+        val withProgress = MediaItem(
+            id = "m1",
+            name = "Movie 1",
+            mediaType = MediaType.MOVIE,
+            playbackPositionTicks = 5_000_000_000L,
+        )
+        val untouched = MediaItem(id = "m2", name = "Movie 2", mediaType = MediaType.MOVIE)
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(MediaDetail(item = person))
+        coEvery { mediaRepository.getItemsByPerson("p1", any()) } returns Result.success(listOf(withProgress, untouched))
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+
+        viewModel.markItemPlayed(withProgress, played = true)
+        advanceUntilIdle()
+
+        assertEquals(listOf(Triple("m1", true, null)), userDataMutator.playedCalls)
+        val filmography = (viewModel.uiState.value as PersonDetailUiState.Success).filmography
+        assertTrue(filmography.first { it.id == "m1" }.isPlayed)
+        assertEquals(0L, filmography.first { it.id == "m1" }.playbackPositionTicks)
+        assertSame(untouched, filmography.last())
     }
 
     @Test

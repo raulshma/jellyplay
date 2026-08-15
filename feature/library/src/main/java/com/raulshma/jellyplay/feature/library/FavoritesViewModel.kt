@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.library
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -23,6 +24,7 @@ private const val PHOTO_FOLDER_PREFETCH_CONCURRENCY = 4
 @HiltViewModel
 class FavoritesViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
+    private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 
@@ -48,13 +50,13 @@ class FavoritesViewModel @Inject constructor(
         imageUrlProvider.getImageUrl(itemId)
 
     /**
-     * Marks the item played/unplayed on the server. Intentionally
-     * silent: the paged grid is left untouched so the user keeps their scroll
+     * Marks the item played/unplayed. Intentionally silent (the mutator's
+     * default): the paged grid is left untouched so the user keeps their scroll
      * position — the badge updates on the next natural data refresh.
      */
     fun markItemPlayed(item: MediaItem, played: Boolean) {
         launch {
-            if (played) mediaRepository.markPlayed(item.id) else mediaRepository.markUnplayed(item.id)
+            userDataMutator.setPlayed(item.id, played)
         }
     }
 

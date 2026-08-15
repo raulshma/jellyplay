@@ -99,7 +99,23 @@ class MediaRepositoryHomeSectionsCacheTest {
     }
 
     @Test
-    fun `getHomeSections re-fetches after invalidateCaches`() = runBlocking {
+    fun `getHomeSections re-fetches on a forced read`() = runBlocking {
+        // Plan 08: the pull-to-refresh freshness lever is the force parameter
+        // (the old global invalidateCaches knob is module-internal now; the
+        // internal variant's wholesale coverage is asserted in
+        // MediaRepositoryImplTest).
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("A")
+
+        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = true)
+
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `getHomeSections re-fetches after the internal wholesale invalidation`() = runBlocking {
         val repository = buildRepository()
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("A")

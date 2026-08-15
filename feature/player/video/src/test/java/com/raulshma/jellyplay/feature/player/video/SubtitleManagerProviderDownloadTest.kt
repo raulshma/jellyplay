@@ -41,8 +41,8 @@ import org.robolectric.RobolectricTestRunner
  *  1. the bytes are persisted durably to the on-device streaming-subtitle store;
  *  2. the bytes are side-loaded into the live engine (`addExternalSubtitle`);
  *  3. the bytes are uploaded to the Jellyfin server (`uploadSubtitle`);
- *  4. the media-detail cache is invalidated and re-fetched so the new stream
- *     surfaces (`invalidateDetailCache` + `onMediaDetailRefreshed`);
+ *  4. the media-detail is force-re-fetched so the new stream surfaces
+ *     (`getMediaDetail(force = true)` + `onMediaDetailRefreshed`);
  *  5. the per-id status lands on [SubtitleDownloadState.DOWNLOADED].
  *
  * And for the failure branches: an upload failure (e.g. server unreachable) is
@@ -130,7 +130,7 @@ class SubtitleManagerProviderDownloadTest {
             mediaSources = emptyList(),
             chapters = emptyList(),
         )
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(detail)
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(detail)
 
         manager().downloadProviderSubtitle(result)
         drain()
@@ -159,10 +159,9 @@ class SubtitleManagerProviderDownloadTest {
             )
         }
 
-        // 4. Cache invalidated then re-fetched so the stream surfaces; the
-        //    refreshed detail is handed back to the VM to rebuild mediaStreams.
-        io.mockk.verify(atLeast = 1) { mediaRepository.invalidateDetailCache("item-1") }
-        coVerify(atLeast = 1) { mediaRepository.getMediaDetail("item-1") }
+        // 4. Force-re-fetched so the stream surfaces; the refreshed detail is
+        //    handed back to the VM to rebuild mediaStreams.
+        io.mockk.coVerify(atLeast = 1) { mediaRepository.getMediaDetail("item-1", force = true) }
         assertEquals(listOf(detail), refreshedDetails)
 
         // 5. Per-id status reflects success. Status is keyed on the composite
@@ -188,9 +187,8 @@ class SubtitleManagerProviderDownloadTest {
         // server upload failed (the offline/offline-first contract).
         assertEquals(1, streamingSubtitleStore.loadAll("item-1").size)
         // No refresh should run: no server stream surfaced.
-        io.mockk.verify(exactly = 0) { mediaRepository.invalidateDetailCache(any()) }
         assertTrue(refreshedDetails.isEmpty())
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
         // Non-fatal: device-only status + info note (not a hard error).
         val status = state.value.downloadingSubtitles["OPENSUBTITLES:os-42"]
         assertEquals(SubtitleDownloadState.DOWNLOADED_DEVICE_ONLY, status?.state)
@@ -212,7 +210,6 @@ class SubtitleManagerProviderDownloadTest {
         coVerify(exactly = 0) {
             playbackRepository.uploadSubtitle(any(), any(), any(), any(), any(), any())
         }
-        io.mockk.verify(exactly = 0) { mediaRepository.invalidateDetailCache(any()) }
         assertTrue(refreshedDetails.isEmpty())
         coVerify { userMessageBus.error(any<String>()) }
         val status = state.value.downloadingSubtitles["OPENSUBTITLES:os-42"]

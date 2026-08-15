@@ -5,6 +5,8 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.raulshma.jellyplay.core.data.repository.HomeSectionQuery
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataContainer
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -96,6 +98,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 class HomeViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val mediaRepository: MediaRepository,
+    private val userDataMutator: UserDataMutator,
     private val orderHomeSections: OrderHomeSectionsUseCase,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
@@ -805,26 +808,32 @@ class HomeViewModel @Inject constructor(
     }
 
 
-    private fun setItemPlayed(item: MediaItem, played: Boolean) {
-        launch {
-            val result = if (played) mediaRepository.markPlayed(item.id)
-            else mediaRepository.markUnplayed(item.id)
-            if (result.isSuccess) {
-                _uiState.update { state ->
-                    state.copy(
-                        sections = state.sections.map { section ->
-                            section.copy(
-                                items = section.items.map {
-                                    if (it.id == item.id) it.copy(
-                                        isPlayed = played,
-                                        playbackPositionTicks = 0L,
-                                    ) else it
-                                }
-                            )
-                        }
+    /**
+     * The home screen's container adapter: maps the mutation over EVERY
+     * section, because the same item can appear in several (e.g. Continue
+     * Watching and Latest in X) and every visible card must flip together.
+     * Everything else about the mutation is owned by [UserDataMutator].
+     */
+    private val sectionItemContainer = UserDataContainer { itemId, patch ->
+        _uiState.update { state ->
+            state.copy(
+                sections = state.sections.map { section ->
+                    section.copy(
+                        items = section.items.map { if (it.id == itemId) patch(it) else it }
                     )
                 }
-            }
+            )
+        }
+    }
+
+    private fun setItemPlayed(item: MediaItem, played: Boolean) {
+        launch {
+            userDataMutator.setPlayed(
+                itemId = item.id,
+                played = played,
+                mode = UserDataMutator.FlipMode.Optimistic,
+                containers = listOf(sectionItemContainer),
+            )
         }
     }
 
@@ -837,9 +846,8 @@ class HomeViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             resetHomeScrollPosition()
             _uiState.update { it.copy(sections = emptyList(), favorites = emptyList(), discoverSections = emptyMap(), error = null) }
-            mediaRepository.invalidateCaches()
             invalidateDiscoverCache()
-            fetchAndUpdateSections()
+            fetchAndUpdateSections(force = true)
             startPeriodicRefresh()
         }
     }
@@ -847,9 +855,8 @@ class HomeViewModel @Inject constructor(
     private fun pullToRefresh() {
         launch {
             _uiState.update { it.copy(isRefreshing = true, error = null) }
-            mediaRepository.invalidateCaches()
             invalidateDiscoverCache()
-            fetchAndUpdateSections()
+            fetchAndUpdateSections(force = true)
             startPeriodicRefresh()
         }
     }
@@ -1085,7 +1092,7 @@ class HomeViewModel @Inject constructor(
                 )
             }
 
-    private suspend fun fetchAndUpdateSections() {
+    private suspend fun fetchAndUpdateSections(force: Boolean = false) {
         // Do not drop a refresh that arrives while another request is running.
         // In particular, a sign-in can complete while Home's earlier request is
         // still failing with the just-cleared session. Waiting for the lock
@@ -1131,7 +1138,10 @@ class HomeViewModel @Inject constructor(
             // main fetch via coroutineScope's structured concurrency.
             coroutineScope {
                 val mainDeferred = async {
-                    mediaRepository.getHomeSections(query)
+                    // force = the home screen's manual refresh / pull-to-refresh:
+                    // bypass this query's home-sections cache rather than
+                    // dropping every cache in the repository (plan 08).
+                    mediaRepository.getHomeSections(query, force = force)
                 }
                 val discoverDeferred = if (_uiState.value.discoverEnabled) {
                     async { runCatching { fetchDiscoverSections(seerrPreferences) } }

@@ -226,10 +226,8 @@ class PlayedStateSyncImpl @Inject constructor(
     override suspend fun reconcileOfflineRow(itemId: String): ComputeResult? {
         val offline = offlineRepository.getOfflineItem(itemId) ?: return null
         // Pull a fresh server view (bypass any cached detail so a stale cache
-        // cannot mask a newer played/position state). One operation also drops
-        // the series-scoped caches if this item belongs to one.
-        mediaRepository.get().invalidateUserDataCaches(itemId)
-        val serverItem = mediaRepository.get().getMediaDetail(itemId).getOrNull()?.item ?: return null
+        // cannot mask a newer played/position state).
+        val serverItem = mediaRepository.get().getMediaDetail(itemId, force = true).getOrNull()?.item ?: return null
 
         // Favorite is a user preference shared across devices, so the server is
         // authoritative: if it disagrees with the local row, adopt the server's

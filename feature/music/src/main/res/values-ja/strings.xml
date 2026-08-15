@@ -35,6 +35,7 @@
     <string name="music_move_down">下に移動</string>
     <string name="music_instant_mix">インスタントミックス</string>
     <string name="music_creating_mix">ミックスを作成中…</string>
+    <string name="music_mix_unavailable">ミックスのトラックがありません</string>
     <string name="music_now_playing">再生中</string>
     <string name="music_download_album">アルバムをダウンロード</string>
     <string name="music_download_track">トラックをダウンロード</string>

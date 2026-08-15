@@ -1,9 +1,7 @@
 package com.raulshma.jellyplay.feature.music.musichome
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
-import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -32,7 +30,7 @@ import javax.inject.Inject
 class MusicHomeViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val audioPlaybackManager: AudioPlaybackManager,
+    private val audioQueueFacade: AudioQueueFacade,
     private val downloadRepository: DownloadRepository,
     private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
     private val offlineRepository: OfflineRepository,
@@ -154,7 +152,10 @@ class MusicHomeViewModel @Inject constructor(
 
     fun refresh() {
         launch {
-            mediaRepository.invalidateCaches()
+            // No cache bypass needed (plan 08): every query this screen shows
+            // (favorites + filtered items) is an uncached passthrough in the
+            // repository, so the old global invalidateCaches() call was a
+            // no-op for this screen's data.
             loadSections()
         }
     }
@@ -181,28 +182,20 @@ class MusicHomeViewModel @Inject constructor(
 
     fun playAll(tracks: List<MediaItem>, startIndex: Int = 0) {
         launch {
-            val queueItems = tracks.map { track ->
-                track.toAudioQueueItem(imageUrl = getImageUrl(track.id))
-            }
-            audioPlaybackManager.playQueue(queueItems, startIndex)
+            audioQueueFacade.playTracks(tracks, startIndex = startIndex)
         }
     }
 
     fun shufflePlay(tracks: List<MediaItem>) {
-        val shuffled = tracks.shuffled()
-        playAll(shuffled, startIndex = 0)
+        launch {
+            audioQueueFacade.playTracks(tracks, shuffled = true)
+        }
     }
 
     fun playAlbum(albumId: String) {
         launch {
             mediaRepository.getAlbumTracks(albumId)
-                .onSuccess { tracks ->
-                    if (tracks.isEmpty()) return@launch
-                    val queueItems = tracks.map { track ->
-                        track.toAudioQueueItem(imageUrl = getImageUrl(track.id))
-                    }
-                    audioPlaybackManager.playQueue(queueItems, 0)
-                }
+                .onSuccess { tracks -> audioQueueFacade.playTracks(tracks) }
         }
     }
 
@@ -219,25 +212,26 @@ class MusicHomeViewModel @Inject constructor(
 
     fun playAlbums(albums: List<MediaItem>) {
         launch {
-            val allTracks = fetchAlbumTracksParallel(albums)
-            if (allTracks.isNotEmpty()) {
-                audioPlaybackManager.playQueue(allTracks, 0)
-            }
+            // One playTracks over the concatenated, per-album-mapped list —
+            // byte-for-byte the former single one-shot playQueue ordering.
+            audioQueueFacade.playTracks(fetchAlbumTracksParallel(albums))
         }
     }
 
     fun shuffleAlbums(albums: List<MediaItem>) {
         launch {
-            val allTracks = fetchAlbumTracksParallel(albums).shuffled()
-            if (allTracks.isNotEmpty()) {
-                audioPlaybackManager.playQueue(allTracks, 0)
-            }
+            audioQueueFacade.playTracks(fetchAlbumTracksParallel(albums), shuffled = true)
         }
     }
 
     private val fetchSemaphore = Semaphore(4)
 
-    private suspend fun fetchAlbumTracksParallel(albums: List<MediaItem>): List<AudioQueueItem> {
+    /**
+     * Parallel (Semaphore(4)) album-track fetch. Returns each track paired with
+     * its own album fallback (the source album's name) so the facade can map
+     * per-album naming before concatenation — plan 04 risk 2.
+     */
+    private suspend fun fetchAlbumTracksParallel(albums: List<MediaItem>): List<Pair<MediaItem, String?>> {
         return coroutineScope {
             albums.map { album ->
                 async {
@@ -245,12 +239,7 @@ class MusicHomeViewModel @Inject constructor(
                         mediaRepository.getAlbumTracks(album.id)
                         .getOrNull()
                         .orEmpty()
-                        .map { track ->
-                            track.toAudioQueueItem(
-                                imageUrl = getImageUrl(track.id),
-                                albumFallback = album.name,
-                            )
-                        }
+                        .map { track -> track to album.name }
                     }
                 }
             }.awaitAll().flatten()

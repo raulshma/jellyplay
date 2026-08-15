@@ -93,8 +93,8 @@ internal class ResyncActions(
         scope.launch {
             _state.value = ResyncUiState.Working
             val newState = try {
-                mediaRepository.invalidateDetailCache(id)
-                val detail = mediaRepository.getMediaDetail(id).getOrNull()
+                // Force read: fetch fresh detail, bypassing the TTL cache.
+                val detail = mediaRepository.getMediaDetail(id, force = true).getOrNull()
                 if (detail == null) {
                     ResyncUiState.Error("Couldn't load latest details")
                 } else {

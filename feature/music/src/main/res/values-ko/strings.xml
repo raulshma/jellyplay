@@ -35,6 +35,7 @@
     <string name="music_move_down">아래로 이동</string>
     <string name="music_instant_mix">인스턴트 믹스</string>
     <string name="music_creating_mix">믹스 만드는 중…</string>
+    <string name="music_mix_unavailable">믹스 트랙이 없습니다</string>
     <string name="music_now_playing">재생 중</string>
     <string name="music_download_album">앨범 다운로드</string>
     <string name="music_download_track">트랙 다운로드</string>

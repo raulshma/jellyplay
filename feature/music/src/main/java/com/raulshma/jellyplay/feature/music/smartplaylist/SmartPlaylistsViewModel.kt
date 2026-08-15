@@ -3,8 +3,7 @@ package com.raulshma.jellyplay.feature.music.smartplaylist
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -26,7 +25,7 @@ import javax.inject.Inject
 class SmartPlaylistsViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val audioPlaybackManager: AudioPlaybackManager,
+    private val audioQueueFacade: AudioQueueFacade,
     private val smartPlaylistRepository: SmartPlaylistRepository,
 ) : JellyPlayViewModel() {
 
@@ -152,10 +151,9 @@ class SmartPlaylistsViewModel @Inject constructor(
         imageUrlProvider.getImageUrl(itemId)
 
     fun playAll(startIndex: Int = 0) {
-        val queueItems = generatedItems.map { track ->
-            track.toAudioQueueItem(imageUrl = getImageUrl(track.id))
+        launch {
+            audioQueueFacade.playTracks(generatedItems, startIndex = startIndex)
         }
-        audioPlaybackManager.playQueue(queueItems, startIndex)
     }
 
     private fun applyCriteria(

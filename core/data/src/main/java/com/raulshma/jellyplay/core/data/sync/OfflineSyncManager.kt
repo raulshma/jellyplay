@@ -117,9 +117,9 @@ class OfflineSyncManager @Inject constructor(
 
         syncBaselineDao.setSyncChecking(itemId, 1)
         try {
-            // Bust the TTL detail cache so we get a fresh fetch, not a stale read.
-            mediaRepository.invalidateDetailCache(itemId)
-            val fresh = mediaRepository.getMediaDetail(itemId).getOrNull()
+            // Force read: bypass the TTL detail cache so we get a fresh fetch,
+            // not a stale read.
+            val fresh = mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
             if (fresh == null) {
                 recordError(itemId, baseline)
                 return ResyncCheckResult(itemId, baseline.toOfflineSyncState().copy(status = SyncStatus.ERROR))
@@ -189,8 +189,8 @@ class OfflineSyncManager @Inject constructor(
                 setProgress(itemId, ResyncPhase.ERROR, null)
                 return@withContext ResyncResult(itemId, steps, mediaFileChanged)
             }
-            mediaRepository.invalidateDetailCache(itemId)
-            val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
+            // Force read: fetch fresh detail, bypassing the TTL cache.
+            val detail = mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
             if (detail == null) {
                 steps += ResyncStepResult(itemId, ResyncStep.FETCH_DETAIL, success = false, message = "Fetch failed")
                 setProgress(itemId, ResyncPhase.ERROR, null)

@@ -82,7 +82,7 @@ class MediaRepositoryImpl @Inject constructor(
      * both live in `core:data` and Hilt resolves the direction.
      */
     private val episodeCatalogue: EpisodeCatalogue,
-) : MediaRepository {
+) : MediaRepository, MediaRepositoryCacheInvalidation {
 
     private val detailCache = TtlCache<MediaDetail>(
         maxSize = DETAIL_CACHE_MAX_ENTRIES,
@@ -103,7 +103,10 @@ class MediaRepositoryImpl @Inject constructor(
     private val albumTracksCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
     private val collectionItemsCache = TtlCache<SearchResult>(ttlMs = DETAIL_CACHE_TTL_MS)
 
-    override fun invalidateDetailCache(itemId: String?) {
+    // Plan 08: private — the detail cache is repo-internal machinery; reads
+    // that need freshness use getMediaDetail(force = true) and mutations/
+    // invalidations run through the composite + per-type dispatch below.
+    private fun invalidateDetailCache(itemId: String? = null) {
         detailCacheEpoch.incrementAndGet()
         if (itemId != null) {
             val identity = currentIdentity()
@@ -118,15 +121,39 @@ class MediaRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun invalidateSeriesCache(seriesId: String) {
-        // Seasons/episodes caches now live in [episodeCatalogue]; funnel the
-        // invalidation through it so the snapshot + epoch drop together.
+    // Plan 08: funnels to the catalogue so the composite user-data eviction
+    // (and the internal per-type dispatch) can drop a series' seasons/episodes
+    // snapshot + epoch together. Private — seasons/episodes caches now live in
+    // [episodeCatalogue] and no external caller needs this knob.
+    private fun invalidateSeriesCache(seriesId: String) {
         episodeCatalogue.invalidateSeries(seriesId)
     }
 
-    override fun invalidateCollectionItemsCache(collectionId: String) {
+    // Plan 08: private funnel — collection edits self-invalidate, so no
+    // external caller needs this knob anymore.
+    private fun invalidateCollectionItemsCache(collectionId: String) {
         // Keys are `collection_${id}_${startIndex}_${limit}`, so evict by prefix.
         collectionItemsCache.removeByKeyPrefix(currentIdentity(), "collection_$collectionId")
+    }
+
+    /**
+     * Single owner of the "what did this detail's type affect" mapping (plan
+     * 08). Absorbs the provider's old `invalidateByType` table and the
+     * series-resolution rule that used to live in the interface KDoc: one
+     * encoding, no caller-side re-derivation. Reached through the module-
+     * internal [MediaRepositoryCacheInvalidation] seam.
+     */
+    override fun invalidateFor(detail: MediaDetail) {
+        when (detail.item.mediaType) {
+            MediaType.SERIES -> {
+                episodeCatalogue.invalidateSeries(detail.item.id)
+                invalidateDetailCache(detail.item.id)
+            }
+            MediaType.EPISODE -> detail.item.seriesId?.let { invalidateSeriesCache(it) }
+            MediaType.ALBUM -> invalidateUserDataCaches(detail.item.id)
+            MediaType.COLLECTION -> invalidateCollectionItemsCache(detail.item.id)
+            else -> Unit // plain item: caller-scoped invalidation already ran
+        }
     }
 
     // In-memory home-sections cache. Previously a hand-rolled triple of
@@ -246,9 +273,14 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun getHomeSections(
         query: HomeSectionQuery,
+        force: Boolean,
     ): Result<HomeSectionsResult> {
         val identity = currentIdentity()
         val cacheKey = query.cacheKey()
+        // Freshness lever: drop this query's cached snapshot first — the
+        // invalidate-then-read sequence the home screen's manual refresh used
+        // to run as a global cache drop (plan 08).
+        if (force) homeSectionsCache.remove(identity, cacheKey)
         homeSectionsCache.get(identity, cacheKey)?.let { return Result.success(it) }
         return apiClient.getHomeSections(
             enabledSections = query.enabledSections,
@@ -306,8 +338,9 @@ class MediaRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> {
+    override suspend fun getLibraryFolders(force: Boolean): Result<List<LibraryFolder>> {
         val identity = currentIdentity()
+        if (force) libraryFoldersCache.remove(identity, "folders")
         libraryFoldersCache.get(identity, "folders")?.let { return Result.success(it) }
         return apiClient.getLibraryFolders().also { result ->
             result.getOrNull()?.let { libraryFoldersCache.put(identity, "folders", it) }
@@ -362,7 +395,12 @@ class MediaRepositoryImpl @Inject constructor(
     // lose an increment (a lost update would weaken the stale-snapshot guard).
     private val detailCacheEpoch = AtomicLong(0L)
 
-    override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> {
+    override suspend fun getMediaDetail(itemId: String, force: Boolean): Result<MediaDetail> {
+        // Freshness lever: drop the cached entry first — verbatim the
+        // invalidate-then-read sequence callers used to run by hand. The
+        // detailCacheEpoch bump below also guards a racing fetch from
+        // re-inserting the stale snapshot.
+        if (force) invalidateDetailCache(itemId)
         val identity = currentIdentity()
         // Fast path: serve from cache without entering coroutineScope, avoiding
         // the scope-creation overhead on the (common) cached read. The authoritative
@@ -514,9 +552,10 @@ class MediaRepositoryImpl @Inject constructor(
         },
     ).flow
 
-    override suspend fun getGenres(parentId: String?): Result<List<Genre>> {
+    override suspend fun getGenres(parentId: String?, force: Boolean): Result<List<Genre>> {
         val identity = currentIdentity()
         val cacheKey = "genres_${parentId ?: "root"}"
+        if (force) genresCache.remove(identity, cacheKey)
         genresCache.get(identity, cacheKey)?.let { return Result.success(it) }
         return apiClient.getGenres(parentId).also { result ->
             result.getOrNull()?.let { genresCache.put(identity, cacheKey, it) }
@@ -628,10 +667,14 @@ class MediaRepositoryImpl @Inject constructor(
         apiClient.getCollections(limit)
 
     override suspend fun createCollection(name: String, itemIds: List<String>): Result<String> =
+        // Plan 08: collection edits self-invalidate — the detail screen used to
+        // compensate with a manual invalidateCollectionItemsCache call.
         apiClient.createCollection(name, itemIds)
+            .onSuccess { invalidateCollectionItemsCache(it) }
 
     override suspend fun addItemsToCollection(collectionId: String, itemIds: List<String>): Result<Unit> =
         apiClient.addItemsToCollection(collectionId, itemIds)
+            .onSuccess { invalidateCollectionItemsCache(collectionId) }
 
     override suspend fun getTags(
         parentId: String?,
@@ -818,25 +861,38 @@ class MediaRepositoryImpl @Inject constructor(
         overview: String?,
         itemIds: List<String>,
         mediaType: MediaType,
-    ): Result<String> = apiClient.createPlaylist(name, overview, itemIds, mediaType)
+    ): Result<String> =
+        // Plan 08: playlist edits self-invalidate. getPlaylistItems is an
+        // uncached passthrough, so the one cached projection of a playlist is
+        // its detail entry — one invalidateDetailCache(playlistId) per edit
+        // (PlaylistDetailViewModel used to drop it by hand on refresh).
+        apiClient.createPlaylist(name, overview, itemIds, mediaType)
+            .onSuccess { invalidateDetailCache(it) }
 
     override suspend fun updatePlaylist(
         playlistId: String,
         name: String?,
         overview: String?,
         isPublic: Boolean?,
-    ): Result<Unit> = apiClient.updatePlaylist(playlistId, name, overview, isPublic)
+    ): Result<Unit> =
+        apiClient.updatePlaylist(playlistId, name, overview, isPublic)
+            .onSuccess { invalidateDetailCache(playlistId) }
 
-    override suspend fun deletePlaylist(playlistId: String): Result<Unit> = apiClient.deletePlaylist(playlistId)
+    override suspend fun deletePlaylist(playlistId: String): Result<Unit> =
+        apiClient.deletePlaylist(playlistId)
+            .onSuccess { invalidateDetailCache(playlistId) }
 
     override suspend fun addItemsToPlaylist(playlistId: String, itemIds: List<String>): Result<Unit> =
         apiClient.addItemsToPlaylist(playlistId, itemIds)
+            .onSuccess { invalidateDetailCache(playlistId) }
 
     override suspend fun removeItemsFromPlaylist(playlistId: String, entryIds: List<String>): Result<Unit> =
         apiClient.removeItemsFromPlaylist(playlistId, entryIds)
+            .onSuccess { invalidateDetailCache(playlistId) }
 
     override suspend fun movePlaylistItem(playlistId: String, entryId: String, newIndex: Int): Result<Unit> =
         apiClient.movePlaylistItem(playlistId, entryId, newIndex)
+            .onSuccess { invalidateDetailCache(playlistId) }
 
     override suspend fun getSyncPlayGroups(): Result<List<SyncPlayGroup>> =
         apiClient.getSyncPlayGroups()
@@ -927,16 +983,35 @@ class MediaRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun markSeasonPlayed(seasonId: String, seriesId: String): Result<Unit> {
+        // Season ids are never detail-cached, so the series-resolution inside
+        // withUserDataMutationCacheInvalidation cannot discover the parent —
+        // the caller-supplied seriesIdHint is load-bearing here.
+        return withUserDataMutationCacheInvalidation(seriesId, seriesIdHint = seriesId) {
+            playedStateSync.flip(seasonId, played = true)
+        }
+    }
+
+    override suspend fun markSeasonUnplayed(seasonId: String, seriesId: String): Result<Unit> {
+        return withUserDataMutationCacheInvalidation(seriesId, seriesIdHint = seriesId) {
+            playedStateSync.flip(seasonId, played = false)
+        }
+    }
+
     /**
      * Evicts before and after a user-data write. The parent series id is
      * captured before the first eviction because that eviction removes the
-     * cached detail needed to discover an episode's series.
+     * cached detail needed to discover an episode's series; [seriesIdHint]
+     * supplies it directly when the mutated id is not detail-cached at all
+     * (e.g. season marks — seasons are never cached, so the caller names the
+     * series).
      */
     private suspend fun <T> withUserDataMutationCacheInvalidation(
         itemId: String,
+        seriesIdHint: String? = null,
         mutation: suspend () -> Result<T>,
     ): Result<T> {
-        val seriesId = cachedSeriesId(itemId)
+        val seriesId = seriesIdHint ?: cachedSeriesId(itemId)
         invalidateHomeSectionsCache()
         invalidateUserDataCaches(itemId, seriesId)
         return try {
@@ -950,17 +1025,16 @@ class MediaRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Invalidates the detail + similar caches for [itemId] and, when [itemId]
-     * belongs to a series (either is the series or is an episode of one), the
-     * series-scoped seasons/episodes caches. This ensures user-data mutations
-     * (favorite, played, playback position) are reflected on re-entry instead
-     * of serving the cached pre-mutation snapshot.
+     * Composite "user data for [itemId] changed" (favorite flip, played/
+     * unplayed, playback position, season mark). Owns the series-resolution
+     * rule: drops the item's detail + similar caches and its album tracks,
+     * and — if the item belongs to a series (either is the series or is an
+     * episode of one, discovered from the cached detail or the caller-supplied
+     * [seriesIdHint] when the item itself is not detail-cached, e.g. seasons) —
+     * that series' seasons/episodes caches too. Single owner of the rule so a
+     * call site never re-derives "is this item part of a series?" locally.
      */
-    override fun invalidateUserDataCaches(itemId: String) {
-        invalidateUserDataCaches(itemId, seriesIdHint = null)
-    }
-
-    private fun invalidateUserDataCaches(itemId: String, seriesIdHint: String?) {
+    private fun invalidateUserDataCaches(itemId: String, seriesIdHint: String? = null) {
         val identity = currentIdentity()
         // Read the cached detail first to discover whether this item belongs
         // to a series (either is the series or is an episode of one) so we can
@@ -1083,7 +1157,14 @@ class MediaRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun invalidateCaches() {
+    /**
+     * Wholesale in-memory cache drop (plan 08: demoted off the public
+     * interface). Only two legitimate callers remain, both in this module:
+     * the `init {}` identity observer (logout / server / user switch) and the
+     * background user-data sync worker. Reads that need freshness use the
+     * per-query force parameters instead.
+     */
+    internal suspend fun invalidateCaches() {
         invalidateDetailCache()
         homeSectionsCache.clear()
         // Also clear the secondary caches — they hold user-scoped data (library folders,

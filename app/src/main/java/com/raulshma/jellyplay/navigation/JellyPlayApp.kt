@@ -109,6 +109,8 @@ import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.navigation.components.ExpressiveFloatingNavigationBar
 import com.raulshma.jellyplay.navigation.components.MoreToggleIcon
+import com.raulshma.jellyplay.navigation.playbackhost.HostDecision
+import com.raulshma.jellyplay.navigation.playbackhost.PlaybackHostRouter
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -176,7 +178,6 @@ import com.raulshma.jellyplay.feature.music.navigation.musicSection
 import com.raulshma.jellyplay.feature.music.musichome.MusicHomeScreen
 import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
 import com.raulshma.jellyplay.feature.player.live.navigation.livePlayerSection
-import com.raulshma.jellyplay.feature.player.video.navigation.videoPlayerSection
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
 import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
@@ -379,68 +380,43 @@ private fun MainContent(
         }
     }
     val navigator = Navigator(navigationState, navigateFilter = { route ->
-        // When the preferred player is EXTERNAL, intercept navigation to *any*
-        // video route and hand off to the app-level ActivityResultLauncher
-        // below. That launcher reads the external player's returned position
-        // and credits watched progress via reportExternalPlaybackStopped — so
-        // the Continue Watching row advances for both regular videos and Live
-        // TV channels. Returning false prevents the
-        // in-app VideoPlayerScreen from composing for the external case.
-        val isExternalPreferred = preferences.preferredPlayer ==
-            com.raulshma.jellyplay.core.model.PlayerType.EXTERNAL
-        val externalTarget = when {
-            isExternalPreferred && route is Route.VideoPlayer ->
-                ExternalLaunchTarget(route.itemId, route.mediaSourceId, route.startPositionTicks)
-            isExternalPreferred && route is Route.LiveTvChannelPlayer ->
-                ExternalLaunchTarget(route.channelId, null, 0L)
-            else -> null
-        }
-        if (externalTarget != null) {
-            scope.launch {
-                val launch = viewModel.buildExternalPlayerLaunch(
-                    itemId = externalTarget.itemId,
-                    mediaSourceId = externalTarget.mediaSourceId,
-                    startPositionTicks = externalTarget.startPositionTicks,
-                ) ?: return@launch
-                viewModel.reportExternalPlaybackStart(launch)
-                pendingExternalLaunch = launch
-                val chooser = Intent.createChooser(launch.intent, "Open with…")
-                runCatching { externalPlayerLauncher.launch(chooser) }
-                    .onFailure {
-                        pendingExternalLaunch = null
-                        viewModel.userMessageBus.error(
-                            com.raulshma.jellyplay.core.ui.feedback.uiTextOf(
-                                com.raulshma.jellyplay.core.ui.R.string.msg_no_video_player_found,
-                            ),
-                        )
-                    }
+        // Thin executing adapter for PlaybackHostRouter — the single owner of
+        // the "which host mounts playback" decision. ExternalPlayer → the
+        // app-level ActivityResultLauncher below (its returned position is
+        // credited via reportExternalPlaybackStopped, so Continue Watching
+        // advances for regular videos and Live TV channels); DedicatedActivity
+        // → PlayerActivity (system PiP floats over this browse UI; back-stack
+        // choreography: shared taskAffinity, singleTask). Both return false so
+        // the route never enters an in-nav back stack. InNav/NotPlayback →
+        // true, the Navigator pushes normally.
+        when (val decision = PlaybackHostRouter.decide(route, preferences.preferredPlayer)) {
+            is HostDecision.ExternalPlayer -> {
+                scope.launch {
+                    val launch = viewModel.buildExternalPlayerLaunch(
+                        itemId = decision.itemId,
+                        mediaSourceId = decision.mediaSourceId,
+                        startPositionTicks = decision.startPositionTicks,
+                    ) ?: return@launch
+                    viewModel.reportExternalPlaybackStart(launch)
+                    pendingExternalLaunch = launch
+                    val chooser = Intent.createChooser(launch.intent, "Open with…")
+                    runCatching { externalPlayerLauncher.launch(chooser) }
+                        .onFailure {
+                            pendingExternalLaunch = null
+                            viewModel.userMessageBus.error(
+                                com.raulshma.jellyplay.core.ui.feedback.uiTextOf(
+                                    com.raulshma.jellyplay.core.ui.R.string.msg_no_video_player_found,
+                                ),
+                            )
+                        }
+                }
+                false
             }
-            false
-        } else if (route is Route.VideoPlayer) {
-            // Route fullscreen video to the dedicated PlayerActivity so system
-            // Picture-in-Picture floats over this browse UI (back-stack
-            // choreography: shared taskAffinity, singleTask). Returning false
-            // prevents the in-nav VideoPlayerScreen from composing.
-            val intent = Intent(context, com.raulshma.jellyplay.PlayerActivity::class.java).apply {
-                putExtra(com.raulshma.jellyplay.PlayerActivity.EXTRA_ITEM_ID, route.itemId)
-                route.mediaSourceId?.let {
-                    putExtra(com.raulshma.jellyplay.PlayerActivity.EXTRA_MEDIA_SOURCE_ID, it)
-                }
-                putExtra(
-                    com.raulshma.jellyplay.PlayerActivity.EXTRA_START_POSITION_TICKS,
-                    route.startPositionTicks,
-                )
-                route.subtitleStreamIndex?.let {
-                    putExtra(com.raulshma.jellyplay.PlayerActivity.EXTRA_SUBTITLE_STREAM_INDEX, it)
-                }
-                route.audioStreamIndex?.let {
-                    putExtra(com.raulshma.jellyplay.PlayerActivity.EXTRA_AUDIO_STREAM_INDEX, it)
-                }
+            is HostDecision.DedicatedActivity -> {
+                context.startActivity(decision.args.buildIntent(context))
+                false
             }
-            context.startActivity(intent)
-            false
-        } else {
-            true
+            HostDecision.InNav, HostDecision.NotPlayback -> true
         }
     })
     val currentTopLevel by navigationState.topLevelRoute
@@ -605,17 +581,6 @@ private fun MainContent(
                 message = nowPlayingTemplate.format(title),
                 withDismissAction = true,
             )
-        }
-    }
-
-    val enterPip: () -> Unit = remember(navigator) {
-        {
-            // TODO(pip): in-nav player PiP (e.g. LiveTV) is broken since the
-            //  PlayerActivity migration (55cd569f8) removed
-            //  MainActivity:supportsPictureInPicture. The former enterPipMode()
-            //  call now always fails; this collapses to the goBack fallback.
-            //  Restore by routing live playback through PlayerActivity.
-            navigator.goBack()
         }
     }
 
@@ -794,7 +759,7 @@ private fun MainContent(
                     onLogout = onLogout,
                     homeMode = homeMode,
                     onModeChange = onModeChange,
-                    enterPip = enterPip,                    saveableStateHolder = saveableStateHolder,
+                    saveableStateHolder = saveableStateHolder,
                     entryDecorator = entryDecorator,
                     onNowPlayingClick = onNowPlayingClick,
                     onAmbientClick = onAmbientClick,
@@ -845,7 +810,7 @@ private fun MainContent(
                         onLogout = onLogout,
                         homeMode = homeMode,
                         onModeChange = onModeChange,
-                        enterPip = enterPip,                        saveableStateHolder = saveableStateHolder,
+                        saveableStateHolder = saveableStateHolder,
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
@@ -883,7 +848,7 @@ private fun MainContent(
                         onLogout = onLogout,
                         homeMode = homeMode,
                         onModeChange = onModeChange,
-                        enterPip = enterPip,                        saveableStateHolder = saveableStateHolder,
+                        saveableStateHolder = saveableStateHolder,
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,                    )
@@ -924,7 +889,7 @@ private fun TvContent(
     onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
-    enterPip: () -> Unit,    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
@@ -1007,7 +972,7 @@ private fun TvContent(
                         onLogout = onLogout,
                         homeMode = homeMode,
                         onModeChange = onModeChange,
-                        enterPip = enterPip,                        saveableStateHolder = saveableStateHolder,
+                        saveableStateHolder = saveableStateHolder,
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
@@ -1062,7 +1027,7 @@ private fun PhoneContent(
     onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
-    enterPip: () -> Unit,    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
@@ -1206,7 +1171,7 @@ private fun PhoneContent(
                         onLogout = onLogout,
                         homeMode = homeMode,
                         onModeChange = onModeChange,
-                        enterPip = enterPip,                        saveableStateHolder = saveableStateHolder,
+                        saveableStateHolder = saveableStateHolder,
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
@@ -1402,7 +1367,7 @@ private fun FullScreenContent(
     onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
-    enterPip: () -> Unit,    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,) {
@@ -1417,24 +1382,12 @@ private fun FullScreenContent(
             onLogout = onLogout,
             homeMode = homeMode,
             onModeChange = onModeChange,
-            enterPip = enterPip,            saveableStateHolder = saveableStateHolder,
+            saveableStateHolder = saveableStateHolder,
             entryDecorator = entryDecorator,
             onNowPlayingClick = onNowPlayingClick,
             onAmbientClick = onAmbientClick,
         )    }
 }
-
-/**
- * Resolved fields needed to build an [com.raulshma.jellyplay.ExternalPlayerLaunch]
- * from a navigable video route (regular video or Live TV channel). Used by the
- * `navigateFilter` to uniformly hand off to the app-level external-player
-     * ActivityResultLauncher.
- */
-private data class ExternalLaunchTarget(
-    val itemId: String,
-    val mediaSourceId: String?,
-    val startPositionTicks: Long,
-)
 
 private fun routeToIcon(route: Route): ImageVector = when (route) {
     Route.Home -> Tabler.Outline.Home
@@ -1476,7 +1429,7 @@ private fun MainNavDisplay(
     onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
-    enterPip: () -> Unit,    innerPadding: PaddingValues = PaddingValues(0.dp),
+    innerPadding: PaddingValues = PaddingValues(0.dp),
     saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     entryDecorator: NavEntryDecorator<NavKey>,
     modifier: Modifier = Modifier,
@@ -1491,13 +1444,17 @@ private fun MainNavDisplay(
     val paddingDecorator = remember(innerPadding) {
         NavEntryDecorator<NavKey>(
             decorate = { entry ->
-                val contentKey = entry.contentKey.toString()
-                val isPlayer = contentKey.contains("AudioPlayer") ||
-                        contentKey.contains("VideoPlayer") ||
-                        contentKey.contains("LiveTvChannelPlayer") ||
-                        contentKey.contains("Ambient")
+                // Full-screen hosts (players / ambient / onboarding / photo
+                // viewer) bypass the mini-player bottom padding — typed
+                // membership instead of the former contentKey.toString()
+                // string matching. Known delta vs the string checks: Onboarding
+                // and PhotoViewer also skip the padding now, which is correct
+                // (no mini player is shown under either). SubtitleTester
+                // intentionally keeps the padding (it overlays a fullscreen
+                // host, and isFullScreen deliberately excludes it).
+                val isFullScreenHost = (entry.contentKey as? Route)?.isFullScreen == true
 
-                if (isPlayer) {
+                if (isFullScreenHost) {
                     entry.Content()
                 } else {
                     Box(
@@ -1559,7 +1516,7 @@ private fun MainNavDisplay(
         onModeChange,
         onNowPlayingClick,
         onAmbientClick,
-        enterPip,        onLogout,
+        onLogout,
         onPlayOnClick,
         playOnStrategy,
     ) {
@@ -1590,8 +1547,7 @@ private fun MainNavDisplay(
             liveTvSection(navigator)
             detailsSection(navigator)
             editorSection(navigator)
-            videoPlayerSection(navigator, onEnterPip = enterPip)
-            livePlayerSection(navigator, onEnterPip = enterPip)
+            livePlayerSection(navigator)
             audioPlayerSection(navigator)
             downloadsSection(navigator)
             authSection(navigator) { navigator.goBack() }

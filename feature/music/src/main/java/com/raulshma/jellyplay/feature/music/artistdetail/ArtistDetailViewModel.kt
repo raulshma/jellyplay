@@ -1,23 +1,25 @@
 package com.raulshma.jellyplay.feature.music.artistdetail
 
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
+import android.content.Context
+import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
+import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.music.R
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import javax.inject.Inject
 
 @HiltViewModel
 class ArtistDetailViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val audioPlaybackManager: AudioPlaybackManager,
+    private val audioQueueFacade: AudioQueueFacade,
 ) : JellyPlayViewModel() {
 
     private val _artistName = composeState("")
@@ -41,12 +43,12 @@ class ArtistDetailViewModel @Inject constructor(
     private val _mixFirstTrackId = composeState<String?>(null)
     val mixFirstTrackId: String? get() = _mixFirstTrackId.value
 
-    fun loadArtist(artistId: String) {
+    fun loadArtist(artistId: String, force: Boolean = false) {
         launch {
             _isLoading.value = true
             _error.value = null
             coroutineScope {
-                val detailDeferred = async { mediaRepository.getMediaDetail(artistId) }
+                val detailDeferred = async { mediaRepository.getMediaDetail(artistId, force = force) }
                 val albumsDeferred = async { mediaRepository.getArtistAlbums(artistId) }
                 detailDeferred.await()
                     .onSuccess { detail -> _artistName.value = detail.item.name }
@@ -62,8 +64,7 @@ class ArtistDetailViewModel @Inject constructor(
 
     fun refreshArtist(artistId: String) {
         launch {
-            mediaRepository.invalidateDetailCache(artistId)
-            loadArtist(artistId)
+            loadArtist(artistId, force = true)
         }
     }
 
@@ -77,22 +78,14 @@ class ArtistDetailViewModel @Inject constructor(
         launch {
             _isStartingMix.value = true
             _error.value = null
-            mediaRepository.getInstantMix(artistId)
-                .onSuccess { mix ->
-                    if (mix.isEmpty()) {
-                        _error.value = "No mix tracks available for this artist"
-                    } else {
-                        val queueItems = mix.map { track ->
-                            track.toAudioQueueItem(
-                                imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
-                                albumFallback = track.album,
-                            )
-                        }
-                        audioPlaybackManager.playQueue(queueItems, 0)
-                        _mixFirstTrackId.value = mix.first().id
-                    }
-                }
-                .onFailure { _error.value = it.message ?: "Failed to start Instant Mix" }
+            // No album fallback: the former `track.album` fallback was a no-op
+            // (the mapper keeps the track's own album whenever it is set).
+            when (val outcome = audioQueueFacade.startInstantMix(artistId)) {
+                is AudioQueueOutcome.Started -> _mixFirstTrackId.value = outcome.queue.first().id
+                AudioQueueOutcome.Empty -> _error.value = context.getString(R.string.music_mix_unavailable)
+                AudioQueueOutcome.Suppressed -> Unit
+                is AudioQueueOutcome.Failed -> _error.value = outcome.cause.message ?: "Failed to start Instant Mix"
+            }
             _isStartingMix.value = false
         }
     }

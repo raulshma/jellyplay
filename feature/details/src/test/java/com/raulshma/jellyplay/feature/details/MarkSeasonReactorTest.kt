@@ -1,14 +1,10 @@
 package com.raulshma.jellyplay.feature.details
 
 import android.content.Context
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -17,21 +13,21 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * Tests [MarkSeasonReactor] against [FakeUserDataMutator]. The mutation
+ * protocol (write, serialization, provider season rewrite, series-catalogue
+ * drop) moved into [com.raulshma.jellyplay.core.data.repository.UserDataMutator]
+ * and is pinned by its own suite; what stays pinned here is the reactor's
+ * screen-stateful part — the idempotence guard (in-flight + last successful
+ * target), the episodes-on-screen early-exit, and the failure message.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MarkSeasonReactorTest {
 
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val context: Context = mockk(relaxed = true)
+    private val mutator = FakeUserDataMutator()
 
     private val messages = mutableListOf<DetailMessage>()
-    private val rewriteCalls = mutableListOf<RewriteCall>()
-
-    /** Captured (itemId, seasonId, transform) triple for applyRewrite invocations. */
-    private class RewriteCall(
-        val itemId: String,
-        val seasonId: String,
-        val transform: (List<MediaItem>) -> List<MediaItem>,
-    )
 
     private fun reactor(
         scope: TestScope,
@@ -40,16 +36,13 @@ class MarkSeasonReactorTest {
         seriesId: String? = null,
     ): MarkSeasonReactor {
         messages.clear()
-        rewriteCalls.clear()
+        mutator.seasonCalls.clear()
         return MarkSeasonReactor(
             scope = scope,
-            mediaRepository = mediaRepository,
+            userDataMutator = mutator,
             context = context,
             itemIdProvider = { itemId },
             episodesProvider = { episodes },
-            applyRewrite = { iid, sid, transform ->
-                rewriteCalls += RewriteCall(iid, sid, transform)
-            },
             messageSink = { message -> messages += message },
             seriesIdProvider = { seriesId },
         )
@@ -69,42 +62,27 @@ class MarkSeasonReactorTest {
 
     // region markSeasonPlayed
     @Test
-    fun `markSeasonPlayed marks season then applies watched rewrite to every episode`() = runTest {
+    fun `markSeasonPlayed delegates to setSeasonPlayed with the screen's series scope`() = runTest {
         val episodes = listOf(episode("e1", played = false), episode("e2", played = false))
-        val reactor = reactor(this, episodes = mapOf("season1" to episodes))
-        coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
+        val reactor = reactor(this, episodes = mapOf("season1" to episodes), seriesId = "s1")
 
         reactor.markSeasonPlayed("season1")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.markPlayed("season1") }
-        assertEquals(1, rewriteCalls.size)
-
-        val call = rewriteCalls.single()
-        assertEquals("s1", call.itemId)
-        assertEquals("season1", call.seasonId)
-
-        val rewritten = call.transform(episodes)
-        assertTrue(rewritten.all { it.isPlayed })
-        // The mark-played endpoint clears the resume position; transform mirrors it.
-        assertEquals(0L, rewritten.first().playbackPositionTicks)
-        assertEquals(0L, rewritten.last().playbackPositionTicks)
+        assertEquals(listOf(Triple("s1", "season1", true)), mutator.seasonCalls)
     }
 
     @Test
-    fun `markSeasonPlayed invalidates the parent series detail cache after success`() = runTest {
-        // The repository's markPlayed(seasonId) invalidation cannot derive the
-        // parent series (seasons are never cached), so the reactor must drop
-        // detailCache[seriesId] explicitly — otherwise re-entry serves the stale
-        // series header until a forced re-resolve.
-        val episodes = listOf(episode("e1", played = false), episode("e2", played = false))
-        val reactor = reactor(this, episodes = mapOf("season1" to episodes), seriesId = "s1")
-        coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
+    fun `markSeasonPlayed with null seriesId falls back to the screen item id`() = runTest {
+        // Seasons only render on a series screen, where itemId IS the series id;
+        // the fallback is the defensive mid-navigation path.
+        val episodes = listOf(episode("e1", played = false))
+        val reactor = reactor(this, episodes = mapOf("season1" to episodes), seriesId = null)
 
         reactor.markSeasonPlayed("season1")
         advanceUntilIdle()
 
-        verify(exactly = 1) { mediaRepository.invalidateUserDataCaches("s1") }
+        assertEquals(listOf(Triple("s1", "season1", true)), mutator.seasonCalls)
     }
 
     @Test
@@ -115,28 +93,31 @@ class MarkSeasonReactorTest {
         reactor.markSeasonPlayed("season1")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
-        assertTrue(rewriteCalls.isEmpty())
+        assertTrue(mutator.seasonCalls.isEmpty())
         assertTrue(messages.isEmpty())
     }
 
     @Test
-    fun `markSeasonPlayed repository failure emits message and skips rewrite`() = runTest {
+    fun `markSeasonPlayed failure emits message and does not skip a retry`() = runTest {
         val episodes = listOf(episode("e1", played = false))
         val reactor = reactor(this, episodes = mapOf("season1" to episodes))
-        coEvery { mediaRepository.markPlayed("season1") } returns Result.failure(RuntimeException("boom"))
+        mutator.seasonResult = { _, _, _ -> Result.failure(RuntimeException("boom")) }
         every { context.getString(R.string.detail_msg_couldnt_mark_played) } returns "couldn't mark"
 
         reactor.markSeasonPlayed("season1")
         advanceUntilIdle()
 
-        coVerify { mediaRepository.markPlayed("season1") }
-        assertTrue(rewriteCalls.isEmpty())
-
+        assertEquals(1, mutator.seasonCalls.size)
         assertEquals(1, messages.size)
         val message = messages.single()
         assertTrue(message is DetailMessage.Text)
         assertEquals("couldn't mark", (message as DetailMessage.Text).text)
+
+        // The guard entry was rolled back: a retry of the same direction must
+        // not be swallowed as "already in target state".
+        reactor.markSeasonPlayed("season1")
+        advanceUntilIdle()
+        assertEquals(2, mutator.seasonCalls.size)
     }
 
     @Test
@@ -146,8 +127,8 @@ class MarkSeasonReactorTest {
         reactor.markSeasonPlayed("season1")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
-        assertTrue(rewriteCalls.isEmpty())
+        assertTrue(mutator.seasonCalls.isEmpty())
+        assertTrue(messages.isEmpty())
     }
 
     @Test
@@ -157,79 +138,69 @@ class MarkSeasonReactorTest {
         reactor.markSeasonPlayed("nope")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
-        assertTrue(rewriteCalls.isEmpty())
+        assertTrue(mutator.seasonCalls.isEmpty())
+        assertTrue(messages.isEmpty())
     }
     // endregion
 
     // region markSeasonUnplayed mirror
     @Test
-    fun `markSeasonUnplayed marks season then applies unwatched rewrite`() = runTest {
+    fun `markSeasonUnplayed delegates with played false`() = runTest {
         val episodes = listOf(
             episode("e1", played = true, positionTicks = 5_000_000_000L),
-            episode("e2", played = true, positionTicks = 5_000_000_000L),
+            episode("e2", played = true),
         )
-        val reactor = reactor(this, episodes = mapOf("season1" to episodes))
-        coEvery { mediaRepository.markUnplayed("season1") } returns Result.success(Unit)
+        val reactor = reactor(this, episodes = mapOf("season1" to episodes), seriesId = "s1")
 
         reactor.markSeasonUnplayed("season1")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.markUnplayed("season1") }
-        val rewritten = rewriteCalls.single().transform(episodes)
-        assertTrue(rewritten.none { it.isPlayed })
-        // Resume position cleared on unplayed (mirrors mark-played).
-        assertEquals(0L, rewritten.first().playbackPositionTicks)
+        assertEquals(listOf(Triple("s1", "season1", false)), mutator.seasonCalls)
     }
 
     @Test
-    fun `rapid season toggles are applied in order`() = runTest {
-        var currentEpisodes = listOf(episode("e1", played = false))
+    fun `rapid inverse season toggles both apply in order`() = runTest {
+        val currentEpisodes = listOf(episode("e1", played = false))
         val reactor = MarkSeasonReactor(
             scope = this,
-            mediaRepository = mediaRepository,
+            userDataMutator = mutator,
             context = context,
             itemIdProvider = { "s1" },
             episodesProvider = { mapOf("season1" to currentEpisodes) },
-            applyRewrite = { _, _, transform -> currentEpisodes = transform(currentEpisodes) },
             messageSink = { message -> messages += message },
         )
-        coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
-        coEvery { mediaRepository.markUnplayed("season1") } returns Result.success(Unit)
 
         reactor.markSeasonPlayed("season1")
         reactor.markSeasonUnplayed("season1")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.markPlayed("season1") }
-        coVerify(exactly = 1) { mediaRepository.markUnplayed("season1") }
-        assertTrue(currentEpisodes.none { it.isPlayed })
-    }
-    // endregion
-
-    // region fire-and-forget single-item toggles
-    @Test
-    fun `markEpisodePlayed played delegates markPlayed`() = runTest {
-        val reactor = reactor(this)
-        coEvery { mediaRepository.markPlayed("ep1") } returns Result.success(Unit)
-
-        reactor.markEpisodePlayed("ep1", played = true)
-        advanceUntilIdle()
-
-        coVerify { mediaRepository.markPlayed("ep1") }
-        assertTrue(rewriteCalls.isEmpty())
-        assertTrue(messages.isEmpty())
+        // The in-flight guard must not swallow the inverse toggle (the UI
+        // snapshot is still pre-mutation) — both mutations land, in order.
+        assertEquals(
+            listOf(Triple("s1", "season1", true), Triple("s1", "season1", false)),
+            mutator.seasonCalls,
+        )
     }
 
     @Test
-    fun `markEpisodePlayed unplayed delegates markUnplayed`() = runTest {
-        val reactor = reactor(this)
-        coEvery { mediaRepository.markUnplayed("ep1") } returns Result.success(Unit)
+    fun `rapid same-direction taps are deduped by the in-flight guard`() = runTest {
+        val currentEpisodes = listOf(episode("e1", played = false))
+        val reactor = MarkSeasonReactor(
+            scope = this,
+            userDataMutator = mutator,
+            context = context,
+            itemIdProvider = { "s1" },
+            episodesProvider = { mapOf("season1" to currentEpisodes) },
+            messageSink = { message -> messages += message },
+        )
 
-        reactor.markEpisodePlayed("ep1", played = false)
+        reactor.markSeasonPlayed("season1")
+        reactor.markSeasonPlayed("season1")
         advanceUntilIdle()
 
-        coVerify { mediaRepository.markUnplayed("ep1") }
+        // The second tap dedups against the recorded (in-flight) target while
+        // the UI emission has not caught up — one mutation, not two.
+        assertEquals(listOf(Triple("s1", "season1", true)), mutator.seasonCalls)
     }
     // endregion
 }

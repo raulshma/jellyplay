@@ -74,8 +74,12 @@ import javax.inject.Singleton
  * `OfflineModeManager` keeps [OfflineMode.ONLINE] on a LAN.
  */
 @Singleton
-class UnifiedMediaDetailProviderImpl @Inject constructor(
+internal class UnifiedMediaDetailProviderImpl @Inject constructor(
     private val mediaRepository: MediaRepository,
+    // Plan 08: the per-type "which caches does this detail affect" dispatch is
+    // owned by the repository; this internal seam (same module) is how the
+    // force-refresh path reaches it without the repo exporting cache knobs.
+    private val cacheInvalidation: MediaRepositoryCacheInvalidation,
     private val offlineRepository: OfflineRepository,
     private val downloadRepository: DownloadRepository,
     private val episodeCatalogue: EpisodeCatalogue,
@@ -521,13 +525,14 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
     // ------------------------------------------------------------------
 
     private suspend fun Session.resolveRemote(targetGen: Long, force: Boolean) {
-        if (force) {
-            mediaRepository.invalidateDetailCache(itemId)
-        }
-        val result = mediaRepository.getMediaDetail(itemId)
+        // Force read: the repository drops the item's cached detail before the
+        // fetch (plan 08's freshness lever), then the per-type dispatch below
+        // drops the type-scoped caches (series catalogue, album tracks,
+        // collection items) the snapshot derivation reads right after.
+        val result = mediaRepository.getMediaDetail(itemId, force = force)
         result
             .onSuccess { detail ->
-                if (force) invalidateByType(detail)
+                if (force) cacheInvalidation.invalidateFor(detail)
                 val usable = playbackSourceResolver.resolveUsableDownload(itemId) != null
                 val seriesData = loadSeriesData(detail, offline = false)
                 val album = loadAlbumTracks(detail, offline = false)
@@ -722,21 +727,6 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
         offlineRepository.getSeasonsForSeries(seriesId).first().flatMap { season ->
             offlineRepository.getEpisodesForSeason(season.id).first()
         }
-
-    private fun invalidateByType(detail: MediaDetail) {
-        when (detail.item.mediaType) {
-            MediaType.SERIES -> {
-                episodeCatalogue.invalidateSeries(detail.item.id)
-                mediaRepository.invalidateDetailCache(detail.item.id)
-            }
-            MediaType.EPISODE -> detail.item.seriesId?.let { seriesId ->
-                episodeCatalogue.invalidateSeries(seriesId)
-            }
-            MediaType.ALBUM -> mediaRepository.invalidateUserDataCaches(detail.item.id)
-            MediaType.COLLECTION -> mediaRepository.invalidateCollectionItemsCache(detail.item.id)
-            else -> Unit // detail cache already invalidated by the caller
-        }
-    }
 
     // ------------------------------------------------------------------
     // Snapshot construction

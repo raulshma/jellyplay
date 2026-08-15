@@ -40,6 +40,7 @@ class AudioPlayerViewModel @Inject constructor(
     private val audioStore: AudioStore,
     private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
     private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
+    private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
     private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
     private val downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake,
     private val sleepTimerManager: SleepTimerManager,
@@ -696,8 +697,12 @@ class AudioPlayerViewModel @Inject constructor(
     fun toggleFavorite() {
         val itemId = audioPlaybackManager.currentPlayingItemId.value ?: return
         launch {
-            mediaRepository.toggleFavorite(itemId)
-                .onSuccess { fav -> _uiState.update { it.copy(isFavorite = fav) } }
+            // Silent mode (no containers — the player exposes a scalar, not a
+            // list); the resolved target drives the scalar flip.
+            userDataMutator.setFavorite(itemId)
+                .onSuccess { applied ->
+                    applied.favorite?.let { fav -> _uiState.update { it.copy(isFavorite = fav) } }
+                }
         }
     }
 

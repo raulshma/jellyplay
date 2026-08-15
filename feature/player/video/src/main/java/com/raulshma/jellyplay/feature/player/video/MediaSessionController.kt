@@ -125,8 +125,9 @@ internal class MediaSessionController(
      *
      * PlayerActivity lives in the `app` module, which this feature module
      * cannot compile against, so it is referenced by class name. [EXTRA_ITEM_ID_KEY]
-     * mirrors `PlayerActivity.EXTRA_ITEM_ID` (the same launch contract the
-     * `Route.VideoPlayer` handler in JellyPlayApp.kt uses).
+     * mirrors `PlayerActivityArgs.EXTRA_ITEM_ID` — the app module's single
+     * build/parse adapter for the PlayerActivity launch contract (the same
+     * contract the `PlaybackHostRouter` DedicatedActivity branch builds).
      *
      * Because PlayerActivity is `singleTask` and shares the default
      * taskAffinity, firing this while a PlayerActivity instance is alive — the
@@ -157,7 +158,10 @@ internal class MediaSessionController(
 
         // PlayerActivity lives in the `app` module; reference by class name.
         private const val PLAYER_ACTIVITY_CLASS_NAME = "com.raulshma.jellyplay.PlayerActivity"
-        // Must match PlayerActivity.EXTRA_ITEM_ID ("player_item_id").
+        // Must match PlayerActivityArgs.EXTRA_ITEM_ID ("player_item_id") —
+        // the app module owns the launch contract; a value change here (or
+        // there) breaks notification→PlayerActivity silently. The app-side
+        // PlayerActivityArgs round-trip test pins the literal both must agree on.
         private const val EXTRA_ITEM_ID_KEY = "player_item_id"
 
         /**
