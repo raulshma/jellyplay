@@ -140,7 +140,6 @@ import com.raulshma.jellyplay.core.ui.animation.NavTransitionContext
 import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
 import com.raulshma.jellyplay.core.ui.animation.toTransition
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
-import com.raulshma.jellyplay.core.ui.navigation.isFullScreen
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route

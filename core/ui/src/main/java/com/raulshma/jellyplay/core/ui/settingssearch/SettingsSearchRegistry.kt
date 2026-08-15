@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.raulshma.jellyplay.core.ui.R
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.navigation.withHighlightSettingId
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -108,7 +109,7 @@ object SettingsSearchRegistry {
             subtitleRes = R.string.ss_integrations_subtitle,
             categoryRes = R.string.ss_cat_integrations,
             keywords = listOf("integrations", "jellyseerr", "overseerr", "arr", "sonarr", "radarr", "request"),
-            route = Route.Integrations(highlightSettingId = "integrations"),
+            route = Route.Integrations().withHighlightSettingId("integrations"),
             icon = Tabler.Outline.Plug
         ),
         SettingsSearchItem(
@@ -117,7 +118,7 @@ object SettingsSearchRegistry {
             subtitleRes = R.string.ss_subtitle_provider_settings_subtitle,
             categoryRes = R.string.ss_cat_integrations,
             keywords = listOf("subtitle", "provider", "opensubtitles", "opensubtitles.com", "tvsubs", "manager", "extensions"),
-            route = Route.Integrations(highlightSettingId = "subtitle_provider_settings"),
+            route = Route.Integrations().withHighlightSettingId("subtitle_provider_settings"),
             icon = Tabler.Outline.Language,
             isAdvanced = true
         ),

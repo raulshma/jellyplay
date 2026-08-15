@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderIds
@@ -15,13 +16,18 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleQuery
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import com.raulshma.jellyplay.feature.player.video.state.SubtitleState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -34,16 +40,22 @@ import kotlinx.coroutines.withContext
  * the collaborator-extraction pattern established by [TrackSelectionHelper] and
  * [TrickplayManager]). The ViewModel keeps thin public delegating functions of
  * the same names so the screen call sites are unchanged; this class performs
- * the actual work against the repositories and the subtitle-manager slice of
- * [VideoPlayerUiState].
+ * the actual work against the repositories and owns the subtitle-workflow slice
+ * [SubtitleState] (download/search state) as its single home, exposed as a
+ * read-only [StateFlow].
  *
- * State access mirrors [TrackSelectionHelper]: the VM injects [getUiState] /
- * [updateUiState] lambdas so this class reads and writes its UiState slice
- * without a hard ViewModel reference. After a successful download/upload the
- * media detail is re-fetched and handed to [onMediaDetailRefreshed], which the
- * VM implements to re-apply the detail and refresh the shared
- * `currentMediaSource` / `mediaStreams` / `detectedAspectRatio` fields (those
- * are not owned by this class).
+ * **Item-switch semantics: the workflow state does NOT persist across
+ * episodes.** [resetForItem] clears the search/download state (and cancels
+ * in-flight jobs so a stale post-download refresh can't write status back into
+ * the freshly-cleared state for the new item); the ViewModel's
+ * `releaseInternals()` calls it — the explicit form of the implicit reset the
+ * former UiState rebuild performed (none of these fields were whitelisted).
+ *
+ * After a successful download/upload the media detail is re-fetched and handed
+ * to [onMediaDetailRefreshed], which the VM implements to re-apply the detail
+ * and refresh the shared `currentMediaSource` / `mediaStreams` /
+ * `detectedAspectRatio` fields (those are session state owned by the ViewModel;
+ * access here is a narrow [getMediaStreams] read).
  *
  * File reads (`queryFileSizeBytes` / `readAndEncode`) live here because they
  * only need [context]; they are private to this class.
@@ -57,8 +69,7 @@ internal class SubtitleManager(
     private val userMessageBus: UserMessageBus,
     private val scope: CoroutineScope,
     private val addExternalSubtitle: (SubtitleSource) -> Unit,
-    private val getUiState: () -> VideoPlayerUiState,
-    private val updateUiState: ((VideoPlayerUiState) -> VideoPlayerUiState) -> Unit,
+    private val getMediaStreams: () -> List<MediaStream>,
     private val getCurrentItemId: () -> String?,
     private val onMediaDetailRefreshed: (MediaDetail) -> Unit,
     /**
@@ -71,6 +82,10 @@ internal class SubtitleManager(
      */
     private val getCurrentMediaDetail: () -> MediaDetail?,
 ) {
+
+    private val _state = MutableStateFlow(SubtitleState())
+    val state: StateFlow<SubtitleState> = _state.asStateFlow()
+
     /**
      * In-flight remote-search job. A slow "en" query landing after a
      * fast "fr" query used to overwrite the latter's results, surfacing
@@ -94,10 +109,10 @@ internal class SubtitleManager(
 
     fun loadRemoteSubtitles() {
         val itemId = getCurrentItemId() ?: return
-        updateUiState { it.copy(isLoadingRemoteSubtitles = true) }
+        _state.update { it.copy(isLoadingRemoteSubtitles = true) }
         scope.launch {
             val subs = playbackRepository.getRemoteSubtitles(itemId).getOrElse { emptyList() }
-            updateUiState { it.copy(remoteSubtitles = subs, isLoadingRemoteSubtitles = false) }
+            _state.update { it.copy(remoteSubtitles = subs, isLoadingRemoteSubtitles = false) }
         }
     }
 
@@ -227,11 +242,11 @@ internal class SubtitleManager(
 
     /** Current subtitle-stream indices across all media sources, for the snapshot. */
     private fun currentSubtitleStreamIndices(): Set<Int> =
-        getUiState().mediaStreams.filter { it.type == StreamType.SUBTITLE }.map { it.index }.toSet()
+        getMediaStreams().filter { it.type == StreamType.SUBTITLE }.map { it.index }.toSet()
 
-    /** Sets [subtitleId]'s download status on the UiState slice. */
+    /** Sets [subtitleId]'s download status on the owned state. */
     private fun markDownloadStatus(subtitleId: String, state: SubtitleDownloadState, errorMessage: String? = null) {
-        updateUiState {
+        _state.update {
             it.copy(
                 downloadingSubtitles = it.downloadingSubtitles + (subtitleId to SubtitleDownloadStatus(subtitleId, state, errorMessage)),
             )
@@ -240,7 +255,7 @@ internal class SubtitleManager(
 
     /** Removes [subtitleId]'s status entry (e.g. on a fresh retry reset). */
     private fun clearDownloadStatus(subtitleId: String) {
-        updateUiState {
+        _state.update {
             it.copy(downloadingSubtitles = it.downloadingSubtitles - subtitleId)
         }
     }
@@ -271,9 +286,9 @@ internal class SubtitleManager(
 
     /**
      * Resets the Subtitle Manager's search/cultures state. Called when the sheet
-     * opens (or the playback item changes) so results from a previous item don't
-     * leak into a new one. Cultures are reloaded on demand since they may
-     * be item-scoped on some servers.
+     * opens so results from a previous item don't leak into a new one. Cultures
+     * are reloaded on demand since they may be item-scoped on some servers.
+     * (Sheet-open semantics: the server-default list and provider config stay.)
      */
     fun resetSubtitleManagerState() {
         // Cancel any in-flight downloads so a stale post-download refresh can't
@@ -282,7 +297,7 @@ internal class SubtitleManager(
         downloadJobs.clear()
         searchJob?.cancel()
         providerSearchJob?.cancel()
-        updateUiState {
+        _state.update {
             it.copy(
                 searchedSubtitles = emptyList(),
                 hasSearchedSubtitles = false,
@@ -297,20 +312,35 @@ internal class SubtitleManager(
     }
 
     /**
+     * Item-switch reset: restores the default [SubtitleState] wholesale — the
+     * explicit form of the implicit reset the former UiState rebuild performed
+     * (none of these fields were whitelisted, so every one of them reset).
+     * Cancels the in-flight jobs first: a stale post-download refresh must not
+     * write status back into the freshly-cleared state for the new item.
+     */
+    fun resetForItem() {
+        downloadJobs.values.forEach { it.cancel() }
+        downloadJobs.clear()
+        searchJob?.cancel()
+        providerSearchJob?.cancel()
+        _state.value = SubtitleState()
+    }
+
+    /**
      * Loads the language cultures the server understands for subtitle
      * upload/search selection. Idempotent: a no-op once cultures are already
      * populated for the current item (e.g. across tab switches / reopens).
      */
     fun loadSubtitleCultures() {
-        if (getUiState().subtitleCultures.isNotEmpty()) return
+        if (_state.value.subtitleCultures.isNotEmpty()) return
         val itemId = getCurrentItemId() ?: return
         scope.launch {
             playbackRepository.getSubtitleCultures(itemId).fold(
-                onSuccess = { cultures -> updateUiState { it.copy(subtitleCultures = cultures) } },
+                onSuccess = { cultures -> _state.update { it.copy(subtitleCultures = cultures) } },
                 onFailure = {
                     // An empty cultures list just yields an empty dropdown;
                     // users can still type a code manually, so no error toast.
-                    updateUiState { it.copy(subtitleCultures = emptyList()) }
+                    _state.update { it.copy(subtitleCultures = emptyList()) }
                 },
             )
         }
@@ -319,25 +349,25 @@ internal class SubtitleManager(
     /**
      * Language-scoped remote subtitle search (OpenSubtitles via the server).
      * Results populate the Search tab and are kept separate from the Download
-     * tab's server-default list. A failure surfaces as [VideoPlayerUiState.subtitleSearchError]
-     * (distinct from an empty result) so the UI can invite retry rather than
-     * implying "no subtitles exist".
+     * tab's server-default list. A failure surfaces as
+     * [SubtitleState.subtitleSearchError] (distinct from an empty result) so
+     * the UI can invite retry rather than implying "no subtitles exist".
      */
     fun searchRemoteSubtitles(language: String) {
         val itemId = getCurrentItemId() ?: return
         searchJob?.cancel()
-        updateUiState {
+        _state.update {
             it.copy(isSearchingSubtitles = true, hasSearchedSubtitles = false, searchedSubtitles = emptyList(), subtitleSearchError = null)
         }
         searchJob = scope.launch {
             playbackRepository.searchRemoteSubtitles(itemId, language).fold(
                 onSuccess = { subs ->
-                    updateUiState {
+                    _state.update {
                         it.copy(searchedSubtitles = subs, isSearchingSubtitles = false, hasSearchedSubtitles = true, subtitleSearchError = null)
                     }
                 },
                 onFailure = { e ->
-                    updateUiState {
+                    _state.update {
                         it.copy(
                             isSearchingSubtitles = false,
                             hasSearchedSubtitles = false,
@@ -352,14 +382,14 @@ internal class SubtitleManager(
     // region Multi-provider search (Jellyfin + Wyzie + OpenSubtitles)
 
     /**
-     * Loads the user's configured providers into UiState so the Search tab can
+     * Loads the user's configured providers into state so the Search tab can
      * decide whether to show provider filter chips. Called when the
      * SubtitleManager sheet opens. Jellyfin is always present.
      */
     fun loadConfiguredProviders() {
         scope.launch {
             val configured = subtitleProviderRepository.configuredProviders().first()
-            updateUiState { it.copy(configuredSubtitleProviders = configured) }
+            _state.update { it.copy(configuredSubtitleProviders = configured) }
         }
     }
 
@@ -367,8 +397,8 @@ internal class SubtitleManager(
      * Concurrent cross-provider search: Jellyfin (server-scoped by itemId +
      * language) + every configured external provider (Wyzie/OpenSubtitles,
      * searched by TMDB/IMDb/title from the item's provider ids). Results are
-     * merged into [VideoPlayerUiState.providerSearchResults] with per-provider
-     * error chips in [VideoPlayerUiState.providerSearchErrors] — one bad key
+     * merged into [SubtitleState.providerSearchResults] with per-provider
+     * error chips in [SubtitleState.providerSearchErrors] — one bad key
      * never blanks the others.
      *
      * A separate job from [searchJob] so the two search paths (legacy
@@ -379,7 +409,7 @@ internal class SubtitleManager(
     fun searchAllProviders(language: String) {
         val itemId = getCurrentItemId() ?: return
         providerSearchJob?.cancel()
-        updateUiState {
+        _state.update {
             it.copy(
                 isSearchingSubtitles = true,
                 hasSearchedSubtitles = false,
@@ -416,14 +446,14 @@ internal class SubtitleManager(
                 itemId,
                 language,
             ) { partial ->
-                updateUiState {
+                _state.update {
                     it.copy(
                         providerSearchResults = partial.results,
                         providerSearchErrors = partial.errors,
                     )
                 }
             }
-            updateUiState {
+            _state.update {
                 it.copy(
                     isSearchingSubtitles = false,
                     hasSearchedSubtitles = true,
@@ -575,13 +605,25 @@ internal class SubtitleManager(
         else -> null
     }
 
-    /** Sets a provider-subtitle (composite-keyed) download status on UiState. */
+    /**
+     * Seeds [SubtitleState.defaultSearchLanguage] from the user's preferred
+     * subtitle language (ISO 639-2/3). The former projection lived in
+     * [SettingsProjector]; it moves here because the field's home moved.
+     * Guarded so an unrelated preference emission does not re-emit the flow.
+     */
+    fun seedDefaultSearchLanguage(language: String) {
+        if (_state.value.defaultSearchLanguage != language) {
+            _state.update { it.copy(defaultSearchLanguage = language) }
+        }
+    }
+
+    /** Sets a provider-subtitle (composite-keyed) download status on the owned state. */
     private fun markProviderDownloadStatus(
         statusKey: String,
         state: SubtitleDownloadState,
         errorMessage: String? = null,
     ) {
-        updateUiState {
+        _state.update {
             it.copy(
                 downloadingSubtitles = it.downloadingSubtitles + (statusKey to SubtitleDownloadStatus(statusKey, state, errorMessage)),
             )
@@ -602,7 +644,7 @@ internal class SubtitleManager(
      */
     fun uploadSubtitle(uri: Uri, fileName: String, language: String?, isForced: Boolean, isHearingImpaired: Boolean) {
         val itemId = getCurrentItemId() ?: return
-        updateUiState { it.copy(isUploadingSubtitle = true) }
+        _state.update { it.copy(isUploadingSubtitle = true) }
         scope.launch {
             val result = runCatching {
                 withContext(Dispatchers.IO) {
@@ -627,7 +669,7 @@ internal class SubtitleManager(
             }.mapCatching { base64 ->
                 playbackRepository.uploadSubtitle(itemId, base64, fileName, language, isForced, isHearingImpaired).getOrThrow()
             }
-            updateUiState { it.copy(isUploadingSubtitle = false) }
+            _state.update { it.copy(isUploadingSubtitle = false) }
             result.onSuccess {
                 // Refresh media detail so the uploaded track surfaces in the
                 // subtitle track list — same approach as downloadSubtitle().

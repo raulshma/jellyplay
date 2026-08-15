@@ -850,6 +850,9 @@ fun VideoPlayerScreen(
     }
 
     if (isCastConnected) {
+        // Track slice — collected here (the cast dashboard is the
+        // only consumer on this branch) rather than through the residual uiState.
+        val trackState by viewModel.trackState.collectAsStateWithLifecycle()
         CompanionDashboard(
             title = title,
             subtitle = subtitle,
@@ -862,8 +865,8 @@ fun VideoPlayerScreen(
             durationMs = duration,
             volume = castVolume,
             isConnecting = isCastConnecting,
-            audioTracks = uiState.audioTracks,
-            subtitleTracks = uiState.subtitleTracks,
+            audioTracks = trackState.audioTracks,
+            subtitleTracks = trackState.subtitleTracks,
             episodes = uiState.seasonEpisodes,
             onPlayPause = doTogglePlayPause,
             onSeekBack = doSeekBack,
@@ -1455,6 +1458,16 @@ fun VideoPlayerScreen(
                 }
             }
 
+            // Controller-owned slices — collected here, at their
+            // consumption points, instead of flowing through the residual
+            // uiState. Each is low-frequency; collecting per-leaf keeps the
+            // root scope unaffected.
+            val trackState by viewModel.trackState.collectAsStateWithLifecycle()
+            val effectsState by viewModel.effectsState.collectAsStateWithLifecycle()
+            val sleepTimer by viewModel.sleepTimerState.collectAsStateWithLifecycle()
+            val abRepeat by viewModel.abRepeatState.collectAsStateWithLifecycle()
+            val syncPlay by viewModel.syncPlayState.collectAsStateWithLifecycle()
+
             if (uiState.showVideoStats) {
                 VideoStatsOverlay(
                     statsFlow = viewModel.videoStats,
@@ -1470,7 +1483,7 @@ fun VideoPlayerScreen(
                     playMethod = uiState.playMethod,
                     streamingQuality = uiState.preferredPlayerType.name,
                     playerType = uiState.preferredPlayerType.name,
-                    decoderMode = uiState.decoderMode.displayName,
+                    decoderMode = effectsState.decoderMode.displayName,
                     // Engines expose a real audio session id (ExoPlayer: live
                     // session; mpv: generated id; VLC: 0 — capabilities gate the
                     // row). Read the collected engine so a swap refreshes it.
@@ -1576,10 +1589,10 @@ fun VideoPlayerScreen(
             val onNightModeStrengthChange by remember { mutableStateOf({ strength: EffectStrength -> viewModel.setNightModeStrength(strength) }) }
             val onAVSyncClick by remember { mutableStateOf({ currentSheet = PlayerSheet.AVSync }) }
             val onDecoderClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Decoder }) }
-            // uiState is a `by collectAsStateWithLifecycle()` delegate, so
-            // `uiState.audioPassthrough` is read at invocation time — no key
+            // effectsState is a `by collectAsStateWithLifecycle()` delegate, so
+            // `effectsState.audioPassthrough` is read at invocation time — no key
             // needed and the lambda never goes stale.
-            val onPassthroughClick by remember { mutableStateOf({ viewModel.setAudioPassthrough(!uiState.audioPassthrough) }) }
+            val onPassthroughClick by remember { mutableStateOf({ viewModel.setAudioPassthrough(!effectsState.audioPassthrough) }) }
             val onEpisodesClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Episodes }) }
             val onSyncPlayClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SyncPlay }) }
             val onPipClick by remember(onEnterPip) { mutableStateOf({ onEnterPip() }) }
@@ -1659,15 +1672,15 @@ fun VideoPlayerScreen(
                 chapters = uiState.chapters,
                 dialogueBoostEnabled = uiState.dialogueBoostEnabled,
                 dialogueBoostStrength = uiState.dialogueBoostStrength,
-                nightModeEnabled = uiState.nightModeEnabled,
-                nightModeStrength = uiState.nightModeStrength,
-                audioPassthrough = uiState.audioPassthrough,
+                nightModeEnabled = effectsState.nightModeEnabled,
+                nightModeStrength = effectsState.nightModeStrength,
+                audioPassthrough = effectsState.audioPassthrough,
                 segments = uiState.segments,
                 resumePositionMs = resumePositionMs,
                 playMethod = uiState.playMethod,
                 hdrType = uiState.hdrType,
                 mediaStreams = uiState.mediaStreams,
-                audioTracks = uiState.audioTracks,
+                audioTracks = trackState.audioTracks,
                 isConnectionMetered = uiState.isConnectionMetered,
                 subtitleDelayMs = uiState.subtitleStyle.offsetMs,
                 onSubtitleDelayClick = { showDelayOverlay = true },
@@ -1724,20 +1737,20 @@ fun VideoPlayerScreen(
                 onMuteClick = onMuteClick,
                 isMuted = uiState.isMuted,
                 isInSyncPlaySession = isInSyncPlaySession,
-                syncPlayGroupName = uiState.syncPlayGroupName,
-                syncPlayParticipantCount = uiState.syncPlayParticipantCount,
-                isSyncPlaySynced = uiState.isSyncPlaySynced,
-                isSyncPlaySyncing = uiState.isSyncPlaySyncing,
+                syncPlayGroupName = syncPlay.syncPlayGroupName,
+                syncPlayParticipantCount = syncPlay.syncPlayParticipantCount,
+                isSyncPlaySynced = syncPlay.isSyncPlaySynced,
+                isSyncPlaySyncing = syncPlay.isSyncPlaySyncing,
                 showVideoStats = uiState.showVideoStats,
                 onVideoStatsClick = onVideoStatsClick,
                 streamingQuality = uiState.streamingQuality,
                 playbackMode = uiState.playbackMode,
                 onQualityClick = onQualityClick,
                 onPlaybackModeClick = onPlaybackModeClick,
-                audioNormalizationMode = uiState.audioNormalizationMode,
-                audioNormalizationEnabled = uiState.audioNormalizationEnabled,
-                channelMixMode = uiState.channelMixMode,
-                channelMixEnabled = uiState.channelMixEnabled,
+                audioNormalizationMode = effectsState.audioNormalizationMode,
+                audioNormalizationEnabled = effectsState.audioNormalizationEnabled,
+                channelMixMode = effectsState.channelMixMode,
+                channelMixEnabled = effectsState.channelMixEnabled,
                 supportsAudioNormalization = uiState.engineCapabilities.supportsAudioNormalization,
                 supportsChannelMixing = uiState.engineCapabilities.supportsChannelMixing,
                 supportsLiveQualitySwitch = uiState.engineCapabilities.supportsLiveQualitySwitch,
@@ -1745,8 +1758,8 @@ fun VideoPlayerScreen(
                 onAudioNormalizationModeChange = onAudioNormalizationModeChange,
                 onChannelMixClick = onChannelMixClick,
                 onChannelMixModeChange = onChannelMixModeChange,
-                sleepTimerActive = uiState.sleepTimerActive,
-                sleepTimerEndOfEpisode = uiState.sleepTimerEndOfEpisode,
+                sleepTimerActive = sleepTimer.sleepTimerActive,
+                sleepTimerEndOfEpisode = sleepTimer.sleepTimerEndOfEpisode,
                 sleepTimerRemainingFlow = viewModel.sleepTimerRemainingMs,
                 onSleepTimerClick = onSleepTimerClick,
                 supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
@@ -1754,8 +1767,8 @@ fun VideoPlayerScreen(
                 onVideoFilterClick = onVideoFilterClick,
                 supportsScreenshot = uiState.engineCapabilities.supportsScreenshot,
                 onScreenshotClick = onScreenshotClick,
-                abRepeatActive = uiState.abRepeat.isActive,
-                onAbRepeatToggle = { viewModel.setAbRepeatEnabled(!uiState.abRepeat.enabled) },
+                abRepeatActive = abRepeat.isActive,
+                onAbRepeatToggle = { viewModel.setAbRepeatEnabled(!abRepeat.enabled) },
                 onAbRepeatSetA = { viewModel.setAbRepeatPointA() },
                 onAbRepeatSetB = { viewModel.setAbRepeatPointB() },
                 onAbRepeatClear = { viewModel.clearAbRepeat() },
@@ -2081,11 +2094,14 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.Audio -> {
+            // Track slice: collected inside the branch — only this
+            // picker consumes it while the sheet is open.
+            val trackState by viewModel.trackState.collectAsStateWithLifecycle()
             TrackPickerSheet(
                 title = stringResource(R.string.player_audio),
-                tracks = uiState.audioTracks,
+                tracks = trackState.audioTracks,
                 onSelect = { viewModel.selectAudioTrack(it) },
-                onReset = if (uiState.hasAudioOverride) { { viewModel.resetAudioTrack() } } else null,
+                onReset = if (trackState.hasAudioOverride) { { viewModel.resetAudioTrack() } } else null,
                 onDismiss = dismissSheet,
                 footer = if (uiState.seriesId != null) {
                     {
@@ -2094,10 +2110,10 @@ private fun PlayerSheetRouter(
                         // every episode of this series; toggling off forgets it.
                         RememberPreferenceToggle(
                             label = stringResource(R.string.player_video_remember_audio_language),
-                            checked = uiState.hasSeriesAudioPref,
+                            checked = trackState.hasSeriesAudioPref,
                             onToggle = { remember ->
                                 val lang = if (remember) {
-                                    uiState.audioTracks.firstOrNull { it.isSelected && it.index >= 0 }?.language
+                                    trackState.audioTracks.firstOrNull { it.isSelected && it.index >= 0 }?.language
                                 } else {
                                     null
                                 }
@@ -2114,13 +2130,17 @@ private fun PlayerSheetRouter(
                 viewModel.loadSubtitleCultures()
                 viewModel.loadConfiguredSubtitleProviders()
             }
+            // Track + subtitle-workflow slices: collected inside the
+            // branch — only this hub consumes them while the sheet is open.
+            val trackState by viewModel.trackState.collectAsStateWithLifecycle()
+            val subtitleState by viewModel.subtitleState.collectAsStateWithLifecycle()
             SubtitleHubSheet(
                 initialTab = com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTab.TRACKS,
                 onDismiss = dismissSheet,
                 // Tracks tab
-                subtitleTracks = uiState.subtitleTracks,
+                subtitleTracks = trackState.subtitleTracks,
                 onSelectSubtitleTrack = { viewModel.selectSubtitleTrack(it) },
-                onResetSubtitleTrack = if (uiState.hasSubtitleOverride) {
+                onResetSubtitleTrack = if (trackState.hasSubtitleOverride) {
                     { viewModel.resetSubtitleTrack() }
                 } else null,
                 tracksFooter = if (uiState.seriesId != null) {
@@ -2131,18 +2151,18 @@ private fun PlayerSheetRouter(
                         // "Off" row selected it saves a "subtitles off" intent so
                         // every episode loads with subs off. Toggling off forgets
                         // whichever intent was saved.
-                        val selectedOff = uiState.subtitleTracks
+                        val selectedOff = trackState.subtitleTracks
                             .firstOrNull { it.isSelected && it.index < 0 } != null
-                        val label = if (selectedOff || uiState.hasSeriesSubtitleOffPref) {
+                        val label = if (selectedOff || trackState.hasSeriesSubtitleOffPref) {
                             stringResource(R.string.player_video_remember_subtitles_off)
                         } else {
                             stringResource(R.string.player_video_remember_subtitle_language)
                         }
                         RememberPreferenceToggle(
                             label = label,
-                            checked = uiState.hasSeriesSubtitlePref,
+                            checked = trackState.hasSeriesSubtitlePref,
                             onToggle = { remember ->
-                                val sel = uiState.subtitleTracks.firstOrNull { it.isSelected }
+                                val sel = trackState.subtitleTracks.firstOrNull { it.isSelected }
                                 if (sel != null && sel.index < 0) {
                                     viewModel.setSeriesSubtitleDisabled(remember)
                                 } else if (remember) {
@@ -2166,28 +2186,28 @@ private fun PlayerSheetRouter(
                 onOpenTester = onOpenSubtitleTester,
                 capabilities = uiState.engineCapabilities,
                 // Get tab
-                downloadSubtitles = uiState.remoteSubtitles,
-                isDownloading = uiState.isLoadingRemoteSubtitles,
+                downloadSubtitles = subtitleState.remoteSubtitles,
+                isDownloading = subtitleState.isLoadingRemoteSubtitles,
                 onDownload = { viewModel.downloadSubtitle(it) },
                 onLoadLocalFile = onLoadLocalSubtitle,
-                searchResults = uiState.searchedSubtitles,
-                isSearching = uiState.isSearchingSubtitles,
-                hasSearched = uiState.hasSearchedSubtitles,
-                searchError = uiState.subtitleSearchError,
-                cultures = uiState.subtitleCultures,
-                defaultLanguage = uiState.defaultSearchLanguage,
+                searchResults = subtitleState.searchedSubtitles,
+                isSearching = subtitleState.isSearchingSubtitles,
+                hasSearched = subtitleState.hasSearchedSubtitles,
+                searchError = subtitleState.subtitleSearchError,
+                cultures = subtitleState.subtitleCultures,
+                defaultLanguage = subtitleState.defaultSearchLanguage,
                 onSearch = { viewModel.searchRemoteSubtitles(it) },
                 onDownloadSearched = { viewModel.downloadSubtitle(it) },
-                providerSearchResults = uiState.providerSearchResults,
-                providerSearchErrors = uiState.providerSearchErrors,
-                configuredProviders = uiState.configuredSubtitleProviders,
+                providerSearchResults = subtitleState.providerSearchResults,
+                providerSearchErrors = subtitleState.providerSearchErrors,
+                configuredProviders = subtitleState.configuredSubtitleProviders,
                 onSearchAllProviders = { viewModel.searchAllSubtitleProviders(it) },
                 onDownloadProviderSubtitle = { viewModel.downloadProviderSubtitle(it) },
-                downloadingSubtitles = uiState.downloadingSubtitles,
+                downloadingSubtitles = subtitleState.downloadingSubtitles,
                 // "Use" affordance: the hub switches to its Tracks tab itself;
                 // this callback is a no-op placeholder for the host.
                 onUseSubtitle = {},
-                isUploading = uiState.isUploadingSubtitle,
+                isUploading = subtitleState.isUploadingSubtitle,
                 onUpload = { uri, fileName, language, isForced, isHearingImpaired ->
                     viewModel.uploadSubtitle(uri, fileName, language, isForced, isHearingImpaired)
                     onSheetChange(PlayerSheet.None)
@@ -2212,6 +2232,9 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.PlaybackInfo -> {
+            // Track + effects slices: collected inside the branch.
+            val trackState by viewModel.trackState.collectAsStateWithLifecycle()
+            val effectsState by viewModel.effectsState.collectAsStateWithLifecycle()
             PlayerModalBottomSheet(
                 onDismissRequest = dismissSheet,
                 sheetState = rememberModalBottomSheetState(),
@@ -2223,17 +2246,17 @@ private fun PlayerSheetRouter(
                     isConnectionMetered = uiState.isConnectionMetered,
                     hdrType = uiState.hdrType,
                     playerType = uiState.preferredPlayerType.name,
-                    decoderMode = uiState.decoderMode.name,
+                    decoderMode = effectsState.decoderMode.name,
                     aspectRatio = uiState.aspectRatio.name,
-                    nightModeEnabled = uiState.nightModeEnabled,
-                    nightModeStrength = uiState.nightModeStrength,
+                    nightModeEnabled = effectsState.nightModeEnabled,
+                    nightModeStrength = effectsState.nightModeStrength,
                     dialogueBoostEnabled = uiState.dialogueBoostEnabled,
                     dialogueBoostStrength = uiState.dialogueBoostStrength,
-                    audioPassthrough = uiState.audioPassthrough,
-                    audioTracks = uiState.audioTracks,
-                    subtitleTracks = uiState.subtitleTracks,
+                    audioPassthrough = effectsState.audioPassthrough,
+                    audioTracks = trackState.audioTracks,
+                    subtitleTracks = trackState.subtitleTracks,
                     playbackSpeed = uiState.playbackSpeed,
-                    audioDelayMs = uiState.audioDelayMs,
+                    audioDelayMs = effectsState.audioDelayMs,
                     subtitleDelayMs = uiState.subtitleStyle.offsetMs,
                     playerError = uiState.playerError,
                     modifier = Modifier
@@ -2252,16 +2275,20 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.AVSync -> {
+            // Effects slice: collected inside the branch.
+            val effectsState by viewModel.effectsState.collectAsStateWithLifecycle()
             AVSyncSheet(
-                currentAudioDelayMs = uiState.audioDelayMs,
+                currentAudioDelayMs = effectsState.audioDelayMs,
                 onAudioDelayChange = { viewModel.setAudioDelay(it) },
                 onDismiss = dismissSheet,
                 audioDelaySupported = uiState.engineCapabilities.supportsAudioDelay,
             )
         }
         is PlayerSheet.Decoder -> {
+            // Effects slice: collected inside the branch.
+            val effectsState by viewModel.effectsState.collectAsStateWithLifecycle()
             DecoderPickerSheet(
-                currentMode = uiState.decoderMode,
+                currentMode = effectsState.decoderMode,
                 onSelect = { viewModel.setDecoderMode(it) },
                 onDismiss = dismissSheet,
             )
@@ -2283,14 +2310,16 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.SyncPlay -> {
+            // SyncPlay group-display slice: collected inside the branch.
+            val syncPlayState by viewModel.syncPlayState.collectAsStateWithLifecycle()
             SyncPlayPlayerSheet(
-                groupName = uiState.syncPlayGroupName ?: "Group",
-                participantCount = uiState.syncPlayParticipantCount,
-                isSynced = uiState.isSyncPlaySynced,
+                groupName = syncPlayState.syncPlayGroupName ?: "Group",
+                participantCount = syncPlayState.syncPlayParticipantCount,
+                isSynced = syncPlayState.isSyncPlaySynced,
                 isPlaying = uiState.isPlaying,
                 ignoreWait = syncPlayIgnoreWait,
-                repeatMode = uiState.syncPlayRepeatMode,
-                shuffleMode = uiState.syncPlayShuffleMode,
+                repeatMode = syncPlayState.syncPlayRepeatMode,
+                shuffleMode = syncPlayState.syncPlayShuffleMode,
                 onRepeatModeChange = { viewModel.setSyncPlayRepeatMode(it) },
                 onShuffleModeChange = { viewModel.setSyncPlayShuffleMode(it) },
                 onTogglePlayPause = { viewModel.syncPlayTogglePlayPause() },
@@ -2320,10 +2349,12 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.SleepTimer -> {
+            // Sleep-timer slice: collected inside the branch.
+            val sleepTimerState by viewModel.sleepTimerState.collectAsStateWithLifecycle()
             SleepTimerSheetBinder(
-                isActive = uiState.sleepTimerActive,
-                isEndOfEpisodeMode = uiState.sleepTimerEndOfEpisode,
-                lastUsedDurationMs = uiState.sleepTimerLastUsedDurationMs,
+                isActive = sleepTimerState.sleepTimerActive,
+                isEndOfEpisodeMode = sleepTimerState.sleepTimerEndOfEpisode,
+                lastUsedDurationMs = sleepTimerState.sleepTimerLastUsedDurationMs,
                 sleepTimerRemainingFlow = sleepTimerRemainingFlow,
                 onSelectDuration = { viewModel.startSleepTimer(it) },
                 onSelectEndOfEpisode = { viewModel.startSleepTimerEndOfEpisode() },

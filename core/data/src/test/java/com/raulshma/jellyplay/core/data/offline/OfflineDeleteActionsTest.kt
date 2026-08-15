@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.details
+package com.raulshma.jellyplay.core.data.offline
 
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -12,6 +12,14 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+/**
+ * Moved with [OfflineDeleteActions] from `feature/details` — the
+ * detail-side cases (content-mutated signaling, collapse classification) run
+ * unchanged, proving the lift is behavior-preserving, plus the new cases that
+ * replace Home's and Downloads' now-deleted private copies: `Set` input,
+ * [OfflineDeleteActions.deleteDownload] routing, and zero-episode-season
+ * safety.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class OfflineDeleteActionsTest {
 
@@ -40,6 +48,12 @@ class OfflineDeleteActionsTest {
         id = id,
         name = id,
         mediaType = MediaType.SEASON,
+    )
+
+    private fun movie(id: String) = MediaItem(
+        id = id,
+        name = id,
+        mediaType = MediaType.MOVIE,
     )
 
     // region deleteOfflineEpisodes — whole-season vs partial classification
@@ -98,6 +112,69 @@ class OfflineDeleteActionsTest {
 
         coVerify(exactly = 0) { offlineRepository.deleteOfflineSeason(any()) }
         coVerify(exactly = 0) { offlineRepository.deleteOfflineItem(any()) }
+    }
+
+    @Test
+    fun `deleteOfflineEpisodes accepts a Set input like the home sheet`() = runTest {
+        val episodes = mapOf(
+            "season1" to listOf(episode("e1"), episode("e2")),
+            "season2" to listOf(episode("e3"), episode("e4")),
+        )
+        val seasons = listOf(season("season1"), season("season2"))
+        val actions = actions(this, episodes, seasons)
+
+        // The offline home's advanced delete sheet multi-selects across seasons
+        // with a Set<String>: season1 is fully selected (collapses), season2
+        // only partially (per-episode fallback, e4 left untouched).
+        actions.deleteOfflineEpisodes(setOf("e1", "e2", "e3"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { offlineRepository.deleteOfflineSeason("season1") }
+        coVerify(exactly = 0) { offlineRepository.deleteOfflineSeason("season2") }
+        coVerify(exactly = 0) { offlineRepository.deleteOfflineItem("e1") }
+        coVerify(exactly = 0) { offlineRepository.deleteOfflineItem("e2") }
+        coVerify(exactly = 1) { offlineRepository.deleteOfflineItem("e3") }
+        coVerify(exactly = 0) { offlineRepository.deleteOfflineItem("e4") }
+    }
+
+    @Test
+    fun `deleteOfflineEpisodes never collapses a season with zero downloaded episodes`() = runTest {
+        // Home's sheet pre-filters empty seasons out; detail's snapshot keeps
+        // them. Both must be safe: a season with no episode rows can never be
+        // "fully selected", so it must not trigger a whole-season drop.
+        val episodes = mapOf("season1" to listOf(episode("e1")))
+        val seasons = listOf(season("season1"), season("emptySeason"))
+        val actions = actions(this, episodes, seasons)
+
+        actions.deleteOfflineEpisodes(listOf("e1"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { offlineRepository.deleteOfflineSeason("season1") }
+        coVerify(exactly = 0) { offlineRepository.deleteOfflineSeason("emptySeason") }
+    }
+    // endregion
+
+    // region deleteDownload — quick-action routing (Home / Downloads quick menus)
+    @Test
+    fun `deleteDownload routes a series to whole-series delete`() = runTest {
+        val actions = actions(this)
+
+        actions.deleteDownload(season("s1").copy(mediaType = MediaType.SERIES))
+        advanceUntilIdle()
+
+        coVerify { offlineRepository.deleteOfflineSeries("s1") }
+        coVerify(exactly = 0) { offlineRepository.deleteOfflineItem(any()) }
+    }
+
+    @Test
+    fun `deleteDownload routes a non-series item to a single-item delete`() = runTest {
+        val actions = actions(this)
+
+        actions.deleteDownload(movie("m1"))
+        advanceUntilIdle()
+
+        coVerify { offlineRepository.deleteOfflineItem("m1") }
+        coVerify(exactly = 0) { offlineRepository.deleteOfflineSeries(any()) }
     }
     // endregion
 
@@ -170,6 +247,22 @@ class OfflineDeleteActionsTest {
         // Whole-season drop + a single mutation signal (not one per episode).
         coVerify { offlineRepository.deleteOfflineSeason("season1") }
         assertEquals(1, mutations)
+    }
+
+    @Test
+    fun `onContentMutated defaults to a no-op for reactive consumers`() = runTest {
+        // Home/downloads construct the actions without the callback (their
+        // Room-backed offline library flows refresh on their own); the default
+        // must simply never fire.
+        val actions = OfflineDeleteActions(
+            scope = this,
+            offlineRepository = offlineRepository,
+        )
+
+        actions.deleteOfflineItem("id1")
+        advanceUntilIdle()
+
+        coVerify { offlineRepository.deleteOfflineItem("id1") }
     }
     // endregion
 }

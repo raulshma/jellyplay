@@ -6,22 +6,46 @@ import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
-import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/**
+ * Bridges the shared [SyncPlayManager] to the local playback session: forwards
+ * group playback commands to the engine, reports local state back, and owns the
+ * SyncPlay group-display slice [SyncPlayUiState] (group name, participant
+ * count, sync status, repeat/shuffle modes) as its single home, exposed as a
+ * read-only [StateFlow].
+ *
+ * **Item-switch semantics: the group-display state resets on every item
+ * switch** — `reset()` (invoked from the ViewModel's `releaseInternals()`)
+ * restores the default [SyncPlayUiState]. None of these fields were on the
+ * former reset whitelist, so this explicit reset is the same semantics the
+ * implicit UiState rebuild used to provide. A still-active session restores its
+ * display state right after via the ViewModel's `reattachSession()` call.
+ *
+ * `isPlaying` is *session* state owned by the ViewModel; the two places the
+ * bridge used to write it into the god-state UiState now go through the narrow
+ * [setIsPlaying] lambda. `isInSyncPlaySession` lives in [SyncPlayUiState] (the
+ * bridge is its home); the ViewModel mirrors it into the residual UiState for
+ * the segment-overlay projection (see `VideoPlayerViewModel`).
+ */
 internal class SyncPlayBridge(
     private val syncPlayManager: SyncPlayManager,
-    private val uiState: StateFlowHandle<VideoPlayerUiState>,
     private val getMediaEngine: () -> MediaEngine?,
     private val getCurrentItemId: () -> String?,
     private val onLoadItem: (String, Long) -> Unit,
+    // Narrow session-state write: the bridge no longer holds the UiState handle.
+    private val setIsPlaying: (Boolean) -> Unit,
     // No default: a previous default of `CoroutineScope(SupervisorJob() +
     // Dispatchers.Main)` was an uncancellable root scope that would leak if a
     // caller forgot to pass its own. Forcing the caller (the ViewModel) to
@@ -35,6 +59,9 @@ internal class SyncPlayBridge(
 
     private val _notifications = MutableSharedFlow<String>(extraBufferCapacity = 10)
     val notifications: SharedFlow<String> = _notifications.asSharedFlow()
+
+    private val _state = MutableStateFlow(SyncPlayUiState())
+    val state: StateFlow<SyncPlayUiState> = _state.asStateFlow()
 
     val isInSession: Boolean get() = syncPlayManager.isInSyncPlaySession
     val ignoreWait: StateFlow<Boolean> get() = syncPlayManager.playbackCore.ignoreWait
@@ -50,7 +77,7 @@ internal class SyncPlayBridge(
         syncPlayManager.playbackCore.setCallbacks(this)
         if (syncPlayManager.isInSyncPlaySession) {
             val group = syncPlayManager.currentGroup
-            uiState.update { it.copy(
+            _state.update { it.copy(
                 isInSyncPlaySession = true,
                 syncPlayGroupName = group?.groupName,
                 syncPlayParticipantCount = group?.participantCount ?: 0,
@@ -67,7 +94,7 @@ internal class SyncPlayBridge(
         scope.launch {
             syncPlayManager.joinGroup(groupId)
             val group = syncPlayManager.currentGroup
-            uiState.update { it.copy(
+            _state.update { it.copy(
                 syncPlayGroupName = group?.groupName ?: groupId,
                 isInSyncPlaySession = true,
                 syncPlayParticipantCount = group?.participantCount ?: 0,
@@ -80,7 +107,7 @@ internal class SyncPlayBridge(
     fun leaveGroup() {
         scope.launch {
             syncPlayManager.leaveGroup()
-            uiState.update { it.copy(
+            _state.update { it.copy(
                 syncPlayGroupName = null,
                 syncPlayParticipantCount = 0,
                 isSyncPlaySynced = false,
@@ -100,7 +127,7 @@ internal class SyncPlayBridge(
         syncPlayManager.playbackCore.clearCallbacks()
         syncPlayManager.playbackCore.setCallbacks(this)
         val group = syncPlayManager.currentGroup
-        uiState.update { it.copy(
+        _state.update { it.copy(
             isInSyncPlaySession = true,
             syncPlayGroupName = group?.groupName,
             syncPlayParticipantCount = group?.participantCount ?: 0,
@@ -113,6 +140,34 @@ internal class SyncPlayBridge(
 
     fun setIgnoreWait(ignore: Boolean) {
         syncPlayManager.playbackCore.setIgnoreWait(ignore)
+    }
+
+    /**
+     * Queue reconciliation, first stage of every session load: when a group is
+     * playing a different item, point its queue at the requested item
+     * (best-effort; any failure is swallowed) so the group's transport stays
+     * coherent with the local load. Runs as the [SessionLoadPipeline]'s first
+     * hook, before any prefs/load work.
+     */
+    suspend fun reconcileQueueForItem(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
+        val currentGroup = syncPlayManager.currentGroup
+        val groupPlayingId = currentGroup?.playingItemId
+        if (syncPlayManager.isInSyncPlaySession && groupPlayingId != null && groupPlayingId != itemId) {
+            try {
+                val matchingEntry = currentGroup.playlistItemMap.entries.find { it.value == itemId }
+                if (matchingEntry != null) {
+                    syncPlayManager.syncPlayController.setPlaylistItem(matchingEntry.key)
+                } else {
+                    syncPlayManager.syncPlayController.setNewQueue(
+                        itemIds = listOf(itemId),
+                        playingItemId = itemId,
+                        mediaSourceId = mediaSourceId,
+                        startPositionTicks = startPositionTicks,
+                    )
+                }
+            } catch (_: Exception) {
+            }
+        }
     }
 
     fun sendStop() {
@@ -147,14 +202,17 @@ internal class SyncPlayBridge(
         currentPlaylistItemId = null
         eventJob?.cancel()
         eventJob = null
-        uiState.update { it.copy(isSyncPlaySyncing = false) }
+        // Item-switch semantics: the group-display state is per-item (it was
+        // never on the reset whitelist) — restore the defaults. A still-active
+        // session re-populates via reattachSession() right after the switch.
+        _state.value = SyncPlayUiState()
     }
 
     fun togglePlayPause() {
         scope.launch {
             if (getMediaEngine()?.isPlaying?.value == true) {
                 getMediaEngine()?.pause()
-                uiState.update { it.copy(isPlaying = false) }
+                setIsPlaying(false)
                 syncPlayManager.syncPlayController.pause()
             } else {
                 syncPlayManager.syncPlayController.unpause()
@@ -183,7 +241,7 @@ internal class SyncPlayBridge(
                         when {
                             currentItemId == null || currentItemId != event.data.playingItemId -> {
                                 syncPlayManager.playbackCore.setPendingItemLoad(true)
-                                uiState.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
+                                _state.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
                                 val posTicks = syncPlayManager.queueCore.getStartPositionTicks(
                                     syncPlayManager.playbackCore.lastCommand
                                 )
@@ -191,13 +249,13 @@ internal class SyncPlayBridge(
                             }
                             getMediaEngine() == null -> {
                                 syncPlayManager.playbackCore.setPendingItemLoad(true)
-                                uiState.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
+                                _state.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
                             }
                             else -> {
                                 val engine = getMediaEngine()
                                 if (engine == null) {
                                     syncPlayManager.playbackCore.setPendingItemLoad(true)
-                                    uiState.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
+                                    _state.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
                                 } else {
                                     val posTicks = syncPlayManager.estimateCurrentTicks(
                                         event.data.startPositionTicks, event.data.whenMs
@@ -217,12 +275,12 @@ internal class SyncPlayBridge(
                                 }
                             }
                         }
-                        uiState.update { it.copy(isSyncPlaySynced = true) }
+                        _state.update { it.copy(isSyncPlaySynced = true) }
                         updateGroupState()
                     }
                     is SyncPlayEvent.GroupUpdate -> {
                         if (event.groupName.isBlank() && event.participantCount == 0) {
-                            uiState.update { it.copy(
+                            _state.update { it.copy(
                                 syncPlayGroupName = null,
                                 syncPlayParticipantCount = 0,
                                 isSyncPlaySynced = false,
@@ -233,20 +291,20 @@ internal class SyncPlayBridge(
                         updateGroupState()
                     }
                     is SyncPlayEvent.WaitForGroup -> {
-                        uiState.update { it.copy(isSyncPlaySynced = false, isSyncPlaySyncing = true) }
+                        _state.update { it.copy(isSyncPlaySynced = false, isSyncPlaySyncing = true) }
                     }
                     is SyncPlayEvent.Notification -> {
                         _notifications.tryEmit(event.message)
                     }
                     is SyncPlayEvent.StateUpdate -> {
-                        uiState.update { it.copy(isSyncPlaySynced = true) }
+                        _state.update { it.copy(isSyncPlaySynced = true) }
                         updateGroupState()
                     }
                     is SyncPlayEvent.PlaybackCommand -> {
                         updateGroupState()
                     }
                     is SyncPlayEvent.GroupLeft -> {
-                        uiState.update { it.copy(
+                        _state.update { it.copy(
                             syncPlayGroupName = null,
                             syncPlayParticipantCount = 0,
                             isSyncPlaySynced = false,
@@ -261,12 +319,14 @@ internal class SyncPlayBridge(
 
     private fun updateGroupState() {
         val group = syncPlayManager.currentGroup
-        uiState.update { it.copy(
-            syncPlayGroupName = group?.groupName ?: it.syncPlayGroupName,
-            syncPlayParticipantCount = group?.participantCount ?: it.syncPlayParticipantCount,
-            syncPlayRepeatMode = group?.repeatMode ?: it.syncPlayRepeatMode,
-            syncPlayShuffleMode = group?.shuffleMode ?: it.syncPlayShuffleMode,
-        ) }
+        _state.update {
+            it.copy(
+                syncPlayGroupName = group?.groupName ?: it.syncPlayGroupName,
+                syncPlayParticipantCount = group?.participantCount ?: it.syncPlayParticipantCount,
+                syncPlayRepeatMode = group?.repeatMode ?: it.syncPlayRepeatMode,
+                syncPlayShuffleMode = group?.shuffleMode ?: it.syncPlayShuffleMode,
+            )
+        }
     }
 
     // PlaybackCoreCallbacks implementation
@@ -279,11 +339,16 @@ internal class SyncPlayBridge(
     override fun isPlaying(): Boolean = getMediaEngine()?.isPlaying?.value ?: false
 
     override fun onSyncStateChanged(synced: Boolean, syncing: Boolean) {
-        uiState.update { it.copy(
+        _state.update { it.copy(
             isSyncPlaySynced = synced,
             isSyncPlaySyncing = syncing,
-            isPlaying = if (synced && getMediaEngine()?.isPlaying?.value == true) true else it.isPlaying,
         ) }
+        // Session-state reconciliation: when the group reports synced and the
+        // engine is actually playing, make sure the play/pause icon reflects it.
+        // A no-op write of the same value never re-emits a StateFlow.
+        if (synced && getMediaEngine()?.isPlaying?.value == true) {
+            setIsPlaying(true)
+        }
     }
 
     companion object {

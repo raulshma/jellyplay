@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
-import android.content.Context
+import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -8,10 +8,10 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -25,10 +25,10 @@ import org.junit.Test
 class CollectionActionsTest {
 
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
-    private val context: Context = mockk(relaxed = true)
+    private val mediaDetailProvider: MediaDetailProvider = mockk(relaxed = true)
 
-    private val messages = mutableListOf<DetailMessage>()
-    private val messageSink: (DetailMessage) -> Unit = { messages += it }
+    private val strings = fakeDetailStrings()
+    private val messages = RecordingMessages()
 
     private val movieDetail = MediaDetail(
         item = MediaItem(id = "m1", name = "A Movie", mediaType = MediaType.MOVIE),
@@ -47,18 +47,29 @@ class CollectionActionsTest {
 
     private fun actions(
         scope: CoroutineScope,
-        detail: () -> MediaDetail? = { movieDetail },
-        sortedEpisodes: () -> List<MediaItem> = { emptyList() },
-        canonicalEpisodeIds: suspend (String) -> List<String> = { emptyList() },
-    ): CollectionActions = CollectionActions(
-        scope = scope,
-        mediaRepository = mediaRepository,
-        context = context,
-        detailProvider = detail,
-        sortedEpisodesProvider = sortedEpisodes,
-        canonicalEpisodeIds = canonicalEpisodeIds,
-        messageSink = messageSink,
-    )
+        detail: MediaDetail? = movieDetail,
+        sortedEpisodes: List<MediaItem> = emptyList(),
+        canonicalEpisodeIds: (String) -> List<String> = { emptyList() },
+    ): CollectionActions {
+        val session = MutableStateFlow(
+            DetailSession(
+                itemId = detail?.item?.id ?: "m1",
+                detail = detail,
+                sortedEpisodes = sortedEpisodes,
+            ),
+        )
+        coEvery { mediaDetailProvider.canonicalEpisodeIds(any()) } coAnswers {
+            canonicalEpisodeIds(firstArg())
+        }
+        return CollectionActions(
+            scope = scope,
+            session = session,
+            messages = messages.flow,
+            strings = strings,
+            mediaRepository = mediaRepository,
+            mediaDetailProvider = mediaDetailProvider,
+        )
+    }
 
     // region openCollectionPicker
     @Test
@@ -79,7 +90,7 @@ class CollectionActionsTest {
     @Test
     fun `openCollectionPicker with an audio detail is a no-op`() = runTest {
         coEvery { mediaRepository.getCollections(any()) } returns Result.success(emptyList())
-        val a = actions(this, detail = { audioDetail })
+        val a = actions(this, detail = audioDetail)
 
         a.openCollectionPicker()
         advanceUntilIdle()
@@ -94,7 +105,7 @@ class CollectionActionsTest {
     fun `openCollectionPicker with a series sets showCollectionPicker and loads collections`() = runTest {
         val c1 = CollectionSummary(id = "c1", name = "Marvel", itemCount = 4)
         coEvery { mediaRepository.getCollections(any()) } returns Result.success(listOf(c1))
-        val a = actions(this, detail = { seriesDetail })
+        val a = actions(this, detail = seriesDetail)
 
         a.openCollectionPicker()
         advanceUntilIdle()
@@ -105,7 +116,7 @@ class CollectionActionsTest {
 
     @Test
     fun `openCollectionPicker with no loaded detail is a no-op`() = runTest {
-        val a = actions(this, detail = { null })
+        val a = actions(this, detail = null)
 
         a.openCollectionPicker()
         advanceUntilIdle()
@@ -156,7 +167,6 @@ class CollectionActionsTest {
     // region addToCollection
     @Test
     fun `addToCollection success emits the added-to-collection message`() = runTest {
-        every { context.getString(R.string.detail_msg_added_to_collection, any()) } returns "added"
         coEvery { mediaRepository.addItemsToCollection(any(), any()) } returns Result.success(Unit)
         val collection = CollectionSummary(id = "c1", name = "Marvel", itemCount = 4)
         val a = actions(this)
@@ -164,7 +174,11 @@ class CollectionActionsTest {
         a.addToCollection(collection)
         advanceUntilIdle()
 
-        assertTrue(messages.contains(DetailMessage.Text("added")))
+        assertTrue(
+            messages.recorded.contains(
+                DetailMessage.Text(strings.get(R.string.detail_msg_added_to_collection, collection.name))
+            )
+        )
         assertFalse(a.state.value.isAddingToCollection)
         assertFalse(a.state.value.showCollectionPicker)
         coVerify { mediaRepository.addItemsToCollection("c1", listOf("m1")) }
@@ -172,19 +186,22 @@ class CollectionActionsTest {
 
     @Test
     fun `addToCollection for a series with no episodes emits the no-episodes-queued message`() = runTest {
-        every { context.getString(R.string.detail_msg_no_episodes_queued) } returns "no episodes"
         val collection = CollectionSummary(id = "c1", name = "Marvel", itemCount = 4)
         val a = actions(
             this,
-            detail = { seriesDetail },
-            sortedEpisodes = { emptyList() },
+            detail = seriesDetail,
+            sortedEpisodes = emptyList(),
             canonicalEpisodeIds = { emptyList() },
         )
 
         a.addToCollection(collection)
         advanceUntilIdle()
 
-        assertTrue(messages.contains(DetailMessage.Text("no episodes")))
+        assertTrue(
+            messages.recorded.contains(
+                DetailMessage.Text(strings.get(R.string.detail_msg_no_episodes_queued))
+            )
+        )
         // Nothing should be added against an empty resolution.
         coVerify(exactly = 0) { mediaRepository.addItemsToCollection(any(), any()) }
         assertFalse(a.state.value.isAddingToCollection)
@@ -192,7 +209,6 @@ class CollectionActionsTest {
 
     @Test
     fun `addToCollection for a series resolves ids from sorted episodes over a cold load`() = runTest {
-        every { context.getString(R.string.detail_msg_added_to_collection, any()) } returns "added"
         coEvery { mediaRepository.addItemsToCollection(any(), any()) } returns Result.success(Unit)
         val collection = CollectionSummary(id = "c1", name = "Marvel", itemCount = 4)
         val ep1 = MediaItem(id = "ep1", name = "E1", mediaType = MediaType.EPISODE)
@@ -200,8 +216,8 @@ class CollectionActionsTest {
         var coldLoads = 0
         val a = actions(
             this,
-            detail = { seriesDetail },
-            sortedEpisodes = { listOf(ep1, ep2) },
+            detail = seriesDetail,
+            sortedEpisodes = listOf(ep1, ep2),
             canonicalEpisodeIds = {
                 coldLoads++
                 listOf("cold")
@@ -218,13 +234,12 @@ class CollectionActionsTest {
 
     @Test
     fun `addToCollection for a series falls back to canonicalEpisodeIds when the snapshot is empty`() = runTest {
-        every { context.getString(R.string.detail_msg_added_to_collection, any()) } returns "added"
         coEvery { mediaRepository.addItemsToCollection(any(), any()) } returns Result.success(Unit)
         val collection = CollectionSummary(id = "c1", name = "Marvel", itemCount = 4)
         val a = actions(
             this,
-            detail = { seriesDetail },
-            sortedEpisodes = { emptyList() },
+            detail = seriesDetail,
+            sortedEpisodes = emptyList(),
             canonicalEpisodeIds = { listOf("cold-1", "cold-2") },
         )
 
@@ -236,14 +251,17 @@ class CollectionActionsTest {
 
     @Test
     fun `addToCollection repository failure emits couldnt-add message`() = runTest {
-        every { context.getString(R.string.detail_msg_couldnt_add_to_collection) } returns "couldn't add"
         coEvery { mediaRepository.addItemsToCollection(any(), any()) } returns Result.failure(RuntimeException("server"))
         val a = actions(this)
 
         a.addToCollection(CollectionSummary(id = "c1", name = "Marvel", itemCount = 4))
         advanceUntilIdle()
 
-        assertTrue(messages.contains(DetailMessage.Text("couldn't add")))
+        assertTrue(
+            messages.recorded.contains(
+                DetailMessage.Text(strings.get(R.string.detail_msg_couldnt_add_to_collection))
+            )
+        )
         assertFalse(a.state.value.isAddingToCollection)
         assertFalse(a.state.value.showCollectionPicker)
     }
@@ -252,7 +270,6 @@ class CollectionActionsTest {
     // region createAndAddCollection
     @Test
     fun `createAndAddCollection success creates the collection and closes the dialog`() = runTest {
-        every { context.getString(R.string.detail_msg_collection_created, any()) } returns "created"
         coEvery { mediaRepository.createCollection(any(), any()) } returns Result.success("col-new")
         val a = actions(this)
         a.openCreateCollectionDialog()
@@ -263,7 +280,11 @@ class CollectionActionsTest {
 
         // Name is trimmed; the create endpoint is seeded with the current item; dialog closes on success.
         coVerify { mediaRepository.createCollection("My Set", listOf("m1")) }
-        assertTrue(messages.contains(DetailMessage.Text("created")))
+        assertTrue(
+            messages.recorded.contains(
+                DetailMessage.Text(strings.get(R.string.detail_msg_collection_created, "My Set"))
+            )
+        )
         assertFalse(a.state.value.showCreateCollectionDialog)
         assertFalse(a.state.value.isAddingToCollection)
     }
@@ -283,7 +304,7 @@ class CollectionActionsTest {
 
     @Test
     fun `createAndAddCollection with no loaded detail is a no-op`() = runTest {
-        val a = actions(this, detail = { null })
+        val a = actions(this, detail = null)
 
         a.createAndAddCollection("Name")
         advanceUntilIdle()
@@ -293,7 +314,6 @@ class CollectionActionsTest {
 
     @Test
     fun `createAndAddCollection repository failure emits couldnt-add message`() = runTest {
-        every { context.getString(R.string.detail_msg_couldnt_add_to_collection) } returns "couldn't add"
         coEvery { mediaRepository.createCollection(any(), any()) } returns Result.failure(RuntimeException("server"))
         val a = actions(this)
         a.openCreateCollectionDialog()
@@ -301,7 +321,11 @@ class CollectionActionsTest {
         a.createAndAddCollection("Name")
         advanceUntilIdle()
 
-        assertTrue(messages.contains(DetailMessage.Text("couldn't add")))
+        assertTrue(
+            messages.recorded.contains(
+                DetailMessage.Text(strings.get(R.string.detail_msg_couldnt_add_to_collection))
+            )
+        )
         // The dialog still closes on failure (the create attempt completed).
         assertFalse(a.state.value.showCreateCollectionDialog)
         assertFalse(a.state.value.isAddingToCollection)
@@ -309,11 +333,10 @@ class CollectionActionsTest {
 
     @Test
     fun `createAndAddCollection for a series with no episodes emits no-episodes-queued and skips create`() = runTest {
-        every { context.getString(R.string.detail_msg_no_episodes_queued) } returns "no episodes"
         val a = actions(
             this,
-            detail = { seriesDetail },
-            sortedEpisodes = { emptyList() },
+            detail = seriesDetail,
+            sortedEpisodes = emptyList(),
             canonicalEpisodeIds = { emptyList() },
         )
         a.openCreateCollectionDialog()
@@ -323,7 +346,11 @@ class CollectionActionsTest {
 
         // No seed ids → must not create an empty collection; surfaces the
         // shared no-op message and closes the dialog.
-        assertTrue(messages.contains(DetailMessage.Text("no episodes")))
+        assertTrue(
+            messages.recorded.contains(
+                DetailMessage.Text(strings.get(R.string.detail_msg_no_episodes_queued))
+            )
+        )
         coVerify(exactly = 0) { mediaRepository.createCollection(any(), any()) }
         assertFalse(a.state.value.showCreateCollectionDialog)
         assertFalse(a.state.value.isAddingToCollection)

@@ -3,15 +3,19 @@ package com.raulshma.jellyplay.feature.player.video.state
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
-import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadStatus
 
 /**
- * Subtitle styling + the SubtitleManager sheet's download/search state. The
- * download list ([remoteSubtitles]) and search list ([searchedSubtitles]) are
- * kept separate so tab switches never clobber each other.
+ * The SubtitleManager sheet's download/search state — the slice owned by
+ * [com.raulshma.jellyplay.feature.player.video.SubtitleManager]. The download
+ * list ([remoteSubtitles]) and search list ([searchedSubtitles]) are kept
+ * separate so tab switches never clobber each other.
+ *
+ * `subtitleStyle` deliberately does NOT live here: it has three writers
+ * (SettingsProjector + the ViewModel's subtitle-delay/style setters), so it
+ * stays a session/prefs-mirror field on [com.raulshma.jellyplay.feature.player.video.VideoPlayerUiState].
  *
  * [providerSearchResults] holds the merged cross-provider search (Jellyfin +
  * Wyzie + OpenSubtitles), tagged with provenance so the Search tab can render
@@ -22,7 +26,6 @@ import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadStatus
  */
 @Immutable
 data class SubtitleState(
-    val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val remoteSubtitles: List<RemoteSubtitleInfo> = emptyList(),
     val subtitleCultures: List<CultureInfo> = emptyList(),
     val searchedSubtitles: List<RemoteSubtitleInfo> = emptyList(),
@@ -32,7 +35,7 @@ data class SubtitleState(
     val isUploadingSubtitle: Boolean = false,
     val isLoadingRemoteSubtitles: Boolean = false,
     val defaultSearchLanguage: String = "eng",
-    /** Per-subtitle-id download status, projected from [VideoPlayerUiState.downloadingSubtitles]. */
+    /** Per-subtitle-id download status for the "Get Subtitles" sheet. */
     val downloadingSubtitles: Map<String, SubtitleDownloadStatus> = emptyMap(),
     /** Merged cross-provider search results (Jellyfin + external providers). */
     val providerSearchResults: List<SubtitleSearchResult> = emptyList(),

@@ -2,7 +2,9 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
+import com.raulshma.jellyplay.core.model.ItemPlaybackPreference
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.RememberedTrack
 import com.raulshma.jellyplay.core.model.StreamType
@@ -10,7 +12,12 @@ import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelFormatter
 import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelInfo
+import com.raulshma.jellyplay.feature.player.video.state.TrackState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -24,14 +31,25 @@ import kotlinx.coroutines.launch
  * [trackSelectionPolicy]. That keeps this hub free of the precedence ladder
  * (pending → stored → scoring → type-specific → matcher → fallback), which now
  * has a first-class, unit-tested home. See [TrackSelectionPolicy].
+ *
+ * **State ownership:** this class is the single home of the track slice
+ * [TrackState] (the picker lists + the per-item override and per-series
+ * preference flags), exposed as a read-only [StateFlow]. The server
+ * `mediaStreams` it enriches from are *session* state owned by the ViewModel —
+ * access is a narrow [getMediaStreams] read, never a full-UiState handle.
+ *
+ * **Item-switch semantics: track state does NOT persist across episodes.**
+ * [resetForItem] clears the whole [TrackState] — none of these fields were on
+ * the former reset whitelist, so the implicit reset (fresh UiState) became this
+ * explicit command. The internal cross-episode *memory* (remembered tracks)
+ * intentionally survives a same-series episode change via [setPendingStreams].
  */
 internal class TrackSelectionHelper(
     private val engineStore: PlayerEngineStore,
     private val subtitleStore: SubtitleLanguageStore,
     private val trackSelectionPolicy: TrackSelectionPolicy = TrackSelectionPolicy(),
     private val getEngine: () -> MediaEngine?,
-    private val getUiState: () -> VideoPlayerUiState,
-    private val updateUiState: ((VideoPlayerUiState) -> VideoPlayerUiState) -> Unit,
+    private val getMediaStreams: () -> List<MediaStream>,
     private val getCurrentItemId: () -> String?,
     private val getCurrentSeriesId: () -> String?,
     private val getPlayMethod: () -> PlayMethod,
@@ -42,6 +60,9 @@ internal class TrackSelectionHelper(
     private val persistRememberedTrack: (TrackType, RememberedTrack?) -> Unit = { _, _ -> },
     private val scope: CoroutineScope,
 ) {
+    private val _state = MutableStateFlow(TrackState())
+    val state: StateFlow<TrackState> = _state.asStateFlow()
+
     private var selectedSubtitleTrackIndex: Int? = null
     private var selectedAudioTrackIndex: Int? = null
 
@@ -113,7 +134,7 @@ internal class TrackSelectionHelper(
             val streamIndex = option.index - SERVER_TRACK_INDEX_BASE
             selectedAudioTrackIndex = option.index
             audioSelectionHeld = true
-            updateUiState { state ->
+            _state.update { state ->
                 state.copy(audioTracks = state.audioTracks.map { track ->
                     track.copy(isSelected = track.index == option.index)
                 })
@@ -132,7 +153,7 @@ internal class TrackSelectionHelper(
         // later track emission (e.g. offline sidecar subs attached post-load)
         // can still resolve the language/preference selection.
         audioSelectionHeld = isUserOverride || option.index >= 0
-        updateUiState { state ->
+        _state.update { state ->
             val isDefault = option.index < 0
             state.copy(audioTracks = state.audioTracks.map { track ->
                 val matches = track.index == option.index
@@ -143,7 +164,7 @@ internal class TrackSelectionHelper(
         // Remember a real (>= 0) audio selection so the next episode can score
         // against it (G5). "Off"/Default selections don't carry forward intent.
         if (option.index >= 0 && option.index < SERVER_TRACK_INDEX_BASE) {
-            val tracks = getUiState().audioTracks
+            val tracks = _state.value.audioTracks
             val remembered = RememberedTrack(
                 label = option.label,
                 language = option.language,
@@ -171,7 +192,7 @@ internal class TrackSelectionHelper(
             val streamIndex = option.index - SERVER_TRACK_INDEX_BASE
             selectedSubtitleTrackIndex = option.index
             subtitleSelectionHeld = true
-            updateUiState { state ->
+            _state.update { state ->
                 state.copy(subtitleTracks = state.subtitleTracks.map { track ->
                     track.copy(isSelected = track.index == option.index)
                 })
@@ -192,7 +213,7 @@ internal class TrackSelectionHelper(
         // the first track list) can still apply the auto/preference selection.
         subtitleSelectionHeld = isUserOverride || option.index >= 0
 
-        updateUiState { state ->
+        _state.update { state ->
             val isOff = option.index < 0
             state.copy(subtitleTracks = state.subtitleTracks.map { track ->
                 val matches = track.index == option.index
@@ -202,7 +223,7 @@ internal class TrackSelectionHelper(
         }
         // Remember a real subtitle selection for cross-episode scoring (G5).
         if (option.index >= 0 && option.index < SERVER_TRACK_INDEX_BASE) {
-            val tracks = getUiState().subtitleTracks
+            val tracks = _state.value.subtitleTracks
             val remembered = RememberedTrack(
                 label = option.label,
                 language = option.language,
@@ -223,7 +244,7 @@ internal class TrackSelectionHelper(
 
     fun updateTracksFromEngine() {
         val engine = getEngine() ?: return
-        val streams = getUiState().mediaStreams
+        val streams = getMediaStreams()
         val rawTracks = engine.availableTracks.value
 
         // If a previously-selected track has lost its "selected" flag (e.g. the
@@ -331,7 +352,7 @@ internal class TrackSelectionHelper(
             }
         }
 
-        updateUiState { it.copy(audioTracks = audioTracks, subtitleTracks = subtitleTracks) }
+        _state.update { it.copy(audioTracks = audioTracks, subtitleTracks = subtitleTracks) }
 
         val pendingAudio = pendingAudioStreamIndex
         if (pendingAudio != null) {
@@ -417,7 +438,7 @@ internal class TrackSelectionHelper(
             if (pending == -1) {
                 subtitleTracks.firstOrNull { it.index < 0 }?.let { selectSubtitleTrack(it, isUserOverride = false) }
             } else {
-                val subStreams = getUiState().mediaStreams
+                val subStreams = getMediaStreams()
                 val targetStream = subStreams.firstOrNull { it.type == StreamType.SUBTITLE && it.index == pending }
                 if (targetStream != null) {
                     // Prefer the container stream index (mpv ff-index == the
@@ -570,6 +591,60 @@ internal class TrackSelectionHelper(
     }
 
     /**
+     * Item-switch reset: the whole [TrackState] is per-item (picker lists +
+     * override/preference flags) and must not bleed into the next episode.
+     * Called by the ViewModel's `releaseInternals()` next to [reset] — this is
+     * the explicit form of the implicit reset the former UiState rebuild did
+     * (none of these fields were on the reset whitelist).
+     */
+    fun resetForItem() {
+        _state.value = TrackState()
+    }
+
+    /**
+     * Reflects the stored per-item audio/subtitle stream selection (from the
+     * session state or the aggregate preferences snapshot) into the override
+     * flags. Called by the ViewModel's session collector and aggregate
+     * collector — the two sites that formerly wrote these flags directly into
+     * the UiState. Guarded so a redundant call does not re-emit the flow.
+     */
+    fun onStoredSelectionChanged(stored: MediaStreamSelection?) {
+        val newAudio = stored?.audioStreamIndex != null
+        val newSub = stored?.subtitleStreamIndex != null
+        val s = _state.value
+        if (s.hasAudioOverride != newAudio || s.hasSubtitleOverride != newSub) {
+            _state.update { it.copy(hasAudioOverride = newAudio, hasSubtitleOverride = newSub) }
+        }
+    }
+
+    /**
+     * Reflects the resolved per-item/series playback preference into the
+     * series-preference flags (the track sheets' "remember for this series"
+     * toggle rows). Called by the ViewModel's resolver collector — the site
+     * that formerly wrote these flags directly into the UiState.
+     */
+    fun onSeriesPreferenceResolved(pref: ItemPlaybackPreference?) {
+        val isSeries = pref?.scope == com.raulshma.jellyplay.core.model.PlaybackPrefScope.SERIES
+        val newAudio = isSeries && pref.audioLanguage != null
+        val newSub = isSeries && (pref.subtitleLanguage != null || pref.subtitleDisabled == true)
+        val newSubOff = isSeries && pref.subtitleDisabled == true
+        val newBoost = isSeries && pref.dialogueBoostStrength != null
+        val s = _state.value
+        if (s.hasSeriesAudioPref != newAudio || s.hasSeriesSubtitlePref != newSub ||
+            s.hasSeriesSubtitleOffPref != newSubOff || s.hasSeriesDialogueBoostPref != newBoost
+        ) {
+            _state.update {
+                it.copy(
+                    hasSeriesAudioPref = newAudio,
+                    hasSeriesSubtitlePref = newSub,
+                    hasSeriesSubtitleOffPref = newSubOff,
+                    hasSeriesDialogueBoostPref = newBoost,
+                )
+            }
+        }
+    }
+
+    /**
      * Merge server-side [MediaStream] entries into the engine-derived track
      * options for transcoded/direct-stream playback. The HLS manifest only
      * carries one audio track (and may omit embedded subs), so the engine
@@ -658,7 +733,7 @@ internal class TrackSelectionHelper(
         subtitleTrackOption: TrackOption?,
     ) {
         val itemId = getCurrentItemId() ?: return
-        val streams = getUiState().mediaStreams
+        val streams = getMediaStreams()
         val currentSelection = engineStore.playerEngine.value.mediaStreamSelections[itemId]
         val audioStreamIndex = if (audioTrackOption != null) {
             if (audioTrackOption.index < 0) -1

@@ -142,13 +142,12 @@ class VideoPlayerCleanupTest {
         every { syncPlayManager.playbackCore } returns playbackCore
         syncPlayManager.stubEmptyEvents()
 
-        val uiState = StateFlowHandle(MutableStateFlow(VideoPlayerUiState()))
         val bridge = SyncPlayBridge(
             syncPlayManager = syncPlayManager,
-            uiState = uiState,
             getMediaEngine = { null },
             getCurrentItemId = { null },
             onLoadItem = { _, _ -> },
+            setIsPlaying = { },
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         )
 
@@ -158,7 +157,7 @@ class VideoPlayerCleanupTest {
         // reset() must also release the callbacks held by the @Singleton core
         // so it cannot retain the destroyed ViewModel/bridge after teardown.
         verify { playbackCore.clearCallbacks() }
-        assertFalse(uiState.value.isSyncPlaySyncing)
+        assertFalse(bridge.state.value.isSyncPlaySyncing)
     }
 
     @Test

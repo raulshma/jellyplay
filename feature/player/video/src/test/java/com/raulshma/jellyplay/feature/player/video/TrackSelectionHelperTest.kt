@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MediaTrack
+import com.raulshma.jellyplay.feature.player.video.state.TrackState
 import io.mockk.every
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -24,11 +25,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+/**
+ * Tests for [TrackSelectionHelper] after state ownership moved into the helper:
+ * the test surface is the helper's [TrackState] flow — no
+ * [VideoPlayerUiState], no ViewModel. Server `mediaStreams` (session state the
+ * helper only reads) enter through a plain variable captured by the
+ * `getMediaStreams` lambda.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class TrackSelectionHelperTest {
 
@@ -36,7 +43,7 @@ class TrackSelectionHelperTest {
     private lateinit var subtitleStore: SubtitleLanguageStore
     private lateinit var engine: MediaEngine
     private lateinit var availableTracks: MutableStateFlow<List<MediaTrack>>
-    private lateinit var state: MutableStateFlow<VideoPlayerUiState>
+    private var mediaStreams: List<MediaStream> = emptyList()
     private lateinit var helper: TrackSelectionHelper
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
@@ -50,14 +57,13 @@ class TrackSelectionHelperTest {
         engine = mockk(relaxed = true)
         availableTracks = MutableStateFlow(emptyList())
         every { engine.availableTracks } returns availableTracks
-        state = MutableStateFlow(VideoPlayerUiState())
+        mediaStreams = emptyList()
 
         helper = TrackSelectionHelper(
             engineStore = engineStore,
             subtitleStore = subtitleStore,
             getEngine = { engine },
-            getUiState = { state.value },
-            updateUiState = { transform -> state.value = transform(state.value) },
+            getMediaStreams = { mediaStreams },
             getCurrentItemId = { "item1" },
             getCurrentSeriesId = { null },
             getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
@@ -85,38 +91,44 @@ class TrackSelectionHelperTest {
         return resolver
     }
 
+    private fun makeHelper(
+        getEngine: () -> MediaEngine? = { engine },
+        getCurrentItemId: () -> String? = { "item1" },
+        getCurrentSeriesId: () -> String? = { null },
+        resolver: ItemPlaybackPreferenceResolver = noOpResolver(),
+    ) = TrackSelectionHelper(
+        engineStore = engineStore,
+        subtitleStore = subtitleStore,
+        getEngine = getEngine,
+        getMediaStreams = { mediaStreams },
+        getCurrentItemId = getCurrentItemId,
+        getCurrentSeriesId = getCurrentSeriesId,
+        getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
+        onReloadForStreamChange = { _, _ -> },
+        playbackPreferenceResolver = resolver,
+        scope = scope,
+    )
+
     @Test
     fun updateTracksFromEngine_noEngine_returnsEarly() {
-        helper = TrackSelectionHelper(
-            engineStore = engineStore,
-            subtitleStore = subtitleStore,
-            getEngine = { null },
-            getUiState = { state.value },
-            updateUiState = { transform -> state.value = transform(state.value) },
-            getCurrentItemId = { "item1" },
-            getCurrentSeriesId = { null },
-            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
-            onReloadForStreamChange = { _, _ -> },
-            playbackPreferenceResolver = noOpResolver(),
-            scope = scope,
-        )
+        helper = makeHelper(getEngine = { null })
         helper.updateTracksFromEngine()
-        assertTrue(state.value.audioTracks.isEmpty())
+        assertTrue(helper.state.value.audioTracks.isEmpty())
     }
 
     @Test
     fun updateTracksFromEngine_emptyTracks_returnsDefaultAndOffOnly() {
         helper.updateTracksFromEngine()
 
-        assertEquals(1, state.value.audioTracks.size)
-        assertEquals("Default", state.value.audioTracks[0].label)
-        assertTrue(state.value.audioTracks[0].isSelected)
+        assertEquals(1, helper.state.value.audioTracks.size)
+        assertEquals("Default", helper.state.value.audioTracks[0].label)
+        assertTrue(helper.state.value.audioTracks[0].isSelected)
 
         // NOTE: production uses "None" for the empty-subtitle placeholder and "Off" for the
         // populated-case header. This test pins the current empty-case behaviour.
-        assertEquals(1, state.value.subtitleTracks.size)
-        assertEquals("None", state.value.subtitleTracks[0].label)
-        assertTrue(state.value.subtitleTracks[0].isSelected)
+        assertEquals(1, helper.state.value.subtitleTracks.size)
+        assertEquals("None", helper.state.value.subtitleTracks[0].label)
+        assertTrue(helper.state.value.subtitleTracks[0].isSelected)
     }
 
     @Test
@@ -127,7 +139,7 @@ class TrackSelectionHelperTest {
         )
         helper.updateTracksFromEngine()
 
-        val audio = state.value.audioTracks
+        val audio = helper.state.value.audioTracks
         assertEquals(3, audio.size) // Default + 2
         assertEquals("Default", audio[0].label)
         assertFalse(audio[0].isSelected) // engine had a selection
@@ -142,7 +154,7 @@ class TrackSelectionHelperTest {
         )
         helper.updateTracksFromEngine()
 
-        val subs = state.value.subtitleTracks
+        val subs = helper.state.value.subtitleTracks
         assertEquals(2, subs.size)
         assertEquals("Off", subs[0].label)
         assertTrue(subs[1].isSelected)
@@ -150,84 +162,66 @@ class TrackSelectionHelperTest {
 
     @Test
     fun selectAudioTrack_positiveIndex_callsEngineSelectAndUpdatesState() {
-        state.value = VideoPlayerUiState(
-            audioTracks = listOf(
-                TrackOption(-1, "Default", null, true),
-                TrackOption(0, "English", "eng", false),
-                TrackOption(1, "Spanish", "spa", false),
-            ),
+        // Populate via the engine (Default unselected, English auto-selected by
+        // the "eng" preference, Spanish unselected), then user-select Spanish.
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
+            mediaTrack(1, "Spanish", "spa", TrackType.AUDIO, isSelected = false),
         )
+        helper.updateTracksFromEngine()
         helper.selectAudioTrack(TrackOption(1, "Spanish", "spa", false))
 
         verify { engine.selectTrack(TrackType.AUDIO, 1) }
-        assertFalse(state.value.audioTracks[0].isSelected) // Default
-        assertFalse(state.value.audioTracks[1].isSelected) // English
-        assertTrue(state.value.audioTracks[2].isSelected)   // Spanish
+        assertFalse(helper.state.value.audioTracks[0].isSelected) // Default
+        assertFalse(helper.state.value.audioTracks[1].isSelected) // English
+        assertTrue(helper.state.value.audioTracks[2].isSelected)   // Spanish
     }
 
     @Test
     fun selectAudioTrack_negativeIndex_selectsDefaultAndClearsStoredId() {
-        state.value = VideoPlayerUiState(
-            audioTracks = listOf(
-                TrackOption(-1, "Default", null, false),
-                TrackOption(0, "English", "eng", true),
-            ),
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
         )
+        helper.updateTracksFromEngine()
         helper.selectAudioTrack(TrackOption(-1, "Default", null, true))
 
         verify { engine.selectTrack(TrackType.AUDIO, -1) }
-        assertTrue(state.value.audioTracks[0].isSelected)
-        assertFalse(state.value.audioTracks[1].isSelected)
+        assertTrue(helper.state.value.audioTracks[0].isSelected)
+        assertFalse(helper.state.value.audioTracks[1].isSelected)
     }
 
     @Test
     fun selectAudioTrack_noEngine_returnsEarly() {
-        helper = TrackSelectionHelper(
-            engineStore = engineStore,
-            subtitleStore = subtitleStore,
-            getEngine = { null },
-            getUiState = { state.value },
-            updateUiState = { transform -> state.value = transform(state.value) },
-            getCurrentItemId = { "item1" },
-            getCurrentSeriesId = { null },
-            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
-            onReloadForStreamChange = { _, _ -> },
-            playbackPreferenceResolver = noOpResolver(),
-            scope = scope,
-        )
+        helper = makeHelper(getEngine = { null })
         helper.selectAudioTrack(TrackOption(1, "Spanish", "spa", false))
         // No crash, no state change beyond initial
-        assertTrue(state.value.audioTracks.isEmpty())
+        assertTrue(helper.state.value.audioTracks.isEmpty())
     }
 
     @Test
     fun selectSubtitleTrack_positiveIndex_callsEngineSelectAndUpdatesState() {
-        state.value = VideoPlayerUiState(
-            subtitleTracks = listOf(
-                TrackOption(-1, "Off", null, true),
-                TrackOption(0, "English", "eng", false),
-            ),
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
         )
+        helper.updateTracksFromEngine()
         helper.selectSubtitleTrack(TrackOption(0, "English", "eng", false))
 
         verify { engine.selectTrack(TrackType.SUBTITLE, 0) }
-        assertFalse(state.value.subtitleTracks[0].isSelected)
-        assertTrue(state.value.subtitleTracks[1].isSelected)
+        assertFalse(helper.state.value.subtitleTracks[0].isSelected) // Off
+        assertTrue(helper.state.value.subtitleTracks[1].isSelected)  // English
     }
 
     @Test
     fun selectSubtitleTrack_negativeIndex_selectsOff() {
-        state.value = VideoPlayerUiState(
-            subtitleTracks = listOf(
-                TrackOption(-1, "Off", null, false),
-                TrackOption(0, "English", "eng", true),
-            ),
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
         )
+        helper.updateTracksFromEngine()
         helper.selectSubtitleTrack(TrackOption(-1, "Off", null, true))
 
         verify { engine.selectTrack(TrackType.SUBTITLE, -1) }
-        assertTrue(state.value.subtitleTracks[0].isSelected)
-        assertFalse(state.value.subtitleTracks[1].isSelected)
+        assertTrue(helper.state.value.subtitleTracks[0].isSelected)
+        assertFalse(helper.state.value.subtitleTracks[1].isSelected)
     }
 
     @Test
@@ -259,10 +253,8 @@ class TrackSelectionHelperTest {
 
     @Test
     fun updateTracksFromEngine_pendingAudioIndex_selectsByIndex() {
-        state.value = VideoPlayerUiState(
-            mediaStreams = listOf(
-                MediaStream(index = 1, type = StreamType.AUDIO, displayTitle = "Spanish"),
-            ),
+        mediaStreams = listOf(
+            MediaStream(index = 1, type = StreamType.AUDIO, displayTitle = "Spanish"),
         )
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
@@ -292,10 +284,8 @@ class TrackSelectionHelperTest {
                 mediaStreamSelections = mapOf("item1" to MediaStreamSelection(audioStreamIndex = 1)),
             ),
         )
-        state.value = VideoPlayerUiState(
-            mediaStreams = listOf(
-                MediaStream(index = 1, type = StreamType.AUDIO, displayTitle = "Spanish"),
-            ),
+        mediaStreams = listOf(
+            MediaStream(index = 1, type = StreamType.AUDIO, displayTitle = "Spanish"),
         )
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
@@ -314,10 +304,8 @@ class TrackSelectionHelperTest {
                 subtitlesForcedOnly = true,
             ),
         )
-        state.value = VideoPlayerUiState(
-            mediaStreams = listOf(
-                MediaStream(index = 0, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English", isForced = true),
-            ),
+        mediaStreams = listOf(
+            MediaStream(index = 0, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English", isForced = true),
         )
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
@@ -357,7 +345,6 @@ class TrackSelectionHelperTest {
     @Test
     fun updateTracksFromEngine_subtitleSelectionHeld_survivesReemissionWithEmptyStreams() {
         // Simulate offline: mediaStreams is empty.
-        state.value = VideoPlayerUiState()
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
         )
@@ -372,7 +359,7 @@ class TrackSelectionHelperTest {
         // The held English selection survives — no call to select Off.
         verify(exactly = 0) { engine.selectTrack(TrackType.SUBTITLE, -1) }
         // The selection itself stays put.
-        assertEquals(0, state.value.subtitleTracks.first { it.isSelected }.index)
+        assertEquals(0, helper.state.value.subtitleTracks.first { it.isSelected }.index)
     }
 
     @Test
@@ -382,7 +369,6 @@ class TrackSelectionHelperTest {
         // engine positional index directly.
         every { engineStore.playerEngine } returns MutableStateFlow(PlayerEngineSlice())
         every { subtitleStore.subtitle } returns MutableStateFlow(SubtitleSlice())
-        state.value = VideoPlayerUiState() // empty mediaStreams
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
         )
@@ -421,7 +407,6 @@ class TrackSelectionHelperTest {
                 mediaStreamSelections = mapOf("item1" to MediaStreamSelection(subtitleStreamIndex = 2)),
             ),
         )
-        state.value = VideoPlayerUiState() // empty mediaStreams == offline
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false, id = "offline:0"),
             mediaTrack(1, "Spanish", "spa", TrackType.SUBTITLE, isSelected = false, id = "offline:2"),
@@ -429,7 +414,7 @@ class TrackSelectionHelperTest {
         helper.updateTracksFromEngine()
 
         verify { engine.selectTrack(TrackType.SUBTITLE, 1) }
-        assertEquals(1, state.value.subtitleTracks.first { it.isSelected }.index)
+        assertEquals(1, helper.state.value.subtitleTracks.first { it.isSelected }.index)
     }
 
     @Test
@@ -438,7 +423,6 @@ class TrackSelectionHelperTest {
         // subtitleStreamIndex threaded from MediaDetailScreen.onPlayClick for a
         // LOCAL origin must resolve to the offline:${pending} sub even with
         // empty server mediaStreams (which previously dropped it silently).
-        state.value = VideoPlayerUiState() // empty mediaStreams == offline
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false, id = "offline:0"),
             mediaTrack(1, "Spanish", "spa", TrackType.SUBTITLE, isSelected = false, id = "offline:2"),
@@ -459,7 +443,6 @@ class TrackSelectionHelperTest {
                 mediaStreamSelections = mapOf("item1" to MediaStreamSelection(subtitleStreamIndex = 0)),
             ),
         )
-        state.value = VideoPlayerUiState() // empty mediaStreams == offline
         availableTracks.value = listOf(
             // No offline: id — synthetic engine ids only.
             mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false, id = "mpv_sub_1"),
@@ -476,7 +459,6 @@ class TrackSelectionHelperTest {
         // after the first track list). Auto-selection falls through to Off but
         // must NOT latch, so a later emission with a real track can still
         // resolve the language preference.
-        state.value = VideoPlayerUiState()
         availableTracks.value = emptyList()
         helper.updateTracksFromEngine()
         verify { engine.selectTrack(TrackType.SUBTITLE, -1) } // auto Off
@@ -504,8 +486,8 @@ class TrackSelectionHelperTest {
         helper.updateTracksFromEngine()
 
         // No stored override (mock store is inert) and no "eng" match → Default selected.
-        assertTrue(state.value.audioTracks[0].isSelected) // Default
-        assertFalse(state.value.audioTracks[1].isSelected) // Espanol
+        assertTrue(helper.state.value.audioTracks[0].isSelected) // Default
+        assertFalse(helper.state.value.audioTracks[1].isSelected) // Espanol
     }
 
     @Test
@@ -517,24 +499,12 @@ class TrackSelectionHelperTest {
         )
         helper.updateTracksFromEngine()
         // Pending audio index 3 has no match → no selection beyond default
-        assertEquals(2, state.value.audioTracks.size)
+        assertEquals(2, helper.state.value.audioTracks.size)
     }
 
     @Test
     fun resetAudioSelection_clearsStoredAudioSelection_whenNoItemId_returnsEarly() {
-        val noItemId = TrackSelectionHelper(
-            engineStore = engineStore,
-            subtitleStore = subtitleStore,
-            getEngine = { engine },
-            getUiState = { state.value },
-            updateUiState = { transform -> state.value = transform(state.value) },
-            getCurrentItemId = { null },
-            getCurrentSeriesId = { null },
-            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
-            onReloadForStreamChange = { _, _ -> },
-            playbackPreferenceResolver = noOpResolver(),
-            scope = scope,
-        )
+        val noItemId = makeHelper(getCurrentItemId = { null })
         noItemId.resetAudioSelection() // should not throw
     }
 
@@ -547,24 +517,15 @@ class TrackSelectionHelperTest {
         every { subtitleStore.subtitle } returns MutableStateFlow(
             SubtitleSlice(preferredSubtitleLanguage = "eng"),
         )
-        helper = TrackSelectionHelper(
-            engineStore = engineStore,
-            subtitleStore = subtitleStore,
-            getEngine = { engine },
-            getUiState = { state.value },
-            updateUiState = { transform -> state.value = transform(state.value) },
-            getCurrentItemId = { "item1" },
+        helper = makeHelper(
             getCurrentSeriesId = { "series1" },
-            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
-            onReloadForStreamChange = { _, _ -> },
-            playbackPreferenceResolver = resolverFor(
+            resolver = resolverFor(
                 com.raulshma.jellyplay.core.model.ItemPlaybackPreference(
                     scope = com.raulshma.jellyplay.core.model.PlaybackPrefScope.SERIES,
                     key = "series1",
                     subtitleDisabled = true,
                 )
             ),
-            scope = scope,
         )
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
@@ -574,6 +535,87 @@ class TrackSelectionHelperTest {
         verify { engine.selectTrack(TrackType.SUBTITLE, -1) }
         // The English track must NOT have been selected by the matcher.
         verify(exactly = 0) { engine.selectTrack(TrackType.SUBTITLE, 0) }
+    }
+
+    // ─── Item-switch semantics ─────────────────────────────────────────────────
+
+    /**
+     * Track state is per-item: resetForItem clears the picker lists and the
+     * override/preference flags — the explicit form of the implicit reset the
+     * former UiState rebuild performed (none of these fields were whitelisted).
+     */
+    @Test
+    fun `resetForItem clears tracks and override flags`() {
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+        helper.onStoredSelectionChanged(MediaStreamSelection(audioStreamIndex = 1, subtitleStreamIndex = 1))
+        helper.onSeriesPreferenceResolved(
+            com.raulshma.jellyplay.core.model.ItemPlaybackPreference(
+                scope = com.raulshma.jellyplay.core.model.PlaybackPrefScope.SERIES,
+                key = "series1",
+                audioLanguage = "eng",
+                subtitleDisabled = true,
+                dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.HIGH,
+            )
+        )
+        assertTrue(helper.state.value.audioTracks.isNotEmpty())
+        assertTrue(helper.state.value.hasAudioOverride)
+        assertTrue(helper.state.value.hasSeriesAudioPref)
+
+        helper.resetForItem()
+
+        assertEquals(TrackState(), helper.state.value)
+    }
+
+    /** The stored per-item override flags derive from the stored stream selection. */
+    @Test
+    fun `onStoredSelectionChanged reflects override flags`() {
+        helper.onStoredSelectionChanged(null)
+        assertFalse(helper.state.value.hasAudioOverride)
+        assertFalse(helper.state.value.hasSubtitleOverride)
+
+        helper.onStoredSelectionChanged(MediaStreamSelection(audioStreamIndex = 1))
+        assertTrue(helper.state.value.hasAudioOverride)
+        assertFalse(helper.state.value.hasSubtitleOverride)
+
+        helper.onStoredSelectionChanged(MediaStreamSelection(audioStreamIndex = null, subtitleStreamIndex = 2))
+        assertFalse(helper.state.value.hasAudioOverride)
+        assertTrue(helper.state.value.hasSubtitleOverride)
+    }
+
+    /** The series-pref flags derive from the resolved series-scope preference. */
+    @Test
+    fun `onSeriesPreferenceResolved reflects series preference flags`() {
+        helper.onSeriesPreferenceResolved(null)
+        assertEquals(TrackState(), helper.state.value.copy(audioTracks = helper.state.value.audioTracks, subtitleTracks = helper.state.value.subtitleTracks))
+
+        helper.onSeriesPreferenceResolved(
+            com.raulshma.jellyplay.core.model.ItemPlaybackPreference(
+                scope = com.raulshma.jellyplay.core.model.PlaybackPrefScope.SERIES,
+                key = "series1",
+                audioLanguage = "eng",
+                subtitleDisabled = true,
+                dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.HIGH,
+            )
+        )
+        val s = helper.state.value
+        assertTrue(s.hasSeriesAudioPref)
+        assertTrue(s.hasSeriesSubtitlePref)
+        assertTrue(s.hasSeriesSubtitleOffPref)
+        assertTrue(s.hasSeriesDialogueBoostPref)
+
+        // Item-scope preferences are NOT series prefs.
+        helper.onSeriesPreferenceResolved(
+            com.raulshma.jellyplay.core.model.ItemPlaybackPreference(
+                scope = com.raulshma.jellyplay.core.model.PlaybackPrefScope.ITEM,
+                key = "item1",
+                audioLanguage = "eng",
+            )
+        )
+        assertFalse(helper.state.value.hasSeriesAudioPref)
     }
 
     private fun mediaTrack(

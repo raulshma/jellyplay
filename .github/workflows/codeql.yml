@@ -1,0 +1,78 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, Monday 05:30 UTC
+    - cron: "30 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  # Required by CodeQL to upload SARIF results
+  security-events: write
+  contents: read
+  # Required for PR analysis to read workflow runs (baseline resolution)
+  actions: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: java-kotlin
+            build-mode: manual
+            timeout: 90
+          - language: actions
+            build-mode: none
+            timeout: 15
+          - language: javascript-typescript
+            build-mode: none
+            timeout: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Project requires JDK 17 (AGP 9.x, Kotlin 2.3). Foojay resolver in
+      # settings.gradle.kts would download a toolchain if missing, but
+      # pre-installing it is faster and works fully offline.
+      - name: Set up JDK 17
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@988661ebb5e81487b3fb31b2185d2856c0a10679 # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      # gradle.properties is tuned for an 18-core dev machine
+      # (org.gradle.workers.max=12, 6g daemon heap). GitHub runners have
+      # 4 cores / 16 GB, so the default autobuild OOMs during Kotlin
+      # compilation. Build with capped parallelism and runner-sized heaps.
+      - name: Build (Gradle, debug variants of all modules)
+        if: matrix.language == 'java-kotlin'
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --max-workers=2 \
+            "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" \
+            "-Pkotlin.daemon.jvmargs=-Xmx3g -XX:+UseParallelGC"
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@988661ebb5e81487b3fb31b2185d2856c0a10679 # v4
+        with:
+          category: "/language:${{ matrix.language }}"

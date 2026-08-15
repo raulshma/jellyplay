@@ -210,6 +210,9 @@ dependencies {
 
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test)
+    // NavigationRouteTest round-trips every Route through nav3's NavKeySerializer,
+    // which encodes/decodes via kotlinx.serialization Json.
+    androidTestImplementation(libs.kotlinx.serialization.json)
     debugImplementation(libs.compose.ui.test.manifest)
 
     // Generates and merges a Baseline Profile from the :baselineprofile

@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
+import com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState
 
 /**
  * Builds the engine [EngineConfig] from the current UI state plus the cached
@@ -39,30 +40,31 @@ internal object EngineConfigBuilder {
 
     fun build(
         state: VideoPlayerUiState,
+        effects: AudioEffectsState,
         equalizerEnabled: Boolean,
         agg: VideoPlayerAggregate,
     ): EngineConfig = EngineConfig(
-        decoderMode = state.decoderMode,
-        audioPassthrough = state.audioPassthrough,
-        audioDelayMs = state.audioDelayMs,
+        decoderMode = effects.decoderMode,
+        audioPassthrough = effects.audioPassthrough,
+        audioDelayMs = effects.audioDelayMs,
         subtitleDelayMs = state.subtitleStyle.offsetMs,
         subtitleStyle = state.subtitleStyle,
         videoEffects = state.videoEffects,
         audioEffects = audioEffects(
             dialogueBoostEnabled = state.dialogueBoostEnabled,
             dialogueBoostStrength = state.dialogueBoostStrength,
-            nightModeEnabled = state.nightModeEnabled,
-            nightModeStrength = state.nightModeStrength,
+            nightModeEnabled = effects.nightModeEnabled,
+            nightModeStrength = effects.nightModeStrength,
             equalizerEnabled = equalizerEnabled,
-            audioNormalizationMode = state.audioNormalizationMode,
-            audioNormalizationEnabled = state.audioNormalizationEnabled,
-            channelMixMode = state.channelMixMode,
-            channelMixEnabled = state.channelMixEnabled,
-            bassBoostEnabled = state.bassBoostEnabled,
-            bassBoostStrength = state.bassBoostStrength,
-            virtualizerEnabled = state.virtualizerEnabled,
-            virtualizerStrength = state.virtualizerStrength,
-            reverbPreset = state.reverbPreset,
+            audioNormalizationMode = effects.audioNormalizationMode,
+            audioNormalizationEnabled = effects.audioNormalizationEnabled,
+            channelMixMode = effects.channelMixMode,
+            channelMixEnabled = effects.channelMixEnabled,
+            bassBoostEnabled = effects.bassBoostEnabled,
+            bassBoostStrength = effects.bassBoostStrength,
+            virtualizerEnabled = effects.virtualizerEnabled,
+            virtualizerStrength = effects.virtualizerStrength,
+            reverbPreset = effects.reverbPreset,
             audioSlice = agg.audio,
             audioEffectsSlice = agg.audioEffects,
         ),

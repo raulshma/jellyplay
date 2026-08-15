@@ -1,9 +1,9 @@
 package com.raulshma.jellyplay.feature.details
 
-import android.content.Context
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
@@ -38,9 +38,10 @@ import org.junit.Test
  * its own — it launches on the injected [CoroutineScope], so each test passes
  * the [runTest] [TestScope] and flushes via [advanceUntilIdle].
  *
- * Follows the [com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder]
- * test template: relaxed mocks for the collaborators, provider lambdas for the
- * VM-injected readers, and a capturing sink for one-shot messages.
+ * Session-seam fixture: one [MutableStateFlow] of [DetailSession] replaces the
+ * former 4 provider lambdas; localized strings arrive via the pure
+ * [fakeDetailStrings] fake; one-shot messages are captured from the shared
+ * flow via [RecordingMessages].
  */
 class DownloadLifecycleActionsTest {
 
@@ -48,7 +49,10 @@ class DownloadLifecycleActionsTest {
     private val downloadsStore: DownloadsStore = mockk(relaxed = true)
     private val adaptiveBitrateManager: AdaptiveBitrateManager = mockk(relaxed = true)
     private val downloadRepository: DownloadRepository = mockk(relaxed = true)
-    private val context: Context = mockk(relaxed = true)
+    private val mediaDetailProvider: MediaDetailProvider = mockk(relaxed = true)
+
+    private val strings = fakeDetailStrings()
+    private val messages = RecordingMessages()
 
     @Before
     fun setUpDispatcher() {
@@ -56,9 +60,10 @@ class DownloadLifecycleActionsTest {
     }
 
     /**
-     * Builds an [DownloadLifecycleActions] wired to the relaxed collaborators,
-     * with overridable provider lambdas. Defaults: unmetered connection, an
-     * empty [DownloadsSlice] (→ ORIGINAL quality → null maxBitrate).
+     * Builds a [DownloadLifecycleActions] wired to the relaxed collaborators,
+     * with an overridable session flow. Defaults: unmetered connection, an
+     * empty [DownloadsSlice] (→ ORIGINAL quality → null maxBitrate), and an
+     * expandSeason that records calls and returns empty.
      */
     private fun makeActions(
         scope: CoroutineScope,
@@ -66,26 +71,37 @@ class DownloadLifecycleActionsTest {
         seasons: List<MediaItem> = emptyList(),
         seriesId: String? = null,
         itemId: String? = null,
-        expandSeason: suspend (itemId: String, seasonId: String) -> List<MediaItem> = { _, _ -> emptyList() },
-        messageSink: (DetailMessage) -> Unit = {},
+        expandCalls: MutableList<Pair<String, String>>? = null,
+        expandedEpisodes: (String) -> List<MediaItem> = { emptyList() },
         downloadsSlice: DownloadsSlice = DownloadsSlice(),
         unmetered: Boolean = true,
     ): DownloadLifecycleActions {
+        val session = MutableStateFlow(
+            DetailSession(
+                itemId = itemId ?: detail?.item?.id ?: "item-1",
+                seriesId = seriesId,
+                detail = detail,
+                seasons = seasons,
+            ),
+        )
         every { downloadsStore.downloads } returns MutableStateFlow(downloadsSlice)
         every { adaptiveBitrateManager.isUnmeteredConnection() } returns unmetered
+        if (expandCalls != null) {
+            coEvery { mediaDetailProvider.expandSeason(any(), any()) } coAnswers {
+                expandCalls += arg<String>(0) to arg<String>(1)
+                expandedEpisodes(arg(1))
+            }
+        }
         return DownloadLifecycleActions(
             scope = scope,
+            session = session,
+            messages = messages.flow,
+            strings = strings,
             downloadIntake = downloadIntake,
             downloadsStore = downloadsStore,
             adaptiveBitrateManager = adaptiveBitrateManager,
             downloadRepository = downloadRepository,
-            context = context,
-            detailProvider = { detail },
-            seasonsProvider = { seasons },
-            currentSeriesIdProvider = { seriesId },
-            itemIdProvider = { itemId },
-            expandSeason = expandSeason,
-            messageSink = messageSink,
+            mediaDetailProvider = mediaDetailProvider,
         )
     }
 
@@ -212,17 +228,35 @@ class DownloadLifecycleActionsTest {
         coEvery { downloadIntake.startSeries("series-1", null) } returns
             Result.success(listOf("d1", "d2", "d3"))
 
-        val messages = mutableListOf<DetailMessage>()
-        val h = makeActions(scope = this, detail = detail, messageSink = { messages += it })
+        val h = makeActions(scope = this, detail = detail)
 
         h.downloadSeries()
         advanceUntilIdle()
 
         assertEquals(
             listOf(DetailMessage.SeriesDownload(queuedCount = 3, error = null)),
-            messages,
+            messages.recorded,
         )
         assertFalse(h.state.value.isDownloadingSeries)
+    }
+
+    @Test
+    fun `downloadSeries with no loaded session emits details-not-loaded error`() = runTest {
+        // Ports the former DetailViewModelTest message-flow test: the no-detail
+        // precondition must surface exactly one SeriesDownload error through the
+        // shared message channel.
+        val h = makeActions(scope = this, detail = null)
+
+        h.downloadSeries()
+        advanceUntilIdle()
+
+        val msg = messages.recorded.filterIsInstance<DetailMessage.SeriesDownload>().single()
+        assertEquals(0, msg.queuedCount)
+        assertEquals(
+            strings.get(R.string.detail_error_details_not_loaded),
+            msg.error,
+        )
+        coVerify(exactly = 0) { downloadIntake.startSeries(any(), any()) }
     }
     // endregion
 
@@ -240,8 +274,8 @@ class DownloadLifecycleActionsTest {
             seasons = listOf(season1, season2),
             seriesId = "series-1",
             itemId = "item-1",
-            expandSeason = { itemId, seasonId ->
-                expandedCalls += itemId to seasonId
+            expandCalls = expandedCalls,
+            expandedEpisodes = { seasonId ->
                 when (seasonId) {
                     "s1" -> listOf(ep1)
                     "s2" -> listOf(ep2)
@@ -274,7 +308,8 @@ class DownloadLifecycleActionsTest {
             seasons = listOf(season1),
             seriesId = "series-1",
             itemId = "item-1",
-            expandSeason = { _, _ -> listOf(ep1) },
+            expandCalls = mutableListOf(),
+            expandedEpisodes = { listOf(ep1) },
         )
 
         h.prepareDownloadSheetEpisodes()
@@ -294,28 +329,24 @@ class DownloadLifecycleActionsTest {
     // region startDownload — precondition + cellular-warning guards
     @Test
     fun `startDownload with no loaded detail emits details-not-loaded and skips intake`() = runTest {
-        every { context.getString(R.string.detail_error_details_not_loaded) } returns "no detail"
-        val messages = mutableListOf<DetailMessage>()
-        val h = makeActions(scope = this, detail = null, messageSink = { messages += it })
+        val h = makeActions(scope = this, detail = null)
 
         h.startDownload()
         advanceUntilIdle()
 
-        assertTrue(messages.contains(DetailMessage.Text("no detail")))
+        assertTrue(messages.recorded.contains(DetailMessage.Text(strings.get(R.string.detail_error_details_not_loaded))))
         coVerify(exactly = 0) { downloadIntake.start(any(), any(), any()) }
     }
 
     @Test
     fun `startDownload with no media source emits no-source and skips intake`() = runTest {
-        every { context.getString(R.string.detail_error_no_source) } returns "no source"
-        val messages = mutableListOf<DetailMessage>()
         val detail = MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))
-        val h = makeActions(scope = this, detail = detail, messageSink = { messages += it })
+        val h = makeActions(scope = this, detail = detail)
 
         h.startDownload()
         advanceUntilIdle()
 
-        assertTrue(messages.contains(DetailMessage.Text("no source")))
+        assertTrue(messages.recorded.contains(DetailMessage.Text(strings.get(R.string.detail_error_no_source))))
         coVerify(exactly = 0) { downloadIntake.start(any(), any(), any()) }
     }
 
@@ -421,49 +452,31 @@ class DownloadLifecycleActionsTest {
     // region downloadSeries — eligibility + failure paths
     @Test
     fun `downloadSeries on a non-series emits not-a-series error`() = runTest {
-        every { context.getString(R.string.detail_error_not_a_series) } returns "not a series"
-        val messages = mutableListOf<DetailMessage>()
         val movieDetail = MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))
-        val h = makeActions(scope = this, detail = movieDetail, messageSink = { messages += it })
+        val h = makeActions(scope = this, detail = movieDetail)
 
         h.downloadSeries()
         advanceUntilIdle()
 
-        val msg = messages.filterIsInstance<DetailMessage.SeriesDownload>().single()
+        val msg = messages.recorded.filterIsInstance<DetailMessage.SeriesDownload>().single()
         assertEquals(0, msg.queuedCount)
-        assertEquals("not a series", msg.error)
-        coVerify(exactly = 0) { downloadIntake.startSeries(any(), any()) }
-    }
-
-    @Test
-    fun `downloadSeries with no loaded detail emits details-not-loaded error`() = runTest {
-        every { context.getString(R.string.detail_error_details_not_loaded) } returns "no detail"
-        val messages = mutableListOf<DetailMessage>()
-        val h = makeActions(scope = this, detail = null, messageSink = { messages += it })
-
-        h.downloadSeries()
-        advanceUntilIdle()
-
-        val msg = messages.filterIsInstance<DetailMessage.SeriesDownload>().single()
-        assertEquals("no detail", msg.error)
+        assertEquals(strings.get(R.string.detail_error_not_a_series), msg.error)
         coVerify(exactly = 0) { downloadIntake.startSeries(any(), any()) }
     }
 
     @Test
     fun `downloadSeries intake failure emits queue-failed error`() = runTest {
-        every { context.getString(R.string.detail_error_queue_failed) } returns "queue failed"
         val seriesDetail = MediaDetail(item = MediaItem(id = "series-1", name = "Series", mediaType = MediaType.SERIES))
-        // A throwable with no message exercises the getString fallback path.
+        // A throwable with no message exercises the strings-fallback path.
         coEvery { downloadIntake.startSeries("series-1", null) } returns Result.failure(RuntimeException())
-        val messages = mutableListOf<DetailMessage>()
-        val h = makeActions(scope = this, detail = seriesDetail, messageSink = { messages += it })
+        val h = makeActions(scope = this, detail = seriesDetail)
 
         h.downloadSeries()
         advanceUntilIdle()
 
-        val msg = messages.filterIsInstance<DetailMessage.SeriesDownload>().single()
+        val msg = messages.recorded.filterIsInstance<DetailMessage.SeriesDownload>().single()
         assertEquals(0, msg.queuedCount)
-        assertEquals("queue failed", msg.error)
+        assertEquals(strings.get(R.string.detail_error_queue_failed), msg.error)
         assertFalse(h.state.value.isDownloadingSeries)
     }
     // endregion
@@ -472,14 +485,12 @@ class DownloadLifecycleActionsTest {
     @Test
     fun `loadDownloadSheetEpisodes expands once and is idempotent for a fetched season`() = runTest {
         val ep1 = MediaItem(id = "e1", name = "E1", mediaType = MediaType.EPISODE)
-        val expandCalls = mutableListOf<String>()
+        val expandCalls = mutableListOf<Pair<String, String>>()
         val h = makeActions(
             scope = this,
             itemId = "item-1",
-            expandSeason = { _, seasonId ->
-                expandCalls += seasonId
-                listOf(ep1)
-            },
+            expandCalls = expandCalls,
+            expandedEpisodes = { listOf(ep1) },
         )
 
         h.loadDownloadSheetEpisodes("s1")
@@ -488,39 +499,39 @@ class DownloadLifecycleActionsTest {
         h.loadDownloadSheetEpisodes("s1")
         advanceUntilIdle()
 
-        assertEquals(listOf("s1"), expandCalls)
+        assertEquals(listOf("item-1" to "s1"), expandCalls)
         assertEquals(mapOf("s1" to listOf(ep1)), h.state.value.downloadSheetEpisodes)
     }
 
     @Test
-    fun `loadDownloadSheetEpisodes with null itemId is a no-op`() = runTest {
-        val expandCalls = mutableListOf<String>()
-        val h = makeActions(
+    fun `loadDownloadSheetEpisodes with a null session is a no-op`() = runTest {
+        val actions = DownloadLifecycleActions(
             scope = this,
-            itemId = null,
-            expandSeason = { _, seasonId ->
-                expandCalls += seasonId
-                emptyList()
-            },
+            session = MutableStateFlow(null),
+            messages = messages.flow,
+            strings = strings,
+            downloadIntake = downloadIntake,
+            downloadsStore = downloadsStore,
+            adaptiveBitrateManager = adaptiveBitrateManager,
+            downloadRepository = downloadRepository,
+            mediaDetailProvider = mediaDetailProvider,
         )
 
-        h.loadDownloadSheetEpisodes("s1")
+        actions.loadDownloadSheetEpisodes("s1")
         advanceUntilIdle()
 
-        assertTrue(expandCalls.isEmpty())
+        coVerify(exactly = 0) { mediaDetailProvider.expandSeason(any(), any()) }
     }
 
     @Test
     fun `resetDownloadSheetState clears the per-season cache so the next load re-expands`() = runTest {
         val ep1 = MediaItem(id = "e1", name = "E1", mediaType = MediaType.EPISODE)
-        val expandCalls = mutableListOf<String>()
+        val expandCalls = mutableListOf<Pair<String, String>>()
         val h = makeActions(
             scope = this,
             itemId = "item-1",
-            expandSeason = { _, seasonId ->
-                expandCalls += seasonId
-                listOf(ep1)
-            },
+            expandCalls = expandCalls,
+            expandedEpisodes = { listOf(ep1) },
         )
 
         h.loadDownloadSheetEpisodes("s1")
@@ -530,7 +541,34 @@ class DownloadLifecycleActionsTest {
         advanceUntilIdle()
 
         // Reset dropped the fetched-season cache → the season re-expands.
-        assertEquals(listOf("s1", "s1"), expandCalls)
+        assertEquals(listOf("item-1" to "s1", "item-1" to "s1"), expandCalls)
+    }
+    // endregion
+
+    // region download-details sheet inventory (moved from the VM body)
+    @Test
+    fun `loadDownloadFileInventory loads from the repository into state`() = runTest {
+        val inventory = mockk<com.raulshma.jellyplay.core.model.DownloadFileInventory>(relaxed = true)
+        coEvery { downloadRepository.getDownloadFileInventory("m1") } returns inventory
+        val detail = MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))
+        val h = makeActions(scope = this, detail = detail)
+
+        h.loadDownloadFileInventory()
+        advanceUntilIdle()
+
+        assertEquals(inventory, h.state.value.downloadFileInventory)
+        assertFalse(h.state.value.isLoadingDownloadFiles)
+    }
+
+    @Test
+    fun `clearDownloadFileInventory resets the sheet inventory`() = runTest {
+        val detail = MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))
+        val h = makeActions(scope = this, detail = detail)
+
+        h.clearDownloadFileInventory()
+
+        assertNull(h.state.value.downloadFileInventory)
+        assertFalse(h.state.value.isLoadingDownloadFiles)
     }
     // endregion
 }

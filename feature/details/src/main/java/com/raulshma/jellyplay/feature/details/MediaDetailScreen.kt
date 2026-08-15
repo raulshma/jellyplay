@@ -85,6 +85,14 @@ fun MediaDetailScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // Download-lifecycle slice: collected ONCE here because the always-composed
+    // content tree needs the button spinner + picker + downloaded-ids fields
+    // (they flow into DetailContentState below); the sheets read the same
+    // value with no per-sheet subscription.
+    val downloads by viewModel.downloads.state.collectAsStateWithLifecycle()
+    // Resync slice: same story — the always-composed freshness banner reads it
+    // through the bag; the resync sheet reads the same value.
+    val resyncState by viewModel.resync.state.collectAsStateWithLifecycle()
     val detail = uiState.detail
     val canManageSeries by viewModel.canManageSeries.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
@@ -102,7 +110,7 @@ fun MediaDetailScreen(
     val hasLocalContent = uiState.detailContext?.download != null || uiState.origin?.isLocal == true
     LaunchedEffect(currentItem?.id, hasLocalContent) {
         if (currentItem != null && hasLocalContent) {
-            viewModel.checkForUpdates()
+            viewModel.resync.checkForUpdates()
         }
     }
     // Memoized so the URL isn't rebuilt on every recomposition (e.g. on each
@@ -203,7 +211,7 @@ fun MediaDetailScreen(
         }
     }
 
-    val cellularWarningMb = uiState.cellularDownloadWarningMb
+    val cellularWarningMb = downloads.cellularDownloadWarningMb
     if (cellularWarningMb != null) {
         ConfirmDialog(
             title = stringResource(R.string.detail_cellular_download_title),
@@ -211,8 +219,8 @@ fun MediaDetailScreen(
             confirmText = stringResource(R.string.detail_download_anyway),
             dismissText = stringResource(R.string.detail_cancel),
             tone = ConfirmTone.NEUTRAL,
-            onConfirm = { viewModel.confirmCellularDownload() },
-            onDismiss = { viewModel.dismissCellularDownloadWarning() },
+            onConfirm = { viewModel.downloads.confirmCellularDownload() },
+            onDismiss = { viewModel.downloads.dismissCellularDownloadWarning() },
         )
     }
 
@@ -242,7 +250,7 @@ fun MediaDetailScreen(
             colorStyle = preferences.theme.colorStyle,
             accentColorSwatch = preferences.theme.accentColorSwatch,
         ) {
-            val downloadFlow = remember(itemId) { viewModel.getDownloadFlow(itemId) }
+            val downloadFlow = remember(itemId) { viewModel.downloads.downloadFlow(itemId) }
             val activeDownload by downloadFlow.collectAsStateWithLifecycle(initialValue = null)
 
             // Seerr integration state (derived from the uiState snapshot)
@@ -259,7 +267,7 @@ fun MediaDetailScreen(
                 remember(seerrLoadingState, viewModel) {
                     { tmdbId, mediaType, onDone ->
                         seerrLoadingState.startLoading(tmdbId)
-                        viewModel.prefetchSeerrDetails(tmdbId, mediaType) {
+                        viewModel.seerrRequests.prefetchDetails(tmdbId, mediaType) {
                             seerrLoadingState.stopLoading(tmdbId)
                             onDone()
                         }
@@ -307,8 +315,8 @@ fun MediaDetailScreen(
                     persistedSeasonId = preferences.lastViewedSeasonBySeries[seriesIdForSeasons],
                     selectedSubtitleIndex = uiState.selectedSubtitleIndex,
                     selectedAudioIndex = uiState.selectedAudioIndex,
-                    isDownloading = uiState.isDownloading,
-                    isDownloadingSeries = uiState.isDownloadingSeries,
+                    isDownloading = downloads.isDownloading,
+                    isDownloadingSeries = downloads.isDownloadingSeries,
                     activeDownload = activeDownload,
                     loadState = uiState.loadState,
                     albumTracks = uiState.albumTracks,
@@ -331,9 +339,9 @@ fun MediaDetailScreen(
                     assets = uiState.assets,
                     localSubtitles = uiState.localSubtitles,
                     selectedLocalSubtitleIndex = uiState.selectedLocalSubtitleIndex,
-                    resyncState = uiState.resyncState,
-                    downloadedEpisodeIds = uiState.downloadedEpisodeIds,
-                    downloadPicker = uiState.downloadPicker,
+                    resyncState = resyncState,
+                    downloadedEpisodeIds = downloads.downloadedEpisodeIds,
+                    downloadPicker = downloads.downloadPicker,
                 )
 
                 val onVideoClick = rememberVideoClickHandler(
@@ -401,15 +409,15 @@ fun MediaDetailScreen(
                             onPlayClick(extra.id, null, 0L, null, null)
                         },
                         onAudioClick = { onAudioClick(itemId) },
-                        onDownloadClick = { viewModel.startDownload() },
-                        onOpenDownloadPicker = { viewModel.openDownloadPicker() },
-                        onDismissDownloadPicker = { viewModel.dismissDownloadPicker() },
-                        onPendingQualityChange = { viewModel.setPendingDownloadQuality(it) },
-                        onPendingSubtitleSelectionChange = { viewModel.setPendingSubtitleSelection(it) },
+                        onDownloadClick = { viewModel.downloads.startDownload() },
+                        onOpenDownloadPicker = { viewModel.downloads.openDownloadPicker() },
+                        onDismissDownloadPicker = { viewModel.downloads.dismissDownloadPicker() },
+                        onPendingQualityChange = { viewModel.downloads.setPendingQuality(it) },
+                        onPendingSubtitleSelectionChange = { viewModel.downloads.setPendingSubtitleSelection(it) },
                         onDownloadSeriesClick = {
                             showSeriesDownloadSheet = true
-                            viewModel.loadDownloadedEpisodeIds()
-                            viewModel.prepareDownloadSheetEpisodes()
+                            viewModel.downloads.loadDownloadedEpisodeIds()
+                            viewModel.downloads.prepareDownloadSheetEpisodes()
                         },
                         onToggleFavorite = { viewModel.toggleFavorite() },
                         onMarkPlayed = {
@@ -472,10 +480,10 @@ fun MediaDetailScreen(
                         onShowDetailUpNext = { viewModel.setShowDetailUpNext(true) },
                         onHideDetailUpNext = { viewModel.setShowDetailUpNext(false) },
                         onManageSeries = { onManageSeries(itemId) },
-                        onAddToPlaylist = { viewModel.openPlaylistPicker() },
-                        onAddToCollection = { viewModel.openCollectionPicker() },
+                        onAddToPlaylist = { viewModel.playlists.openPlaylistPicker() },
+                        onAddToCollection = { viewModel.collections.openCollectionPicker() },
                         onStartInstantMix = { viewModel.startInstantMix() },
-                        onStartWatchParty = { viewModel.startWatchParty() },
+                        onStartWatchParty = { viewModel.watchParty.startScreenItem() },
                         onMediaQuickActions = { item -> quickActionController.show(item) },
                         onFocusedMediaItem = { item -> tvFocusedItem = item },
                         onDeleteDownload = {
@@ -497,13 +505,13 @@ fun MediaDetailScreen(
                             )
                         },
                         onOpenResync = { showResyncSheet = true },
-                        onResync = { viewModel.resync() },
-                        onRedownloadMedia = { viewModel.redownloadMedia() },
-                        onClearResync = { viewModel.clearResyncState() },
+                        onResync = { viewModel.resync.resync() },
+                        onRedownloadMedia = { viewModel.resync.redownloadMedia() },
+                        onClearResync = { viewModel.resync.clearResyncState() },
                         onOpenDownloadDetails = {
                             // Load the on-disk inventory (media + sidecars) before showing
                             // the sheet so sizes are fresh; it re-reads on every open.
-                            viewModel.loadDownloadFileInventory()
+                            viewModel.downloads.loadDownloadFileInventory()
                             showDownloadDetailsSheet = true
                         },
                         onSelectLocalSubtitle = { index -> viewModel.selectLocalSubtitle(index) },
@@ -529,9 +537,9 @@ fun MediaDetailScreen(
                 seerrRequestItem?.let { item ->
                     // Fetch service details and TV seasons on-demand when dialog opens
                     LaunchedEffect(item.id) {
-                        viewModel.loadSeerrServiceDetails(item.mediaType)
+                        viewModel.seerrRequests.loadServiceDetails(item.mediaType)
                         if (item.mediaType.equals("tv", ignoreCase = true)) {
-                            viewModel.loadSeerrTvSeasons(item.id)
+                            viewModel.seerrRequests.loadTvSeasons(item.id)
                         }
                     }
 
@@ -545,69 +553,76 @@ fun MediaDetailScreen(
                         requestSuccess = seerrRequestResult?.success,
                         requestError = seerrRequestResult?.error,
                         onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
-                            viewModel.requestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags)
+                            viewModel.seerrRequests.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
                         },
                         onDismiss = {
                             seerrRequestItem = null
-                            viewModel.clearSeerrRequestResult()
+                            viewModel.seerrRequests.clearRequestResult()
                         },
                     )
                 }
             } // CompositionLocalProvider
         }
 
-        if (uiState.showPlaylistPicker && detail != null) {
+        // ── Add-to-Playlist sheet + create dialog. State is collected from the
+        // owning helper at the composition site that reads it — a closed sheet
+        // composes nothing and the content core never sees a playlist tick. ──
+        val playlistState by viewModel.playlists.state.collectAsStateWithLifecycle()
+        if (playlistState.showPlaylistPicker && detail != null) {
             val playlistSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             TvSafeSheet(
-                onDismissRequest = { viewModel.dismissPlaylistPicker() },
+                onDismissRequest = { viewModel.playlists.dismissPlaylistPicker() },
                 sheetState = playlistSheetState,
             ) {
                 AddToPlaylistSheet(
-                    playlists = uiState.playlists,
-                    isLoading = uiState.isLoadingPlaylists,
-                    isAdding = uiState.isAddingToPlaylist,
-                    onWatchLater = { viewModel.addToWatchLater() },
-                    onPick = { playlist -> viewModel.addToPlaylist(playlist) },
-                    onCreateNew = { viewModel.openCreatePlaylistDialog() },
-                    onDismiss = { viewModel.dismissPlaylistPicker() },
+                    playlists = playlistState.playlists,
+                    isLoading = playlistState.isLoadingPlaylists,
+                    isAdding = playlistState.isAddingToPlaylist,
+                    onWatchLater = { viewModel.playlists.addToWatchLater() },
+                    onPick = { playlist -> viewModel.playlists.addToPlaylist(playlist) },
+                    onCreateNew = { viewModel.playlists.openCreatePlaylistDialog() },
+                    onDismiss = { viewModel.playlists.dismissPlaylistPicker() },
                 )
             }
         }
 
-        if (uiState.showCreatePlaylistDialog) {
+        if (playlistState.showCreatePlaylistDialog) {
             CreatePlaylistDialog(
-                isLoading = uiState.isAddingToPlaylist,
+                isLoading = playlistState.isAddingToPlaylist,
                 onConfirm = { name, overview ->
-                    viewModel.createAndAddPlaylist(name, overview)
+                    viewModel.playlists.createAndAddPlaylist(name, overview)
                 },
-                onDismiss = { viewModel.dismissCreatePlaylistDialog() },
+                onDismiss = { viewModel.playlists.dismissCreatePlaylistDialog() },
             )
         }
 
-        if (uiState.showCollectionPicker && detail != null) {
+        // ── Add-to-Collection sheet + create dialog (mirror of the playlist
+        // block; same collection locality). ──
+        val collectionState by viewModel.collections.state.collectAsStateWithLifecycle()
+        if (collectionState.showCollectionPicker && detail != null) {
             val collectionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             TvSafeSheet(
-                onDismissRequest = { viewModel.dismissCollectionPicker() },
+                onDismissRequest = { viewModel.collections.dismissCollectionPicker() },
                 sheetState = collectionSheetState,
             ) {
                 AddToCollectionSheet(
-                    collections = uiState.collections,
-                    isLoading = uiState.isLoadingCollections,
-                    isAdding = uiState.isAddingToCollection,
-                    onPick = { collection -> viewModel.addToCollection(collection) },
-                    onCreateNew = { viewModel.openCreateCollectionDialog() },
-                    onDismiss = { viewModel.dismissCollectionPicker() },
+                    collections = collectionState.collections,
+                    isLoading = collectionState.isLoadingCollections,
+                    isAdding = collectionState.isAddingToCollection,
+                    onPick = { collection -> viewModel.collections.addToCollection(collection) },
+                    onCreateNew = { viewModel.collections.openCreateCollectionDialog() },
+                    onDismiss = { viewModel.collections.dismissCollectionPicker() },
                 )
             }
         }
 
-        if (uiState.showCreateCollectionDialog) {
+        if (collectionState.showCreateCollectionDialog) {
             CreateCollectionDialog(
-                isLoading = uiState.isAddingToCollection,
+                isLoading = collectionState.isAddingToCollection,
                 onConfirm = { name ->
-                    viewModel.createAndAddCollection(name)
+                    viewModel.collections.createAndAddCollection(name)
                 },
-                onDismiss = { viewModel.dismissCreateCollectionDialog() },
+                onDismiss = { viewModel.collections.dismissCreateCollectionDialog() },
             )
         }
 
@@ -617,28 +632,28 @@ fun MediaDetailScreen(
             TvSafeSheet(
                 onDismissRequest = {
                     showSeriesDownloadSheet = false
-                    viewModel.resetDownloadSheetState()
+                    viewModel.downloads.resetDownloadSheetState()
                 },
                 sheetState = downloadSheetState,
             ) {
                 SeriesDownloadSheet(
                     seasons = uiState.seasons,
-                    episodes = uiState.downloadSheetEpisodes,
-                    loadingSeasons = uiState.downloadSheetLoadingSeasons,
-                    downloadedEpisodeIds = uiState.downloadedEpisodeIds,
+                    episodes = downloads.downloadSheetEpisodes,
+                    loadingSeasons = downloads.downloadSheetLoadingSeasons,
+                    downloadedEpisodeIds = downloads.downloadedEpisodeIds,
                     onLoadEpisodes = { seasonId ->
-                        viewModel.loadDownloadSheetEpisodes(seasonId)
+                        viewModel.downloads.loadDownloadSheetEpisodes(seasonId)
                     },
-                    isDownloading = uiState.isDownloadingSeries,
+                    isDownloading = downloads.isDownloadingSeries,
                     onDownload = { selectedEpisodes ->
                         showSeriesDownloadSheet = false
                         val nonEmpty = selectedEpisodes.filter { it.value.isNotEmpty() }
-                        viewModel.downloadSeries(nonEmpty)
-                        viewModel.resetDownloadSheetState()
+                        viewModel.downloads.downloadSeries(nonEmpty)
+                        viewModel.downloads.resetDownloadSheetState()
                     },
                     onDismiss = {
                         showSeriesDownloadSheet = false
-                        viewModel.resetDownloadSheetState()
+                        viewModel.downloads.resetDownloadSheetState()
                     },
                 )
             }
@@ -672,7 +687,7 @@ fun MediaDetailScreen(
                     episodeSizeBytes = uiState.detailContext?.seriesAggregate?.episodeSizeBytes ?: emptyMap(),
                     onDelete = { episodeIds ->
                         showDeleteEpisodesSheet = false
-                        viewModel.deleteOfflineEpisodes(episodeIds.toList())
+                        viewModel.offline.deleteOfflineEpisodes(episodeIds.toList())
                         // If every downloaded episode was selected there's nothing
                         // left to show — pop back to where the user came from.
                         if (episodeIds.size >= downloadedEpisodeCount) {
@@ -681,7 +696,7 @@ fun MediaDetailScreen(
                     },
                     onDeleteEntireSeries = {
                         showDeleteEpisodesSheet = false
-                        viewModel.deleteOfflineSeries(itemId)
+                        viewModel.offline.deleteOfflineSeries(itemId)
                         onBack()
                     },
                     onDismiss = { showDeleteEpisodesSheet = false },
@@ -782,7 +797,7 @@ fun MediaDetailScreen(
                 icon = Tabler.Outline.Trash,
                 tone = ConfirmTone.DESTRUCTIVE,
                 onConfirm = {
-                    viewModel.deleteOfflineItem(target.itemId)
+                    viewModel.offline.deleteOfflineItem(target.itemId)
                     // A LOCAL origin has nothing left once its only download is
                     // removed — pop back instead of stranding the user on an
                     // empty detail (matches the series batch-delete behavior).
@@ -799,7 +814,7 @@ fun MediaDetailScreen(
                 dismissText = stringResource(R.string.detail_cancel),
                 icon = Tabler.Outline.Trash,
                 tone = ConfirmTone.DESTRUCTIVE,
-                onConfirm = { viewModel.deleteOfflineEpisode(ep.episodeId) },
+                onConfirm = { viewModel.offline.deleteOfflineEpisode(ep.episodeId) },
                 onDismiss = { pendingDeleteEpisode = null },
             )
         }
@@ -809,12 +824,12 @@ fun MediaDetailScreen(
         if (showResyncSheet) {
             ResyncSheet(
                 syncState = uiState.detailContext?.syncState,
-                resyncState = uiState.resyncState,
-                onResync = { viewModel.resync() },
-                onRedownloadMedia = { viewModel.redownloadMedia() },
+                resyncState = resyncState,
+                onResync = { viewModel.resync.resync() },
+                onRedownloadMedia = { viewModel.resync.redownloadMedia() },
                 onDismiss = {
                     showResyncSheet = false
-                    viewModel.clearResyncState()
+                    viewModel.resync.clearResyncState()
                 },
             )
         }
@@ -836,13 +851,13 @@ fun MediaDetailScreen(
                 download = uiState.detailContext?.download,
                 item = detailsItem,
                 mediaSources = detail.mediaSources,
-                inventory = uiState.downloadFileInventory,
-                isLoadingInventory = uiState.isLoadingDownloadFiles,
+                inventory = downloads.downloadFileInventory,
+                isLoadingInventory = downloads.isLoadingDownloadFiles,
                 backdropUrl = sheetBackdropUrl,
                 posterUrl = sheetPosterUrl,
                 onDismiss = {
                     showDownloadDetailsSheet = false
-                    viewModel.clearDownloadFileInventory()
+                    viewModel.downloads.clearDownloadFileInventory()
                 },
             )
         }

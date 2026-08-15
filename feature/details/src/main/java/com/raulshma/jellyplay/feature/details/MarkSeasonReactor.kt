@@ -1,9 +1,10 @@
 package com.raulshma.jellyplay.feature.details
 
-import android.content.Context
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.MediaItem
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -18,23 +19,40 @@ import kotlinx.coroutines.launch
  */
 internal class MarkSeasonReactor(
     private val scope: CoroutineScope,
+    private val session: StateFlow<DetailSession?>,
     private val userDataMutator: UserDataMutator,
-    private val context: Context,
-    private val itemIdProvider: () -> String?,
-    private val episodesProvider: () -> Map<String, List<MediaItem>>,
-    private val messageSink: (DetailMessage) -> Unit,
-    private val seriesIdProvider: () -> String? = { null },
+    private val messages: MutableSharedFlow<DetailMessage>,
+    private val strings: DetailStrings,
 ) {
     /**
-     * Last successful target by screen item/season, used while UI emissions
-     * catch up — the provider's re-emission is reduced by the VM
-     * asynchronously, so the guard cannot trust the episode snapshot alone.
-     * Entries are recorded on success only, matching the mutator's
-     * "flip only on success" contract (plan 03): a failed write records
-     * nothing, so a retry of the same direction is never swallowed.
+     * Last successful target by screen item/season, used ONLY while the UI
+     * emission catches up — the provider's re-emission is reduced by the VM
+     * asynchronously, so immediately-after taps cannot trust the episode
+     * snapshot alone. Entries are recorded on success only, matching the
+     * mutator's "flip only on success" contract (plan 03): a failed write
+     * records nothing, so a retry of the same direction is never swallowed.
+     * Once the session snapshot adopts the recorded target the entry is
+     * retired, so a later same-direction tap (the user re-watched episodes
+     * since) is judged against live state, not a stale record.
      */
     private val lastSuccessfulSeasonStates = mutableMapOf<Pair<String, String>, Boolean>()
     private var lastItemId: String? = null
+
+    init {
+        // Retire records the moment the session snapshot adopts their target:
+        // the record's only job is bridging the async gap between mutation
+        // success and the VM reducer adopting the provider's re-emission.
+        scope.launch {
+            session.collect { current ->
+                val itemId = current?.itemId ?: return@collect
+                lastSuccessfulSeasonStates.entries.retainAll { (key, target) ->
+                    val (screenItem, seasonId) = key
+                    screenItem != itemId ||
+                        current.episodes[seasonId]?.any { !it.matchesWatchedTarget(target) } != false
+                }
+            }
+        }
+    }
 
     /**
      * Marks every episode in [seasonId] as played. Jellyfin's `markPlayedItem`
@@ -57,19 +75,32 @@ internal class MarkSeasonReactor(
 
     private fun markSeason(seasonId: String, played: Boolean) {
         scope.launch {
-            val itemId = itemIdProvider() ?: return@launch
+            val current = session.value ?: return@launch
+            val itemId = current.itemId
             if (lastItemId != itemId) {
                 lastSuccessfulSeasonStates.clear()
                 lastItemId = itemId
             }
-            val currentEpisodes = episodesProvider()[seasonId] ?: return@launch
+            val currentEpisodes = current.episodes[seasonId] ?: return@launch
             val stateKey = itemId to seasonId
-            // Prefer the last successful target while the provider emission
-            // is still being reduced by the VM. This keeps rapid inverse
-            // actions from using the pre-action UI snapshot and returning
-            // early incorrectly.
-            val alreadyInTargetState = lastSuccessfulSeasonStates[stateKey]?.let { it == played }
-                ?: currentEpisodes.all { it.isPlayed == played }
+            // Guard against redundant flips, in three steps:
+            //  1. A recorded success in the OPPOSITE direction means "all in
+            //     target" is the pre-mutation view the snapshot has not
+            //     adopted yet — the tap must run (rapid inverse toggles).
+            //  2. Every episode already matches the target (unwatched means
+            //     no resume position either) — genuinely nothing to do.
+            //  3. A same-direction record that the snapshot has not adopted
+            //     yet, with the snapshot still fully pre-mutation — dedupe a
+            //     rapid double-tap. Any MIXED snapshot (some watched /
+            //     half-played / unwatched) is state newer than the record —
+            //     episode-level flips or playback since — so the flip runs.
+            val recorded = lastSuccessfulSeasonStates[stateKey]
+            val alreadyInTargetState = when {
+                recorded == !played -> false
+                currentEpisodes.all { it.matchesWatchedTarget(played) } -> true
+                recorded == played && currentEpisodes.none { it.matchesWatchedTarget(played) } -> true
+                else -> false
+            }
             if (alreadyInTargetState) return@launch
 
             // The series screen knows both ids, so the season-aware mutation
@@ -78,13 +109,13 @@ internal class MarkSeasonReactor(
             // back to the screen item: seasons only render on a series screen,
             // where the two are the same id, so this only fires mid-navigation
             // (defensive) and at worst drops one extra catalogue entry.
-            val seriesId = seriesIdProvider() ?: itemId
+            val seriesId = current.seriesId ?: itemId
             userDataMutator.setSeasonPlayed(seriesId, seasonId, played)
                 .onSuccess { lastSuccessfulSeasonStates[stateKey] = played }
                 .onFailure {
-                    messageSink(
+                    messages.tryEmit(
                         DetailMessage.Text(
-                            context.getString(
+                            strings.get(
                                 if (played) R.string.detail_msg_couldnt_mark_played
                                 else R.string.detail_msg_couldnt_mark_unplayed
                             )
@@ -93,4 +124,14 @@ internal class MarkSeasonReactor(
                 }
         }
     }
+
+    /**
+     * Whether an episode is already in the state a season flip would put it
+     * in. Watched is [MediaItem.isPlayed] alone; unwatched also requires a
+     * clean resume point — a half-played episode is NOT unwatched (the flip
+     * must clear its progress), matching [AppliedMutation]'s patch, which
+     * zeroes the position on every played flip.
+     */
+    private fun MediaItem.matchesWatchedTarget(played: Boolean): Boolean =
+        if (played) isPlayed else !isPlayed && (playbackPositionTicks ?: 0L) == 0L
 }

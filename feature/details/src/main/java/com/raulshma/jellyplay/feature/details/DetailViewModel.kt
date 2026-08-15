@@ -2,56 +2,36 @@ package com.raulshma.jellyplay.feature.details
 
 import android.content.Context
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.repository.ArrRepository
-import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
-import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
-import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
-import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
+import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
-import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
-import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
-import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
-import com.raulshma.jellyplay.core.datastore.library.LibraryStore
-import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
-import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.DetailCapabilities
 import com.raulshma.jellyplay.core.model.DetailContext
 import com.raulshma.jellyplay.core.model.DetailOrigin
 import com.raulshma.jellyplay.core.model.DetailPreferences
-import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.ResyncResult
-import com.raulshma.jellyplay.core.model.isAudioType
-import com.raulshma.jellyplay.core.model.isVideoType
-import com.raulshma.jellyplay.core.model.seriesIdForDetail
-import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.model.isExperimentalEnabled
+import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
+import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
+import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
-import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
-import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
-import com.raulshma.jellyplay.core.network.api.TmdbApiClient
-import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
+import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.isAudioType
+import com.raulshma.jellyplay.core.model.seriesIdForDetail
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -60,13 +40,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,8 +55,11 @@ import javax.inject.Inject
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
-class DetailViewModel @Inject constructor(
+class DetailViewModel @Inject internal constructor(
+    // Context only for the storage probe behind [getAvailableStorageBytes];
+    // every localized string goes through the [strings] seam.
     @ApplicationContext private val context: Context,
+    private val strings: DetailStrings,
     private val mediaRepository: MediaRepository,
     /**
      * The single seam for user-data mutations (watched / favorite). The VM
@@ -95,52 +76,49 @@ class DetailViewModel @Inject constructor(
      * [loadItemInternal] collects its [DetailLoadState] stream and reduces each
      * emission into [_uiState]; remote-only subordinate work (Seerr, Sonarr,
      * theme music, similar/collection items) fires off the resolved snapshot.
+     * Also feeds the action helpers' season expansion / canonical-id lookups.
      */
     private val mediaDetailProvider: MediaDetailProvider,
-    /**
-     * Orchestrates offline download freshness checks and metadata/image resyncs.
-     * [checkForUpdates] is TTL-gated (1h) and safe to fire on entry; [resyncItem]
-     * powers the resync / re-download actions surfaced via [DetailUiState.resyncState].
-     */
-    private val offlineSyncManager: OfflineSyncManager,
     private val playbackRepository: PlaybackRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
-    private val downloadIntake: DownloadIntake,
-    private val projections: PreferenceProjections,
-    private val libraryStore: LibraryStore,
-    private val homeDiscoveryStore: HomeDiscoveryStore,
-    private val experimentalStore: ExperimentalStore,
-    private val downloadsStore: DownloadsStore,
-    private val appRuntimeStateStore: AppRuntimeStateStore,
-    private val engineStore: PlayerEngineStore,
-    private val offlineModeManager: OfflineModeManager,
-    private val adaptiveBitrateManager: AdaptiveBitrateManager,
-    private val seerrRepository: SeerrRepository,
-    private val seerrRequestDelegate: SeerrRequestDelegate,
+    /** Preference/state stores read by the content core (pure DI aggregation). */
+    private val stores: DetailStores,
+    /** Seerr/TMDB/Arr remote-discovery clients + their offline gate (pure DI aggregation). */
+    private val remoteDiscovery: RemoteDiscoveryClients,
     private val audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager,
     private val audioQueueFacade: AudioQueueFacade,
     private val themeMusicPlayer: com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer,
-    private val tmdbApiClient: TmdbApiClient,
-    private val arrRepository: ArrRepository,
-    private val syncPlayManager: SyncPlayManager,
+    /** Hilt factories for the extracted action helpers (see [DetailActionFactories]). */
+    private val actionFactories: DetailActionFactories,
 ) : JellyPlayViewModel() {
 
     /** Media-detail preference fields, projected centrally off the store slices. */
-    val preferences: StateFlow<DetailPreferences> = projections.detailPreferences
+    val preferences: StateFlow<DetailPreferences> = stores.projections.detailPreferences
 
-    // Single source of truth for detail-screen state. All mutations
+    // Single source of truth for detail-screen CONTENT state. All mutations
     // funnel through [_uiState.update]; the [uiState] aggregator additionally
     // folds in [SeerrRequestStateHolder] state via combine() so observers see a
-    // single atomic snapshot.
+    // single atomic snapshot. Per-sheet action state (downloads, playlists,
+    // collections, resync) deliberately does NOT live here — it is published by
+    // the owning helper (see [downloads], [playlists], [collections],
+    // [resync]) and collected directly at the composition site that needs it.
     private val _uiState = MutableStateFlow(DetailUiState())
 
     /**
+     * The loaded item's session snapshot — what every action helper needs to
+     * know about the current screen. Reset to a bare id-only session in
+     * [loadItemInternal] and adopted (content sections filled) in
+     * [reduceLoaded] on each new resolution; helpers read `.value` at command
+     * time, exactly when the former provider lambdas read the VM.
+     */
+    private val _session = MutableStateFlow<DetailSession?>(null)
+
+    /**
      * One-shot user-facing messages. Buffered so a message emitted before the
-     * screen subscribes (e.g. during `loadItem`) is not lost. Replaces the
-     * former `userMessage` / `downloadError` / `seriesDownloadResult` nullable
-     * fields on [DetailUiState] and their clear-* methods.
+     * screen subscribes (e.g. during `loadItem`) is not lost. Shared with every
+     * action helper (they `tryEmit` into it), keeping a single one-shot channel
+     * for the whole screen.
      */
     private val _messages = MutableSharedFlow<DetailMessage>(
         replay = 0,
@@ -157,8 +135,9 @@ class DetailViewModel @Inject constructor(
      * - At least one Sonarr server is resolved.
      *
      * Server resolution is deferred past the cheap checks and performed once
-     * per series detail load (in [loadItem]) rather than inside this combine.
-     * The actual series lookup happens inside ManageSeriesScreen.
+     * per series detail load (in [reduceLoaded]'s remote side effects) rather
+     * than inside this combine. The actual series lookup happens inside
+     * ManageSeriesScreen.
      */
     val canManageSeries: StateFlow<Boolean> = combine(
         // Map to identity-relevant fields only so favorite/played toggles (which
@@ -166,7 +145,7 @@ class DetailViewModel @Inject constructor(
         // equal emissions that StateFlow deduplicates.
         _uiState.map { it.detail?.item?.let { item -> ItemIdentity(item.id, item.mediaType) } },
         _uiState.map { it.detail?.providerIds?.get("tvdb") },
-        experimentalStore.experimental.map { it.enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION) },
+        stores.experimentalStore.experimental.map { it.enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION) },
         _uiState.map { it.sonarrServersResolved },
     ) { itemIdentity, tvdbId, flagEnabled, sonarrResolved ->
         if (!flagEnabled || itemIdentity == null) false
@@ -175,16 +154,22 @@ class DetailViewModel @Inject constructor(
         else sonarrResolved
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
-    private val seerrRequestState = com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder(scope, seerrRequestDelegate)
+    private val seerrRequestState = SeerrRequestStateHolder(scope, remoteDiscovery.seerrRequestDelegate)
 
     /**
-     * Aggregated detail-screen state. Eight upstream flows feed this [StateFlow],
-     * but they are split into three independently-`stateIn`'d groups so a tick in
-     * one group (e.g. Seerr connection polling) doesn't re-run the combine logic of
-     * an unrelated group (e.g. the core detail/seasons/episodes tree). A final
-     * outer [combine] folds the three snapshots into a single [DetailUiState] so
-     * observers see one atomic snapshot, while each group's [StateFlow] deduplicates
-     * its own emissions upstream of the merge.
+     * Aggregated detail-screen CONTENT state. Three upstream groups feed this
+     * [StateFlow], each independently `stateIn`'d so a tick in one group (e.g.
+     * Seerr connection polling) doesn't re-run the combine logic of an
+     * unrelated group (e.g. the core detail/seasons/episodes tree). A final
+     * outer [combine] folds the two Seerr groups into the core snapshot so
+     * observers see one atomic snapshot, while each group's [StateFlow]
+     * deduplicates its own emissions upstream of the merge.
+     *
+     * Action-helper state (download lifecycle, playlists, collections, resync)
+     * is intentionally absent: those helpers publish their own `StateFlow`s
+     * (see [downloads], [playlists], [collections], [resync]) and the screen
+     * collects what an open sheet needs directly from the owning helper, so a
+     * tick in any sheet state no longer re-copies the content bag.
      */
     val uiState: StateFlow<DetailUiState> by lazy {
         // Group 1 — core load state (detail/seasons/episodes/smart-play/...).
@@ -207,8 +192,8 @@ class DetailViewModel @Inject constructor(
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrRequestSnapshot())
         // Group 3 — Seerr connection flags that only gate recommendation visibility.
         val seerrFlags = combine(
-            seerrRepository.isConnected(),
-            seerrRepository.isRecommendationsEnabled(),
+            remoteDiscovery.seerrRepository.isConnected(),
+            remoteDiscovery.seerrRepository.isRecommendationsEnabled(),
         ) { isConnected, isRecommendationsEnabled ->
             SeerrConnectionFlags(isConnected, isRecommendationsEnabled)
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrConnectionFlags())
@@ -224,41 +209,86 @@ class DetailViewModel @Inject constructor(
                 isSeerrRecommendationsEnabled = flags.isRecommendationsEnabled,
             )
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
-            // Group 4 — fold the extracted action helpers' state back into the
-            // flat [DetailUiState]. The helpers own their StateFlows; this combine
-            // projects them into the existing fields so composables + tests that
-            // read uiState.* are unchanged. One emission per helper tick.
-            .let { seerr ->
-                combine(
-                    seerr,
-                    resyncActions.state,
-                    playlistActions.state,
-                    downloadLifecycleActions.state,
-                    collectionActions.state,
-                ) { primary, resync, playlist, download, collection ->
-                    primary.copy(
-                        resyncState = resync,
-                        playlists = playlist.playlists,
-                        isLoadingPlaylists = playlist.isLoadingPlaylists,
-                        isAddingToPlaylist = playlist.isAddingToPlaylist,
-                        showPlaylistPicker = playlist.showPlaylistPicker,
-                        showCreatePlaylistDialog = playlist.showCreatePlaylistDialog,
-                        collections = collection.collections,
-                        isLoadingCollections = collection.isLoadingCollections,
-                        isAddingToCollection = collection.isAddingToCollection,
-                        showCollectionPicker = collection.showCollectionPicker,
-                        showCreateCollectionDialog = collection.showCreateCollectionDialog,
-                        isDownloading = download.isDownloading,
-                        cellularDownloadWarningMb = download.cellularDownloadWarningMb,
-                        isDownloadingSeries = download.isDownloadingSeries,
-                        downloadSheetEpisodes = download.downloadSheetEpisodes,
-                        downloadSheetLoadingSeasons = download.downloadSheetLoadingSeasons,
-                        downloadedEpisodeIds = download.downloadedEpisodeIds,
-                        downloadPicker = download.downloadPicker,
-                    )
-                }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
-            }
     }
+
+    // ── Extracted action helpers ────────────────────────────────────────
+    // Each follows the SeerrRequestStateHolder template: a plain, VM-scoped
+    // class (constructed here, dies with viewModelScope) that owns its own
+    // coroutines and state. They are the screen's seams — commands go through
+    // the properties below, state is collected from the helper's own
+    // StateFlow — so the flat [DetailUiState] bag stays a pure content core
+    // and a tick in one sheet no longer re-copies it.
+    private val offlineDeleteActions = OfflineDeleteActions(
+        scope = scope,
+        offlineRepository = offlineRepository,
+        // Content reads ride the session flow (not the flat uiState bag), same
+        // deferred-read timing as every other helper seam.
+        episodesProvider = { _session.value?.episodes ?: emptyMap() },
+        seasonsProvider = { _session.value?.seasons ?: emptyList() },
+        onContentMutated = ::refreshAfterOfflineMutation,
+    )
+    private val resyncActions = actionFactories.resync.create(
+        scope = scope,
+        session = _session,
+        mediaRepository = mediaRepository,
+        offlineRepository = offlineRepository,
+    )
+    private val markSeasonReactor = MarkSeasonReactor(
+        scope = scope,
+        session = _session,
+        userDataMutator = userDataMutator,
+        messages = _messages,
+        strings = strings,
+    )
+    private val playlistActions = actionFactories.playlists.create(
+        scope = scope,
+        session = _session,
+        messages = _messages,
+        strings = strings,
+        mediaDetailProvider = mediaDetailProvider,
+    )
+    private val collectionActions = CollectionActions(
+        scope = scope,
+        session = _session,
+        messages = _messages,
+        strings = strings,
+        mediaRepository = mediaRepository,
+        mediaDetailProvider = mediaDetailProvider,
+    )
+    private val downloadLifecycleActions = actionFactories.downloads.create(
+        scope = scope,
+        session = _session,
+        messages = _messages,
+        strings = strings,
+        mediaDetailProvider = mediaDetailProvider,
+    )
+    private val watchPartyActions = actionFactories.watchParty.create(
+        scope = scope,
+        session = _session,
+        messages = _messages,
+        strings = strings,
+    )
+
+    /** Download-lifecycle seam: single-item/series downloads, sheets, picker. */
+    internal val downloads: DownloadLifecycleActions get() = downloadLifecycleActions
+
+    /** Add-to-Playlist seam (picker + create dialog state and commands). */
+    internal val playlists: PlaylistActions get() = playlistActions
+
+    /** Add-to-Collection seam (picker + create dialog state and commands). */
+    internal val collections: CollectionActions get() = collectionActions
+
+    /** Resync / re-download / freshness-check seam. */
+    internal val resync: ResyncActions get() = resyncActions
+
+    /** Offline-delete seam (fire-and-forget; no observable state). */
+    internal val offline: OfflineDeleteActions get() = offlineDeleteActions
+
+    /** Watch-party (SyncPlay) bootstrap seam. */
+    internal val watchParty: WatchPartyActions get() = watchPartyActions
+
+    /** Seerr request-flow seam (the state-holder pattern the helpers copy). */
+    internal val seerrRequests: SeerrRequestStateHolder get() = seerrRequestState
 
     // Direct (non-observable) readers for the two stream-selection indices.
     // These are read synchronously at click time inside the play callback
@@ -293,78 +323,6 @@ class DetailViewModel @Inject constructor(
      */
     private var lastAppliedGeneration = -1L
 
-    // ── Extracted action helpers ────────────────────────────────────────
-    // Each follows the SeerrRequestStateHolder template: a plain, VM-scoped
-    // class (constructed here, dies with viewModelScope) that owns its own
-    // coroutines and state. The VM keeps thin delegating methods below so
-    // existing callers and tests stay stable; each helper is independently
-    // unit-testable. Stateful helpers expose a StateFlow folded into [uiState]
-    // (see the combine below); one-shot messages flow back through _messages.
-    private val offlineDeleteActions = OfflineDeleteActions(
-        scope = scope,
-        offlineRepository = offlineRepository,
-        episodesProvider = { _uiState.value.episodes },
-        seasonsProvider = { _uiState.value.seasons },
-        onContentMutated = ::refreshAfterOfflineMutation,
-    )
-    private val resyncActions = ResyncActions(
-        scope = scope,
-        offlineSyncManager = offlineSyncManager,
-        mediaRepository = mediaRepository,
-        offlineRepository = offlineRepository,
-        downloadIntake = downloadIntake,
-        context = context,
-        itemIdProvider = { currentItemId },
-    )
-    private val markSeasonReactor = MarkSeasonReactor(
-        scope = scope,
-        userDataMutator = userDataMutator,
-        context = context,
-        itemIdProvider = { currentItemId },
-        episodesProvider = { _uiState.value.episodes },
-        messageSink = { _messages.tryEmit(it) },
-        seriesIdProvider = { currentSeriesId },
-    )
-    private val playlistActions = PlaylistActions(
-        scope = scope,
-        mediaRepository = mediaRepository,
-        appRuntimeStateStore = appRuntimeStateStore,
-        context = context,
-        detailProvider = { _uiState.value.detail },
-        sortedEpisodesProvider = { _uiState.value.sortedEpisodes },
-        canonicalEpisodeIds = mediaDetailProvider::canonicalEpisodeIds,
-        messageSink = { _messages.tryEmit(it) },
-    )
-    private val collectionActions = CollectionActions(
-        scope = scope,
-        mediaRepository = mediaRepository,
-        context = context,
-        detailProvider = { _uiState.value.detail },
-        sortedEpisodesProvider = { _uiState.value.sortedEpisodes },
-        canonicalEpisodeIds = mediaDetailProvider::canonicalEpisodeIds,
-        messageSink = { _messages.tryEmit(it) },
-    )
-    private val downloadLifecycleActions = DownloadLifecycleActions(
-        scope = scope,
-        downloadIntake = downloadIntake,
-        downloadsStore = downloadsStore,
-        adaptiveBitrateManager = adaptiveBitrateManager,
-        downloadRepository = downloadRepository,
-        context = context,
-        detailProvider = { _uiState.value.detail },
-        seasonsProvider = { _uiState.value.seasons },
-        currentSeriesIdProvider = { currentSeriesId },
-        itemIdProvider = { currentItemId },
-        expandSeason = mediaDetailProvider::expandSeason,
-        messageSink = { _messages.tryEmit(it) },
-    )
-    private val watchPartyActions = WatchPartyActions(
-        mediaRepository = mediaRepository,
-        syncPlayManager = syncPlayManager,
-        context = context,
-        messageSink = { _messages.tryEmit(it) },
-    )
-
     fun selectSubtitle(index: Int?) {
         _uiState.update { it.copy(selectedSubtitleIndex = index) }
         persistStreamSelection(subtitleIndex = index, audioIndex = _uiState.value.selectedAudioIndex)
@@ -379,7 +337,7 @@ class DetailViewModel @Inject constructor(
      * Persists a manifest-backed local-subtitle selection for the current item.
      *
      * Sets [DetailUiState.selectedLocalSubtitleIndex] in [_uiState] AND persists
-     * via [PlayerEngineStore.setMediaStreamSelection] (subtitleStreamIndex =
+     * via `stores.engineStore.setMediaStreamSelection` (subtitleStreamIndex =
      * [index], audioStreamIndex = the existing remote audio index). A spike
      * confirmed `mediaStreamSelections[itemId]` is honored offline, and the
      * player resolves the side-loaded subtitle by its `offline:${index}` id via
@@ -395,40 +353,15 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * Loads the on-disk file inventory (media + sidecar artifacts) for the
-     * download-details sheet. Runs only when the sheet opens — sidecar sizes
-     * aren't persisted, so this is the one place the filesystem walk executes.
-     * Resolves the item id from the current snapshot, falling back to
-     * [currentItemId] so a not-yet-snapshotted download still inventories.
-     */
-    fun loadDownloadFileInventory() {
-        val itemId = _uiState.value.detail?.item?.id ?: currentItemId ?: return
-        _uiState.update { it.copy(isLoadingDownloadFiles = true) }
-        launch {
-            val inventory = downloadRepository.getDownloadFileInventory(itemId)
-            _uiState.update {
-                it.copy(downloadFileInventory = inventory, isLoadingDownloadFiles = false)
-            }
-        }
-    }
-
-    /** Clears the loaded inventory so the next sheet open re-reads fresh sizes. */
-    fun clearDownloadFileInventory() {
-        _uiState.update {
-            it.copy(downloadFileInventory = null, isLoadingDownloadFiles = false)
-        }
-    }
-
-    /**
      * Single persistence seam for the stream selectors: writes the resolved
-     * subtitle/audio pair to [PlayerEngineStore.setMediaStreamSelection]. Extracted
+     * subtitle/audio pair to `stores.engineStore.setMediaStreamSelection`. Extracted
      * so [selectSubtitle], [selectAudio], and [selectLocalSubtitle] cannot drift
      * apart in how they resolve the current item id or launch the write.
      */
     private fun persistStreamSelection(subtitleIndex: Int?, audioIndex: Int?) {
         val itemId = _uiState.value.detail?.item?.id ?: return
         launch {
-            engineStore.setMediaStreamSelection(
+            stores.engineStore.setMediaStreamSelection(
                 itemId = itemId,
                 subtitleStreamIndex = subtitleIndex,
                 audioStreamIndex = audioIndex,
@@ -443,7 +376,7 @@ class DetailViewModel @Inject constructor(
      * without any per-screen plumbing.
      */
     fun setEpisodesDescending(descending: Boolean) {
-        launch { libraryStore.setEpisodesDescending(descending) }
+        launch { stores.libraryStore.setEpisodesDescending(descending) }
     }
 
     /**
@@ -452,11 +385,8 @@ class DetailViewModel @Inject constructor(
      * every series detail screen.
      */
     fun setCompactEpisodeList(enabled: Boolean) {
-        launch { libraryStore.setCompactEpisodeList(enabled) }
+        launch { stores.libraryStore.setCompactEpisodeList(enabled) }
     }
-
-    fun getDownloadFlow(itemId: String): Flow<com.raulshma.jellyplay.core.model.DownloadItem?> =
-        downloadRepository.getDownloadByMediaItemIdFlow(itemId)
 
     fun loadItem(itemId: String) {
         loadItemInternal(itemId, refresh = false)
@@ -481,6 +411,10 @@ class DetailViewModel @Inject constructor(
         // observing the previous item's detail via the shared ViewModel) can be
         // rejected before it loads the wrong item's trailers/videos.
         currentItemId = itemId
+        // Same for the helpers' session: a bare id-only session is visible to
+        // command-time reads immediately (the content sections fill in
+        // reduceLoaded once the provider resolves).
+        _session.value = DetailSession(itemId = itemId)
         loadJob?.cancel()
         loadJob = launch {
             // Single atomic reset — collapses what used to be ~14 separate
@@ -520,9 +454,6 @@ class DetailViewModel @Inject constructor(
                     seerrSimilar = emptyList(),
                     relatedVideos = emptyList(),
                     sonarrServersResolved = false,
-                    // NOTE: isDownloading / isDownloadingSeries / download-sheet
-                    // fields are owned by [downloadLifecycleActions] and reset
-                    // via resetForNavigation() below, not here.
                 )
             }
             // Drop the provider's catalogue cache for any series we were viewing
@@ -588,15 +519,15 @@ class DetailViewModel @Inject constructor(
                 val accessDenied: Boolean
                 when {
                     e.isUnavailableOffline -> {
-                        message = context.getString(R.string.detail_error_unavailable_offline)
+                        message = strings.get(R.string.detail_error_unavailable_offline)
                         accessDenied = false
                     }
                     e.isAccessDenied -> {
-                        message = context.getString(R.string.detail_error_access_denied)
+                        message = strings.get(R.string.detail_error_access_denied)
                         accessDenied = true
                     }
                     else -> {
-                        message = e.message.ifBlank { context.getString(R.string.detail_error_load_failed) }
+                        message = e.message.ifBlank { strings.get(R.string.detail_error_load_failed) }
                         accessDenied = false
                     }
                 }
@@ -615,7 +546,8 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * Reduces a resolved [MediaDetailSnapshot] into [_uiState].
+     * Reduces a resolved [MediaDetailSnapshot] into [_uiState] (and adopts it
+     * into the helpers' [_session]).
      *
      * Two paths, keyed on [MediaDetailSnapshot.contentGeneration] vs
      * [lastAppliedGeneration]:
@@ -655,10 +587,21 @@ class DetailViewModel @Inject constructor(
         // New resolution: adopt content sections wholesale.
         currentSeriesId = detail.item.seriesIdForDetail
 
+        // Publish the resolved session to the action helpers (command-time
+        // reads now see the full content snapshot).
+        _session.value = DetailSession(
+            itemId = itemId,
+            seriesId = currentSeriesId,
+            detail = detail,
+            seasons = snapshot.seasons,
+            episodes = snapshot.episodesBySeason,
+            sortedEpisodes = snapshot.sortedEpisodes,
+        )
+
         // Stream selection: remote applies the persisted engine-store selection;
         // local clears it (local playback uses the separate local-subtitle index).
         val (subtitleIndex, audioIndex) = if (isRemote) {
-            val stored = engineStore.playerEngine.value.mediaStreamSelections[itemId]
+            val stored = stores.engineStore.playerEngine.value.mediaStreamSelections[itemId]
             stored?.subtitleStreamIndex to stored?.audioStreamIndex
         } else {
             null to null
@@ -803,7 +746,7 @@ class DetailViewModel @Inject constructor(
     /**
      * Resolves whether any Sonarr server is reachable, once per series load, and
      * stores the boolean in [_uiState]. Previously [canManageSeries] called
-     * [ArrRepository.resolveServers] from inside a `combine` transform, which
+     * `remoteDiscovery.arrRepository.resolveServers` from inside a `combine` transform, which
      * re-issued network I/O on every identity tick and got cancelled/restarted
      * mid-resolution. Hoisting it here makes the combine a pure derivation.
      */
@@ -812,7 +755,7 @@ class DetailViewModel @Inject constructor(
         if (tvdbId?.toIntOrNull() == null) return
         val itemId = detail.item.id
         launch {
-            val summary = arrRepository.resolveServers()
+            val summary = remoteDiscovery.arrRepository.resolveServers()
                 .getOrDefault(com.raulshma.jellyplay.core.model.arr.ArrServiceSummary())
             // Guard: don't write sonarr resolution onto a different item's state.
             if (currentItemId != itemId) return@launch
@@ -892,39 +835,11 @@ class DetailViewModel @Inject constructor(
             ) {
                 is AudioQueueOutcome.Started -> Unit
                 AudioQueueOutcome.Empty ->
-                    _messages.tryEmit(DetailMessage.Text(context.getString(R.string.detail_instant_mix_empty)))
+                    _messages.tryEmit(DetailMessage.Text(strings.get(R.string.detail_instant_mix_empty)))
                 AudioQueueOutcome.Suppressed -> Unit
                 is AudioQueueOutcome.Failed ->
-                    _messages.tryEmit(DetailMessage.Text(context.getString(R.string.detail_instant_mix_failed)))
+                    _messages.tryEmit(DetailMessage.Text(strings.get(R.string.detail_instant_mix_failed)))
             }
-        }
-    }
-
-    // ── Watch party ────────────────────────────────────────────────────
-    // Delegated to [watchPartyActions] (WatchPartyActions). The VM resolves the
-    // current item into the bootstrap params (id / group title / default media
-    // source) and launches the coroutine; the helper owns the create→join→queue
-    // sequence and emits success/failure via DetailMessage.
-
-    /**
-     * Bootstraps a SyncPlay watch party for the current item and opens the
-     * player on success. The group is named after the item (falling back to a
-     * generic label) and seeded with the item's default media source at position
-     * 0. The player is opened by [MediaDetailScreen] on
-     * [DetailMessage.WatchPartyStarted]; the existing SyncPlayBridge then
-     * auto-detects the active session. Fire-and-forget from the UI's standpoint
-     * — success/failure flow back as one-shot messages.
-     */
-    fun startWatchParty() {
-        val detail = _uiState.value.detail ?: return
-        val item = detail.item
-        val itemId = item.id
-        val title = item.name.orEmpty().ifBlank {
-            context.getString(R.string.detail_watch_party_default_name)
-        }
-        val mediaSourceId = detail.mediaSources.firstOrNull()?.id
-        launch {
-            watchPartyActions.start(itemId, title, mediaSourceId)
         }
     }
 
@@ -993,10 +908,10 @@ class DetailViewModel @Inject constructor(
         val s = episode.seasonNumber ?: 1
         val e = episode.episodeNumber ?: episode.indexNumber ?: 1
         val label = when (label) {
-            LabelKind.RESUME_EPISODE -> context.getString(R.string.detail_resume_episode, s, e)
-            LabelKind.NEXT_UP_EPISODE -> context.getString(R.string.detail_next_up_episode, s, e)
-            LabelKind.PLAY_EPISODE -> context.getString(R.string.detail_play_episode, s, e)
-            LabelKind.REPLAY_EPISODE -> context.getString(R.string.detail_replay_episode, s, e)
+            LabelKind.RESUME_EPISODE -> strings.get(R.string.detail_resume_episode, s, e)
+            LabelKind.NEXT_UP_EPISODE -> strings.get(R.string.detail_next_up_episode, s, e)
+            LabelKind.PLAY_EPISODE -> strings.get(R.string.detail_play_episode, s, e)
+            LabelKind.REPLAY_EPISODE -> strings.get(R.string.detail_replay_episode, s, e)
         }
         return DetailUiState.SmartPlayTarget(
             episode = episode,
@@ -1049,7 +964,7 @@ class DetailViewModel @Inject constructor(
                 seriesId = seriesIdForItem(itemId),
             ).onFailure {
                 // Don't leave the user guessing why the heart didn't flip.
-                _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_update_favorite)))
+                _messages.emit(DetailMessage.Text(strings.get(R.string.detail_msg_couldnt_update_favorite)))
             }
         }
     }
@@ -1077,7 +992,7 @@ class DetailViewModel @Inject constructor(
             ).onFailure {
                 _messages.emit(
                     DetailMessage.Text(
-                        context.getString(
+                        strings.get(
                             if (played) R.string.detail_msg_couldnt_mark_played
                             else R.string.detail_msg_couldnt_mark_unplayed
                         )
@@ -1127,9 +1042,9 @@ class DetailViewModel @Inject constructor(
 
     /**
      * Marks every episode in [seasonId] as played. The optimistic rewrite goes
-     * through [MediaDetailProvider.applyOptimisticSeasonRewrite]; the reducer
-     * adopts it + recomputes smart-play. Delegates to [MarkSeasonReactor] — see
-     * there for the no-refetch / re-entry invalidation contract.
+     * through the mutator's provider-season rewrite; the reducer adopts it +
+     * recomputes smart-play. Delegates to [MarkSeasonReactor] — see there for
+     * the no-refetch / re-entry invalidation contract.
      */
     fun markSeasonPlayed(seasonId: String) = markSeasonReactor.markSeasonPlayed(seasonId)
 
@@ -1139,8 +1054,8 @@ class DetailViewModel @Inject constructor(
         val item = _uiState.value.detail?.item ?: return
         val seriesId = item.seriesId ?: item.id
         launch {
-            homeDiscoveryStore.excludeSeriesFromNextUp(seriesId)
-            _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_hidden_from_next_up)))
+            stores.homeDiscoveryStore.excludeSeriesFromNextUp(seriesId)
+            _messages.emit(DetailMessage.Text(strings.get(R.string.detail_msg_hidden_from_next_up)))
         }
     }
 
@@ -1148,24 +1063,24 @@ class DetailViewModel @Inject constructor(
         val item = _uiState.value.detail?.item ?: return
         val seriesId = item.seriesId ?: item.id
         launch {
-            homeDiscoveryStore.includeSeriesInNextUp(seriesId)
-            _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_shown_in_next_up)))
+            stores.homeDiscoveryStore.includeSeriesInNextUp(seriesId)
+            _messages.emit(DetailMessage.Text(strings.get(R.string.detail_msg_shown_in_next_up)))
         }
     }
 
     fun hideFromContinueWatching() {
         val item = _uiState.value.detail?.item ?: return
         launch {
-            homeDiscoveryStore.hideCwItem(item.id)
-            _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_hidden_from_continue_watching)))
+            stores.homeDiscoveryStore.hideCwItem(item.id)
+            _messages.emit(DetailMessage.Text(strings.get(R.string.detail_msg_hidden_from_continue_watching)))
         }
     }
 
     fun showFromContinueWatching() {
         val item = _uiState.value.detail?.item ?: return
         launch {
-            homeDiscoveryStore.unhideCwItem(item.id)
-            _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_shown_in_continue_watching)))
+            stores.homeDiscoveryStore.unhideCwItem(item.id)
+            _messages.emit(DetailMessage.Text(strings.get(R.string.detail_msg_shown_in_continue_watching)))
         }
     }
 
@@ -1177,33 +1092,15 @@ class DetailViewModel @Inject constructor(
      */
     fun setLastViewedSeason(seriesId: String, seasonId: String) {
         launch {
-            homeDiscoveryStore.setLastViewedSeason(seriesId, seasonId)
+            stores.homeDiscoveryStore.setLastViewedSeason(seriesId, seasonId)
         }
     }
 
     fun setShowDetailUpNext(enabled: Boolean) {
         launch {
-            libraryStore.setShowDetailUpNext(enabled)
+            stores.libraryStore.setShowDetailUpNext(enabled)
         }
     }
-
-    fun startDownload() = downloadLifecycleActions.startDownload()
-
-    // ── Pre-download picker (quality + external-subtitle selection) ──
-    fun openDownloadPicker() = downloadLifecycleActions.openDownloadPicker()
-    fun dismissDownloadPicker() = downloadLifecycleActions.dismissDownloadPicker()
-    fun setPendingDownloadQuality(quality: DownloadQuality) =
-        downloadLifecycleActions.setPendingQuality(quality)
-    fun setPendingSubtitleSelection(selection: SubtitleSelection) =
-        downloadLifecycleActions.setPendingSubtitleSelection(selection)
-
-    /**
-     * Called from the UI after the user explicitly confirms a cellular download
-     * that exceeded the warning threshold. Delegates to [DownloadLifecycleActions].
-     */
-    fun confirmCellularDownload() = downloadLifecycleActions.confirmCellularDownload()
-
-    fun dismissCellularDownloadWarning() = downloadLifecycleActions.dismissCellularDownloadWarning()
 
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)
@@ -1211,18 +1108,6 @@ class DetailViewModel @Inject constructor(
     /** Chapter thumbnail URL for the detail-screen chapter row. */
     fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?): String =
         imageUrlProvider.getChapterImageUrl(itemId, imageIndex, tag)
-
-    fun downloadSeries(episodeIds: Map<String, List<String>>? = null) =
-        downloadLifecycleActions.downloadSeries(episodeIds)
-
-    fun prepareDownloadSheetEpisodes() = downloadLifecycleActions.prepareDownloadSheetEpisodes()
-
-    fun loadDownloadSheetEpisodes(seasonId: String) =
-        downloadLifecycleActions.loadDownloadSheetEpisodes(seasonId)
-
-    fun loadDownloadedEpisodeIds() = downloadLifecycleActions.loadDownloadedEpisodeIds()
-
-    fun resetDownloadSheetState() = downloadLifecycleActions.resetDownloadSheetState()
 
     fun getBackdropUrl(itemId: String): String =
         imageUrlProvider.getBackdropUrl(itemId)
@@ -1254,7 +1139,7 @@ class DetailViewModel @Inject constructor(
                 )
             }
 
-            if (offlineModeManager.networkStatus.value == NetworkStatus.Local) return@launch
+            if (remoteDiscovery.offlineModeManager.networkStatus.value == NetworkStatus.Local) return@launch
 
             val mediaType = detail.item.mediaType
             if (mediaType != MediaType.MOVIE && mediaType != MediaType.SERIES) return@launch
@@ -1275,16 +1160,16 @@ class DetailViewModel @Inject constructor(
             // 1. Fetch related videos (trailers)
             if (connected) {
                 val videosResult = if (mediaType == MediaType.MOVIE) {
-                    seerrRepository.getMovieDetails(tmdbId).map { it.relatedVideos }
+                    remoteDiscovery.seerrRepository.getMovieDetails(tmdbId).map { it.relatedVideos }
                 } else {
-                    seerrRepository.getTvDetails(tmdbId).map { it.relatedVideos }
+                    remoteDiscovery.seerrRepository.getTvDetails(tmdbId).map { it.relatedVideos }
                 }
                 if (generation == seerrDataGeneration) {
                     val videos = videosResult.getOrElse { emptyList() }
                     _uiState.update { it.copy(relatedVideos = videos) }
                 }
             } else {
-                val videosResult = tmdbApiClient.getVideos(tmdbId, mediaType == MediaType.MOVIE)
+                val videosResult = remoteDiscovery.tmdbApiClient.getVideos(tmdbId, mediaType == MediaType.MOVIE)
                 if (generation == seerrDataGeneration) {
                     val videos = videosResult.getOrElse { emptyList() }
                     _uiState.update { it.copy(relatedVideos = videos) }
@@ -1296,11 +1181,11 @@ class DetailViewModel @Inject constructor(
             if (connected && enabled && generation == seerrDataGeneration) {
                 coroutineScope {
                     val recsDeferred = async {
-                        seerrRepository.getRecommendations(tmdbId, mediaType)
+                        remoteDiscovery.seerrRepository.getRecommendations(tmdbId, mediaType)
                             .getOrElse { com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse() }
                     }
                     val similarDeferred = async {
-                        seerrRepository.getSimilar(tmdbId, mediaType)
+                        remoteDiscovery.seerrRepository.getSimilar(tmdbId, mediaType)
                             .getOrElse { com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse() }
                     }
                     val recs = recsDeferred.await()
@@ -1318,7 +1203,7 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    fun loadSeerrDataIfNeeded(detail: MediaDetail) {
+    private fun loadSeerrDataIfNeeded(detail: MediaDetail) {
         // Reject details that don't belong to the item currently being viewed.
         // Because the DetailViewModel is shared across detail navigations, a
         // freshly-composed screen briefly observes the *previous* item's detail
@@ -1333,74 +1218,6 @@ class DetailViewModel @Inject constructor(
 
     fun getSeerrPosterUrl(posterPath: String?): String? =
         posterPath?.let { buildPosterUrl(it) }
-
-    fun requestSeerrMedia(
-        item: SeerrSearchItem,
-        seasons: List<Int>? = null,
-        serverId: Int? = null,
-        profileId: Int? = null,
-        rootFolder: String? = null,
-        tags: List<Int>? = null,
-    ) = seerrRequestState.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
-
-    fun loadSeerrServiceDetails(mediaType: String) = seerrRequestState.loadServiceDetails(mediaType)
-
-    fun loadSeerrTvSeasons(tmdbId: Int) = seerrRequestState.loadTvSeasons(tmdbId)
-
-    fun clearSeerrRequestResult() = seerrRequestState.clearRequestResult()
-
-    fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) =
-        seerrRequestState.prefetchDetails(tmdbId, mediaType, onDone)
-
-    // ── Add to Playlist ────────────────────────────────────────────────
-    // Delegated to [playlistActions] (PlaylistActions). The VM keeps thin
-    // pass-throughs so existing callers/tests stay stable; the helper owns the
-    // playlist state machine + the series→episode-id expansion.
-
-    /** Opens the Add-to-Playlist picker. Delegates to [PlaylistActions]. */
-    fun openPlaylistPicker() = playlistActions.openPlaylistPicker()
-
-    fun dismissPlaylistPicker() = playlistActions.dismissPlaylistPicker()
-
-    fun openCreatePlaylistDialog() = playlistActions.openCreatePlaylistDialog()
-
-    fun dismissCreatePlaylistDialog() = playlistActions.dismissCreatePlaylistDialog()
-
-    /** Adds the current item to an existing playlist. Delegates to [PlaylistActions]. */
-    fun addToPlaylist(playlist: com.raulshma.jellyplay.core.model.Playlist) =
-        playlistActions.addToPlaylist(playlist)
-
-    /** Adds to the reserved "Watch Later" playlist. Delegates to [PlaylistActions]. */
-    fun addToWatchLater() = playlistActions.addToWatchLater()
-
-    /** Creates a new playlist seeded with the current item. Delegates to [PlaylistActions]. */
-    fun createAndAddPlaylist(name: String, overview: String) =
-        playlistActions.createAndAddPlaylist(name, overview)
-
-    // ── Add to Collection ───────────────────────────────────────────────
-    // Delegated to [collectionActions] (CollectionActions). The VM keeps thin
-    // pass-throughs so callers/tests stay stable; the helper owns the
-    // collection state machine + the series→episode-id expansion. A mirror of
-    // the playlist block above, minus the Watch Later bucket (collections have
-    // none) and minus the media-type tagging (the create endpoint takes only a
-    // name).
-
-    /** Opens the Add-to-Collection picker. Delegates to [CollectionActions]. */
-    fun openCollectionPicker() = collectionActions.openCollectionPicker()
-
-    fun dismissCollectionPicker() = collectionActions.dismissCollectionPicker()
-
-    fun openCreateCollectionDialog() = collectionActions.openCreateCollectionDialog()
-
-    fun dismissCreateCollectionDialog() = collectionActions.dismissCreateCollectionDialog()
-
-    /** Adds the current item to an existing collection. Delegates to [CollectionActions]. */
-    fun addToCollection(collection: com.raulshma.jellyplay.core.model.CollectionSummary) =
-        collectionActions.addToCollection(collection)
-
-    /** Creates a new collection seeded with the current item. Delegates to [CollectionActions]. */
-    fun createAndAddCollection(name: String) =
-        collectionActions.createAndAddCollection(name)
 
     // ── Offline / download-lifecycle management ──────────────────────────
     // Ports the operations previously owned by OfflineDetailViewModel and
@@ -1430,50 +1247,6 @@ class DetailViewModel @Inject constructor(
             launch { mediaDetailProvider.refresh(itemId) }
         }
     }
-
-    /** Deletes a single downloaded item by id. Delegates to [OfflineDeleteActions]. */
-    fun deleteOfflineItem(id: String) = offlineDeleteActions.deleteOfflineItem(id)
-
-    /** Deletes a single downloaded episode by id. Delegates to [OfflineDeleteActions]. */
-    fun deleteOfflineEpisode(episodeId: String) =
-        offlineDeleteActions.deleteOfflineEpisode(episodeId)
-
-    /**
-     * Deletes a batch of downloaded episodes. Whole-season selections collapse
-     * into one [offlineRepository.deleteOfflineSeason] transaction; partial
-     * selections fall back to per-episode deletes. See [OfflineDeleteActions].
-     */
-    fun deleteOfflineEpisodes(episodeIds: List<String>) =
-        offlineDeleteActions.deleteOfflineEpisodes(episodeIds)
-
-    /** Drops an entire downloaded season (one DB transaction + artifact cleanup). */
-    fun deleteOfflineSeason(seasonId: String) = offlineDeleteActions.deleteOfflineSeason(seasonId)
-
-    /** Drops an entire downloaded series and all its seasons/episodes. */
-    fun deleteOfflineSeries(seriesId: String) = offlineDeleteActions.deleteOfflineSeries(seriesId)
-
-    /**
-     * TTL-gated server freshness check for the current item. Safe to call on
-     * every screen entry. Delegates to [ResyncActions.checkForUpdates].
-     */
-    fun checkForUpdates() = resyncActions.checkForUpdates()
-
-    /**
-     * Re-syncs the current item's metadata and changed images from the server.
-     * Surfaces progress via [DetailUiState.resyncState]. Delegates to
-     * [ResyncActions.resync].
-     */
-    fun resync() = resyncActions.resync()
-
-    /** Resets [DetailUiState.resyncState] to [ResyncUiState.Idle] (no-op while Working). */
-    fun clearResyncState() = resyncActions.clearResyncState()
-
-    /**
-     * Re-downloads the media file when the server's MediaSource changed. This is
-     * the DETAIL re-download path, not the *arr Manage-Series action
-     * ([ArrRepository.redownloadMedia]). Delegates to [ResyncActions.redownloadMedia].
-     */
-    fun redownloadMedia() = resyncActions.redownloadMedia()
 
     /**
      * Marks a single episode played/unplayed (offline-aware + outboxed via the

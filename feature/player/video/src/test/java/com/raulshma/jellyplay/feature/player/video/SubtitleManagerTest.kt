@@ -16,15 +16,16 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import com.raulshma.jellyplay.feature.player.video.state.SubtitleState
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -37,12 +38,14 @@ import org.junit.Test
 
 /**
  * Unit tests for [SubtitleManager] — the in-player subtitle download / search /
- * stream-management state machine. Tests verify state transitions, interaction
- * with [PlaybackRepository] / [MediaRepository], flow updates emitted to
- * `getUiState` / `updateUiState` lambdas, an [UnconfinedTestDispatcher] scope so
- * the collaborator's `scope.launch` blocks run to completion synchronously, and
- * mockk for the repositories. The media-detail refresh coupling is captured via
- * an instrumentation flag on the `onMediaDetailRefreshed` callback.
+ * stream-management state machine. After state ownership moved into the manager
+ * the test surface is the manager's [SubtitleState] flow — no
+ * [VideoPlayerUiState], no ViewModel. Tests verify state transitions and
+ * interaction with [PlaybackRepository] / [MediaRepository], an
+ * [UnconfinedTestDispatcher] scope so the collaborator's `scope.launch` blocks
+ * run to completion synchronously, and mockk for the repositories. The
+ * media-detail refresh coupling is captured via an instrumentation flag on the
+ * `onMediaDetailRefreshed` callback.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SubtitleManagerTest {
@@ -51,11 +54,11 @@ class SubtitleManagerTest {
     private lateinit var mediaRepository: MediaRepository
     private lateinit var subtitleProviderRepository: SubtitleProviderRepository
     private lateinit var userMessageBus: UserMessageBus
-    private lateinit var state: MutableStateFlow<VideoPlayerUiState>
     private lateinit var addedSubtitles: MutableList<SubtitleSource>
     private var refreshedDetails: MutableList<MediaDetail> = mutableListOf()
     private var currentDetail: MediaDetail? = null
     private lateinit var manager: SubtitleManager
+    private var mediaStreams: List<MediaStream> = emptyList()
 
     // An unconfined scope makes manager's scope.launch blocks run to completion
     // synchronously, keeping assertions deterministic.
@@ -67,10 +70,10 @@ class SubtitleManagerTest {
         mediaRepository = mockk(relaxed = true)
         subtitleProviderRepository = mockk(relaxed = true)
         userMessageBus = mockk(relaxed = true)
-        state = MutableStateFlow(VideoPlayerUiState())
         addedSubtitles = mutableListOf()
         refreshedDetails.clear()
         currentDetail = null
+        mediaStreams = emptyList()
 
         manager = SubtitleManager(
             context = mockk(relaxed = true),
@@ -81,8 +84,7 @@ class SubtitleManagerTest {
             userMessageBus = userMessageBus,
             scope = scope,
             addExternalSubtitle = { addedSubtitles += it },
-            getUiState = { state.value },
-            updateUiState = { transform -> state.value = transform(state.value) },
+            getMediaStreams = { mediaStreams },
             getCurrentItemId = { "item-1" },
             onMediaDetailRefreshed = { refreshedDetails += it },
             getCurrentMediaDetail = { currentDetail },
@@ -96,8 +98,8 @@ class SubtitleManagerTest {
 
         manager.loadRemoteSubtitles()
 
-        assertTrue(state.value.isLoadingRemoteSubtitles.not())
-        assertEquals(subs, state.value.remoteSubtitles)
+        assertTrue(manager.state.value.isLoadingRemoteSubtitles.not())
+        assertEquals(subs, manager.state.value.remoteSubtitles)
     }
 
     @Test
@@ -106,8 +108,8 @@ class SubtitleManagerTest {
 
         manager.loadRemoteSubtitles()
 
-        assertTrue(state.value.remoteSubtitles.isEmpty())
-        assertFalse(state.value.isLoadingRemoteSubtitles)
+        assertTrue(manager.state.value.remoteSubtitles.isEmpty())
+        assertFalse(manager.state.value.isLoadingRemoteSubtitles)
     }
 
     @Test
@@ -127,10 +129,10 @@ class SubtitleManagerTest {
 
         manager.searchRemoteSubtitles("eng")
 
-        assertEquals(subs, state.value.searchedSubtitles)
-        assertTrue(state.value.hasSearchedSubtitles)
-        assertFalse(state.value.isSearchingSubtitles)
-        assertNull(state.value.subtitleSearchError)
+        assertEquals(subs, manager.state.value.searchedSubtitles)
+        assertTrue(manager.state.value.hasSearchedSubtitles)
+        assertFalse(manager.state.value.isSearchingSubtitles)
+        assertNull(manager.state.value.subtitleSearchError)
     }
 
     @Test
@@ -141,10 +143,10 @@ class SubtitleManagerTest {
 
         // A failure must set subtitleSearchError (so the UI invites retry) and
         // must NOT claim a search completed with an empty result.
-        assertEquals("rate limited", state.value.subtitleSearchError)
-        assertFalse(state.value.hasSearchedSubtitles)
-        assertFalse(state.value.isSearchingSubtitles)
-        assertTrue(state.value.searchedSubtitles.isEmpty())
+        assertEquals("rate limited", manager.state.value.subtitleSearchError)
+        assertFalse(manager.state.value.hasSearchedSubtitles)
+        assertFalse(manager.state.value.isSearchingSubtitles)
+        assertTrue(manager.state.value.searchedSubtitles.isEmpty())
     }
 
     @Test
@@ -162,8 +164,8 @@ class SubtitleManagerTest {
 
         // Network detail fetch never happens when the in-memory snapshot exists.
         coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
-        assertTrue(state.value.hasSearchedSubtitles)
-        assertFalse(state.value.isSearchingSubtitles)
+        assertTrue(manager.state.value.hasSearchedSubtitles)
+        assertFalse(manager.state.value.isSearchingSubtitles)
     }
 
     @Test
@@ -188,11 +190,11 @@ class SubtitleManagerTest {
 
         manager.searchAllProviders("eng")
 
-        assertEquals(listOf(wyzieResult), state.value.providerSearchResults)
+        assertEquals(listOf(wyzieResult), manager.state.value.providerSearchResults)
         // No fatal "Could not load item details" — external results came through.
-        assertTrue(state.value.providerSearchErrors.isEmpty())
-        assertTrue(state.value.hasSearchedSubtitles)
-        assertFalse(state.value.isSearchingSubtitles)
+        assertTrue(manager.state.value.providerSearchErrors.isEmpty())
+        assertTrue(manager.state.value.hasSearchedSubtitles)
+        assertFalse(manager.state.value.isSearchingSubtitles)
     }
 
     @Test
@@ -230,21 +232,24 @@ class SubtitleManagerTest {
         manager.searchAllProviders("eng")
 
         // Final state reflects the merged snapshot.
-        assertEquals(2, state.value.providerSearchResults.size)
-        assertTrue(state.value.hasSearchedSubtitles)
-        assertFalse(state.value.isSearchingSubtitles)
+        assertEquals(2, manager.state.value.providerSearchResults.size)
+        assertTrue(manager.state.value.hasSearchedSubtitles)
+        assertFalse(manager.state.value.isSearchingSubtitles)
     }
 
     @Test
     fun loadSubtitleCultures_isIdempotentWhenAlreadyPopulated() {
-        state.value = state.value.copy(subtitleCultures = listOf(CultureInfo(name = "eng")))
         coEvery { playbackRepository.getSubtitleCultures("item-1") } returns Result.success(listOf(CultureInfo(name = "deu")))
+        manager.loadSubtitleCultures()
+        assertEquals(listOf(CultureInfo(name = "deu")), manager.state.value.subtitleCultures)
 
+        // A second, different result must NOT re-fetch or replace the populated
+        // cultures (idempotent guard).
+        coEvery { playbackRepository.getSubtitleCultures("item-1") } returns Result.success(listOf(CultureInfo(name = "eng")))
         manager.loadSubtitleCultures()
 
-        // Already-populated cultures must not be re-fetched (idempotent guard).
-        coVerify(exactly = 0) { playbackRepository.getSubtitleCultures(any()) }
-        assertEquals(listOf(CultureInfo(name = "eng")), state.value.subtitleCultures)
+        coVerify(exactly = 1) { playbackRepository.getSubtitleCultures(any()) }
+        assertEquals(listOf(CultureInfo(name = "deu")), manager.state.value.subtitleCultures)
     }
 
     @Test
@@ -253,26 +258,23 @@ class SubtitleManagerTest {
 
         manager.loadSubtitleCultures()
 
-        assertEquals(listOf(CultureInfo(name = "deu", displayName = "German")), state.value.subtitleCultures)
+        assertEquals(listOf(CultureInfo(name = "deu", displayName = "German")), manager.state.value.subtitleCultures)
     }
 
     @Test
     fun resetSubtitleManagerState_clearsTheWholeSlice() {
-        state.value = state.value.copy(
-            searchedSubtitles = listOf(RemoteSubtitleInfo(id = "x")),
-            hasSearchedSubtitles = true,
-            isSearchingSubtitles = true,
-            subtitleSearchError = "err",
-            subtitleCultures = listOf(CultureInfo(name = "eng")),
-        )
+        coEvery { playbackRepository.searchRemoteSubtitles("item-1", "eng") } returns Result.failure(RuntimeException("err"))
+        manager.searchRemoteSubtitles("eng")
+        assertTrue(manager.state.value.hasSearchedSubtitles.not())
+        assertEquals("err", manager.state.value.subtitleSearchError)
 
         manager.resetSubtitleManagerState()
 
-        assertTrue(state.value.searchedSubtitles.isEmpty())
-        assertFalse(state.value.hasSearchedSubtitles)
-        assertFalse(state.value.isSearchingSubtitles)
-        assertNull(state.value.subtitleSearchError)
-        assertTrue(state.value.subtitleCultures.isEmpty())
+        assertTrue(manager.state.value.searchedSubtitles.isEmpty())
+        assertFalse(manager.state.value.hasSearchedSubtitles)
+        assertFalse(manager.state.value.isSearchingSubtitles)
+        assertNull(manager.state.value.subtitleSearchError)
+        assertTrue(manager.state.value.subtitleCultures.isEmpty())
     }
 
     @Test
@@ -293,10 +295,6 @@ class SubtitleManagerTest {
             // force-read freshness seam).
             io.mockk.coVerify(atLeast = 1) { mediaRepository.getMediaDetail("item-1", force = true) }
             assertEquals(listOf(detail), refreshedDetails)
-            assertEquals(
-                SubtitleDownloadState.DOWNLOADED,
-                state.value.downloadingSubtitles["s1"]?.state,
-            )
         }
 
     @Test
@@ -306,7 +304,8 @@ class SubtitleManagerTest {
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
             coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(mediaDetail("item-1"))
 
-            managerInScope(this).downloadSubtitle(
+            val m = managerInScope(this)
+            m.downloadSubtitle(
                 RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"),
             )
             // Advance the virtual clock past the poll loop's inter-attempt delays
@@ -315,7 +314,7 @@ class SubtitleManagerTest {
 
             assertEquals(
                 SubtitleDownloadState.DELAYED,
-                state.value.downloadingSubtitles["s1"]?.state,
+                m.state.value.downloadingSubtitles["s1"]?.state,
             )
             io.mockk.verify { userMessageBus.info(any<String>()) }
         }
@@ -325,11 +324,12 @@ class SubtitleManagerTest {
         runTest(UnconfinedTestDispatcher()) {
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.failure(RuntimeException("network"))
 
-            managerInScope(this).downloadSubtitle(
+            val m = managerInScope(this)
+            m.downloadSubtitle(
                 RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"),
             )
 
-            val status = state.value.downloadingSubtitles["s1"]
+            val status = m.state.value.downloadingSubtitles["s1"]
             assertEquals(SubtitleDownloadState.FAILED, status?.state)
             assertEquals("network", status?.errorMessage)
             io.mockk.verify { userMessageBus.error(any<String>()) }
@@ -342,16 +342,15 @@ class SubtitleManagerTest {
             // post-download detail still only carries that same index-2 stream —
             // no genuinely new stream — so this must NOT short-circuit success;
             // it falls through to DELAYED (guard against a false positive).
-            state.value = state.value.copy(
-                mediaStreams = listOf(
-                    MediaStream(index = 2, type = StreamType.SUBTITLE, language = "eng"),
-                ),
+            mediaStreams = listOf(
+                MediaStream(index = 2, type = StreamType.SUBTITLE, language = "eng"),
             )
             val detail = mediaDetailWithSubtitle("item-1", streamIndex = 2, language = "eng")
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
             coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(detail)
 
-            managerInScope(this).downloadSubtitle(
+            val m = managerInScope(this)
+            m.downloadSubtitle(
                 RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"),
             )
             // The detail carries only the pre-existing index-2 stream, so the
@@ -361,7 +360,7 @@ class SubtitleManagerTest {
 
             assertEquals(
                 SubtitleDownloadState.DELAYED,
-                state.value.downloadingSubtitles["s1"]?.state,
+                m.state.value.downloadingSubtitles["s1"]?.state,
             )
             // No detail should have been applied since nothing genuinely appeared.
             assertTrue(refreshedDetails.isEmpty())
@@ -376,24 +375,65 @@ class SubtitleManagerTest {
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
             coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(mediaDetail("item-1"))
 
-            managerInScope(this).downloadSubtitle(
+            val m = managerInScope(this)
+            m.downloadSubtitle(
                 RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"),
             )
 
-            assertTrue(state.value.downloadingSubtitles.containsKey("s1"))
+            assertTrue(m.state.value.downloadingSubtitles.containsKey("s1"))
         }
 
     @Test
-    fun resetSubtitleManagerState_clearsDownloads() {
-        state.value = state.value.copy(
-            downloadingSubtitles = mapOf(
-                "s1" to SubtitleDownloadStatus("s1", SubtitleDownloadState.DOWNLOADED),
-            ),
+    fun resetSubtitleManagerState_clearsDownloads() =
+        runTest(UnconfinedTestDispatcher()) {
+            coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.failure(RuntimeException("network"))
+            val m = managerInScope(this)
+            m.downloadSubtitle(RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"))
+            assertTrue(m.state.value.downloadingSubtitles.isNotEmpty())
+
+            m.resetSubtitleManagerState()
+
+            assertTrue(m.state.value.downloadingSubtitles.isEmpty())
+        }
+
+    // ─── Item-switch semantics ─────────────────────────────────────────────────
+
+    /**
+     * The workflow state is per-item: resetForItem clears search/download state
+     * (and cancels in-flight jobs) — the explicit form of the implicit reset the
+     * former UiState rebuild performed (none of these fields were whitelisted).
+     */
+    @Test
+    fun `resetForItem clears search and download status`() {
+        coEvery { playbackRepository.searchRemoteSubtitles("item-1", "eng") } returns Result.failure(RuntimeException("err"))
+        coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.failure(RuntimeException("network"))
+        // A configured-provider emission must also be wiped by the reset.
+        every { subtitleProviderRepository.configuredProviders() } returns flowOf(
+            setOf(SubtitleProviderKind.JELLYFIN)
         )
+        manager.searchRemoteSubtitles("eng")
+        manager.downloadSubtitle(RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"))
+        manager.loadConfiguredProviders()
+        assertTrue(manager.state.value.downloadingSubtitles.isNotEmpty())
+        assertEquals("err", manager.state.value.subtitleSearchError)
+        assertTrue(manager.state.value.configuredSubtitleProviders.isNotEmpty())
 
-        manager.resetSubtitleManagerState()
+        manager.resetForItem()
 
-        assertTrue(state.value.downloadingSubtitles.isEmpty())
+        assertEquals(SubtitleState(), manager.state.value)
+    }
+
+    /** Prefs seed (the former SettingsProjector projection of the default search language). */
+    @Test
+    fun `seedDefaultSearchLanguage updates only when different`() {
+        assertEquals("eng", manager.state.value.defaultSearchLanguage)
+
+        val before = manager.state.value
+        manager.seedDefaultSearchLanguage("eng")
+        assertTrue(before === manager.state.value)
+
+        manager.seedDefaultSearchLanguage("spa")
+        assertEquals("spa", manager.state.value.defaultSearchLanguage)
     }
 
     // Note: addLocalSubtitle() is thin string→SubtitleSource mapping that calls
@@ -409,8 +449,7 @@ class SubtitleManagerTest {
         userMessageBus = userMessageBus,
         scope = scope,
         addExternalSubtitle = { addedSubtitles += it },
-        getUiState = { state.value },
-        updateUiState = { transform -> state.value = transform(state.value) },
+        getMediaStreams = { mediaStreams },
         getCurrentItemId = { id },
         onMediaDetailRefreshed = { refreshedDetails += it },
         getCurrentMediaDetail = { currentDetail },
@@ -430,8 +469,7 @@ class SubtitleManagerTest {
         userMessageBus = userMessageBus,
         scope = testScope,
         addExternalSubtitle = { addedSubtitles += it },
-        getUiState = { state.value },
-        updateUiState = { transform -> state.value = transform(state.value) },
+        getMediaStreams = { mediaStreams },
         getCurrentItemId = { "item-1" },
         onMediaDetailRefreshed = { refreshedDetails += it },
         getCurrentMediaDetail = { currentDetail },

@@ -1,14 +1,21 @@
 package com.raulshma.jellyplay.feature.details
 
-import android.content.Context
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
+import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaSource
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -18,10 +25,9 @@ class WatchPartyActionsTest {
 
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val syncPlayManager: SyncPlayManager = mockk(relaxed = true)
-    private val context: Context = mockk(relaxed = true)
 
-    private val messages = mutableListOf<DetailMessage>()
-    private val messageSink: (DetailMessage) -> Unit = { messages += it }
+    private val strings = fakeDetailStrings()
+    private val messages = RecordingMessages()
 
     private val group = SyncPlayGroup(
         groupId = "g1",
@@ -31,16 +37,83 @@ class WatchPartyActionsTest {
 
     @Before
     fun setUp() {
-        messages.clear()
-        every { context.getString(R.string.detail_msg_watch_party_failed) } returns "couldn't start watch party"
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        messages.reset()
     }
 
-    private fun actions(): WatchPartyActions = WatchPartyActions(
+    private fun actions(
+        scope: kotlinx.coroutines.CoroutineScope? = null,
+        session: MutableStateFlow<DetailSession?> = MutableStateFlow(null),
+    ): WatchPartyActions = WatchPartyActions(
+        scope = scope ?: kotlinx.coroutines.test.TestScope(),
+        session = session,
+        messages = messages.flow,
+        strings = strings,
         mediaRepository = mediaRepository,
         syncPlayManager = syncPlayManager,
-        context = context,
-        messageSink = messageSink,
     )
+
+    // ── Screen-item entry point (title/source resolution moved here) ─────
+
+    @Test
+    fun `startScreenItem resolves title and default media source from the session and seeds the queue`() = runTest {
+        val detail = MediaDetail(
+            item = MediaItem(id = "m1", name = "My Movie", mediaType = MediaType.MOVIE),
+            mediaSources = listOf(MediaSource(id = "src1", name = "Source")),
+        )
+        coEvery { mediaRepository.createSyncPlayGroup(any()) } returns Result.success(Unit)
+        coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(listOf(group))
+        coEvery { syncPlayManager.joinGroup(any()) } returns Result.success(Unit)
+        coEvery {
+            mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any())
+        } returns Result.success(Unit)
+
+        actions(this, MutableStateFlow(DetailSession(itemId = "m1", detail = detail))).startScreenItem()
+        advanceUntilIdle()
+
+        // Group titled from the item name; queue seeded with the default source.
+        coVerify(exactly = 1) { mediaRepository.createSyncPlayGroup("My Movie") }
+        coVerify(exactly = 1) {
+            mediaRepository.syncPlaySetNewQueue(
+                itemIds = listOf("m1"),
+                playingItemId = "m1",
+                mediaSourceId = "src1",
+                startPositionTicks = 0L,
+            )
+        }
+        assertTrue(messages.recorded.contains(DetailMessage.WatchPartyStarted("m1")))
+    }
+
+    @Test
+    fun `startScreenItem falls back to the localized default title for a blank item name`() = runTest {
+        val detail = MediaDetail(
+            item = MediaItem(id = "m1", name = "", mediaType = MediaType.MOVIE),
+        )
+        coEvery { mediaRepository.createSyncPlayGroup(any()) } returns Result.success(Unit)
+        coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(
+            listOf(group.copy(groupName = strings.get(R.string.detail_watch_party_default_name)))
+        )
+        coEvery { syncPlayManager.joinGroup(any()) } returns Result.success(Unit)
+        coEvery {
+            mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any())
+        } returns Result.success(Unit)
+
+        actions(this, MutableStateFlow(DetailSession(itemId = "m1", detail = detail))).startScreenItem()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            mediaRepository.createSyncPlayGroup(strings.get(R.string.detail_watch_party_default_name))
+        }
+    }
+
+    @Test
+    fun `startScreenItem with no loaded detail is a no-op`() = runTest {
+        actions(this).startScreenItem()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { mediaRepository.createSyncPlayGroup(any()) }
+        assertTrue(messages.recorded.isEmpty())
+    }
 
     // ── Happy path ──────────────────────────────────────────────────────
 
@@ -53,14 +126,14 @@ class WatchPartyActionsTest {
             mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any())
         } returns Result.success(Unit)
 
-        val result = actions().start(
+        val result = actions(this).start(
             itemId = "m1",
             title = "My Movie",
             mediaSourceId = "src1",
         )
 
         assertTrue(result.isSuccess)
-        assertTrue(messages.contains(DetailMessage.WatchPartyStarted("m1")))
+        assertTrue(messages.recorded.contains(DetailMessage.WatchPartyStarted("m1")))
         coVerify(exactly = 1) { mediaRepository.createSyncPlayGroup("My Movie") }
         // Snapshot (pre-create) + recover (post-create) = two reads.
         coVerify(exactly = 2) { mediaRepository.getSyncPlayGroups() }
@@ -85,7 +158,7 @@ class WatchPartyActionsTest {
             mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any())
         } answers { calls += "setQueue"; Result.success(Unit) }
 
-        actions().start("m1", "My Movie", null)
+        actions(this).start("m1", "My Movie", null)
 
         // Snapshot read precedes create; recover read follows it.
         assertEquals(listOf("getGroups", "create", "getGroups", "join", "setQueue"), calls)
@@ -100,10 +173,14 @@ class WatchPartyActionsTest {
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(emptyList())
         coEvery { mediaRepository.createSyncPlayGroup(any()) } returns Result.failure(RuntimeException("server"))
 
-        val result = actions().start("m1", "My Movie", null)
+        val result = actions(this).start("m1", "My Movie", null)
 
         assertTrue(result.isFailure)
-        assertTrue(messages.contains(DetailMessage.Text("couldn't start watch party")))
+        assertTrue(
+            messages.recorded.contains(
+                DetailMessage.Text(strings.get(R.string.detail_msg_watch_party_failed))
+            )
+        )
         coVerify(exactly = 0) { syncPlayManager.joinGroup(any()) }
         coVerify(exactly = 0) { mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any()) }
     }
@@ -114,10 +191,14 @@ class WatchPartyActionsTest {
         // The group list does not contain a group matching the title.
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(emptyList())
 
-        val result = actions().start("m1", "My Movie", null)
+        val result = actions(this).start("m1", "My Movie", null)
 
         assertTrue(result.isFailure)
-        assertTrue(messages.contains(DetailMessage.Text("couldn't start watch party")))
+        assertTrue(
+            messages.recorded.contains(
+                DetailMessage.Text(strings.get(R.string.detail_msg_watch_party_failed))
+            )
+        )
         coVerify(exactly = 0) { syncPlayManager.joinGroup(any()) }
         coVerify(exactly = 0) { mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any()) }
     }
@@ -128,10 +209,14 @@ class WatchPartyActionsTest {
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(listOf(group))
         coEvery { syncPlayManager.joinGroup(any()) } returns Result.failure(RuntimeException("ws"))
 
-        val result = actions().start("m1", "My Movie", null)
+        val result = actions(this).start("m1", "My Movie", null)
 
         assertTrue(result.isFailure)
-        assertTrue(messages.contains(DetailMessage.Text("couldn't start watch party")))
+        assertTrue(
+            messages.recorded.contains(
+                DetailMessage.Text(strings.get(R.string.detail_msg_watch_party_failed))
+            )
+        )
         coVerify(exactly = 0) { mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any()) }
     }
 
@@ -144,12 +229,16 @@ class WatchPartyActionsTest {
             mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any())
         } returns Result.failure(RuntimeException("queue"))
 
-        val result = actions().start("m1", "My Movie", null)
+        val result = actions(this).start("m1", "My Movie", null)
 
         assertTrue(result.isFailure)
-        assertTrue(messages.contains(DetailMessage.Text("couldn't start watch party")))
+        assertTrue(
+            messages.recorded.contains(
+                DetailMessage.Text(strings.get(R.string.detail_msg_watch_party_failed))
+            )
+        )
         // No WatchPartyStarted may be emitted on any failure path.
-        assertTrue(messages.none { it is DetailMessage.WatchPartyStarted })
+        assertTrue(messages.recorded.none { it is DetailMessage.WatchPartyStarted })
     }
 
     // ── Group disambiguation ───────────────────────────────────────────
@@ -170,7 +259,7 @@ class WatchPartyActionsTest {
             mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any())
         } returns Result.success(Unit)
 
-        val result = actions().start("m1", "My Movie", null)
+        val result = actions(this).start("m1", "My Movie", null)
 
         assertTrue(result.isSuccess)
         coVerify { syncPlayManager.joinGroup("fresh") }

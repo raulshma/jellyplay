@@ -213,6 +213,24 @@ abstract class DataModule {
     @Singleton
     abstract fun bindSearchHistoryRepository(impl: SearchHistoryRepositoryImpl): SearchHistoryRepository
 
+    // The single search kernel: debounced preview fetch + Seerr
+    // gating + history policy behind one seam, consumed by the home inline
+    // search and the search screen alike (previously two hand-rolled engines
+    // with two debounce constants and two history policies).
+    @Binds
+    @Singleton
+    abstract fun bindMediaSearchEngine(
+        impl: com.raulshma.jellyplay.core.data.search.MediaSearchEngineImpl,
+    ): com.raulshma.jellyplay.core.data.search.MediaSearchEngine
+
+    // The narrow offline-first title+poster lookup seam. Leaf
+    // adapter over existing singletons — no scope or cycle risk.
+    @Binds
+    @Singleton
+    abstract fun bindOfflineFirstItemResolver(
+        impl: com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl,
+    ): com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
+
     @Binds
     @Singleton
     abstract fun bindWatchHistoryRepository(impl: WatchHistoryRepositoryImpl): WatchHistoryRepository

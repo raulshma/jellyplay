@@ -85,6 +85,8 @@ import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
 import com.raulshma.jellyplay.core.ui.navigation.withHighlightSettingId
+import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
+import com.raulshma.jellyplay.core.ui.settingssearch.settingsSearchResults
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -602,6 +604,7 @@ private fun MainHomeContent(
                     isLightTheme = isLightTheme,
                     isSearchFocused = isSearchFocused,
                     searchQuery = viewModel.searchQuery,
+                    includeSettingsResults = state.showSettingsInHomeSearch,
                     offlineMode = state.offlineMode,
                     homeMode = state.homeMode,
                     headerStatus = headerStatus,
@@ -625,7 +628,7 @@ private fun MainHomeContent(
                     onHeroFocusDown = remember(heroFocusRequester) {
                         { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }
                     },
-                    searchResultsContent = {
+                    searchResultsContent = { settingsResults ->
                         if (state.isSearchActive || searchHistory.isNotEmpty()) {
                             HomeSearchResultsOverlay(
                                 jellyfinResults = state.searchState.jellyfinResults,
@@ -638,7 +641,7 @@ private fun MainHomeContent(
                                 onHistoryClick = searchOnHistoryClick,
                                 onDeleteHistoryItem = searchOnDeleteHistoryItem,
                                 onClearHistory = searchOnClearHistory,
-                                settingsResults = if (state.showSettingsInHomeSearch) state.searchState.settingsResults else emptyList(),
+                                settingsResults = settingsResults,
                                 onSettingsClick = searchOnSettingsClick,
                             )
                         }
@@ -858,6 +861,7 @@ private fun HomeTopDockScrim(
     isLightTheme: Boolean,
     isSearchFocused: Boolean,
     searchQuery: StateFlow<String>,
+    includeSettingsResults: Boolean,
     offlineMode: com.raulshma.jellyplay.core.model.OfflineMode,
     homeMode: HomeMode,
     headerStatus: HeaderStatus,
@@ -879,7 +883,7 @@ private fun HomeTopDockScrim(
     isGoingOnline: Boolean = false,
     onShowSyncDetails: () -> Unit = {},
     onHeroFocusDown: () -> Boolean,
-    searchResultsContent: @Composable () -> Unit,
+    searchResultsContent: @Composable (List<ResolvedSettingsItem>) -> Unit,
 ) {
     val onSurface = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
     val baseIconColor = if (isLightTheme) onSurface else androidx.compose.ui.graphics.Color.White
@@ -891,6 +895,20 @@ private fun HomeTopDockScrim(
     // recompose on each keystroke; the orchestrator stays untouched. Mirrors
     // the scrollFraction deferral documented at the top of this KDoc.
     val query by searchQuery.collectAsStateWithLifecycle()
+
+    // Local settings search also lives in this leaf: it is pure-local and
+    // needs an Android Context to resolve the registry's @StringRes ids, so it
+    // moved out of HomeViewModel (which no longer carries an appContext).
+    // Gated by the Appearance toggle — when off, an empty flow keeps the slot
+    // idle while preserving the (empty) settings row.
+    val settingsContext = LocalContext.current
+    val settingsResults by remember(includeSettingsResults, settingsContext) {
+        if (includeSettingsResults) {
+            settingsSearchResults(searchQuery, settingsContext)
+        } else {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        }
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
 
     // ── Auto-hide top header on scroll ──
     // Mirrors the floating nav-bar hide-on-scroll: hide on scroll-down, reveal
@@ -955,7 +973,7 @@ private fun HomeTopDockScrim(
         onToggleOffline = onToggleOffline,
         isGoingOnline = isGoingOnline,
         onShowSyncDetails = onShowSyncDetails,
-        searchResultsContent = searchResultsContent,
+        searchResultsContent = { searchResultsContent(settingsResults) },
         modifier = Modifier
             .then(
                 if (isTv) {

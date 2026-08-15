@@ -13,8 +13,8 @@ import kotlinx.coroutines.launch
  * Mirrors the controller-extraction pattern of [SleepTimerController] /
  * [AutoPlayController]: pure workflow logic lifted out of the ViewModel. The
  * loop monitor runs against the high-frequency position flow
- * (`VideoPlayerViewModel._currentPositionMs`) rather than the ~4 Hz `uiState`,
- * so re-seeking at B is responsive without allocating a uiState copy per tick.
+ * (`VideoPlayerViewModel.currentPositionMs`) rather than a ~4 Hz uiState, so
+ * re-seeking at B is responsive without allocating a state copy per tick.
  *
  * Design notes:
  *  - When `enabled` and both points are set, reaching or passing B seeks back
@@ -26,14 +26,18 @@ import kotlinx.coroutines.launch
  *  - Disabled or single-point states are inert (no seeks). Clearing both points
  *    and disabling resets the controller.
  *
- * Per-item persistence of the A/B window is handled by the caller via
- * [StateFlow]; this class only owns the live loop logic.
+ * **Item-switch semantics: the window does NOT persist across episodes.**
+ * [resetForItem] clears both points (and re-arms), and the ViewModel's
+ * item-switch path calls it. This also fixes the former divergence bug where
+ * the reset ritual wiped the UiState mirror of this state but not the
+ * controller's own copy — after an episode switch the loop monitor could seek
+ * the *next* episode back to the *previous* episode's A point, and one tap on
+ * the toggle resurrected the stale points.
  */
 internal class AbRepeatController(
     private val scope: CoroutineScope,
     private val getEngine: () -> MediaEngine?,
     private val positionFlow: StateFlow<Long>,
-    private val updateUiState: ((VideoPlayerUiState) -> VideoPlayerUiState) -> Unit,
 ) {
     private val _state = MutableStateFlow(AbRepeatState())
     val state: StateFlow<AbRepeatState> = _state.asStateFlow()
@@ -68,7 +72,6 @@ internal class AbRepeatController(
     fun setEnabled(enabled: Boolean) {
         _state.value = _state.value.copy(enabled = enabled)
         armed = true
-        publish()
     }
 
     /** Sets the A point to the current playback position (clamped below B). */
@@ -77,7 +80,6 @@ internal class AbRepeatController(
         val a = if (b != null && ms >= b) (b - 1).coerceAtLeast(0) else ms.coerceAtLeast(0)
         _state.value = _state.value.copy(aMs = a)
         armed = true
-        publish()
     }
 
     /** Sets the B point to the current playback position (clamped above A). */
@@ -86,17 +88,21 @@ internal class AbRepeatController(
         val b = if (a != null && ms <= a) (a + 1) else ms.coerceAtLeast(0)
         _state.value = _state.value.copy(bMs = b)
         armed = true
-        publish()
     }
 
     fun clear() {
         _state.value = AbRepeatState()
         armed = true
-        publish()
     }
 
-    private fun publish() {
-        updateUiState { it.copy(abRepeat = _state.value) }
+    /**
+     * Item-switch reset: clears the window and re-arms the crossing monitor.
+     * Called by the ViewModel's `releaseInternals()` on every item switch so a
+     * previous episode's A/B points can neither seek the new episode nor be
+     * resurrected by a single tap on the toggle.
+     */
+    fun resetForItem() {
+        clear()
     }
 }
 

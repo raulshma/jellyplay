@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.lifecycle.SavedStateHandle
+import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -159,18 +160,23 @@ class OfflineLibraryViewModel @Inject constructor(
     }
 
     /**
-     * Deletes a downloaded item from the long-press quick-action sheet. Routes by
-     * media type: a series deletes the whole series download; anything else
-     * deletes the single item. The reactive [offlineLibrary] flow refreshes on
-     * its own once the row is gone.
+     * Shared offline-delete module (core/data) — the same routing the detail
+     * screen and offline home use. Providers default to empty (this screen
+     * never batch-deletes episodes) and `onContentMutated` stays a no-op: the
+     * reactive [offlineLibrary] Room flow refreshes on its own once rows are
+     * gone.
+     */
+    private val deleteActions = OfflineDeleteActions(
+        scope = scope,
+        offlineRepository = offlineRepository,
+    )
+
+    /**
+     * Deletes a downloaded item from the long-press quick-action sheet:
+     * [OfflineDeleteActions.deleteDownload] routes a series to the whole-series
+     * delete and anything else to the single-item delete.
      */
     fun delete(item: MediaItem) {
-        launch {
-            if (item.mediaType == MediaType.SERIES) {
-                offlineRepository.deleteOfflineSeries(item.id)
-            } else {
-                offlineRepository.deleteOfflineItem(item.id)
-            }
-        }
+        deleteActions.deleteDownload(item)
     }
 }

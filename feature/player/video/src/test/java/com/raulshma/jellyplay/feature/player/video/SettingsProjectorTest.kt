@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
@@ -43,12 +42,6 @@ class SettingsProjectorTest {
                 tvZoomModePercent = 100f,
                 videoPassOutProtectionHours = 4,
             ),
-            audio = AudioSlice(
-                sleepTimerDurationMs = 20_000L,
-            ),
-            subtitle = SubtitleSlice(
-                preferredSubtitleLanguage = "spa",
-            ),
             security = SecuritySlice(
                 usePinForPlayerLock = true,
                 pinHash = "hashed_pin",
@@ -57,7 +50,6 @@ class SettingsProjectorTest {
 
         projector.project(agg)
 
-        assertEquals(20_000L, uiState.sleepTimerLastUsedDurationMs)
         assertTrue(uiState.showPlaybackMetadata)
         assertTrue(uiState.showClock)
         assertTrue(uiState.showTimeRemaining)
@@ -67,8 +59,14 @@ class SettingsProjectorTest {
         assertEquals(10, uiState.autoPlayCountdownSec)
         assertTrue(uiState.usePinForPlayerLock)
         assertTrue(uiState.hasPin)
-        assertEquals("spa", uiState.defaultSearchLanguage)
     }
+
+    // Note: the sleep-timer last-used duration and the Subtitle Manager's
+    // default search language were formerly projected here too; their homes
+    // moved to SleepTimerController / SubtitleManager and the
+    // ViewModel's aggregate collector seeds them — see
+    // SleepTimerControllerTest.`seedLastUsedDurationMs updates only when different`
+    // and SubtitleManagerTest.`seedDefaultSearchLanguage updates only when different`.
 
     @Test
     fun project_returnsTrueWhenSubtitleStyleChanges() {

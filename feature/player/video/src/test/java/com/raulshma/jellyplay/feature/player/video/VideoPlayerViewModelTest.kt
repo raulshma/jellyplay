@@ -248,6 +248,12 @@ class VideoPlayerViewModelTest {
         every { jellyfinRemotePlayCastStrategy.isConnected } returns MutableStateFlow(false)
         val resumeTicks = 10_290_000_000L // 17:09, the reporter's example
         val runtimeTicks = 54_000_000_000L // 90 min total runtime
+        // The pipeline seeds the playhead from the RESOLVED ticks; explicit
+        // nonzero ticks pass through the resolver unchanged (its real rule,
+        // pinned by PlaybackSourceResolverTest).
+        coEvery {
+            playbackSourceResolver.resolveStartPositionTicks("item-1", resumeTicks)
+        } returns resumeTicks
         coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(
             MediaDetail(
                 item = MediaItem(
@@ -267,6 +273,41 @@ class VideoPlayerViewModelTest {
         assertEquals(runtimeTicks / 10_000, viewModel.durationMs.value)
         // The loading screen lifts once the load completes, so the seek bar's
         // first paint (with both values seeded) is the resume fraction.
+        assertFalse(viewModel.uiState.value.isInitializing)
+    }
+
+    /**
+     * Zero-tick entries (Downloads list, episode browser) resolve the resume
+     * position from the offline mirror inside the load pipeline. The playhead
+     * seed must use those RESOLVED ticks — not the raw request ticks — or the
+     * seek bar paints 0 at the loader lift and jumps to the resume position on
+     * the engine's first tick.
+     */
+    @Test
+    fun initialize_zeroRequestTicksWithOfflineResume_seedsResolvedPlayhead() {
+        every { aggregateStore.aggregate } returns MutableStateFlow(
+            VideoPlayerAggregate(playback = PlaybackSlice(preferredPlayer = PlayerType.EXTERNAL))
+        )
+        every { aggregateStore.aggregateRaw } returns flowOf(
+            VideoPlayerAggregate(playback = PlaybackSlice(preferredPlayer = PlayerType.EXTERNAL))
+        )
+        every { jellyfinRemotePlayCastStrategy.isConnected } returns MutableStateFlow(false)
+        val storedTicks = 5L * 60L * 1000L * 10_000L // 5 min resume in the offline mirror
+        coEvery { playbackSourceResolver.resolveStartPositionTicks("item-1", 0L) } returns storedTicks
+        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(
+            MediaDetail(
+                item = MediaItem(
+                    id = "item-1",
+                    name = "Test Movie",
+                    mediaType = MediaType.MOVIE,
+                    runTimeTicks = 54_000_000_000L,
+                )
+            )
+        )
+
+        viewModel.initialize("item-1", null, 0L)
+
+        assertEquals(storedTicks / 10_000, viewModel.currentPositionMs.value)
         assertFalse(viewModel.uiState.value.isInitializing)
     }
 
@@ -356,15 +397,15 @@ class VideoPlayerViewModelTest {
 
     @Test
     fun toggleNightMode_flipsEnabled() {
-        val before = viewModel.uiState.value.nightModeEnabled
+        val before = viewModel.effectsState.value.nightModeEnabled
         viewModel.toggleNightMode()
-        assertEquals(!before, viewModel.uiState.value.nightModeEnabled)
+        assertEquals(!before, viewModel.effectsState.value.nightModeEnabled)
     }
 
     @Test
     fun setNightModeStrength_updatesState() {
         viewModel.setNightModeStrength(EffectStrength.HIGH)
-        assertEquals(EffectStrength.HIGH, viewModel.uiState.value.nightModeStrength)
+        assertEquals(EffectStrength.HIGH, viewModel.effectsState.value.nightModeStrength)
     }
 
     @Test

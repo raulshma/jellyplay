@@ -7,8 +7,8 @@ import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
-import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.Genre
@@ -51,13 +51,6 @@ import javax.inject.Inject
  */
 private const val OFFLINE_SEARCH_RESULT_LIMIT: Int = 10
 
-/**
- * Debounce applied to the search query before triggering a library/Seerr
- * lookup. Kept short so results feel immediate while still coalescing rapid
- * keystrokes and avoiding one network round-trip per character.
- */
-private const val SEARCH_DEBOUNCE_MS: Long = 300
-
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class SearchViewModel @Inject constructor(
@@ -66,10 +59,8 @@ class SearchViewModel @Inject constructor(
     private val imageUrlProvider: ImageUrlProvider,
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
-    private val searchHistoryRepository: SearchHistoryRepository,
+    private val mediaSearchEngine: MediaSearchEngine,
     private val offlineRepository: OfflineRepository,
-    private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
-    private val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore,
     private val searchFiltersStore: com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore,
 ) : JellyPlayViewModel() {
 
@@ -98,10 +89,6 @@ class SearchViewModel @Inject constructor(
 
     private val _searchHistory = stateFlow<List<SearchHistoryItem>>(emptyList())
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory.flow
-
-    private val hideSearchHistoryPref: StateFlow<Boolean> = experimentalStore.experimental
-        .map { it.hideSearchHistory }
-        .stateIn(scope, SharingStarted.Lazily, false)
 
     private val seerrPrefs: Flow<com.raulshma.jellyplay.core.model.seerr.SeerrPreferences> =
         seerrRepository.getPreferences()
@@ -132,7 +119,7 @@ class SearchViewModel @Inject constructor(
     private var seerrSearchJob: Job? = null
 
     val pagedResults: Flow<PagingData<MediaItem>> = combine(
-        queryFlow.flow.debounce(SEARCH_DEBOUNCE_MS).distinctUntilChanged(),
+        queryFlow.flow.debounce(mediaSearchEngine.debounceMs).distinctUntilChanged(),
         _filters.flow,
     ) { q, f -> q to f }
         .flatMapLatest { (currentQuery, filters) ->
@@ -234,30 +221,19 @@ class SearchViewModel @Inject constructor(
 
     private fun loadSearchHistory() {
         launch {
-            serverIdentityStore.activeUserId
-                .flatMapLatest { userId ->
-                    if (userId != null) searchHistoryRepository.getRecent(userId)
-                    else flowOf(emptyList())
-                }
-                // Respect the user's "hide search history" preference: when
-                // enabled we expose an empty list to the UI while still
-                // keeping the underlying history intact for when they re-enable.
-                .combine(hideSearchHistoryPref) { history, hide ->
-                    if (hide) emptyList() else history
-                }
-                .collect { history -> _searchHistory.set(history) }
+            // Keyed on the active user and gated by the hide-history
+            // preference inside the engine — the same policy the home bar's
+            // inline search now uses.
+            mediaSearchEngine.recentHistory().collect { history -> _searchHistory.set(history) }
         }
     }
 
     fun deleteHistoryItem(id: Long) {
-        launch { searchHistoryRepository.deleteById(id) }
+        launch { mediaSearchEngine.deleteHistoryItem(id) }
     }
 
     fun clearHistory() {
-        launch {
-            val userId = serverIdentityStore.activeUserId.first() ?: return@launch
-            searchHistoryRepository.clearAll(userId)
-        }
+        launch { mediaSearchEngine.clearHistory() }
     }
 
     fun search(newQuery: String) {
@@ -331,20 +307,13 @@ class SearchViewModel @Inject constructor(
      * Called by the UI once the paged search confirms a non-empty result set for
      * [query] (refresh finished with ≥1 item). This defers persisting the query
      * to "Recent Searches" until we know it actually matched something, so a
-     * typo with zero hits never pollutes history.
+     * typo with zero hits never pollutes history. The result-gate itself
+     * (≥2 chars, hide-history preference, active user) lives in
+     * [MediaSearchEngine.recordHistory].
      */
     fun onSearchResultsShown(query: String) {
         if (query.isBlank()) return
-        launch { saveQueryIfNeeded(query) }
-    }
-
-    private suspend fun saveQueryIfNeeded(query: String) {
-        if (query.trim().length < 2) return
-        // Skip persistence entirely when the user has hidden search history —
-        // avoids surfacing past queries the moment they re-enable the setting.
-        if (hideSearchHistoryPref.value) return
-        val userId = serverIdentityStore.activeUserId.first() ?: return
-        searchHistoryRepository.saveQuery(query, userId)
+        launch { mediaSearchEngine.recordHistory(query, jellyfinHadResults = true) }
     }
 
     fun getImageUrl(itemId: String): String =
@@ -366,10 +335,10 @@ class SearchViewModel @Inject constructor(
 
     private suspend fun searchSeerr(query: String) {
         try {
-            val prefs = seerrPrefs.first()
-            val connected = prefs.serverUrl.isNotBlank()
-            val enabled = prefs.searchEnabled
-            if (!connected || !enabled) {
+            // The Seerr gate (connected + search-enabled + not on a Local
+            // network) is owned by the engine — the same gate the home bar's
+            // inline search uses. The error row below stays screen-local.
+            if (!mediaSearchEngine.isSeerrSearchAvailable()) {
                 _seerrResults.set(emptyList())
                 _seerrSearchError.set(false)
                 return

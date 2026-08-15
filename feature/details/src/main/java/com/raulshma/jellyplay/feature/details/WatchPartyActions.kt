@@ -1,32 +1,82 @@
 package com.raulshma.jellyplay.feature.details
 
-import android.content.Context
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Owns the "Start watch party" concern for the detail screen. A plain helper
- * class (no `@Inject`) constructed by [DetailViewModel], structurally a mirror
- * of [PlaylistActions]: user-facing messages push through
- * [messageSink] so the helper owns no message channel of its own.
+ * class constructed by the VM (via [Factory]): user-facing messages push
+ * through the shared [messages] channel so the helper owns no message channel
+ * of its own.
  *
  * Unlike the fire-and-forget helpers, this bootstrap is a four-step
  * client/server sequence (create group → recover its id → join → push the
  * queue) whose outcome the caller needs to know before opening the player, so
  * [start] is a suspending function returning [Result] rather than a
- * launch-internal non-suspend entry. The VM resolves the item/title/source id
- * and launches the coroutine; this class does the rest.
+ * launch-internal non-suspend entry. The no-arg [startScreenItem] resolves the
+ * current item into the bootstrap params (id / group title with localized
+ * fallback / default media source) from the session and launches the
+ * coroutine; this class does the rest.
  *
  * There is no invite link / share / deep-link: once [start] succeeds the player
- * is opened by the screen and the existing [SyncPlayBridge] auto-detects the
+ * is opened by the screen and the existing SyncPlayBridge auto-detects the
  * now-active session (`syncPlayManager.isInSyncPlaySession`).
  */
 internal class WatchPartyActions(
+    private val scope: CoroutineScope,
+    private val session: StateFlow<DetailSession?>,
+    private val messages: MutableSharedFlow<DetailMessage>,
+    private val strings: DetailStrings,
     private val mediaRepository: MediaRepository,
     private val syncPlayManager: SyncPlayManager,
-    private val context: Context,
-    private val messageSink: (DetailMessage) -> Unit,
 ) {
+    /**
+     * Hilt factory bundling this helper's exclusive collaborator
+     * ([SyncPlayManager]) so it never appears in the [DetailViewModel]
+     * constructor.
+     */
+    class Factory @Inject constructor(
+        private val mediaRepository: MediaRepository,
+        private val syncPlayManager: SyncPlayManager,
+    ) {
+        fun create(
+            scope: CoroutineScope,
+            session: StateFlow<DetailSession?>,
+            messages: MutableSharedFlow<DetailMessage>,
+            strings: DetailStrings,
+        ): WatchPartyActions = WatchPartyActions(
+            scope = scope,
+            session = session,
+            messages = messages,
+            strings = strings,
+            mediaRepository = mediaRepository,
+            syncPlayManager = syncPlayManager,
+        )
+    }
+
+    /**
+     * Bootstraps a watch party for the session's current item: resolves the
+     * item id, the group title (the item name, falling back to a localized
+     * generic label) and the default media source, then launches the
+     * create→join→queue sequence via [start]. Fire-and-forget from the UI's
+     * standpoint — success/failure flow back as one-shot messages.
+     */
+    fun startScreenItem() {
+        val detail = session.value?.detail ?: return
+        val item = detail.item
+        val itemId = item.id
+        val title = item.name.orEmpty().ifBlank {
+            strings.get(R.string.detail_watch_party_default_name)
+        }
+        val mediaSourceId = detail.mediaSources.firstOrNull()?.id
+        scope.launch { start(itemId, title, mediaSourceId) }
+    }
+
     /**
      * Bootstraps a SyncPlay watch party for [itemId] and pushes it into the
      * shared queue. The group is created from [title], recovered from the
@@ -46,7 +96,7 @@ internal class WatchPartyActions(
      * screen can navigate to the player.
      *
      * @return the overall outcome so the caller may react (the success/failure
-     *         messages are always pushed through [messageSink]).
+     *         messages are always pushed through [messages]).
      */
     suspend fun start(
         itemId: String,
@@ -89,7 +139,7 @@ internal class WatchPartyActions(
             startPositionTicks = 0L,
         ).onFailure { return fail(it) }
 
-        messageSink(DetailMessage.WatchPartyStarted(itemId))
+        messages.tryEmit(DetailMessage.WatchPartyStarted(itemId))
         return Result.success(Unit)
     }
 
@@ -99,7 +149,7 @@ internal class WatchPartyActions(
      * per-step error handling so the four bootstrap calls stay readable.
      */
     private fun fail(cause: Throwable): Result<Unit> {
-        messageSink(DetailMessage.Text(context.getString(R.string.detail_msg_watch_party_failed)))
+        messages.tryEmit(DetailMessage.Text(strings.get(R.string.detail_msg_watch_party_failed)))
         return Result.failure(cause)
     }
 }

@@ -1,11 +1,12 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -47,14 +48,12 @@ class AbRepeatControllerTest {
     ): Pair<AbRepeatController, MutableStateFlow<Long>> {
         val positionFlow = MutableStateFlow(position)
         val engine = mockk<MediaEngine>(relaxed = true) {
-            io.mockk.every { seekTo(any()) } answers { onSeek(firstArg()) }
+            every { seekTo(any()) } answers { onSeek(firstArg()) }
         }
-        var uiState = VideoPlayerUiState()
         val controller = AbRepeatController(
-            scope = TestScope(kotlinx.coroutines.test.UnconfinedTestDispatcher()),
+            scope = TestScope(UnconfinedTestDispatcher()),
             getEngine = { engine },
             positionFlow = positionFlow,
-            updateUiState = { transform -> uiState = transform(uiState) },
         )
         controller.start()
         return controller to positionFlow
@@ -97,5 +96,45 @@ class AbRepeatControllerTest {
         assertFalse(controller.state.value.isActive)
         assertNull(controller.state.value.aMs)
         assertNull(controller.state.value.bMs)
+    }
+
+    /**
+     * Item-switch semantics: the window does NOT persist
+     * across episodes — resetForItem clears both points (and disables), so a
+     * previous episode's points can neither seek the new episode nor be
+     * resurrected by a single tap on the toggle. This is the named fix for the
+     * former mirror/state divergence bug (see VideoPlayerResetEquivalenceTest).
+     */
+    @Test
+    fun `resetForItem clears points and disarms`() {
+        var seekCalls = 0
+        val (controller, positionFlow) = makeController(0, onSeek = { seekCalls++ })
+        controller.setEnabled(true)
+        controller.setPointA(1_000)
+        controller.setPointB(5_000)
+
+        controller.resetForItem()
+
+        assertEquals(AbRepeatState(), controller.state.value)
+
+        // Advancing past the previous B must NOT seek back to the old A —
+        // the loop monitor no longer has a window.
+        positionFlow.value = 6_000
+        assertEquals(0, seekCalls)
+    }
+
+    /** After resetForItem the monitor stays inert even when re-enabled without new points. */
+    @Test
+    fun `resetForItem leaves controller inert when re-enabled`() {
+        var seekCalls = 0
+        val (controller, positionFlow) = makeController(0, onSeek = { seekCalls++ })
+        controller.setEnabled(true)
+        controller.setPointA(1_000)
+        controller.setPointB(5_000)
+        controller.resetForItem()
+
+        controller.setEnabled(true)
+        positionFlow.value = 10_000
+        assertEquals(0, seekCalls)
     }
 }
