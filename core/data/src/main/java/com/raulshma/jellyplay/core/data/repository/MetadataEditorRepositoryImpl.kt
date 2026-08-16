@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.model.EditorPerson
+import com.raulshma.jellyplay.core.model.EditableItemMetadata
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.ImageProviderInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -22,48 +22,20 @@ class MetadataEditorRepositoryImpl @Inject constructor(
     override suspend fun getMetadataEditorInfo(itemId: String): Result<MetadataEditorInfo> =
         apiClient.getMetadataEditorInfo(itemId)
 
-    override suspend fun updateItem(
-        itemId: String,
-        name: String,
-        originalTitle: String?,
-        sortName: String?,
-        overview: String?,
-        tagline: String?,
-        genres: List<String>,
-        tags: List<String>,
-        studios: List<String>,
-        communityRating: Float?,
-        criticRating: Float?,
-        officialRating: String?,
-        customRating: String?,
-        productionYear: Int?,
-        premiereDate: String?,
-        endDate: String?,
-        runtimeTicks: Long?,
-        indexNumber: Int?,
-        parentIndexNumber: Int?,
-        displayOrder: String?,
-        status: String?,
-        airDays: List<String>,
-        airTime: String?,
-        people: List<EditorPerson>,
-        providerIds: Map<String, String>,
-        lockData: Boolean,
-        lockedFields: List<String>,
-        preferredMetadataLanguage: String?,
-        preferredMetadataCountryCode: String?,
-        taglines: List<String>,
-        productionLocations: List<String>,
-        dateCreated: String?,
-        type: String,
-    ): Result<Unit> = apiClient.updateItem(
-        itemId, name, originalTitle, sortName, overview, tagline, genres, tags,
-        studios, communityRating, criticRating, officialRating, customRating,
-        productionYear, premiereDate, endDate, runtimeTicks, indexNumber,
-        parentIndexNumber, displayOrder, status, airDays, airTime, people,
-        providerIds, lockData, lockedFields, preferredMetadataLanguage,
-        preferredMetadataCountryCode, taglines, productionLocations, dateCreated, type,
-    )
+    override suspend fun updateItem(itemId: String, metadata: EditableItemMetadata): Result<Unit> =
+        apiClient.updateItem(
+            itemId, metadata.name, metadata.originalTitle, metadata.sortName,
+            metadata.overview, metadata.tagline, metadata.genres, metadata.tags,
+            metadata.studios, metadata.communityRating, metadata.criticRating,
+            metadata.officialRating, metadata.customRating, metadata.productionYear,
+            metadata.premiereDate, metadata.endDate, metadata.runtimeTicks,
+            metadata.indexNumber, metadata.parentIndexNumber, metadata.displayOrder,
+            metadata.status, metadata.airDays, metadata.airTime, metadata.people,
+            metadata.providerIds, metadata.lockData, metadata.lockedFields,
+            metadata.preferredMetadataLanguage, metadata.preferredMetadataCountryCode,
+            metadata.taglines, metadata.productionLocations, metadata.dateCreated,
+            metadata.type,
+        )
 
     override suspend fun refreshItemMetadata(
         itemId: String,

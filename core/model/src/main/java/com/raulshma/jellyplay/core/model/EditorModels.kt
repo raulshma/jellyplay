@@ -103,3 +103,45 @@ data class EditorPerson(
     val primaryImageTag: String? = null,
     val sortOrder: Int? = null,
 )
+
+/**
+ * The editable field set of one item, as submitted by the metadata editor's
+ * save action. Bundled so repository/update call sites don't thread ~30
+ * positional primitives.
+ */
+@Immutable
+@Serializable
+data class EditableItemMetadata(
+    val name: String,
+    val originalTitle: String? = null,
+    val sortName: String? = null,
+    val overview: String? = null,
+    val tagline: String? = null,
+    val genres: List<String> = emptyList(),
+    val tags: List<String> = emptyList(),
+    val studios: List<String> = emptyList(),
+    val communityRating: Float? = null,
+    val criticRating: Float? = null,
+    val officialRating: String? = null,
+    val customRating: String? = null,
+    val productionYear: Int? = null,
+    val premiereDate: String? = null,
+    val endDate: String? = null,
+    val runtimeTicks: Long? = null,
+    val indexNumber: Int? = null,
+    val parentIndexNumber: Int? = null,
+    val displayOrder: String? = null,
+    val status: String? = null,
+    val airDays: List<String> = emptyList(),
+    val airTime: String? = null,
+    val people: List<EditorPerson> = emptyList(),
+    val providerIds: Map<String, String> = emptyMap(),
+    val lockData: Boolean = false,
+    val lockedFields: List<String> = emptyList(),
+    val preferredMetadataLanguage: String? = null,
+    val preferredMetadataCountryCode: String? = null,
+    val taglines: List<String> = emptyList(),
+    val productionLocations: List<String> = emptyList(),
+    val dateCreated: String? = null,
+    val type: String = "Unknown",
+)

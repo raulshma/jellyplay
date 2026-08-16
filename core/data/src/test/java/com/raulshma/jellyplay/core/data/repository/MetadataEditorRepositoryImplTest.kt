@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.model.EditableItemMetadata
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -39,17 +40,15 @@ class MetadataEditorRepositoryImplTest {
             Result.success(Unit)
 
         val result = repository.updateItem(
-            itemId = "m1", name = "Name", originalTitle = null, sortName = null,
-            overview = "O", tagline = null, genres = listOf("G"), tags = emptyList(),
-            studios = emptyList(), communityRating = 8f, criticRating = null,
-            officialRating = "PG", customRating = null, productionYear = 2020,
-            premiereDate = null, endDate = null, runtimeTicks = null,
-            indexNumber = null, parentIndexNumber = null, displayOrder = null,
-            status = null, airDays = emptyList(), airTime = null,
-            people = emptyList(), providerIds = emptyMap(),
-            lockData = false, lockedFields = emptyList(),
-            preferredMetadataLanguage = null, preferredMetadataCountryCode = null,
-            taglines = emptyList(), productionLocations = emptyList(), dateCreated = null,
+            itemId = "m1",
+            metadata = EditableItemMetadata(
+                name = "Name",
+                overview = "O",
+                genres = listOf("G"),
+                communityRating = 8f,
+                officialRating = "PG",
+                productionYear = 2020,
+            ),
         )
 
         assertTrue(result.isSuccess)

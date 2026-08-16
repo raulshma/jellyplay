@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Base64
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.model.EditableItemMetadata
 import com.raulshma.jellyplay.core.model.EditorPerson
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.ImageProviderInfo
@@ -220,37 +221,39 @@ class EditorViewModel @Inject constructor(
 
                 editorRepository.updateItem(
                     itemId = itemId,
-                    name = state.name,
-                    originalTitle = state.originalTitle.ifBlank { null },
-                    sortName = state.sortName.ifBlank { null },
-                    overview = state.overview.ifBlank { null },
-                    tagline = state.tagline.ifBlank { null },
-                    genres = state.genres,
-                    tags = state.tags,
-                    studios = state.studios,
-                    communityRating = state.communityRating.toFloatOrNull(),
-                    criticRating = state.criticRating.toFloatOrNull(),
-                    officialRating = state.officialRating.ifBlank { null },
-                    customRating = state.customRating.ifBlank { null },
-                    productionYear = state.productionYear.toIntOrNull(),
-                    premiereDate = state.premiereDate.ifBlank { null },
-                    endDate = state.endDate.ifBlank { null },
-                    runtimeTicks = state.runtimeMinutes.toLongOrNull()?.let { it * 600_000_000 },
-                    indexNumber = state.indexNumber.toIntOrNull(),
-                    parentIndexNumber = state.parentIndexNumber.toIntOrNull(),
-                    displayOrder = state.displayOrder.ifBlank { null },
-                    status = state.status.ifBlank { null },
-                    airDays = state.airDays,
-                    airTime = state.airTime.ifBlank { null },
-                    people = state.people,
-                    providerIds = state.providerIds,
-                    lockData = state.lockData,
-                    lockedFields = state.lockedFields,
-                    preferredMetadataLanguage = state.preferredMetadataLanguage.ifBlank { null },
-                    preferredMetadataCountryCode = state.preferredMetadataCountryCode.ifBlank { null },
-                    taglines = if (state.tagline.isNotBlank()) listOf(state.tagline) else emptyList(),
-                    productionLocations = state.productionLocations,
-                    dateCreated = state.mediaDetail?.dateCreated,
+                    metadata = EditableItemMetadata(
+                        name = state.name,
+                        originalTitle = state.originalTitle.ifBlank { null },
+                        sortName = state.sortName.ifBlank { null },
+                        overview = state.overview.ifBlank { null },
+                        tagline = state.tagline.ifBlank { null },
+                        genres = state.genres,
+                        tags = state.tags,
+                        studios = state.studios,
+                        communityRating = state.communityRating.toFloatOrNull(),
+                        criticRating = state.criticRating.toFloatOrNull(),
+                        officialRating = state.officialRating.ifBlank { null },
+                        customRating = state.customRating.ifBlank { null },
+                        productionYear = state.productionYear.toIntOrNull(),
+                        premiereDate = state.premiereDate.ifBlank { null },
+                        endDate = state.endDate.ifBlank { null },
+                        runtimeTicks = state.runtimeMinutes.toLongOrNull()?.let { it * 600_000_000 },
+                        indexNumber = state.indexNumber.toIntOrNull(),
+                        parentIndexNumber = state.parentIndexNumber.toIntOrNull(),
+                        displayOrder = state.displayOrder.ifBlank { null },
+                        status = state.status.ifBlank { null },
+                        airDays = state.airDays,
+                        airTime = state.airTime.ifBlank { null },
+                        people = state.people,
+                        providerIds = state.providerIds,
+                        lockData = state.lockData,
+                        lockedFields = state.lockedFields,
+                        preferredMetadataLanguage = state.preferredMetadataLanguage.ifBlank { null },
+                        preferredMetadataCountryCode = state.preferredMetadataCountryCode.ifBlank { null },
+                        taglines = if (state.tagline.isNotBlank()) listOf(state.tagline) else emptyList(),
+                        productionLocations = state.productionLocations,
+                        dateCreated = state.mediaDetail?.dateCreated,
+                    ),
                 ).getOrThrow()
 
                 originalHash = computeDirtyHash(_uiState.value)

@@ -155,7 +155,7 @@ class EngineEventCoordinatorTest {
 
         // Explicit user mode change re-arms the one-shot latch.
         playbackMode = PlaybackMode.FORCE_DIRECT_PLAY
-        coordinator.onPlaybackModeChanged(PlaybackMode.FORCE_DIRECT_PLAY)
+        coordinator.onPlaybackModeChanged()
         fakeEngine.errorEmissions.tryEmit(EngineError.Decoder("h264", null))
         testScheduler.runCurrent()
 
@@ -172,7 +172,7 @@ class EngineEventCoordinatorTest {
         testScheduler.runCurrent()
         assertEquals(2, decisions.size)
 
-        coordinator.onNewItem("next-item")
+        coordinator.onNewItem()
         fakeEngine.errorEmissions.tryEmit(EngineError.Decoder("h264", null))
         testScheduler.runCurrent()
 

@@ -177,18 +177,14 @@ class SessionLoadPipeline(
 
         val agg = aggregateStore.aggregate.value
 
-        val defaultAspectRatio = try {
-            when (agg.videoPlayer.videoDefaultAspectRatio) {
-                "FIT" -> AspectRatio.FIT
-                "FILL" -> AspectRatio.FILL
-                "CROP" -> AspectRatio.CROP
-                "16:9" -> AspectRatio.RATIO_16_9
-                "4:3" -> AspectRatio.RATIO_4_3
-                "21:9" -> AspectRatio.RATIO_21_9
-                else -> AspectRatio.AUTO
-            }
-        } catch (_: Exception) {
-            AspectRatio.AUTO
+        val defaultAspectRatio = when (agg.videoPlayer.videoDefaultAspectRatio) {
+            "FIT" -> AspectRatio.FIT
+            "FILL" -> AspectRatio.FILL
+            "CROP" -> AspectRatio.CROP
+            "16:9" -> AspectRatio.RATIO_16_9
+            "4:3" -> AspectRatio.RATIO_4_3
+            "21:9" -> AspectRatio.RATIO_21_9
+            else -> AspectRatio.AUTO
         }
 
         outputs.onPrefsProjected {

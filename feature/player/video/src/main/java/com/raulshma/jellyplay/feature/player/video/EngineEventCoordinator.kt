@@ -337,12 +337,12 @@ class EngineEventCoordinator(
     // ── Public control surface ───────────────────────────────────────────────
 
     /** Resets the fallback latch (a new item is loading). */
-    fun onNewItem(itemId: String?) {
+    fun onNewItem() {
         directPlayFallbackOffered = false
     }
 
     /** Re-arms the fallback latch (the user explicitly changed the mode). */
-    fun onPlaybackModeChanged(mode: PlaybackMode) {
+    fun onPlaybackModeChanged() {
         directPlayFallbackOffered = false
     }
 

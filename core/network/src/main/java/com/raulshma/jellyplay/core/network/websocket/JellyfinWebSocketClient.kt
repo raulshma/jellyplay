@@ -102,7 +102,7 @@ class JellyfinWebSocketClient @Inject constructor(
         val accessToken = token ?: return
         val device = deviceId ?: return
 
-        val wsUrl = buildWsUrl(serverAddress, accessToken, device)
+        val wsUrl = buildSocketUrl(serverAddress, device, deviceName, clientName, accessToken)
         // Log only the base endpoint — the full URL carries the access token
         // and deviceId as query parameters.
         Log.d(TAG, "Connecting WebSocket to ${serverAddress.trimEnd('/')}/socket")
@@ -223,15 +223,6 @@ class JellyfinWebSocketClient @Inject constructor(
         stopKeepAlive()
         webSocket?.close(1000, "Client disconnecting")
         webSocket = null
-    }
-
-    private fun buildWsUrl(serverAddress: String, accessToken: String, device: String): String {
-        val base = serverAddress.trim().trimEnd('/')
-            .replace("https://", "wss://")
-            .replace("http://", "ws://")
-        val name = deviceName?.let { "&deviceName=${java.net.URLEncoder.encode(it, "UTF-8")}" } ?: ""
-        val client = clientName?.let { "&client=${java.net.URLEncoder.encode(it, "UTF-8")}" } ?: ""
-        return "$base/socket?api_key=$accessToken&deviceId=$device$name$client"
     }
 
     private fun handleMessage(text: String) {

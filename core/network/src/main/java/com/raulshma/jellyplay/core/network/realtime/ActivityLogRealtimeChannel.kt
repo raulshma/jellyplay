@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.network.api.toActivityLogEntry
+import com.raulshma.jellyplay.core.network.websocket.buildSocketUrl
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -62,11 +63,12 @@ class ActivityLogRealtimeChannel @Inject constructor(
             val token = apiClient.getAccessToken() ?: return
             val device = serverIdentityStore.ensureDeviceId()
 
-            val wsUrl = serverUrl.trim().trimEnd('/')
-                .replace("https://", "wss://")
-                .replace("http://", "ws://") +
-                "/socket?deviceId=${java.net.URLEncoder.encode(device, "UTF-8")}" +
-                "&deviceName=JellyPlay&client=JellyPlay"
+            val wsUrl = buildSocketUrl(
+                serverAddress = serverUrl,
+                deviceId = device,
+                deviceName = "JellyPlay",
+                client = "JellyPlay",
+            )
 
             val request = Request.Builder()
                 .url(wsUrl)

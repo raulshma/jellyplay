@@ -31,7 +31,7 @@ import javax.inject.Singleton
 class AdminRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val engine: JellyfinApiEngine,
-    realtimeTasks: ScheduledTasksRealtimeChannel,
+    private val realtimeTasks: ScheduledTasksRealtimeChannel,
     private val activityLogRealtimeChannel: ActivityLogRealtimeChannel,
 ) : AdminRepository {
 
@@ -48,8 +48,6 @@ class AdminRepositoryImpl @Inject constructor(
             accessToken = engine.currentUser.value?.accessToken.orEmpty(),
             okHttpClient = engine.okHttpClient,
         )
-
-    private val realtimeTasks: ScheduledTasksRealtimeChannel = realtimeTasks
 
     override suspend fun getSystemInfo(): Result<SystemInfo> = apiClient.getSystemInfo()
 

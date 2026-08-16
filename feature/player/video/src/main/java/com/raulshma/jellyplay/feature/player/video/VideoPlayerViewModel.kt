@@ -1604,7 +1604,7 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(autoplayCancelled = false) }
         lastSeekPositionMs = null
         lastSeekTimestamp = 0L
-        engineEventCoordinator.onNewItem(itemId)
+        engineEventCoordinator.onNewItem()
         // New item = new play session id; clear the Stop dedup latch so the
         // upcoming session's Stop can be reported.
         stopReportedForSession = null
@@ -2276,7 +2276,7 @@ class VideoPlayerViewModel @Inject constructor(
         if (_uiState.value.playbackMode == mode) return
         // User explicitly changed the mode — re-arm the direct-play fallback so
         // a future FORCE_DIRECT_PLAY attempt can fail-and-retry again.
-        engineEventCoordinator.onPlaybackModeChanged(mode)
+        engineEventCoordinator.onPlaybackModeChanged()
         _uiState.update { it.copy(playbackMode = mode) }
         launch {
             playbackStore.setPlaybackMode(mode)
