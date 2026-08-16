@@ -701,3 +701,28 @@ private fun com.raulshma.jellyplay.core.model.UserAccessSchedule.toSdk(
     startHour = startHour,
     endHour = endHour,
 )
+
+/**
+ * Parses the `MessageData` object of a WebSocket `ActivityLogEntry` push.
+ * PascalCase field names match the Jellyfin server's activity-log JSON
+ * contract; the server's `Severity` strings map onto [ActivityLogSeverity]
+ * (unknown values degrade to INFORMATION, matching the REST mapper).
+ */
+internal fun org.json.JSONObject.toActivityLogEntry(): ActivityLogEntry = ActivityLogEntry(
+    id = optLong("Id"),
+    name = optString("Name"),
+    type = optString("Type"),
+    userId = optString("UserId").takeIf { it.isNotBlank() },
+    overview = optString("Overview").takeIf { it.isNotBlank() },
+    shortOverview = optString("ShortOverview").takeIf { it.isNotBlank() },
+    itemId = optString("ItemId").takeIf { it.isNotBlank() },
+    date = optString("Date"),
+    severity = when (optString("Severity")) {
+        "Trace" -> ActivityLogSeverity.TRACE
+        "Debug" -> ActivityLogSeverity.DEBUG
+        "Warn", "Warning" -> ActivityLogSeverity.WARNING
+        "Error" -> ActivityLogSeverity.ERROR
+        "Fatal", "Critical" -> ActivityLogSeverity.FATAL
+        else -> ActivityLogSeverity.INFORMATION
+    },
+)

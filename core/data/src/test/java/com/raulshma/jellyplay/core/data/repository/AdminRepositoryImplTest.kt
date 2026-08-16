@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
+import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
 import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -34,7 +35,8 @@ class AdminRepositoryImplTest {
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
     private val realtimeTasks: ScheduledTasksRealtimeChannel = mockk(relaxed = true)
     private val engine: JellyfinApiEngine = mockk(relaxed = true)
-    private val repository = AdminRepositoryImpl(apiClient, engine, realtimeTasks)
+    private val activityLogChannel: ActivityLogRealtimeChannel = mockk(relaxed = true)
+    private val repository = AdminRepositoryImpl(apiClient, engine, realtimeTasks, activityLogChannel)
 
     private val admin = ManagedUser(id = "u-admin", name = "Alice", policy = ManagedUserPolicy(isAdministrator = true))
     private val disabledAdmin = ManagedUser(id = "u-dis", name = "Bob", policy = ManagedUserPolicy(isAdministrator = true, isDisabled = true))
@@ -370,5 +372,30 @@ class AdminRepositoryImplTest {
         assertEquals("u1", session.userId)
         assertEquals("tok", session.accessToken)
         assertSame(okHttp, session.okHttpClient)
+    }
+
+    @Test
+    fun `log REST operations delegate to the client`() = runTest {
+        coEvery { apiClient.getLogFiles() } returns Result.success(emptyList())
+        coEvery { apiClient.getLogFileContent("log.txt") } returns Result.success("line")
+        coEvery { apiClient.getActivityLogEntries(startIndex = 10, limit = 50) } returns Result.success(emptyList())
+
+        repository.getLogFiles()
+        repository.getLogFileContent("log.txt")
+        repository.getActivityLogEntries(startIndex = 10, limit = 50)
+
+        coVerify(exactly = 1) { apiClient.getLogFiles() }
+        coVerify(exactly = 1) { apiClient.getLogFileContent("log.txt") }
+        coVerify(exactly = 1) { apiClient.getActivityLogEntries(startIndex = 10, limit = 50) }
+    }
+
+    @Test
+    fun `liveActivityEntries delegates to the realtime channel with the seed ids`() = runTest {
+        val entry = com.raulshma.jellyplay.core.model.ActivityLogEntry(id = 7L, name = "Login")
+        every { activityLogChannel.entries(setOf(7L)) } returns flowOf(entry)
+
+        val first = repository.liveActivityEntries(setOf(7L)).first()
+
+        assertEquals(entry, first)
     }
 }

@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.AdminDashboardSummary
 import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.LiveTvChannel
+import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.ParentalRatingOption
@@ -113,6 +114,22 @@ interface AdminRepository {
     suspend fun getSessions(): Result<List<SessionInfo>>
 
     suspend fun sendMessageToSession(sessionId: String, header: String, text: String): Result<Unit>
+
+    // ── Logs screen ──
+
+    suspend fun getLogFiles(): Result<List<LogFile>>
+
+    suspend fun getLogFileContent(fileName: String): Result<String>
+
+    suspend fun getActivityLogEntries(startIndex: Int? = null, limit: Int? = null): Result<List<ActivityLogEntry>>
+
+    /**
+     * Cold flow of live activity-log entries: collecting opens the live-log
+     * WebSocket (with reconnect backoff and REST-polling fallback owned by the
+     * data layer); cancelling the collector tears it down. [knownIds] seeds
+     * dedupe so the polling fallback does not replay already-known entries.
+     */
+    fun liveActivityEntries(knownIds: Set<Long> = emptySet()): Flow<ActivityLogEntry>
 
     // ── Plugins screens (list, detail, config) ──
 

@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.AdminDashboardSummary
 import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.LiveTvChannel
+import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.ParentalRatingOption
@@ -18,6 +19,7 @@ import com.raulshma.jellyplay.core.model.UserEditorContext
 import com.raulshma.jellyplay.core.model.UsersOverview
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
+import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
 import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -30,6 +32,7 @@ class AdminRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val engine: JellyfinApiEngine,
     realtimeTasks: ScheduledTasksRealtimeChannel,
+    private val activityLogRealtimeChannel: ActivityLogRealtimeChannel,
 ) : AdminRepository {
 
     override val scheduledTasks: Flow<List<ScheduledTaskInfo>>
@@ -165,6 +168,17 @@ class AdminRepositoryImpl @Inject constructor(
 
     override suspend fun sendMessageToSession(sessionId: String, header: String, text: String): Result<Unit> =
         apiClient.sendMessageToSession(sessionId, header, text)
+
+    override suspend fun getLogFiles(): Result<List<LogFile>> = apiClient.getLogFiles()
+
+    override suspend fun getLogFileContent(fileName: String): Result<String> =
+        apiClient.getLogFileContent(fileName)
+
+    override suspend fun getActivityLogEntries(startIndex: Int?, limit: Int?): Result<List<ActivityLogEntry>> =
+        apiClient.getActivityLogEntries(startIndex = startIndex, limit = limit)
+
+    override fun liveActivityEntries(knownIds: Set<Long>): Flow<ActivityLogEntry> =
+        activityLogRealtimeChannel.entries(knownIds)
 
     override suspend fun getInstalledPlugins(): Result<List<PluginInfo>> =
         apiClient.getInstalledPlugins()
