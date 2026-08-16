@@ -16,10 +16,11 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverSlice
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.model.DreamImage
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -52,18 +53,22 @@ class JellyPlayDreamService : DreamService() {
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface DreamServiceEntryPoint {
-        fun jellyfinApiClient(): JellyfinApiClient
         fun authRepository(): AuthRepository
+        fun mediaRepository(): MediaRepository
+        fun imageUrlProvider(): ImageUrlProvider
         fun screensaverStore(): com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
     }
 
     private val entryPoint by lazy {
         EntryPointAccessors.fromApplication(applicationContext, DreamServiceEntryPoint::class.java)
     }
-    private val apiClient by lazy { entryPoint.jellyfinApiClient() }
     private val authRepository by lazy { entryPoint.authRepository() }
+    private val mediaRepository by lazy { entryPoint.mediaRepository() }
+    private val imageUrlProvider by lazy { entryPoint.imageUrlProvider() }
     private val preferencesStore by lazy { entryPoint.screensaverStore() }
-    private val imageProvider by lazy { DreamImageProvider(apiClient, applicationContext) }
+    private val imageProvider by lazy {
+        DreamImageProvider(mediaRepository, imageUrlProvider, applicationContext)
+    }
 
     private val dreamLifecycle = DreamLifecycleOwner()
     private var serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
