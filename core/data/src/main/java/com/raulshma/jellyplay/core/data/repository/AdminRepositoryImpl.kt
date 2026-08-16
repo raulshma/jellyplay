@@ -5,17 +5,27 @@ import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.ParentalRatingOption
+import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.UserEditorContext
 import com.raulshma.jellyplay.core.model.UsersOverview
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
+import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class AdminRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
+    private val realtimeTasks: ScheduledTasksRealtimeChannel,
 ) : AdminRepository {
+
+    override val scheduledTasks: Flow<List<ScheduledTaskInfo>>
+        get() = realtimeTasks.tasks
+
+    override val libraryScanTask: Flow<ScheduledTaskInfo?>
+        get() = realtimeTasks.scanLibraryTask
 
     override suspend fun getSystemInfo(): Result<SystemInfo> = apiClient.getSystemInfo()
 
@@ -75,6 +85,21 @@ class AdminRepositoryImpl @Inject constructor(
 
     override suspend fun getTags(limit: Int): Result<List<String>> =
         apiClient.getTags(limit = limit)
+
+    override suspend fun renameDevice(deviceId: String, customName: String?): Result<Unit> =
+        apiClient.updateDeviceOptions(deviceId, customName)
+
+    override suspend fun deleteDevice(deviceId: String): Result<Unit> =
+        apiClient.deleteDevice(deviceId)
+
+    override suspend fun getScheduledTasks(isHidden: Boolean?): Result<List<ScheduledTaskInfo>> =
+        apiClient.getScheduledTasks(isHidden = isHidden)
+
+    override suspend fun startTask(taskId: String): Result<Unit> =
+        apiClient.startTask(taskId)
+
+    override suspend fun cancelTask(taskId: String): Result<Unit> =
+        apiClient.cancelTask(taskId)
 
     private fun List<ManagedUser>.activeAdminCount(): Int =
         count { it.policy.isAdministrator && !it.policy.isDisabled }

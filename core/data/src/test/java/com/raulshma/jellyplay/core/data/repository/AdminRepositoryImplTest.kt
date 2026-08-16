@@ -1,13 +1,19 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
+import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -17,7 +23,8 @@ import org.junit.Test
 class AdminRepositoryImplTest {
 
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
-    private val repository = AdminRepositoryImpl(apiClient)
+    private val realtimeTasks: ScheduledTasksRealtimeChannel = mockk(relaxed = true)
+    private val repository = AdminRepositoryImpl(apiClient, realtimeTasks)
 
     private val admin = ManagedUser(id = "u-admin", name = "Alice", policy = ManagedUserPolicy(isAdministrator = true))
     private val disabledAdmin = ManagedUser(id = "u-dis", name = "Bob", policy = ManagedUserPolicy(isAdministrator = true, isDisabled = true))
@@ -149,5 +156,48 @@ class AdminRepositoryImplTest {
         coVerify(exactly = 1) { apiClient.updateUserPolicy("u-reg", any()) }
         coVerify(exactly = 1) { apiClient.updateUserPassword("u-reg", "pw") }
         coVerify(exactly = 1) { apiClient.deleteUser("u-reg") }
+    }
+
+    @Test
+    fun `device operations delegate to the client`() = runTest {
+        val devices = listOf(DeviceInfo(id = "d1", name = "Phone"))
+        coEvery { apiClient.getDevices() } returns Result.success(devices)
+        coEvery { apiClient.updateDeviceOptions("d1", "Living Room") } returns Result.success(Unit)
+        coEvery { apiClient.deleteDevice("d1") } returns Result.success(Unit)
+
+        repository.getDevices()
+        repository.renameDevice("d1", "Living Room")
+        repository.deleteDevice("d1")
+
+        coVerify(exactly = 1) { apiClient.getDevices() }
+        coVerify(exactly = 1) { apiClient.updateDeviceOptions("d1", "Living Room") }
+        coVerify(exactly = 1) { apiClient.deleteDevice("d1") }
+    }
+
+    @Test
+    fun `scheduled task operations delegate with the hidden filter`() = runTest {
+        val tasks = listOf(ScheduledTaskInfo(name = "Scan", key = "RefreshLibrary"))
+        coEvery { apiClient.getScheduledTasks(isHidden = false) } returns Result.success(tasks)
+        coEvery { apiClient.startTask("RefreshLibrary") } returns Result.success(Unit)
+        coEvery { apiClient.cancelTask("RefreshLibrary") } returns Result.success(Unit)
+
+        repository.getScheduledTasks(isHidden = false)
+        repository.startTask("RefreshLibrary")
+        repository.cancelTask("RefreshLibrary")
+
+        coVerify(exactly = 1) { apiClient.getScheduledTasks(isHidden = false) }
+        coVerify(exactly = 1) { apiClient.startTask("RefreshLibrary") }
+        coVerify(exactly = 1) { apiClient.cancelTask("RefreshLibrary") }
+    }
+
+    @Test
+    fun `realtime task flows surface the channel's pushes`() = runTest {
+        val scanTask = ScheduledTaskInfo(name = "Scan media library", key = "RefreshLibrary")
+        val otherTask = ScheduledTaskInfo(name = "Optimize", key = "OptimizeDatabase")
+        every { realtimeTasks.tasks } returns flowOf(listOf(scanTask, otherTask))
+        every { realtimeTasks.scanLibraryTask } returns flowOf(scanTask)
+
+        assertEquals(listOf(scanTask, otherTask), repository.scheduledTasks.first())
+        assertEquals(scanTask, repository.libraryScanTask.first())
     }
 }

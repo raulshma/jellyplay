@@ -1,10 +1,9 @@
 package com.raulshma.jellyplay.feature.admin.tasks
 
 import android.util.Log
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.TaskState
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,8 +18,7 @@ data class ScheduledTasksState(
 
 @HiltViewModel
 class ScheduledTasksViewModel @Inject constructor(
-    private val apiClient: JellyfinApiClient,
-    private val realtimeTasks: ScheduledTasksRealtimeChannel,
+    private val adminRepository: AdminRepository,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(ScheduledTasksState())
@@ -51,7 +49,7 @@ class ScheduledTasksViewModel @Inject constructor(
 
     private fun fetchTasks() {
         launch {
-            val result = apiClient.getScheduledTasks(isHidden = false)
+            val result = adminRepository.getScheduledTasks(isHidden = false)
             result.onSuccess { tasks ->
                 _state.value = _state.value.copy(tasks = tasks)
                 hasRunningTasks.value = tasks.any { it.state == TaskState.RUNNING }
@@ -80,7 +78,7 @@ class ScheduledTasksViewModel @Inject constructor(
      */
     private fun observeRealtimeTasks() {
         launch {
-            realtimeTasks.tasks.collect { wsTasks ->
+            adminRepository.scheduledTasks.collect { wsTasks ->
                 val existingByKey = _state.value.tasks.associateBy { it.key }
                 val merged = wsTasks
                     .filter { !it.isHidden }
@@ -111,7 +109,7 @@ class ScheduledTasksViewModel @Inject constructor(
 
     fun startTask(taskId: String) {
         launch {
-            apiClient.startTask(taskId)
+            adminRepository.startTask(taskId)
             // The WS push overlays the new state within ~1s; refresh once to
             // populate immediately rather than waiting for the next push.
             fetchTasks()
@@ -120,7 +118,7 @@ class ScheduledTasksViewModel @Inject constructor(
 
     fun cancelTask(taskId: String) {
         launch {
-            apiClient.cancelTask(taskId)
+            adminRepository.cancelTask(taskId)
             fetchTasks()
         }
     }

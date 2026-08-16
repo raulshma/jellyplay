@@ -5,9 +5,11 @@ import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.ParentalRatingOption
+import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.UserEditorContext
 import com.raulshma.jellyplay.core.model.UsersOverview
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Server-administration seam for feature screens. Features consume screen
@@ -56,4 +58,28 @@ interface AdminRepository {
     suspend fun getParentalRatings(): Result<List<ParentalRatingOption>>
 
     suspend fun getTags(limit: Int = 500): Result<List<String>>
+
+    // ── Devices screen ──
+
+    suspend fun renameDevice(deviceId: String, customName: String?): Result<Unit>
+
+    suspend fun deleteDevice(deviceId: String): Result<Unit>
+
+    // ── Scheduled tasks screen ──
+
+    suspend fun getScheduledTasks(isHidden: Boolean? = false): Result<List<ScheduledTaskInfo>>
+
+    suspend fun startTask(taskId: String): Result<Unit>
+
+    suspend fun cancelTask(taskId: String): Result<Unit>
+
+    /**
+     * Live scheduled-task pushes (full list, server cadence). App-lifetime hot
+     * flow over the shared socket: collecting subscribes, cancelling the
+     * collector unsubscribes (after a grace window), the socket survives.
+     */
+    val scheduledTasks: Flow<List<ScheduledTaskInfo>>
+
+    /** The "Scan media library" task when present/running, else null. */
+    val libraryScanTask: Flow<ScheduledTaskInfo?>
 }

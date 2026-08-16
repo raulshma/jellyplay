@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.admin.devices
 
 import android.util.Log
 import com.raulshma.jellyplay.core.model.DeviceInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -21,7 +21,7 @@ data class DevicesState(
 
 @HiltViewModel
 class DevicesViewModel @Inject constructor(
-    private val apiClient: JellyfinApiClient,
+    private val adminRepository: AdminRepository,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(DevicesState())
@@ -34,7 +34,7 @@ class DevicesViewModel @Inject constructor(
     fun loadDevices() {
         launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
-            val result = apiClient.getDevices()
+            val result = adminRepository.getDevices()
             result.onSuccess { devices ->
                 _state.value = _state.value.copy(devices = devices, isLoading = false)
             }.onFailure { e ->
@@ -47,7 +47,7 @@ class DevicesViewModel @Inject constructor(
     fun refresh() {
         launch {
             _state.value = _state.value.copy(isRefreshing = true)
-            val result = apiClient.getDevices()
+            val result = adminRepository.getDevices()
             result.onSuccess { devices ->
                 _state.value = _state.value.copy(devices = devices, isRefreshing = false)
             }.onFailure {
@@ -71,7 +71,7 @@ class DevicesViewModel @Inject constructor(
     fun deleteDevice() {
         val deviceId = _state.value.selectedDevice?.id ?: return
         launch {
-            apiClient.deleteDevice(deviceId)
+            adminRepository.deleteDevice(deviceId)
             _state.value = _state.value.copy(showDeleteDialog = false, selectedDevice = null)
             loadDevices()
         }
@@ -96,7 +96,7 @@ class DevicesViewModel @Inject constructor(
 
     fun saveDeviceName() {
         launch {
-            apiClient.updateDeviceOptions(_state.value.editDeviceId, _state.value.editCustomName.ifBlank { null })
+            adminRepository.renameDevice(_state.value.editDeviceId, _state.value.editCustomName.ifBlank { null })
             _state.value = _state.value.copy(showEditNameDialog = false)
             loadDevices()
         }
