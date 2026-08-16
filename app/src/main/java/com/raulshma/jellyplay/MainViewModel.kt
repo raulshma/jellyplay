@@ -365,7 +365,7 @@ class MainViewModel @Inject constructor(
             webSocketClient.isConnected.collect { connected ->
                 if (connected && !lastConnected && isAuthenticated.value) {
                     launch {
-                        runCatching { apiClient.postCapabilities() }
+                        runCatching { authRepository.postCapabilities() }
                     }
                 }
                 lastConnected = connected

@@ -427,6 +427,8 @@ class AuthRepositoryImpl @Inject constructor(
         return userDao.getUsersForServerOnce(serverId).map { it.toUserInfo() }
     }
 
+    override suspend fun postCapabilities(): Result<Unit> = apiClient.postCapabilities()
+
     private suspend fun persistSession(server: ServerInfo, user: UserInfo, fallbackUsername: String = "") {
         val existingServer = serverDao.getServerById(server.id)
         val preservedAlternateAddresses = existingServer?.alternateAddresses

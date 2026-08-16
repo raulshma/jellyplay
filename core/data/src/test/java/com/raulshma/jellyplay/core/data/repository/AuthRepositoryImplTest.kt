@@ -152,6 +152,16 @@ class AuthRepositoryImplTest {
     }
 
     @Test
+    fun `postCapabilities delegates to the client`() = runTest {
+        coEvery { apiClient.postCapabilities() } returns Result.success(Unit)
+
+        val result = repository.postCapabilities()
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { apiClient.postCapabilities() }
+    }
+
+    @Test
     fun `logout disconnects apiClient and clears only the session`() = runTest {
         repository.logout()
 

@@ -80,4 +80,10 @@ interface AuthRepository {
     suspend fun removeUser(userId: String)
 
     suspend fun getUsersForServer(serverId: String): List<UserInfo>
+
+    /**
+     * Announces this client's capabilities to the server (session lifecycle —
+     * must land after the WebSocket handshake creates the server-side session).
+     */
+    suspend fun postCapabilities(): Result<Unit>
 }
