@@ -5,7 +5,6 @@ import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -30,12 +29,10 @@ class PersonDetailViewModel @Inject constructor(
         _uiState.value = PersonDetailUiState.Loading
         launch {
             coroutineScope {
-                val detailDeferred = async {
-                    RetryPolicy.executeWithRetry { mediaRepository.getMediaDetail(personId) }
-                }
-                val itemsDeferred = async {
-                    RetryPolicy.executeWithRetry { mediaRepository.getItemsByPerson(personId) }
-                }
+                // No feature-level retry: the repository paths already retry
+                // (and coordinate retry with address failover) in the engine.
+                val detailDeferred = async { mediaRepository.getMediaDetail(personId) }
+                val itemsDeferred = async { mediaRepository.getItemsByPerson(personId) }
 
                 val detailResult = detailDeferred.await()
                 val itemsResult = itemsDeferred.await()
