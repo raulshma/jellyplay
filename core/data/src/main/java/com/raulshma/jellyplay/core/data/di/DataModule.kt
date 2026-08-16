@@ -15,6 +15,8 @@ import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceReposit
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
+import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
@@ -217,6 +219,13 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindAdminStatisticsRepository(impl: AdminStatisticsRepositoryImpl): AdminStatisticsRepository
+
+    // The metadata editor's seam: item metadata, image CRUD, remote images,
+    // and subtitle upload/delete behind one interface the editor feature
+    // consumes (previously the editor injected the raw transport client).
+    @Binds
+    @Singleton
+    abstract fun bindMetadataEditorRepository(impl: MetadataEditorRepositoryImpl): MetadataEditorRepository
 
     @Binds
     @Singleton

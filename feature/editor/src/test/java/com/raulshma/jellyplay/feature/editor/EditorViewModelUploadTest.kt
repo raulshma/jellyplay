@@ -9,7 +9,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MetadataEditorInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.every
@@ -29,7 +29,7 @@ class EditorViewModelUploadTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private lateinit var apiClient: JellyfinApiClient
+    private lateinit var editorRepository: MetadataEditorRepository
     private lateinit var authRepository: AuthRepository
     private lateinit var subtitleProviderRepository: SubtitleProviderRepository
     private lateinit var context: Context
@@ -41,7 +41,7 @@ class EditorViewModelUploadTest {
 
     @Before
     fun setUp() {
-        apiClient = mockk(relaxed = true)
+        editorRepository = mockk(relaxed = true)
         authRepository = mockk(relaxed = true)
         subtitleProviderRepository = mockk(relaxed = true)
         context = mockk(relaxed = true)
@@ -50,16 +50,16 @@ class EditorViewModelUploadTest {
         every { context.contentResolver } returns contentResolver
         every { authRepository.currentUser } returns MutableStateFlow(null)
 
-        coEvery { apiClient.getMediaDetail(itemId) } returns Result.success(
+        coEvery { editorRepository.getMediaDetail(itemId) } returns Result.success(
             MediaDetail(item = MediaItem(id = itemId, name = "Movie", mediaType = MediaType.MOVIE))
         )
-        coEvery { apiClient.getMetadataEditorInfo(any()) } returns Result.success(MetadataEditorInfo())
-        coEvery { apiClient.getItemImageInfo(any()) } returns Result.success(emptyList())
-        coEvery { apiClient.getRemoteImageProviders(any()) } returns Result.success(emptyList())
-        coEvery { apiClient.setItemImage(any(), any(), any()) } returns Result.success(Unit)
+        coEvery { editorRepository.getMetadataEditorInfo(any()) } returns Result.success(MetadataEditorInfo())
+        coEvery { editorRepository.getItemImageInfo(any()) } returns Result.success(emptyList())
+        coEvery { editorRepository.getRemoteImageProviders(any()) } returns Result.success(emptyList())
+        coEvery { editorRepository.setItemImage(any(), any(), any()) } returns Result.success(Unit)
 
         viewModel = EditorViewModel(
-            apiClient,
+            editorRepository,
             authRepository,
             subtitleProviderRepository,
             // No-op streaming subtitle store — upload tests don't exercise the
