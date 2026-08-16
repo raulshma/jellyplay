@@ -1,11 +1,14 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.model.ActivityLogEntry
+import com.raulshma.jellyplay.core.model.AdminDashboardSummary
 import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.ParentalRatingOption
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
+import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.UserEditorContext
 import com.raulshma.jellyplay.core.model.UsersOverview
@@ -82,4 +85,28 @@ interface AdminRepository {
 
     /** The "Scan media library" task when present/running, else null. */
     val libraryScanTask: Flow<ScheduledTaskInfo?>
+
+    // ── Dashboard screen ──
+
+    /** The dashboard's five-endpoint opening fan-out with per-field degradation. */
+    suspend fun getDashboardSummary(): Result<AdminDashboardSummary>
+
+    suspend fun restartServer(): Result<Unit>
+
+    suspend fun shutdownServer(): Result<Unit>
+
+    suspend fun stopSession(sessionId: String): Result<Unit>
+
+    /**
+     * Starts the media-library scan. Absorbs the task lookup (key, then name)
+     * and falls back to the plain library-refresh endpoint when the server
+     * exposes no such task.
+     */
+    suspend fun startLibraryScan(): Result<Unit>
+
+    // ── Shared (dashboard, settings) ──
+
+    suspend fun getSessions(): Result<List<SessionInfo>>
+
+    suspend fun sendMessageToSession(sessionId: String, header: String, text: String): Result<Unit>
 }

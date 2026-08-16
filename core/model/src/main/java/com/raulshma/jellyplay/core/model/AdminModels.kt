@@ -203,3 +203,17 @@ data class UserEditorContext(
     val currentUserId: String? = null,
     val adminCount: Int = 0,
 )
+
+/**
+ * Dashboard opening snapshot: the five endpoints the dashboard hero renders,
+ * fetched together. Individual endpoint failures degrade their own field
+ * (null / empty); the summary itself still succeeds.
+ */
+@Immutable
+data class AdminDashboardSummary(
+    val systemInfo: SystemInfo? = null,
+    val itemCounts: ItemCounts? = null,
+    val sessions: List<SessionInfo> = emptyList(),
+    val recentActivity: List<ActivityLogEntry> = emptyList(),
+    val tasks: List<ScheduledTaskInfo> = emptyList(),
+)

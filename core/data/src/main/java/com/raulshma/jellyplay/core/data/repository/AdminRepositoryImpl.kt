@@ -1,16 +1,21 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.model.ActivityLogEntry
+import com.raulshma.jellyplay.core.model.AdminDashboardSummary
 import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.ParentalRatingOption
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
+import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.UserEditorContext
 import com.raulshma.jellyplay.core.model.UsersOverview
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -101,6 +106,56 @@ class AdminRepositoryImpl @Inject constructor(
     override suspend fun cancelTask(taskId: String): Result<Unit> =
         apiClient.cancelTask(taskId)
 
+    override suspend fun getDashboardSummary(): Result<AdminDashboardSummary> = coroutineScope {
+        // Each endpoint degrades independently: telemetry fields to null,
+        // list fields to empty — a single failing card never blanks the screen.
+        val sysInfoDeferred = async { apiClient.getSystemInfo().getOrNull() }
+        val countsDeferred = async { apiClient.getItemCounts().getOrNull() }
+        val sessionsDeferred = async { apiClient.getSessions().getOrNull() }
+        val activityDeferred = async { apiClient.getActivityLogEntries(limit = 10).getOrNull() }
+        val tasksDeferred = async { apiClient.getScheduledTasks().getOrNull() }
+
+        Result.success(
+            AdminDashboardSummary(
+                systemInfo = sysInfoDeferred.await(),
+                itemCounts = countsDeferred.await(),
+                sessions = sessionsDeferred.await() ?: emptyList(),
+                recentActivity = activityDeferred.await() ?: emptyList(),
+                tasks = tasksDeferred.await() ?: emptyList(),
+            ),
+        )
+    }
+
+    override suspend fun restartServer(): Result<Unit> = apiClient.restartServer()
+
+    override suspend fun shutdownServer(): Result<Unit> = apiClient.shutdownServer()
+
+    override suspend fun stopSession(sessionId: String): Result<Unit> =
+        apiClient.stopSession(sessionId)
+
+    override suspend fun startLibraryScan(): Result<Unit> {
+        val tasks = apiClient.getScheduledTasks().getOrNull().orEmpty()
+        val taskId = tasks.firstOrNull { it.key == KEY_SCAN_LIBRARY }?.id
+            ?: tasks.firstOrNull { it.name.equals(NAME_SCAN_LIBRARY, ignoreCase = true) }?.id
+        return if (taskId != null) {
+            apiClient.startTask(taskId)
+        } else {
+            // No exposed task — fall back to the library refresh endpoint (no progress).
+            apiClient.scanLibrary()
+        }
+    }
+
+    override suspend fun getSessions(): Result<List<SessionInfo>> = apiClient.getSessions()
+
+    override suspend fun sendMessageToSession(sessionId: String, header: String, text: String): Result<Unit> =
+        apiClient.sendMessageToSession(sessionId, header, text)
+
     private fun List<ManagedUser>.activeAdminCount(): Int =
         count { it.policy.isAdministrator && !it.policy.isDisabled }
+
+    private companion object {
+        // Jellyfin scheduled-task key / display name for "Scan media library".
+        const val KEY_SCAN_LIBRARY = "RefreshLibrary"
+        const val NAME_SCAN_LIBRARY = "Scan Media Library"
+    }
 }

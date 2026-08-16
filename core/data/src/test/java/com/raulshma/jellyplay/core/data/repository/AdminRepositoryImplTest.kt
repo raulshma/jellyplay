@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.DeviceInfo
+import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
@@ -199,5 +200,93 @@ class AdminRepositoryImplTest {
 
         assertEquals(listOf(scanTask, otherTask), repository.scheduledTasks.first())
         assertEquals(scanTask, repository.libraryScanTask.first())
+    }
+
+    @Test
+    fun `getDashboardSummary degrades individual endpoint failures`() = runTest {
+        coEvery { apiClient.getSystemInfo() } returns Result.failure(Exception("sys boom"))
+        coEvery { apiClient.getItemCounts() } returns Result.success(ItemCounts(movieCount = 3))
+        coEvery { apiClient.getSessions() } returns Result.failure(Exception("sessions boom"))
+        coEvery { apiClient.getActivityLogEntries(limit = 10) } returns Result.success(emptyList())
+        coEvery { apiClient.getScheduledTasks() } returns Result.success(emptyList())
+
+        val summary = repository.getDashboardSummary().getOrNull()!!
+
+        assertEquals(null, summary.systemInfo)
+        assertEquals(3, summary.itemCounts?.movieCount)
+        assertEquals(emptyList<com.raulshma.jellyplay.core.model.SessionInfo>(), summary.sessions)
+        assertEquals(emptyList<com.raulshma.jellyplay.core.model.ActivityLogEntry>(), summary.recentActivity)
+    }
+
+    @Test
+    fun `getDashboardSummary fires all five endpoints`() = runTest {
+        coEvery { apiClient.getSystemInfo() } returns Result.success(SystemInfo(serverName = "Jelly"))
+        coEvery { apiClient.getItemCounts() } returns Result.success(ItemCounts())
+        coEvery { apiClient.getSessions() } returns Result.success(emptyList())
+        coEvery { apiClient.getActivityLogEntries(limit = 10) } returns Result.success(emptyList())
+        coEvery { apiClient.getScheduledTasks() } returns Result.success(emptyList())
+
+        val summary = repository.getDashboardSummary().getOrNull()!!
+
+        assertEquals("Jelly", summary.systemInfo?.serverName)
+        coVerify(exactly = 1) { apiClient.getSystemInfo() }
+        coVerify(exactly = 1) { apiClient.getItemCounts() }
+        coVerify(exactly = 1) { apiClient.getSessions() }
+        coVerify(exactly = 1) { apiClient.getActivityLogEntries(limit = 10) }
+        coVerify(exactly = 1) { apiClient.getScheduledTasks() }
+    }
+
+    @Test
+    fun `startLibraryScan starts the task found by key`() = runTest {
+        val scanTask = ScheduledTaskInfo(id = "task-1", key = "RefreshLibrary", name = "Scan Media Library")
+        coEvery { apiClient.getScheduledTasks() } returns Result.success(listOf(scanTask))
+        coEvery { apiClient.startTask("task-1") } returns Result.success(Unit)
+
+        val result = repository.startLibraryScan()
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { apiClient.startTask("task-1") }
+        coVerify(exactly = 0) { apiClient.scanLibrary() }
+    }
+
+    @Test
+    fun `startLibraryScan falls back to name match when key is absent`() = runTest {
+        val scanTask = ScheduledTaskInfo(id = "task-2", key = "SomethingElse", name = "Scan Media Library")
+        coEvery { apiClient.getScheduledTasks() } returns Result.success(listOf(scanTask))
+        coEvery { apiClient.startTask("task-2") } returns Result.success(Unit)
+
+        repository.startLibraryScan()
+
+        coVerify(exactly = 1) { apiClient.startTask("task-2") }
+    }
+
+    @Test
+    fun `startLibraryScan falls back to the refresh endpoint when no task matches`() = runTest {
+        coEvery { apiClient.getScheduledTasks() } returns Result.success(emptyList())
+        coEvery { apiClient.scanLibrary() } returns Result.success(Unit)
+
+        val result = repository.startLibraryScan()
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 0) { apiClient.startTask(any()) }
+        coVerify(exactly = 1) { apiClient.scanLibrary() }
+    }
+
+    @Test
+    fun `server power and session operations delegate`() = runTest {
+        coEvery { apiClient.restartServer() } returns Result.success(Unit)
+        coEvery { apiClient.shutdownServer() } returns Result.success(Unit)
+        coEvery { apiClient.stopSession("s1") } returns Result.success(Unit)
+        coEvery { apiClient.sendMessageToSession("s1", "Header", "Body") } returns Result.success(Unit)
+
+        repository.restartServer()
+        repository.shutdownServer()
+        repository.stopSession("s1")
+        repository.sendMessageToSession("s1", "Header", "Body")
+
+        coVerify(exactly = 1) { apiClient.restartServer() }
+        coVerify(exactly = 1) { apiClient.shutdownServer() }
+        coVerify(exactly = 1) { apiClient.stopSession("s1") }
+        coVerify(exactly = 1) { apiClient.sendMessageToSession("s1", "Header", "Body") }
     }
 }
