@@ -179,3 +179,27 @@ data class SessionPlayState(
     val repeatMode: String = "RepeatNone",
     val playMethod: String? = null,
 )
+
+/**
+ * Users-screen summary: the managed-user list joined with the current user id
+ * and the count of active administrators (disabled admins excluded).
+ */
+@Immutable
+data class UsersOverview(
+    val users: List<ManagedUser> = emptyList(),
+    val currentUserId: String? = null,
+    val adminCount: Int = 0,
+)
+
+/**
+ * User-editor context: everything the user-detail screen needs on open.
+ * Auxiliary tab data (devices, channels, ratings, tags) loads lazily and is
+ * fetched through the repository's individual operations.
+ */
+@Immutable
+data class UserEditorContext(
+    val user: ManagedUser,
+    val libraries: List<LibraryFolder> = emptyList(),
+    val currentUserId: String? = null,
+    val adminCount: Int = 0,
+)
