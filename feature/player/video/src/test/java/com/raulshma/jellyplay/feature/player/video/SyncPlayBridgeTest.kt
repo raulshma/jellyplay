@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
+import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import io.mockk.every
 import io.mockk.mockk
@@ -112,6 +113,83 @@ class SyncPlayBridgeTest {
     fun isPlaying_withNoEngine_returnsFalse() {
         engineProvider = { null }
         assertFalse(bridge.isPlaying())
+    }
+
+    @Test
+    fun isBuffering_reflectsEnginePlaybackState() {
+        every { engine.playbackState } returns MutableStateFlow(
+            com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING,
+        )
+        assertTrue(bridge.isBuffering())
+    }
+
+    @Test
+    fun isBuffering_whenReady_returnsFalse() {
+        every { engine.playbackState } returns MutableStateFlow(
+            com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.READY,
+        )
+        assertFalse(bridge.isBuffering())
+    }
+
+    @Test
+    fun isBuffering_withNoEngine_returnsFalse() {
+        engineProvider = { null }
+        assertFalse(bridge.isBuffering())
+    }
+
+    // ─── onIsPlayingChanged group propagation ────────────────────────────────
+
+    @Test
+    fun onIsPlayingChanged_localStartWhileGroupPaused_propagatesUnpause() {
+        every { syncPlayManager.isInSyncPlaySession } returns true
+        every { syncPlayManager.currentGroup } returns SyncPlayGroup(
+            groupId = "g",
+            groupName = "g",
+            participantCount = 1,
+            isPlaying = false,
+        )
+        every { playbackCore.lastCommand } returns null
+        bridge.onIsPlayingChanged(true)
+        coVerify { syncPlayManager.syncPlayController.unpause() }
+    }
+
+    @Test
+    fun onIsPlayingChanged_groupAlreadyPlaying_doesNotEcho() {
+        every { syncPlayManager.isInSyncPlaySession } returns true
+        every { syncPlayManager.currentGroup } returns SyncPlayGroup(
+            groupId = "g",
+            groupName = "g",
+            participantCount = 1,
+            isPlaying = true,
+        )
+        bridge.onIsPlayingChanged(true)
+        coVerify(exactly = 0) { syncPlayManager.syncPlayController.unpause() }
+    }
+
+    @Test
+    fun onIsPlayingChanged_groupDrivenUnpause_doesNotEcho() {
+        every { syncPlayManager.isInSyncPlaySession } returns true
+        every { syncPlayManager.currentGroup } returns SyncPlayGroup(
+            groupId = "g",
+            groupName = "g",
+            participantCount = 1,
+            isPlaying = false,
+        )
+        every { playbackCore.lastCommand } returns com.raulshma.jellyplay.core.model.SyncPlayPlaybackCommand(
+            command = "Unpause",
+            whenMs = 0L,
+            positionTicks = 0L,
+            playlistItemId = "",
+            emittedAtMs = 0L,
+        )
+        bridge.onIsPlayingChanged(true)
+        coVerify(exactly = 0) { syncPlayManager.syncPlayController.unpause() }
+    }
+
+    @Test
+    fun onIsPlayingChanged_pauseEvent_doesNothing() {
+        bridge.onIsPlayingChanged(false)
+        coVerify(exactly = 0) { syncPlayManager.syncPlayController.unpause() }
     }
 
     // ─── onSyncStateChanged ───────────────────────────────────────────────────

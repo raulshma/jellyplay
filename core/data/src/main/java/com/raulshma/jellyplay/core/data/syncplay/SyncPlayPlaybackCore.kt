@@ -24,6 +24,14 @@ interface PlaybackCoreCallbacks {
     fun currentPositionMs(): Long
     fun durationMs(): Long
     fun isPlaying(): Boolean
+
+    /**
+     * Whether the engine is currently in an intermediate buffering state.
+     * Mirrors the HTML5 `waiting`/`playing` event pair the official web client
+     * binds to: `isBuffering` decides whether a debounced buffering report
+     * should actually be sent once the debounce elapses.
+     */
+    fun isBuffering(): Boolean
     fun onSyncStateChanged(synced: Boolean, syncing: Boolean)
 }
 
@@ -61,7 +69,24 @@ class SyncPlayPlaybackCore @Inject constructor(
     private var pendingItemLoad = false
 
     @Volatile
-    private var lastPlayCommandTimeMs = 0L
+    private var bufferingReportJob: Job? = null
+
+    /**
+     * True from the moment a Buffering report is sent until the matching
+     * Ready report goes out. Gates the "playing" Ready report — see
+     * [onPlaybackStateChanged].
+     */
+    @Volatile
+    private var reportedBuffering = false
+
+    /**
+     * Engine `isPlaying` as of the last [onPlaybackStateChanged] call. A
+     * READY with the engine *already* playing before is a seek-completion,
+     * not a resume — the browser players behind the official web client
+     * never fire their `playing` event for those, and neither do we.
+     */
+    @Volatile
+    private var lastKnownEnginePlaying = false
 
     private val _ignoreWait = MutableStateFlow(false)
     val ignoreWait: StateFlow<Boolean> = _ignoreWait.asStateFlow()
@@ -110,6 +135,7 @@ class SyncPlayPlaybackCore @Inject constructor(
                 return@launch
             }
 
+            Log.d(TAG, "Applying command: ${cmd.command}, when=${cmd.whenMs}, pos=${cmd.positionTicks}")
             when (cmd.command) {
                 "Unpause" -> scheduleUnpause(cmd)
                 "Pause" -> schedulePause(cmd)
@@ -133,16 +159,15 @@ class SyncPlayPlaybackCore @Inject constructor(
         enableSyncJob?.cancel()
         stopSyncCorrection()
         lastScheduledCommand = cmd
-        lastPlayCommandTimeMs = System.currentTimeMillis()
 
         val cb = callbacks ?: return
         val playAtLocalMs = timeSyncManager.toLocal(cmd.whenMs)
         val nowMs = System.currentTimeMillis()
         val waitMs = playAtLocalMs - nowMs
 
-        cb.onSyncStateChanged(synced = false, syncing = false)
-
         if (waitMs > 50) {
+            // Scheduled in the future: pause, pre-seek, then play at When.
+            cb.onSyncStateChanged(synced = false, syncing = true)
             scheduledCommandJob = scope.launch {
                 cb.localPause()
                 val preSeekTicks = estimateCurrentTicks(cmd.positionTicks, cmd.whenMs)
@@ -160,6 +185,10 @@ class SyncPlayPlaybackCore @Inject constructor(
             }
         } else {
             if (cb.isPlaying() && Math.abs(cb.currentPositionMs() - safePositionMs(estimateCurrentTicks(cmd.positionTicks, cmd.whenMs), cb.durationMs())) < 500) {
+                // No-op echo (e.g. server re-asserting state): we're already
+                // playing in lockstep. Flip straight to synced — do NOT pulse
+                // through "syncing", or every echo command visibly flashes the
+                // status chip.
                 Log.d(TAG, "Unpause: already playing and within 500ms")
                 cb.onSyncStateChanged(synced = true, syncing = false)
                 scheduleEnableSync()
@@ -167,6 +196,7 @@ class SyncPlayPlaybackCore @Inject constructor(
             }
             val estimatedTicks = estimateCurrentTicks(cmd.positionTicks, cmd.whenMs)
             val estimatedMs = safePositionMs(estimatedTicks, cb.durationMs())
+            cb.onSyncStateChanged(synced = false, syncing = true)
             cb.localSeek(estimatedMs)
             cb.localPlay()
             cb.onSyncStateChanged(synced = true, syncing = false)
@@ -242,61 +272,108 @@ class SyncPlayPlaybackCore @Inject constructor(
         }
     }
 
+    /**
+     * Reports local playback progress to the server, mirroring the official web
+     * client's event mapping (HTML5 `waiting` → Buffering, `playing` → Ready):
+     *
+     *  - **Buffering** is sent only after a debounce and only if the engine is
+     *    *still* buffering when it elapses. ExoPlayer flips through
+     *    BUFFERING/READY on every seek — both ours (sync correction, scheduled
+     *    commands) and user seeks — and reporting each flip makes the server
+     *    park the whole group in Waiting and broadcast Pause/Unpause commands
+     *    that trigger further state changes: an echo loop of
+     *    "syncing → synced" pulses and group-wide stutter.
+     *  - **Ready** is sent when playback actually progresses (engine READY and
+     *    playing — the `playing` event equivalent) and on the item-load
+     *    handshake. A READY-but-paused engine sends nothing.
+     *
+     * The server replies to a Ready received while the group is already Playing
+     * with a fresh Unpause command addressed to this session, so every
+     * avoidable Ready report is another Unpause echo the local player must
+     * absorb (and re-seek for) — the second half of the historic echo loop.
+     */
     fun onPlaybackStateChanged(state: Int) {
         scope.launch {
             val cb = callbacks ?: return@launch
-            val posTicks: Long
-            try {
-                posTicks = cb.currentPositionMs() * 10_000
+            val enginePlaying = try {
+                cb.isPlaying()
             } catch (_: Exception) {
-                return@launch
+                false
             }
-
             when (state) {
-                STATE_IDLE, STATE_BUFFERING -> {
-                    if (state == STATE_BUFFERING) {
-                        val timeSincePlayCmd = System.currentTimeMillis() - lastPlayCommandTimeMs
-                        if (timeSincePlayCmd < 2000 && lastCommand?.command == "Unpause") {
-                            Log.d(TAG, "BUFFERING suppressed (Play command ${timeSincePlayCmd}ms ago)")
-                            return@launch
+                STATE_IDLE -> {
+                    // Stopped/released playback has nothing to report; session
+                    // teardown is owned by onGroupLeft()/reset().
+                    bufferingReportJob?.cancel()
+                    bufferingReportJob = null
+                }
+                STATE_BUFFERING -> {
+                    if (!pendingItemLoad) {
+                        bufferingReportJob?.cancel()
+                        bufferingReportJob = scope.launch {
+                            delay(BUFFERING_REPORT_DEBOUNCE_MS)
+                            if (callbacks?.isBuffering() != true) return@launch
+                            stopSyncCorrection()
+                            val posTicks = try {
+                                cb.currentPositionMs() * 10_000
+                            } catch (_: Exception) {
+                                return@launch
+                            }
+                            reportedBuffering = true
+                            Log.d(TAG, "Reporting Buffering (stall persisted past debounce)")
+                            controller.reportBuffering(
+                                positionTicks = posTicks,
+                                isPlaying = enginePlaying,
+                                playlistItemId = currentPlaylistItemId,
+                                whenMs = timeSyncManager.remoteNow(),
+                            )
                         }
-                    }
-                    stopSyncCorrection()
-                    scope.launch {
-                        controller.reportBuffering(
-                            positionTicks = posTicks,
-                            isPlaying = cb.isPlaying(),
-                            playlistItemId = currentPlaylistItemId,
-                            whenMs = timeSyncManager.remoteNow(),
-                        )
                     }
                 }
                 STATE_READY -> {
+                    bufferingReportJob?.cancel()
+                    bufferingReportJob = null
+                    val posTicks: Long
+                    try {
+                        posTicks = cb.currentPositionMs() * 10_000
+                    } catch (_: Exception) {
+                        return@launch
+                    }
                     if (pendingItemLoad) {
                         pendingItemLoad = false
                         cb.localPause()
                         Log.d(TAG, "READY (item load): pausing and reporting ready")
-                        scope.launch {
-                            controller.reportReady(
-                                positionTicks = posTicks,
-                                isPlaying = false,
-                                playlistItemId = currentPlaylistItemId,
-                                whenMs = timeSyncManager.remoteNow(),
-                            )
-                        }
+                        controller.reportReady(
+                            positionTicks = posTicks,
+                            isPlaying = false,
+                            playlistItemId = currentPlaylistItemId,
+                            whenMs = timeSyncManager.remoteNow(),
+                        )
                         cb.onSyncStateChanged(synced = false, syncing = true)
-                    } else {
-                        scope.launch {
-                            controller.reportReady(
-                                positionTicks = posTicks,
-                                isPlaying = cb.isPlaying(),
-                                playlistItemId = currentPlaylistItemId,
-                                whenMs = timeSyncManager.remoteNow(),
-                            )
-                        }
+                    } else if (enginePlaying && (reportedBuffering || !lastKnownEnginePlaying)) {
+                        // Equivalent of the web client's `playing` event: fire
+                        // on stall recovery (we reported buffering) or on an
+                        // actual pause→play resume — NOT on seek completions
+                        // while already playing. The server answers a Ready
+                        // received during Playing with a fresh Unpause command
+                        // addressed to us, so reporting seek completions
+                        // re-triggers command application (and its chip pulse)
+                        // in an endless echo.
+                        Log.d(
+                            TAG,
+                            "Reporting Ready(playing): recoveredFromBuffering=$reportedBuffering, resumed=$!lastKnownEnginePlaying",
+                        )
+                        controller.reportReady(
+                            positionTicks = posTicks,
+                            isPlaying = true,
+                            playlistItemId = currentPlaylistItemId,
+                            whenMs = timeSyncManager.remoteNow(),
+                        )
                     }
+                    reportedBuffering = false
                 }
             }
+            lastKnownEnginePlaying = enginePlaying
         }
     }
 
@@ -307,6 +384,10 @@ class SyncPlayPlaybackCore @Inject constructor(
         val cb = callbacks ?: return
         val cmd = lastCommand ?: return
         if (cmd.command != "Unpause") return
+        // Corrections only make sense against a progressing clock; seeking or
+        // speed-adjusting a paused/stalled engine both desynchronizes the
+        // local position and triggers BUFFERING/READY transitions.
+        if (!cb.isPlaying()) return
 
         val currentPosMs = cb.currentPositionMs()
         val currentPosTicks = currentPosMs * 10_000
@@ -330,13 +411,14 @@ class SyncPlayPlaybackCore @Inject constructor(
             val speedToSyncTime = calculateSpeedToSyncTime(diffMs)
             val speed = calculateSpeedCorrection(diffMs, speedToSyncTime)
             cb.setPlaybackRate(speed)
-            cb.onSyncStateChanged(synced = false, syncing = true)
+            // A speed nudge is imperceptible — keep the UI "synced" instead of
+            // flashing "syncing" every correction cycle (the official client
+            // shows no OSD for speed-to-sync either).
             speedToSyncJob?.cancel()
             speedToSyncJob = scope.launch {
                 delay(speedToSyncTime.toLong())
                 if (syncEnabled) {
                     cb.setPlaybackRate(1.0f)
-                    cb.onSyncStateChanged(synced = true, syncing = false)
                 }
             }
             Log.d(TAG, "SpeedToSync: diff=${diffMs}ms, speed=$speed")
@@ -400,11 +482,12 @@ class SyncPlayPlaybackCore @Inject constructor(
         scheduledCommandJob?.cancel()
         enableSyncJob?.cancel()
         speedToSyncJob?.cancel()
+        bufferingReportJob?.cancel()
+        bufferingReportJob = null
         stopSyncCorrection()
         lastCommand = null
         lastScheduledCommand = null
         pendingItemLoad = false
-        lastPlayCommandTimeMs = 0L
     }
 
     fun onGroupLeft() {
@@ -428,6 +511,11 @@ class SyncPlayPlaybackCore @Inject constructor(
         private const val STATE_BUFFERING = 2
         private const val STATE_READY = 3
 
+        // Matches the official web client's buffering-notification debounce
+        // (minBufferingThresholdMillis): transient stalls — especially the
+        // BUFFERING/READY flips ExoPlayer does around every seek — must not
+        // reach the server, or the whole group is parked in Waiting.
+        private const val BUFFERING_REPORT_DEBOUNCE_MS = 1_000L
         private const val MIN_DELAY_SPEED_TO_SYNC = 60.0
         private const val MAX_DELAY_SPEED_TO_SYNC = 3000.0
         private const val SPEED_TO_SYNC_DURATION = 1000.0

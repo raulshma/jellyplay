@@ -571,6 +571,27 @@ private fun MainContent(
         }
     }
 
+    // SyncPlay auto-open: a joined group started playing (or switched items)
+    // while no player is on top of any back stack → open the video player.
+    // When a player IS already open, its SyncPlayBridge drives the item load
+    // in place — pushing another VideoPlayer route here would stack duplicate
+    // player screens.
+    LaunchedEffect(Unit) {
+        viewModel.syncPlayOpenRequests.collect { request ->
+            val playerOpen = navigationState.backStacks.values.any { stack ->
+                stack.lastOrNull() is Route.VideoPlayer
+            }
+            if (!playerOpen) {
+                navigator.navigate(
+                    Route.VideoPlayer(
+                        itemId = request.itemId,
+                        startPositionTicks = request.startPositionTicks,
+                    )
+                )
+            }
+        }
+    }
+
     val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
     val nowPlayingTemplate = stringResource(R.string.snackbar_now_playing)
     androidx.compose.runtime.LaunchedEffect(viewModel.remoteControlReceiver) {

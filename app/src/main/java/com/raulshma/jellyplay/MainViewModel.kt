@@ -193,6 +193,20 @@ class MainViewModel @Inject constructor(
     val pendingRoute = _pendingRoute.flow
 
     /**
+     * Auto-open request for the video player when a joined SyncPlay group
+     * starts playing or switches to a different item. Emitted at the app shell
+     * (not the SyncPlay screen) so the player opens no matter which screen is
+     * foreground — previously only the SyncPlay screen's ViewModel watched for
+     * this, so group playback while the user browsed elsewhere silently did
+     * nothing until they revisited the SyncPlay screen.
+     */
+    private val _syncPlayOpenRequests = MutableSharedFlow<SyncPlayOpenRequest>(extraBufferCapacity = 4)
+    val syncPlayOpenRequests = _syncPlayOpenRequests.asSharedFlow()
+
+    /** Dedupe key of the last SyncPlay item an open request was emitted for. */
+    private var lastSyncPlayOpenKey: String? = null
+
+    /**
      * One-shot signal fired by the "Surprise Me" launcher shortcut. The Home
      * hero controller has no VM entry point, so the Home screen
      * observes this and flips its local `showSurprise` state on launch.
@@ -372,6 +386,36 @@ class MainViewModel @Inject constructor(
         launch {
             experimentalStore.experimental.collect { prefs ->
                 _selfUpdateDownloadEnabled.set(prefs.selfUpdateDownloadEnabled)
+            }
+        }
+
+        // SyncPlay group playback → open the video player app-wide. Emits only
+        // when the playing item actually changes; the navigation layer gates on
+        // whether a player is already open. Joining mid-playback is covered
+        // too: the server pushes the group's play-queue state to the joining
+        // session as a PlayQueueUpdate.
+        launch {
+            syncPlayManager.events.collect { event ->
+                if (event is com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent.PlayQueueUpdate &&
+                    event.data.playingItemId.isNotBlank() &&
+                    syncPlayManager.isInSyncPlaySession
+                ) {
+                    val key = event.data.playingPlaylistItemId.ifBlank { event.data.playingItemId }
+                    if (key != lastSyncPlayOpenKey) {
+                        lastSyncPlayOpenKey = key
+                        val posTicks = if (event.data.isPlaying && event.data.whenMs > 0) {
+                            syncPlayManager.estimateCurrentTicks(event.data.startPositionTicks, event.data.whenMs)
+                        } else {
+                            event.data.startPositionTicks
+                        }
+                        _syncPlayOpenRequests.tryEmit(SyncPlayOpenRequest(event.data.playingItemId, posTicks))
+                    }
+                }
+            }
+        }
+        launch {
+            syncPlayManager.currentGroupFlow.collect { group ->
+                if (group == null) lastSyncPlayOpenKey = null
             }
         }
     }
@@ -755,4 +799,10 @@ data class ExternalPlayerLaunch(
     val itemId: String,
     val startPositionTicks: Long,
     val playSessionId: String,
+)
+
+/** Item + resolved start position for a SyncPlay-driven player open. */
+data class SyncPlayOpenRequest(
+    val itemId: String,
+    val startPositionTicks: Long,
 )

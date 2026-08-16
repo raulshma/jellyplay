@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
+import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState
 import kotlinx.coroutines.CoroutineScope
@@ -56,6 +57,15 @@ internal class SyncPlayBridge(
 
     private var eventJob: Job? = null
     private var currentPlaylistItemId: String? = null
+
+    /**
+     * Wall-clock ms of the last group-unpause request sent from this bridge
+     * ([togglePlayPause] or [onIsPlayingChanged]). Used to keep the
+     * "local playback started while the group was paused → tell the group"
+     * propagation from double-firing when the engine starts playing as a
+     * *result* of the unpause we already sent.
+     */
+    private var lastUnpauseRequestAtMs = 0L
 
     private val _notifications = MutableSharedFlow<String>(extraBufferCapacity = 10)
     val notifications: SharedFlow<String> = _notifications.asSharedFlow()
@@ -152,9 +162,12 @@ internal class SyncPlayBridge(
     suspend fun reconcileQueueForItem(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
         val currentGroup = syncPlayManager.currentGroup
         val groupPlayingId = currentGroup?.playingItemId
-        if (syncPlayManager.isInSyncPlaySession && groupPlayingId != null && groupPlayingId != itemId) {
+        // A null groupPlayingId means the group has no queue yet (freshly
+        // created group) — point it at this item so group transport commands
+        // have something to act on.
+        if (syncPlayManager.isInSyncPlaySession && groupPlayingId != itemId) {
             try {
-                val matchingEntry = currentGroup.playlistItemMap.entries.find { it.value == itemId }
+                val matchingEntry = currentGroup?.playlistItemMap?.entries?.find { it.value == itemId }
                 if (matchingEntry != null) {
                     syncPlayManager.syncPlayController.setPlaylistItem(matchingEntry.key)
                 } else {
@@ -189,7 +202,22 @@ internal class SyncPlayBridge(
     }
 
     fun onIsPlayingChanged(isPlaying: Boolean) {
-        // handled by playback state flow
+        if (!isPlaying || !isInSession) return
+        // Local playback just started (initial load autoplay, engine reclaim)
+        // while the group is still paused — propagate it so the *whole group*
+        // starts, matching the official client's behaviour when a member
+        // begins playing. Without this, our player runs ahead locally, the
+        // server-side group stays Paused, and other clients (including the
+        // official Jellyfin client) never open their players.
+        val group = syncPlayManager.currentGroup ?: return
+        if (group.isPlaying) return
+        // Group-driven playback arrives as an Unpause command; our engine
+        // starting because of it must not echo another unpause request.
+        if (syncPlayManager.playbackCore.lastCommand?.command == "Unpause") return
+        val nowMs = System.currentTimeMillis()
+        if (nowMs - lastUnpauseRequestAtMs < UNPAUSE_REQUEST_DEDUPE_MS) return
+        lastUnpauseRequestAtMs = nowMs
+        scope.launch { syncPlayManager.syncPlayController.unpause() }
     }
 
     fun reset() {
@@ -215,6 +243,7 @@ internal class SyncPlayBridge(
                 setIsPlaying(false)
                 syncPlayManager.syncPlayController.pause()
             } else {
+                lastUnpauseRequestAtMs = System.currentTimeMillis()
                 syncPlayManager.syncPlayController.unpause()
             }
         }
@@ -275,11 +304,18 @@ internal class SyncPlayBridge(
                                 }
                             }
                         }
-                        _state.update { it.copy(isSyncPlaySynced = true) }
+                        // A queue update while the group is actively playing
+                        // means we're aligned with it; while paused, leave the
+                        // chip untouched (a paused group is still "Synced" —
+                        // forcing a flip here made queue ops pulse the chip).
+                        if (event.data.isPlaying) {
+                            _state.update { it.copy(isSyncPlaySynced = true, isSyncPlaySyncing = false) }
+                        }
                         updateGroupState()
                     }
                     is SyncPlayEvent.GroupUpdate -> {
                         if (event.groupName.isBlank() && event.participantCount == 0) {
+                            Log.d(TAG, "GroupUpdate empty: clearing session display state")
                             _state.update { it.copy(
                                 syncPlayGroupName = null,
                                 syncPlayParticipantCount = 0,
@@ -291,13 +327,23 @@ internal class SyncPlayBridge(
                         updateGroupState()
                     }
                     is SyncPlayEvent.WaitForGroup -> {
+                        Log.d(TAG, "WaitForGroup(${event.userName ?: "?"}): syncing")
                         _state.update { it.copy(isSyncPlaySynced = false, isSyncPlaySyncing = true) }
                     }
                     is SyncPlayEvent.Notification -> {
                         _notifications.tryEmit(event.message)
                     }
                     is SyncPlayEvent.StateUpdate -> {
-                        _state.update { it.copy(isSyncPlaySynced = true) }
+                        // Waiting is the transient "parked while a client
+                        // catches up" state — the only one that surfaces as
+                        // "Syncing". A Paused group is still in lockstep, so
+                        // it stays "Synced".
+                        Log.d(TAG, "StateUpdate: state=${event.state}, reason=${event.reason}")
+                        val waiting = event.state.equals("Waiting", ignoreCase = true)
+                        _state.update {
+                            if (waiting) it.copy(isSyncPlaySynced = false, isSyncPlaySyncing = true)
+                            else it.copy(isSyncPlaySynced = true, isSyncPlaySyncing = false)
+                        }
                         updateGroupState()
                     }
                     is SyncPlayEvent.PlaybackCommand -> {
@@ -337,6 +383,8 @@ internal class SyncPlayBridge(
     override fun currentPositionMs(): Long = getMediaEngine()?.currentPositionMs ?: 0L
     override fun durationMs(): Long = getMediaEngine()?.durationMs ?: 0L
     override fun isPlaying(): Boolean = getMediaEngine()?.isPlaying?.value ?: false
+    override fun isBuffering(): Boolean =
+        getMediaEngine()?.playbackState?.value == EnginePlaybackState.BUFFERING
 
     override fun onSyncStateChanged(synced: Boolean, syncing: Boolean) {
         _state.update { it.copy(
@@ -353,5 +401,8 @@ internal class SyncPlayBridge(
 
     companion object {
         private const val TAG = "SyncPlayBridge"
+
+        /** Window in which a second group-unpause request is suppressed. */
+        private const val UNPAUSE_REQUEST_DEDUPE_MS = 3_000L
     }
 }

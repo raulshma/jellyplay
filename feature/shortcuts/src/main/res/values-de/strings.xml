@@ -8,6 +8,10 @@
     <string name="shortcuts_empty_title">Keine Shortcuts verfügbar</string>
     <string name="shortcuts_empty_description">Durchsuche die App, um Funktionen und Inhalte zu entdecken</string>
     <string name="shortcuts_empty_action">Bibliothek durchsuchen</string>
+    <string name="shortcuts_search_placeholder">Shortcuts durchsuchen…</string>
+    <string name="shortcuts_search_no_results">Keine Shortcuts entsprechen „%1$s"</string>
+    <string name="shortcuts_search_clear">Suche löschen</string>
+    <string name="shortcuts_admin_badge">Admin</string>
     <string name="shortcuts_hero_eyebrow">SCHNELLZUGRIFF</string>
     <string name="shortcuts_hero_title">Shortcuts</string>
     <string name="shortcuts_hero_subtitle">Downloads, Anfragen, Einstellungen &amp; Admin-Tools</string>

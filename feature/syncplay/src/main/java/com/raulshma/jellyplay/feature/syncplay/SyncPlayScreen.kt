@@ -100,7 +100,6 @@ import com.composables.icons.tabler.outline.*
 @Composable
 fun SyncPlayScreen(
     onBack: () -> Unit,
-    onPlayItem: (String, Long) -> Unit,
     viewModel: SyncPlayViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -110,7 +109,6 @@ fun SyncPlayScreen(
     val error = uiState.error
     val isInGroup = uiState.isInGroup
     val showCreateDialog = uiState.showCreateDialog
-    val navigateToPlayer by viewModel.navigateToPlayer.collectAsStateWithLifecycle()
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -156,13 +154,6 @@ fun SyncPlayScreen(
                 message = message,
                 duration = SnackbarDuration.Short,
             )
-        }
-    }
-
-    navigateToPlayer?.let { request ->
-        LaunchedEffect(request) {
-            onPlayItem(request.itemId, request.positionTicks)
-            viewModel.onNavigateToPlayerHandled()
         }
     }
 
