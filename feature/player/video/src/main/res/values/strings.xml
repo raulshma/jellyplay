@@ -178,8 +178,14 @@
     <string name="player_video_ab_repeat">A/B Repeat</string>
     <string name="player_video_ab_repeat_on">A/B Repeat \u00B7 On</string>
     <string name="player_video_set_a_point">Set A Point</string>
+    <string name="player_video_set_a_point_at">Set A Point \u00B7 %1$s</string>
     <string name="player_video_set_b_point">Set B Point</string>
+    <string name="player_video_set_b_point_at">Set B Point \u00B7 %1$s</string>
     <string name="player_video_clear_ab_repeat">Clear A/B Repeat</string>
+    <string name="player_video_ab_repeat_badge_enabled">A/B repeat on — seek to the start point, then use Set A Point</string>
+    <string name="player_video_ab_repeat_badge_a_set">A set at %1$s — seek to the end point, then use Set B Point</string>
+    <string name="player_video_ab_repeat_badge_active">Looping %1$s \u2192 %2$s</string>
+    <string name="player_video_ab_repeat_badge_cleared">A/B repeat cleared</string>
     <string name="player_audio_only">Audio only</string>
     <string name="player_audio_only_on">Audio only on — video hidden</string>
 

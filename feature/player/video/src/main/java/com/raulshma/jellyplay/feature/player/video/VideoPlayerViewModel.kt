@@ -3160,6 +3160,7 @@ class VideoPlayerViewModel @Inject constructor(
     fun setAbRepeatPointB() = abRepeatController.setPointB(_currentPositionMs.value)
     fun clearAbRepeat() = abRepeatController.clear()
     val abRepeatState: StateFlow<AbRepeatState> get() = abRepeatController.state
+    val abRepeatEvents: SharedFlow<AbRepeatEvent> get() = abRepeatController.events
 
     private val releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

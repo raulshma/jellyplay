@@ -91,12 +91,34 @@ fun rememberScreenBackgroundColor(
     return backgroundColor
 }
 
+/**
+ * House styles for [JellyPlayScreenScaffold]'s header. The value decides both where the
+ * title sits and how the bar tracks scroll:
+ *
+ * @property Standard   Compact pinned header. The title renders inline, right of the back
+ *                      button, on a single line; it ellipsizes when long and never pushes
+ *                      [JellyPlayScreenScaffold]'s `actions` out of the bar. This is the
+ *                      default and the house style for list/detail screens.
+ * @property Collapsing [MediumTopAppBar]: the title starts as a
+ *                      large heading below the back/actions row and collapses into the row
+ *                      as content scrolls. Use only when the screen intentionally leads
+ *                      with a hero-style large title.
+ * @property None       No header at all; the screen owns its own top bar or has none.
+ */
 enum class TopBarStyle {
     Standard,
     Collapsing,
     None,
 }
 
+/**
+ * Standard screen scaffold: shared header (title + optional back button + `actions`) over
+ * scrollable content on the themed background.
+ *
+ * Title placement is governed by [TopBarStyle]; see its KDoc before picking a non-default
+ * style. `actions` are always laid out at the end of the header row and keep their full
+ * width regardless of title length.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun JellyPlayScreenScaffold(

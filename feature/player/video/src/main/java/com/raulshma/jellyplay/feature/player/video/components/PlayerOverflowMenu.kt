@@ -39,6 +39,8 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.feature.player.video.AbRepeatState
+import com.raulshma.jellyplay.feature.player.video.formatDuration
 
 /**
  * The three-dot overflow menu in [PlayerControls]: subtitle style, dialogue
@@ -108,7 +110,7 @@ internal fun BoxScope.PlayerOverflowMenu(
     onVideoFilterClick: () -> Unit = {},
     supportsScreenshot: Boolean = false,
     onScreenshotClick: () -> Unit = {},
-    abRepeatActive: Boolean = false,
+    abRepeat: AbRepeatState = AbRepeatState(),
     onAbRepeatToggle: () -> Unit = {},
     onAbRepeatSetA: () -> Unit = {},
     onAbRepeatSetB: () -> Unit = {},
@@ -454,19 +456,22 @@ internal fun BoxScope.PlayerOverflowMenu(
             }
             OverflowMenuItem(
                 icon = Tabler.Outline.Repeat,
-                label = if (abRepeatActive) stringResource(R.string.player_video_ab_repeat_on) else stringResource(R.string.player_video_ab_repeat),
+                label = if (abRepeat.enabled) stringResource(R.string.player_video_ab_repeat_on) else stringResource(R.string.player_video_ab_repeat),
                 onClick = onAbRepeatToggle,
-                tint = if (abRepeatActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                tint = if (abRepeat.enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
-            if (abRepeatActive) {
+            // The set-point items must be reachable the moment A/B repeat is
+            // enabled — gating them on `isActive` (both points already set)
+            // made the feature a dead end: the points could never be set.
+            if (abRepeat.enabled || abRepeat.aMs != null || abRepeat.bMs != null) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.ArrowLeft,
-                    label = stringResource(R.string.player_video_set_a_point),
+                    label = if (abRepeat.aMs != null) stringResource(R.string.player_video_set_a_point_at, formatDuration(abRepeat.aMs)) else stringResource(R.string.player_video_set_a_point),
                     onClick = onAbRepeatSetA,
                 )
                 OverflowMenuItem(
                     icon = Tabler.Outline.ArrowRight,
-                    label = stringResource(R.string.player_video_set_b_point),
+                    label = if (abRepeat.bMs != null) stringResource(R.string.player_video_set_b_point_at, formatDuration(abRepeat.bMs)) else stringResource(R.string.player_video_set_b_point),
                     onClick = onAbRepeatSetB,
                 )
                 OverflowMenuItem(

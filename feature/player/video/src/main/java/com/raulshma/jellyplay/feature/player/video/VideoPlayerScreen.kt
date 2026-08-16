@@ -66,6 +66,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -170,10 +171,15 @@ import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 // Named so the tuning is discoverable instead of scattered as bare literals.
 /** How long the gesture-seek ripple/indicator lingers after the last seek input. */
 private const val GESTURE_SEEK_LINGER_MS = 800L
-/** How long the AutoAspectRatio / Zoom badge is shown before auto-dismissing. */
+/** How long the AutoAspectRatio badge is shown before auto-dismissing. */
 private const val ASPECT_BADGE_DURATION_MS = 5_000L
+
 /** How long the zoom badge is shown before auto-dismissing. */
 private const val ZOOM_BADGE_DURATION_MS = 2_000L
+/** How long A/B repeat confirmation badges (point captured, loop active, cleared) are shown. */
+private const val AB_REPEAT_BADGE_DURATION_MS = 3_000L
+/** How long A/B repeat step-guidance badges (enable hint, A-set hint) linger — they instruct the next action. */
+private const val AB_REPEAT_BADGE_HINT_DURATION_MS = 4_000L
 
 /** "Resumed — tap to restart" chip lifetime (3s). */
 private const val RESUME_CHIP_DISPLAY_MS = 3_000L
@@ -1501,6 +1507,7 @@ fun VideoPlayerScreen(
                 detectedAspectRatio = detectedAspectRatio,
                 aspectRatio = aspectRatio,
             )
+            AbRepeatBadge(events = viewModel.abRepeatEvents)
 
             ZoomBadge(videoZoom = videoZoom)
 
@@ -1767,7 +1774,7 @@ fun VideoPlayerScreen(
                 onVideoFilterClick = onVideoFilterClick,
                 supportsScreenshot = uiState.engineCapabilities.supportsScreenshot,
                 onScreenshotClick = onScreenshotClick,
-                abRepeatActive = abRepeat.isActive,
+                abRepeat = abRepeat,
                 onAbRepeatToggle = { viewModel.setAbRepeatEnabled(!abRepeat.enabled) },
                 onAbRepeatSetA = { viewModel.setAbRepeatPointA() },
                 onAbRepeatSetB = { viewModel.setAbRepeatPointB() },
@@ -2063,6 +2070,57 @@ private fun BoxScope.ZoomBadge(videoZoom: Float) {
         text = zoomText,
         topPadding = 100.dp,
     )
+}
+
+/**
+ * Transient badge walking the user through the A/B repeat workflow, driven by
+ * the controller's one-shot events: enabling hints at the next step ("seek,
+ * then Set A Point"), each captured point confirms with its timestamp, and the
+ * completed loop announces its window. Auto-dismisses like
+ * [AutoAspectRatioBadge]; step-guidance messages linger a beat longer.
+ */
+@Composable
+private fun BoxScope.AbRepeatBadge(events: SharedFlow<AbRepeatEvent>) {
+    var event by remember { mutableStateOf<AbRepeatEvent?>(null) }
+    var showBadge by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        events.collect { e ->
+            event = e
+            showBadge = true
+            delay(
+                if (e is AbRepeatEvent.Enabled || e is AbRepeatEvent.PointASet) {
+                    AB_REPEAT_BADGE_HINT_DURATION_MS
+                } else {
+                    AB_REPEAT_BADGE_DURATION_MS
+                }
+            )
+            showBadge = false
+        }
+    }
+
+    val text = when (val e = event) {
+        AbRepeatEvent.Enabled -> stringResource(R.string.player_video_ab_repeat_badge_enabled)
+        is AbRepeatEvent.PointASet -> stringResource(
+            R.string.player_video_ab_repeat_badge_a_set,
+            formatDuration(e.aMs),
+        )
+        is AbRepeatEvent.PointBSet -> stringResource(
+            R.string.player_video_ab_repeat_badge_active,
+            formatDuration(e.aMs),
+            formatDuration(e.bMs),
+        )
+        AbRepeatEvent.Cleared -> stringResource(R.string.player_video_ab_repeat_badge_cleared)
+        null -> null
+    }
+
+    if (text != null) {
+        PlayerBadge(
+            show = showBadge,
+            text = text,
+            topPadding = 60.dp,
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

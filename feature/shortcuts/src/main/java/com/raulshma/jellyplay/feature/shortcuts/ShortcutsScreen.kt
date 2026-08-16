@@ -206,7 +206,7 @@ fun ShortcutsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.shortcuts_screen_title),
         onBack = onBack,
-        topBarStyle = TopBarStyle.Collapsing,
+        topBarStyle = TopBarStyle.Standard,
         backgroundColor = backgroundColor,
         actions = {
             val searchActionFocus = rememberTvFocusState()
