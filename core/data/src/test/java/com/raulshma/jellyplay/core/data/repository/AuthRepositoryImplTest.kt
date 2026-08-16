@@ -127,6 +127,31 @@ class AuthRepositoryImplTest {
     }
 
     @Test
+    fun `probeServer passes success through without persisting`() = runTest {
+        coEvery { apiClient.getServerInfo(altAddress) } returns
+            Result.success(testServer.copy(address = altAddress))
+
+        val result = repository.probeServer(altAddress)
+
+        assertTrue(result.isSuccess)
+        assertEquals(altAddress, result.getOrNull()?.address)
+        // A probe must never mutate persisted state.
+        coVerify(exactly = 0) { serverDao.insertServer(any()) }
+        coVerify(exactly = 0) { serverDao.updateServer(any()) }
+    }
+
+    @Test
+    fun `probeServer passes failure through without persisting`() = runTest {
+        coEvery { apiClient.getServerInfo(altAddress) } returns
+            Result.failure(Exception("unreachable"))
+
+        val result = repository.probeServer(altAddress)
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { serverDao.insertServer(any()) }
+    }
+
+    @Test
     fun `logout disconnects apiClient and clears only the session`() = runTest {
         repository.logout()
 

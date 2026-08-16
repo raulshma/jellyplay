@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.auth
 import android.content.Context
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.UserInfo
 import io.mockk.coEvery
@@ -42,8 +41,7 @@ class AuthViewModelTest {
         // route those two keys to the real strings.xml values.
         every { appContext.getString(R.string.auth_qc_error_not_enabled) } returns "Quick Connect is not enabled on this server"
         every { appContext.getString(R.string.auth_qc_error_timeout) } returns "Quick Connect timed out. Please try again."
-        val apiClient = mockk<JellyfinApiClient>()
-        viewModel = AuthViewModel(authRepository, apiClient, appContext)
+        viewModel = AuthViewModel(authRepository, appContext)
     }
 
     @After

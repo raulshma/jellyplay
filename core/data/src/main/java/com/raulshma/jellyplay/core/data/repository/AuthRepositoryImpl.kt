@@ -84,6 +84,9 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun probeServer(address: String): Result<ServerInfo> =
+        apiClient.getServerInfo(address)
+
     override suspend fun removeServer(serverId: String) {
         database.withTransaction {
             userDao.deleteUsersForServer(serverId)

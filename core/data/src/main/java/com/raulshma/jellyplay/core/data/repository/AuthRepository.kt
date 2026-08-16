@@ -20,6 +20,13 @@ interface AuthRepository {
 
     suspend fun addServer(address: String): Result<ServerInfo>
 
+    /**
+     * Reachability probe against one explicit address (a primary or an
+     * alternate). Purely a health check — never connects the client or
+     * persists anything, unlike [addServer].
+     */
+    suspend fun probeServer(address: String): Result<ServerInfo>
+
     suspend fun removeServer(serverId: String)
 
     suspend fun switchServer(serverId: String): Result<Unit>
