@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.model.PluginInfo
 import com.raulshma.jellyplay.core.model.PluginInstallationInfo
 import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.model.PluginRepository
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -73,7 +73,7 @@ enum class PluginStatusFilter(val displayName: String) {
 
 @HiltViewModel
 class PluginsViewModel @Inject constructor(
-    private val apiClient: JellyfinApiClient,
+    private val adminRepository: AdminRepository,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(PluginsState())
@@ -108,7 +108,7 @@ class PluginsViewModel @Inject constructor(
 
     private fun fetchInstalledPlugins() {
         launch {
-            apiClient.getInstalledPlugins().onSuccess { plugins ->
+            adminRepository.getInstalledPlugins().onSuccess { plugins ->
                 _state.value = _state.value.copy(installedPlugins = plugins.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }))
             }.onFailure { e ->
                 Log.e("Plugins", "Failed to fetch plugins", e)
@@ -125,7 +125,7 @@ class PluginsViewModel @Inject constructor(
     private fun fetchCatalog() {
         launch {
             _state.value = _state.value.copy(isCatalogLoading = true)
-            apiClient.getAvailablePackages().onSuccess { packages ->
+            adminRepository.getAvailablePackages().onSuccess { packages ->
                 _state.value = _state.value.copy(
                     availablePackages = packages.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }),
                     isCatalogLoading = false,
@@ -148,7 +148,7 @@ class PluginsViewModel @Inject constructor(
     private fun fetchRepositories() {
         launch {
             _state.value = _state.value.copy(isReposLoading = true)
-            apiClient.getRepositories().onSuccess { repos ->
+            adminRepository.getRepositories().onSuccess { repos ->
                 _state.value = _state.value.copy(
                     repositories = repos,
                     isReposLoading = false,
@@ -173,7 +173,7 @@ class PluginsViewModel @Inject constructor(
 
     fun enablePlugin(plugin: PluginInfo) {
         launch {
-            apiClient.enablePlugin(plugin.id, plugin.version)
+            adminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = true)
             delay(500)
             fetchInstalledPlugins()
         }
@@ -181,7 +181,7 @@ class PluginsViewModel @Inject constructor(
 
     fun disablePlugin(plugin: PluginInfo) {
         launch {
-            apiClient.disablePlugin(plugin.id, plugin.version)
+            adminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = false)
             delay(500)
             fetchInstalledPlugins()
         }
@@ -189,7 +189,7 @@ class PluginsViewModel @Inject constructor(
 
     fun uninstallPlugin(pluginId: String) {
         launch {
-            apiClient.uninstallPlugin(pluginId)
+            adminRepository.uninstallPlugin(pluginId)
             delay(500)
             fetchInstalledPlugins()
         }
@@ -202,7 +202,7 @@ class PluginsViewModel @Inject constructor(
         repositoryUrl: String? = null,
     ) {
         launch {
-            apiClient.installPackage(
+            adminRepository.installPackage(
                 name = name,
                 assemblyGuid = assemblyGuid,
                 version = version,
@@ -220,7 +220,7 @@ class PluginsViewModel @Inject constructor(
 
     fun cancelInstallation(packageId: String) {
         launch {
-            apiClient.cancelPackageInstallation(packageId)
+            adminRepository.cancelPackageInstallation(packageId)
             delay(500)
             fetchActiveInstallations()
         }
@@ -228,7 +228,7 @@ class PluginsViewModel @Inject constructor(
 
     private fun fetchActiveInstallations() {
         launch {
-            apiClient.getPackageInstallations().onSuccess { installations ->
+            adminRepository.getPackageInstallations().onSuccess { installations ->
                 _state.value = _state.value.copy(activeInstallations = installations)
                 hasActiveInstalls.value = installations.isNotEmpty()
                 if (installations.isEmpty()) {
@@ -253,7 +253,7 @@ class PluginsViewModel @Inject constructor(
         launch {
             val current = _state.value.repositories.toMutableList()
             current.add(PluginRepository(name = name, url = url, isEnabled = true))
-            apiClient.setRepositories(current).onSuccess {
+            adminRepository.setRepositories(current).onSuccess {
                 _state.value = _state.value.copy(repositories = current)
             }.onFailure { e ->
                 Log.e("Plugins", "Failed to add repository", e)
@@ -267,7 +267,7 @@ class PluginsViewModel @Inject constructor(
             val current = _state.value.repositories.toMutableList()
             if (index in current.indices) {
                 current.removeAt(index)
-                apiClient.setRepositories(current).onSuccess {
+                adminRepository.setRepositories(current).onSuccess {
                     _state.value = _state.value.copy(repositories = current)
                 }.onFailure { e ->
                     Log.e("Plugins", "Failed to remove repository", e)
@@ -282,7 +282,7 @@ class PluginsViewModel @Inject constructor(
             val current = _state.value.repositories.toMutableList()
             if (index in current.indices) {
                 current[index] = current[index].copy(isEnabled = enabled)
-                apiClient.setRepositories(current).onSuccess {
+                adminRepository.setRepositories(current).onSuccess {
                     _state.value = _state.value.copy(repositories = current)
                 }.onFailure { e ->
                     Log.e("Plugins", "Failed to toggle repository", e)

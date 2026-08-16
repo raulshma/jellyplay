@@ -2,13 +2,11 @@ package com.raulshma.jellyplay.feature.admin.plugins
 
 import android.content.Context
 import android.util.Log
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.admin.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import javax.inject.Inject
@@ -27,8 +25,7 @@ data class PluginConfigState(
 @HiltViewModel
 class PluginConfigViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val apiClient: JellyfinApiClient,
-    private val engine: JellyfinApiEngine,
+    private val adminRepository: AdminRepository,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(PluginConfigState())
@@ -43,27 +40,20 @@ class PluginConfigViewModel @Inject constructor(
     }
 
     /** The OkHttpClient used by [PluginConfigScreen] to auth same-origin WebView requests. */
-    val okHttpClient: OkHttpClient get() = engine.okHttpClient
+    val okHttpClient: OkHttpClient get() = adminRepository.pluginWebViewSession.okHttpClient
 
     private fun loadConfig(pluginId: String) {
         launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
             prepareBridgeScript()
-            apiClient.getConfigurationPages().onSuccess { pages ->
-                val configPage = pages.find { it.pluginId == pluginId }
-                if (configPage != null) {
-                    _state.value = _state.value.copy(configPageName = configPage.name)
-                    apiClient.getDashboardConfigurationPage(configPage.name).onSuccess { html ->
-                        _state.value = _state.value.copy(configPageHtml = html)
-                    }.onFailure { e ->
-                        Log.e("PluginConfig", "Failed to load config page HTML", e)
-                        _state.value = _state.value.copy(error = e.message)
-                    }
+            adminRepository.getPluginConfigPage(pluginId).onSuccess { page ->
+                if (page != null) {
+                    _state.value = _state.value.copy(configPageName = page.name, configPageHtml = page.html)
                 } else {
                     _state.value = _state.value.copy(error = context.getString(R.string.admin_no_config_page))
                 }
             }.onFailure { e ->
-                Log.e("PluginConfig", "Failed to load config pages", e)
+                Log.e("PluginConfig", "Failed to load config page", e)
                 _state.value = _state.value.copy(error = e.message)
             }
             _state.value = _state.value.copy(isLoading = false)
@@ -77,9 +67,7 @@ class PluginConfigViewModel @Inject constructor(
      * authenticates same-origin GETs via shouldInterceptRequest.
      */
     private suspend fun prepareBridgeScript() {
-        val server = engine.currentServer.value?.address.orEmpty()
-        val token = engine.currentUser.value?.accessToken.orEmpty()
-        val userId = engine.currentUser.value?.id.orEmpty()
+        val session = adminRepository.pluginWebViewSession
         val rawJs = withContext(kotlinx.coroutines.Dispatchers.IO) {
             runCatching {
                 context.assets.open("pluginBridge.js").bufferedReader().use { it.readText() }
@@ -88,10 +76,10 @@ class PluginConfigViewModel @Inject constructor(
                 ""
             }
         }
-        val script = buildBridgeScript(rawJs, server, userId, token)
+        val script = buildBridgeScript(rawJs, session.serverAddress, session.userId, session.accessToken)
         _state.value = _state.value.copy(
-            serverAddress = server,
-            accessToken = token,
+            serverAddress = session.serverAddress,
+            accessToken = session.accessToken,
             bridgeScript = script,
         )
     }

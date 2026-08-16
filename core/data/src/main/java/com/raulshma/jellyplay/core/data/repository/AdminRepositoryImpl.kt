@@ -7,12 +7,17 @@ import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.ParentalRatingOption
+import com.raulshma.jellyplay.core.model.PluginInfo
+import com.raulshma.jellyplay.core.model.PluginInstallationInfo
+import com.raulshma.jellyplay.core.model.PluginPackage
+import com.raulshma.jellyplay.core.model.PluginRepository
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.UserEditorContext
 import com.raulshma.jellyplay.core.model.UsersOverview
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -23,7 +28,8 @@ import javax.inject.Singleton
 @Singleton
 class AdminRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
-    private val realtimeTasks: ScheduledTasksRealtimeChannel,
+    private val engine: JellyfinApiEngine,
+    realtimeTasks: ScheduledTasksRealtimeChannel,
 ) : AdminRepository {
 
     override val scheduledTasks: Flow<List<ScheduledTaskInfo>>
@@ -31,6 +37,16 @@ class AdminRepositoryImpl @Inject constructor(
 
     override val libraryScanTask: Flow<ScheduledTaskInfo?>
         get() = realtimeTasks.scanLibraryTask
+
+    override val pluginWebViewSession: PluginWebViewSession
+        get() = PluginWebViewSession(
+            serverAddress = engine.currentServer.value?.address.orEmpty(),
+            userId = engine.currentUser.value?.id.orEmpty(),
+            accessToken = engine.currentUser.value?.accessToken.orEmpty(),
+            okHttpClient = engine.okHttpClient,
+        )
+
+    private val realtimeTasks: ScheduledTasksRealtimeChannel = realtimeTasks
 
     override suspend fun getSystemInfo(): Result<SystemInfo> = apiClient.getSystemInfo()
 
@@ -149,6 +165,53 @@ class AdminRepositoryImpl @Inject constructor(
 
     override suspend fun sendMessageToSession(sessionId: String, header: String, text: String): Result<Unit> =
         apiClient.sendMessageToSession(sessionId, header, text)
+
+    override suspend fun getInstalledPlugins(): Result<List<PluginInfo>> =
+        apiClient.getInstalledPlugins()
+
+    override suspend fun getAvailablePackages(): Result<List<PluginPackage>> =
+        apiClient.getAvailablePackages()
+
+    override suspend fun getPackageInfo(name: String, assemblyGuid: String?): Result<PluginPackage> =
+        apiClient.getPackageInfo(name, assemblyGuid)
+
+    override suspend fun getPackageInstallations(): Result<List<PluginInstallationInfo>> =
+        apiClient.getPackageInstallations()
+
+    override suspend fun installPackage(
+        name: String,
+        assemblyGuid: String?,
+        version: String?,
+        repositoryUrl: String?,
+    ): Result<Unit> = apiClient.installPackage(
+        name = name,
+        assemblyGuid = assemblyGuid,
+        version = version,
+        repositoryUrl = repositoryUrl,
+    )
+
+    override suspend fun cancelPackageInstallation(packageId: String): Result<Unit> =
+        apiClient.cancelPackageInstallation(packageId)
+
+    override suspend fun setPluginEnabled(pluginId: String, version: String, enabled: Boolean): Result<Unit> =
+        if (enabled) apiClient.enablePlugin(pluginId, version) else apiClient.disablePlugin(pluginId, version)
+
+    override suspend fun uninstallPlugin(pluginId: String): Result<Unit> =
+        apiClient.uninstallPlugin(pluginId)
+
+    override suspend fun getRepositories(): Result<List<PluginRepository>> =
+        apiClient.getRepositories()
+
+    override suspend fun setRepositories(repositories: List<PluginRepository>): Result<Unit> =
+        apiClient.setRepositories(repositories)
+
+    override suspend fun getPluginConfigPage(pluginId: String): Result<PluginConfigPageContent?> {
+        val pages = apiClient.getConfigurationPages().getOrElse { return Result.failure(it) }
+        val page = pages.find { it.pluginId == pluginId } ?: return Result.success(null)
+        return apiClient.getDashboardConfigurationPage(page.name).map { html ->
+            PluginConfigPageContent(name = page.name, html = html)
+        }
+    }
 
     private fun List<ManagedUser>.activeAdminCount(): Int =
         count { it.policy.isAdministrator && !it.policy.isDisabled }

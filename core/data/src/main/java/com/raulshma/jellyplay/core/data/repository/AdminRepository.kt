@@ -7,6 +7,10 @@ import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.ParentalRatingOption
+import com.raulshma.jellyplay.core.model.PluginInfo
+import com.raulshma.jellyplay.core.model.PluginInstallationInfo
+import com.raulshma.jellyplay.core.model.PluginPackage
+import com.raulshma.jellyplay.core.model.PluginRepository
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
@@ -109,4 +113,45 @@ interface AdminRepository {
     suspend fun getSessions(): Result<List<SessionInfo>>
 
     suspend fun sendMessageToSession(sessionId: String, header: String, text: String): Result<Unit>
+
+    // ── Plugins screens (list, detail, config) ──
+
+    suspend fun getInstalledPlugins(): Result<List<PluginInfo>>
+
+    suspend fun getAvailablePackages(): Result<List<PluginPackage>>
+
+    suspend fun getPackageInfo(name: String, assemblyGuid: String? = null): Result<PluginPackage>
+
+    suspend fun getPackageInstallations(): Result<List<PluginInstallationInfo>>
+
+    suspend fun installPackage(
+        name: String,
+        assemblyGuid: String? = null,
+        version: String? = null,
+        repositoryUrl: String? = null,
+    ): Result<Unit>
+
+    suspend fun cancelPackageInstallation(packageId: String): Result<Unit>
+
+    suspend fun setPluginEnabled(pluginId: String, version: String, enabled: Boolean): Result<Unit>
+
+    suspend fun uninstallPlugin(pluginId: String): Result<Unit>
+
+    suspend fun getRepositories(): Result<List<PluginRepository>>
+
+    suspend fun setRepositories(repositories: List<PluginRepository>): Result<Unit>
+
+    /**
+     * Resolves a plugin's configuration page in one call: page lookup by
+     * plugin id, then the page's HTML. Null when the plugin exposes no
+     * configuration page.
+     */
+    suspend fun getPluginConfigPage(pluginId: String): Result<PluginConfigPageContent?>
+
+    /**
+     * WebView bridge session: the server address, user id, and access token
+     * the plugin bridge script is parameterized with, plus the engine's
+     * OkHttpClient for same-origin request interception.
+     */
+    val pluginWebViewSession: PluginWebViewSession
 }
