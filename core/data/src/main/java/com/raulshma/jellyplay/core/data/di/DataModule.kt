@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.data.di
 
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.data.repository.AdminRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
@@ -204,6 +206,13 @@ abstract class DataModule {
     abstract fun bindAudioQueueFacade(
         impl: com.raulshma.jellyplay.core.data.playback.DefaultAudioQueueFacade,
     ): com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
+
+    // The administration seam for Jellyfin-native admin screens: absorbs each
+    // screen's fan-out, lookup, and fallback policy behind screen operations
+    // so features never see the raw transport client.
+    @Binds
+    @Singleton
+    abstract fun bindAdminRepository(impl: AdminRepositoryImpl): AdminRepository
 
     @Binds
     @Singleton
