@@ -5,7 +5,6 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,7 +26,6 @@ sealed class QuickConnectUiState {
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val apiClient: JellyfinApiClient,
     @ApplicationContext private val appContext: Context,
 ) : JellyPlayViewModel() {
 
@@ -85,7 +83,7 @@ class AuthViewModel @Inject constructor(
                 val startTime = System.currentTimeMillis()
                 val addresses = listOf(server.address) + server.alternateAddresses
                 val reachable = addresses.any { address ->
-                    apiClient.getServerInfo(address).isSuccess
+                    authRepository.probeServer(address).isSuccess
                 }
                 val latency = System.currentTimeMillis() - startTime
                 val health = if (reachable) {

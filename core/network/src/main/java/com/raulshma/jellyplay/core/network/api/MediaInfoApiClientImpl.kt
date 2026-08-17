@@ -211,20 +211,24 @@ class MediaInfoApiClientImpl @Inject constructor(
     override suspend fun getUsers(): Result<List<JellyfinUser>> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val response = api.userApi.getUsers().content ?: emptyList()
-        response.map { dto ->
-            JellyfinUser(
-                id = dto.id.toString(),
-                name = dto.name ?: "",
-                primaryImageTag = dto.primaryImageTag,
-                lastLoginDate = dto.lastLoginDate?.toString(),
-                lastActivityDate = dto.lastActivityDate?.toString(),
-                isAdmin = dto.policy?.isAdministrator ?: false,
-                isDisabled = dto.policy?.isDisabled ?: false,
-                isHidden = false,
-                hasPassword = dto.hasPassword,
-            )
-        }
+        response.map(::toJellyfinUser)
     }
+
+    override suspend fun getUserById(userId: String): Result<JellyfinUser> = engine.apiResultWithRetry {
+        engine.requireApi().userApi.getUserById(java.util.UUID.fromString(userId)).content.let(::toJellyfinUser)
+    }
+
+    private fun toJellyfinUser(dto: org.jellyfin.sdk.model.api.UserDto): JellyfinUser = JellyfinUser(
+        id = dto.id.toString(),
+        name = dto.name ?: "",
+        primaryImageTag = dto.primaryImageTag,
+        lastLoginDate = dto.lastLoginDate?.toString(),
+        lastActivityDate = dto.lastActivityDate?.toString(),
+        isAdmin = dto.policy?.isAdministrator ?: false,
+        isDisabled = dto.policy?.isDisabled ?: false,
+        isHidden = false,
+        hasPassword = dto.hasPassword,
+    )
 
     override suspend fun getUserPlayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = engine.apiResultWithRetry {
         val api = engine.requireApi()

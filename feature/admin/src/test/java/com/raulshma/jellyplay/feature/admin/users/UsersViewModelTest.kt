@@ -1,8 +1,9 @@
 package com.raulshma.jellyplay.feature.admin.users
 
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.model.UsersOverview
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -24,48 +25,38 @@ class UsersViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private lateinit var apiClient: JellyfinApiClient
+    private lateinit var adminRepository: AdminRepository
 
     private val admin = ManagedUser(id = "u-admin", name = "Alice", policy = ManagedUserPolicy(isAdministrator = true))
-    private val disabledAdmin = ManagedUser(id = "u-dis", name = "Bob", policy = ManagedUserPolicy(isAdministrator = true, isDisabled = true))
     private val regular = ManagedUser(id = "u-reg", name = "Cara", policy = ManagedUserPolicy(isAdministrator = false))
 
     @Before
     fun setUp() {
-        apiClient = mockk(relaxed = true)
+        adminRepository = mockk(relaxed = true)
     }
 
-    @Test
-    fun `load sets users currentUserId and adminCount`() = runTest {
-        coEvery { apiClient.getManagedUsers() } returns Result.success(listOf(admin, regular))
-        coEvery { apiClient.getCurrentUserId() } returns Result.success("u-admin")
+    private fun overview(users: List<ManagedUser>, currentId: String? = "u-admin", adminCount: Int = 1) =
+        UsersOverview(users = users, currentUserId = currentId, adminCount = adminCount)
 
-        val viewModel = UsersViewModel(apiClient)
+    @Test
+    fun `load maps overview into state`() = runTest {
+        coEvery { adminRepository.getUsersOverview() } returns
+            Result.success(overview(listOf(admin, regular), currentId = "u-admin", adminCount = 1))
+
+        val viewModel = UsersViewModel(adminRepository)
         advanceUntilIdle()
 
         assertEquals(listOf(admin, regular), viewModel.state.users)
         assertEquals("u-admin", viewModel.state.currentUserId)
-        assertEquals(1, viewModel.state.adminCount) // only Alice, Bob not loaded here
-    }
-
-    @Test
-    fun `adminCount excludes disabled admins`() = runTest {
-        coEvery { apiClient.getManagedUsers() } returns Result.success(listOf(admin, disabledAdmin))
-        coEvery { apiClient.getCurrentUserId() } returns Result.success("u-admin")
-
-        val viewModel = UsersViewModel(apiClient)
-        advanceUntilIdle()
-
-        assertEquals(1, viewModel.state.adminCount) // disabled admin Bob not counted
+        assertEquals(1, viewModel.state.adminCount)
     }
 
     @Test
     fun `createUser reloads and closes dialog`() = runTest {
-        coEvery { apiClient.getManagedUsers() } returns Result.success(emptyList())
-        coEvery { apiClient.getCurrentUserId() } returns Result.success("me")
-        coEvery { apiClient.createUser(any(), any()) } returns Result.success(admin)
+        coEvery { adminRepository.getUsersOverview() } returns Result.success(overview(emptyList(), "me", 0))
+        coEvery { adminRepository.createUser(any(), any()) } returns Result.success(admin)
 
-        val viewModel = UsersViewModel(apiClient)
+        val viewModel = UsersViewModel(adminRepository)
         advanceUntilIdle()
         viewModel.showCreateDialog()
         assertTrue(viewModel.state.showCreateDialog)
@@ -73,17 +64,17 @@ class UsersViewModelTest {
         viewModel.createUser("Alice", null)
         advanceUntilIdle()
 
-        coVerify { apiClient.createUser("Alice", null) }
+        coVerify { adminRepository.createUser("Alice", null) }
         assertTrue(!viewModel.state.showCreateDialog)
     }
 
     @Test
     fun `deleteUser reloads and closes dialog`() = runTest {
-        coEvery { apiClient.getManagedUsers() } returns Result.success(listOf(admin, regular))
-        coEvery { apiClient.getCurrentUserId() } returns Result.success("me")
-        coEvery { apiClient.deleteUser(any()) } returns Result.success(Unit)
+        coEvery { adminRepository.getUsersOverview() } returns
+            Result.success(overview(listOf(admin, regular), "me", 1))
+        coEvery { adminRepository.deleteUser(any()) } returns Result.success(Unit)
 
-        val viewModel = UsersViewModel(apiClient)
+        val viewModel = UsersViewModel(adminRepository)
         advanceUntilIdle()
         viewModel.showDeleteDialog(regular)
         assertTrue(viewModel.state.showDeleteDialog)
@@ -91,17 +82,16 @@ class UsersViewModelTest {
         viewModel.deleteUser()
         advanceUntilIdle()
 
-        coVerify { apiClient.deleteUser("u-reg") }
+        coVerify { adminRepository.deleteUser("u-reg") }
         assertTrue(!viewModel.state.showDeleteDialog)
         assertNull(viewModel.state.selectedUser)
     }
 
     @Test
     fun `load failure surfaces error`() = runTest {
-        coEvery { apiClient.getManagedUsers() } returns Result.failure(RuntimeException("boom"))
-        coEvery { apiClient.getCurrentUserId() } returns Result.success("me")
+        coEvery { adminRepository.getUsersOverview() } returns Result.failure(RuntimeException("boom"))
 
-        val viewModel = UsersViewModel(apiClient)
+        val viewModel = UsersViewModel(adminRepository)
         advanceUntilIdle()
 
         assertNotNull(viewModel.state.error)
@@ -110,11 +100,10 @@ class UsersViewModelTest {
 
     @Test
     fun `createUser failure keeps dialog open and sets error`() = runTest {
-        coEvery { apiClient.getManagedUsers() } returns Result.success(emptyList())
-        coEvery { apiClient.getCurrentUserId() } returns Result.success("me")
-        coEvery { apiClient.createUser(any(), any()) } returns Result.failure(RuntimeException("name taken"))
+        coEvery { adminRepository.getUsersOverview() } returns Result.success(overview(emptyList(), "me", 0))
+        coEvery { adminRepository.createUser(any(), any()) } returns Result.failure(RuntimeException("name taken"))
 
-        val viewModel = UsersViewModel(apiClient)
+        val viewModel = UsersViewModel(adminRepository)
         advanceUntilIdle()
         viewModel.showCreateDialog()
 
@@ -123,9 +112,8 @@ class UsersViewModelTest {
 
         // dialog stays open so user can adjust/retry
         assertTrue(viewModel.state.showCreateDialog)
-        assertNotNull(viewModel.state.error)
         assertEquals("name taken", viewModel.state.error)
         // must NOT reload on failure
-        coVerify(exactly = 1) { apiClient.getManagedUsers() } // only the initial load
+        coVerify(exactly = 1) { adminRepository.getUsersOverview() } // only the initial load
     }
 }

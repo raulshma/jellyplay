@@ -1,16 +1,15 @@
 package com.raulshma.jellyplay.feature.details
 
-import android.content.Context
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
-import com.raulshma.jellyplay.core.model.ResyncResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Resync / re-download actions extracted from [DetailViewModel]. Owns the
@@ -21,13 +20,37 @@ import kotlinx.coroutines.launch
  */
 internal class ResyncActions(
     private val scope: CoroutineScope,
+    private val session: StateFlow<DetailSession?>,
     private val offlineSyncManager: OfflineSyncManager,
     private val mediaRepository: MediaRepository,
     private val offlineRepository: OfflineRepository,
     private val downloadIntake: DownloadIntake,
-    private val context: Context,
-    private val itemIdProvider: () -> String?,
 ) {
+    /**
+     * Hilt factory bundling this helper's exclusive collaborator
+     * ([OfflineSyncManager]; [DownloadIntake] is shared with
+     * [DownloadLifecycleActions.Factory] and resolved here independently) so
+     * neither appears in the [DetailViewModel] constructor.
+     */
+    class Factory @Inject constructor(
+        private val offlineSyncManager: OfflineSyncManager,
+        private val downloadIntake: DownloadIntake,
+    ) {
+        fun create(
+            scope: CoroutineScope,
+            session: StateFlow<DetailSession?>,
+            mediaRepository: MediaRepository,
+            offlineRepository: OfflineRepository,
+        ): ResyncActions = ResyncActions(
+            scope = scope,
+            session = session,
+            offlineSyncManager = offlineSyncManager,
+            mediaRepository = mediaRepository,
+            offlineRepository = offlineRepository,
+            downloadIntake = downloadIntake,
+        )
+    }
+
     private val _state = MutableStateFlow<ResyncUiState>(ResyncUiState.Idle)
     val state: StateFlow<ResyncUiState> = _state.asStateFlow()
 
@@ -38,7 +61,7 @@ internal class ResyncActions(
      * resulting flag re-emits reactively via the provider's sync-state attachment.
      */
     fun checkForUpdates() {
-        val id = itemIdProvider() ?: return
+        val id = session.value?.itemId ?: return
         scope.launch { offlineSyncManager.checkForUpdates(id) }
     }
 
@@ -48,7 +71,7 @@ internal class ResyncActions(
      * [com.raulshma.jellyplay.core.model.OfflineSyncState.mediaFileChanged].
      */
     fun resync() {
-        val id = itemIdProvider() ?: return
+        val id = session.value?.itemId ?: return
         if (_state.value is ResyncUiState.Working) return
         scope.launch {
             _state.value = ResyncUiState.Working
@@ -88,7 +111,7 @@ internal class ResyncActions(
      * (that is the *arr Manage-Series action, unrelated).
      */
     fun redownloadMedia() {
-        val id = itemIdProvider() ?: return
+        val id = session.value?.itemId ?: return
         if (_state.value is ResyncUiState.Working) return
         scope.launch {
             _state.value = ResyncUiState.Working
@@ -101,7 +124,7 @@ internal class ResyncActions(
                     offlineRepository.deleteOfflineItem(id)
                     val result = downloadIntake.start(detail)
                     if (result.downloadItem != null) {
-                        ResyncUiState.Done(ResyncResult(id, emptyList(), mediaFileChanged = false))
+                        ResyncUiState.Done(com.raulshma.jellyplay.core.model.ResyncResult(id, emptyList(), mediaFileChanged = false))
                     } else {
                         ResyncUiState.Error(result.error ?: "Re-download failed")
                     }

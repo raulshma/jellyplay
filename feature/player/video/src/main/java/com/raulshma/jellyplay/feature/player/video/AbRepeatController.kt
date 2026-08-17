@@ -2,8 +2,11 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
@@ -13,8 +16,8 @@ import kotlinx.coroutines.launch
  * Mirrors the controller-extraction pattern of [SleepTimerController] /
  * [AutoPlayController]: pure workflow logic lifted out of the ViewModel. The
  * loop monitor runs against the high-frequency position flow
- * (`VideoPlayerViewModel._currentPositionMs`) rather than the ~4 Hz `uiState`,
- * so re-seeking at B is responsive without allocating a uiState copy per tick.
+ * (`VideoPlayerViewModel.currentPositionMs`) rather than a ~4 Hz uiState, so
+ * re-seeking at B is responsive without allocating a state copy per tick.
  *
  * Design notes:
  *  - When `enabled` and both points are set, reaching or passing B seeks back
@@ -26,19 +29,26 @@ import kotlinx.coroutines.launch
  *  - Disabled or single-point states are inert (no seeks). Clearing both points
  *    and disabling resets the controller.
  *
- * Per-item persistence of the A/B window is handled by the caller via
- * [StateFlow]; this class only owns the live loop logic.
+ * **Item-switch semantics: the window does NOT persist across episodes.**
+ * [resetForItem] clears both points (and re-arms), and the ViewModel's
+ * item-switch path calls it. This also fixes the former divergence bug where
+ * the reset ritual wiped the UiState mirror of this state but not the
+ * controller's own copy — after an episode switch the loop monitor could seek
+ * the *next* episode back to the *previous* episode's A point, and one tap on
+ * the toggle resurrected the stale points.
  */
 internal class AbRepeatController(
     private val scope: CoroutineScope,
     private val getEngine: () -> MediaEngine?,
     private val positionFlow: StateFlow<Long>,
-    private val updateUiState: ((VideoPlayerUiState) -> VideoPlayerUiState) -> Unit,
 ) {
     private val _state = MutableStateFlow(AbRepeatState())
     val state: StateFlow<AbRepeatState> = _state.asStateFlow()
 
-    /** True while the loop is mid-crossing (B reached, awaiting re-arm at A). */
+    private val _events = MutableSharedFlow<AbRepeatEvent>(extraBufferCapacity = 8)
+    val events: SharedFlow<AbRepeatEvent> = _events.asSharedFlow()
+
+    /** True while the loop is mid-crossing (B reached, awaiting re-arm below B). */
     private var armed = true
 
     /** Start monitoring the position flow for B-crossings. */
@@ -47,28 +57,36 @@ internal class AbRepeatController(
             positionFlow.collect { pos ->
                 val s = _state.value
                 if (!s.enabled || s.aMs == null || s.bMs == null) return@collect
-                if (armed && pos >= s.bMs) {
-                    armed = false
-                    val a = s.aMs
-                    getEngine()?.seekTo(a)
-                    // Re-arm once the seek lands at/under B (it will, at A).
-                    scope.launch {
-                        positionFlow.collect { p ->
-                            if (p < (s.bMs)) {
-                                armed = true
-                                return@collect
-                            }
-                        }
+                if (armed) {
+                    if (pos >= s.bMs) {
+                        armed = false
+                        getEngine()?.seekTo(s.aMs)
                     }
+                } else if (pos < s.bMs) {
+                    // Re-arm once the seek lands at/under B (it will, at A).
+                    armed = true
                 }
             }
         }
     }
 
+    /**
+     * Toggling. Turning on arms a fresh window; turning off is a full wipe of
+     * any points — a stale window must not resurrect (markers included) the
+     * next time the toggle flips on. Only user-visible clears announce
+     * themselves via [AbRepeatEvent.Cleared].
+     */
     fun setEnabled(enabled: Boolean) {
+        if (!enabled) {
+            val hadWindow = _state.value.aMs != null || _state.value.bMs != null
+            _state.value = AbRepeatState()
+            armed = true
+            if (hadWindow) _events.tryEmit(AbRepeatEvent.Cleared)
+            return
+        }
         _state.value = _state.value.copy(enabled = enabled)
         armed = true
-        publish()
+        _events.tryEmit(AbRepeatEvent.Enabled)
     }
 
     /** Sets the A point to the current playback position (clamped below B). */
@@ -77,7 +95,7 @@ internal class AbRepeatController(
         val a = if (b != null && ms >= b) (b - 1).coerceAtLeast(0) else ms.coerceAtLeast(0)
         _state.value = _state.value.copy(aMs = a)
         armed = true
-        publish()
+        _events.tryEmit(AbRepeatEvent.PointASet(a))
     }
 
     /** Sets the B point to the current playback position (clamped above A). */
@@ -86,17 +104,26 @@ internal class AbRepeatController(
         val b = if (a != null && ms <= a) (a + 1) else ms.coerceAtLeast(0)
         _state.value = _state.value.copy(bMs = b)
         armed = true
-        publish()
+        if (_state.value.isActive) _events.tryEmit(AbRepeatEvent.PointBSet(_state.value.aMs!!, b))
     }
 
     fun clear() {
         _state.value = AbRepeatState()
         armed = true
-        publish()
+        _events.tryEmit(AbRepeatEvent.Cleared)
     }
 
-    private fun publish() {
-        updateUiState { it.copy(abRepeat = _state.value) }
+    /**
+     * Item-switch reset: clears the window and re-arms the crossing monitor.
+     * Called by the ViewModel's `releaseInternals()` on every item switch so a
+     * previous episode's A/B points can neither seek the new episode nor be
+     * resurrected by a single tap on the toggle. Silent by design — unlike
+     * [clear] it emits no [AbRepeatEvent], so episode switches never surface a
+     * badge.
+     */
+    fun resetForItem() {
+        _state.value = AbRepeatState()
+        armed = true
     }
 }
 
@@ -108,4 +135,23 @@ data class AbRepeatState(
 ) {
     /** True only when enabled and both points are set with A < B. */
     val isActive: Boolean get() = enabled && aMs != null && bMs != null && aMs < bMs
+}
+
+/**
+ * One-shot UI feedback for user-initiated A/B repeat actions, consumed by the
+ * player's transient badge. [AbRepeatController.resetForItem] deliberately
+ * emits nothing so episode switches don't surface a badge.
+ */
+sealed interface AbRepeatEvent {
+    /** A/B repeat toggled on (no points set yet). */
+    data object Enabled : AbRepeatEvent
+
+    /** A point captured at [aMs] (clamped value). */
+    data class PointASet(val aMs: Long) : AbRepeatEvent
+
+    /** B point captured at [bMs]; the loop is now active between [aMs] and [bMs]. */
+    data class PointBSet(val aMs: Long, val bMs: Long) : AbRepeatEvent
+
+    /** Both points cleared. */
+    data object Cleared : AbRepeatEvent
 }

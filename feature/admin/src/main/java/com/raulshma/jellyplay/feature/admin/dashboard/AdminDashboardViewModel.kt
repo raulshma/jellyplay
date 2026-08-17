@@ -1,17 +1,14 @@
 package com.raulshma.jellyplay.feature.admin.dashboard
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.TaskState
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,8 +35,7 @@ data class AdminDashboardState(
 
 @HiltViewModel
 class AdminDashboardViewModel @Inject constructor(
-    private val apiClient: JellyfinApiClient,
-    private val realtimeTasks: ScheduledTasksRealtimeChannel,
+    private val adminRepository: AdminRepository,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(AdminDashboardState())
@@ -70,35 +66,23 @@ class AdminDashboardViewModel @Inject constructor(
             // screen is reached; the server still 403s as a backstop.
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                coroutineScope {
-                    val sysInfoDeferred = async { apiClient.getSystemInfo().getOrNull() }
-                    val countsDeferred = async { apiClient.getItemCounts().getOrNull() }
-                    val sessionsDeferred = async { apiClient.getSessions().getOrNull() }
-                    val activityDeferred = async { apiClient.getActivityLogEntries(limit = 10).getOrNull() }
-                    val tasksDeferred = async { apiClient.getScheduledTasks().getOrNull() }
+                val summary = adminRepository.getDashboardSummary().getOrThrow()
 
-                    val sysInfo = sysInfoDeferred.await()
-                    val counts = countsDeferred.await()
-                    val sessions = sessionsDeferred.await() ?: emptyList()
-                    val allTasks = tasksDeferred.await() ?: emptyList()
-                    val activity = activityDeferred.await() ?: emptyList()
-
-                    val running = allTasks.filter { task -> task.state == TaskState.RUNNING }
-                    hasRunningTasks.value = running.isNotEmpty()
-                    // Seed the scan state from the initial REST snapshot so the
-                    // button reflects an in-progress scan before the first WS
-                    // push lands. Subsequent updates come from [observeScanLibraryTask].
-                    applyScanTask(allTasks.firstOrNull { it.key == KEY_SCAN_LIBRARY })
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            systemInfo = sysInfo,
-                            itemCounts = counts,
-                            runningTasks = running,
-                            sessions = sessions,
-                            recentActivity = activity,
-                        )
-                    }
+                val running = summary.tasks.filter { task -> task.state == TaskState.RUNNING }
+                hasRunningTasks.value = running.isNotEmpty()
+                // Seed the scan state from the initial REST snapshot so the
+                // button reflects an in-progress scan before the first WS
+                // push lands. Subsequent updates come from [observeScanLibraryTask].
+                applyScanTask(summary.tasks.firstOrNull { it.key == KEY_SCAN_LIBRARY })
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        systemInfo = summary.systemInfo,
+                        itemCounts = summary.itemCounts,
+                        runningTasks = running,
+                        sessions = summary.sessions,
+                        recentActivity = summary.recentActivity,
+                    )
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
@@ -121,7 +105,7 @@ class AdminDashboardViewModel @Inject constructor(
     }
 
     private suspend fun refreshRunningTasks() {
-        val result = apiClient.getScheduledTasks()
+        val result = adminRepository.getScheduledTasks()
         val tasks = result.getOrNull() ?: return
         val running = tasks.filter { task -> task.state == TaskState.RUNNING }
         hasRunningTasks.value = running.isNotEmpty()
@@ -133,7 +117,7 @@ class AdminDashboardViewModel @Inject constructor(
     fun restartServer() {
         launch {
             _uiState.update { it.copy(isRestarting = true) }
-            val result = apiClient.restartServer()
+            val result = adminRepository.restartServer()
             if (result.isSuccess) {
                 delay(3000)
                 _uiState.update { it.copy(isRestarting = false, error = null) }
@@ -152,7 +136,7 @@ class AdminDashboardViewModel @Inject constructor(
     fun shutdownServer() {
         launch {
             _uiState.update { it.copy(isShuttingDown = true) }
-            val result = apiClient.shutdownServer()
+            val result = adminRepository.shutdownServer()
             if (result.isSuccess) {
                 _uiState.update { it.copy(isShuttingDown = false, error = null) }
             } else {
@@ -186,7 +170,7 @@ class AdminDashboardViewModel @Inject constructor(
         val session = _uiState.value.pendingStopSession ?: return
         launch {
             _uiState.update { it.copy(isStoppingSession = true) }
-            val result = apiClient.stopSession(session.id)
+            val result = adminRepository.stopSession(session.id)
             if (result.isSuccess) {
                 _uiState.update {
                     it.copy(isStoppingSession = false, pendingStopSession = null, error = null)
@@ -206,11 +190,11 @@ class AdminDashboardViewModel @Inject constructor(
     /**
      * Starts a media-library scan by triggering Jellyfin's built-in
      * "Scan media library" scheduled task ([KEY_SCAN_LIBRARY]). Live progress
-     * then flows in over WebSocket via [ScheduledTasksRealtimeChannel]
+     * then flows in over WebSocket via the repository's task channel
      * (the same `ScheduledTasksInfo` push jellyfin-web relies on).
      *
      * We set an optimistic grace window because the server takes a beat to
-     * flip the task IDLE → RUNNING after [apiClient.startTask], and a WS push
+     * flip the task IDLE → RUNNING after the start request, and a WS push
      * landing in that window would report IDLE and collapse the UI. Once the
      * WS confirms RUNNING the window is cleared; a later IDLE means "done".
      */
@@ -219,15 +203,7 @@ class AdminDashboardViewModel @Inject constructor(
         scanOptimisticUntilMs.set(System.currentTimeMillis() + scanOptimisticGraceMs)
         launch {
             _uiState.update { it.copy(libraryScanState = LibraryScanState.Running(progress = null)) }
-            val tasks = apiClient.getScheduledTasks().getOrNull().orEmpty()
-            val scanTask = tasks.firstOrNull { it.key == KEY_SCAN_LIBRARY }
-            val taskId = scanTask?.id ?: tasks.firstOrNull { it.name.equals(NAME_SCAN_LIBRARY, ignoreCase = true) }?.id
-            if (taskId != null) {
-                apiClient.startTask(taskId)
-            } else {
-                // Fall back to the library refresh endpoint (no progress).
-                apiClient.scanLibrary()
-            }
+            adminRepository.startLibraryScan()
         }
     }
 
@@ -239,7 +215,7 @@ class AdminDashboardViewModel @Inject constructor(
      */
     private fun observeScanLibraryTask() {
         launch {
-            realtimeTasks.scanLibraryTask.collect { task -> applyScanTask(task) }
+            adminRepository.libraryScanTask.collect { task -> applyScanTask(task) }
         }
     }
 
@@ -276,9 +252,8 @@ class AdminDashboardViewModel @Inject constructor(
     }
 
     private companion object {
-        // Jellyfin scheduled-task key / display name for "Scan media library".
+        // Jellyfin scheduled-task key for "Scan media library".
         const val KEY_SCAN_LIBRARY = "RefreshLibrary"
-        const val NAME_SCAN_LIBRARY = "Scan Media Library"
 
         // How long to keep the optimistic Running state after the user taps
         // "Scan Library", waiting for the server to flip the task to RUNNING.

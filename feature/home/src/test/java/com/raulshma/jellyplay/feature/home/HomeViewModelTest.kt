@@ -1,22 +1,24 @@
 package com.raulshma.jellyplay.feature.home
 
-import android.content.Context
 import androidx.lifecycle.LifecycleOwner
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
-import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
+import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.AppliedMutation
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
+import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
+import com.raulshma.jellyplay.core.data.search.MediaSearchPreviewState
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -35,7 +37,6 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
-import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
@@ -107,9 +108,14 @@ class HomeViewModelTest {
     private lateinit var experimentalStore: ExperimentalStore
     private lateinit var playbackStore: PlaybackStore
     private lateinit var preferencesEditor: PreferencesEditor
-    private lateinit var serverIdentityStore: ServerIdentityStore
     private lateinit var widgetDataStore: WidgetDataStore
-    private lateinit var searchHistoryRepository: SearchHistoryRepository
+
+    /** Inline-search kernel — targeted fake instead of five collaborators. */
+    private val mediaSearchEngine: MediaSearchEngine = mockk(relaxed = true)
+
+    /** Offline-first title+poster resolution delegated to the data layer. */
+    private val offlineFirstItemResolver: OfflineFirstItemResolver = mockk(relaxed = true)
+
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var seerrRequestDelegate: SeerrRequestDelegate
     private lateinit var seerrPreferencesStore: SeerrPreferencesStore
@@ -127,7 +133,6 @@ class HomeViewModelTest {
     private val appearanceFlow = MutableStateFlow(AppearanceSlice())
     private val experimentalFlow = MutableStateFlow(ExperimentalSlice())
     private val playbackFlow = MutableStateFlow(PlaybackSlice())
-    private val activeUserIdFlow = MutableStateFlow<String?>(null)
     private val seerrPrefsFlow = MutableStateFlow(SeerrPreferences())
     private val offlineModeFlow = MutableStateFlow(OfflineMode.ONLINE)
     private val networkStatusFlow = MutableStateFlow(NetworkStatus.Online)
@@ -151,9 +156,7 @@ class HomeViewModelTest {
         experimentalStore = mockk(relaxed = true)
         playbackStore = mockk(relaxed = true)
         preferencesEditor = mockk(relaxed = true)
-        serverIdentityStore = mockk(relaxed = true)
         widgetDataStore = mockk(relaxed = true)
-        searchHistoryRepository = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
         seerrRequestDelegate = mockk(relaxed = true)
         seerrPreferencesStore = mockk(relaxed = true)
@@ -166,12 +169,18 @@ class HomeViewModelTest {
         playbackSyncScheduler = mockk(relaxed = true)
         fakeTimeSource = FakeTimeSource()
 
+        every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
+        every { mediaSearchEngine.preview(any()) } returns flowOf(
+            MediaSearchPreviewState(query = "", jellyfin = emptyList(), seerr = emptyList(), isSearching = false)
+        )
+        coEvery { offlineFirstItemResolver.resolveMediaRef(any()) } returns
+            ResolvedMediaRef(item = null, posterUrl = "http://server/img")
+
         every { authRepository.currentUser } returns userFlow
         every { homeDiscoveryStore.homeDiscovery } returns homeDiscoveryFlow
         every { appearanceStore.appearance } returns appearanceFlow
         every { experimentalStore.experimental } returns experimentalFlow
         every { playbackStore.playback } returns playbackFlow
-        every { serverIdentityStore.activeUserId } returns activeUserIdFlow
         every { seerrPreferencesStore.preferences } returns seerrPrefsFlow
         every { offlineModeManager.offlineMode } returns offlineModeFlow
         every { offlineModeManager.networkStatus } returns networkStatusFlow
@@ -181,15 +190,13 @@ class HomeViewModelTest {
         every { playbackOutboxRepository.getAllFlow() } returns outboxEntriesFlow
         every { offlineRepository.getOfflineLibrary() } returns flowOf(emptyList())
         every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)
-        every { searchHistoryRepository.getRecent(any(), any()) } returns flowOf(emptyList())
-        every { seerrRepository.isConnected() } returns flowOf(false)
-        every { seerrRepository.isSearchEnabled() } returns flowOf(false)
     }
 
     private fun buildViewModel(): HomeViewModel = HomeViewModel(
-        appContext = mockk<Context>(relaxed = true),
         mediaRepository = mediaRepository,
         userDataMutator = userDataMutator,
+        mediaSearchEngine = mediaSearchEngine,
+        offlineFirstItemResolver = offlineFirstItemResolver,
         orderHomeSections = OrderHomeSectionsUseCase(),
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
@@ -204,9 +211,7 @@ class HomeViewModelTest {
         experimentalStore = experimentalStore,
         playbackStore = playbackStore,
         preferencesEditor = preferencesEditor,
-        serverIdentityStore = serverIdentityStore,
         widgetDataStore = widgetDataStore,
-        searchHistoryRepository = searchHistoryRepository,
         seerrRepository = seerrRepository,
         seerrRequestDelegate = seerrRequestDelegate,
         seerrPreferencesStore = seerrPreferencesStore,
@@ -659,15 +664,14 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun ensurePendingItemDetails_resolvesOfflineItem_andUsesLocalPosterPath() = runTest {
-        val offlineItem = com.raulshma.jellyplay.core.model.OfflineMediaItem(
-            id = "item-1",
-            name = "Offline Movie",
-            mediaType = MediaType.MOVIE,
-            posterPath = "file:///offline/poster.jpg",
+    fun ensurePendingItemDetails_mapsResolverResultIntoState() = runTest {
+        // The offline-first fork itself is pinned by OfflineFirstItemResolverTest
+        // in :core:data; here we only pin that the VM caches the resolver's
+        // answer per outbox id.
+        coEvery { offlineFirstItemResolver.resolveMediaRef("item-1") } returns ResolvedMediaRef(
+            item = MediaItem(id = "item-1", name = "Offline Movie", mediaType = MediaType.MOVIE),
+            posterUrl = "file:///offline/poster.jpg",
         )
-        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem
-        every { imageUrlProvider.getImageUrl("item-1") } returns "http://server/item-1/image"
         viewModel = buildViewModel()
 
         viewModel.ensurePendingItemDetails(listOf("item-1"))
@@ -675,57 +679,12 @@ class HomeViewModelTest {
 
         val resolved = viewModel.pendingItemDetails.value["item-1"]
         assertEquals("Offline Movie", resolved?.item?.name)
-        // Offline hit must prefer the local poster path over the server URL.
         assertEquals("file:///offline/poster.jpg", resolved?.posterUrl)
-        // Network fallback must not fire when the offline store had the row.
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail("item-1") }
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun ensurePendingItemDetails_fallsBackToNetwork_whenOfflineMiss_andOnline() = runTest {
-        coEvery { offlineRepository.getOfflineItem("item-2") } returns null
-        val detail = com.raulshma.jellyplay.core.model.MediaDetail(
-            item = MediaItem(id = "item-2", name = "Online Only", mediaType = MediaType.MOVIE),
-        )
-        coEvery { mediaRepository.getMediaDetail("item-2") } returns Result.success(detail)
-        every { imageUrlProvider.getImageUrl("item-2") } returns "http://server/item-2/image"
-        viewModel = buildViewModel()
-
-        viewModel.ensurePendingItemDetails(listOf("item-2"))
-        runCurrent()
-
-        val resolved = viewModel.pendingItemDetails.value["item-2"]
-        assertEquals("Online Only", resolved?.item?.name)
-        assertEquals("http://server/item-2/image", resolved?.posterUrl)
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun ensurePendingItemDetails_skipsNetwork_whenOfflineMiss_andOfflineMode() = runTest {
-        coEvery { offlineRepository.getOfflineItem("item-3") } returns null
-        every { imageUrlProvider.getImageUrl("item-3") } returns "http://server/item-3/image"
-        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
-        viewModel = buildViewModel()
-        runCurrent()
-
-        viewModel.ensurePendingItemDetails(listOf("item-3"))
-        runCurrent()
-
-        val resolved = viewModel.pendingItemDetails.value["item-3"]
-        // Resolves to the not-found marker (null item) with a server URL so the
-        // row can still attempt to load it once back online.
-        assertEquals(null, resolved?.item)
-        assertEquals("http://server/item-3/image", resolved?.posterUrl)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail("item-3") }
         stopPeriodicRefresh()
     }
 
     @Test
     fun ensurePendingItemDetails_prunesStaleKeys_andDedupesInFlight() = runTest {
-        coEvery { offlineRepository.getOfflineItem(any()) } returns null
-        coEvery { mediaRepository.getMediaDetail(any()) } returns Result.failure(RuntimeException("net"))
-        every { imageUrlProvider.getImageUrl(any()) } returns "http://server/img"
         viewModel = buildViewModel()
 
         viewModel.ensurePendingItemDetails(listOf("a", "b"))
@@ -739,6 +698,7 @@ class HomeViewModelTest {
         runCurrent()
 
         assertEquals(setOf("b", "c"), viewModel.pendingItemDetails.value.keys)
+        coVerify(exactly = 1) { offlineFirstItemResolver.resolveMediaRef("b") }
         stopPeriodicRefresh()
     }
 

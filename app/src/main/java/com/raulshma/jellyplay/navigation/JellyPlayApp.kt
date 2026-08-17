@@ -140,7 +140,6 @@ import com.raulshma.jellyplay.core.ui.animation.NavTransitionContext
 import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
 import com.raulshma.jellyplay.core.ui.animation.toTransition
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
-import com.raulshma.jellyplay.core.ui.navigation.isFullScreen
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -567,6 +566,27 @@ private fun MainContent(
                         is com.raulshma.jellyplay.core.data.remote.NavigationTarget.OpenMediaDetail -> Route.MediaDetail(target.itemId)
                         else -> Route.Home
                     }
+                )
+            }
+        }
+    }
+
+    // SyncPlay auto-open: a joined group started playing (or switched items)
+    // while no player is on top of any back stack → open the video player.
+    // When a player IS already open, its SyncPlayBridge drives the item load
+    // in place — pushing another VideoPlayer route here would stack duplicate
+    // player screens.
+    LaunchedEffect(Unit) {
+        viewModel.syncPlayOpenRequests.collect { request ->
+            val playerOpen = navigationState.backStacks.values.any { stack ->
+                stack.lastOrNull() is Route.VideoPlayer
+            }
+            if (!playerOpen) {
+                navigator.navigate(
+                    Route.VideoPlayer(
+                        itemId = request.itemId,
+                        startPositionTicks = request.startPositionTicks,
+                    )
                 )
             }
         }

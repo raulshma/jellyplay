@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
+import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -42,7 +43,7 @@ class SyncDetailsSheetTest {
             episodeNumber = 1,
             mediaType = MediaType.EPISODE,
         )
-        val resolved = ResolvedSyncMedia(
+        val resolved = ResolvedMediaRef(
             item = item,
             posterUrl = "http://server/m1/poster",
         )

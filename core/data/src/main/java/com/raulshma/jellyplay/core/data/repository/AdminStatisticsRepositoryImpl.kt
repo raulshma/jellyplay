@@ -103,6 +103,27 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
         }
     }
 
+    /** Played/unplayed counters fetched concurrently for one user. */
+    private data class UserPlayCounts(
+        val moviePlayed: Int,
+        val episodePlayed: Int,
+        val songPlayed: Int,
+        val movieUnplayed: Int,
+    )
+
+    private suspend fun fetchUserPlayCounts(userId: String): UserPlayCounts = coroutineScope {
+        val movieDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
+        val episodeDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrDefault(0) }
+        val songDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0) }
+        val movieUnplayedDeferred = async { apiClient.getUserUnplayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
+        UserPlayCounts(
+            moviePlayed = movieDeferred.await(),
+            episodePlayed = episodeDeferred.await(),
+            songPlayed = songDeferred.await(),
+            movieUnplayed = movieUnplayedDeferred.await(),
+        )
+    }
+
     private suspend fun buildUserStatistics(
         user: JellyfinUser,
         isActive: Boolean,
@@ -110,17 +131,11 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
     ): UserStatistics {
         val userId = user.id
 
-        val stats = coroutineScope {
-            val movieDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
-            val episodeDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrDefault(0) }
-            val songDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0) }
-            val movieUnplayedDeferred = async { apiClient.getUserUnplayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
-            intArrayOf(movieDeferred.await(), episodeDeferred.await(), songDeferred.await(), movieUnplayedDeferred.await())
-        }
-        val moviePlayed = stats[0]
-        val episodePlayed = stats[1]
-        val songPlayed = stats[2]
-        val movieUnplayed = stats[3]
+        val stats = fetchUserPlayCounts(userId)
+        val moviePlayed = stats.moviePlayed
+        val episodePlayed = stats.episodePlayed
+        val songPlayed = stats.songPlayed
+        val movieUnplayed = stats.movieUnplayed
         val movieTotal = movieUnplayed + moviePlayed
         val completionRate = if (movieTotal > 0) moviePlayed.toFloat() / movieTotal else 0f
 
@@ -141,18 +156,38 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getUserDetailStatistics(userId: String, page: Int, pageSize: Int): Result<UserDetailPage> = runCatching {
-        val users = apiClient.getUsers().getOrDefault(emptyList())
-        val user = users.firstOrNull { it.id == userId } ?: JellyfinUser(id = userId)
         val pluginAvailable = _pluginStatus.value == PlaybackReportingStatus.AVAILABLE
 
-        val playedResult = apiClient.getItemsWithUserData(
-            userId = userId,
-            isPlayed = true,
-            sortBy = "PlayCount",
-            sortOrder = "Descending",
-            startIndex = page * pageSize,
-            limit = pageSize,
-        ).getOrDefault(Pair(0, emptyList()))
+        // User lookup, played page, and plugin chart are independent round-trips
+        // — run them concurrently (was: full getUsers() scan + sequential tail
+        // paying sum-of-latencies). The per-user endpoint replaces the list scan.
+        val user: JellyfinUser
+        val playedResult: Pair<Int, List<com.raulshma.jellyplay.core.model.MediaItem>>
+        val pluginChart: List<com.raulshma.jellyplay.core.model.PlaybackActivityPoint>
+        coroutineScope {
+            val userDeferred = async {
+                apiClient.getUserById(userId).getOrNull() ?: JellyfinUser(id = userId)
+            }
+            val playedDeferred = async {
+                apiClient.getItemsWithUserData(
+                    userId = userId,
+                    isPlayed = true,
+                    sortBy = "PlayCount",
+                    sortOrder = "Descending",
+                    startIndex = page * pageSize,
+                    limit = pageSize,
+                ).getOrDefault(Pair(0, emptyList()))
+            }
+            val pluginChartDeferred = async {
+                if (pluginAvailable) {
+                    apiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId)
+                        .getOrDefault(emptyList())
+                } else emptyList()
+            }
+            user = userDeferred.await()
+            playedResult = playedDeferred.await()
+            pluginChart = pluginChartDeferred.await()
+        }
 
         val topItems = playedResult.second.map { item ->
             com.raulshma.jellyplay.core.model.UserTopItem(
@@ -167,34 +202,33 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
             )
         }
 
-        val pluginChart = if (pluginAvailable) {
-            apiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId).getOrDefault(emptyList())
-        } else emptyList()
-
-        val fallbackItems = if (pluginChart.isEmpty() || pluginChart.all { it.value == 0L }) {
-            apiClient.getItemsWithUserData(
-                userId = userId,
-                isPlayed = true,
-                sortBy = "DatePlayed",
-                sortOrder = "Descending",
-                startIndex = 0,
-                limit = 300,
-            ).getOrDefault(Pair(0, emptyList())).second
-        } else emptyList()
+        // The fallback items list depends on pluginChart's outcome; the four
+        // counts don't depend on anything — overlap both groups.
+        val fallbackItems: List<com.raulshma.jellyplay.core.model.MediaItem>
+        val counts: UserPlayCounts
+        coroutineScope {
+            val fallbackDeferred = async {
+                if (pluginChart.isEmpty() || pluginChart.all { it.value == 0L }) {
+                    apiClient.getItemsWithUserData(
+                        userId = userId,
+                        isPlayed = true,
+                        sortBy = "DatePlayed",
+                        sortOrder = "Descending",
+                        startIndex = 0,
+                        limit = 300,
+                    ).getOrDefault(Pair(0, emptyList())).second
+                } else emptyList()
+            }
+            val countsDeferred = async { fetchUserPlayCounts(userId) }
+            fallbackItems = fallbackDeferred.await()
+            counts = countsDeferred.await()
+        }
         val fallbackChart = if (fallbackItems.isNotEmpty()) buildFallbackActivityChart(fallbackItems) else pluginChart
         val fallbackTrendData = if (fallbackItems.isNotEmpty()) buildFallbackActivityChart(fallbackItems) else emptyList()
-
-        val counts = coroutineScope {
-            val movieDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
-            val episodeDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrDefault(0) }
-            val songDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0) }
-            val movieUnplayedDeferred = async { apiClient.getUserUnplayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
-            intArrayOf(movieDeferred.await(), episodeDeferred.await(), songDeferred.await(), movieUnplayedDeferred.await())
-        }
-        val moviePlayedCount = counts[0]
-        val episodePlayedCount = counts[1]
-        val songPlayedCount = counts[2]
-        val movieUnplayed = counts[3]
+        val moviePlayedCount = counts.moviePlayed
+        val episodePlayedCount = counts.episodePlayed
+        val songPlayedCount = counts.songPlayed
+        val movieUnplayed = counts.movieUnplayed
 
         val typeBreakdown = listOf(
             ContentBreakdown(
@@ -500,14 +534,17 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                 }
                 allResults.addAll(items)
 
-                val entity = scanStateDao.getById(scanId) ?: return
-                scanStateDao.update(
-                    entity.copy(
+                // Targeted progress write; 0 affected rows = scan row deleted
+                // (cancelled) — stop without the full-row read.
+                if (scanStateDao.updateProgress(
+                        scanId = scanId,
                         progress = minOf(startIndex + result.second.size, result.first),
                         total = result.first,
                         itemsFound = allResults.size,
-                    )
-                )
+                    ) == 0
+                ) {
+                    return
+                }
 
                 startIndex += pageSize
                 hasMore = result.second.size >= pageSize && startIndex < result.first
@@ -584,14 +621,17 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
 
                     allResults.addAll(items)
 
-                    val entity = scanStateDao.getById(scanId) ?: return
-                    scanStateDao.update(
-                        entity.copy(
+                    // Targeted progress write; 0 affected rows = scan row
+                    // deleted (cancelled) — stop without the full-row read.
+                    if (scanStateDao.updateProgress(
+                            scanId = scanId,
                             progress = allResults.size,
                             total = allResults.size + (result.first.coerceAtLeast(0) - items.size),
                             itemsFound = allResults.size,
-                        )
-                    )
+                        ) == 0
+                    ) {
+                        return
+                    }
 
                     startIndex += pageSize
                     hasMore = result.second.size >= pageSize
@@ -616,13 +656,13 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
     }
 
     override fun getScanProgress(scanId: String): Flow<ScanProgress> =
-        scanStateDao.observeById(scanId).map { entity ->
-            if (entity == null) ScanProgress()
+        scanStateDao.observeProgress(scanId).map { row ->
+            if (row == null) ScanProgress()
             else ScanProgress(
-                phase = runCatching { ScanPhase.valueOf(entity.status) }.getOrDefault(ScanPhase.IDLE),
-                scanned = entity.progress,
-                total = entity.total,
-                itemsFound = entity.itemsFound,
+                phase = runCatching { ScanPhase.valueOf(row.status) }.getOrDefault(ScanPhase.IDLE),
+                scanned = row.progress,
+                total = row.total,
+                itemsFound = row.itemsFound,
             )
         }
 

@@ -16,10 +16,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 
+/**
+ * AnimatedVisibility wrapper for a whole section: fade + slight rise on
+ * enter, reverse on exit. Not staggered — for the delay-indexed variant see
+ * [StaggeredSection]; the distinct name keeps the two apart.
+ */
 @Composable
-fun StaggeredSection(
+fun AnimatedSectionEntrance(
     visible: Boolean,
-    index: Int,
     content: @Composable () -> Unit,
 ) {
     AnimatedVisibility(

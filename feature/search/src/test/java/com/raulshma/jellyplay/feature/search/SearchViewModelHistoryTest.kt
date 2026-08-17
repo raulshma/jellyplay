@@ -2,13 +2,10 @@ package com.raulshma.jellyplay.feature.search
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
-import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
-import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
-import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
@@ -24,40 +21,34 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
+/**
+ * Pins [SearchViewModel.onSearchResultsShown]'s delegation to
+ * [MediaSearchEngine.recordHistory]: only non-blank confirmed queries reach
+ * the engine. The engine-side policy (≥2 chars, hide-history preference,
+ * active user) is covered by MediaSearchEngineTest in :core:data.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SearchViewModelHistoryTest {
 
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private lateinit var mediaRepository: MediaRepository
-    private lateinit var imageUrlProvider: ImageUrlProvider
-    private lateinit var seerrRepository: SeerrRepository
-    private lateinit var seerrRequestDelegate: SeerrRequestDelegate
-    private lateinit var searchHistoryRepository: SearchHistoryRepository
-    private lateinit var offlineRepository: OfflineRepository
-    private lateinit var experimentalStore: ExperimentalStore
-    private lateinit var serverIdentityStore: ServerIdentityStore
-    private lateinit var searchFiltersStore: SearchFiltersStore
+    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
+    private val seerrRepository: SeerrRepository = mockk(relaxed = true)
+    private val seerrRequestDelegate: SeerrRequestDelegate = mockk(relaxed = true)
+    private val mediaSearchEngine: MediaSearchEngine = mockk(relaxed = true)
+    private val offlineRepository: OfflineRepository = mockk(relaxed = true)
+    private val searchFiltersStore: SearchFiltersStore = mockk(relaxed = true)
 
     private lateinit var viewModel: SearchViewModel
 
     @Before
     fun setUp() {
-        mediaRepository = mockk(relaxed = true)
-        imageUrlProvider = mockk(relaxed = true)
-        seerrRepository = mockk(relaxed = true)
-        seerrRequestDelegate = mockk(relaxed = true)
-        searchHistoryRepository = mockk(relaxed = true)
-        offlineRepository = mockk(relaxed = true)
-        experimentalStore = mockk(relaxed = true)
-        serverIdentityStore = mockk(relaxed = true)
-        searchFiltersStore = mockk(relaxed = true)
-
-        every { experimentalStore.experimental } returns MutableStateFlow(ExperimentalSlice())
-        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        every { mediaSearchEngine.debounceMs } returns 300L
+        every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
+        coEvery { mediaSearchEngine.isSeerrSearchAvailable() } returns false
         every { searchFiltersStore.searchFiltersJson } returns MutableStateFlow(null)
-        every { seerrRepository.isConnected() } returns flowOf(false)
         every { seerrRepository.getPreferences() } returns flowOf(
             com.raulshma.jellyplay.core.model.seerr.SeerrPreferences()
         )
@@ -68,7 +59,6 @@ class SearchViewModelHistoryTest {
         coEvery { mediaRepository.getSearchSuggestions(any()) } returns Result.success(
             com.raulshma.jellyplay.core.model.SearchResult(emptyList(), 0, 0)
         )
-        coEvery { searchHistoryRepository.getRecent(any(), any()) } returns flowOf(emptyList())
         coEvery { offlineRepository.searchOffline(any(), any()) } returns emptyList()
 
         viewModel = SearchViewModel(
@@ -77,10 +67,8 @@ class SearchViewModelHistoryTest {
             imageUrlProvider,
             seerrRepository,
             seerrRequestDelegate,
-            searchHistoryRepository,
+            mediaSearchEngine,
             offlineRepository,
-            experimentalStore,
-            serverIdentityStore,
             searchFiltersStore,
         )
     }
@@ -90,16 +78,7 @@ class SearchViewModelHistoryTest {
         viewModel.onSearchResultsShown("matrix")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { searchHistoryRepository.saveQuery("matrix", "user-1") }
-    }
-
-    @Test
-    fun `onSearchResultsShown skips queries shorter than 2 chars`() = runTest {
-        // Guards against typo'd single-char queries polluting history.
-        viewModel.onSearchResultsShown("a")
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { searchHistoryRepository.saveQuery(any(), any()) }
+        coVerify(exactly = 1) { mediaSearchEngine.recordHistory("matrix", jellyfinHadResults = true) }
     }
 
     @Test
@@ -107,6 +86,6 @@ class SearchViewModelHistoryTest {
         viewModel.onSearchResultsShown("")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { searchHistoryRepository.saveQuery(any(), any()) }
+        coVerify(exactly = 0) { mediaSearchEngine.recordHistory(any(), any()) }
     }
 }

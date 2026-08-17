@@ -7,7 +7,10 @@ import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaSource
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleFile
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
@@ -20,7 +23,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -62,7 +64,6 @@ class SubtitleManagerProviderDownloadTest {
     private lateinit var userMessageBus: UserMessageBus
     private lateinit var addedSubtitles: MutableList<SubtitleSource>
     private lateinit var refreshedDetails: MutableList<MediaDetail>
-    private lateinit var state: MutableStateFlow<VideoPlayerUiState>
 
     // Unconfined so the manager's `scope.launch` in downloadProviderSubtitle
     // runs to completion synchronously inside the runBlocking-driven call.
@@ -102,7 +103,6 @@ class SubtitleManagerProviderDownloadTest {
         userMessageBus = mockk(relaxed = true)
         addedSubtitles = mutableListOf()
         refreshedDetails = mutableListOf()
-        state = MutableStateFlow(VideoPlayerUiState())
     }
 
     private fun manager(): SubtitleManager = SubtitleManager(
@@ -114,8 +114,7 @@ class SubtitleManagerProviderDownloadTest {
         userMessageBus = userMessageBus,
         scope = scope,
         addExternalSubtitle = { addedSubtitles += it },
-        getUiState = { state.value },
-        updateUiState = { transform -> state.value = transform(state.value) },
+        getMediaStreams = { emptyList() },
         getCurrentItemId = { "item-1" },
         onMediaDetailRefreshed = { refreshedDetails += it },
         getCurrentMediaDetail = { null },
@@ -132,7 +131,8 @@ class SubtitleManagerProviderDownloadTest {
         )
         coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(detail)
 
-        manager().downloadProviderSubtitle(result)
+        val m = manager()
+        m.downloadProviderSubtitle(result)
         drain()
 
         // 1. Persisted durably to the on-device store (survives replay/offline).
@@ -166,7 +166,7 @@ class SubtitleManagerProviderDownloadTest {
 
         // 5. Per-id status reflects success. Status is keyed on the composite
         //    "provider:id".
-        val status = state.value.downloadingSubtitles["OPENSUBTITLES:os-42"]
+        val status = m.state.value.downloadingSubtitles["OPENSUBTITLES:os-42"]
         assertEquals(SubtitleDownloadState.DOWNLOADED, status?.state)
         assertNull(status?.errorMessage)
         coVerify { userMessageBus.info(any<String>()) }
@@ -178,7 +178,8 @@ class SubtitleManagerProviderDownloadTest {
         coEvery { playbackRepository.uploadSubtitle(any(), any(), any(), any(), any(), any()) } returns
             Result.failure(RuntimeException("server rejected"))
 
-        manager().downloadProviderSubtitle(result)
+        val m = manager()
+        m.downloadProviderSubtitle(result)
         drain()
 
         // Still side-loaded (immediate use)…
@@ -190,7 +191,7 @@ class SubtitleManagerProviderDownloadTest {
         assertTrue(refreshedDetails.isEmpty())
         coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
         // Non-fatal: device-only status + info note (not a hard error).
-        val status = state.value.downloadingSubtitles["OPENSUBTITLES:os-42"]
+        val status = m.state.value.downloadingSubtitles["OPENSUBTITLES:os-42"]
         assertEquals(SubtitleDownloadState.DOWNLOADED_DEVICE_ONLY, status?.state)
         assertEquals("server rejected", status?.errorMessage)
         coVerify { userMessageBus.info(any<String>()) }
@@ -201,7 +202,8 @@ class SubtitleManagerProviderDownloadTest {
         coEvery { subtitleProviderRepository.downloadExternal(result) } returns
             Result.failure(RuntimeException("provider down"))
 
-        manager().downloadProviderSubtitle(result)
+        val m = manager()
+        m.downloadProviderSubtitle(result)
         drain()
 
         // Nothing side-loaded, nothing uploaded, nothing refreshed, nothing persisted.
@@ -212,7 +214,7 @@ class SubtitleManagerProviderDownloadTest {
         }
         assertTrue(refreshedDetails.isEmpty())
         coVerify { userMessageBus.error(any<String>()) }
-        val status = state.value.downloadingSubtitles["OPENSUBTITLES:os-42"]
+        val status = m.state.value.downloadingSubtitles["OPENSUBTITLES:os-42"]
         assertEquals(SubtitleDownloadState.FAILED, status?.state)
         assertEquals("provider down", status?.errorMessage)
     }
@@ -227,13 +229,46 @@ class SubtitleManagerProviderDownloadTest {
             jellyfinInfo = com.raulshma.jellyplay.core.model.RemoteSubtitleInfo(id = "jelly-1"),
         )
 
-        manager().downloadProviderSubtitle(jellyfinResult)
+        // Both suspend calls the delegated path makes must be stubbed
+        // explicitly: a relaxed mock answers them with mistyped success values
+        // (the Result<T> payload decodes as Object), and the resulting CCE
+        // crashes the downloadSubtitle coroutine after the delegation verify —
+        // escaping the SupervisorJob scope as an uncaught leak that fails the
+        // NEXT test class to enter runTest.
+        coEvery { playbackRepository.downloadSubtitle("item-1", "jelly-1") } returns Result.success(Unit)
+        // The appear-poll reads the forced detail; one source carrying a new
+        // SUBTITLE stream satisfies it on the first attempt, so the delegated
+        // row settles DOWNLOADED without the ~9 s poll budget.
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
+            MediaDetail(
+                item = MediaItem(id = "item-1", name = "Movie", mediaType = MediaType.MOVIE),
+                mediaSources = listOf(
+                    MediaSource(
+                        id = "ms-1",
+                        name = "Movie",
+                        mediaStreams = listOf(
+                            MediaStream(index = 0, type = StreamType.SUBTITLE, language = "eng"),
+                        ),
+                    ),
+                ),
+                chapters = emptyList(),
+            )
+        )
+
+        val m = manager()
+        m.downloadProviderSubtitle(jellyfinResult)
         drain()
 
+        coVerify(exactly = 1) { playbackRepository.downloadSubtitle("item-1", "jelly-1") }
         coVerify(exactly = 0) {
             subtitleProviderRepository.downloadExternal(any())
             playbackRepository.uploadSubtitle(any(), any(), any(), any(), any(), any())
         }
         assertTrue(addedSubtitles.isEmpty())
+        // Delegation is end-to-end: the forced refresh surfaced the new stream
+        // and the row settled DOWNLOADED through the server path (keyed on the
+        // plain RemoteSubtitleInfo id, not the composite provider key).
+        assertEquals("item-1", refreshedDetails.single().item.id)
+        assertEquals(SubtitleDownloadState.DOWNLOADED, m.state.value.downloadingSubtitles["jelly-1"]?.state)
     }
 }

@@ -8,14 +8,19 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ReverbPreset
 
 /**
- * Audio-effects settings: dialogue boost, night mode, passthrough, decoder
- * mode, normalization, channel mix, bass boost, virtualizer, reverb, audio
- * delay. Mutated via the AVSync/Effects sheets; read by the engine config.
+ * Audio-effects state owned by
+ * [com.raulshma.jellyplay.feature.player.video.VideoEffectsController]: night
+ * mode, passthrough, decoder mode, normalization, channel mix, bass boost,
+ * virtualizer, reverb, audio delay. Mutated via the AVSync/Effects sheets;
+ * read by the engine config.
+ *
+ * `dialogueBoost*` deliberately does NOT live here: dialogue boost is
+ * per-item/series resolver-driven state with multiple writers (the preference
+ * resolver, the engine-bind seeding, the user toggle), so it stays on
+ * [com.raulshma.jellyplay.feature.player.video.VideoPlayerUiState].
  */
 @Immutable
 data class AudioEffectsState(
-    val dialogueBoostEnabled: Boolean = false,
-    val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
     val nightModeEnabled: Boolean = false,
     val nightModeStrength: EffectStrength = EffectStrength.MODERATE,
     val audioPassthrough: Boolean = false,

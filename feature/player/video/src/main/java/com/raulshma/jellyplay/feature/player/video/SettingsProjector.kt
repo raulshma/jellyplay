@@ -41,18 +41,15 @@ internal class SettingsProjector(
      * projected field has no downstream side effect.
      */
     fun project(agg: VideoPlayerAggregate): Boolean {
-        val state = getUiState()
         var subtitleStyleChanged = false
 
-        // Per-item audio/subtitle override flags — derived from the stored
-        // selection for the current item. Skipped wholesale when unchanged
-        // (the most common case: these rarely flip).
-        val stored = getItemId()?.let { agg.engine.mediaStreamSelections[it] }
-        val newAudio = stored?.audioStreamIndex != null
-        val newSub = stored?.subtitleStreamIndex != null
-        if (state.hasAudioOverride != newAudio || state.hasSubtitleOverride != newSub) {
-            updateUiState { it.copy(hasAudioOverride = newAudio, hasSubtitleOverride = newSub) }
-        }
+        // Note: three former projections moved out when their fields' homes
+        // moved to the owning controllers — the per-item audio/subtitle
+        // override flags (now TrackSelectionHelper.onStoredSelectionChanged),
+        // `sleepTimerLastUsedDurationMs` (now SleepTimerController
+        // .seedLastUsedDurationMs) and `defaultSearchLanguage` (now
+        // SubtitleManager.seedDefaultSearchLanguage). The VM's aggregate
+        // collector routes those.
 
         // HDR-aware subtitle style: the resolved style depends on whether the
         // current streams carry HDR, so re-derive on every prefs tick. The VM
@@ -76,9 +73,6 @@ internal class SettingsProjector(
             subtitleStyleChanged = true
         }
 
-        diff(agg.audio.sleepTimerDurationMs, VideoPlayerUiState::sleepTimerLastUsedDurationMs) {
-            it.copy(sleepTimerLastUsedDurationMs = agg.audio.sleepTimerDurationMs)
-        }
         diff(agg.videoPlayer.videoShowPlaybackMetadata, VideoPlayerUiState::showPlaybackMetadata) {
             it.copy(showPlaybackMetadata = agg.videoPlayer.videoShowPlaybackMetadata)
         }
@@ -107,13 +101,6 @@ internal class SettingsProjector(
             updateUiState { it.copy(usePinForPlayerLock = agg.security.usePinForPlayerLock, hasPin = hasPin) }
         }
 
-        // Default the Subtitle Manager's Search-tab language to the user's
-        // preferred subtitle language (ISO 639-2/3, e.g. "eng").
-        val searchLang = agg.subtitle.preferredSubtitleLanguage ?: DEFAULT_SEARCH_LANGUAGE
-        if (getUiState().defaultSearchLanguage != searchLang) {
-            updateUiState { it.copy(defaultSearchLanguage = searchLang) }
-        }
-
         return subtitleStyleChanged
     }
 
@@ -131,9 +118,5 @@ internal class SettingsProjector(
         if (selector.get(getUiState()) != newValue) {
             updateUiState(copy)
         }
-    }
-
-    private companion object {
-        const val DEFAULT_SEARCH_LANGUAGE = "eng"
     }
 }

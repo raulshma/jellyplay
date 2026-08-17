@@ -103,7 +103,17 @@ fun ProgramsScreen(
                     contentPadding = PaddingValues(top = 8.dp, bottom = bottomPad),
                     verticalArrangement = Arrangement.spacedBy(spacing + 8.dp),
                 ) {
-                    items(items = uiState.rows, key = { it.title }) { row ->
+                    items(
+                        items = uiState.rows,
+                        // Section ids are fixed-distinct per ProgramsViewModel,
+                        // so the id alone is a stable collision-free key (a
+                        // title key would crash on duplicate titles) that
+                        // survives "On Now" refreshes (a program-id-keyed row
+                        // would lose scroll position whenever the top program
+                        // rotates).
+                        key = { row -> row.id },
+                        contentType = { "program_row" },
+                    ) { row ->
                         ProgramRowSection(
                             row = row,
                             contentPad = contentPad,

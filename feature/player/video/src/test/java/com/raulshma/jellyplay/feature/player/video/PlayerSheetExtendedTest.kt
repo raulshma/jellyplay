@@ -117,50 +117,52 @@ class PlayerSheetExtendedTest {
     }
 }
 
-/** Tests for sleep timer state in VideoPlayerUiState. */
+/** Tests for the sleep-timer slice, owned by SleepTimerController. */
 class SleepTimerStateTest {
 
     @Test
     fun sleepTimer_defaultInactive() {
-        val state = VideoPlayerUiState()
+        val state = com.raulshma.jellyplay.feature.player.video.state.SleepTimerState()
         assertFalse(state.sleepTimerActive)
     }
 
     @Test
     fun sleepTimer_defaultEndOfEpisodeFalse() {
-        val state = VideoPlayerUiState()
+        val state = com.raulshma.jellyplay.feature.player.video.state.SleepTimerState()
         assertFalse(state.sleepTimerEndOfEpisode)
     }
 
     @Test
     fun sleepTimer_defaultLastUsedDurationMsZero() {
-        val state = VideoPlayerUiState()
+        val state = com.raulshma.jellyplay.feature.player.video.state.SleepTimerState()
         assertEquals(0L, state.sleepTimerLastUsedDurationMs)
     }
 
     @Test
     fun sleepTimer_activate_setsActive() {
         val durationMs = 30 * 60 * 1_000L // 30 minutes
-        val state = VideoPlayerUiState().copy(
-            sleepTimerActive = true,
-            sleepTimerLastUsedDurationMs = durationMs,
-        )
+        val state = com.raulshma.jellyplay.feature.player.video.state.SleepTimerState()
+            .copy(
+                sleepTimerActive = true,
+                sleepTimerLastUsedDurationMs = durationMs,
+            )
         assertTrue(state.sleepTimerActive)
         assertEquals(durationMs, state.sleepTimerLastUsedDurationMs)
     }
 
     @Test
     fun sleepTimer_endOfEpisodeMode_setsFlag() {
-        val state = VideoPlayerUiState().copy(
-            sleepTimerActive = true,
-            sleepTimerEndOfEpisode = true,
-        )
+        val state = com.raulshma.jellyplay.feature.player.video.state.SleepTimerState()
+            .copy(
+                sleepTimerActive = true,
+                sleepTimerEndOfEpisode = true,
+            )
         assertTrue(state.sleepTimerEndOfEpisode)
     }
 
     @Test
     fun sleepTimer_deactivate_clearsState() {
-        val state = VideoPlayerUiState(
+        val state = com.raulshma.jellyplay.feature.player.video.state.SleepTimerState(
             sleepTimerActive = true,
         ).copy(
             sleepTimerActive = false,

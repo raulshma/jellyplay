@@ -7,7 +7,8 @@ import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.ParentalRatingOption
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.model.UserEditorContext
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import com.raulshma.jellyplay.feature.admin.R
 import io.mockk.coEvery
@@ -33,7 +34,7 @@ class UserDetailViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private lateinit var apiClient: JellyfinApiClient
+    private lateinit var adminRepository: AdminRepository
 
     private val admin = ManagedUser(id = "u-admin", name = "Alice", policy = ManagedUserPolicy(isAdministrator = true))
     private val otherAdmin = ManagedUser(id = "u-other", name = "Zed", policy = ManagedUserPolicy(isAdministrator = true))
@@ -43,7 +44,7 @@ class UserDetailViewModelTest {
 
     @Before
     fun setUp() {
-        apiClient = mockk(relaxed = true)
+        adminRepository = mockk(relaxed = true)
         context = mockk(relaxed = true)
         // Save path surfaces localized strings via context.getString. The default
         // relaxed-mock "" would break the assertion that saveError carries an
@@ -55,11 +56,15 @@ class UserDetailViewModelTest {
     }
 
     private fun TestScope.loadViewModel(target: ManagedUser, allUsers: List<ManagedUser>, currentId: String = "me"): UserDetailViewModel {
-        coEvery { apiClient.getManagedUser(target.id) } returns Result.success(target)
-        coEvery { apiClient.getLibraryFoldersForEditor() } returns Result.success(libs)
-        coEvery { apiClient.getCurrentUserId() } returns Result.success(currentId)
-        coEvery { apiClient.getManagedUsers() } returns Result.success(allUsers)
-        val vm = UserDetailViewModel(apiClient, context)
+        coEvery { adminRepository.getUserEditorContext(target.id) } returns Result.success(
+            UserEditorContext(
+                user = target,
+                libraries = libs,
+                currentUserId = currentId,
+                adminCount = allUsers.count { it.policy.isAdministrator && !it.policy.isDisabled },
+            )
+        )
+        val vm = UserDetailViewModel(adminRepository, context)
         vm.loadUser(target.id)
         advanceUntilIdle() // loadUser launches a coroutine; let it complete so the loaded state is ready
         return vm
@@ -109,9 +114,9 @@ class UserDetailViewModelTest {
     fun `save commits rename then policy and reloads`() = runTest {
         val vm = loadViewModel(admin, listOf(admin))
         val reloaded = admin.copy(name = "Alice2")
-        coEvery { apiClient.renameUser("u-admin", "Alice2") } returns Result.success(reloaded)
-        coEvery { apiClient.updateUserPolicy("u-admin", any()) } returns Result.success(Unit)
-        coEvery { apiClient.getManagedUser("u-admin") } returns Result.success(reloaded)
+        coEvery { adminRepository.renameUser("u-admin", "Alice2") } returns Result.success(reloaded)
+        coEvery { adminRepository.updateUserPolicy("u-admin", any()) } returns Result.success(Unit)
+        coEvery { adminRepository.getManagedUser("u-admin") } returns Result.success(reloaded)
 
         vm.editName("Alice2")
         vm.onPolicyChange(admin.policy.copy(isHidden = true))
@@ -119,9 +124,9 @@ class UserDetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(ordering = io.mockk.Ordering.ORDERED) {
-            apiClient.renameUser("u-admin", "Alice2")
-            apiClient.updateUserPolicy("u-admin", any())
-            apiClient.getManagedUser("u-admin")
+            adminRepository.renameUser("u-admin", "Alice2")
+            adminRepository.updateUserPolicy("u-admin", any())
+            adminRepository.getManagedUser("u-admin")
         }
         assertNull(vm.uiState.value.editedName)
         assertNull(vm.uiState.value.editedPolicy)
@@ -131,16 +136,16 @@ class UserDetailViewModelTest {
     @Test
     fun `partial save keeps uncommitted editedPolicy`() = runTest {
         val vm = loadViewModel(admin, listOf(admin))
-        coEvery { apiClient.renameUser("u-admin", "Alice2") } returns Result.success(admin.copy(name = "Alice2"))
-        coEvery { apiClient.updateUserPolicy("u-admin", any()) } returns Result.failure(RuntimeException("policy boom"))
+        coEvery { adminRepository.renameUser("u-admin", "Alice2") } returns Result.success(admin.copy(name = "Alice2"))
+        coEvery { adminRepository.updateUserPolicy("u-admin", any()) } returns Result.failure(RuntimeException("policy boom"))
 
         vm.editName("Alice2")
         vm.onPolicyChange(admin.policy.copy(isHidden = true))
         vm.save()
         advanceUntilIdle()
 
-        coVerify { apiClient.renameUser("u-admin", "Alice2") }
-        coVerify { apiClient.updateUserPolicy("u-admin", any()) }
+        coVerify { adminRepository.renameUser("u-admin", "Alice2") }
+        coVerify { adminRepository.updateUserPolicy("u-admin", any()) }
         // rename succeeded -> cleared; policy failed -> retained for retry
         assertNull(vm.uiState.value.editedName)
         assertNotNull(vm.uiState.value.editedPolicy)
@@ -150,12 +155,12 @@ class UserDetailViewModelTest {
     @Test
     fun `updatePassword independent of dirty form`() = runTest {
         val vm = loadViewModel(admin, listOf(admin))
-        coEvery { apiClient.updateUserPassword("u-admin", any()) } returns Result.success(Unit)
+        coEvery { adminRepository.updateUserPassword("u-admin", any()) } returns Result.success(Unit)
 
         vm.updatePassword("secret")
         advanceUntilIdle()
 
-        coVerify { apiClient.updateUserPassword("u-admin", "secret") }
+        coVerify { adminRepository.updateUserPassword("u-admin", "secret") }
         assertFalse(vm.uiState.value.isDirty) // password op does not set isDirty
         assertFalse(vm.uiState.value.showPasswordDialog) // dialog dismissed by updatePassword
     }
@@ -167,7 +172,7 @@ class UserDetailViewModelTest {
         vm.deleteUser(onDone = { calledDone = true })
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { apiClient.deleteUser(any()) }
+        coVerify(exactly = 0) { adminRepository.deleteUser(any()) }
         assertFalse(calledDone)
     }
 
@@ -175,9 +180,9 @@ class UserDetailViewModelTest {
     fun `save with reload failure sets honest message and saveError`() = runTest {
         val vm = loadViewModel(admin, listOf(admin))
         // mutation succeeds, but the post-save reload fails
-        coEvery { apiClient.renameUser("u-admin", "Alice2") } returns Result.success(admin.copy(name = "Alice2"))
-        coEvery { apiClient.updateUserPolicy("u-admin", any()) } returns Result.success(Unit)
-        coEvery { apiClient.getManagedUser("u-admin") } returns Result.failure(RuntimeException("reload boom"))
+        coEvery { adminRepository.renameUser("u-admin", "Alice2") } returns Result.success(admin.copy(name = "Alice2"))
+        coEvery { adminRepository.updateUserPolicy("u-admin", any()) } returns Result.success(Unit)
+        coEvery { adminRepository.getManagedUser("u-admin") } returns Result.failure(RuntimeException("reload boom"))
 
         vm.editName("Alice2")
         vm.save()
@@ -204,8 +209,8 @@ class UserDetailViewModelTest {
         val vm = loadViewModel(admin, listOf(admin))
         val devs = listOf(DeviceInfo(id = "d1", name = "Phone"))
         val chans = listOf(LiveTvChannel(id = "c1", name = "News"))
-        coEvery { apiClient.getDevices() } returns Result.success(devs)
-        coEvery { apiClient.getLiveTvChannels(limit = 500) } returns Result.success(chans)
+        coEvery { adminRepository.getDevices() } returns Result.success(devs)
+        coEvery { adminRepository.getLiveTvChannels(limit = 500) } returns Result.success(chans)
 
         vm.loadAuxFor(UserEditTab.ACCESS)
         advanceUntilIdle()
@@ -214,21 +219,21 @@ class UserDetailViewModelTest {
         assertEquals(chans, vm.uiState.value.channels)
         assertTrue(UserEditTab.ACCESS in vm.uiState.value.auxLoadedTabs)
 
-        coVerify(exactly = 1) { apiClient.getDevices() }
-        coVerify(exactly = 1) { apiClient.getLiveTvChannels(limit = 500) }
+        coVerify(exactly = 1) { adminRepository.getDevices() }
+        coVerify(exactly = 1) { adminRepository.getLiveTvChannels(limit = 500) }
 
         // second call does not refetch
         vm.loadAuxFor(UserEditTab.ACCESS)
         advanceUntilIdle()
-        coVerify(exactly = 1) { apiClient.getDevices() }
+        coVerify(exactly = 1) { adminRepository.getDevices() }
     }
 
     @Test
     fun `loadAuxFor PARENTAL fetches ratings and tags`() = runTest {
         val vm = loadViewModel(admin, listOf(admin))
         val ratings = listOf(ParentalRatingOption("PG", 10, null))
-        coEvery { apiClient.getParentalRatings() } returns Result.success(ratings)
-        coEvery { apiClient.getTags(limit = 500) } returns Result.success(listOf("kids"))
+        coEvery { adminRepository.getParentalRatings() } returns Result.success(ratings)
+        coEvery { adminRepository.getTags(limit = 500) } returns Result.success(listOf("kids"))
 
         vm.loadAuxFor(UserEditTab.PARENTAL)
         advanceUntilIdle()
@@ -249,8 +254,8 @@ class UserDetailViewModelTest {
     @Test
     fun `loadAuxFor failure sets auxError without throwing`() = runTest {
         val vm = loadViewModel(admin, listOf(admin))
-        coEvery { apiClient.getDevices() } returns Result.failure(RuntimeException("boom"))
-        coEvery { apiClient.getLiveTvChannels(limit = 500) } returns Result.success(emptyList())
+        coEvery { adminRepository.getDevices() } returns Result.failure(RuntimeException("boom"))
+        coEvery { adminRepository.getLiveTvChannels(limit = 500) } returns Result.success(emptyList())
 
         vm.loadAuxFor(UserEditTab.ACCESS)
         advanceUntilIdle()

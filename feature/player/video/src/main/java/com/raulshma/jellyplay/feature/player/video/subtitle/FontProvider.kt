@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Typeface
 import android.net.Uri
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.lruMapOf
 import com.yubyf.truetypeparser.TTFFile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -45,6 +46,102 @@ class FontProvider @Inject constructor(
     }
 
     /**
+     * Cached font file bytes, keyed by file name with a `(length, lastModified)`
+     * stamp so a re-installed user font (same deterministic name, new content)
+     * is re-read. Populated from [Dispatchers.IO] by [prewarm]; engine `load()`
+     * reads from this cache so every ASS session start (each track change) stops
+     * re-reading multi-MB .ttf files from disk on the Main thread.
+     */
+    private class FontBytes(val length: Long, val lastModified: Long, val bytes: ByteArray)
+
+    private val fontBytesCache = java.util.concurrent.ConcurrentHashMap<String, FontBytes>()
+
+    /**
+     * Ensures the fonts dir + bundled fallback exist and loads every installed
+     * `.ttf`'s bytes into the cache, off the caller's dispatcher. Idempotent;
+     * safe to call repeatedly (cached stamps short-circuit unchanged files).
+     */
+    suspend fun prewarm() {
+        withContext(Dispatchers.IO) {
+            loadFontBytesInternal()
+        }
+    }
+
+    /** Cache-populating read of every font file's bytes; runs on IO. */
+    private fun loadFontBytesInternal(): Map<String, ByteArray> {
+        val dir = provideFontsDir()
+        val result = LinkedHashMap<String, ByteArray>()
+        dir.listFiles { file -> file.isFile && file.extension.equals("ttf", ignoreCase = true) }
+            ?.forEach { ttf ->
+                readFontBytes(ttf)?.takeIf { it.isNotEmpty() }?.let { bytes ->
+                    result[ttf.nameWithoutExtension] = bytes
+                }
+            }
+        return result
+    }
+
+    /** Cache hit (stamp-validated) or disk read; stores the result. */
+    private fun readFontBytes(file: File): ByteArray? {
+        val cached = fontBytesCache[file.name]
+        val length = file.length()
+        val lastModified = file.lastModified()
+        if (cached != null && cached.length == length && cached.lastModified == lastModified) {
+            return cached.bytes
+        }
+        return runCatching { file.readBytes() }
+            .getOrNull()
+            ?.also { fontBytesCache[file.name] = FontBytes(length, lastModified, it) }
+    }
+
+    /**
+     * Font bytes for the ass-media `AssHandler.addFont(name, bytes)` API, as a
+     * `(familyName, bytes)` map. Cache-first — the name says so — synchronous
+     * on purpose because the engine's `load()` is Main-thread, and populated
+     * by [prewarm]; on a cold cache (first playback before the startup
+     * pre-warm lands) it falls back to a disk read, byte-identical to the
+     * previous behavior.
+     */
+    fun cachedFontBytes(): Map<String, ByteArray> = loadFontBytesInternal()
+
+    /**
+     * Returns the selected font with the requested synthetic weight and slant.
+     *
+     * Android's native subtitle renderer only accepts a single [Typeface].  In
+     * particular, passing the regular bundled face alone silently drops the
+     * bold/italic toggles, so apply the requested style after loading the font.
+     *
+     * Memoized per `(path, bold, italic)` — [Typeface] is immutable and this
+     * is called from `applySubtitleStyle` on every style diff / track toggle,
+     * which previously re-parsed the TTF from disk each time.
+     */
+    fun typefaceFor(style: SubtitleStyle): Typeface {
+        val fontFile = style.fontFamilyPath
+            ?.let(::File)
+            ?.takeIf(File::isFile)
+            ?: bundledFallback
+        val typefaceStyle = when {
+            style.bold && style.italic -> Typeface.BOLD_ITALIC
+            style.bold -> Typeface.BOLD
+            style.italic -> Typeface.ITALIC
+            else -> Typeface.NORMAL
+        }
+        val key = "${fontFile.absolutePath}|${style.bold}|${style.italic}|$typefaceStyle"
+        // Access-order LinkedHashMap touched from Main here and from IO in
+        // [installUserFont] eviction — every read/write holds the map lock.
+        // The TTF parse inside getOrPut only runs on a miss, at most once per
+        // key, so the lock is never held across repeated expensive work.
+        synchronized(typefaceCache) {
+            return typefaceCache.getOrPut(key) {
+                val base = runCatching { Typeface.createFromFile(fontFile) }
+                    .getOrDefault(Typeface.SANS_SERIF)
+                Typeface.create(base, typefaceStyle)
+            }
+        }
+    }
+
+    private val typefaceCache = lruMapOf<String, Typeface>(MAX_TYPEFACES)
+
+    /**
      * Ensures the fonts directory and bundled fallback are ready. Returns the
      * directory both engines point libass at (mpv `sub-fonts-dir`, ass-media
      * `AssHandler` font config). Idempotent.
@@ -61,29 +158,6 @@ class FontProvider @Inject constructor(
         bundledFallback // force lazy init
         runCatching { File(fontsDir, "fonts.conf").delete() }
         return fontsDir
-    }
-
-    /**
-     * Returns the selected font with the requested synthetic weight and slant.
-     *
-     * Android's native subtitle renderer only accepts a single [Typeface].  In
-     * particular, passing the regular bundled face alone silently drops the
-     * bold/italic toggles, so apply the requested style after loading the font.
-     */
-    fun typefaceFor(style: SubtitleStyle): Typeface {
-        val fontFile = style.fontFamilyPath
-            ?.let(::File)
-            ?.takeIf(File::isFile)
-            ?: bundledFallback
-        val base = runCatching { Typeface.createFromFile(fontFile) }
-            .getOrDefault(Typeface.SANS_SERIF)
-        val typefaceStyle = when {
-            style.bold && style.italic -> Typeface.BOLD_ITALIC
-            style.bold -> Typeface.BOLD
-            style.italic -> Typeface.ITALIC
-            else -> Typeface.NORMAL
-        }
-        return Typeface.create(base, typefaceStyle)
     }
 
     /** Absolute path to the bundled fallback, for engines that accept a font file. */
@@ -123,6 +197,11 @@ class FontProvider @Inject constructor(
             if (finalFile != tempFile) {
                 tempFile.renameTo(finalFile)
             }
+            // New content under a deterministic name: drop the stale byte-cache
+            // entry and any memoized typeface for that path (stamps also guard
+            // this, but evicting keeps the cache from serving a renamed file).
+            fontBytesCache.remove(finalName)
+            synchronized(typefaceCache) { typefaceCache.keys.removeIf { it.startsWith(finalFile.absolutePath + "|") } }
             InstalledFont(finalFile, family ?: finalFile.nameWithoutExtension)
         } catch (e: Exception) {
             null
@@ -133,6 +212,9 @@ class FontProvider @Inject constructor(
         name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifEmpty { "user" }
 
     companion object {
+        /** Fonts installed are few (bundled + one per family); cap defensively. */
+        private const val MAX_TYPEFACES = 16
+
         /**
          * Extracts the font family name from a .ttf/.otf file's name table via
          * the truetypeparser lib. Returns null on any parse failure (corrupt

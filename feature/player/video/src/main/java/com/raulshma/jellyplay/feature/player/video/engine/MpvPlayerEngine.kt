@@ -233,12 +233,21 @@ class MpvPlayerEngine(
             override fun eventProperty(property: String) {}
             override fun eventProperty(property: String, value: Long) {
                 when (property) {
-                    "time-pos" -> cachedPositionMs = value * 1000L
                     "demuxer-cache-time" -> cachedBufferedPositionMs = value * 1000L
                 }
             }
             override fun eventProperty(property: String, value: Double) {
                 when (property) {
+                    // time-pos MUST be observed as DOUBLE: as INT64, mpv emits
+                    // a property change only when the whole-second value
+                    // changes (1 update/sec), so currentPositionMs quantizes
+                    // to 1000ms steps. SyncPlay's correction loop compares it
+                    // against a continuously-advancing server clock and read
+                    // the 0..1000ms quantization gap as drift, SkipToSync-
+                    // seeking (and pulsing "Syncing") on most 2s correction
+                    // ticks — the endless syncing/synced cycle on mpv. DOUBLE
+                    // updates per frame, giving ms precision.
+                    "time-pos" -> cachedPositionMs = (value * 1000L).toLong().coerceAtLeast(0L)
                     "duration" -> cachedDurationMs = (value * 1000L).toLong().coerceAtLeast(0L)
                     "sub-start" -> cachedSubStartSec = value
                     "demuxer-cache-duration" -> {
@@ -523,7 +532,7 @@ class MpvPlayerEngine(
             mpv.observeProperty("speed", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
             mpv.observeProperty("paused-for-cache", MPV.mpvFormat.MPV_FORMAT_FLAG)
             mpv.observeProperty("eof-reached", MPV.mpvFormat.MPV_FORMAT_FLAG)
-            mpv.observeProperty("time-pos", MPV.mpvFormat.MPV_FORMAT_INT64)
+            mpv.observeProperty("time-pos", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
             mpv.observeProperty("duration", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
             mpv.observeProperty("demuxer-cache-duration", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
             mpv.observeProperty("demuxer-cache-time", MPV.mpvFormat.MPV_FORMAT_INT64)

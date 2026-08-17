@@ -120,12 +120,11 @@ class ScheduledTasksRealtimeChannel @Inject constructor(
     }
 
     private fun parseTasks(event: WebSocketEvent): List<ScheduledTaskInfo> {
-        // The original raw WS text is the reliable source — event.data is a
-        // JSONObject by default, but the ScheduledTasksInfo Data payload is an
-        // array. Re-parse the envelope's Data as a JSONArray from the raw text.
+        // The payload is an array — read it from the event's pre-parsed
+        // dataArray instead of re-parsing the whole rawText envelope (this
+        // channel receives the full TaskInfo[] push once per second).
+        val data = event.dataArray ?: JSONArray()
         return try {
-            val envelope = org.json.JSONObject(event.rawText)
-            val data = envelope.optJSONArray("Data") ?: JSONArray()
             buildList {
                 for (i in 0 until data.length()) {
                     val obj = data.optJSONObject(i) ?: continue

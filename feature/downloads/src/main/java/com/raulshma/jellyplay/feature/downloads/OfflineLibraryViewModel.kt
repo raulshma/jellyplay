@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.lifecycle.SavedStateHandle
+import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -11,6 +12,7 @@ import com.raulshma.jellyplay.feature.downloads.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /** How the downloaded library is sorted. */
@@ -85,7 +88,11 @@ class OfflineLibraryViewModel @Inject constructor(
             combine(_sort, _filter) { s, f -> s to f },
         ) { items, query, (sort, filter) ->
             _isLoading.value = false
-            applyQueryFilterAndSort(items, query, filter, sort)
+            // Filter/sort of the full offline library stays off the Main
+            // dispatcher — only a concern for very large libraries, but free.
+            withContext(Dispatchers.Default) {
+                applyQueryFilterAndSort(items, query, filter, sort)
+            }
         }.stateIn(
             scope = scope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -159,18 +166,23 @@ class OfflineLibraryViewModel @Inject constructor(
     }
 
     /**
-     * Deletes a downloaded item from the long-press quick-action sheet. Routes by
-     * media type: a series deletes the whole series download; anything else
-     * deletes the single item. The reactive [offlineLibrary] flow refreshes on
-     * its own once the row is gone.
+     * Shared offline-delete module (core/data) — the same routing the detail
+     * screen and offline home use. Providers default to empty (this screen
+     * never batch-deletes episodes) and `onContentMutated` stays a no-op: the
+     * reactive [offlineLibrary] Room flow refreshes on its own once rows are
+     * gone.
+     */
+    private val deleteActions = OfflineDeleteActions(
+        scope = scope,
+        offlineRepository = offlineRepository,
+    )
+
+    /**
+     * Deletes a downloaded item from the long-press quick-action sheet:
+     * [OfflineDeleteActions.deleteDownload] routes a series to the whole-series
+     * delete and anything else to the single-item delete.
      */
     fun delete(item: MediaItem) {
-        launch {
-            if (item.mediaType == MediaType.SERIES) {
-                offlineRepository.deleteOfflineSeries(item.id)
-            } else {
-                offlineRepository.deleteOfflineItem(item.id)
-            }
-        }
+        deleteActions.deleteDownload(item)
     }
 }

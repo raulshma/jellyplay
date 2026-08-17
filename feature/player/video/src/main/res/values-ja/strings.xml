@@ -173,6 +173,12 @@
     <string name="player_video_set_a_point">A ポイントを設定</string>
     <string name="player_video_set_b_point">B ポイントを設定</string>
     <string name="player_video_clear_ab_repeat">A/B リピートをクリア</string>
+    <string name="player_video_set_a_point_at">A ポイントを設定 \u00B7 %1$s</string>
+    <string name="player_video_set_b_point_at">B ポイントを設定 \u00B7 %1$s</string>
+    <string name="player_video_ab_repeat_badge_enabled">A/B リピート オン — 開始点までシークして「A ポイントを設定」</string>
+    <string name="player_video_ab_repeat_badge_a_set">A を %1$s に設定 — 終了点までシークして「B ポイントを設定」</string>
+    <string name="player_video_ab_repeat_badge_active">%1$s → %2$s をループ中</string>
+    <string name="player_video_ab_repeat_badge_cleared">A/B リピートをクリアしました</string>
     <string name="player_audio_only">音声のみ</string>
     <string name="player_audio_only_on">音声のみ — 動画非表示</string>
 

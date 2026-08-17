@@ -387,6 +387,7 @@ class EpisodeCatalogueImplTest {
         val ep = offlineEpisode("e1", seriesId = "series-1", seasonId = "season-1")
         every { offlineRepository.getSeasonsForSeries("series-1") } returns flowOf(listOf(season))
         every { offlineRepository.getEpisodesForSeason("season-1") } returns flowOf(listOf(ep))
+        coEvery { offlineRepository.getEpisodesForSeries("series-1") } returns listOf(ep)
 
         val result = catalogue.loadSeriesEpisodes("series-1", offline = true)
 
@@ -425,6 +426,7 @@ class EpisodeCatalogueImplTest {
         every { offlineRepository.getSeasonsForSeries("series-1") } returns flowOf(listOf(season1, season2))
         every { offlineRepository.getEpisodesForSeason("season-1") } returns flowOf(emptyList())
         every { offlineRepository.getEpisodesForSeason("season-2") } returns flowOf(listOf(s2Episode))
+        coEvery { offlineRepository.getEpisodesForSeries("series-1") } returns listOf(s2Episode)
 
         val snapshot = catalogue.loadSeriesEpisodes("series-1", offline = true).getOrNull()!!
 

@@ -42,7 +42,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.StaggeredSection
+import com.raulshma.jellyplay.core.ui.components.AnimatedSectionEntrance
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -215,8 +215,6 @@ private fun DashboardContent(
     contentFocusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
-    var staggerIndex = 0
-
     Column(
         modifier = modifier
             .tvFocusRestorer()
@@ -232,7 +230,7 @@ private fun DashboardContent(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         state.systemInfo?.let { info ->
-            StaggeredSection(visible = true, index = staggerIndex++) {
+            AnimatedSectionEntrance(visible = true) {
                 ServerHeroHeader(
                     systemInfo = info,
                     isRestarting = state.isRestarting,
@@ -247,7 +245,7 @@ private fun DashboardContent(
         }
 
         state.itemCounts?.let { counts ->
-            StaggeredSection(visible = true, index = staggerIndex++) {
+            AnimatedSectionEntrance(visible = true) {
                 LibraryStatsRow(counts = counts)
             }
         }
@@ -259,7 +257,7 @@ private fun DashboardContent(
             ) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (state.runningTasks.isNotEmpty()) {
-                        StaggeredSection(visible = true, index = staggerIndex) {
+                        AnimatedSectionEntrance(visible = true) {
                             RunningTasksCard(
                                 tasks = state.runningTasks,
                                 onViewAll = onScheduledTasks,
@@ -269,7 +267,7 @@ private fun DashboardContent(
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (state.sessions.isNotEmpty()) {
-                        StaggeredSection(visible = true, index = staggerIndex + 1) {
+                        AnimatedSectionEntrance(visible = true) {
                             ActiveSessionsSection(
                                 sessions = state.sessions,
                                 onViewAll = onDevices,
@@ -279,10 +277,9 @@ private fun DashboardContent(
                     }
                 }
             }
-            staggerIndex += 2
         } else {
             if (state.runningTasks.isNotEmpty()) {
-                StaggeredSection(visible = true, index = staggerIndex++) {
+                AnimatedSectionEntrance(visible = true) {
                     RunningTasksCard(
                         tasks = state.runningTasks,
                         onViewAll = onScheduledTasks,
@@ -291,7 +288,7 @@ private fun DashboardContent(
             }
 
             if (state.sessions.isNotEmpty()) {
-                StaggeredSection(visible = true, index = staggerIndex++) {
+                AnimatedSectionEntrance(visible = true) {
                     ActiveSessionsSection(
                         sessions = state.sessions,
                         onViewAll = onDevices,
@@ -302,7 +299,7 @@ private fun DashboardContent(
         }
 
         if (state.recentActivity.isNotEmpty()) {
-            StaggeredSection(visible = true, index = staggerIndex++) {
+            AnimatedSectionEntrance(visible = true) {
                 RecentActivityTimeline(
                     entries = state.recentActivity,
                     onViewAll = onLogs,
@@ -310,7 +307,7 @@ private fun DashboardContent(
             }
         }
 
-        StaggeredSection(visible = true, index = staggerIndex) {
+        AnimatedSectionEntrance(visible = true) {
             QuickActionsSection(
                 onScheduledTasks = onScheduledTasks,
                 onDevices = onDevices,

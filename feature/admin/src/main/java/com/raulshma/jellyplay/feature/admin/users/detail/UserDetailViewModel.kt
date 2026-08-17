@@ -9,7 +9,7 @@ import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.ParentalRatingOption
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.admin.R
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -44,7 +44,7 @@ data class UserDetailState(
 
 @HiltViewModel
 class UserDetailViewModel @Inject constructor(
-    private val apiClient: JellyfinApiClient,
+    private val adminRepository: AdminRepository,
     @ApplicationContext private val context: Context,
 ) : JellyPlayViewModel() {
 
@@ -60,27 +60,22 @@ class UserDetailViewModel @Inject constructor(
         launch {
             // Access control is enforced by AdminRouteContainer before this
             // screen is reached; the server still 403s as a backstop.
-            val userResult = apiClient.getManagedUser(userId)
-            val libsResult = apiClient.getLibraryFoldersForEditor()
-            val meResult = apiClient.getCurrentUserId()
-            val allUsersResult = apiClient.getManagedUsers()
-            userResult.onSuccess { user ->
-                val me = meResult.getOrNull()
-                val allUsers = allUsersResult.getOrNull().orEmpty()
-                val adminCount = allUsers.count { it.policy.isAdministrator && !it.policy.isDisabled }
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        user = user,
-                        libraries = libsResult.getOrNull().orEmpty(),
-                        isSelf = me != null && me == user.id,
-                        isLastAdmin = adminCount == 1 && user.policy.isAdministrator && !user.policy.isDisabled,
-                    )
+            adminRepository.getUserEditorContext(userId)
+                .onSuccess { editor ->
+                    val user = editor.user
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            user = user,
+                            libraries = editor.libraries,
+                            isSelf = editor.currentUserId != null && editor.currentUserId == user.id,
+                            isLastAdmin = editor.adminCount == 1 && user.policy.isAdministrator && !user.policy.isDisabled,
+                        )
+                    }
+                }.onFailure { e ->
+                    Log.e("UserDetail", "Failed to load user", e)
+                    _uiState.update { it.copy(isLoading = false, error = e.message) }
                 }
-            }.onFailure { e ->
-                Log.e("UserDetail", "Failed to load user", e)
-                _uiState.update { it.copy(isLoading = false, error = e.message) }
-            }
         }
     }
 
@@ -112,13 +107,13 @@ class UserDetailViewModel @Inject constructor(
             runCatching {
                 when (tab) {
                     UserEditTab.ACCESS -> {
-                        val devs = apiClient.getDevices().getOrThrow()
-                        val chans = apiClient.getLiveTvChannels(limit = 500).getOrThrow()
+                        val devs = adminRepository.getDevices().getOrThrow()
+                        val chans = adminRepository.getLiveTvChannels(limit = 500).getOrThrow()
                         _uiState.update { it.copy(devices = devs, channels = chans) }
                     }
                     UserEditTab.PARENTAL -> {
-                        val ratings = apiClient.getParentalRatings().getOrThrow()
-                        val tagList = apiClient.getTags(limit = 500).getOrThrow()
+                        val ratings = adminRepository.getParentalRatings().getOrThrow()
+                        val tagList = adminRepository.getTags(limit = 500).getOrThrow()
                         _uiState.update { it.copy(parentalRatings = ratings, tags = tagList) }
                     }
                     else -> Unit
@@ -153,7 +148,7 @@ class UserDetailViewModel @Inject constructor(
         launch {
             // 1. rename first (if pending)
             if (editedName != null) {
-                val r = apiClient.renameUser(id, editedName)
+                val r = adminRepository.renameUser(id, editedName)
                 if (r.isFailure) {
                     val e = r.exceptionOrNull()
                     Log.e("UserDetail", "rename failed", e)
@@ -164,7 +159,7 @@ class UserDetailViewModel @Inject constructor(
             }
             // 2. policy second (if pending)
             if (editedPolicy != null) {
-                val r = apiClient.updateUserPolicy(id, editedPolicy)
+                val r = adminRepository.updateUserPolicy(id, editedPolicy)
                 if (r.isFailure) {
                     val e = r.exceptionOrNull()
                     Log.e("UserDetail", "policy update failed", e)
@@ -175,7 +170,7 @@ class UserDetailViewModel @Inject constructor(
                 _uiState.update { it.copy(editedPolicy = null) }
             }
             // 3. reload
-            apiClient.getManagedUser(id).onSuccess { fresh ->
+            adminRepository.getManagedUser(id).onSuccess { fresh ->
                 _uiState.update { it.copy(isSaving = false, user = fresh, message = context.getString(R.string.admin_changes_saved)) }
             }.onFailure {
                 _uiState.update { it.copy(isSaving = false, message = context.getString(R.string.admin_saved_reload_failed), saveError = context.getString(R.string.admin_could_not_reload)) }
@@ -186,7 +181,7 @@ class UserDetailViewModel @Inject constructor(
     fun updatePassword(newPassword: String?) {
         val id = userId
         launch {
-            val r = apiClient.updateUserPassword(id, newPassword)
+            val r = adminRepository.updateUserPassword(id, newPassword)
             _uiState.update {
                 it.copy(
                     showPasswordDialog = false,
@@ -207,7 +202,7 @@ class UserDetailViewModel @Inject constructor(
         if (_uiState.value.isSelf) return // self-guard
         val id = userId
         launch {
-            apiClient.deleteUser(id)
+            adminRepository.deleteUser(id)
                 .onSuccess {
                     _uiState.update { it.copy(showDeleteDialog = false) }
                     onDone()

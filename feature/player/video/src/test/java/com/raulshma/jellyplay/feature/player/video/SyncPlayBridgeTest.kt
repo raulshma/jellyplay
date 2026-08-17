@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
-import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
+import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import io.mockk.every
 import io.mockk.mockk
@@ -29,9 +29,11 @@ class SyncPlayBridgeTest {
     private lateinit var syncPlayManager: SyncPlayManager
     private lateinit var playbackCore: SyncPlayPlaybackCore
     private lateinit var engine: MediaEngine
-    private lateinit var state: MutableStateFlow<VideoPlayerUiState>
-    private lateinit var uiState: StateFlowHandle<VideoPlayerUiState>
     private lateinit var bridge: SyncPlayBridge
+
+    // Narrow session-state seam: captures the play/pause mirror writes the
+    // ViewModel would apply to its UiState.
+    private val isPlayingWrites = mutableListOf<Boolean>()
 
     private var engineProvider: () -> MediaEngine? = { engine }
 
@@ -46,15 +48,13 @@ class SyncPlayBridgeTest {
         every { engine.isPlaying } returns MutableStateFlow(false)
         every { engine.currentPositionMs } returns 0L
         every { engine.durationMs } returns 0L
-        state = MutableStateFlow(VideoPlayerUiState())
-        uiState = StateFlowHandle(state)
 
         bridge = SyncPlayBridge(
             syncPlayManager = syncPlayManager,
-            uiState = uiState,
             getMediaEngine = { engineProvider() },
             getCurrentItemId = { null },
             onLoadItem = { _, _ -> },
+            setIsPlaying = { isPlayingWrites += it },
             scope = scope,
         )
     }
@@ -115,20 +115,97 @@ class SyncPlayBridgeTest {
         assertFalse(bridge.isPlaying())
     }
 
+    @Test
+    fun isBuffering_reflectsEnginePlaybackState() {
+        every { engine.playbackState } returns MutableStateFlow(
+            com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING,
+        )
+        assertTrue(bridge.isBuffering())
+    }
+
+    @Test
+    fun isBuffering_whenReady_returnsFalse() {
+        every { engine.playbackState } returns MutableStateFlow(
+            com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.READY,
+        )
+        assertFalse(bridge.isBuffering())
+    }
+
+    @Test
+    fun isBuffering_withNoEngine_returnsFalse() {
+        engineProvider = { null }
+        assertFalse(bridge.isBuffering())
+    }
+
+    // ─── onIsPlayingChanged group propagation ────────────────────────────────
+
+    @Test
+    fun onIsPlayingChanged_localStartWhileGroupPaused_propagatesUnpause() {
+        every { syncPlayManager.isInSyncPlaySession } returns true
+        every { syncPlayManager.currentGroup } returns SyncPlayGroup(
+            groupId = "g",
+            groupName = "g",
+            participantCount = 1,
+            isPlaying = false,
+        )
+        every { playbackCore.lastCommand } returns null
+        bridge.onIsPlayingChanged(true)
+        coVerify { syncPlayManager.syncPlayController.unpause() }
+    }
+
+    @Test
+    fun onIsPlayingChanged_groupAlreadyPlaying_doesNotEcho() {
+        every { syncPlayManager.isInSyncPlaySession } returns true
+        every { syncPlayManager.currentGroup } returns SyncPlayGroup(
+            groupId = "g",
+            groupName = "g",
+            participantCount = 1,
+            isPlaying = true,
+        )
+        bridge.onIsPlayingChanged(true)
+        coVerify(exactly = 0) { syncPlayManager.syncPlayController.unpause() }
+    }
+
+    @Test
+    fun onIsPlayingChanged_groupDrivenUnpause_doesNotEcho() {
+        every { syncPlayManager.isInSyncPlaySession } returns true
+        every { syncPlayManager.currentGroup } returns SyncPlayGroup(
+            groupId = "g",
+            groupName = "g",
+            participantCount = 1,
+            isPlaying = false,
+        )
+        every { playbackCore.lastCommand } returns com.raulshma.jellyplay.core.model.SyncPlayPlaybackCommand(
+            command = "Unpause",
+            whenMs = 0L,
+            positionTicks = 0L,
+            playlistItemId = "",
+            emittedAtMs = 0L,
+        )
+        bridge.onIsPlayingChanged(true)
+        coVerify(exactly = 0) { syncPlayManager.syncPlayController.unpause() }
+    }
+
+    @Test
+    fun onIsPlayingChanged_pauseEvent_doesNothing() {
+        bridge.onIsPlayingChanged(false)
+        coVerify(exactly = 0) { syncPlayManager.syncPlayController.unpause() }
+    }
+
     // ─── onSyncStateChanged ───────────────────────────────────────────────────
 
     @Test
     fun onSyncStateChanged_synced_updatesUiState() {
         bridge.onSyncStateChanged(synced = true, syncing = false)
-        assertTrue(uiState.value.isSyncPlaySynced)
-        assertFalse(uiState.value.isSyncPlaySyncing)
+        assertTrue(bridge.state.value.isSyncPlaySynced)
+        assertFalse(bridge.state.value.isSyncPlaySyncing)
     }
 
     @Test
     fun onSyncStateChanged_syncing_updatesUiState() {
         bridge.onSyncStateChanged(synced = false, syncing = true)
-        assertFalse(uiState.value.isSyncPlaySynced)
-        assertTrue(uiState.value.isSyncPlaySyncing)
+        assertFalse(bridge.state.value.isSyncPlaySynced)
+        assertTrue(bridge.state.value.isSyncPlaySyncing)
     }
 
     // ─── reset ────────────────────────────────────────────────────────────────
@@ -138,7 +215,7 @@ class SyncPlayBridgeTest {
         bridge.reset()
         verify { playbackCore.reset() }
         verify { playbackCore.clearCallbacks() }
-        assertFalse(uiState.value.isSyncPlaySyncing)
+        assertFalse(bridge.state.value.isSyncPlaySyncing)
     }
 
     // ─── setIgnoreWait ────────────────────────────────────────────────────────
@@ -157,7 +234,7 @@ class SyncPlayBridgeTest {
         bridge.togglePlayPause()
         verify { engine.pause() }
         coVerify { syncPlayManager.syncPlayController.pause() }
-        assertFalse(uiState.value.isPlaying)
+        assertEquals(listOf(false), isPlayingWrites)
     }
 
     @Test
@@ -184,10 +261,42 @@ class SyncPlayBridgeTest {
         bridge.leaveGroup()
         coVerify { syncPlayManager.leaveGroup() }
         verify { playbackCore.reset() }
-        assertNull(uiState.value.syncPlayGroupName)
-        assertEquals(0, uiState.value.syncPlayParticipantCount)
-        assertFalse(uiState.value.isInSyncPlaySession)
-        assertFalse(uiState.value.isSyncPlaySynced)
+        assertNull(bridge.state.value.syncPlayGroupName)
+        assertEquals(0, bridge.state.value.syncPlayParticipantCount)
+        assertFalse(bridge.state.value.isInSyncPlaySession)
+        assertFalse(bridge.state.value.isSyncPlaySynced)
+    }
+
+    // ─── joinGroup / group-display state ────────────────────────────────────
+
+    @Test
+    fun joinGroup_populatesGroupDisplayState() {
+        every { syncPlayManager.currentGroup } returns null
+        bridge.joinGroup("group-1")
+
+        val s = bridge.state.value
+        assertTrue(s.isInSyncPlaySession)
+        assertEquals("group-1", s.syncPlayGroupName)
+        assertEquals(0, s.syncPlayParticipantCount)
+        assertEquals(
+            com.raulshma.jellyplay.core.model.SyncPlayRepeatMode.REPEAT_NONE,
+            s.syncPlayRepeatMode,
+        )
+    }
+
+    /** Item-switch semantics: reset() restores the default group-display state. */
+    @Test
+    fun reset_clearsGroupDisplayState() {
+        every { syncPlayManager.currentGroup } returns null
+        bridge.joinGroup("group-1")
+        assertTrue(bridge.state.value.isInSyncPlaySession)
+
+        bridge.reset()
+
+        assertEquals(
+            com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState(),
+            bridge.state.value,
+        )
     }
 
     // ─── sendNextItem / sendPreviousItem / sendStop ───────────────────────────

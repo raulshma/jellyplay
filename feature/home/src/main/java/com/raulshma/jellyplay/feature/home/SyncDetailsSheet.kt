@@ -33,6 +33,7 @@ import com.composables.icons.tabler.outline.Clock
 import com.composables.icons.tabler.outline.CloudOff
 import com.composables.icons.tabler.outline.Movie
 import com.composables.icons.tabler.outline.Refresh
+import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -71,7 +72,7 @@ import kotlin.math.abs
 @Composable
 internal fun SyncDetailsSheet(
     entries: List<PlaybackOutboxEntry>,
-    itemDetails: Map<String, ResolvedSyncMedia>,
+    itemDetails: Map<String, ResolvedMediaRef>,
     offlineMode: OfflineMode,
     onSyncNow: () -> Unit,
     onDismiss: () -> Unit,
@@ -154,7 +155,7 @@ internal fun SyncDetailsSheet(
 @Composable
 private fun PendingEntryRow(
     entry: PlaybackOutboxEntry,
-    resolved: ResolvedSyncMedia?,
+    resolved: ResolvedMediaRef?,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val focusState = rememberTvFocusState()

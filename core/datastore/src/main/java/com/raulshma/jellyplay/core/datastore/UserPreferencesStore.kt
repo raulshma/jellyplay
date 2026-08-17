@@ -68,6 +68,8 @@ import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -291,25 +293,31 @@ class UserPreferencesStore @Inject constructor(
      * (preferences change slowly).
      */
     suspend fun snapshotForBackup(): SettingsBackupSnapshot {
+        // All slice reads are independent DataStores — fetch them concurrently
+        // (backup-only path; was ~19 sequential .first() round-trips).
         val slices = linkedMapOf<String, kotlinx.serialization.json.JsonElement>()
-        slices[BackupSliceKey.PLAYBACK] = encodeSliceElement(playbackStore.playback.first(), PlaybackSlice.serializer())
-        slices[BackupSliceKey.APPEARANCE] = encodeSliceElement(appearanceStore.appearance.first(), AppearanceSlice.serializer())
-        slices[BackupSliceKey.VIDEO_PLAYER] = encodeSliceElement(videoPlayerStore.videoPlayer.first(), VideoPlayerSlice.serializer())
-        slices[BackupSliceKey.DOWNLOADS] = encodeSliceElement(downloadsStore.downloads.first(), DownloadsSlice.serializer())
-        slices[BackupSliceKey.PLAYER_ENGINE] = encodeSliceElement(engineStore.playerEngine.first(), PlayerEngineSlice.serializer())
-        slices[BackupSliceKey.HOME_DISCOVERY] = encodeSliceElement(homeDiscoveryStore.homeDiscovery.first(), HomeDiscoverySlice.serializer())
-        slices[BackupSliceKey.AUDIO] = encodeSliceElement(audioStore.audio.first(), AudioSlice.serializer())
-        slices[BackupSliceKey.AUDIO_EFFECTS] = encodeSliceElement(audioEffectsStore.audioEffects.first(), AudioEffectsSlice.serializer())
-        slices[BackupSliceKey.AUDIO_CACHE] = encodeSliceElement(audioCacheStore.audioCache.first(), AudioCacheSlice.serializer())
-        slices[BackupSliceKey.LIBRARY] = encodeSliceElement(libraryStore.library.first(), LibrarySlice.serializer())
-        slices[BackupSliceKey.NAVIGATION] = encodeSliceElement(navigationStore.navigation.first(), NavigationSlice.serializer())
-        slices[BackupSliceKey.NETWORK_OFFLINE] = encodeSliceElement(networkOfflineStore.networkOffline.first(), NetworkOfflineSlice.serializer())
-        slices[BackupSliceKey.NOTIFICATION] = encodeSliceElement(notificationStore.notification.first(), NotificationSlice.serializer())
-        slices[BackupSliceKey.SCREENSAVER] = encodeSliceElement(screensaverStore.screensaver.first(), ScreensaverSlice.serializer())
-        slices[BackupSliceKey.SECURITY] = encodeSliceElement(securityStore.security.first(), SecuritySlice.serializer())
-        slices[BackupSliceKey.SUBTITLE] = encodeSliceElement(subtitleLanguageStore.subtitle.first(), SubtitleSlice.serializer())
-        slices[BackupSliceKey.SYNC_PLAY_CAST] = encodeSliceElement(syncPlayCastStore.syncPlayCast.first(), SyncPlayCastSlice.serializer())
-        slices[BackupSliceKey.EXPERIMENTAL] = encodeSliceElement(experimentalStore.experimental.first(), ExperimentalSlice.serializer())
+        coroutineScope {
+            val jobs = linkedMapOf<String, kotlinx.coroutines.Deferred<kotlinx.serialization.json.JsonElement>>()
+            jobs[BackupSliceKey.PLAYBACK] = async { encodeSliceElement(playbackStore.playback.first(), PlaybackSlice.serializer()) }
+            jobs[BackupSliceKey.APPEARANCE] = async { encodeSliceElement(appearanceStore.appearance.first(), AppearanceSlice.serializer()) }
+            jobs[BackupSliceKey.VIDEO_PLAYER] = async { encodeSliceElement(videoPlayerStore.videoPlayer.first(), VideoPlayerSlice.serializer()) }
+            jobs[BackupSliceKey.DOWNLOADS] = async { encodeSliceElement(downloadsStore.downloads.first(), DownloadsSlice.serializer()) }
+            jobs[BackupSliceKey.PLAYER_ENGINE] = async { encodeSliceElement(engineStore.playerEngine.first(), PlayerEngineSlice.serializer()) }
+            jobs[BackupSliceKey.HOME_DISCOVERY] = async { encodeSliceElement(homeDiscoveryStore.homeDiscovery.first(), HomeDiscoverySlice.serializer()) }
+            jobs[BackupSliceKey.AUDIO] = async { encodeSliceElement(audioStore.audio.first(), AudioSlice.serializer()) }
+            jobs[BackupSliceKey.AUDIO_EFFECTS] = async { encodeSliceElement(audioEffectsStore.audioEffects.first(), AudioEffectsSlice.serializer()) }
+            jobs[BackupSliceKey.AUDIO_CACHE] = async { encodeSliceElement(audioCacheStore.audioCache.first(), AudioCacheSlice.serializer()) }
+            jobs[BackupSliceKey.LIBRARY] = async { encodeSliceElement(libraryStore.library.first(), LibrarySlice.serializer()) }
+            jobs[BackupSliceKey.NAVIGATION] = async { encodeSliceElement(navigationStore.navigation.first(), NavigationSlice.serializer()) }
+            jobs[BackupSliceKey.NETWORK_OFFLINE] = async { encodeSliceElement(networkOfflineStore.networkOffline.first(), NetworkOfflineSlice.serializer()) }
+            jobs[BackupSliceKey.NOTIFICATION] = async { encodeSliceElement(notificationStore.notification.first(), NotificationSlice.serializer()) }
+            jobs[BackupSliceKey.SCREENSAVER] = async { encodeSliceElement(screensaverStore.screensaver.first(), ScreensaverSlice.serializer()) }
+            jobs[BackupSliceKey.SECURITY] = async { encodeSliceElement(securityStore.security.first(), SecuritySlice.serializer()) }
+            jobs[BackupSliceKey.SUBTITLE] = async { encodeSliceElement(subtitleLanguageStore.subtitle.first(), SubtitleSlice.serializer()) }
+            jobs[BackupSliceKey.SYNC_PLAY_CAST] = async { encodeSliceElement(syncPlayCastStore.syncPlayCast.first(), SyncPlayCastSlice.serializer()) }
+            jobs[BackupSliceKey.EXPERIMENTAL] = async { encodeSliceElement(experimentalStore.experimental.first(), ExperimentalSlice.serializer()) }
+            for ((key, deferred) in jobs) slices[key] = deferred.await()
+        }
         return SettingsBackupSnapshot(slices, appRuntimeStateStore.state.first())
     }
 

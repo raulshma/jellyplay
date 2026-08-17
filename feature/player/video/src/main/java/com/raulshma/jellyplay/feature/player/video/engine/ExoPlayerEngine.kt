@@ -565,20 +565,15 @@ class ExoPlayerEngine(
         // Wire the AssHandler to the player and inject the bundled fallback
         // font (and any user-installed fonts) so libass can resolve families.
         // ass-media's font API is per-file byte[] (AssHandler.addFont), not a
-        // directory path, so we enumerate FontProvider's fonts dir and feed each
-        // .ttf. Mirrors mpv's sub-fonts-dir pointing at the same directory.
+        // directory path. FontProvider's cache serves the bytes — the startup
+        // pre-warm loads them on IO once per process, so this Main-thread path
+        // (which runs on every load()/track change) does no disk I/O.
         assHandler?.let { handler ->
             handler.init(exo)
             runCatching {
-                val fontsDir = fontProvider.provideFontsDir()
-                fontsDir.listFiles { file -> file.extension.equals("ttf", ignoreCase = true) }
-                    ?.forEach { ttf ->
-                        runCatching {
-                            ttf.readBytes().takeIf { it.isNotEmpty() }?.let { bytes ->
-                                handler.addFont(ttf.nameWithoutExtension, bytes)
-                            }
-                        }
-                    }
+                fontProvider.cachedFontBytes().forEach { (name, bytes) ->
+                    runCatching { handler.addFont(name, bytes) }
+                }
             }
         }
 

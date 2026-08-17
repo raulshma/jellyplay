@@ -1963,11 +1963,15 @@ private fun ReleaseDateRow(
     releases: SeerrReleases?,
     discoverRegion: String,
 ) {
-    val regionReleases = releases?.results?.find { it.iso31661 == discoverRegion }?.releaseDates.orEmpty()
-    val filteredReleases = regionReleases
-        .filter { it.type in 3..5 }
-        .distinctBy { it.type }
-        .sortedBy { it.type }
+    val filteredReleases = remember(releases, discoverRegion) {
+        releases?.results
+            ?.find { it.iso31661 == discoverRegion }
+            ?.releaseDates
+            .orEmpty()
+            .filter { it.type in 3..5 }
+            .distinctBy { it.type }
+            .sortedBy { it.type }
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),

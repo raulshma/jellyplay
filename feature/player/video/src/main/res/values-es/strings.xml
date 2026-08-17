@@ -173,6 +173,12 @@
     <string name="player_video_set_a_point">Definir punto A</string>
     <string name="player_video_set_b_point">Definir punto B</string>
     <string name="player_video_clear_ab_repeat">Borrar repetición A/B</string>
+    <string name="player_video_set_a_point_at">Definir punto A \u00B7 %1$s</string>
+    <string name="player_video_set_b_point_at">Definir punto B \u00B7 %1$s</string>
+    <string name="player_video_ab_repeat_badge_enabled">Repetición A/B activada — busca el punto de inicio y usa «Definir punto A»</string>
+    <string name="player_video_ab_repeat_badge_a_set">A fijado en %1$s — busca el punto final y usa «Definir punto B»</string>
+    <string name="player_video_ab_repeat_badge_active">Repitiendo %1$s \u2192 %2$s</string>
+    <string name="player_video_ab_repeat_badge_cleared">Repetición A/B borrada</string>
     <string name="player_audio_only">Solo audio</string>
     <string name="player_audio_only_on">Solo audio — video oculto</string>
 

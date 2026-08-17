@@ -13,7 +13,6 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
-import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 
 import com.raulshma.jellyplay.core.model.UserInfo
 
@@ -126,7 +125,6 @@ data class HomeSeriesDeleteState(
 data class HomeSearchState(
     val jellyfinResults: List<MediaItem> = emptyList(),
     val seerrResults: List<SeerrSearchItem> = emptyList(),
-    val settingsResults: List<ResolvedSettingsItem> = emptyList(),
     val isSearching: Boolean = false,
 ) {
     // NOTE: the live query string no longer lives here. It is the per-keystroke
@@ -135,6 +133,11 @@ data class HomeSearchState(
     // the ~510-line MainHomeContent body. The source of truth is now the VM's
     // `searchQuery` StateFlow (read in a leaf), with `isSearchActive` carrying
     // only the rarely-changing blank/nonblank signal to the orchestrator.
+    //
+    // NOTE: settings results also no longer live here — the local
+    // settings-search pipeline is computed in the UI layer
+    // (HomeTopDockScrim via `settingsSearchResults`), which owns the Android
+    // Context needed to resolve the registry's @StringRes ids.
 }
 
 @Immutable

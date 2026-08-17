@@ -327,36 +327,41 @@ class VideoPlayerUiStateExtendedTest {
     }
 }
 
-/** SyncPlay state tests. */
+/**
+ * SyncPlay state tests. The group-display slice (name/count/sync status/
+ * repeat/shuffle) moved to SyncPlayUiState, owned by SyncPlayBridge;
+ * the session flag stays on VideoPlayerUiState because it feeds the
+ * segment-overlay projection.
+ */
 class VideoPlayerUiStateSyncPlayTest {
 
     @Test
     fun syncPlay_defaults_groupNameIsNull() {
-        val state = VideoPlayerUiState()
+        val state = com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState()
         assertNull(state.syncPlayGroupName)
     }
 
     @Test
     fun syncPlay_defaults_participantCountIsZero() {
-        val state = VideoPlayerUiState()
+        val state = com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState()
         assertEquals(0, state.syncPlayParticipantCount)
     }
 
     @Test
     fun syncPlay_defaults_isSyncedFalse() {
-        val state = VideoPlayerUiState()
+        val state = com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState()
         assertFalse(state.isSyncPlaySynced)
     }
 
     @Test
     fun syncPlay_defaults_repeatModeIsNone() {
-        val state = VideoPlayerUiState()
+        val state = com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState()
         assertEquals(SyncPlayRepeatMode.REPEAT_NONE, state.syncPlayRepeatMode)
     }
 
     @Test
     fun syncPlay_defaults_shuffleModeIsSorted() {
-        val state = VideoPlayerUiState()
+        val state = com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState()
         assertEquals(SyncPlayShuffleMode.SORTED, state.syncPlayShuffleMode)
     }
 
@@ -410,19 +415,22 @@ class VideoPlayerUiStateSyncPlayTest {
 
     @Test
     fun syncPlay_copy_updatesGroupName() {
-        val state = VideoPlayerUiState().copy(syncPlayGroupName = "Group 1")
+        val state = com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState()
+            .copy(syncPlayGroupName = "Group 1")
         assertEquals("Group 1", state.syncPlayGroupName)
     }
 
     @Test
     fun syncPlay_copy_updatesParticipantCount() {
-        val state = VideoPlayerUiState().copy(syncPlayParticipantCount = 3)
+        val state = com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState()
+            .copy(syncPlayParticipantCount = 3)
         assertEquals(3, state.syncPlayParticipantCount)
     }
 
     @Test
     fun syncPlay_copy_updatesSynced() {
-        val state = VideoPlayerUiState().copy(isSyncPlaySynced = true)
+        val state = com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState()
+            .copy(isSyncPlaySynced = true)
         assertTrue(state.isSyncPlaySynced)
     }
 }

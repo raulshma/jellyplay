@@ -15,8 +15,9 @@ import com.raulshma.jellyplay.core.designsystem.theme.modalSpringSpec
 
 /**
  * Coarse classification of a destination route, used purely to pick a transition.
- * Derived from [com.raulshma.jellyplay.core.ui.navigation.Route] classification
- * extensions by [com.raulshma.jellyplay.core.ui.navigation.Route.toNavRouteClass].
+ * Derived from the [com.raulshma.jellyplay.core.ui.navigation.Route] classification
+ * members (per-route metadata declared on each route) by
+ * [com.raulshma.jellyplay.core.ui.navigation.toNavRouteClass].
  */
 enum class NavRouteClass {
     AMBIENT,

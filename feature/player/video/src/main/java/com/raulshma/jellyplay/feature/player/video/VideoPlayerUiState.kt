@@ -1,11 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChapterInfo
-import com.raulshma.jellyplay.core.model.ChannelMixMode
-import com.raulshma.jellyplay.core.model.CultureInfo
-import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaSource
@@ -15,32 +11,23 @@ import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
-import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrickplayInfo
-import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
-import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
-import com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState
 import com.raulshma.jellyplay.feature.player.video.state.AutoplayState
 import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
 import com.raulshma.jellyplay.feature.player.video.state.GesturePrefsState
 import com.raulshma.jellyplay.feature.player.video.state.MediaContentState
 import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
 import com.raulshma.jellyplay.feature.player.video.state.SegmentState
-import com.raulshma.jellyplay.feature.player.video.state.SleepTimerState
-import com.raulshma.jellyplay.feature.player.video.state.SubtitleState
-import com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState
-import com.raulshma.jellyplay.feature.player.video.state.TrackState
 import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.PersonInfo
@@ -76,6 +63,16 @@ data class SegmentOverlayState(
     val shouldShowUpNext: Boolean = false,
 )
 
+/**
+ * Session + prefs-mirror state for the video player.
+ *
+ * The sleep-timer, track, subtitle-workflow, audio-effects and SyncPlay
+ * group-display slices used to live here as flat fields; they are now owned by
+ * their controllers and exposed as `StateFlow`s on the ViewModel. What remains is
+ * session state (item identity, transport, engine, surface flags, the
+ * subtitle-preview trio, per-item resolver-driven dialogue boost) plus the
+ * preferences mirror written by [SettingsProjector].
+ */
 @Immutable
 data class VideoPlayerUiState(
     val title: String = "",
@@ -93,22 +90,10 @@ data class VideoPlayerUiState(
     val currentPosition: Long = 0L,
     val duration: Long = 0L,
     val playbackSpeed: Float = 1.0f,
-    val audioTracks: List<TrackOption> = emptyList(),
-    val hasAudioOverride: Boolean = false,
-    val hasSubtitleOverride: Boolean = false,
-    /** A per-series audio-language preference exists for the current series. */
-    val hasSeriesAudioPref: Boolean = false,
-    /** A per-series subtitle preference (language or "off") exists for the current series. */
-    val hasSeriesSubtitlePref: Boolean = false,
-    /** A per-series "subtitles off" preference exists for the current series. */
-    val hasSeriesSubtitleOffPref: Boolean = false,
-    /** A per-series dialogue-boost preference exists for the current series. */
-    val hasSeriesDialogueBoostPref: Boolean = false,
     val overview: String = "",
     val people: List<PersonInfo> = emptyList(),
     val artworkUrl: String? = null,
     val lyricsLines: List<LyricsLine> = emptyList(),
-    val subtitleTracks: List<TrackOption> = emptyList(),
     val chapters: List<ChapterInfo> = emptyList(),
     val aspectRatio: AspectRatio = AspectRatio.AUTO,
     val detectedAspectRatio: AspectRatio? = null,
@@ -117,48 +102,6 @@ data class VideoPlayerUiState(
     val subtitleStyle: SubtitleStyle = SubtitleStyle.DEFAULT,
     val dialogueBoostEnabled: Boolean = false,
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
-    val nightModeEnabled: Boolean = false,
-    val nightModeStrength: EffectStrength = EffectStrength.MODERATE,
-    val audioPassthrough: Boolean = false,
-    val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
-    val remoteSubtitles: List<RemoteSubtitleInfo> = emptyList(),
-    val isLoadingRemoteSubtitles: Boolean = false,
-    // Subtitle Manager: language cultures for the upload/search
-    // dropdowns, and the language-scoped search results. Kept separate from
-    // [remoteSubtitles] (Download tab) so the two lists never clobber each
-    // other across tab switches.
-    val subtitleCultures: List<CultureInfo> = emptyList(),
-    val searchedSubtitles: List<RemoteSubtitleInfo> = emptyList(),
-    val isSearchingSubtitles: Boolean = false,
-    val hasSearchedSubtitles: Boolean = false,
-    /** Non-null when the last subtitle search failed (network/server). Lets the
-     *  Search tab distinguish a failure from a genuine empty result. */
-    val subtitleSearchError: String? = null,
-    /** Per-subtitle-id download status for the "Get Subtitles" sheet (Download +
-     *  Search tabs). The sheet stays open after a pick and renders a per-row
-     *  spinner / ✓-Downloaded / "taking a while" / failed state keyed by this map,
-     *  instead of the former single global boolean that closed the panel on pick.
-     *  See [SubtitleManager.downloadSubtitle] and [SubtitleDownloadStatus]. */
-    val downloadingSubtitles: Map<String, SubtitleDownloadStatus> = emptyMap(),
-    val isUploadingSubtitle: Boolean = false,
-    val defaultSearchLanguage: String = "eng",
-    /** Merged cross-provider search results (Jellyfin + Wyzie + OpenSubtitles).
-     *  Populated by [SubtitleManager.searchAllProviders]; rendered in the Search
-     *  tab with provider filter chips. Kept alongside [searchedSubtitles] (the
-     *  legacy Jellyfin-only list) so the two code paths don't interfere. */
-    val providerSearchResults: List<com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult> = emptyList(),
-    /** Per-provider failure message from the last multi-provider search; surfaced
-     *  as a chip on the affected provider's filter so one bad key is visible. */
-    val providerSearchErrors: Map<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind, String> = emptyMap(),
-    /** Providers the user has configured (Jellyfin always present). Drives chip
-     *  visibility in the Search tab. */
-    val configuredSubtitleProviders: Set<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind> = emptySet(),
-    val syncPlayGroupName: String? = null,
-    val syncPlayParticipantCount: Int = 0,
-    val isSyncPlaySynced: Boolean = false,
-    val isSyncPlaySyncing: Boolean = false,
-    val syncPlayRepeatMode: SyncPlayRepeatMode = SyncPlayRepeatMode.REPEAT_NONE,
-    val syncPlayShuffleMode: SyncPlayShuffleMode = SyncPlayShuffleMode.SORTED,
     val nextEpisode: JellyfinMediaItem? = null,
     val previousEpisode: JellyfinMediaItem? = null,
     val streamUrl: String? = null,
@@ -180,7 +123,6 @@ data class VideoPlayerUiState(
     val gestureIndicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
     val frameRateMatching: Boolean = false,
     val refreshRateMode: com.raulshma.jellyplay.core.model.RefreshRateMode = com.raulshma.jellyplay.core.model.RefreshRateMode.OFF,
-    val audioDelayMs: Long = 0L,
     val segments: List<MediaSegment> = emptyList(),
     val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
     val seriesId: String? = null,
@@ -232,20 +174,6 @@ data class VideoPlayerUiState(
     val adaptiveBitrateEnabled: Boolean = true,
     val playbackMode: PlaybackMode = PlaybackMode.AUTO,
     val showPlaybackErrorDialog: Boolean = false,
-    val audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
-    val audioNormalizationEnabled: Boolean = false,
-    val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
-    val channelMixEnabled: Boolean = false,
-    val bassBoostEnabled: Boolean = false,
-    val bassBoostStrength: EffectStrength = EffectStrength.MODERATE,
-    val virtualizerEnabled: Boolean = false,
-    val virtualizerStrength: Int = 500,
-    val reverbPreset: ReverbPreset = ReverbPreset.NONE,
-    val sleepTimerActive: Boolean = false,
-    val sleepTimerEndOfEpisode: Boolean = false,
-    val sleepTimerLastUsedDurationMs: Long = 0L,
-    /** A/B repeat window (G2). Inert unless [AbRepeatState.isActive]. */
-    val abRepeat: AbRepeatState = AbRepeatState(),
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val isScreenLocked: Boolean = false,
     val usePinForPlayerLock: Boolean = false,
@@ -292,6 +220,12 @@ data class VideoPlayerUiState(
     // These are derived `val`s (computed per access) rather than stored
     // properties, so the data class's equality/hashCode still reflect the flat
     // fields — the source of truth during the transition.
+    //
+    // The sleep-timer, track, subtitle-workflow, audio-effects and SyncPlay
+    // group-display slices used to have projections here too; they now live in
+    // their owning controllers (`SleepTimerController.state`,
+    // `TrackSelectionHelper.state`, `SubtitleManager.state`,
+    // `VideoEffectsController.state`, `SyncPlayBridge.state`).
 
     val media: MediaContentState
         get() = MediaContentState(
@@ -300,47 +234,6 @@ data class VideoPlayerUiState(
             currentMediaSource = currentMediaSource, mediaStreams = mediaStreams,
             playMethod = playMethod, isDirectPlayForced = isDirectPlayForced,
             seriesId = seriesId,
-        )
-
-    val tracks: TrackState
-        get() = TrackState(
-            audioTracks = audioTracks, subtitleTracks = subtitleTracks,
-            hasAudioOverride = hasAudioOverride, hasSubtitleOverride = hasSubtitleOverride,
-            hasSeriesAudioPref = hasSeriesAudioPref,
-            hasSeriesSubtitlePref = hasSeriesSubtitlePref,
-            hasSeriesSubtitleOffPref = hasSeriesSubtitleOffPref,
-            hasSeriesDialogueBoostPref = hasSeriesDialogueBoostPref,
-        )
-
-    val subtitles: SubtitleState
-        get() = SubtitleState(
-            subtitleStyle = subtitleStyle, remoteSubtitles = remoteSubtitles,
-            subtitleCultures = subtitleCultures, searchedSubtitles = searchedSubtitles,
-            isSearchingSubtitles = isSearchingSubtitles,
-            hasSearchedSubtitles = hasSearchedSubtitles,
-            subtitleSearchError = subtitleSearchError,
-            isUploadingSubtitle = isUploadingSubtitle,
-            isLoadingRemoteSubtitles = isLoadingRemoteSubtitles,
-            defaultSearchLanguage = defaultSearchLanguage,
-            downloadingSubtitles = downloadingSubtitles,
-            providerSearchResults = providerSearchResults,
-            providerSearchErrors = providerSearchErrors,
-            configuredSubtitleProviders = configuredSubtitleProviders,
-        )
-
-    val effects: AudioEffectsState
-        get() = AudioEffectsState(
-            dialogueBoostEnabled = dialogueBoostEnabled,
-            dialogueBoostStrength = dialogueBoostStrength,
-            nightModeEnabled = nightModeEnabled, nightModeStrength = nightModeStrength,
-            audioPassthrough = audioPassthrough, decoderMode = decoderMode,
-            audioNormalizationMode = audioNormalizationMode,
-            audioNormalizationEnabled = audioNormalizationEnabled,
-            channelMixMode = channelMixMode, channelMixEnabled = channelMixEnabled,
-            bassBoostEnabled = bassBoostEnabled, bassBoostStrength = bassBoostStrength,
-            virtualizerEnabled = virtualizerEnabled,
-            virtualizerStrength = virtualizerStrength,
-            reverbPreset = reverbPreset, audioDelayMs = audioDelayMs,
         )
 
     val videoFx: VideoFxState
@@ -366,24 +259,6 @@ data class VideoPlayerUiState(
             videoAutoplayNext = videoAutoplayNext,
             autoPlayCountdownSec = autoPlayCountdownSec,
             autoplayCancelled = autoplayCancelled,
-        )
-
-    val syncPlay: SyncPlayUiState
-        get() = SyncPlayUiState(
-            isInSyncPlaySession = isInSyncPlaySession,
-            syncPlayGroupName = syncPlayGroupName,
-            syncPlayParticipantCount = syncPlayParticipantCount,
-            isSyncPlaySynced = isSyncPlaySynced,
-            isSyncPlaySyncing = isSyncPlaySyncing,
-            syncPlayRepeatMode = syncPlayRepeatMode,
-            syncPlayShuffleMode = syncPlayShuffleMode,
-        )
-
-    val sleepTimer: SleepTimerState
-        get() = SleepTimerState(
-            sleepTimerActive = sleepTimerActive,
-            sleepTimerEndOfEpisode = sleepTimerEndOfEpisode,
-            sleepTimerLastUsedDurationMs = sleepTimerLastUsedDurationMs,
         )
 
     val gestures: GesturePrefsState
@@ -439,7 +314,7 @@ data class VideoPlayerUiState(
     /**
      * Position-explicit overload. Lets high-frequency callers (e.g. the
      * position-tick auto-skip check) compute the active segment for a raw
-     * engine position WITHOUT copying this 95-field state (which is the
+     * engine position WITHOUT copying this state bag (which is the
      * highest-frequency avoidable allocation on the playback path).
      */
     fun computeActiveSegment(positionMs: Long): MediaSegment? =

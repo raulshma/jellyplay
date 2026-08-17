@@ -5,11 +5,9 @@ import com.raulshma.jellyplay.core.model.DetailAssets
 import com.raulshma.jellyplay.core.model.DetailCapabilities
 import com.raulshma.jellyplay.core.model.DetailContext
 import com.raulshma.jellyplay.core.model.DetailOrigin
-import com.raulshma.jellyplay.core.model.DownloadFileInventory
 import com.raulshma.jellyplay.core.model.LocalSubtitleOption
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -18,7 +16,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 
 /**
- * Single-source-of-truth UI state for the media-detail screen.
+ * Single-source-of-truth CONTENT state for the media-detail screen.
  *
  * Every observable screen state lives behind this data class so that:
  *  - Compose sees **atomic snapshots** — a content-load no longer triggers
@@ -26,9 +24,17 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
  *  - State restoration works against a single serializable object.
  *  - Tests assert against one object instead of mocking dozens of fields.
  *
- * Backward-compatible property accessors on [DetailViewModel] still project
- * these fields for existing call sites; new code should prefer
- * `viewModel.uiState.collectAsStateWithLifecycle()`.
+ * This is deliberately the **content core** only — atomic snapshots of the
+ * detail/seasons/episodes tree plus remote-discovery ephemera written solely
+ * by the ViewModel body. Per-sheet action state does NOT live here: downloads,
+ * playlists, collections, and resync are owned by their action helpers
+ * ([DownloadLifecycleActions], [PlaylistActions], [CollectionActions],
+ * [ResyncActions]), which publish their own `StateFlow`s and are collected
+ * directly by the sheet that needs them (see the `viewModel.downloads` /
+ * `viewModel.playlists` / `viewModel.collections` / `viewModel.resync`
+ * seams). Re-flattening helper state back into this bag was removed — it
+ * re-copied the entire state on every helper tick and froze the bag at 55
+ * fields.
  */
 @Immutable
 data class DetailUiState(
@@ -62,9 +68,6 @@ data class DetailUiState(
     // The currently-selected local subtitle stream index (null = none/disabled).
     // Independent from [selectedSubtitleIndex], which is the REMOTE stream index.
     val selectedLocalSubtitleIndex: Int? = null,
-    // Resync / re-download action status. Owned by the ViewModel; reset to Idle
-    // via DetailViewModel.clearResyncState(). Distinct from the snapshot load state.
-    val resyncState: ResyncUiState = ResyncUiState.Idle,
     // Monotonic per-item content generation of the last fully-applied snapshot.
     // Used by the screen only for diagnostics; the VM gates side effects off it.
     val contentGeneration: Long = 0L,
@@ -115,26 +118,6 @@ data class DetailUiState(
     val seerrSonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
     val isLoadingSeerrServices: Boolean = false,
     val seerrTvSeasons: List<SeerrSeason> = emptyList(),
-    // Downloads
-    val isDownloading: Boolean = false,
-    val cellularDownloadWarningMb: Int? = null,
-    val isDownloadingSeries: Boolean = false,
-    val downloadSheetEpisodes: Map<String, List<MediaItem>> = emptyMap(),
-    val downloadSheetLoadingSeasons: Set<String> = emptySet(),
-    val downloadedEpisodeIds: Set<String> = emptySet(),
-    // Pre-download picker: quality override + external-subtitle selection. The
-    // picker is opened from the download affordance; on confirm the pending
-    // values feed [DetailViewModel.startDownload]. Folded into
-    // [DownloadPickerState] (projected from [DownloadLifecycleState] by the
-    // Group-4 combine in DetailViewModel) so the trio travels as one unit.
-    val downloadPicker: DownloadPickerState = DownloadPickerState(),
-    // Download-details bottom sheet: on-disk file inventory (media file +
-    // subtitles/trickplay/segments/images sidecars) with live byte sizes. Null
-    // until the sheet is opened and the inventory is loaded; the inventory itself
-    // is empty once loaded if no files resolved on disk. Loaded lazily on open so
-    // the filesystem walk only runs for users who actually open the sheet.
-    val downloadFileInventory: DownloadFileInventory? = null,
-    val isLoadingDownloadFiles: Boolean = false,
     // "Manage Series" (DIRECT_ARR_INTEGRATION). Shown for a series with a tvdb
     // id when the experimental flag is on; server resolution is deferred to the
     // ManageSeriesScreen itself (cheap gate here — no network on the detail screen).
@@ -143,22 +126,6 @@ data class DetailUiState(
     // stays a pure derivation over snapshot state instead of issuing network I/O
     // on every identity tick.
     val sonarrServersResolved: Boolean = false,
-    // Add-to-playlist picker (movie/episode/series/music-video detail). The
-    // playlist list + flags are fetched on-demand when the picker opens, not
-    // on every detail load.
-    val playlists: List<Playlist> = emptyList(),
-    val isLoadingPlaylists: Boolean = false,
-    val isAddingToPlaylist: Boolean = false,
-    val showPlaylistPicker: Boolean = false,
-    val showCreatePlaylistDialog: Boolean = false,
-    // Add-to-collection picker (movie/episode/series detail). Mirrors the
-    // playlist picker fields above; the collection list + flags are fetched
-    // on-demand when the picker opens, not on every detail load.
-    val collections: List<com.raulshma.jellyplay.core.model.CollectionSummary> = emptyList(),
-    val isLoadingCollections: Boolean = false,
-    val isAddingToCollection: Boolean = false,
-    val showCollectionPicker: Boolean = false,
-    val showCreateCollectionDialog: Boolean = false,
 ) {
     @Immutable
     data class SmartPlayTarget(

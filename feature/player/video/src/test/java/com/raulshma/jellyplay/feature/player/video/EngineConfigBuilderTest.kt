@@ -38,10 +38,11 @@ import org.junit.Test
 class EngineConfigBuilderTest {
 
     private fun baselineState() = VideoPlayerUiState()
+    private fun baselineEffects() = com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState()
 
     @Test
     fun build_defaultsPropagateForNeutralState() {
-        val config = EngineConfigBuilder.build(baselineState(), equalizerEnabled = false, agg = VideoPlayerAggregate())
+        val config = EngineConfigBuilder.build(baselineState(), baselineEffects(), equalizerEnabled = false, agg = VideoPlayerAggregate())
         assertEquals(EngineConfig().decoderMode, config.decoderMode)
         assertFalse(config.audioPassthrough)
         assertEquals(0L, config.audioDelayMs)
@@ -51,10 +52,14 @@ class EngineConfigBuilderTest {
     }
 
     @Test
-    fun build_carriesAudioEffectsFromUiState() {
+    fun build_carriesAudioEffectsFromStateAndEffectsSlice() {
+        // Dialogue boost stays on the UiState (per-item resolver-driven); the
+        // other effects come from the controller-owned AudioEffectsState.
         val state = baselineState().copy(
             dialogueBoostEnabled = true,
             dialogueBoostStrength = EffectStrength.HIGH,
+        )
+        val effects = com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState(
             nightModeEnabled = true,
             nightModeStrength = EffectStrength.MODERATE,
             audioNormalizationMode = AudioNormalizationMode.DYNAMIC,
@@ -68,7 +73,7 @@ class EngineConfigBuilderTest {
             reverbPreset = ReverbPreset.LARGE_HALL,
             audioDelayMs = 42L,
         )
-        val config = EngineConfigBuilder.build(state, equalizerEnabled = true, agg = VideoPlayerAggregate())
+        val config = EngineConfigBuilder.build(state, effects, equalizerEnabled = true, agg = VideoPlayerAggregate())
 
         with(config.audioEffects) {
             assertTrue(dialogueBoostEnabled)
@@ -89,7 +94,7 @@ class EngineConfigBuilderTest {
 
     @Test
     fun build_equalizerEnabledComesFromParam_notState() {
-        val config = EngineConfigBuilder.build(baselineState(), equalizerEnabled = true, agg = VideoPlayerAggregate())
+        val config = EngineConfigBuilder.build(baselineState(), baselineEffects(), equalizerEnabled = true, agg = VideoPlayerAggregate())
         assertTrue(config.audioEffects.equalizerEnabled)
     }
 
@@ -104,7 +109,7 @@ class EngineConfigBuilderTest {
                 volumeBoostGain = 6,
             ),
         )
-        val config = EngineConfigBuilder.build(baselineState(), equalizerEnabled = false, agg = agg)
+        val config = EngineConfigBuilder.build(baselineState(), baselineEffects(), equalizerEnabled = false, agg = agg)
 
         assertEquals(eqSettings, config.audioEffects.equalizerSettings)
         assertTrue(config.audioEffects.volumeBoostEnabled)
@@ -115,15 +120,15 @@ class EngineConfigBuilderTest {
     @Test
     fun build_subtitleDelayReadsStyleOffset() {
         val state = baselineState().copy(subtitleStyle = SubtitleStyle(offsetMs = 250L))
-        val config = EngineConfigBuilder.build(state, equalizerEnabled = false, agg = VideoPlayerAggregate())
+        val config = EngineConfigBuilder.build(state, baselineEffects(), equalizerEnabled = false, agg = VideoPlayerAggregate())
         assertEquals(250L, config.subtitleDelayMs)
         assertEquals(250L, config.subtitleStyle.offsetMs)
     }
 
     @Test
-    fun build_decoderAndPassthroughReadFromState() {
-        val state = baselineState().copy(decoderMode = DecoderMode.SW_ONLY, audioPassthrough = true)
-        val config = EngineConfigBuilder.build(state, equalizerEnabled = false, agg = VideoPlayerAggregate())
+    fun build_decoderAndPassthroughReadFromEffectsSlice() {
+        val effects = baselineEffects().copy(decoderMode = DecoderMode.SW_ONLY, audioPassthrough = true)
+        val config = EngineConfigBuilder.build(baselineState(), effects, equalizerEnabled = false, agg = VideoPlayerAggregate())
         assertEquals(DecoderMode.SW_ONLY, config.decoderMode)
         assertTrue(config.audioPassthrough)
     }
@@ -132,7 +137,7 @@ class EngineConfigBuilderTest {
     fun build_videoEffectsPropagatedFromState() {
         val effects = VideoEffectsConfig(brightness = 0.2f, saturation = 1.5f)
         val state = baselineState().copy(videoEffects = effects)
-        val config = EngineConfigBuilder.build(state, equalizerEnabled = false, agg = VideoPlayerAggregate())
+        val config = EngineConfigBuilder.build(state, baselineEffects(), equalizerEnabled = false, agg = VideoPlayerAggregate())
         assertEquals(effects, config.videoEffects)
     }
 

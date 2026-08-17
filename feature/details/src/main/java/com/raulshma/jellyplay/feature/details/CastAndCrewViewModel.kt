@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,7 +27,9 @@ class CastAndCrewViewModel @Inject constructor(
     fun load(itemId: String) {
         _uiState.value = CastAndCrewUiState.Loading
         launch {
-            val result = RetryPolicy.executeWithRetry { mediaRepository.getMediaDetail(itemId) }
+            // No feature-level retry: the repository path already retries
+            // (and coordinates retry with address failover) in the engine.
+            val result = mediaRepository.getMediaDetail(itemId)
             _uiState.value = result.fold(
                 onSuccess = { detail ->
                     val partition = partitionCastAndCrew(detail.people)

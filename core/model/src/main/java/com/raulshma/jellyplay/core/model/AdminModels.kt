@@ -179,3 +179,41 @@ data class SessionPlayState(
     val repeatMode: String = "RepeatNone",
     val playMethod: String? = null,
 )
+
+/**
+ * Users-screen summary: the managed-user list joined with the current user id
+ * and the count of active administrators (disabled admins excluded).
+ */
+@Immutable
+data class UsersOverview(
+    val users: List<ManagedUser> = emptyList(),
+    val currentUserId: String? = null,
+    val adminCount: Int = 0,
+)
+
+/**
+ * User-editor context: everything the user-detail screen needs on open.
+ * Auxiliary tab data (devices, channels, ratings, tags) loads lazily and is
+ * fetched through the repository's individual operations.
+ */
+@Immutable
+data class UserEditorContext(
+    val user: ManagedUser,
+    val libraries: List<LibraryFolder> = emptyList(),
+    val currentUserId: String? = null,
+    val adminCount: Int = 0,
+)
+
+/**
+ * Dashboard opening snapshot: the five endpoints the dashboard hero renders,
+ * fetched together. Individual endpoint failures degrade their own field
+ * (null / empty); the summary itself still succeeds.
+ */
+@Immutable
+data class AdminDashboardSummary(
+    val systemInfo: SystemInfo? = null,
+    val itemCounts: ItemCounts? = null,
+    val sessions: List<SessionInfo> = emptyList(),
+    val recentActivity: List<ActivityLogEntry> = emptyList(),
+    val tasks: List<ScheduledTaskInfo> = emptyList(),
+)

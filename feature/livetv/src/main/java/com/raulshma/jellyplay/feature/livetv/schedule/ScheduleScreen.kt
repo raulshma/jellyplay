@@ -53,6 +53,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.livetv.R
+import com.raulshma.jellyplay.feature.livetv.formatLiveTvTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -123,7 +124,7 @@ fun ScheduleScreen(
                                 TimerRow(
                                     title = timer.programName,
                                     subtitle = timer.channelName,
-                                    meta = formatStart(timer.startDate),
+                                    meta = formatLiveTvTime(timer.startDate).orEmpty(),
                                     contentPad = contentPad,
                                     onClick = { viewModel.showTimerDetail(timer) },
                                 )
@@ -219,22 +220,10 @@ private fun TimerDetailDialog(
             timer.channelName?.takeIf { it.isNotBlank() }?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(stringResource(R.string.livetv_schedule_start, formatStart(timer.startDate)), style = MaterialTheme.typography.bodySmall,
+            Text(stringResource(R.string.livetv_schedule_start, formatLiveTvTime(timer.startDate).orEmpty()), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(stringResource(R.string.livetv_schedule_end, formatStart(timer.endDate)), style = MaterialTheme.typography.bodySmall,
+            Text(stringResource(R.string.livetv_schedule_end, formatLiveTvTime(timer.endDate).orEmpty()), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         },
     )
-}
-
-private fun formatStart(iso: String?): String {
-    if (iso.isNullOrBlank()) return ""
-    return runCatching {
-        java.time.OffsetDateTime.parse(iso, java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-            .format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))
-    }.recoverCatching {
-        java.time.LocalDateTime.parse(
-            iso.replace("Z", "").replace("T", " ").substringBefore('+').trim()
-        ).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))
-    }.getOrElse { iso }
 }

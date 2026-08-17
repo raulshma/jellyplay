@@ -141,6 +141,9 @@ class PersonDetailViewModelTest {
         val state = viewModel.uiState.value
         assertTrue(state is PersonDetailUiState.Error)
         assertEquals("detail boom", (state as PersonDetailUiState.Error).message)
+        // Retry is owned by the data layer; this layer must not re-issue calls.
+        io.mockk.coVerify(exactly = 1) { mediaRepository.getMediaDetail("p1") }
+        io.mockk.coVerify(exactly = 1) { mediaRepository.getItemsByPerson("p1") }
     }
 
     @Test

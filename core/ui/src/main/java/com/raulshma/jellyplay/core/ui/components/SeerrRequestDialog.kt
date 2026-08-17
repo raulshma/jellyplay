@@ -119,6 +119,9 @@ fun SeerrRequestDialog(
     val availableSeasonNumbers = remember(seasons) {
         seasons.mapNotNull { season -> season.seasonNumber }
     }
+    val sortedSeasons = remember(seasons) {
+        seasons.sortedBy { it.seasonNumber }
+    }
 
     LaunchedEffect(isTv, radarrServers, sonarrServers) {
         if (isTv) {
@@ -454,7 +457,7 @@ fun SeerrRequestDialog(
                                     )
                                 }
                             }
-                            items(seasons.sortedBy { it.seasonNumber }, key = { it.seasonNumber }, contentType = { "season" }) { season ->
+                            items(sortedSeasons, key = { it.seasonNumber }, contentType = { "season" }) { season ->
                                 val seasonNumber = season.seasonNumber
                                 val isSelected = selectAllSeasons || seasonNumber in selectedSeasonNumbers
                                 Row(

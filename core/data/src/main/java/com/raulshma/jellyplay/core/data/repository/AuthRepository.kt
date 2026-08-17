@@ -20,6 +20,13 @@ interface AuthRepository {
 
     suspend fun addServer(address: String): Result<ServerInfo>
 
+    /**
+     * Reachability probe against one explicit address (a primary or an
+     * alternate). Purely a health check — never connects the client or
+     * persists anything, unlike [addServer].
+     */
+    suspend fun probeServer(address: String): Result<ServerInfo>
+
     suspend fun removeServer(serverId: String)
 
     suspend fun switchServer(serverId: String): Result<Unit>
@@ -73,4 +80,10 @@ interface AuthRepository {
     suspend fun removeUser(userId: String)
 
     suspend fun getUsersForServer(serverId: String): List<UserInfo>
+
+    /**
+     * Announces this client's capabilities to the server (session lifecycle —
+     * must land after the WebSocket handshake creates the server-side session).
+     */
+    suspend fun postCapabilities(): Result<Unit>
 }

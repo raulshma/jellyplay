@@ -84,6 +84,9 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun probeServer(address: String): Result<ServerInfo> =
+        apiClient.getServerInfo(address)
+
     override suspend fun removeServer(serverId: String) {
         database.withTransaction {
             userDao.deleteUsersForServer(serverId)
@@ -423,6 +426,8 @@ class AuthRepositoryImpl @Inject constructor(
         // would cancel a fresh Flow emission (full query cost) on every call.
         return userDao.getUsersForServerOnce(serverId).map { it.toUserInfo() }
     }
+
+    override suspend fun postCapabilities(): Result<Unit> = apiClient.postCapabilities()
 
     private suspend fun persistSession(server: ServerInfo, user: UserInfo, fallbackUsername: String = "") {
         val existingServer = serverDao.getServerById(server.id)

@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.size.Size as CoilSize
+import com.raulshma.jellyplay.core.designsystem.theme.detailEntrance
+import com.raulshma.jellyplay.core.designsystem.theme.rememberDetailEntrance
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
@@ -76,6 +78,16 @@ fun CollectionDetailScreen(
 
     val backdropVisible = remember { mutableStateOf(false) }
     val contentVisible = remember { mutableStateOf(false) }
+
+    // Shared entrance progress for the poster grid — the same
+    // [rememberDetailEntrance] + [detailEntrance] pair as the downloads list.
+    // ONE Animatable for the whole grid replaces the per-cell
+    // `mutableStateOf + LaunchedEffect + AnimatedVisibility` triple; it starts
+    // at the exact moment the per-cell animations used to (when the loaded
+    // state arrives), and cells read it inside the modifier's draw-phase
+    // lambda, so cells composed later during scroll just see the settled 1f
+    // and render immediately.
+    val gridEntrance = rememberDetailEntrance(start = success != null)
 
     LaunchedEffect(success) {
         if (success != null) {
@@ -201,28 +213,26 @@ fun CollectionDetailScreen(
                             contentType = { "mediaItem" },
                             onFocusedIndexChange = { index -> items.getOrNull(index)?.let { tvFocusedItem = it } },
                         ) { index, item, focusModifier ->
-                            val itemVisible = remember { mutableStateOf(false) }
-                            LaunchedEffect(Unit) { itemVisible.value = true }
-                            AnimatedVisibility(
-                                visible = itemVisible.value,
-                                enter = fadeIn(
-                                    MaterialTheme.motionScheme.defaultEffectsSpec()
-                                ) + slideInVertically(
-                                    initialOffsetY = { it / 8 },
-                                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                                ),
-                            ) {
-                                val itemProgress = item.progressFraction()
-                                PosterCard(
-                                    item = item,
-                                    imageUrl = viewModel.getImageUrl(item.id),
-                                    onClick = { onItemClick(item.id) },
-                                    modifier = focusModifier,
-                                    showProgress = itemProgress != null && itemProgress > 0f,
-                                    progressPercent = itemProgress ?: 0f,
-                                    sharedElementKey = "poster_${item.id}",
-                                )
-                            }
+                            val itemProgress = item.progressFraction()
+                            PosterCard(
+                                item = item,
+                                imageUrl = viewModel.getImageUrl(item.id),
+                                onClick = { onItemClick(item.id) },
+                                // graphicsLayer before focusModifier so the reveal
+                                // wraps the whole cell (focus indicator included),
+                                // matching the AnimatedVisibility wrapper it
+                                // replaces: fade + slide up from 1/8 of the cell
+                                // height. The shared Animatable is read inside
+                                // the modifier's draw-phase lambda, so cells
+                                // composed later during scroll render at the
+                                // settled 1f immediately.
+                                modifier = Modifier
+                                    .detailEntrance(progress = { gridEntrance.value })
+                                    .then(focusModifier),
+                                showProgress = itemProgress != null && itemProgress > 0f,
+                                progressPercent = itemProgress ?: 0f,
+                                sharedElementKey = "poster_${item.id}",
+                            )
                         }
                         } // close else (items non-empty)
                     }

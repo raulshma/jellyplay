@@ -176,8 +176,10 @@ class DownloadRepositoryImpl @Inject constructor(
                 return@runCatching existing.toDownloadItem()
             }
             if (existing.downloadPath.isNotBlank()) {
-                File(existing.downloadPath).let { f -> if (f.exists()) f.delete() }
-                DownloadArtifacts.cleanup(File(existing.downloadPath).parentFile, existing.mediaItemId)
+                withContext(Dispatchers.IO) {
+                    File(existing.downloadPath).let { f -> if (f.exists()) f.delete() }
+                    DownloadArtifacts.cleanup(File(existing.downloadPath).parentFile, existing.mediaItemId)
+                }
             }
             downloadDao.deleteDownloadById(existing.id)
         }
@@ -1037,10 +1039,14 @@ class DownloadRepositoryImpl @Inject constructor(
     }
 
     private suspend fun cleanupDownloadFiles(entity: DownloadEntity) {
-        if (entity.downloadPath.isNotBlank()) {
-            val file = File(entity.downloadPath)
-            if (file.exists()) file.delete()
-            DownloadArtifacts.cleanup(file.parentFile, entity.mediaItemId)
+        // File deletion + directory listing off the caller's (Main) dispatcher —
+        // same pattern as the sibling helpers below.
+        withContext(Dispatchers.IO) {
+            if (entity.downloadPath.isNotBlank()) {
+                val file = File(entity.downloadPath)
+                if (file.exists()) file.delete()
+                DownloadArtifacts.cleanup(file.parentFile, entity.mediaItemId)
+            }
         }
         database.withTransaction {
             downloadDao.deleteDownloadById(entity.id)

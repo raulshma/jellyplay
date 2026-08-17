@@ -2,7 +2,12 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
+import com.raulshma.jellyplay.feature.player.video.state.SleepTimerState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -19,10 +24,16 @@ import kotlinx.coroutines.launch
  *  - `preSleepVolume` capture/restore (so cancel never slams to full volume),
  *  - the two callbacks closing over the current engine (pause on expire,
  *    setVolume on each fade tick — both skip writes while the user is muted),
- *  - the sleep-timer slice of [VideoPlayerUiState] (`sleepTimerActive`,
- *    `sleepTimerEndOfEpisode`, `sleepTimerLastUsedDurationMs`), and
+ *  - the sleep-timer slice [SleepTimerState] (`sleepTimerActive`,
+ *    `sleepTimerEndOfEpisode`, `sleepTimerLastUsedDurationMs`) — this class is
+ *    its single home, exposed as a read-only [StateFlow], and
  *  - the two preference writes (`setSleepTimerDurationMs` /
  *    `setSleepTimerEndOfEpisode`).
+ *
+ * **Item-switch semantics: a running timer deliberately PERSISTS across
+ * episodes** (it was whitelisted in the ViewModel's former reset ritual).
+ * Persistence is the default — there is no `resetForItem()`. Only full VM
+ * teardown (`onRelease`) detaches the fade callback.
  *
  * Engine + mute access is via lambdas so this class stays ViewModel-agnostic
  * and always reads the *current* engine (the VM swaps engines on retry).
@@ -33,8 +44,10 @@ internal class SleepTimerController(
     private val scope: CoroutineScope,
     private val getEngine: () -> com.raulshma.jellyplay.feature.player.video.engine.MediaEngine?,
     private val isMuted: () -> Boolean,
-    private val updateUiState: ((VideoPlayerUiState) -> VideoPlayerUiState) -> Unit,
 ) {
+
+    private val _state = MutableStateFlow(SleepTimerState())
+    val state: StateFlow<SleepTimerState> = _state.asStateFlow()
 
     /**
      * Volume captured when a timed timer starts fading, so [cancelSleepTimer]
@@ -69,7 +82,7 @@ internal class SleepTimerController(
             if (!isMuted()) getEngine()?.setVolume(progress)
         }
         sleepTimerManager.start(durationMs)
-        updateUiState {
+        _state.update {
             it.copy(
                 sleepTimerActive = true,
                 sleepTimerEndOfEpisode = false,
@@ -95,7 +108,7 @@ internal class SleepTimerController(
         sleepTimerManager.setOnTimerExpired { getEngine()?.pause() }
         sleepTimerManager.setOnFadeProgress(null)
         sleepTimerManager.startEndOfEpisode()
-        updateUiState {
+        _state.update {
             it.copy(
                 sleepTimerActive = true,
                 sleepTimerEndOfEpisode = true,
@@ -116,7 +129,7 @@ internal class SleepTimerController(
             preSleepVolume?.let { engine.setVolume(it) }
         }
         preSleepVolume = null
-        updateUiState {
+        _state.update {
             it.copy(
                 sleepTimerActive = false,
                 sleepTimerEndOfEpisode = false,
@@ -131,6 +144,18 @@ internal class SleepTimerController(
      */
     fun triggerSleepTimerEndOfEpisode() {
         sleepTimerManager.triggerEndOfEpisode()
+    }
+
+    /**
+     * Seeds [SleepTimerState.sleepTimerLastUsedDurationMs] from the persisted
+     * [AudioStore] preference. The former projection lived in
+     * [SettingsProjector]; it moves here because the field's home moved. Guarded
+     * so an unrelated preference emission does not re-emit the state flow.
+     */
+    fun seedLastUsedDurationMs(durationMs: Long) {
+        if (_state.value.sleepTimerLastUsedDurationMs != durationMs) {
+            _state.update { it.copy(sleepTimerLastUsedDurationMs = durationMs) }
+        }
     }
 
     /** Tear down callbacks so a released engine is never touched by a stray tick. */

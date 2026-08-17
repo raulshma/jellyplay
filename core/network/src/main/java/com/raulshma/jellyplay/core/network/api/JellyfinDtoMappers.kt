@@ -520,24 +520,35 @@ internal fun parseItemKind(type: String): BaseItemKind? = when (type) {
 
 internal fun parseItemSortList(sortBy: String): List<org.jellyfin.sdk.model.api.ItemSortBy> {
     if (sortBy.isBlank()) return emptyList()
-    return sortBy.split(",").mapNotNull { token ->
-        val trimmed = token.trim()
-        when (trimmed) {
-            "SortName" -> org.jellyfin.sdk.model.api.ItemSortBy.SORT_NAME
-            "DatePlayed" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_PLAYED
-            "DateCreated" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED
-            "DateLastContentAdded" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_LAST_CONTENT_ADDED
-            "PlayCount" -> org.jellyfin.sdk.model.api.ItemSortBy.PLAY_COUNT
-            "Random" -> org.jellyfin.sdk.model.api.ItemSortBy.RANDOM
-            "PremiereDate" -> org.jellyfin.sdk.model.api.ItemSortBy.PREMIERE_DATE
-            "ProductionYear" -> org.jellyfin.sdk.model.api.ItemSortBy.PRODUCTION_YEAR
-            "CommunityRating" -> org.jellyfin.sdk.model.api.ItemSortBy.COMMUNITY_RATING
-            else -> org.jellyfin.sdk.model.api.ItemSortBy.entries.find {
-                it.serialName.equals(trimmed, ignoreCase = true) || it.name.equals(trimmed, ignoreCase = true)
-            }
+    return sortBy.split(",").mapNotNull { token -> parseItemSortToken(token.trim()) }
+}
+
+/**
+ * Lookup for one sort token: the 9 exact-match hot tokens via `when`, then a
+ * static lowercase map over all [org.jellyfin.sdk.model.api.ItemSortBy] entries
+ * (serialName + enum name) — previously a linear O(entries) scan per non-exact
+ * token on every browse/search page load.
+ */
+private fun parseItemSortToken(trimmed: String): org.jellyfin.sdk.model.api.ItemSortBy? = when (trimmed) {
+    "SortName" -> org.jellyfin.sdk.model.api.ItemSortBy.SORT_NAME
+    "DatePlayed" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_PLAYED
+    "DateCreated" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED
+    "DateLastContentAdded" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_LAST_CONTENT_ADDED
+    "PlayCount" -> org.jellyfin.sdk.model.api.ItemSortBy.PLAY_COUNT
+    "Random" -> org.jellyfin.sdk.model.api.ItemSortBy.RANDOM
+    "PremiereDate" -> org.jellyfin.sdk.model.api.ItemSortBy.PREMIERE_DATE
+    "ProductionYear" -> org.jellyfin.sdk.model.api.ItemSortBy.PRODUCTION_YEAR
+    "CommunityRating" -> org.jellyfin.sdk.model.api.ItemSortBy.COMMUNITY_RATING
+    else -> ITEM_SORT_BY_TOKENS[trimmed.lowercase()]
+}
+
+private val ITEM_SORT_BY_TOKENS: Map<String, org.jellyfin.sdk.model.api.ItemSortBy> =
+    buildMap {
+        for (entry in org.jellyfin.sdk.model.api.ItemSortBy.entries) {
+            put(entry.serialName.lowercase(), entry)
+            put(entry.name.lowercase(), entry)
         }
     }
-}
 
 internal fun parseItemSortBy(sortBy: String): org.jellyfin.sdk.model.api.ItemSortBy? =
     parseItemSortList(sortBy).firstOrNull()
@@ -700,4 +711,29 @@ private fun com.raulshma.jellyplay.core.model.UserAccessSchedule.toSdk(
     dayOfWeek = org.jellyfin.sdk.model.api.DynamicDayOfWeek.fromName(dayOfWeek),
     startHour = startHour,
     endHour = endHour,
+)
+
+/**
+ * Parses the `MessageData` object of a WebSocket `ActivityLogEntry` push.
+ * PascalCase field names match the Jellyfin server's activity-log JSON
+ * contract; the server's `Severity` strings map onto [ActivityLogSeverity]
+ * (unknown values degrade to INFORMATION, matching the REST mapper).
+ */
+internal fun org.json.JSONObject.toActivityLogEntry(): ActivityLogEntry = ActivityLogEntry(
+    id = optLong("Id"),
+    name = optString("Name"),
+    type = optString("Type"),
+    userId = optString("UserId").takeIf { it.isNotBlank() },
+    overview = optString("Overview").takeIf { it.isNotBlank() },
+    shortOverview = optString("ShortOverview").takeIf { it.isNotBlank() },
+    itemId = optString("ItemId").takeIf { it.isNotBlank() },
+    date = optString("Date"),
+    severity = when (optString("Severity")) {
+        "Trace" -> ActivityLogSeverity.TRACE
+        "Debug" -> ActivityLogSeverity.DEBUG
+        "Warn", "Warning" -> ActivityLogSeverity.WARNING
+        "Error" -> ActivityLogSeverity.ERROR
+        "Fatal", "Critical" -> ActivityLogSeverity.FATAL
+        else -> ActivityLogSeverity.INFORMATION
+    },
 )

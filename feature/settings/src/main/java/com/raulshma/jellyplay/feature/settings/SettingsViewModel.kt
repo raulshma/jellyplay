@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.BackupSliceKey
@@ -49,7 +50,7 @@ class SettingsViewModel @Inject constructor(
     private val projections: PreferenceProjections,
     private val authRepository: AuthRepository,
     private val seerrRepository: SeerrRepository,
-    private val apiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient,
+    private val adminRepository: AdminRepository,
     private val editor: PreferencesEditor,
     private val recentsStore: SettingsRecentsStore,
 ) : JellyPlayViewModel() {
@@ -164,7 +165,7 @@ class SettingsViewModel @Inject constructor(
     private fun loadSessions() {
         launch {
             isLoadingSessions = true
-            apiClient.getSessions()
+            adminRepository.getSessions()
                 .onSuccess { sessions -> activeSessions = sessions.filterActiveSessions() }
             isLoadingSessions = false
         }
@@ -180,7 +181,7 @@ class SettingsViewModel @Inject constructor(
         sessionRefreshJob = launch {
             while (true) {
                 kotlinx.coroutines.delay(30_000)
-                apiClient.getSessions()
+                adminRepository.getSessions()
                     .onSuccess { sessions -> activeSessions = sessions.filterActiveSessions() }
             }
         }
@@ -211,7 +212,7 @@ class SettingsViewModel @Inject constructor(
 
     fun sendMessageToSession(sessionId: String, header: String, text: String) {
         launch {
-            apiClient.sendMessageToSession(sessionId, header, text)
+            adminRepository.sendMessageToSession(sessionId, header, text)
                 .onSuccess {
                     messageSentEvent = "Message sent successfully"
                 }

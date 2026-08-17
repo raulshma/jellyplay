@@ -59,9 +59,8 @@ import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.livetv.R
+import com.raulshma.jellyplay.feature.livetv.formatLiveTvTime
 import java.time.Instant
-import java.time.OffsetDateTime
-import java.time.format.DateTimeFormatter
 
 /**
  * The channel detail content: header + Watch Live, now-playing hero (with live
@@ -375,12 +374,7 @@ private fun ProgramTimelineRow(
     onCancelSeries: (LiveTvProgram) -> Unit,
 ) {
     val airingProgress = if (isAiring) rememberLiveProgress(program) else 0f
-    val time = program.startDate?.let {
-        runCatching {
-            OffsetDateTime.parse(it, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-                .format(DateTimeFormatter.ofPattern("h:mm a"))
-        }.getOrNull()
-    } ?: "--"
+    val time = formatLiveTvTime(program.startDate) ?: "--"
     Row(
         modifier = Modifier
             .fillMaxWidth()

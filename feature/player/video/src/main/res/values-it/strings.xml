@@ -173,6 +173,12 @@
     <string name="player_video_set_a_point">Imposta punto A</string>
     <string name="player_video_set_b_point">Imposta punto B</string>
     <string name="player_video_clear_ab_repeat">Cancella ripetizione A/B</string>
+    <string name="player_video_set_a_point_at">Imposta punto A \u00B7 %1$s</string>
+    <string name="player_video_set_b_point_at">Imposta punto B \u00B7 %1$s</string>
+    <string name="player_video_ab_repeat_badge_enabled">Ripetizione A/B attiva — vai al punto di inizio, poi «Imposta punto A»</string>
+    <string name="player_video_ab_repeat_badge_a_set">A impostato a %1$s — vai al punto finale, poi «Imposta punto B»</string>
+    <string name="player_video_ab_repeat_badge_active">Ciclo %1$s \u2192 %2$s</string>
+    <string name="player_video_ab_repeat_badge_cleared">Ripetizione A/B cancellata</string>
     <string name="player_audio_only">Solo audio</string>
     <string name="player_audio_only_on">Solo audio — video nascosto</string>
 

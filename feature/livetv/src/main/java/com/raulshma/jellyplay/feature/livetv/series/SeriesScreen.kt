@@ -97,7 +97,11 @@ fun SeriesScreen(
                     contentPadding = PaddingValues(top = 8.dp, bottom = bottomPad),
                     verticalArrangement = Arrangement.spacedBy(spacing),
                 ) {
-                    items(items = uiState.seriesTimers, key = { it.id }) { timer ->
+                    items(
+                        items = uiState.seriesTimers,
+                        key = { it.id },
+                        contentType = { "series_timer" },
+                    ) { timer ->
                         SeriesTimerCard(timer = timer, contentPad = contentPad) { viewModel.showDetail(timer) }
                     }
                 }

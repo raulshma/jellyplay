@@ -1,28 +1,33 @@
 package com.raulshma.jellyplay.feature.details
 
-import android.content.Context
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.model.DownloadFileInventory
+import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadQuality
-import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaType
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Observable slice of the download-lifecycle concern owned by
  * [DownloadLifecycleActions]. Mirrors the fields the detail screen reads to
  * drive the download button spinner, the cellular-size confirmation dialog,
- * the series-download spinner, and the download sheet's per-season cache.
+ * the series-download spinner, the download sheet's per-season cache, and the
+ * download-details sheet's on-disk file inventory.
  */
 @Immutable
 internal data class DownloadLifecycleState(
@@ -36,38 +41,68 @@ internal data class DownloadLifecycleState(
     // [DownloadPickerState] so sheet visibility, quality, and subtitle selection
     // travel as one unit through the holder instead of three loose fields.
     val downloadPicker: DownloadPickerState = DownloadPickerState(),
+    // Download-details bottom sheet: on-disk file inventory (media + sidecars)
+    // with live byte sizes. Null until the sheet is opened and the inventory
+    // is loaded; empty once loaded if no files resolved on disk.
+    val downloadFileInventory: DownloadFileInventory? = null,
+    val isLoadingDownloadFiles: Boolean = false,
 )
 
 /**
  * Owns the download-lifecycle concern extracted from [DetailViewModel]:
  * single-item download (with the cellular size warning), series download,
- * and the download sheet's per-season on-demand cache.
+ * the download sheet's per-season on-demand cache, and the download-details
+ * sheet's file inventory.
  *
- * Plain class (no Hilt/DI) constructed by the VM, mirroring the
+ * Plain class constructed by the VM via [Factory], mirroring the
  * [com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder] template:
- * takes [scope], owns its coroutines via [scope.launch], and exposes
- * [state]. All VM-internal references are injected as provider lambdas / a
- * message sink so this class has no dependency on the VM's state container.
- *
- * - [detailProvider] / [seasonsProvider] read the current detail/seasons.
- * - [currentSeriesIdProvider] / [itemIdProvider] read the current navigation ids.
- * - [expandSeason] is the provider's idempotent per-season expand.
- * - [messageSink] forwards one-shot [DetailMessage]s to the VM's shared flow.
+ * takes [scope], owns its coroutines via [scope.launch], and publishes
+ * [state]. Item context arrives through the [DetailSession] flow; one-shot
+ * messages flow through the shared [messages] channel; localized strings
+ * arrive via [strings]; per-season expansion rides the deep
+ * [MediaDetailProvider] seam instead of a bare function pointer.
  */
 internal class DownloadLifecycleActions(
     private val scope: CoroutineScope,
+    private val session: StateFlow<DetailSession?>,
+    private val messages: MutableSharedFlow<DetailMessage>,
+    private val strings: DetailStrings,
     private val downloadIntake: DownloadIntake,
     private val downloadsStore: DownloadsStore,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
     private val downloadRepository: DownloadRepository,
-    private val context: Context,
-    private val detailProvider: () -> MediaDetail?,
-    private val seasonsProvider: () -> List<MediaItem>,
-    private val currentSeriesIdProvider: () -> String?,
-    private val itemIdProvider: () -> String?,
-    private val expandSeason: suspend (itemId: String, seasonId: String) -> List<MediaItem>,
-    private val messageSink: (DetailMessage) -> Unit,
+    private val mediaDetailProvider: MediaDetailProvider,
 ) {
+    /**
+     * Hilt factory bundling this helper's exclusive collaborators so they
+     * never appear in the [DetailViewModel] constructor. The VM supplies only
+     * the screen-scoped inputs in [create].
+     */
+    class Factory @Inject constructor(
+        private val downloadIntake: DownloadIntake,
+        private val downloadsStore: DownloadsStore,
+        private val adaptiveBitrateManager: AdaptiveBitrateManager,
+        private val downloadRepository: DownloadRepository,
+    ) {
+        fun create(
+            scope: CoroutineScope,
+            session: StateFlow<DetailSession?>,
+            messages: MutableSharedFlow<DetailMessage>,
+            strings: DetailStrings,
+            mediaDetailProvider: MediaDetailProvider,
+        ): DownloadLifecycleActions = DownloadLifecycleActions(
+            scope = scope,
+            session = session,
+            messages = messages,
+            strings = strings,
+            downloadIntake = downloadIntake,
+            downloadsStore = downloadsStore,
+            adaptiveBitrateManager = adaptiveBitrateManager,
+            downloadRepository = downloadRepository,
+            mediaDetailProvider = mediaDetailProvider,
+        )
+    }
+
     private val _state = MutableStateFlow(DownloadLifecycleState())
     val state: StateFlow<DownloadLifecycleState> = _state.asStateFlow()
 
@@ -115,12 +150,12 @@ internal class DownloadLifecycleActions(
     private var downloadSheetFetchedSeasonIds: Set<String> = emptySet()
 
     fun startDownload() {
-        val detail = detailProvider() ?: run {
-            scope.launch { messageSink(DetailMessage.Text(context.getString(R.string.detail_error_details_not_loaded))) }
+        val detail = session.value?.detail ?: run {
+            scope.launch { messages.tryEmit(DetailMessage.Text(strings.get(R.string.detail_error_details_not_loaded))) }
             return
         }
         val source = detail.mediaSources.firstOrNull() ?: run {
-            scope.launch { messageSink(DetailMessage.Text(context.getString(R.string.detail_error_no_source))) }
+            scope.launch { messages.tryEmit(DetailMessage.Text(strings.get(R.string.detail_error_no_source))) }
             return
         }
 
@@ -153,7 +188,7 @@ internal class DownloadLifecycleActions(
      * warning state and proceeds with the download.
      */
     fun confirmCellularDownload() {
-        val detail = detailProvider() ?: return
+        val detail = session.value?.detail ?: return
         val source = detail.mediaSources.firstOrNull() ?: return
         _state.update { it.copy(cellularDownloadWarningMb = null) }
         performDownload(detail.item, source)
@@ -167,7 +202,7 @@ internal class DownloadLifecycleActions(
         item: MediaItem,
         source: MediaSource,
     ) {
-        val detail = detailProvider() ?: return
+        val detail = session.value?.detail ?: return
         scope.launch {
             _state.update { it.copy(isDownloading = true) }
             try {
@@ -183,24 +218,24 @@ internal class DownloadLifecycleActions(
                 val result = downloadIntake.start(detail, maxBitrate, picker.subtitleSelection.toIndexSet())
                 if (result.downloadItem == null) {
                     val message = result.error
-                        ?: context.getString(R.string.detail_error_download_failed)
-                    messageSink(DetailMessage.Text(message))
+                        ?: strings.get(R.string.detail_error_download_failed)
+                    messages.tryEmit(DetailMessage.Text(message))
                 }
             } catch (e: Exception) {
-                messageSink(DetailMessage.Text(e.message ?: context.getString(R.string.detail_error_download_failed)))
+                messages.tryEmit(DetailMessage.Text(e.message ?: strings.get(R.string.detail_error_download_failed)))
             }
             _state.update { it.copy(isDownloading = false) }
         }
     }
 
     fun downloadSeries(episodeIds: Map<String, List<String>>? = null) {
-        val detail = detailProvider() ?: run {
-            scope.launch { messageSink(DetailMessage.SeriesDownload(queuedCount = 0, error = context.getString(R.string.detail_error_details_not_loaded))) }
+        val detail = session.value?.detail ?: run {
+            scope.launch { messages.tryEmit(DetailMessage.SeriesDownload(queuedCount = 0, error = strings.get(R.string.detail_error_details_not_loaded))) }
             return
         }
         val item = detail.item
         if (item.mediaType != MediaType.SERIES) {
-            scope.launch { messageSink(DetailMessage.SeriesDownload(queuedCount = 0, error = context.getString(R.string.detail_error_not_a_series))) }
+            scope.launch { messages.tryEmit(DetailMessage.SeriesDownload(queuedCount = 0, error = strings.get(R.string.detail_error_not_a_series))) }
             return
         }
 
@@ -208,19 +243,19 @@ internal class DownloadLifecycleActions(
             _state.update { it.copy(isDownloadingSeries = true) }
             downloadIntake.startSeries(item.id, episodeIds)
                 .onSuccess { downloadIds ->
-                    messageSink(DetailMessage.SeriesDownload(queuedCount = downloadIds.size, error = null))
+                    messages.tryEmit(DetailMessage.SeriesDownload(queuedCount = downloadIds.size, error = null))
                 }
                 .onFailure { error ->
-                    messageSink(DetailMessage.SeriesDownload(queuedCount = 0, error = error.message ?: context.getString(R.string.detail_error_queue_failed)))
+                    messages.tryEmit(DetailMessage.SeriesDownload(queuedCount = 0, error = error.message ?: strings.get(R.string.detail_error_queue_failed)))
                 }
             _state.update { it.copy(isDownloadingSeries = false) }
         }
     }
 
     fun prepareDownloadSheetEpisodes() {
-        val seriesId = currentSeriesIdProvider() ?: return
-        val itemId = itemIdProvider() ?: return
-        val seasons = seasonsProvider()
+        val seriesId = session.value?.seriesId ?: return
+        val itemId = session.value?.itemId ?: return
+        val seasons = session.value?.seasons ?: emptyList()
         if (seasons.isEmpty()) return
         val seasonIds = seasons.map { it.id }.toSet()
 
@@ -229,15 +264,15 @@ internal class DownloadLifecycleActions(
         _state.update { it.copy(downloadSheetLoadingSeasons = seasonIds) }
 
         scope.launch {
-            // expandSeason is idempotent (returns the cached episodes without
-            // re-emitting when the season is already present + fetched) and only
-            // fetches seasons not yet in the snapshot (e.g. the mismatched-season-key
-            // edge).
-            if (currentSeriesIdProvider() != seriesId) return@launch
+            // MediaDetailProvider.expandSeason is idempotent (returns the
+            // cached episodes without re-emitting when the season is already
+            // present + fetched) and only fetches seasons not yet in the
+            // snapshot (e.g. the mismatched-season-key edge).
+            if (session.value?.seriesId != seriesId) return@launch
             seasons.forEach { season ->
-                downloadSheetEpisodesMap[season.id] = expandSeason(itemId, season.id)
+                downloadSheetEpisodesMap[season.id] = mediaDetailProvider.expandSeason(itemId, season.id)
             }
-            if (currentSeriesIdProvider() != seriesId) return@launch
+            if (session.value?.seriesId != seriesId) return@launch
 
             downloadSheetFetchedSeasonIds = seasonIds
             _state.update {
@@ -251,13 +286,13 @@ internal class DownloadLifecycleActions(
 
     fun loadDownloadSheetEpisodes(seasonId: String) {
         if (seasonId in downloadSheetFetchedSeasonIds) return
-        val itemId = itemIdProvider() ?: return
+        val itemId = session.value?.itemId ?: return
         _state.update { it.copy(downloadSheetLoadingSeasons = it.downloadSheetLoadingSeasons + seasonId) }
         scope.launch {
             // expandSeason serves from the cached snapshot when present, else
             // fetches the one season and merges it in. Avoids a duplicate
             // round-trip and a second in-memory copy.
-            val episodes = expandSeason(itemId, seasonId)
+            val episodes = mediaDetailProvider.expandSeason(itemId, seasonId)
             downloadSheetEpisodesMap[seasonId] = episodes
             _state.update { it.copy(downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()) }
             downloadSheetFetchedSeasonIds = downloadSheetFetchedSeasonIds + seasonId
@@ -266,7 +301,7 @@ internal class DownloadLifecycleActions(
     }
 
     fun loadDownloadedEpisodeIds() {
-        val seriesId = currentSeriesIdProvider() ?: return
+        val seriesId = session.value?.seriesId ?: return
         scope.launch {
             val ids = downloadRepository.getDownloadedEpisodeIdsForSeries(seriesId)
             _state.update { it.copy(downloadedEpisodeIds = ids) }
@@ -285,6 +320,36 @@ internal class DownloadLifecycleActions(
         }
     }
 
+    /**
+     * Loads the on-disk file inventory (media + sidecar artifacts) for the
+     * download-details sheet. Runs only when the sheet opens — sidecar sizes
+     * aren't persisted, so this is the one place the filesystem walk executes.
+     * Resolves the item id from the current session (detail snapshot first,
+     * bare item id fallback so a not-yet-snapshotted download still
+     * inventories).
+     */
+    fun loadDownloadFileInventory() {
+        val itemId = session.value?.detail?.item?.id ?: session.value?.itemId ?: return
+        _state.update { it.copy(isLoadingDownloadFiles = true) }
+        scope.launch {
+            val inventory = downloadRepository.getDownloadFileInventory(itemId)
+            _state.update {
+                it.copy(downloadFileInventory = inventory, isLoadingDownloadFiles = false)
+            }
+        }
+    }
+
+    /** Clears the loaded inventory so the next sheet open re-reads fresh sizes. */
+    fun clearDownloadFileInventory() {
+        _state.update {
+            it.copy(downloadFileInventory = null, isLoadingDownloadFiles = false)
+        }
+    }
+
+    /** Reactive download row for the current item (drives the download-info card). */
+    fun downloadFlow(itemId: String): Flow<DownloadItem?> =
+        downloadRepository.getDownloadByMediaItemIdFlow(itemId)
+
     /** Clears isDownloading/isDownloadingSeries + the sheet caches. Called by the
      *  VM on screen-entry reset (loadItemInternal). */
     fun resetForNavigation() {
@@ -299,6 +364,8 @@ internal class DownloadLifecycleActions(
                 downloadSheetEpisodes = emptyMap(),
                 downloadSheetLoadingSeasons = emptySet(),
                 downloadedEpisodeIds = emptySet(),
+                downloadFileInventory = null,
+                isLoadingDownloadFiles = false,
             )
         }
     }

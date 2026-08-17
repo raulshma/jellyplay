@@ -56,13 +56,11 @@ class VideoPlayerStateTest {
     @Test
     fun audioEffectsState_defaultValuesAndCopy() {
         val state = AudioEffectsState()
-        assertFalse(state.dialogueBoostEnabled)
         assertFalse(state.nightModeEnabled)
         assertEquals(DecoderMode.HW_PREFERRED, state.decoderMode)
         assertEquals(0L, state.audioDelayMs)
 
-        val updated = state.copy(dialogueBoostEnabled = true, decoderMode = DecoderMode.SW_ONLY, audioDelayMs = 250L)
-        assertTrue(updated.dialogueBoostEnabled)
+        val updated = state.copy(decoderMode = DecoderMode.SW_ONLY, audioDelayMs = 250L)
         assertEquals(DecoderMode.SW_ONLY, updated.decoderMode)
         assertEquals(250L, updated.audioDelayMs)
     }

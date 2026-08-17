@@ -137,6 +137,7 @@ class LibVlcPlayerEngine(
         releaseInternal(releaseVlc = true)
 
         currentPlaybackRequest = request
+        pendingStartPositionMs = request.startPositionMs.coerceAtLeast(0L)
 
         val vlcCfg = (currentConfig.engineSpecific as? LibVlcEngineConfig) ?: LibVlcEngineConfig()
 
@@ -308,6 +309,7 @@ class LibVlcPlayerEngine(
         mainHandler.removeCallbacksAndMessages(null)
         pendingPlay = false
         currentPlaybackRequest = null
+        pendingStartPositionMs = 0L
         mediaPlayer?.let { mp ->
             mediaPlayer = null
             mp.setEventListener(null)
@@ -347,6 +349,10 @@ class LibVlcPlayerEngine(
     }
 
     override fun seekTo(positionMs: Long) {
+        // Hold the target as pending until libvlc reports it — a pre-output
+        // `time` write can be dropped by a stopped player, and the display
+        // must not fall back to 0 meanwhile.
+        pendingStartPositionMs = positionMs.coerceAtLeast(0L)
         try { mediaPlayer?.time = positionMs } catch (_: Exception) {}
     }
 
@@ -591,6 +597,7 @@ class LibVlcPlayerEngine(
             // this path (onConfigChanged routes them through setSpuDelay live).
             applySpuDelay(mp)
             if (currentPositionMs > 0) {
+                pendingStartPositionMs = currentPositionMs
                 try { mp.time = currentPositionMs } catch (_: Exception) {}
             }
             if (wasPlaying) {
@@ -629,6 +636,7 @@ class LibVlcPlayerEngine(
             mp.media = media
             media.release()
             if (currentPositionMs > 0) {
+                pendingStartPositionMs = currentPositionMs
                 try { mp.time = currentPositionMs } catch (_: Exception) {}
             }
             if (wasPlaying) {
@@ -764,8 +772,32 @@ class LibVlcPlayerEngine(
 
     val vlcMediaPlayer: MediaPlayer? get() = mediaPlayer
 
+    /**
+     * Start position requested for the current load, held until libvlc reports
+     * a real position. `MediaPlayer.time` reads 0 until playback output begins
+     * even when a `:start-time` media option is set, so `currentPositionMs` /
+     * `positionFlow`'s first emission would otherwise report 0 for resumed
+     * media and clobber the seeded resume playhead (the 0 → resume seek-bar
+     * jump). Mirrors MPV's `cachedPositionMs` load-seed; ExoPlayer holds the
+     * pending seek position natively.
+     */
+    private var pendingStartPositionMs = 0L
+
     override val currentPositionMs: Long
-        get() = try { mediaPlayer?.time ?: 0L } catch (_: Exception) { 0L }
+        get() {
+            val pending = pendingStartPositionMs
+            return try {
+                val mp = mediaPlayer ?: return pending
+                val time = mp.time
+                if (time > 0L) {
+                    // First real position — the pending start is consumed.
+                    pendingStartPositionMs = 0L
+                    time
+                } else {
+                    pending
+                }
+            } catch (_: Exception) { pending }
+        }
 
     override val durationMs: Long
         get() = try {

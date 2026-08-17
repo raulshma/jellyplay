@@ -78,7 +78,7 @@ fun PhotoFolderPoster(
                     ),
             ) {
                 rowUrls.forEachIndexed { colIndex, url ->
-                    val request = remember(url) {
+                    val request = remember(url, context) {
                         ImageRequest.Builder(context)
                             .data(url)
                             .crossfade(false)

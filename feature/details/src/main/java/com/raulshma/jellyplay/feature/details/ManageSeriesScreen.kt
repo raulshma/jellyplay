@@ -604,6 +604,12 @@ private fun EpisodeRow(
     }
 }
 
+// Built once at class-load; captures the default locale then rather than per call
+// (same top-level formatter idiom as EpgGridLayout.kt).
+private val AIR_DATE_FORMATTER: java.time.format.DateTimeFormatter =
+    java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
+        .withLocale(java.util.Locale.getDefault())
+
 /**
  * Sonarr-style air-date formatting. Sonarr returns ISO-8601 UTC ("2025-03-04T00:00:00Z");
  * we display the date portion in a short locale-friendly form. Returns null on parse failure.
@@ -611,11 +617,7 @@ private fun EpisodeRow(
 private fun formatAirDate(isoUtc: String): String? {
     val datePart = isoUtc.substringBefore('T')
     val parsed = runCatching { java.time.LocalDate.parse(datePart) }.getOrNull() ?: return null
-    val formatted = runCatching {
-        java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
-            .withLocale(java.util.Locale.getDefault())
-            .format(parsed)
-    }.getOrNull() ?: return datePart
+    val formatted = runCatching { AIR_DATE_FORMATTER.format(parsed) }.getOrNull() ?: return datePart
     return formatted
 }
 

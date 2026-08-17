@@ -6,10 +6,11 @@ import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.size.Size
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DreamImage
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
@@ -20,7 +21,8 @@ import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 class DreamImageProvider(
-    private val apiClient: JellyfinApiClient,
+    private val mediaRepository: MediaRepository,
+    private val imageUrlProvider: ImageUrlProvider,
     private val context: Context,
 ) {
     private val imageLoader: ImageLoader by lazy { SingletonImageLoader.get(context) }
@@ -32,7 +34,7 @@ class DreamImageProvider(
         val mediaTypes = categories.flatMap { it.toMediaTypes() }.distinct()
         if (mediaTypes.isEmpty()) return@withContext emptyList()
 
-        val result = apiClient.getMediaItems(
+        val result = mediaRepository.getMediaItems(
             filters = com.raulshma.jellyplay.core.model.LibraryFilters(
                 mediaTypes = mediaTypes,
                 sortBy = com.raulshma.jellyplay.core.model.SortOption.RANDOM,
@@ -49,7 +51,7 @@ class DreamImageProvider(
                     MediaType.AUDIO, MediaType.ALBUM, MediaType.ARTIST -> DreamImageCategory.MUSIC
                     else -> return@mapNotNull null
                 }
-                val backdropUrl = apiClient.getBackdropImageUrl(item.id, maxWidth = 1920)
+                val backdropUrl = imageUrlProvider.getBackdropUrl(item.id, maxWidth = 1920)
                 if (backdropUrl.isBlank()) return@mapNotNull null
                 DreamImage(
                     itemId = item.id,

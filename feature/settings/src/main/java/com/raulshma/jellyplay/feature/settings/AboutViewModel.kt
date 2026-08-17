@@ -4,9 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -19,7 +19,7 @@ import javax.inject.Inject
 @HiltViewModel
 class AboutViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val apiClient: JellyfinApiClient,
+    private val adminRepository: AdminRepository,
     private val authRepository: AuthRepository,
     private val experimentalStore: ExperimentalStore,
 ) : JellyPlayViewModel() {
@@ -72,7 +72,7 @@ class AboutViewModel @Inject constructor(
             try {
                 val server = authRepository.currentServer.first()
                 serverAddress = server?.address
-                val systemInfo = apiClient.getSystemInfo().getOrNull()
+                val systemInfo = adminRepository.getSystemInfo().getOrNull()
                 serverName = systemInfo?.serverName
                 serverVersion = systemInfo?.version
             } catch (_: Exception) {

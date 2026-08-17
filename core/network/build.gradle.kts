@@ -50,6 +50,9 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.okhttp)
     testImplementation(libs.okhttp.mockwebserver)
+    // Real org.json for unit tests: the android.jar stub returns nulls, which
+    // silently defeats the WebSocket payload parsing this module tests.
+    testImplementation(libs.org.json)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
 }

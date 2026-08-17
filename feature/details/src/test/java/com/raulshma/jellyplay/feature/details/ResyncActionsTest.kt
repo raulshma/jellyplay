@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.details
 
-import android.content.Context
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -17,6 +16,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -31,19 +31,17 @@ class ResyncActionsTest {
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val downloadIntake: DownloadIntake = mockk(relaxed = true)
-    private val context: Context = mockk(relaxed = true)
 
     private fun actions(
         scope: TestScope,
         itemId: String? = "item1",
     ): ResyncActions = ResyncActions(
         scope = scope,
+        session = MutableStateFlow(itemId?.let { DetailSession(itemId = it) }),
         offlineSyncManager = offlineSyncManager,
         mediaRepository = mediaRepository,
         offlineRepository = offlineRepository,
         downloadIntake = downloadIntake,
-        context = context,
-        itemIdProvider = { itemId },
     )
 
     private fun ok(itemId: String = "item1") = ResyncResult(

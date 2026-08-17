@@ -208,7 +208,7 @@ class VideoPlayerViewModelExtendedTest {
     @Test
     fun setAudioDelay_updatesState() {
         viewModel.setAudioDelay(150L)
-        assertEquals(150L, viewModel.uiState.value.audioDelayMs)
+        assertEquals(150L, viewModel.effectsState.value.audioDelayMs)
     }
 
     @Test

@@ -15,6 +15,10 @@
     <string name="shortcuts_empty_title">No shortcuts available</string>
     <string name="shortcuts_empty_description">Browse the app to discover features and content</string>
     <string name="shortcuts_empty_action">Browse Library</string>
+    <string name="shortcuts_search_placeholder">Search shortcuts…</string>
+    <string name="shortcuts_search_no_results">No shortcuts match \"%1$s\"</string>
+    <string name="shortcuts_search_clear">Clear search</string>
+    <string name="shortcuts_admin_badge">Admin</string>
 
     <!-- Hero -->
     <string name="shortcuts_hero_eyebrow">QUICK ACCESS</string>

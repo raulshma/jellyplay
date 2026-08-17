@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.PluginInstallationInfo
 import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.model.PluginRepository
 import com.raulshma.jellyplay.core.model.PluginVersionInfo
+import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -41,9 +42,11 @@ class PluginApiClientImpl @Inject constructor(
         val url = "${requireServer()}/Plugins"
         val request = authRequest(url).get().build()
         engine.okHttpClient.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: "[]"
             if (!response.isSuccessful) throw Exception("Failed to get plugins: ${response.code}")
-            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+            val body = response.body ?: return@use emptyList<PluginInfo>()
+            // Stream-decode: the plugin list never materializes as a String
+            // alongside the decoded objects.
+            val json = JellyfinApiEngine.sharedJson.decodeFromStream<JsonArray>(body.byteStream())
             json.mapNotNull { element ->
                 try { parsePluginInfo(element.jsonObject) } catch (_: Exception) { null }
             }
@@ -78,9 +81,10 @@ class PluginApiClientImpl @Inject constructor(
         val url = "${requireServer()}/Packages"
         val request = authRequest(url).get().build()
         engine.okHttpClient.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: "[]"
             if (!response.isSuccessful) throw Exception("Failed to get packages: ${response.code}")
-            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+            val body = response.body ?: return@use emptyList<PluginPackage>()
+            // Stream-decode — the package catalog is the largest plugin payload.
+            val json = JellyfinApiEngine.sharedJson.decodeFromStream<JsonArray>(body.byteStream())
             json.mapNotNull { element ->
                 try { parsePackageInfo(element.jsonObject) } catch (_: Exception) { null }
             }
@@ -92,9 +96,9 @@ class PluginApiClientImpl @Inject constructor(
         if (assemblyGuid != null) urlBuilder.append("?assemblyGuid=$assemblyGuid")
         val request = authRequest(urlBuilder.toString()).get().build()
         engine.okHttpClient.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: "{}"
             if (!response.isSuccessful) throw Exception("Failed to get package info: ${response.code}")
-            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonObject>(body)
+            val body = response.body ?: throw Exception("Empty response from server")
+            val json = JellyfinApiEngine.sharedJson.decodeFromStream<JsonObject>(body.byteStream())
             parsePackageInfo(json)
         }
     }

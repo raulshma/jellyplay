@@ -254,7 +254,9 @@ class PlayerSessionManager(
         // Without this, MKV-in-.mp4 hangs ExoPlayer silently in STATE_BUFFERING
         // with no error dialog (only MPV plays, because libavformat sniffs content).
         val containerHint = download?.container
-            ?: com.raulshma.jellyplay.feature.player.video.engine.ContainerSniffer.sniff(localFile)
+            ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.raulshma.jellyplay.feature.player.video.engine.ContainerSniffer.sniff(localFile)
+            }
         val mimeHint = containerHint?.let {
             com.raulshma.jellyplay.feature.player.video.engine.ContainerMimeMapper.mapToMime(it)
         }

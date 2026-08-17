@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Base64
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.model.EditableItemMetadata
 import com.raulshma.jellyplay.core.model.EditorPerson
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.ImageProviderInfo
@@ -11,8 +12,8 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MetadataEditorInfo
 import com.raulshma.jellyplay.core.model.RemoteImageResult
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderIds
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
@@ -87,7 +88,7 @@ data class EditorUiState(
 
 @HiltViewModel
 class EditorViewModel @Inject constructor(
-    private val apiClient: JellyfinApiClient,
+    private val editorRepository: MetadataEditorRepository,
     authRepository: AuthRepository,
     private val subtitleProviderRepository: SubtitleProviderRepository,
     private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
@@ -120,18 +121,18 @@ class EditorViewModel @Inject constructor(
                 val imageInfos: List<ImageInfo>
                 val providers: List<ImageProviderInfo>
                 coroutineScope {
-                    val detailDeferred = async { apiClient.getMediaDetail(itemId) }
+                    val detailDeferred = async { editorRepository.getMediaDetail(itemId) }
                     // Editor metadata / image providers are admin-only endpoints.
                     // Skip them for non-admins instead of firing guaranteed-to-fail
                     // 403s (the server still enforces; this is defense-in-depth).
                     val editorInfoDeferred = async {
-                        if (isAdmin) apiClient.getMetadataEditorInfo(itemId).getOrNull() else null
+                        if (isAdmin) editorRepository.getMetadataEditorInfo(itemId).getOrNull() else null
                     }
                     val imageInfoDeferred = async {
-                        if (isAdmin) apiClient.getItemImageInfo(itemId).getOrNull() else null
+                        if (isAdmin) editorRepository.getItemImageInfo(itemId).getOrNull() else null
                     }
                     val providersDeferred = async {
-                        if (isAdmin) apiClient.getRemoteImageProviders(itemId).getOrNull() else null
+                        if (isAdmin) editorRepository.getRemoteImageProviders(itemId).getOrNull() else null
                     }
 
                     detail = detailDeferred.await().getOrThrow()
@@ -218,39 +219,41 @@ class EditorViewModel @Inject constructor(
                 val state = _uiState.value
                 val itemId = state.mediaDetail?.item?.id ?: return@launch
 
-                apiClient.updateItem(
+                editorRepository.updateItem(
                     itemId = itemId,
-                    name = state.name,
-                    originalTitle = state.originalTitle.ifBlank { null },
-                    sortName = state.sortName.ifBlank { null },
-                    overview = state.overview.ifBlank { null },
-                    tagline = state.tagline.ifBlank { null },
-                    genres = state.genres,
-                    tags = state.tags,
-                    studios = state.studios,
-                    communityRating = state.communityRating.toFloatOrNull(),
-                    criticRating = state.criticRating.toFloatOrNull(),
-                    officialRating = state.officialRating.ifBlank { null },
-                    customRating = state.customRating.ifBlank { null },
-                    productionYear = state.productionYear.toIntOrNull(),
-                    premiereDate = state.premiereDate.ifBlank { null },
-                    endDate = state.endDate.ifBlank { null },
-                    runtimeTicks = state.runtimeMinutes.toLongOrNull()?.let { it * 600_000_000 },
-                    indexNumber = state.indexNumber.toIntOrNull(),
-                    parentIndexNumber = state.parentIndexNumber.toIntOrNull(),
-                    displayOrder = state.displayOrder.ifBlank { null },
-                    status = state.status.ifBlank { null },
-                    airDays = state.airDays,
-                    airTime = state.airTime.ifBlank { null },
-                    people = state.people,
-                    providerIds = state.providerIds,
-                    lockData = state.lockData,
-                    lockedFields = state.lockedFields,
-                    preferredMetadataLanguage = state.preferredMetadataLanguage.ifBlank { null },
-                    preferredMetadataCountryCode = state.preferredMetadataCountryCode.ifBlank { null },
-                    taglines = if (state.tagline.isNotBlank()) listOf(state.tagline) else emptyList(),
-                    productionLocations = state.productionLocations,
-                    dateCreated = state.mediaDetail?.dateCreated,
+                    metadata = EditableItemMetadata(
+                        name = state.name,
+                        originalTitle = state.originalTitle.ifBlank { null },
+                        sortName = state.sortName.ifBlank { null },
+                        overview = state.overview.ifBlank { null },
+                        tagline = state.tagline.ifBlank { null },
+                        genres = state.genres,
+                        tags = state.tags,
+                        studios = state.studios,
+                        communityRating = state.communityRating.toFloatOrNull(),
+                        criticRating = state.criticRating.toFloatOrNull(),
+                        officialRating = state.officialRating.ifBlank { null },
+                        customRating = state.customRating.ifBlank { null },
+                        productionYear = state.productionYear.toIntOrNull(),
+                        premiereDate = state.premiereDate.ifBlank { null },
+                        endDate = state.endDate.ifBlank { null },
+                        runtimeTicks = state.runtimeMinutes.toLongOrNull()?.let { it * 600_000_000 },
+                        indexNumber = state.indexNumber.toIntOrNull(),
+                        parentIndexNumber = state.parentIndexNumber.toIntOrNull(),
+                        displayOrder = state.displayOrder.ifBlank { null },
+                        status = state.status.ifBlank { null },
+                        airDays = state.airDays,
+                        airTime = state.airTime.ifBlank { null },
+                        people = state.people,
+                        providerIds = state.providerIds,
+                        lockData = state.lockData,
+                        lockedFields = state.lockedFields,
+                        preferredMetadataLanguage = state.preferredMetadataLanguage.ifBlank { null },
+                        preferredMetadataCountryCode = state.preferredMetadataCountryCode.ifBlank { null },
+                        taglines = if (state.tagline.isNotBlank()) listOf(state.tagline) else emptyList(),
+                        productionLocations = state.productionLocations,
+                        dateCreated = state.mediaDetail?.dateCreated,
+                    ),
                 ).getOrThrow()
 
                 originalHash = computeDirtyHash(_uiState.value)
@@ -264,7 +267,7 @@ class EditorViewModel @Inject constructor(
     fun uploadImage(imageBytes: ByteArray, imageType: String) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            apiClient.setItemImage(itemId, imageType, imageBytes)
+            editorRepository.setItemImage(itemId, imageType, imageBytes)
                 .onSuccess { reloadImageInfos(itemId) }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
@@ -291,7 +294,7 @@ class EditorViewModel @Inject constructor(
     fun uploadImageFromUrl(url: String, imageType: String) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            apiClient.downloadRemoteImage(itemId, imageType, url)
+            editorRepository.downloadRemoteImage(itemId, imageType, url)
                 .onSuccess { reloadImageInfos(itemId) }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
@@ -300,7 +303,7 @@ class EditorViewModel @Inject constructor(
     fun deleteImage(imageType: String, imageIndex: Int? = null) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            apiClient.deleteItemImage(itemId, imageType, imageIndex)
+            editorRepository.deleteItemImage(itemId, imageType, imageIndex)
                 .onSuccess { reloadImageInfos(itemId) }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
@@ -309,7 +312,7 @@ class EditorViewModel @Inject constructor(
     fun loadRemoteImages(imageType: String? = null, provider: String? = null, startIndex: Int? = null) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            apiClient.getRemoteImages(itemId, imageType, provider, startIndex, 50)
+            editorRepository.getRemoteImages(itemId, imageType, provider, startIndex, 50)
                 .onSuccess { result -> _uiState.update { it.copy(remoteImages = result) } }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
@@ -319,7 +322,7 @@ class EditorViewModel @Inject constructor(
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             val base64Data = Base64.encodeToString(fileBytes, Base64.NO_WRAP)
-            apiClient.uploadSubtitle(itemId, base64Data, fileName, language, isForced, isHearingImpaired)
+            editorRepository.uploadSubtitle(itemId, base64Data, fileName, language, isForced, isHearingImpaired)
                 .onSuccess { loadEditorData(itemId) }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
@@ -352,7 +355,7 @@ class EditorViewModel @Inject constructor(
     fun deleteSubtitle(index: Int) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            apiClient.deleteSubtitle(itemId, index)
+            editorRepository.deleteSubtitle(itemId, index)
                 .onSuccess { loadEditorData(itemId) }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
@@ -361,7 +364,7 @@ class EditorViewModel @Inject constructor(
     fun searchRemoteSubtitles(language: String) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            apiClient.searchRemoteSubtitles(itemId, language)
+            editorRepository.searchRemoteSubtitles(itemId, language)
                 .onSuccess { results -> _uiState.update { it.copy(remoteSubtitleResults = results) } }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
@@ -370,7 +373,7 @@ class EditorViewModel @Inject constructor(
     fun downloadRemoteSubtitle(subtitleId: String) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            apiClient.downloadRemoteSubtitle(itemId, subtitleId)
+            editorRepository.downloadRemoteSubtitle(itemId, subtitleId)
                 .onSuccess { loadEditorData(itemId) }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
@@ -458,7 +461,7 @@ class EditorViewModel @Inject constructor(
                             bytes = file.bytes,
                         )
                         val base64 = Base64.encodeToString(file.bytes, Base64.NO_WRAP)
-                        apiClient.uploadSubtitle(
+                        editorRepository.uploadSubtitle(
                             itemId,
                             base64,
                             file.fileName,
@@ -490,13 +493,13 @@ class EditorViewModel @Inject constructor(
     ) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            apiClient.refreshItemMetadata(itemId, mode, mode, replaceAllMetadata, replaceAllImages)
+            editorRepository.refreshItemMetadata(itemId, mode, mode, replaceAllMetadata, replaceAllImages)
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
     }
 
     fun getImageUrl(itemId: String, imageInfo: com.raulshma.jellyplay.core.model.ImageInfo): String {
-        return apiClient.getImageUrl(
+        return editorRepository.getItemImageUrl(
             itemId,
             imageInfo.imageType,
             400,
@@ -506,7 +509,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun getFullImageUrl(itemId: String, imageInfo: com.raulshma.jellyplay.core.model.ImageInfo): String {
-        return apiClient.getImageUrl(
+        return editorRepository.getItemImageUrl(
             itemId,
             imageInfo.imageType,
             null,
@@ -516,7 +519,7 @@ class EditorViewModel @Inject constructor(
     }
 
     private suspend fun reloadImageInfos(itemId: String) {
-        apiClient.getItemImageInfo(itemId)
+        editorRepository.getItemImageInfo(itemId)
             .onSuccess { infos -> _uiState.update { it.copy(imageInfos = infos) } }
     }
 

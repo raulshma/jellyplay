@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.data.di
 
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.data.repository.AdminRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
@@ -13,6 +15,8 @@ import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceReposit
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
+import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
@@ -205,13 +209,45 @@ abstract class DataModule {
         impl: com.raulshma.jellyplay.core.data.playback.DefaultAudioQueueFacade,
     ): com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 
+    // The administration seam for Jellyfin-native admin screens: absorbs each
+    // screen's fan-out, lookup, and fallback policy behind screen operations
+    // so features never see the raw transport client.
+    @Binds
+    @Singleton
+    abstract fun bindAdminRepository(impl: AdminRepositoryImpl): AdminRepository
+
     @Binds
     @Singleton
     abstract fun bindAdminStatisticsRepository(impl: AdminStatisticsRepositoryImpl): AdminStatisticsRepository
 
+    // The metadata editor's seam: item metadata, image CRUD, remote images,
+    // and subtitle upload/delete behind one interface the editor feature
+    // consumes (previously the editor injected the raw transport client).
+    @Binds
+    @Singleton
+    abstract fun bindMetadataEditorRepository(impl: MetadataEditorRepositoryImpl): MetadataEditorRepository
+
     @Binds
     @Singleton
     abstract fun bindSearchHistoryRepository(impl: SearchHistoryRepositoryImpl): SearchHistoryRepository
+
+    // The single search kernel: debounced preview fetch + Seerr
+    // gating + history policy behind one seam, consumed by the home inline
+    // search and the search screen alike (previously two hand-rolled engines
+    // with two debounce constants and two history policies).
+    @Binds
+    @Singleton
+    abstract fun bindMediaSearchEngine(
+        impl: com.raulshma.jellyplay.core.data.search.MediaSearchEngineImpl,
+    ): com.raulshma.jellyplay.core.data.search.MediaSearchEngine
+
+    // The narrow offline-first title+poster lookup seam. Leaf
+    // adapter over existing singletons — no scope or cycle risk.
+    @Binds
+    @Singleton
+    abstract fun bindOfflineFirstItemResolver(
+        impl: com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl,
+    ): com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 
     @Binds
     @Singleton

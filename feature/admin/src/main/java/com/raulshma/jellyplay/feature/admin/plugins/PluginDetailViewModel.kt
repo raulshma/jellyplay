@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.model.PluginInfo
 import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.model.PluginStatus
 import com.raulshma.jellyplay.core.model.PluginVersionInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -30,7 +30,7 @@ data class PluginDetailState(
 
 @HiltViewModel
 class PluginDetailViewModel @Inject constructor(
-    private val apiClient: JellyfinApiClient,
+    private val adminRepository: AdminRepository,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(PluginDetailState())
@@ -47,7 +47,7 @@ class PluginDetailViewModel @Inject constructor(
     private fun loadPlugin(pluginId: String, pluginName: String) {
         launch {
             _state.value = _state.value.copy(isLoading = true, error = null, isEnabledOverride = null)
-            apiClient.getInstalledPlugins().onSuccess { plugins ->
+            adminRepository.getInstalledPlugins().onSuccess { plugins ->
                 val plugin = plugins.find { it.id == pluginId }
                 if (plugin != null) {
                     _state.value = _state.value.copy(
@@ -76,7 +76,7 @@ class PluginDetailViewModel @Inject constructor(
     private fun loadPackageInfoAsync(name: String, assemblyGuid: String) {
         launch {
             _state.value = _state.value.copy(isLoadingVersions = true)
-            apiClient.getPackageInfo(name, assemblyGuid).onSuccess { pkg ->
+            adminRepository.getPackageInfo(name, assemblyGuid).onSuccess { pkg ->
                 _state.value = _state.value.copy(
                     pluginPackage = pkg,
                     isLoadingVersions = false,
@@ -90,12 +90,11 @@ class PluginDetailViewModel @Inject constructor(
 
     private fun checkConfigPage(pluginId: String) {
         launch {
-            apiClient.getConfigurationPages().onSuccess { pages ->
-                val configPage = pages.find { it.pluginId == pluginId }
-                if (configPage != null) {
+            adminRepository.getPluginConfigPage(pluginId).onSuccess { page ->
+                if (page != null) {
                     _state.value = _state.value.copy(
                         hasConfigPage = true,
-                        configPageName = configPage.name,
+                        configPageName = page.name,
                     )
                 }
             }.onFailure { e ->
@@ -111,9 +110,9 @@ class PluginDetailViewModel @Inject constructor(
         _state.value = _state.value.copy(isToggling = true, isEnabledOverride = !isEnabled)
         launch {
             val result = if (isEnabled) {
-                apiClient.disablePlugin(plugin.id, plugin.version)
+                adminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = false)
             } else {
-                apiClient.enablePlugin(plugin.id, plugin.version)
+                adminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = true)
             }
             result.onSuccess {
                 delay(500)
@@ -130,7 +129,7 @@ class PluginDetailViewModel @Inject constructor(
         val plugin = _state.value.plugin ?: return
         _state.value = _state.value.copy(isUninstalling = true)
         launch {
-            apiClient.uninstallPlugin(plugin.id).onSuccess {
+            adminRepository.uninstallPlugin(plugin.id).onSuccess {
                 delay(500)
                 onComplete()
             }.onFailure { e ->
@@ -147,7 +146,7 @@ class PluginDetailViewModel @Inject constructor(
         val pkg = _state.value.pluginPackage ?: return
         _state.value = _state.value.copy(installingVersion = version.version)
         launch {
-            apiClient.installPackage(
+            adminRepository.installPackage(
                 name = pkg.name,
                 assemblyGuid = pkg.guid,
                 version = version.version,

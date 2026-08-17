@@ -3,9 +3,11 @@ package com.raulshma.jellyplay.core.network.github
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.core.model.compareVersions
 import com.raulshma.jellyplay.core.network.api.ApiException
+import com.raulshma.jellyplay.core.network.api.emptyResponseBodyError
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.OkHttpClient
@@ -75,15 +77,6 @@ class GitHubReleasesApiImpl @Inject constructor(
         return try {
             withContext(Dispatchers.IO) {
                 okHttpClient.newCall(request).execute().use { response ->
-                    val body = response.body?.string()
-                    if (body.isNullOrBlank()) {
-                        return@withContext Result.failure<AppUpdateInfo>(
-                            ApiException.fromNetwork(
-                                java.io.IOException("Empty response from GitHub"),
-                                "Empty response from GitHub",
-                            )
-                        )
-                    }
                     if (!response.isSuccessful) {
                         return@withContext Result.failure(
                             ApiException.fromHttp(
@@ -92,7 +85,15 @@ class GitHubReleasesApiImpl @Inject constructor(
                             )
                         )
                     }
-                    val release = json.decodeFromString<GitHubRelease>(body)
+                    val stream = response.body?.byteStream()
+                    if (stream == null) {
+                        return@withContext Result.failure<AppUpdateInfo>(
+                            emptyResponseBodyError("GitHub")
+                        )
+                    }
+                    // Stream-decode: release notes can be large and previously
+                    // paid double (buffered String + decoded objects).
+                    val release = json.decodeFromStream<GitHubRelease>(stream)
                     val tag = release.tagName.orEmpty().removePrefix("v")
                     val isUpdateAvailable = compareVersions(tag, currentVersionName) > 0
                     val chosen = selectAsset(

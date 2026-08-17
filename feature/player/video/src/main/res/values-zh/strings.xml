@@ -173,6 +173,12 @@
     <string name="player_video_set_a_point">设置 A 点</string>
     <string name="player_video_set_b_point">设置 B 点</string>
     <string name="player_video_clear_ab_repeat">清除 A/B 重复</string>
+    <string name="player_video_set_a_point_at">设置 A 点 \u00B7 %1$s</string>
+    <string name="player_video_set_b_point_at">设置 B 点 \u00B7 %1$s</string>
+    <string name="player_video_ab_repeat_badge_enabled">A/B 重复已开启 — 跳到起点后使用“设置 A 点”</string>
+    <string name="player_video_ab_repeat_badge_a_set">A 点已设于 %1$s — 跳到终点后使用“设置 B 点”</string>
+    <string name="player_video_ab_repeat_badge_active">循环播放 %1$s → %2$s</string>
+    <string name="player_video_ab_repeat_badge_cleared">A/B 重复已清除</string>
     <string name="player_audio_only">仅音频</string>
     <string name="player_audio_only_on">仅音频 — 视频已隐藏</string>
 

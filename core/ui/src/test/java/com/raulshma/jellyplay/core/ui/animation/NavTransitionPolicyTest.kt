@@ -69,6 +69,27 @@ class NavTransitionPolicyTest {
     }
 
     @Test
+    fun forward_modalTarget_overDetail_isModalPush() {
+        // e.g. opening the Requests modal from a PersonDetail screen: the modal
+        // target wins over the detail initial route. Modal membership now
+        // comes from per-route member metadata, so this pins the bucket
+        // interplay the old predicate lists used to own.
+        assertEquals(
+            NavTransitionKind.MODAL_PUSH,
+            policy.kind(ctx(NavRouteClass.MODAL, NavRouteClass.DETAIL)),
+        )
+    }
+
+    @Test
+    fun forward_settingsModal_to_settingsModal_isModalPush() {
+        // e.g. Integrations → ArrSettings (a modal opening another modal).
+        assertEquals(
+            NavTransitionKind.MODAL_PUSH,
+            policy.kind(ctx(NavRouteClass.MODAL, NavRouteClass.MODAL)),
+        )
+    }
+
+    @Test
     fun forward_tabToTab_isTabSwitch() {
         assertEquals(
             NavTransitionKind.TAB_SWITCH,

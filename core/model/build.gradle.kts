@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
 
@@ -17,7 +16,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
-        compose = true
+        // Annotation-only Compose usage (@Immutable/@Stable on data classes):
+        // compose.runtime suffices, no compiler plugin needed (pattern documented
+        // in feature/player/core/build.gradle.kts).
         buildConfig = false
         resValues = false
     }

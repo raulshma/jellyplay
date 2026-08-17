@@ -38,6 +38,7 @@ junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
 mockk = "1.14.11"
+orgJson = "20240303"
 coroutinesTest = "1.11.0"
 robolectric = "4.16.1"
 roomTesting = "2.8.4"
@@ -200,6 +201,7 @@ truetype-parser = { group = "io.github.yubyf", name = "truetypeparser-light", ve
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 
 # Smooth Corner Rect
 smooth-corner-rect = { group = "com.github.racra", name = "smooth-corner-rect-android-compose", version.ref = "smoothCornerRect" }

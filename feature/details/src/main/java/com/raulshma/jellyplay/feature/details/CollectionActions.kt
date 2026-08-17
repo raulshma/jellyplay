@@ -1,14 +1,14 @@
 package com.raulshma.jellyplay.feature.details
 
-import android.content.Context
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.MediaDetail
-import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.isVideoType
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,10 +16,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Collection-owning slice of the detail screen's state. Mirrors the subset of
- * [DetailUiState] fields that [CollectionActions] mutates so the ViewModel can
- * fold this [StateFlow] into its aggregated uiState without owning any
- * collection logic itself.
+ * Collection-owning slice of the detail screen's state. Published directly by
+ * [CollectionActions] via [state] — collected by the Add-to-Collection sheet
+ * and dialog at their composition sites, never re-flattened into
+ * [DetailUiState].
  */
 @Immutable
 internal data class CollectionState(
@@ -32,23 +32,23 @@ internal data class CollectionState(
 
 /**
  * Owns the Add-to-Collection concern for the detail screen. A plain helper
- * class (no `@Inject`) constructed by [DetailViewModel], structurally a mirror
- * of [PlaylistActions]: coroutines launch on the supplied [scope],
- * collection-owning state publishes via [state], and user-facing messages push
- * through [messageSink] so the helper owns no message channel of its own.
+ * class constructed by the VM, structurally a mirror of [PlaylistActions]:
+ * coroutines launch on the supplied [scope], collection-owning state
+ * publishes via [state], and user-facing messages push through the shared
+ * [messages] channel so the helper owns no message channel of its own.
  *
  * Unlike playlists, collections have no reserved "Watch Later" bucket and no
  * media-type tagging — the Jellyfin `createCollection` endpoint takes only a
- * name (+ seed ids) — so this helper is correspondingly simpler.
+ * name (+ seed ids) — so this helper is correspondingly simpler (and needs no
+ * factory: every collaborator is already a [DetailViewModel] dependency).
  */
 internal class CollectionActions(
     private val scope: CoroutineScope,
+    private val session: StateFlow<DetailSession?>,
+    private val messages: MutableSharedFlow<DetailMessage>,
+    private val strings: DetailStrings,
     private val mediaRepository: MediaRepository,
-    private val context: Context,
-    private val detailProvider: () -> MediaDetail?,
-    private val sortedEpisodesProvider: () -> List<MediaItem>,
-    private val canonicalEpisodeIds: suspend (String) -> List<String>,
-    private val messageSink: (DetailMessage) -> Unit,
+    private val mediaDetailProvider: MediaDetailProvider,
 ) {
     private val _state = MutableStateFlow(CollectionState())
     val state: StateFlow<CollectionState> = _state.asStateFlow()
@@ -78,7 +78,7 @@ internal class CollectionActions(
      * its episode ids in [addToCollection] / [createAndAddCollection].
      */
     fun openCollectionPicker() {
-        val detail = detailProvider() ?: return
+        val detail = session.value?.detail ?: return
         val type = detail.item.mediaType
         if (!type.isVideoType && type != MediaType.SERIES) return
         _state.update { it.copy(showCollectionPicker = true) }
@@ -103,12 +103,12 @@ internal class CollectionActions(
     }
 
     private fun loadCollections() {
-        val itemId = detailProvider()?.item?.id ?: return
+        val itemId = session.value?.detail?.item?.id ?: return
         _state.update { it.copy(isLoadingCollections = true) }
         scope.launch {
             mediaRepository.getCollections(limit = 100)
                 .onSuccess { collections ->
-                    if (detailProvider()?.item?.id != itemId) return@onSuccess
+                    if (session.value?.detail?.item?.id != itemId) return@onSuccess
                     _state.update {
                         it.copy(
                             collections = collections,
@@ -117,7 +117,7 @@ internal class CollectionActions(
                     }
                 }
                 .onFailure {
-                    if (detailProvider()?.item?.id != itemId) return@onFailure
+                    if (session.value?.detail?.item?.id != itemId) return@onFailure
                     _state.update { it.copy(isLoadingCollections = false) }
                 }
         }
@@ -129,27 +129,27 @@ internal class CollectionActions(
      * not meaningful — collections hold the concrete playable items).
      */
     fun addToCollection(collection: CollectionSummary) {
-        val detail = detailProvider() ?: return
+        val detail = session.value?.detail ?: return
         scope.launch {
             _state.update { it.copy(isAddingToCollection = true) }
             resolveItemIds(detail)
                 .onSuccess { ids ->
                     if (ids.isEmpty()) {
-                        messageSink(DetailMessage.Text(context.getString(R.string.detail_msg_no_episodes_queued)))
+                        messages.tryEmit(DetailMessage.Text(strings.get(R.string.detail_msg_no_episodes_queued)))
                         return@onSuccess
                     }
                     mediaRepository.addItemsToCollection(collection.id, ids)
                         .onSuccess {
-                            messageSink(
-                                DetailMessage.Text(context.getString(R.string.detail_msg_added_to_collection, collection.name))
+                            messages.tryEmit(
+                                DetailMessage.Text(strings.get(R.string.detail_msg_added_to_collection, collection.name))
                             )
                         }
                         .onFailure {
-                            messageSink(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_collection)))
+                            messages.tryEmit(DetailMessage.Text(strings.get(R.string.detail_msg_couldnt_add_to_collection)))
                         }
                 }
                 .onFailure {
-                    messageSink(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_collection)))
+                    messages.tryEmit(DetailMessage.Text(strings.get(R.string.detail_msg_couldnt_add_to_collection)))
                 }
             finishAction()
         }
@@ -161,13 +161,13 @@ internal class CollectionActions(
      * (no overview), so the create dialog collects a name alone.
      */
     fun createAndAddCollection(name: String) {
-        val detail = detailProvider() ?: return
+        val detail = session.value?.detail ?: return
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         scope.launch {
             _state.update { it.copy(isAddingToCollection = true) }
             val ids = resolveItemIds(detail).getOrElse {
-                messageSink(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_collection)))
+                messages.tryEmit(DetailMessage.Text(strings.get(R.string.detail_msg_couldnt_add_to_collection)))
                 finishAction(closeDialog = true)
                 return@launch
             }
@@ -176,7 +176,7 @@ internal class CollectionActions(
             // creating a collection here would be empty while the success
             // message claims an item was added. Surface it as a no-op instead.
             if (ids.isEmpty()) {
-                messageSink(DetailMessage.Text(context.getString(R.string.detail_msg_no_episodes_queued)))
+                messages.tryEmit(DetailMessage.Text(strings.get(R.string.detail_msg_no_episodes_queued)))
                 finishAction(closeDialog = true)
                 return@launch
             }
@@ -184,11 +184,11 @@ internal class CollectionActions(
                 name = trimmed,
                 itemIds = ids,
             ).onSuccess {
-                messageSink(
-                    DetailMessage.Text(context.getString(R.string.detail_msg_collection_created, trimmed))
+                messages.tryEmit(
+                    DetailMessage.Text(strings.get(R.string.detail_msg_collection_created, trimmed))
                 )
             }.onFailure {
-                messageSink(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_collection)))
+                messages.tryEmit(DetailMessage.Text(strings.get(R.string.detail_msg_couldnt_add_to_collection)))
             }
             finishAction(closeDialog = true)
         }
@@ -198,16 +198,17 @@ internal class CollectionActions(
      * Resolves the current item into the Jellyfin item ids to add to a
      * collection. Movies/episodes/music-videos resolve to themselves; a series
      * expands to its fetched episodes in canonical playback order. Prefers the
-     * sorted ids already in the UI snapshot; falls back to
-     * [canonicalEpisodeIds] when the picker opened before episodes resolved.
+     * sorted ids already in the session snapshot; falls back to
+     * [MediaDetailProvider.canonicalEpisodeIds] when the picker opened before
+     * episodes resolved.
      */
     private suspend fun resolveItemIds(
         detail: MediaDetail,
     ): Result<List<String>> = runCatching {
         val item = detail.item
         if (item.mediaType != MediaType.SERIES) return@runCatching listOf(item.id)
-        val sortedIds = sortedEpisodesProvider().takeIf { it.isNotEmpty() }?.map { it.id }
+        val sortedIds = session.value?.sortedEpisodes?.takeIf { it.isNotEmpty() }?.map { it.id }
         if (!sortedIds.isNullOrEmpty()) return@runCatching sortedIds
-        canonicalEpisodeIds(item.id)
+        mediaDetailProvider.canonicalEpisodeIds(item.id)
     }
 }

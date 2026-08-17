@@ -21,6 +21,7 @@ import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -40,6 +41,10 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     // happens once setContent renders an image — well after onCreate returns.
     @Inject lateinit var okHttpClientProvider: javax.inject.Provider<OkHttpClient>
     @Inject lateinit var networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
+    // Defers the subtitle-font asset copy + byte-cache pre-warm (multi-MB .ttf
+    // reads) to the IO block below, so the player's Main-thread font handoff to
+    // libass hits a warm cache instead of reading disk.
+    @Inject lateinit var fontProviderProvider: javax.inject.Provider<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>
     // javax.inject.Provider defers Hilt construction of AudioPlaybackManager
     // (and its transitive 14-dep graph: AudioLibraryBrowser,
     // AudioProgressReporter, AudioCrossfader, QueueUndoStack, LruCache(25), …)
@@ -80,8 +85,14 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     override fun onCreate() {
         super.onCreate()
         // Critical path: audio + widget updaters (no dependency on the groups
-        // below).
+        // below). Also pre-warms (a) the network-offline DataStore slice — the
+        // real persisted read happens in the store's eager stateIn upstream,
+        // this keeps the flow warm for the imageLoader's lazily-sized DiskCache —
+        // and (b) the subtitle font byte cache so the first ASS playback doesn't
+        // read fonts on Main.
         applicationScope.launch(Dispatchers.IO) {
+            runCatching { networkOfflineStore.networkOffline.first() }
+            runCatching { fontProviderProvider.get().prewarm() }
             audioPlaybackManagerProvider.get().start()
             nowPlayingWidgetUpdaterProvider.get().start()
         }
@@ -130,9 +141,6 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     }
 
     private val imageLoader by lazy {
-        val cacheMb = networkOfflineStore.networkOffline.value.maxCacheSizeMb
-        val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 256L * 1024 * 1024
-
         // Tier the memory-cache budget on device RAM class, mirroring the
         // EngineDeviceProfile.isLowRamDevice gate already used for trickplay.
         // On a 1 GB TV stick the default 20% would over-reserve a small heap
@@ -151,6 +159,15 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                     .build()
             }
             .diskCache {
+                // Sized inside the builder lambda: Coil builds the DiskCache
+                // lazily on its FIRST access (the first networked image write),
+                // not at ImageLoader construction — by then the `networkOffline`
+                // pre-warm in onCreate has long since published the persisted
+                // slice, so `.value` reads the user-configured size instead of
+                // the default. A persisted size > 0 wins; anything else falls
+                // back to 256 MB.
+                val cacheMb = networkOfflineStore.networkOffline.value.maxCacheSizeMb
+                val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 256L * 1024 * 1024
                 DiskCache.Builder()
                     .directory(cacheDir.resolve(ImageCache.DIR).absolutePath.toPath())
                     .maxSizeBytes(cacheSize)

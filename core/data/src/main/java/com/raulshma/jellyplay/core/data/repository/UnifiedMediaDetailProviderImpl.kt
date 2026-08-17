@@ -733,15 +733,14 @@ internal class UnifiedMediaDetailProviderImpl @Inject constructor(
     }
 
     /**
-     * Flattens every episode across a local series's seasons (one-shot Room
-     * read). Used to derive both the aggregate header and the per-episode
-     * artwork map from a single pass over the offline rows — the catalogue's
-     * [MediaItem] projection drops `posterPath` / `totalSizeBytes`.
+     * Flattens every episode across a local series's seasons (single one-shot
+     * Room read, season/index ordered). Used to derive both the aggregate
+     * header and the per-episode artwork map from a single pass over the
+     * offline rows — the catalogue's [MediaItem] projection drops
+     * `posterPath` / `totalSizeBytes`.
      */
     private suspend fun localSeriesEpisodes(seriesId: String): List<OfflineMediaItem> =
-        offlineRepository.getSeasonsForSeries(seriesId).first().flatMap { season ->
-            offlineRepository.getEpisodesForSeason(season.id).first()
-        }
+        offlineRepository.getEpisodesForSeries(seriesId)
 
     // ------------------------------------------------------------------
     // Snapshot construction

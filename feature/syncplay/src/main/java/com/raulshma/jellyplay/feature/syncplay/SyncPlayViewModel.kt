@@ -18,17 +18,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
-
-data class PlayItemRequest(
-    val itemId: String,
-    val positionTicks: Long,
-)
 
 @Immutable
 data class SyncPlayUiState(
@@ -41,6 +34,13 @@ data class SyncPlayUiState(
     val pendingJoin: SyncPlayGroup? = null,
 )
 
+/**
+ * Group list + join/leave state for the SyncPlay screen.
+ *
+ * Player opening on group playback is NOT handled here — the app shell
+ * (MainViewModel.syncPlayOpenRequests) owns it so the player opens regardless
+ * of which screen is foreground.
+ */
 @HiltViewModel
 class SyncPlayViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -55,11 +55,7 @@ class SyncPlayViewModel @Inject constructor(
     private val _notifications = MutableSharedFlow<String>(extraBufferCapacity = 10)
     val notifications: SharedFlow<String> = _notifications.asSharedFlow()
 
-    private val _navigateToPlayer = MutableStateFlow<PlayItemRequest?>(null)
-    val navigateToPlayer: StateFlow<PlayItemRequest?> = _navigateToPlayer.asStateFlow()
-
     private var commandJob: Job? = null
-    private var lastHandledPlayingItemId: String? = null
     private var autoJoinGroupId: String? = null
 
     init {
@@ -128,15 +124,6 @@ class SyncPlayViewModel @Inject constructor(
                     _uiState.update { it.copy(isInGroup = true) }
                     loadCurrentGroup()
                     startEventListener()
-                    val group = syncPlayManager.currentGroup
-                    val playingId = group?.playingItemId
-                    if (!playingId.isNullOrBlank()) {
-                        _navigateToPlayer.value = PlayItemRequest(
-                            itemId = playingId,
-                            positionTicks = group?.positionTicks ?: 0L,
-                        )
-                        lastHandledPlayingItemId = playingId
-                    }
                 }
                 .onFailure {
                     _uiState.update { state -> state.copy(error = it.message ?: context.getString(R.string.syncplay_error_join_group)) }
@@ -151,7 +138,6 @@ class SyncPlayViewModel @Inject constructor(
                 .onSuccess {
                     _uiState.update { it.copy(isInGroup = false, currentGroup = null) }
                     commandJob?.cancel()
-                    lastHandledPlayingItemId = null
                     loadGroups()
                 }
                 .onFailure {
@@ -185,23 +171,12 @@ class SyncPlayViewModel @Inject constructor(
         }
     }
 
-    fun onNavigateToPlayerHandled() {
-        _navigateToPlayer.value = null
-    }
-
     private fun startEventListener() {
         commandJob?.cancel()
         commandJob = launch {
             syncPlayManager.events.collect { event ->
                 when (event) {
                     is SyncPlayEvent.PlayQueueUpdate -> {
-                        if (event.data.playingItemId.isNotBlank() && lastHandledPlayingItemId != event.data.playingItemId) {
-                            _navigateToPlayer.value = PlayItemRequest(
-                                itemId = event.data.playingItemId,
-                                positionTicks = event.data.startPositionTicks,
-                            )
-                            lastHandledPlayingItemId = event.data.playingItemId
-                        }
                         _uiState.update { state ->
                             val current = state.currentGroup ?: SyncPlayGroupInfo(
                                 groupId = "",

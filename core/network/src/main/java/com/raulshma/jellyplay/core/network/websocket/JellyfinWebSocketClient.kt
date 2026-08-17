@@ -18,6 +18,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
@@ -28,14 +29,17 @@ import kotlin.random.Random
  * One entry in the inbound Jellyfin WebSocket message stream.
  *
  * @param type raw Jellyfin `MessageType` string (e.g. `"ScheduledTasksInfo"`, `"Sessions"`)
- * @param data the `Data` payload as a [JSONObject]. For message types whose payload is an
- *   array (e.g. `ScheduledTasksInfo.Data` is `TaskInfo[]`) or a primitive string
- *   (`ForceKeepAlive.Data` is a number), the consumer must read the raw text instead —
- *   see [messageType] for that escape hatch.
+ * @param data the `Data` payload as a [JSONObject] for object-payload message types. Empty
+ *   when the payload is not an object — array payloads are exposed via [dataArray], and
+ *   primitive payloads (`ForceKeepAlive.Data` is a number) never reach consumers.
+ * @param dataArray the `Data` payload as a [JSONArray] for array-payload message types
+ *   (`Sessions` = `SessionInfo[]`, `ScheduledTasksInfo` = `TaskInfo[]`), else null.
+ *   Consumers of those types must read this field instead of `data`.
  */
 data class WebSocketEvent(
     val type: String,
     val data: JSONObject,
+    val dataArray: JSONArray? = null,
     val rawText: String,
 )
 
@@ -102,7 +106,7 @@ class JellyfinWebSocketClient @Inject constructor(
         val accessToken = token ?: return
         val device = deviceId ?: return
 
-        val wsUrl = buildWsUrl(serverAddress, accessToken, device)
+        val wsUrl = buildSocketUrl(serverAddress, device, deviceName, clientName, accessToken)
         // Log only the base endpoint — the full URL carries the access token
         // and deviceId as query parameters.
         Log.d(TAG, "Connecting WebSocket to ${serverAddress.trimEnd('/')}/socket")
@@ -225,15 +229,6 @@ class JellyfinWebSocketClient @Inject constructor(
         webSocket = null
     }
 
-    private fun buildWsUrl(serverAddress: String, accessToken: String, device: String): String {
-        val base = serverAddress.trim().trimEnd('/')
-            .replace("https://", "wss://")
-            .replace("http://", "ws://")
-        val name = deviceName?.let { "&deviceName=${java.net.URLEncoder.encode(it, "UTF-8")}" } ?: ""
-        val client = clientName?.let { "&client=${java.net.URLEncoder.encode(it, "UTF-8")}" } ?: ""
-        return "$base/socket?api_key=$accessToken&deviceId=$device$name$client"
-    }
-
     private fun handleMessage(text: String) {
         try {
             val json = JSONObject(text)
@@ -245,23 +240,43 @@ class JellyfinWebSocketClient @Inject constructor(
                 handleForceKeepAlive(timeoutMs)
                 return
             }
-            val data = json.optJSONObject("Data") ?: JSONObject()
 
+            // Child `Data` construction only happens for emitted types — most
+            // inbound traffic (UserDataChanged, LibraryChanged, …) is dropped
+            // here and must not pay for object construction.
             when (messageType) {
                 "SyncPlayCommand",
                 "SyncPlayGroupUpdate",
                 "Play",
                 "Playstate",
                 "GeneralCommand",
-                "Sessions",
                 "KeepAlive",
                 "GroupJoined",
-                "GroupLeft",
+                "GroupLeft" -> {
+                    val data = json.optJSONObject("Data") ?: JSONObject()
+                    _events.tryEmit(WebSocketEvent(type = messageType, data = data, rawText = text))
+                }
+                // Array payloads: `Data` is a JSON array, which the object-typed
+                // `data` field cannot represent. `Sessions` consumers decode the
+                // raw envelope text directly (array-aware DTO in SessionsPayload.kt),
+                // so no org.json child construction happens on this hot path —
+                // it arrives on every session/playstate change of any client.
+                // (Sessions previously fell into optJSONObject → always `{}`.)
+                "Sessions" -> {
+                    _events.tryEmit(WebSocketEvent(type = messageType, data = JSONObject(), rawText = text))
+                }
                 // Scheduled-task realtime updates. Server only pushes these once
                 // the client sends ScheduledTasksInfoStart (handled by the
-                // realtime channel, not here).
+                // realtime channel, not here). Consumers read `dataArray`.
                 "ScheduledTasksInfo" -> {
-                    _events.tryEmit(WebSocketEvent(type = messageType, data = data, rawText = text))
+                    _events.tryEmit(
+                        WebSocketEvent(
+                            type = messageType,
+                            data = JSONObject(),
+                            dataArray = json.optJSONArray("Data"),
+                            rawText = text,
+                        ),
+                    )
                 }
             }
         } catch (e: Exception) {

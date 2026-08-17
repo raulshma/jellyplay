@@ -111,6 +111,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
 import com.raulshma.jellyplay.feature.player.video.R
+import com.raulshma.jellyplay.feature.player.video.AbRepeatState
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.composables.icons.tabler.Tabler
@@ -221,7 +222,7 @@ internal fun PlayerControls(
     onVideoFilterClick: () -> Unit = {},
     supportsScreenshot: Boolean = false,
     onScreenshotClick: () -> Unit = {},
-    abRepeatActive: Boolean = false,
+    abRepeat: AbRepeatState = AbRepeatState(),
     onAbRepeatToggle: () -> Unit = {},
     onAbRepeatSetA: () -> Unit = {},
     onAbRepeatSetB: () -> Unit = {},
@@ -562,6 +563,8 @@ internal fun PlayerControls(
                     playbackSpeed = playbackSpeed,
                     showTimeRemaining = showTimeRemaining,
                     resumePositionMs = resumePositionMs,
+                    abRepeatStartMs = abRepeat.aMs,
+                    abRepeatEndMs = abRepeat.bMs,
                     onSeekStart = onSeekStart,
                     onSeekEnd = onSeekEnd,
                     onSeekPositionChange = onSeekPositionChange,
@@ -807,7 +810,7 @@ internal fun PlayerControls(
                 showOverflow = false
                 onScreenshotClick()
             },
-            abRepeatActive = abRepeatActive,
+            abRepeat = abRepeat,
             onAbRepeatToggle = {
                 showOverflow = false
                 onAbRepeatToggle()
@@ -985,6 +988,13 @@ private fun TvControllableSeekBar(
     playbackSpeed: Float = 1.0f,
     showTimeRemaining: Boolean = false,
     resumePositionMs: Long = 0L,
+    // Plain values (not streams): A/B points change only on user action, never
+    // per position tick, so passing them here keeps the leaf-collection rule
+    // intact while letting the canvas visualize the window. Point presence
+    // drives drawing — A alone shows its tick, both points show the region.
+    // `setEnabled(false)` wipes points, so a disabled window never renders.
+    abRepeatStartMs: Long? = null,
+    abRepeatEndMs: Long? = null,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
     onSeekPositionChange: (Long) -> Unit = {},
@@ -1032,6 +1042,10 @@ private fun TvControllableSeekBar(
     val chapterMarkerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
     // Resume-position marker: tertiary stands apart from progress/chapter markers.
     val resumeMarkerColor = MaterialTheme.colorScheme.tertiary
+
+    // A/B repeat window: translucent region on the track + primary edge ticks.
+    val abRepeatRegionColor = activeColor.copy(alpha = 0.28f)
+    val abRepeatMarkerColor = activeColor
 
     // Precompute the per-segment draw color once per segment list. The seek bar
     // Canvas redraws on every position/buffered tick (~4 Hz) and previously
@@ -1238,6 +1252,54 @@ private fun TvControllableSeekBar(
                     size = androidx.compose.ui.geometry.Size(trackWidth * progress, trackHeight.toPx()),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight.toPx() / 2f),
                 )
+
+                // A/B repeat window: the A tick appears as soon as A is
+                // captured; completing the window (A < B) adds the shaded
+                // region and the B tick. Toggling A/B repeat off wipes the
+                // points, so the markers vanish with it.
+                val abStart = abRepeatStartMs
+                val abEnd = abRepeatEndMs
+                if (duration > 0) {
+                    val abMarkerHeight = 10.dp.toPx()
+                    val abMarkerWidth = 2.dp.toPx()
+                    if (abStart != null && abEnd != null && abStart < abEnd) {
+                        val abStartFrac = (abStart.toFloat() / duration).coerceIn(0f, 1f)
+                        val abEndFrac = (abEnd.toFloat() / duration).coerceIn(0f, 1f)
+                        if (abEndFrac > abStartFrac) {
+                            drawRoundRect(
+                                color = abRepeatRegionColor,
+                                topLeft = androidx.compose.ui.geometry.Offset(abStartFrac * trackWidth, trackY),
+                                size = androidx.compose.ui.geometry.Size(
+                                    (abEndFrac - abStartFrac) * trackWidth,
+                                    trackHeight.toPx(),
+                                ),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight.toPx() / 2f),
+                            )
+                            listOf(abStartFrac, abEndFrac).forEach { frac ->
+                                drawRoundRect(
+                                    color = abRepeatMarkerColor,
+                                    topLeft = androidx.compose.ui.geometry.Offset(
+                                        frac * trackWidth - abMarkerWidth / 2f,
+                                        trackY + trackHeight.toPx() / 2f - abMarkerHeight / 2f,
+                                    ),
+                                    size = androidx.compose.ui.geometry.Size(abMarkerWidth, abMarkerHeight),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.dp.toPx()),
+                                )
+                            }
+                        }
+                    } else if (abStart != null) {
+                        val abStartFrac = (abStart.toFloat() / duration).coerceIn(0f, 1f)
+                        drawRoundRect(
+                            color = abRepeatMarkerColor,
+                            topLeft = androidx.compose.ui.geometry.Offset(
+                                abStartFrac * trackWidth - abMarkerWidth / 2f,
+                                trackY + trackHeight.toPx() / 2f - abMarkerHeight / 2f,
+                            ),
+                            size = androidx.compose.ui.geometry.Size(abMarkerWidth, abMarkerHeight),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.dp.toPx()),
+                        )
+                    }
+                }
 
                 if (chapters.isNotEmpty() && duration > 0) {
                     chapters.forEach { chapter ->
