@@ -32,6 +32,41 @@ internal fun emptyResponseBodyError(source: String): ApiException {
 }
 
 /**
+ * [parseJsonRequest] for Unit-returning calls: *arr v3 mutation endpoints
+ * return the full affected resource list, which callers would decode purely
+ * to discard it. Success depends only on the status code, so the body is read
+ * only on the error path, for the error message.
+ */
+internal suspend fun parseUnitRequest(
+    client: JsonRequestClient,
+    request: Request,
+): Result<Unit> = try {
+    withContext(Dispatchers.IO) {
+        client.okHttpClient.newCall(request).execute().use { response ->
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                val body = response.body?.string()
+                if (body == null) {
+                    Result.failure<Unit>(
+                        ApiException.fromHttp(response.code, "Empty response body (HTTP ${response.code})")
+                    )
+                } else {
+                    Result.failure(
+                        ApiException.fromHttp(response.code, client.parseErrorMessage(response.code, body))
+                    )
+                }
+            }
+        }
+    }
+} catch (e: Exception) {
+    // CancellationException must propagate for structured-concurrency
+    // correctness; everything else becomes a network failure.
+    if (e is CancellationException) throw e
+    Result.failure(ApiException.fromNetwork(e, client.formatNetworkError(e)))
+}
+
+/**
  * Executes [request] and decodes the success body straight from the
  * response stream — avoids holding the buffered String and the decoded
  * object graph alive at the same time (large queue/history/discover

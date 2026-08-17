@@ -17,7 +17,6 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -43,7 +42,8 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
  * rendered at zoom == 1:
  * - Honors [SubtitleStyle.applyCustomStyle]: when false, falls back to mpv's
  *   default native caption style (white text, black 3.0 outline, bold=false, italic=false).
- * - Resolves font typeface (custom user font or bundled fallback) via [FontProvider].
+ * - Resolves font typeface (custom user font or bundled fallback) via the injected
+ *   [FontProvider] singleton, so its LRU cache and startup prewarm serve the overlay too.
  * - Scales font size proportionally to video container height (matching mpv's `sub-font-size=55`
  *   libass 720p reference canvas ratio).
  * - Places bottom margin at container height * [SubtitleStyle.verticalPosition] (matching `sub-pos`).
@@ -54,12 +54,11 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 internal fun MpvSubtitleOverlay(
     cue: CharSequence?,
     style: SubtitleStyle,
+    fontProvider: FontProvider,
     modifier: Modifier = Modifier,
 ) {
     if (cue.isNullOrBlank()) return
 
-    val context = LocalContext.current
-    val fontProvider = remember(context) { FontProvider(context.applicationContext) }
     val effectiveStyle = remember(style) { resolveEffectiveStyle(style) }
 
     val typeface = remember(effectiveStyle.rawStyle, fontProvider) {

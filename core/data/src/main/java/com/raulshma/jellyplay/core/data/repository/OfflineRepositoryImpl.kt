@@ -122,6 +122,14 @@ class OfflineRepositoryImpl @Inject constructor(
                     .filter { it.media.mediaType != MediaType.SERIES.name }
                     .map { it.media.id }
                     .toList()
+                // Map metadata rows to models once per metadata emission: the
+                // mapping depends solely on offline_media/playback_state
+                // columns, so re-running it inside the combine below would only
+                // repeat the JSON/CSV decodes on every downloads re-emission
+                // (2 s progress ticks during transfers). The combine instead
+                // projects just the download-derived fields onto these items
+                // via cheap data-class copies.
+                val baseItems = rows.map { it.toOfflineMediaItem() }
                 val directDownloadsFlow: Flow<Map<String, DownloadEntity>> =
                     if (directIds.isEmpty()) {
                         flowOf(emptyMap())
@@ -139,17 +147,19 @@ class OfflineRepositoryImpl @Inject constructor(
                 // Combine both maps so the summary re-emits as episode
                 // downloads progress (Room re-emits each Flow on writes to its
                 // tables). SERIES rows take their bytes from the aggregate;
-                // everything else from its direct download row.
+                // everything else from its direct download row. Both branches
+                // are cheap copies over the pre-mapped items — only the
+                // download-derived fields are re-projected.
                 combine(directDownloadsFlow, seriesAggregatesFlow) { downloadMap, aggregateMap ->
-                    rows.map { row ->
-                        if (row.media.mediaType == MediaType.SERIES.name) {
-                            val agg = aggregateMap[row.media.id]
-                            row.toOfflineMediaItem().copy(
+                    baseItems.map { item ->
+                        if (item.mediaType == MediaType.SERIES) {
+                            val agg = aggregateMap[item.id]
+                            item.copy(
                                 downloadedBytes = agg?.downloadedBytes ?: 0L,
                                 totalSizeBytes = agg?.totalSizeBytes ?: 0L,
                             )
                         } else {
-                            row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
+                            item.withDownload(downloadMap[item.id])
                         }
                     }
                 }.distinctUntilChanged()

@@ -129,6 +129,31 @@ aboutLibraries {
 // The exported asset regenerates on demand (./gradlew :app:exportLibraryDefinitions)
 // rather than on every preBuild — it only changes when the dependency graph does.
 
+// Baseline Profile consumers. The androidx.baselineprofile 1.5.x plugin
+// resolves producers per variant: dependencies are the merge of the `main`,
+// flavor, build type and variant entries below. The global `baselineProfile`
+// configuration cannot hold both producers — it extends into every variant
+// and would run each generator against both flavors — so each platform
+// flavor names its own producer module instead:
+// - phone → :baselineprofile    (phone applicationId, ciPixel8 GMD)
+// - tv    → :baselineprofile-tv (TV applicationId, ciTv1080p GMD)
+baselineProfile {
+    // Generated profiles are written into the flavor source sets
+    // (src/<variant>Release/generated/baselineProfiles) so they can be
+    // committed and regenerate on demand, like aboutlibraries.json. Builds
+    // not preceded by a generate step pick up the committed files instead of
+    // producing profile-less APKs.
+    saveInSrc = true
+    variants {
+        create("phone") {
+            from(project(":baselineprofile"))
+        }
+        create("tv") {
+            from(project(":baselineprofile-tv"))
+        }
+    }
+}
+
 dependencies {
     // Explicitly add libmpv first so pickFirsts grabs its newer libc++_shared.so
     implementation(libs.libmpv)
@@ -222,10 +247,8 @@ dependencies {
     androidTestImplementation(libs.kotlinx.serialization.json)
     debugImplementation(libs.compose.ui.test.manifest)
 
-    // Generates and merges a Baseline Profile from the :baselineprofile
-    // macrobenchmark module. AGP installs the resulting baseline-prof.txt /
-    // startup-prof into release builds.
-    // The androidx.baselineprofile 1.5.x consumer plugin (required for AGP 9)
-    // exposes the producer via the `baselineProfile` configuration.
-    "baselineProfile"(project(":baselineprofile"))
+    // Baseline profile producers are wired per flavor in the `baselineProfile`
+    // extension block above (:baselineprofile for phone,
+    // :baselineprofile-tv for tv) instead of a global `baselineProfile`
+    // configuration entry, which cannot disambiguate the two flavors.
 }

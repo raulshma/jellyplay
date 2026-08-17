@@ -1262,6 +1262,7 @@ fun VideoPlayerScreen(
                                 MpvSubtitleOverlay(
                                     cue = liveCue,
                                     style = uiState.subtitleStyle,
+                                    fontProvider = viewModel.fontProvider,
                                 )
                             }
                         }

@@ -109,16 +109,34 @@ class DownloadRepositoryImpl @Inject constructor(
     // download. Avoids launching 20+ parallel OkHttp calls + Coil decodes at once.
     private val downloadPermits = Semaphore(permits = 4)
 
+    // Room re-runs download queries on every 2 s progress tick, and a full
+    // structural `distinctUntilChanged` over up to 500 x ~25-field items is
+    // always unequal while bytes move — so it never suppresses anything on
+    // that path. Compare only the fields the rendered lists depend on
+    // (id order, per-item downloadedBytes, status); emissions differing in
+    // other fields alone (e.g. a speed update) no longer re-emit downstream.
+    private fun List<DownloadItem>.rendersSameAs(other: List<DownloadItem>): Boolean {
+        if (size != other.size) return false
+        return zip(other).all { (o, n) ->
+            o.id == n.id && o.downloadedBytes == n.downloadedBytes && o.status == n.status
+        }
+    }
+
     override fun getAllDownloads(): Flow<List<DownloadItem>> =
         downloadDao.getAllDownloads().map { entities ->
             entities.map { it.toDownloadItem() }
-        }.distinctUntilChanged()
+        }.distinctUntilChanged { old, new -> old.rendersSameAs(new) }
 
     override suspend fun getCompletedAudioDownloads(limit: Int, offset: Int): List<DownloadItem> =
         downloadDao.getCompletedAudioDownloads(limit, offset).map { it.toDownloadItem() }
 
     override fun getDownloadByMediaItemIdFlow(mediaItemId: String): Flow<DownloadItem?> =
         downloadDao.getDownloadByMediaItemIdFlow(mediaItemId).map { it?.toDownloadItem() }
+
+    override fun getDownloadsByMediaItemIdsFlow(mediaItemIds: List<String>): Flow<List<DownloadItem>> =
+        downloadDao.getDownloadsByMediaItemIdsFlow(mediaItemIds).map { entities ->
+            entities.map { it.toDownloadItem() }
+        }.distinctUntilChanged { old, new -> old.rendersSameAs(new) }
 
     override fun getActiveDownloadCount(): Flow<Int> =
         downloadDao.getActiveDownloadCount()

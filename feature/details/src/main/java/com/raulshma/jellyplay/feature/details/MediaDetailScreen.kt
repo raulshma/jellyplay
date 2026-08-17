@@ -669,12 +669,17 @@ fun MediaDetailScreen(
             // the sheet treats each listed episode as deletable. Only seasons
             // that actually carry episodes are passed so the sheet renders no
             // empty rows.
-            val downloadedEpisodesBySeason = uiState.episodes
-                .filterValues { it.isNotEmpty() }
-            val downloadableSeasons = uiState.seasons.filter { it.id in downloadedEpisodesBySeason }
+            val downloadedEpisodesBySeason = remember(uiState.episodes) {
+                uiState.episodes.filterValues { it.isNotEmpty() }
+            }
+            val downloadableSeasons = remember(uiState.seasons, downloadedEpisodesBySeason) {
+                uiState.seasons.filter { it.id in downloadedEpisodesBySeason }
+            }
             val totalSizeBytes = uiState.detailContext?.seriesAggregate?.totalSizeBytes ?: 0L
-            val downloadedEpisodeCount = uiState.detailContext?.seriesAggregate?.downloadedEpisodeCount
-                ?: downloadedEpisodesBySeason.values.sumOf { it.size }
+            val downloadedEpisodeCount = remember(uiState.detailContext, downloadedEpisodesBySeason) {
+                uiState.detailContext?.seriesAggregate?.downloadedEpisodeCount
+                    ?: downloadedEpisodesBySeason.values.sumOf { it.size }
+            }
             val deleteSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             TvSafeSheet(
                 onDismissRequest = { showDeleteEpisodesSheet = false },

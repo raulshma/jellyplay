@@ -72,8 +72,9 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
             // the version bump in [WidgetPersistHelper] because the content
             // was unchanged. Always reading is cheap (single DataStore read)
             // and makes the widget resilient to those edge cases.
-            val fresh = runBlocking { store.libraryWidgetItems.first() }
-            val version = runBlocking { store.libraryWidgetVersion.first() }
+            val (fresh, version) = runBlocking {
+                store.libraryWidgetItems.first() to store.libraryWidgetVersion.first()
+            }
             items = fresh
             loadedVersion = version
             // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.

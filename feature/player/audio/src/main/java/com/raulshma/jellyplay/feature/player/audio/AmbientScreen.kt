@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.LongState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -70,7 +71,7 @@ fun AmbientScreen(
         title = title,
         artist = artist,
         isPlaying = uiState.isPlaying,
-        currentPosition = viewModel.currentPosition,
+        currentPositionState = viewModel.currentPositionState,
         duration = uiState.duration,
         onTap = onTap,
         onPlayPause = { viewModel.togglePlayPause() },
@@ -85,7 +86,7 @@ private fun AmbientScreenContent(
     title: String,
     artist: String,
     isPlaying: Boolean,
-    currentPosition: Long,
+    currentPositionState: LongState,
     duration: Long,
     onTap: () -> Unit,
     onPlayPause: () -> Unit,
@@ -140,7 +141,10 @@ private fun AmbientScreenContent(
             if (duration > 0) {
                 Spacer(Modifier.height(16.dp))
                 LinearProgressIndicator(
-                    progress = { (currentPosition.toFloat() / duration).coerceIn(0f, 1f) },
+                    // Read the position LongState only inside this leaf lambda
+                    // (mirroring PixelProgressSection) so the 4 Hz tick skips
+                    // recomposing the whole content and only re-draws the bar.
+                    progress = { (currentPositionState.value.toFloat() / duration).coerceIn(0f, 1f) },
                     modifier = Modifier
                         .fillMaxWidth(0.7f)
                         .height(2.dp),

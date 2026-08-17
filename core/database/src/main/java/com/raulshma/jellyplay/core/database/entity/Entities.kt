@@ -57,6 +57,9 @@ data class UserEntity(
         Index(value = ["seriesId", "status"]),
         Index(value = ["seasonId", "status"]),
         Index(value = ["status", "priority", "createdAt"]),
+        // Serves getCompletedAudioDownloads (filter on status + mediaType,
+        // order by createdAt) — the music-library DOWNLOADS browse page query.
+        Index(value = ["status", "mediaType", "createdAt"]),
     ],
 )
 data class DownloadEntity(

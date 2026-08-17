@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -55,6 +56,12 @@ class MainActivity : FragmentActivity() {
 
     private var backgroundedAt = 0L
     private var isPinUnlocked = mutableStateOf(false)
+
+    // Cast prewarm started in onCreate (Dispatchers.Default). The hidden
+    // media-route button in setContent waits on this job so its
+    // setUpMediaRouteButton never races — and pays the Play-Services bind on
+    // Main before — the prewarm has finished.
+    private var castPrewarmJob: Job? = null
 
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -79,16 +86,15 @@ class MainActivity : FragmentActivity() {
         // in landscape with no control to unlock it. UNSPECIFIED follows the
         // system auto-rotate setting, matching the fresh-install default.
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        // Initialize Cast SDK off the main thread. The MediaRouteButton is set
-        // up lazily inside setContent's AndroidView.factory and
-        // CastButtonFactory.setUpMediaRouteButton resolves CastContext lazily,
-        // so deferring the JNI/Play-Services binding here no longer blocks the
-        // main thread before setContent (i.e. while the splash is still being
-        // evaluated). The original "pay it during the splash" intent is
-        // preserved — the splash stays up via setKeepOnScreenCondition until
-        // session restore completes, overlapping the Cast init.
+        // Initialize Cast SDK off the main thread. The MediaRouteButton in
+        // setContent is only set up once this job completes, and
+        // CastButtonFactory.setUpMediaRouteButton resolves CastContext on the
+        // calling (main) thread, so the JNI/Play-Services binding is paid
+        // here — overlapped with the splash (kept up via
+        // setKeepOnScreenCondition until session restore completes) rather
+        // than on the first composed frame when restore wins the race.
         if (packageManager.hasSystemFeature("com.google.android.gms.cast")) {
-            lifecycleScope.launch(Dispatchers.Default) {
+            castPrewarmJob = lifecycleScope.launch(Dispatchers.Default) {
                 runCatching { com.google.android.gms.cast.framework.CastContext.getSharedInstance(this@MainActivity) }
             }
         }
@@ -164,23 +170,36 @@ class MainActivity : FragmentActivity() {
                 var pinVerifying by rememberSaveable { mutableStateOf(false) }
             val context = androidx.compose.ui.platform.LocalContext.current
 
-            Box(
-                modifier = Modifier
-                    .size(1.dp)
-            ) {
-                androidx.compose.ui.viewinterop.AndroidView(
-                    factory = { ctx ->
-                        try {
-                            androidx.mediarouter.app.MediaRouteButton(ctx).also {
-                                it.visibility = View.INVISIBLE
-                                com.google.android.gms.cast.framework.CastButtonFactory.setUpMediaRouteButton(ctx, it)
+            // Hidden Cast media-route button, composed only after the Cast
+            // prewarm job from onCreate completes — immediately if it already
+            // has, or when Cast is unsupported and no job was started (the
+            // factory's fallback plain View keeps that path identical).
+            // Sequencing here keeps the Play-Services bind off the first
+            // composed frame; the button setup itself is unchanged.
+            var castPrewarmed by remember { mutableStateOf(castPrewarmJob?.isCompleted ?: true) }
+            LaunchedEffect(castPrewarmJob) {
+                castPrewarmJob?.join()
+                castPrewarmed = true
+            }
+            if (castPrewarmed) {
+                Box(
+                    modifier = Modifier
+                        .size(1.dp)
+                ) {
+                    androidx.compose.ui.viewinterop.AndroidView(
+                        factory = { ctx ->
+                            try {
+                                androidx.mediarouter.app.MediaRouteButton(ctx).also {
+                                    it.visibility = View.INVISIBLE
+                                    com.google.android.gms.cast.framework.CastButtonFactory.setUpMediaRouteButton(ctx, it)
+                                }
+                            } catch (_: Exception) {
+                                View(ctx)
                             }
-                        } catch (_: Exception) {
-                            View(ctx)
-                        }
-                    },
-                    modifier = Modifier.size(1.dp),
-                )
+                        },
+                        modifier = Modifier.size(1.dp),
+                    )
+                }
             }
 
             androidx.compose.runtime.LaunchedEffect(viewModel) {

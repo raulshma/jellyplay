@@ -17,7 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -159,20 +159,24 @@ internal fun DetailBackdrop(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .drawBehind {
+                // drawWithCache rebuilds the scrim Brush only when the snapshot-
+                // read background colour actually changes, instead of allocating
+                // a fresh gradient on every draw pass of the colour animation.
+                .drawWithCache {
                     val backgroundColor = backgroundColorState.value
-                    drawRect(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                if (isLandscapeExpanded) backgroundColor.copy(alpha = 0.5f) else Color.Transparent,
-                                backgroundColor.copy(alpha = if (isLandscapeExpanded) 0.8f else 0.4f),
-                                backgroundColor.copy(alpha = 0.9f),
-                                backgroundColor,
-                            ),
-                            startY = if (isLandscapeExpanded) 0f else (baseBackdropHeight - 200.dp).toPx(),
-                            endY = backdropHeight.toPx(),
+                    val scrimBrush = Brush.verticalGradient(
+                        colors = listOf(
+                            if (isLandscapeExpanded) backgroundColor.copy(alpha = 0.5f) else Color.Transparent,
+                            backgroundColor.copy(alpha = if (isLandscapeExpanded) 0.8f else 0.4f),
+                            backgroundColor.copy(alpha = 0.9f),
+                            backgroundColor,
                         ),
+                        startY = if (isLandscapeExpanded) 0f else (baseBackdropHeight - 200.dp).toPx(),
+                        endY = backdropHeight.toPx(),
                     )
+                    onDrawBehind {
+                        drawRect(scrimBrush)
+                    }
                 },
         )
     }

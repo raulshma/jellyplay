@@ -82,6 +82,15 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
 
     @Inject @ApplicationScope lateinit var applicationScope: CoroutineScope
 
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(base)
+        // Earliest hook in app startup — before ContentProviders and onCreate,
+        // so debug StrictMode sees the whole init path. The debug source set
+        // backs installDebugStrictMode with real policies; the main source set
+        // ships a no-op, so release builds compile none of it.
+        installDebugStrictMode()
+    }
+
     override fun onCreate() {
         super.onCreate()
         // Critical path: audio + widget updaters (no dependency on the groups

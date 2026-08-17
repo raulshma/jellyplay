@@ -20,6 +20,15 @@ interface DownloadRepository : OfflineDownloadWriter {
     fun getAllDownloads(): Flow<List<DownloadItem>>
 
     /**
+     * Download rows for exactly [mediaItemIds] — the scoped reactive read for
+     * screens tracking a known set of items (e.g. an album's tracks). Fetching
+     * only the matching rows costs far less per re-emission than collecting
+     * [getAllDownloads]' full-window query (re-run on every 2 s progress tick
+     * during transfers) and filtering it client-side.
+     */
+    fun getDownloadsByMediaItemIdsFlow(mediaItemIds: List<String>): Flow<List<DownloadItem>>
+
+    /**
      * One page of completed audio (`MUSIC`/`AUDIO`) downloads, newest first —
      * the media-library DOWNLOADS browse page's window. Same filter and order
      * the caller previously applied over [getAllDownloads], resolved in one

@@ -15,8 +15,11 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.toMixErrorMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -34,7 +37,9 @@ class AlbumDetailViewModel @Inject constructor(
     private val _detail = composeState<MediaDetail?>(null)
     val detail: MediaDetail? get() = _detail.value
 
-    private val _tracks = composeState<List<MediaItem>>(emptyList())
+    // StateFlow (not composeState) so `trackDownloads` below can observe the
+    // loaded track ids and scope its downloads query to them.
+    private val _tracks = stateFlow<List<MediaItem>>(emptyList())
     val tracks: List<MediaItem> get() = _tracks.value
 
     private val _isLoading = composeState(true)
@@ -57,7 +62,7 @@ class AlbumDetailViewModel @Inject constructor(
                 .onSuccess { _detail.value = it }
                 .onFailure { _error.value = it.message ?: "Failed to load album" }
             mediaRepository.getAlbumTracks(albumId)
-                .onSuccess { _tracks.value = it }
+                .onSuccess { _tracks.set(it) }
                 .onFailure { _error.value = it.message ?: "Failed to load tracks" }
             _isLoading.value = false
         }
@@ -105,8 +110,20 @@ class AlbumDetailViewModel @Inject constructor(
     fun getBackdropUrl(itemId: String): String =
         imageUrlProvider.getBackdropUrl(itemId)
 
-    val trackDownloads: StateFlow<Map<String, DownloadItem>> = downloadRepository.getAllDownloads()
-        .map { downloads -> downloads.associateBy { it.mediaItemId } }
+    // Scoped to the loaded tracks' ids instead of observing the full downloads
+    // window: Room re-emits on every 2 s progress tick, and this screen only
+    // ever looks up its ~10-20 tracks, so the IN-scoped query re-reads a
+    // handful of rows per tick rather than the whole table.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val trackDownloads: StateFlow<Map<String, DownloadItem>> = _tracks.flow
+        .flatMapLatest { tracks ->
+            if (tracks.isEmpty()) {
+                flowOf(emptyMap())
+            } else {
+                downloadRepository.getDownloadsByMediaItemIdsFlow(tracks.map { it.id })
+                    .map { downloads -> downloads.associateBy { it.mediaItemId } }
+            }
+        }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     fun downloadTrack(track: MediaItem) {

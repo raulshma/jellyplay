@@ -39,6 +39,11 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberSharedElementModifier
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
+// Constant inputs, so a single shared instance serves every card in the grid.
+private val ThumbScrimBrush = Brush.verticalGradient(
+    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)),
+)
+
 /**
  * A 16:9 landscape card for the library "Thumb" view mode — used for
  * libraries whose collection type suggests landscape artwork (music videos,
@@ -106,11 +111,7 @@ fun ThumbCard(
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)),
-                            ),
-                        ),
+                        .background(ThumbScrimBrush),
                 )
                 Column(
                     modifier = Modifier

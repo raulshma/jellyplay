@@ -291,7 +291,10 @@ class VideoPlayerViewModel @Inject constructor(
     private val sleepTimerManager: SleepTimerManager,
     private val userMessageBus: UserMessageBus,
     private val playerEngineFactory: com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory,
-    private val fontProvider: FontProvider,
+    // Public for the screen: the zoom-safe Compose overlay consumes the same
+    // singleton (LRU typeface cache + startup prewarm) instead of building a
+    // private FontProvider per composition.
+    val fontProvider: FontProvider,
     private val savedStateHandle: SavedStateHandle,
     private val subtitlePreviewRepository: com.raulshma.jellyplay.feature.player.video.subtitle.SubtitlePreviewRepository,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,

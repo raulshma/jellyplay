@@ -301,6 +301,14 @@ fun LibraryScreen(
     var tvFocusedItem by remember { mutableStateOf<MediaItem?>(null) }
 
     val backgroundColor = MaterialTheme.colorScheme.background
+    val headerGradientBrush = remember(backgroundColor) {
+        Brush.verticalGradient(
+            colors = listOf(
+                backgroundColor.copy(alpha = 0.95f),
+                backgroundColor,
+            ),
+        )
+    }
 
 
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -344,14 +352,7 @@ fun LibraryScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    backgroundColor.copy(alpha = 0.95f),
-                                    backgroundColor,
-                                ),
-                            )
-                        )
+                        .background(headerGradientBrush)
                         .statusBarsPadding()
                         .padding(top = 4.dp),
                 ) {
@@ -969,8 +970,9 @@ fun LibraryScreen(
                         }
                     }
                     if (groupBy == GroupBy.NONE && jumpIndexByLetter.isNotEmpty()) {
+                        val letters = remember(jumpIndexByLetter) { jumpIndexByLetter.keys.toList() }
                         AlphabetJumpRail(
-                            letters = jumpIndexByLetter.keys.toList(),
+                            letters = letters,
                             activeLetter = activeLetter,
                             onJump = { letter ->
                                 val index = jumpIndexByLetter[letter] ?: return@AlphabetJumpRail
@@ -1080,18 +1082,19 @@ fun LibraryScreen(
                     }
 
                     if (pagedItems.loadState.append is LoadState.Loading) {
+                        val footerGradientBrush = remember(backgroundColor) {
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    backgroundColor,
+                                ),
+                            )
+                        }
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            backgroundColor,
-                                        ),
-                                    )
-                                )
+                                .background(footerGradientBrush)
                                 .padding(vertical = 20.dp),
                             contentAlignment = Alignment.Center,
                         ) {

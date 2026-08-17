@@ -80,9 +80,14 @@ class NowPlayingWidget : AppWidgetProvider() {
         } catch (_: Exception) {
             return
         }
-        kotlinx.coroutines.runBlocking {
-            for (id in appWidgetIds) {
-                store.removeWidgetConfigForId(id)
+        val pending = goAsync()
+        refreshScope.launch {
+            try {
+                for (id in appWidgetIds) {
+                    store.removeWidgetConfigForId(id)
+                }
+            } finally {
+                pending.finish()
             }
         }
     }

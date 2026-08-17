@@ -55,7 +55,7 @@ class AlbumDetailViewModelTest {
 
     @Before
     fun setUp() {
-        every { downloadRepository.getAllDownloads() } returns flowOf(emptyList())
+        every { downloadRepository.getDownloadsByMediaItemIdsFlow(any()) } returns flowOf(emptyList())
         viewModel = AlbumDetailViewModel(
             context = context,
             mediaRepository = mediaRepository,

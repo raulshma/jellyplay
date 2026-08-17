@@ -101,9 +101,25 @@ class OfflineSyncManager @Inject constructor(
      * when the device is offline; only fetches when the TTL has expired and the
      * device is online. Pass [force] to bypass the TTL gate (e.g. pull-to-refresh).
      */
-    suspend fun checkForUpdates(itemId: String, force: Boolean = false): ResyncCheckResult {
-        val baseline = syncBaselineDao.getBaseline(itemId)
-            ?: return ResyncCheckResult(itemId, OfflineSyncState(SyncStatus.UNKNOWN))
+    suspend fun checkForUpdates(itemId: String, force: Boolean = false): ResyncCheckResult =
+        checkForUpdates(itemId, force, syncBaselineDao.getBaseline(itemId))
+
+    /**
+     * [checkForUpdates] over a baseline supplied by the caller — the batched
+     * [checkForUpdatesBatch] prefetches every item's row with one
+     * [SyncBaselineDao.getBaselines] read instead of a per-item round-trip, so
+     * TTL-fresh items (the common case) resolve with zero further queries.
+     * Semantics are identical to the single-item overload: a null row still
+     * reports UNKNOWN and the TTL/offline/refresh branches are unchanged.
+     */
+    private suspend fun checkForUpdates(
+        itemId: String,
+        force: Boolean,
+        baseline: SyncBaselineEntity?,
+    ): ResyncCheckResult {
+        if (baseline == null) {
+            return ResyncCheckResult(itemId, OfflineSyncState(SyncStatus.UNKNOWN))
+        }
 
         val now = System.currentTimeMillis()
         val lastSynced = baseline.lastSyncedAt
@@ -150,15 +166,22 @@ class OfflineSyncManager @Inject constructor(
      * Batch freshness check over [itemIds]. Concurrency-limited to avoid
      * hammering the server with N parallel detail fetches. Each item is
      * individually TTL-gated, so a re-check shortly after a previous batch is
-     * near-free. Returns each item's result in input order.
+     * near-free. Returns each item's result in input order. Baselines are
+     * prefetched in one batched read so the all-fresh common case costs a
+     * single query instead of one per item.
      */
     suspend fun checkForUpdatesBatch(
         itemIds: List<String>,
         force: Boolean = false,
     ): List<ResyncCheckResult> = withContext(Dispatchers.IO) {
         if (itemIds.isEmpty()) return@withContext emptyList()
+        // Chunked like SeenMediaRepositoryImpl's IN queries: Android SQLite caps
+        // a statement at 999 bound params, and the item list is uncapped.
+        val baselinesById = itemIds.chunked(BASELINE_QUERY_CHUNK_SIZE)
+            .flatMap { syncBaselineDao.getBaselines(it) }
+            .associateBy { it.id }
         itemIds.map { id ->
-            async { checkPermits.withPermit { checkForUpdates(id, force) } }
+            async { checkPermits.withPermit { checkForUpdates(id, force, baselinesById[id]) } }
         }.awaitAll()
     }
 
@@ -470,6 +493,8 @@ class OfflineSyncManager @Inject constructor(
         const val SYNC_TTL_MS = 60L * 60 * 1000
         // Caps concurrent detail fetches during a batch check.
         private val checkPermits = Semaphore(permits = 4)
+        // SQLite allows at most 999 bound params per statement; stay safely under.
+        private const val BASELINE_QUERY_CHUNK_SIZE = 900
     }
 }
 

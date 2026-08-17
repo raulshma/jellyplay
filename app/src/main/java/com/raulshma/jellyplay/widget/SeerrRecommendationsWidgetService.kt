@@ -65,8 +65,10 @@ class SeerrRecommendationsWidgetService : RemoteViewsService() {
             // rationale: skipping loads on unchanged versions left the widget
             // blank when the factory was recreated after a worker run that
             // short-circuited the version bump.
-            val version = runBlocking { store.seerrWidgetVersion.first() }
-            items = runBlocking { store.seerrWidgetItems.first() }
+            val (version, fresh) = runBlocking {
+                store.seerrWidgetVersion.first() to store.seerrWidgetItems.first()
+            }
+            items = fresh
             loadedVersion = version
             // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.
             // `posterUrl` is nullable; blank/null entries fall through to the placeholder.
