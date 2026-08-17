@@ -125,8 +125,12 @@ class ArrRepositoryImpl @Inject constructor(
 
         // Discovery outcomes carry an error type so a 401/403 (non-admin Seerr
         // account) surfaces as a distinct UI message instead of an empty list.
-        val radarrOutcome = if (prefs.useSeerrDiscovery) discoverRadarrServers() else DiscoveryOutcome.success()
-        val sonarrOutcome = if (prefs.useSeerrDiscovery) discoverSonarrServers() else DiscoveryOutcome.success()
+        // Both discoveries are independent — run them concurrently.
+        val (radarrOutcome, sonarrOutcome) = coroutineScope {
+            val radarrDeferred = async { if (prefs.useSeerrDiscovery) discoverRadarrServers() else DiscoveryOutcome.success() }
+            val sonarrDeferred = async { if (prefs.useSeerrDiscovery) discoverSonarrServers() else DiscoveryOutcome.success() }
+            radarrDeferred.await() to sonarrDeferred.await()
+        }
 
         // De-dup by canonical baseUrl: manual entries take precedence (a user
         // who manually overrides a discovered server wins).

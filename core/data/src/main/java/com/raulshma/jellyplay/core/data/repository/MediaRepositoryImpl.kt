@@ -60,6 +60,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
@@ -314,19 +315,27 @@ class MediaRepositoryImpl @Inject constructor(
         // value, so the SWR read never misses due to an observe ordering race.
         val server = apiClient.currentServer.first() ?: return null
         val user = apiClient.currentUser.first() ?: return null
-        return homeSectionCacheDao.get(server.id, user.id, query.cacheKey())?.payload
+        val entity = homeSectionCacheDao.get(server.id, user.id, query.cacheKey()) ?: return null
+        // Decode the payload off the caller's (Main) dispatcher — this is the
+        // cold-open critical path and the blob spans hundreds of MediaItems.
+        return withContext(Dispatchers.Default) { entity.payload }
     }
 
     private suspend fun persistHomeSectionsSnapshot(cacheKey: String, result: HomeSectionsResult) {
         val server = apiClient.currentServer.first() ?: return
         val user = apiClient.currentUser.first() ?: return
         runCatching {
+            // Encode off the caller's (Main) dispatcher — this runs on every
+            // successful home refresh (min. once/minute in foreground).
+            val payloadJson = withContext(Dispatchers.Default) {
+                com.raulshma.jellyplay.core.database.Converters.encodeHomeSectionsResult(result)
+            }
             homeSectionCacheDao.upsert(
                 HomeSectionCacheEntity(
                     serverId = server.id,
                     userId = user.id,
                     cacheKey = cacheKey,
-                    payloadJson = com.raulshma.jellyplay.core.database.Converters.encodeHomeSectionsResult(result),
+                    payloadJson = payloadJson,
                     // Wall-clock on purpose: this value must survive a reboot to
                     // serve the next cold open, and monotonic clocks reset on
                     // boot. The in-memory TTL above uses SystemClock.elapsedRealtime
@@ -717,7 +726,9 @@ class MediaRepositoryImpl @Inject constructor(
             val cachedSynced = cached.syncedLyrics
             val cachedPlain = cached.plainLyrics
             if (!cachedSynced.isNullOrBlank()) {
-                val lines = parseLrc(cachedSynced)
+                // Regex-heavy parse over the full synced blob — keep it off the
+                // Main dispatcher this suspend path is usually called on.
+                val lines = withContext(Dispatchers.Default) { parseLrc(cachedSynced) }
                 if (lines.isNotEmpty()) {
                     return@runCatching LyricsResult(
                         lines = lines,

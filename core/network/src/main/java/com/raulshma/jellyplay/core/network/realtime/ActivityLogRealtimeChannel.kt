@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.realtime
 
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
+import com.raulshma.jellyplay.core.model.trimToSize
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.network.api.toActivityLogEntry
@@ -87,7 +88,7 @@ class ActivityLogRealtimeChannel @Inject constructor(
                         val envelope = org.json.JSONObject(text)
                         if (envelope.optString("MessageType") == "ActivityLogEntry") {
                             val entry = envelope.optJSONObject("MessageData")?.toActivityLogEntry() ?: return
-                            seenIds.add(entry.id)
+                            seenIds.addCapped(entry.id)
                             trySend(entry)
                         }
                     } catch (_: Exception) {}
@@ -135,7 +136,7 @@ class ActivityLogRealtimeChannel @Inject constructor(
             val result = apiClient.getActivityLogEntries(limit = POLL_PAGE_SIZE)
             result.onSuccess { entries ->
                 entries.filter { it.id !in seenIds }.forEach { entry ->
-                    seenIds.add(entry.id)
+                    seenIds.addCapped(entry.id)
                     emit(entry)
                 }
             }
@@ -147,8 +148,20 @@ class ActivityLogRealtimeChannel @Inject constructor(
         internal const val POLL_INTERVAL_MS = 5_000L
         internal const val POLL_PAGE_SIZE = 10
 
+        /**
+         * Cap for the dedup id set — the polling fallback otherwise grows it
+         * ~10 ids / 5 s for the life of the channel (~7k/hour).
+         */
+        internal const val MAX_SEEN_IDS = 1_000
+
         /** Exponential backoff: 1s, 2s, 4s, 8s, 16s — capped at 30s. */
         internal fun reconnectDelayMs(attempt: Int): Long =
             (1000L * (1L shl (attempt - 1).coerceAtMost(4))).coerceAtMost(30_000L)
     }
+}
+
+/** [MutableSet.add] that evicts the oldest entry past [ActivityLogRealtimeChannel.MAX_SEEN_IDS]. */
+private fun MutableSet<Long>.addCapped(id: Long) {
+    add(id)
+    trimToSize(ActivityLogRealtimeChannel.MAX_SEEN_IDS)
 }

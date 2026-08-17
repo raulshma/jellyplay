@@ -66,7 +66,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.StaggeredSection
+import com.raulshma.jellyplay.core.ui.components.AnimatedSectionEntrance
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -157,16 +157,16 @@ fun UserStatisticsDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 item {
-                    StaggeredSection(visible = true, index = 0) { UserHeaderCard(state) }
+                    AnimatedSectionEntrance(visible = true) { UserHeaderCard(state) }
                 }
                 item {
-                    StaggeredSection(visible = true, index = 1) {
+                    AnimatedSectionEntrance(visible = true) {
                         StatsSummaryRow(state)
                     }
                 }
                 if (state.detail.weeklyWatchTimeSec > 0 || state.detail.monthlyWatchTimeSec > 0 || state.detail.statistics.totalWatchTimeSec > 0) {
                     item {
-                        StaggeredSection(visible = true, index = 2) {
+                        AnimatedSectionEntrance(visible = true) {
                             WatchTimeCard(
                                 weeklySeconds = state.detail.weeklyWatchTimeSec,
                                 monthlySeconds = state.detail.monthlyWatchTimeSec,
@@ -177,7 +177,7 @@ fun UserStatisticsDetailScreen(
                 }
                 if (state.detail.viewingStreak.currentStreak > 0 || state.detail.viewingStreak.longestStreak > 0) {
                     item {
-                        StaggeredSection(visible = true, index = 3) {
+                        AnimatedSectionEntrance(visible = true) {
                             StreakCard(
                                 currentStreak = state.detail.viewingStreak.currentStreak,
                                 longestStreak = state.detail.viewingStreak.longestStreak,
@@ -188,7 +188,7 @@ fun UserStatisticsDetailScreen(
                 }
                 if (state.detail.monthlyComparison.currentMonthMinutes > 0) {
                     item {
-                        StaggeredSection(visible = true, index = 4) {
+                        AnimatedSectionEntrance(visible = true) {
                             ComparisonCard(
                                 percentageChange = state.detail.monthlyComparison.percentageChange,
                                 currentMinutes = state.detail.monthlyComparison.currentMonthMinutes,
@@ -200,21 +200,21 @@ fun UserStatisticsDetailScreen(
                 }
                 if (state.detail.activityChart.isNotEmpty()) {
                     item {
-                        StaggeredSection(visible = true, index = 5) {
+                        AnimatedSectionEntrance(visible = true) {
                             ActivityChartCard(state)
                         }
                     }
                 }
                 if (state.detail.trendData.isNotEmpty()) {
                     item {
-                        StaggeredSection(visible = true, index = 6) {
+                        AnimatedSectionEntrance(visible = true) {
                             TrendLineChartCard(state)
                         }
                     }
                 }
                 if (state.detail.typeBreakdown.isNotEmpty()) {
                     item {
-                        StaggeredSection(visible = true, index = 7) {
+                        AnimatedSectionEntrance(visible = true) {
                             BreakdownCard(
                                 title = stringResource(R.string.admin_content_breakdown),
                                 data = state.detail.typeBreakdown,
@@ -224,7 +224,7 @@ fun UserStatisticsDetailScreen(
                 }
                 if (state.detail.genreBreakdown.isNotEmpty()) {
                     item {
-                        StaggeredSection(visible = true, index = 8) {
+                        AnimatedSectionEntrance(visible = true) {
                             BreakdownCard(
                                 title = stringResource(R.string.admin_by_genre),
                                 data = state.detail.genreBreakdown,
@@ -234,21 +234,21 @@ fun UserStatisticsDetailScreen(
                 }
                 if (state.detail.genrePieData.isNotEmpty()) {
                     item {
-                        StaggeredSection(visible = true, index = 9) {
+                        AnimatedSectionEntrance(visible = true) {
                             GenrePieChartCard(state)
                         }
                     }
                 }
                 if (state.pluginStatus == PlaybackReportingStatus.AVAILABLE && state.detail.musicStats.topTracks.isNotEmpty()) {
                     item {
-                        StaggeredSection(visible = true, index = 10) {
+                        AnimatedSectionEntrance(visible = true) {
                             MusicStatsSection(state.detail.musicStats)
                         }
                     }
                 }
                 if (state.detail.methodBreakdown.isNotEmpty()) {
                     item {
-                        StaggeredSection(visible = true, index = 11) {
+                        AnimatedSectionEntrance(visible = true) {
                             BreakdownCard(
                                 title = stringResource(R.string.admin_playback_methods),
                                 data = state.detail.methodBreakdown,
@@ -258,7 +258,7 @@ fun UserStatisticsDetailScreen(
                 }
                 if (state.detail.deviceBreakdown.isNotEmpty()) {
                     item {
-                        StaggeredSection(visible = true, index = 12) {
+                        AnimatedSectionEntrance(visible = true) {
                             BreakdownCard(
                                 title = stringResource(R.string.admin_clients_devices),
                                 data = state.detail.deviceBreakdown,
@@ -268,7 +268,7 @@ fun UserStatisticsDetailScreen(
                 }
                 if (state.detail.topItems.isNotEmpty()) {
                     item {
-                        StaggeredSection(visible = true, index = 13) {
+                        AnimatedSectionEntrance(visible = true) {
                             Top5Section(state)
                         }
                     }

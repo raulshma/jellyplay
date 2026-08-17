@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.feature.downloads.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /** How the downloaded library is sorted. */
@@ -86,7 +88,11 @@ class OfflineLibraryViewModel @Inject constructor(
             combine(_sort, _filter) { s, f -> s to f },
         ) { items, query, (sort, filter) ->
             _isLoading.value = false
-            applyQueryFilterAndSort(items, query, filter, sort)
+            // Filter/sort of the full offline library stays off the Main
+            // dispatcher — only a concern for very large libraries, but free.
+            withContext(Dispatchers.Default) {
+                applyQueryFilterAndSort(items, query, filter, sort)
+            }
         }.stateIn(
             scope = scope,
             started = SharingStarted.WhileSubscribed(5_000),

@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.core.network.seerr
 
 import com.raulshma.jellyplay.core.model.seerr.*
 import com.raulshma.jellyplay.core.network.api.ApiException
+import com.raulshma.jellyplay.core.network.api.JsonRequestClient
+import com.raulshma.jellyplay.core.network.api.parseJsonRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -104,11 +106,22 @@ class SeerrApiClientImpl @Inject constructor(
         }
     }
 
-    private inline fun <reified T> parseAndMap(result: Result<String>): Result<T> {
-        return result.mapCatching { body ->
-            json.decodeFromString<T>(body)
-        }
-    }
+    /** Bundled [parseJsonRequest] dependencies; see [parseRequest]. */
+    private val jsonRequestClient = JsonRequestClient(
+        okHttpClient = okHttpClient,
+        json = json,
+        parseErrorMessage = ::parseErrorMessage,
+        formatNetworkError = ::formatNetworkError,
+    )
+
+    /**
+     * Stream-decoding request execution; see [parseJsonRequest]. The shared
+     * helper's `fromHttp`/`fromNetwork` are what [ApiException.fromSeerrHttp] /
+     * [ApiException.fromSeerrNetwork] delegate to, so failure shapes are
+     * unchanged.
+     */
+    private suspend inline fun <reified T> parseRequest(request: Request): Result<T> =
+        parseJsonRequest(jsonRequestClient, request)
 
     private suspend inline fun <reified T> getAndParse(
         baseUrl: String,
@@ -120,7 +133,7 @@ class SeerrApiClientImpl @Inject constructor(
             .withAuth(credentials)
             .get()
             .build()
-        return parseAndMap(executeRequest(request))
+        return parseRequest(request)
     }
 
     private suspend inline fun <reified T> postAndParse(
@@ -134,7 +147,7 @@ class SeerrApiClientImpl @Inject constructor(
             .withAuth(credentials)
             .post(requestBody)
             .build()
-        return parseAndMap(executeRequest(request))
+        return parseRequest(request)
     }
 
     private suspend inline fun <reified T, reified B> postAndParse(
@@ -149,7 +162,7 @@ class SeerrApiClientImpl @Inject constructor(
             .withAuth(credentials)
             .post(requestBody)
             .build()
-        return parseAndMap(executeRequest(request))
+        return parseRequest(request)
     }
 
     private suspend inline fun <reified T, reified B> putAndParse(
@@ -163,7 +176,7 @@ class SeerrApiClientImpl @Inject constructor(
             .withAuth(credentials)
             .put(json.encodeToString(body).toRequestBody("application/json".toMediaType()))
             .build()
-        return parseAndMap(executeRequest(request))
+        return parseRequest(request)
     }
 
     override suspend fun loginJellyfin(
@@ -209,7 +222,7 @@ class SeerrApiClientImpl @Inject constructor(
             .addQueryParameter("page", page.toString())
             .build()
         val request = Request.Builder().url(url).withAuth(credentials).get().build()
-        return parseAndMap(executeRequest(request))
+        return parseRequest(request)
     }
 
     override suspend fun getMovieDetails(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int): Result<SeerrMovieDetails> =
@@ -330,7 +343,7 @@ class SeerrApiClientImpl @Inject constructor(
             .withAuth(credentials)
             .get()
             .build()
-        return parseAndMap(executeRequest(request))
+        return parseRequest(request)
     }
 
     override suspend fun getRequest(
@@ -343,7 +356,7 @@ class SeerrApiClientImpl @Inject constructor(
             .withAuth(credentials)
             .get()
             .build()
-        return parseAndMap(executeRequest(request))
+        return parseRequest(request)
     }
 
     override suspend fun approveRequest(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrRequestItem> =

@@ -754,6 +754,7 @@ class UnifiedMediaDetailProviderImplTest {
         )
         every { offlineRepository.getSeasonsForSeries("s1") } returns MutableStateFlow(listOf(seasonRow))
         every { offlineRepository.getEpisodesForSeason("season1") } returns MutableStateFlow(listOf(epRow))
+        coEvery { offlineRepository.getEpisodesForSeries("s1") } returns listOf(epRow)
 
         val snapshot = (firstResolved(buildProvider(), "s1") as DetailLoadState.Loaded).snapshot
 
@@ -795,6 +796,7 @@ class UnifiedMediaDetailProviderImplTest {
         )
         every { offlineRepository.getSeasonsForSeries("s1") } returns MutableStateFlow(listOf(seasonRow))
         every { offlineRepository.getEpisodesForSeason("season1") } returns MutableStateFlow(listOf(ep1, ep2))
+        coEvery { offlineRepository.getEpisodesForSeries("s1") } returns listOf(ep1, ep2)
 
         val snapshot = (firstResolved(buildProvider(), "s1") as DetailLoadState.Loaded).snapshot
 

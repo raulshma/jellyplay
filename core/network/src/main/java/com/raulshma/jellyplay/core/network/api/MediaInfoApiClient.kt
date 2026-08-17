@@ -24,6 +24,9 @@ interface MediaInfoApiClient {
     // once the route lands; until then the call 404s and Result.failure surfaces it.
     suspend fun sendTestNewsletter(): Result<Unit>
     suspend fun getUsers(): Result<List<JellyfinUser>>
+
+    /** Per-user lookup via `GET /Users/{id}` — avoids the full getUsers() scan for one user. */
+    suspend fun getUserById(userId: String): Result<JellyfinUser>
     suspend fun getUserPlayedItemCount(userId: String, includeItemTypes: List<String>? = null): Result<Int>
     suspend fun getUserUnplayedItemCount(userId: String, includeItemTypes: List<String>? = null): Result<Int>
     suspend fun getItemsWithUserData(userId: String, includeItemTypes: List<String>? = null, isPlayed: Boolean? = null, sortBy: String = "SortName", sortOrder: String = "Ascending", startIndex: Int = 0, limit: Int = 50): Result<Pair<Int, List<MediaItem>>>

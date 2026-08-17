@@ -20,9 +20,13 @@ android {
         versionName = project.findProperty("versionName") as? String ?: "0.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        resourceConfigurations += listOf("en", "de", "es", "fr", "it", "pt", "ja", "ko", "zh")
 
         manifestPlaceholders["versionName"] = versionName ?: "0.0.1"
+    }
+
+    // AGP 9 replacement for the legacy defaultConfig.resourceConfigurations.
+    androidResources {
+        localeFilters += listOf("en", "de", "es", "fr", "it", "pt", "ja", "ko", "zh")
     }
 
     flavorDimensions += "platform"
@@ -44,7 +48,9 @@ android {
             if (gradle.startParameter.taskNames.any { it.contains("debug", ignoreCase = true) }) {
                 include("x86_64")
             }
-            isUniversalApk = true
+            // Universal (all 4 ABIs of the native player stacks) ships for
+            // sideload only; local debug builds skip packaging it.
+            isUniversalApk = !gradle.startParameter.taskNames.any { it.contains("debug", ignoreCase = true) }
         }
     }
 
@@ -83,6 +89,9 @@ android {
     buildFeatures {
         compose = true
         resValues = true
+        // Nothing in app/src references BuildConfig (version info flows through
+        // manifestPlaceholders).
+        buildConfig = false
     }
 
     // i18n: locales are translated in bulk but added incrementally per module.
@@ -117,10 +126,8 @@ aboutLibraries {
     }
 }
 
-// Keep the generated asset in sync with the dependency graph on every build.
-tasks.matching { it.name == "preBuild" }.configureEach {
-    dependsOn("exportLibraryDefinitions")
-}
+// The exported asset regenerates on demand (./gradlew :app:exportLibraryDefinitions)
+// rather than on every preBuild — it only changes when the dependency graph does.
 
 dependencies {
     // Explicitly add libmpv first so pickFirsts grabs its newer libc++_shared.so

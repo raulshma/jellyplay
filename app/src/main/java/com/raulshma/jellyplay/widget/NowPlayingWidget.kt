@@ -30,6 +30,7 @@ class NowPlayingWidget : AppWidgetProvider() {
     interface WidgetEntryPoint {
         fun audioPlaybackManager(): AudioPlaybackManager
         fun widgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
+        fun nowPlayingWidgetUpdater(): NowPlayingWidgetUpdater
     }
 
     /**
@@ -51,13 +52,25 @@ class NowPlayingWidget : AppWidgetProvider() {
         }
     }
 
+    /**
+     * First widget instance just got pinned — kick the updater out of its
+     * dormant state (it starts dormant when nothing is pinned so the process
+     * doesn't pay 1 Hz app-widget binder traffic with zero widgets).
+     */
+    override fun onEnabled(context: Context?) {
+        super.onEnabled(context)
+        notifyUpdaterPresenceChanged(context)
+    }
+
     override fun onDisabled(context: Context?) {
         super.onDisabled(context)
         refreshScope.cancel()
+        notifyUpdaterPresenceChanged(context)
     }
 
     override fun onDeleted(context: Context?, appWidgetIds: IntArray?) {
         super.onDeleted(context, appWidgetIds)
+        notifyUpdaterPresenceChanged(context)
         if (context == null || appWidgetIds == null) return
         val store = try {
             EntryPointAccessors.fromApplication(
@@ -74,6 +87,19 @@ class NowPlayingWidget : AppWidgetProvider() {
         }
     }
 
+    private fun notifyUpdaterPresenceChanged(context: Context?) {
+        if (context == null) return
+        try {
+            EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                WidgetEntryPoint::class.java,
+            ).nowPlayingWidgetUpdater().onWidgetPresenceChanged()
+        } catch (_: Exception) {
+            // Updater not constructed yet (process start race) — Application's
+            // start() call will pick the widget list up anyway.
+        }
+    }
+
     override fun onAppWidgetOptionsChanged(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -81,6 +107,9 @@ class NowPlayingWidget : AppWidgetProvider() {
         newOptions: Bundle
     ) {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        // A resize can arrive while the updater is dormant (e.g. after a
+        // restore where no onEnabled followed) — spec's named restart point.
+        notifyUpdaterPresenceChanged(context)
         val entryPoint = EntryPointAccessors.fromApplication(
             context.applicationContext,
             WidgetEntryPoint::class.java,

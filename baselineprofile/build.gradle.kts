@@ -1,3 +1,5 @@
+import com.android.build.api.dsl.ManagedVirtualDevice
+
 plugins {
     alias(libs.plugins.android.test)
     alias(libs.plugins.kotlin.compose)
@@ -23,6 +25,28 @@ android {
 
     targetProjectPath = ":app"
     experimentalProperties["android.experimental.art-profile"] = true
+
+    // Headless Gradle Managed Device so profile generation needs no plugged-in
+    // hardware: CI (GitHub ubuntu runners expose /dev/kvm) and local runs boot
+    // this emulator on demand. API 34+ so startup-profile rules are collected.
+    // AGP 9 moved managedDevices under testOptions and replaced the old
+    // `devices` container with allDevices.
+    testOptions {
+        managedDevices {
+            allDevices.register<ManagedVirtualDevice>("ciPixel8") {
+                device = "Pixel 8"
+                apiLevel = 34
+                systemImageSource = "aosp"
+            }
+        }
+    }
+}
+
+baselineProfile {
+    // Run generation on the managed device above instead of requiring a
+    // device connected via adb.
+    managedDevices += "ciPixel8"
+    useConnectedDevices = false
 }
 
 dependencies {

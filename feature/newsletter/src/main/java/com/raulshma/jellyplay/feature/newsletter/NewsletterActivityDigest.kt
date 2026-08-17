@@ -105,6 +105,10 @@ private fun ActivityDigestItem(
     }
 }
 
+// Built once at class-load rather than per digest entry.
+private val ACTIVITY_DATE_FORMATTER: java.time.format.DateTimeFormatter =
+    java.time.format.DateTimeFormatter.ofPattern("MMM d")
+
 private fun formatRelativeDate(dateStr: String): String {
     return try {
         val instant = java.time.Instant.parse(dateStr)
@@ -113,10 +117,7 @@ private fun formatRelativeDate(dateStr: String): String {
         when {
             entryDate == today -> "Today"
             entryDate == today.minusDays(1) -> "Yesterday"
-            else -> {
-                val formatter = java.time.format.DateTimeFormatter.ofPattern("MMM d")
-                entryDate.format(formatter)
-            }
+            else -> entryDate.format(ACTIVITY_DATE_FORMATTER)
         }
     } catch (_: Exception) {
         dateStr

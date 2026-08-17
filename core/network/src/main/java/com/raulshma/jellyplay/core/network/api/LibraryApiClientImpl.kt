@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.TtlCache
+import com.raulshma.jellyplay.core.model.lruMapOf
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
@@ -70,6 +71,19 @@ class LibraryApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
     private val lyricsApi: LyricsApi,
 ) : LibraryApiClient {
+
+    /**
+     * Parent ids of libraries already known to return nothing from both the
+     * primary items query and the getLatestMedia fallback — see getMediaItems.
+     * Access-order LRU, capped small; safe across library refreshes because a
+     * library that gains content short-circuits before the fallback is reached.
+     */
+    private val emptyFallbackLibraries = lruMapOf<String, Unit>(32)
+
+    private fun rememberEmptyFallback(parentId: String) {
+        // Main-dispatcher-safe: confined to the apiResultWithRetry IO block.
+        synchronized(emptyFallbackLibraries) { emptyFallbackLibraries[parentId] = Unit }
+    }
 
     // ── Home hot-path sub-call caches ──────────────────────────────────────
     // MediaRepositoryImpl.getHomeSections caches the whole HomeSectionsResult
@@ -511,17 +525,29 @@ class LibraryApiClientImpl @Inject constructor(
             ),
         ).content
         val rawItems = if (response.items.isEmpty() && parentId != null && searchTerm.isNullOrBlank()) {
-            runCatching {
-                engine.requireApi().userLibraryApi.getLatestMedia(
-                    parentId = parentId.toUUID(),
-                    limit = if (limit > 0) limit else 50,
-                    fields = listOf(
-                        ItemFields.OVERVIEW,
-                        ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                        ItemFields.GENRES,
-                    ),
-                ).content
-            }.getOrNull() ?: emptyList()
+            // Skip the doubled request for libraries already known to be
+            // genuinely empty (primary query empty AND fallback empty) — a
+            // visit to an empty library previously paid both requests every
+            // time. Bounded LRU: once the library gains content the primary
+            // query returns items and the fallback is never reached, so the
+            // memo cannot serve a stale non-empty state.
+            if (synchronized(emptyFallbackLibraries) { emptyFallbackLibraries.containsKey(parentId) }) {
+                emptyList()
+            } else {
+                val fallback = runCatching {
+                    engine.requireApi().userLibraryApi.getLatestMedia(
+                        parentId = parentId.toUUID(),
+                        limit = if (limit > 0) limit else 50,
+                        fields = listOf(
+                            ItemFields.OVERVIEW,
+                            ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                            ItemFields.GENRES,
+                        ),
+                    ).content
+                }.getOrNull() ?: emptyList()
+                if (fallback.isEmpty()) rememberEmptyFallback(parentId)
+                fallback
+            }
         } else {
             response.items
         }

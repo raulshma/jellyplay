@@ -12,6 +12,8 @@ import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueMessage
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 import com.raulshma.jellyplay.core.network.api.ApiException
+import com.raulshma.jellyplay.core.network.api.JsonRequestClient
+import com.raulshma.jellyplay.core.network.api.parseJsonRequest
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -100,8 +102,17 @@ class RadarrApiClientImpl @Inject constructor(
         else -> e.message ?: e.javaClass.simpleName
     }
 
-    private inline fun <reified T> parseAndMap(result: Result<String>): Result<T> =
-        result.mapCatching { json.decodeFromString<T>(it) }
+    /** Bundled [parseJsonRequest] dependencies; see [parseRequest]. */
+    private val jsonRequestClient = JsonRequestClient(
+        okHttpClient = okHttpClient,
+        json = json,
+        parseErrorMessage = ::parseErrorMessage,
+        formatNetworkError = ::formatNetworkError,
+    )
+
+    /** Stream-decoding request execution; see [parseJsonRequest]. */
+    private suspend inline fun <reified T> parseRequest(request: Request): Result<T> =
+        parseJsonRequest(jsonRequestClient, request)
 
     /**
      * Applies the [ArrQueueDeleteOptions] as query params on a DELETE URL.
@@ -136,20 +147,6 @@ class RadarrApiClientImpl @Inject constructor(
         return executeRequest(request).map { }
     }
 
-    private suspend inline fun <reified B> postJson(
-        baseUrl: String,
-        apiKey: String,
-        path: String,
-        body: B,
-    ): Result<String> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, path))
-            .withApiKey(apiKey)
-            .post(json.encodeToString(body).toRequestBody("application/json".toMediaType()))
-            .build()
-        return executeRequest(request)
-    }
-
     override suspend fun getQueue(baseUrl: String, apiKey: String): Result<List<ArrQueueItem>> {
         // includeMovie=true attaches the movie resource so we can pull tmdbId + title.
         // Radarr v3 (like Sonarr) wraps the page in a { records, page, pageSize,
@@ -159,7 +156,7 @@ class RadarrApiClientImpl @Inject constructor(
             .addQueryParameter("includeMovie", "true")
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseAndMap<RadarrQueueResponse>(executeRequest(request))
+        return parseRequest<RadarrQueueResponse>(request)
             .map { resp -> resp.records.map { it.toModel() } }
     }
 
@@ -232,7 +229,7 @@ class RadarrApiClientImpl @Inject constructor(
             .addQueryParameter("end", end)
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseAndMap<List<RadarrMovieResource>>(executeRequest(request))
+        return parseRequest<List<RadarrMovieResource>>(request)
             .map { list -> list.map { it.toCalendarItem() } }
     }
 
@@ -247,7 +244,7 @@ class RadarrApiClientImpl @Inject constructor(
         builder.addQueryParameter("includeMovie", "true")
         if (eventType != null) builder.addQueryParameter("eventType", eventType.toString())
         val request = Request.Builder().url(builder.build()).withApiKey(apiKey).get().build()
-        return parseAndMap<RadarrHistoryResponse>(executeRequest(request))
+        return parseRequest<RadarrHistoryResponse>(request)
             .map { resp -> resp.records.map { it.toModel() } }
     }
 
@@ -264,7 +261,7 @@ class RadarrApiClientImpl @Inject constructor(
             .addQueryParameter("sortDirection", "descending")
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseAndMap<RadarrBlocklistResponse>(executeRequest(request))
+        return parseRequest<RadarrBlocklistResponse>(request)
             .map { resp -> resp.records.map { it.toModel() } }
     }
 
@@ -295,7 +292,7 @@ class RadarrApiClientImpl @Inject constructor(
             .addQueryParameter("sortDirection", "descending")
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseAndMap<RadarrWantedResponse>(executeRequest(request))
+        return parseRequest<RadarrWantedResponse>(request)
             .map { resp -> resp.records.map { it.toWantedItem() } }
     }
 
@@ -311,8 +308,12 @@ class RadarrApiClientImpl @Inject constructor(
             movieIds = movieIds,
             movieId = movieIds?.firstOrNull(),
         )
-        val result = postJson(baseUrl, apiKey, "/command", body)
-        return parseAndMap<RadarrCommandResource>(result).map { it.toModel() }
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/command"))
+            .withApiKey(apiKey)
+            .post(json.encodeToString(body).toRequestBody("application/json".toMediaType()))
+            .build()
+        return parseRequest<RadarrCommandResource>(request).map { it.toModel() }
     }
 
     override suspend fun findMovieIdByTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<Int?> {
@@ -323,7 +324,7 @@ class RadarrApiClientImpl @Inject constructor(
             .addQueryParameter("tmdbId", tmdbId.toString())
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseAndMap<List<RadarrMovieResource>>(executeRequest(request))
+        return parseRequest<List<RadarrMovieResource>>(request)
             .map { list -> list.firstOrNull()?.id }
     }
 
@@ -332,7 +333,7 @@ class RadarrApiClientImpl @Inject constructor(
             .addQueryParameter("tmdbId", tmdbId.toString())
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseAndMap<List<RadarrMovieResource>>(executeRequest(request))
+        return parseRequest<List<RadarrMovieResource>>(request)
             .map { list ->
                 list.firstOrNull()?.let {
                     RadarrMovieInfo(

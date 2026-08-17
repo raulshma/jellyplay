@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
@@ -45,6 +46,18 @@ const val MIN_OFFLINE_SEARCH_LENGTH: Int = 2
 
 private val MEDIA_TYPE_BY_NAME: Map<String, MediaType> = MediaType.entries.associateBy { it.name }
 private val DOWNLOAD_STATUS_BY_NAME: Map<String, DownloadStatus> = DownloadStatus.entries.associateBy { it.name }
+
+/**
+ * Joins a metadata row's model with its `downloads` row (null when absent) —
+ * the shape every download-aware read path projects: path + status + byte
+ * counters, all defaulting when there is no download.
+ */
+private fun OfflineMediaItem.withDownload(download: DownloadEntity?): OfflineMediaItem = copy(
+    downloadPath = download?.downloadPath,
+    downloadStatus = download?.status?.let { DOWNLOAD_STATUS_BY_NAME[it] },
+    downloadedBytes = download?.downloadedBytes ?: 0L,
+    totalSizeBytes = download?.totalSizeBytes ?: 0L,
+)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
@@ -62,19 +75,14 @@ class OfflineRepositoryImpl @Inject constructor(
                 flowOf(null)
             } else {
                 downloadDao.getDownloadByMediaItemIdFlow(id).flatMapLatest { download ->
-                    val item = row.toOfflineMediaItem().copy(
-                        downloadPath = download?.downloadPath,
-                        downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
-                        downloadedBytes = download?.downloadedBytes ?: 0L,
-                        totalSizeBytes = download?.totalSizeBytes ?: 0L,
-                    )
+                    val item = row.toOfflineMediaItem().withDownload(download)
                     // Resolve disk-backed local artwork for every media type so
                     // the offline detail hero/poster render without network.
                     // Covers legacy rows (remote URLs written before local-file
                     // persistence) and image-write-failure fallbacks — the
                     // resolver substitutes an existing local file when one is
                     // beside the download, else preserves the original value.
-                    flow<OfflineMediaItem?> { emit(resolveItemArtwork(item)) }
+                    flow<OfflineMediaItem?> { emit(withContext(Dispatchers.IO) { resolveItemArtwork(item) }) }
                 }
             }
         }.distinctUntilChanged()
@@ -88,13 +96,7 @@ class OfflineRepositoryImpl @Inject constructor(
                 downloadDao.getDownloadsByMediaItemIdsFlow(ids).map { downloads ->
                     val downloadMap = downloads.associateBy { it.mediaItemId }
                     rows.map { row ->
-                        val download = downloadMap[row.media.id]
-                        row.toOfflineMediaItem().copy(
-                            downloadPath = download?.downloadPath,
-                            downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
-                            downloadedBytes = download?.downloadedBytes ?: 0L,
-                            totalSizeBytes = download?.totalSizeBytes ?: 0L,
-                        )
+                        row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
                     }
                 }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
             }
@@ -146,13 +148,7 @@ class OfflineRepositoryImpl @Inject constructor(
                                 totalSizeBytes = agg?.totalSizeBytes ?: 0L,
                             )
                         } else {
-                            val download = downloadMap[row.media.id]
-                            row.toOfflineMediaItem().copy(
-                                downloadPath = download?.downloadPath,
-                                downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
-                                downloadedBytes = download?.downloadedBytes ?: 0L,
-                                totalSizeBytes = download?.totalSizeBytes ?: 0L,
-                            )
+                            row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
                         }
                     }
                 }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
@@ -172,19 +168,24 @@ class OfflineRepositoryImpl @Inject constructor(
             else downloadDao.getDownloadsByMediaItemIdsFlow(ids).map { downloads ->
                 val downloadMap = downloads.associateBy { it.mediaItemId }
                 rows.map { row ->
-                    val download = downloadMap[row.media.id]
-                    row.toOfflineMediaItem().copy(
-                        downloadPath = download?.downloadPath,
-                        downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
-                        downloadedBytes = download?.downloadedBytes ?: 0L,
-                        totalSizeBytes = download?.totalSizeBytes ?: 0L,
-                    )
+                    row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
                 }
             }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
         }.distinctUntilChanged()
 
+    override suspend fun getEpisodesForSeries(seriesId: String): List<OfflineMediaItem> {
+        val rows = offlineMediaDao.getEpisodesForSeries(seriesId)
+        val ids = rows.map { it.media.id }
+        if (ids.isEmpty()) return emptyList()
+        val downloadMap = downloadDao.getDownloadsByMediaItemIds(ids).associateBy { it.mediaItemId }
+        return resolveArtworkList(rows.map { row ->
+            row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
+        })
+    }
+
     override suspend fun getOfflineItem(id: String): OfflineMediaItem? =
-        offlineMediaDao.getByIdWithPlayback(id)?.toOfflineMediaItem()?.let { resolveItemArtwork(it) }
+        offlineMediaDao.getByIdWithPlayback(id)?.toOfflineMediaItem()
+            ?.let { withContext(Dispatchers.IO) { resolveItemArtwork(it) } }
 
     override fun getOfflineItemCount(): Flow<Int> =
         offlineMediaDao.getOfflineItemCount()
@@ -474,7 +475,13 @@ class OfflineRepositoryImpl @Inject constructor(
      * Cheap: a couple of `File.exists()` stats per item; Room only re-emits on
      * table writes, not per recomposition.
      */
-    private suspend fun resolveItemArtwork(item: OfflineMediaItem): OfflineMediaItem {
+    private suspend fun resolveItemArtwork(item: OfflineMediaItem): OfflineMediaItem =
+        resolveItemArtwork(item, SeriesPrefetch())
+
+    private suspend fun resolveItemArtwork(
+        item: OfflineMediaItem,
+        prefetch: SeriesPrefetch,
+    ): OfflineMediaItem {
         // First: the item's own artifact beside its media file (all types).
         val ownDir = item.downloadPath
             ?.takeIf { it.isNotBlank() }
@@ -482,8 +489,8 @@ class OfflineRepositoryImpl @Inject constructor(
         val ownPoster = ownDir?.let { localArtifactOrNull(it, DownloadArtifacts.posterFile(item.id)) }
         val ownBackdrop = ownDir?.let { localArtifactOrNull(it, DownloadArtifacts.backdropFile(item.id)) }
         val (resolvedPoster, resolvedBackdrop) = when (item.mediaType) {
-            MediaType.EPISODE -> resolveEpisodeSeriesArtwork(item, ownPoster, ownBackdrop)
-            MediaType.SERIES -> resolveSeriesArtwork(item, ownPoster, ownBackdrop)
+            MediaType.EPISODE -> resolveEpisodeSeriesArtwork(item, ownPoster, ownBackdrop, prefetch)
+            MediaType.SERIES -> resolveSeriesArtwork(item, ownPoster, ownBackdrop, prefetch)
             else -> ownPoster to ownBackdrop
         }
         val posterResolved = if (needsArtworkResolution(item.posterPath)) resolvedPoster ?: item.posterPath else item.posterPath
@@ -493,7 +500,7 @@ class OfflineRepositoryImpl @Inject constructor(
         // artifact dir was located above. Movies/standalone items use ownDir;
         // series rows resolve their first episode's dir; episodes inherit their
         // parent series dir. Skipped entirely when there is no cast to resolve.
-        val castDir = castDirFor(item, ownDir)
+        val castDir = castDirFor(item, ownDir, prefetch)
         val resolvedCast = if (castDir != null && item.cast.isNotEmpty()) {
             resolveCastArtwork(item.cast, castDir)
         } else {
@@ -521,9 +528,86 @@ class OfflineRepositoryImpl @Inject constructor(
      * album tracks). Each item that already has a local path short-circuits
      * with zero FS work; only rows needing resolution stat the artifact files.
      * See [resolveItemArtwork] for the per-field policy.
+     *
+     * Runs on [Dispatchers.IO]: these flows are collected on the Main
+     * dispatcher (ViewModel `stateIn`) and Room re-emits them on every write
+     * to `offline_media`/`downloads` — i.e. continuously during active
+     * downloads — so the `File.exists()` stats must stay off Main.
      */
-    private suspend fun resolveArtworkList(items: List<OfflineMediaItem>): List<OfflineMediaItem> =
-        if (items.isEmpty()) items else items.map { resolveItemArtwork(it) }
+    private suspend fun resolveArtworkList(items: List<OfflineMediaItem>): List<OfflineMediaItem> {
+        if (items.isEmpty()) return items
+        return withContext(Dispatchers.IO) {
+            // All episodes of a season share one seriesId — prefetch each
+            // distinct parent series row once instead of re-querying it per
+            // episode on every emission. Same for each SERIES item's
+            // downloaded-episode dir (one projected query for the whole
+            // list instead of a getDownloadsForSeries round-trip per series).
+            val prefetch = SeriesPrefetch(
+                seriesRowsById = prefetchSeriesRows(items),
+                seriesDirsById = prefetchSeriesArtifactDirs(items),
+            )
+            items.map { resolveItemArtwork(it, prefetch) }
+        }
+    }
+
+    /**
+     * Bulk-prefetched parent-series context for list artwork resolution:
+     * [seriesRowsById] / [seriesDirsById] each come from one projected query
+     * instead of a per-item DAO round-trip. A `null` map means nothing of
+     * that kind was prefetched (the single-item detail path passes a bare
+     * `SeriesPrefetch()`), so [seriesRowOrNull]/[seriesDirOrNull] fall back
+     * to the per-id query; a non-null map missing an id is a definitive
+     * miss, so the fallback is skipped (no redundant re-query).
+     */
+    private inner class SeriesPrefetch(
+        val seriesRowsById: Map<String, OfflineMediaEntity>? = null,
+        val seriesDirsById: Map<String, File>? = null,
+    ) {
+        suspend fun seriesRowOrNull(seriesId: String): OfflineMediaEntity? =
+            if (seriesRowsById != null) seriesRowsById[seriesId] else offlineMediaDao.getById(seriesId)
+
+        suspend fun seriesDirOrNull(seriesId: String): File? =
+            if (seriesDirsById != null) seriesDirsById[seriesId] else firstEpisodeDirForSeries(seriesId)
+    }
+
+    private suspend fun prefetchSeriesRows(
+        items: List<OfflineMediaItem>,
+    ): Map<String, OfflineMediaEntity>? {
+        val seriesIds = items.asSequence()
+            .filter { it.mediaType == MediaType.EPISODE }
+            .mapNotNull { it.seriesId }
+            .distinct()
+            .toList()
+        if (seriesIds.isEmpty()) return null
+        return offlineMediaDao.getByIds(seriesIds).associateBy { it.id }
+    }
+
+    /**
+     * Each distinct SERIES item's artifact dir (parent of a downloaded
+     * episode's file) in ONE projected query. Blank paths and parentless
+     * paths are skipped; the first surviving row per series wins, matching
+     * the per-series [com.raulshma.jellyplay.core.database.dao.DownloadDao.getDownloadsForSeries]
+     * scan's table order. Returns null when the list has no SERIES items
+     * (no query at all); a non-null map missing an id means that series has
+     * no downloaded episode, so no redundant re-query for it.
+     */
+    private suspend fun prefetchSeriesArtifactDirs(
+        items: List<OfflineMediaItem>,
+    ): Map<String, File>? {
+        val seriesIds = items.asSequence()
+            .filter { it.mediaType == MediaType.SERIES }
+            .map { it.id }
+            .distinct()
+            .toList()
+        if (seriesIds.isEmpty()) return null
+        val dirBySeries = LinkedHashMap<String, File>()
+        for (row in downloadDao.getDownloadPathsForSeries(seriesIds)) {
+            if (row.downloadPath.isBlank()) continue
+            val parent = File(row.downloadPath).parentFile ?: continue
+            if (row.seriesId !in dirBySeries) dirBySeries[row.seriesId] = parent
+        }
+        return dirBySeries
+    }
 
     /**
      * Episode fallback: prefer the series' local artwork (series row's local
@@ -536,9 +620,10 @@ class OfflineRepositoryImpl @Inject constructor(
         item: OfflineMediaItem,
         ownPoster: String?,
         ownBackdrop: String?,
+        prefetch: SeriesPrefetch,
     ): Pair<String?, String?> {
         val seriesId = item.seriesId ?: return ownPoster to ownBackdrop
-        val seriesRow = offlineMediaDao.getById(seriesId)
+        val seriesRow = prefetch.seriesRowOrNull(seriesId)
         val episodeDir = item.downloadPath
             ?.takeIf { it.isNotBlank() }
             ?.let { File(it).parentFile }
@@ -559,16 +644,21 @@ class OfflineRepositoryImpl @Inject constructor(
         item: OfflineMediaItem,
         ownPoster: String?,
         ownBackdrop: String?,
+        prefetch: SeriesPrefetch,
     ): Pair<String?, String?> {
-        val seriesDir = downloadDao.getDownloadsForSeries(item.id)
-            .asSequence()
-            .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
-            .mapNotNull { File(it).parentFile }
-            .firstOrNull()
+        val seriesDir = prefetch.seriesDirOrNull(item.id)
         val seriesBackdrop = seriesDir?.let { localArtifactOrNull(it, DownloadArtifacts.backdropFile(item.id)) }
         val seriesPoster = seriesDir?.let { localArtifactOrNull(it, DownloadArtifacts.posterFile(item.id)) }
         return (ownPoster ?: seriesPoster) to (ownBackdrop ?: seriesBackdrop)
     }
+
+    /** Dir of the series' first downloaded episode; null when there is none. */
+    private suspend fun firstEpisodeDirForSeries(seriesId: String): File? =
+        downloadDao.getDownloadsForSeries(seriesId)
+            .asSequence()
+            .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
+            .mapNotNull { File(it).parentFile }
+            .firstOrNull()
 
     /** True when [path] is absent or a server URL — i.e. not a local file. */
     private fun needsArtworkResolution(path: String?): Boolean =
@@ -641,17 +731,18 @@ class OfflineRepositoryImpl @Inject constructor(
      * own). Returns null when neither is available so callers can skip cast
      * resolution rather than stat a path that cannot exist.
      */
-    private suspend fun castDirFor(item: OfflineMediaItem, ownDir: File?): File? {
+    private suspend fun castDirFor(
+        item: OfflineMediaItem,
+        ownDir: File?,
+        prefetch: SeriesPrefetch,
+    ): File? {
         if (ownDir != null) return ownDir
-        // Series row: locate any downloaded episode's dir. Mirrors
-        // resolveSeriesArtwork's scan so the cast row resolves to the same
-        // shared downloads dir the series poster/backdrop already use.
+        // Series row: locate any downloaded episode's dir — the same lookup
+        // [resolveSeriesArtwork] uses (prefetched in lists, per-id on detail
+        // reads) so the cast row resolves to the same shared downloads dir
+        // the series poster/backdrop already use.
         if (item.mediaType == MediaType.SERIES) {
-            return downloadDao.getDownloadsForSeries(item.id)
-                .asSequence()
-                .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
-                .mapNotNull { File(it).parentFile }
-                .firstOrNull()
+            return prefetch.seriesDirOrNull(item.id)
         }
         return null
     }
@@ -683,9 +774,6 @@ class OfflineRepositoryImpl @Inject constructor(
 
     private fun safeMediaTypeOf(name: String): MediaType =
         MEDIA_TYPE_BY_NAME[name] ?: MediaType.UNKNOWN
-
-    private fun safeDownloadStatusOf(name: String): DownloadStatus? =
-        DOWNLOAD_STATUS_BY_NAME[name]
 
     /**
      * Maps a metadata + playback join row to the UI model. Playback fields come

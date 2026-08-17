@@ -13,6 +13,8 @@ import com.raulshma.jellyplay.core.model.arr.ArrQueueMessage
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 import com.raulshma.jellyplay.core.network.api.ApiException
+import com.raulshma.jellyplay.core.network.api.JsonRequestClient
+import com.raulshma.jellyplay.core.network.api.parseJsonRequest
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -98,8 +100,17 @@ class SonarrApiClientImpl @Inject constructor(
         else -> e.message ?: e.javaClass.simpleName
     }
 
-    private inline fun <reified T> parseAndMap(result: Result<String>): Result<T> =
-        result.mapCatching { json.decodeFromString<T>(it) }
+    /** Bundled [parseJsonRequest] dependencies; see [parseRequest]. */
+    private val jsonRequestClient = JsonRequestClient(
+        okHttpClient = okHttpClient,
+        json = json,
+        parseErrorMessage = ::parseErrorMessage,
+        formatNetworkError = ::formatNetworkError,
+    )
+
+    /** Stream-decoding request execution; see [parseJsonRequest]. */
+    private suspend inline fun <reified T> parseRequest(request: Request): Result<T> =
+        parseJsonRequest(jsonRequestClient, request)
 
     private fun HttpUrl.Builder.withDeleteOptions(options: ArrQueueDeleteOptions): HttpUrl.Builder = apply {
         addQueryParameter("removeFromClient", options.removeFromClient.toString())
@@ -130,20 +141,6 @@ class SonarrApiClientImpl @Inject constructor(
         return executeRequest(request).map { }
     }
 
-    private suspend inline fun <reified B> postJson(
-        baseUrl: String,
-        apiKey: String,
-        path: String,
-        body: B,
-    ): Result<String> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, path))
-            .withApiKey(apiKey)
-            .post(json.encodeToString(body).toRequestBody("application/json".toMediaType()))
-            .build()
-        return executeRequest(request)
-    }
-
     override suspend fun getQueue(baseUrl: String, apiKey: String): Result<List<ArrQueueItem>> {
         val url = buildUrl(baseUrl, "/queue")
             .newBuilder()
@@ -151,7 +148,7 @@ class SonarrApiClientImpl @Inject constructor(
             .addQueryParameter("includeEpisode", "true")
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseAndMap<SonarrQueueResponse>(executeRequest(request))
+        return parseRequest<SonarrQueueResponse>(request)
             .map { resp -> resp.records.map { it.toModel() } }
     }
 
@@ -228,7 +225,7 @@ class SonarrApiClientImpl @Inject constructor(
             .addQueryParameter("includeSeries", "true")
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseAndMap<List<SonarrEpisodeResource>>(executeRequest(request))
+        return parseRequest<List<SonarrEpisodeResource>>(request)
             .map { list -> list.map { it.toCalendarItem() } }
     }
 
@@ -243,7 +240,7 @@ class SonarrApiClientImpl @Inject constructor(
         builder.addQueryParameter("includeSeries", "true")
         if (eventType != null) builder.addQueryParameter("eventType", eventType.toString())
         val request = Request.Builder().url(builder.build()).withApiKey(apiKey).get().build()
-        return parseAndMap<SonarrHistoryResponse>(executeRequest(request))
+        return parseRequest<SonarrHistoryResponse>(request)
             .map { resp -> resp.records.map { it.toModel() } }
     }
 
@@ -260,7 +257,7 @@ class SonarrApiClientImpl @Inject constructor(
             .addQueryParameter("sortDirection", "descending")
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseAndMap<SonarrBlocklistResponse>(executeRequest(request))
+        return parseRequest<SonarrBlocklistResponse>(request)
             .map { resp -> resp.records.map { it.toModel() } }
     }
 
@@ -294,7 +291,7 @@ class SonarrApiClientImpl @Inject constructor(
             .addQueryParameter("includeSeries", "true")
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseAndMap<SonarrWantedResponse>(executeRequest(request))
+        return parseRequest<SonarrWantedResponse>(request)
             .map { resp -> resp.records.map { it.toWantedItem() } }
     }
 
@@ -312,8 +309,12 @@ class SonarrApiClientImpl @Inject constructor(
             episodeIds = episodeIds,
             seasonNumber = seasonNumber,
         )
-        val result = postJson(baseUrl, apiKey, "/command", body)
-        return parseAndMap<SonarrCommandResource>(result).map { it.toModel() }
+        val request = Request.Builder()
+            .url(buildUrl(baseUrl, "/command"))
+            .withApiKey(apiKey)
+            .post(json.encodeToString(body).toRequestBody("application/json".toMediaType()))
+            .build()
+        return parseRequest<SonarrCommandResource>(request).map { it.toModel() }
     }
 
     override suspend fun findSeriesByTvdb(baseUrl: String, apiKey: String, tvdbId: Int): Result<Int?> {

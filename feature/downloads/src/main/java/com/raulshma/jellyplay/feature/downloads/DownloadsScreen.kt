@@ -1,11 +1,10 @@
 package com.raulshma.jellyplay.feature.downloads
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
+import com.raulshma.jellyplay.core.designsystem.theme.detailEntrance
+import com.raulshma.jellyplay.core.designsystem.theme.rememberDetailEntrance
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -53,7 +52,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -274,6 +272,20 @@ fun DownloadsScreen(
             // render an "update available" dot without a per-row scan. Computed
             // in composable scope (above the LazyColumn) so `remember` is valid.
             val updateIds = remember(updateRows) { updateRows.map { it.id }.toHashSet() }
+            // Shared entrance reveal for the whole list — the same fix as
+            // MediaDetailBody's LocalDetailEntrance, via the shared
+            // [rememberDetailEntrance] + [detailEntrance] pair. ONE Animatable
+            // driven once when the list mounts replaces the per-row
+            // `mutableStateOf + LaunchedEffect + AnimatedVisibility` triple,
+            // which allocated 2 state objects, a coroutine, and an animation
+            // node for every scroll-composed row and then recomposed each row
+            // twice. Rows read the progress inside the modifier's
+            // graphicsLayer lambda (draw phase), so rows composed later during
+            // scroll render at the settled 1f immediately — no animation,
+            // coroutine, or extra recomposition. Re-mounting this branch
+            // (empty -> non-empty) gets a fresh 0f, matching how newly
+            // composed rows animated before.
+            val entrance = rememberDetailEntrance()
             Box(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
                     modifier = Modifier
@@ -299,49 +311,46 @@ fun DownloadsScreen(
                         }
                     }
                     itemsIndexed(items = downloads, key = { _, it -> it.id }, contentType = { _, _ -> "downloadItem" }) { index, download ->
-                        val visible = remember { mutableStateOf(false) }
-                        LaunchedEffect(Unit) { visible.value = true }
-                        AnimatedVisibility(
-                            visible = visible.value,
-                            enter = fadeIn(
-                                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
-                            ) + slideInVertically(
-                                initialOffsetY = { it / 10 },
-                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                        DownloadItemRow(
+                            // Deferred draw-phase read of the shared entrance
+                            // progress: alpha + a slide of 1/10 of the row
+                            // height reproduce the old fadeIn +
+                            // slideInVertically(it / 10) entrance with zero
+                            // per-row state, coroutine, or animation node.
+                            modifier = Modifier.detailEntrance(
+                                progress = { entrance.value },
+                                slideDivisor = 10f,
                             ),
-                        ) {
-                            DownloadItemRow(
-                                item = download,
-                                formatBytes = formatBytes,
-                                formatSpeed = formatSpeed,
-                                formatEta = formatEta,
-                                selected = download.id in selectedIds,
-                                selectionMode = selectionMode,
-                                hasUpdate = download.status == DownloadStatus.COMPLETED &&
-                                    download.mediaItemId in updateIds,
-                                // Completed downloads open their detail page on tap
-                                // (matching the online experience) rather than auto-playing.
-                                // A distinct Play action is still available in the row.
-                                onOpenDetail = {
-                                    if (download.status == DownloadStatus.COMPLETED) {
-                                        onItemClick(download.mediaItemId)
-                                    }
-                                },
-                                onPlay = {
-                                    if (download.status == DownloadStatus.COMPLETED) {
-                                        onPlayOffline(download.mediaItemId, download.mediaType)
-                                    }
-                                },
-                                onCancel = { viewModel.cancelDownload(download) },
-                                onPause = { viewModel.pauseDownload(download) },
-                                onResume = { viewModel.resumeDownload(download) },
-                                onDelete = { pendingDelete = download },
-                                onRetry = { viewModel.retryDownload(download) },
-                                onMoveToFront = { viewModel.moveToFront(download) },
-                                onLowerPriority = { viewModel.lowerPriority(download) },
-                                onToggleSelection = { viewModel.toggleSelection(download) },
-                            )
-                        }
+                            item = download,
+                            formatBytes = formatBytes,
+                            formatSpeed = formatSpeed,
+                            formatEta = formatEta,
+                            selected = download.id in selectedIds,
+                            selectionMode = selectionMode,
+                            hasUpdate = download.status == DownloadStatus.COMPLETED &&
+                                download.mediaItemId in updateIds,
+                            // Completed downloads open their detail page on tap
+                            // (matching the online experience) rather than auto-playing.
+                            // A distinct Play action is still available in the row.
+                            onOpenDetail = {
+                                if (download.status == DownloadStatus.COMPLETED) {
+                                    onItemClick(download.mediaItemId)
+                                }
+                            },
+                            onPlay = {
+                                if (download.status == DownloadStatus.COMPLETED) {
+                                    onPlayOffline(download.mediaItemId, download.mediaType)
+                                }
+                            },
+                            onCancel = { viewModel.cancelDownload(download) },
+                            onPause = { viewModel.pauseDownload(download) },
+                            onResume = { viewModel.resumeDownload(download) },
+                            onDelete = { pendingDelete = download },
+                            onRetry = { viewModel.retryDownload(download) },
+                            onMoveToFront = { viewModel.moveToFront(download) },
+                            onLowerPriority = { viewModel.lowerPriority(download) },
+                            onToggleSelection = { viewModel.toggleSelection(download) },
+                        )
                     }
                 }
 
@@ -444,6 +453,7 @@ fun DownloadsScreen(
 @Composable
 private fun DownloadItemRow(
     item: DownloadItem,
+    modifier: Modifier = Modifier,
     formatBytes: (Long) -> String,
     formatSpeed: (Long) -> String,
     formatEta: (Long, Long, Long) -> String,
@@ -472,7 +482,9 @@ private fun DownloadItemRow(
     val cardRowFocusState = rememberTvFocusState(focusedScale = 1.01f)
 
     ElevatedCard(
-        modifier = Modifier
+        // Caller-supplied modifier comes first so the shared entrance
+        // graphicsLayer wraps the whole card.
+        modifier = modifier
             .fillMaxWidth()
             .then(cardRowFocusState.focusModifier)
             .tvFocusIndicator(cardRowFocusState, ShapeCache.smooth12)

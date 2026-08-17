@@ -10,10 +10,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,8 +23,15 @@ import javax.inject.Singleton
  * Bridges [AudioPlaybackManager] state into the [NowPlayingWidget].
  *
  * Pushes partial updates whenever any of {title, artist, playing-state,
- * artwork} changes. Position is sampled at 1Hz to avoid hammering the
- * app-widget IPC channel during playback.
+ * artwork} changes. Position pushes are driven by a 1 Hz ticker that runs
+ * only while playing (the bounded paused-wait pattern used by the player's
+ * position ticker): pausing cancels the ticker and sends one final update.
+ *
+ * Dormant while no widget is pinned: every push costs launcher binder IPC
+ * (`getAppWidgetIds` + RemoteViews), so with zero widgets the collectors
+ * don't run at all — [NowPlayingWidget.onEnabled] / [onDeleted] /
+ * [onDisabled] / [onAppWidgetOptionsChanged] call [onWidgetPresenceChanged]
+ * to (re)start or stop us.
  */
 @Singleton
 class NowPlayingWidgetUpdater @Inject constructor(
@@ -41,11 +49,34 @@ class NowPlayingWidgetUpdater @Inject constructor(
         val appWidgetManager = AppWidgetManager.getInstance(context)
         val componentName = ComponentName(context, NowPlayingWidget::class.java)
         val ids = appWidgetManager.getAppWidgetIds(componentName)
+        if (ids.isEmpty()) {
+            // Nothing pinned: stay dormant. The widget provider's
+            // onEnabled/onAppWidgetOptionsChanged re-kicks us when one lands.
+            return
+        }
         for (id in ids) {
             NowPlayingWidget.updateAppWidget(context, appWidgetManager, id)
         }
         metadataJob = scope.launch { observeMetadata() }
         positionJob = scope.launch { observePosition() }
+    }
+
+    /**
+     * Widget presence may have changed (pin added/removed). Restarts the
+     * collectors when a widget exists, tears them down when the last one is
+     * gone. Cheap no-op when presence didn't actually change.
+     */
+    fun onWidgetPresenceChanged() {
+        scope.launch {
+            val hasWidgets = AppWidgetManager.getInstance(context)
+                .getAppWidgetIds(ComponentName(context, NowPlayingWidget::class.java))
+                .isNotEmpty()
+            if (hasWidgets) {
+                start()
+            } else {
+                stop()
+            }
+        }
     }
 
     fun stop() {
@@ -96,25 +127,42 @@ class NowPlayingWidgetUpdater @Inject constructor(
             }
     }
 
-    @OptIn(kotlinx.coroutines.FlowPreview::class)
-    private suspend fun observePosition() {
-        // Throttle to ~1 update/sec while playing. When paused, send a single
-        // final update with the latest position so the bar stays put.
-        audioPlaybackManager.currentPosition
-            .sample(1_000L)
-            .collect { pos ->
-                val playing = audioPlaybackManager.isPlaying.value
-                val duration = audioPlaybackManager.duration.value
-                pushUpdate(
-                    title = audioPlaybackManager.title.value,
-                    subtitle = audioPlaybackManager.artist.value.ifBlank { null },
-                    isPlaying = playing,
-                    albumArt = lastArtwork,
-                    positionMs = pos,
-                    durationMs = duration,
-                    isEmptyState = audioPlaybackManager.currentPlayingItemId.value == null,
-                )
+    private suspend fun observePosition() = coroutineScope {
+        // Bounded paused-wait: the 1 Hz ticker runs only while playing; a
+        // pause cancels it (collectLatest) and sends one final update so the
+        // bar and the "Paused ·" label settle. No clock-driven work — and no
+        // binder IPC — while paused.
+        launch {
+            audioPlaybackManager.isPlaying.collectLatest { playing ->
+                if (playing) {
+                    while (true) {
+                        pushPositionUpdate()
+                        delay(POSITION_TICK_MS)
+                    }
+                } else {
+                    pushPositionUpdate()
+                }
             }
+        }
+        // A seek while paused moves the position without flipping isPlaying;
+        // push those too so the bar doesn't go stale until playback resumes.
+        launch {
+            audioPlaybackManager.currentPosition.collect {
+                if (!audioPlaybackManager.isPlaying.value) pushPositionUpdate()
+            }
+        }
+    }
+
+    private fun pushPositionUpdate() {
+        pushUpdate(
+            title = audioPlaybackManager.title.value,
+            subtitle = audioPlaybackManager.artist.value.ifBlank { null },
+            isPlaying = audioPlaybackManager.isPlaying.value,
+            albumArt = lastArtwork,
+            positionMs = audioPlaybackManager.currentPosition.value,
+            durationMs = audioPlaybackManager.duration.value,
+            isEmptyState = audioPlaybackManager.currentPlayingItemId.value == null,
+        )
     }
 
     private suspend fun loadArtwork(url: String?): Bitmap? {
@@ -150,4 +198,9 @@ class NowPlayingWidgetUpdater @Inject constructor(
         val artUrl: String?,
         val isPlaying: Boolean,
     )
+
+    private companion object {
+        /** Widget progress granularity — matches the player's 1 s ticker. */
+        private const val POSITION_TICK_MS = 1_000L
+    }
 }

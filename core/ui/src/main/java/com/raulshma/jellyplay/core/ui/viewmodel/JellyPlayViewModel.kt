@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.ui.viewmodel
 
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.FloatState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.IntState
@@ -9,7 +8,6 @@ import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.MutableLongState
 import androidx.compose.runtime.State
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -38,7 +36,7 @@ import kotlinx.coroutines.launch
  *
  *  - **StateFlow** ([stateFlow]) — for state that may be observed by
  *    non-Compose code, needs `.value` access from background coroutines, or
- *    is collected via [collectAsState] from a Composable. Backed by
+ *    is collected via `collectAsState` from a Composable. Backed by
  *    [MutableStateFlow].
  *
  *  - **Loading state** ([LoadingState]) — for the common
@@ -224,13 +222,3 @@ class StateFlowHandle<T>(private val backing: MutableStateFlow<T>) {
 
     val value: T get() = backing.value
 }
-
-/**
- * Helper extension to collect a [StateFlow] as Compose [State] with the
- * standard 5-second subscription timeout. Use this in Composables that need
- * to observe a [StateFlow] produced by a ViewModel.
- */
-@Composable
-fun <T> StateFlow<T>.collectAsStateSafe(
-    initial: T,
-): State<T> = collectAsState(initial = initial)

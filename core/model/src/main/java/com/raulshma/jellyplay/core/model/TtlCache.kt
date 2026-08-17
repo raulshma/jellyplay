@@ -40,12 +40,7 @@ class TtlCache<V>(
     private data class Entry<V>(val value: V, val fetchedAt: Long)
 
     private val map: MutableMap<String, Entry<V>> =
-        Collections.synchronizedMap(
-            object : LinkedHashMap<String, Entry<V>>(16, 0.75f, true) {
-                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Entry<V>>?): Boolean =
-                    size > maxSize
-            }
-        )
+        Collections.synchronizedMap(lruMapOf<String, Entry<V>>(maxSize))
 
     fun get(key: String): V? {
         // Synchronize the read-then-expire-check-then-remove sequence: a plain

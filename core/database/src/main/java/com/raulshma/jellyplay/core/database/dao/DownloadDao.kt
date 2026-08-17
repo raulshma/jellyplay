@@ -160,6 +160,10 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE mediaItemId IN (:mediaItemIds)")
     fun getDownloadsByMediaItemIdsFlow(mediaItemIds: List<String>): Flow<List<DownloadEntity>>
 
+    /** One-shot variant of [getDownloadsByMediaItemIdsFlow] for suspend callers. */
+    @Query("SELECT * FROM downloads WHERE mediaItemId IN (:mediaItemIds)")
+    suspend fun getDownloadsByMediaItemIds(mediaItemIds: List<String>): List<DownloadEntity>
+
     @Query("UPDATE downloads SET status = 'PENDING' WHERE status IN ('DOWNLOADING', 'QUEUED')")
     suspend fun resetStuckDownloading()
 
@@ -195,6 +199,17 @@ interface DownloadDao {
      */
     @Query("SELECT seriesId, mediaItemId FROM downloads WHERE seriesId IS NOT NULL")
     suspend fun getDownloadedEpisodeIdsBySeries(): List<EpisodeSeriesRow>
+
+    /**
+     * `(seriesId, downloadPath)` projection of [getDownloadsForSeries] for
+     * every series in [seriesIds] at once. The offline library's artwork
+     * resolution only needs each SERIES item's first downloaded-episode dir;
+     * resolving it per series cost one full-row query per series on every
+     * Room emission during downloads. Same table order as the per-series
+     * query, so "first row per series" picks the same dir.
+     */
+    @Query("SELECT seriesId, downloadPath FROM downloads WHERE seriesId IN (:seriesIds)")
+    suspend fun getDownloadPathsForSeries(seriesIds: List<String>): List<SeriesDownloadPathRow>
 
     /**
      * Aggregated `(totalSizeBytes, downloadedBytes)` per series, summing every
@@ -274,6 +289,16 @@ data class ReconciliationRow(
 data class EpisodeSeriesRow(
     val seriesId: String,
     val mediaItemId: String,
+)
+
+/**
+ * `(seriesId, downloadPath)` projection used by
+ * [DownloadDao.getDownloadPathsForSeries] so the offline library resolves
+ * every series' artifact dir in one 2-column query.
+ */
+data class SeriesDownloadPathRow(
+    val seriesId: String,
+    val downloadPath: String,
 )
 
 /**

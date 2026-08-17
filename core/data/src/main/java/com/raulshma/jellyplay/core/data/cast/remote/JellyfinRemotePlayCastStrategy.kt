@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.network.api.AdminApiClient
+import com.raulshma.jellyplay.core.network.websocket.parseSessionsMessage
+import com.raulshma.jellyplay.core.network.websocket.toSessionInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -239,12 +241,15 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
             webSocketClient.events.collect { event ->
                 if (event.type != "Sessions") return@collect
                 val sessionId = connectedSessionId ?: return@collect
+                // `Data` is a PascalCase SessionInfo[] array — decode the raw
+                // envelope text via the WS DTO (the shared SessionInfo model is
+                // camelCase without @SerialName and cannot decode the wire
+                // format directly), then filter to the connected session before
+                // paying for full mapping.
                 try {
-                    val sessions = sessionsJson.decodeFromString<
-                        List<com.raulshma.jellyplay.core.model.SessionInfo>>(
-                        event.data.toString(),
-                    )
-                    val current = sessions.firstOrNull { it.id == sessionId }
+                    val current = parseSessionsMessage(sessionsJson, event.rawText)
+                        .firstOrNull { it.id == sessionId }
+                        ?.toSessionInfo()
                     if (current != null) {
                         applySessionState(current)
                     } else {

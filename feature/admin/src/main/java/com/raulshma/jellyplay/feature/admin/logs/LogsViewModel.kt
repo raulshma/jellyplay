@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.admin.logs
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.LogFile
+import com.raulshma.jellyplay.core.model.trimToSize
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -43,6 +44,9 @@ class LogsViewModel @Inject constructor(
 
     private companion object {
         const val MAX_LIVE_ENTRIES = 200
+
+        /** Cap for the live dedup id set — 2× the display buffer it guards. */
+        const val MAX_LIVE_ENTRY_IDS = MAX_LIVE_ENTRIES * 2
     }
 
     private var liveCollectJob: Job? = null
@@ -86,6 +90,17 @@ class LogsViewModel @Inject constructor(
             isLogPollingActive = true
         )
         logFilePollingJob = launch {
+            // File metadata (size / modification date) drives the poll: when
+            // unchanged, the multi-MB content re-download + lines() re-split +
+            // diff are all skipped. Jellyfin logs are routinely multi-MB, so
+            // this collapses the 5 s poll to one cheap list request.
+            var lastSize = -1L
+            var lastModified = ""
+            suspend fun fetchMeta(): LogFile? =
+                adminRepository.getLogFiles().getOrNull()
+                    ?.firstOrNull { it.name == fileName }
+            fetchMeta()?.let { lastSize = it.size; lastModified = it.dateModified }
+
             val initialResult = adminRepository.getLogFileContent(fileName)
             initialResult.onSuccess { content ->
                 val lines = content.lines().mapIndexed { index, text ->
@@ -107,8 +122,16 @@ class LogsViewModel @Inject constructor(
             while (_state.value.selectedLogFileName == fileName) {
                 delay(5000)
                 if (_state.value.isLogPollingActive) {
+                    val meta = fetchMeta()
+                    if (meta != null && meta.size == lastSize && meta.dateModified == lastModified) {
+                        continue
+                    }
                     val result = adminRepository.getLogFileContent(fileName)
                     result.onSuccess { content ->
+                        if (meta != null) {
+                            lastSize = meta.size
+                            lastModified = meta.dateModified
+                        }
                         val oldLines = _state.value.selectedLogFileLines
                         val newLinesText = content.lines()
 
@@ -181,6 +204,9 @@ class LogsViewModel @Inject constructor(
                 while (activityEntriesBuffer.size > MAX_LIVE_ENTRIES) {
                     activityEntriesBuffer.removeLast()
                 }
+                // Evict oldest ids so the dedup set cannot grow without bound
+                // over a long live session (~7k ids/hour otherwise).
+                liveEntryIdsBuffer.trimToSize(MAX_LIVE_ENTRY_IDS)
                 _state.value = _state.value.copy(
                     liveEntries = liveEntriesBuffer.toList(),
                     liveEntryIds = liveEntryIdsBuffer.toSet(),

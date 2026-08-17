@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.Serializable
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -46,15 +47,6 @@ class TmdbApiClientImpl @Inject constructor(
         return try {
             withContext(Dispatchers.IO) {
                 okHttpClient.newCall(request).execute().use { response ->
-                    val body = response.body?.string()
-                    if (body.isNullOrBlank()) {
-                        return@withContext Result.failure<List<SeerrRelatedVideo>>(
-                            ApiException.fromNetwork(
-                                IOException("Empty response from TMDB"),
-                                "Empty response from TMDB",
-                            )
-                        )
-                    }
                     if (!response.isSuccessful) {
                         return@withContext Result.failure(
                             ApiException.fromHttp(
@@ -63,7 +55,13 @@ class TmdbApiClientImpl @Inject constructor(
                             )
                         )
                     }
-                    val tmdbResponse = json.decodeFromString<TmdbVideosResponse>(body)
+                    val stream = response.body?.byteStream()
+                    if (stream == null) {
+                        return@withContext Result.failure<List<SeerrRelatedVideo>>(
+                            emptyResponseBodyError("TMDB")
+                        )
+                    }
+                    val tmdbResponse = json.decodeFromStream<TmdbVideosResponse>(stream)
                     val videos = tmdbResponse.results.map {
                         SeerrRelatedVideo(
                             key = it.key,

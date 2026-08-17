@@ -7,7 +7,10 @@ import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaSource
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleFile
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
@@ -226,13 +229,46 @@ class SubtitleManagerProviderDownloadTest {
             jellyfinInfo = com.raulshma.jellyplay.core.model.RemoteSubtitleInfo(id = "jelly-1"),
         )
 
-        manager().downloadProviderSubtitle(jellyfinResult)
+        // Both suspend calls the delegated path makes must be stubbed
+        // explicitly: a relaxed mock answers them with mistyped success values
+        // (the Result<T> payload decodes as Object), and the resulting CCE
+        // crashes the downloadSubtitle coroutine after the delegation verify —
+        // escaping the SupervisorJob scope as an uncaught leak that fails the
+        // NEXT test class to enter runTest.
+        coEvery { playbackRepository.downloadSubtitle("item-1", "jelly-1") } returns Result.success(Unit)
+        // The appear-poll reads the forced detail; one source carrying a new
+        // SUBTITLE stream satisfies it on the first attempt, so the delegated
+        // row settles DOWNLOADED without the ~9 s poll budget.
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
+            MediaDetail(
+                item = MediaItem(id = "item-1", name = "Movie", mediaType = MediaType.MOVIE),
+                mediaSources = listOf(
+                    MediaSource(
+                        id = "ms-1",
+                        name = "Movie",
+                        mediaStreams = listOf(
+                            MediaStream(index = 0, type = StreamType.SUBTITLE, language = "eng"),
+                        ),
+                    ),
+                ),
+                chapters = emptyList(),
+            )
+        )
+
+        val m = manager()
+        m.downloadProviderSubtitle(jellyfinResult)
         drain()
 
+        coVerify(exactly = 1) { playbackRepository.downloadSubtitle("item-1", "jelly-1") }
         coVerify(exactly = 0) {
             subtitleProviderRepository.downloadExternal(any())
             playbackRepository.uploadSubtitle(any(), any(), any(), any(), any(), any())
         }
         assertTrue(addedSubtitles.isEmpty())
+        // Delegation is end-to-end: the forced refresh surfaced the new stream
+        // and the row settled DOWNLOADED through the server path (keyed on the
+        // plain RemoteSubtitleInfo id, not the composite provider key).
+        assertEquals("item-1", refreshedDetails.single().item.id)
+        assertEquals(SubtitleDownloadState.DOWNLOADED, m.state.value.downloadingSubtitles["jelly-1"]?.state)
     }
 }

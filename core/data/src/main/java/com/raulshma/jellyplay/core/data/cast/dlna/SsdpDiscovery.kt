@@ -85,11 +85,19 @@ class SsdpDiscovery(
 
     private fun launchDiscoveryLoop(scope: CoroutineScope): Job {
         return scope.launch(Dispatchers.IO) {
-            acquireMulticastLock()
             try {
                 while (isActive) {
                     try {
-                        performSearch()
+                        // MulticastLock scoped to the search cycle only — the
+                        // 30 s idle gap between bursts previously held the lock
+                        // (and the wifi radio out of power save) for the whole
+                        // discovery session.
+                        acquireMulticastLock()
+                        try {
+                            performSearch()
+                        } finally {
+                            releaseMulticastLock()
+                        }
                         purgeExpiredDevices()
                     } catch (e: CancellationException) {
                         throw e

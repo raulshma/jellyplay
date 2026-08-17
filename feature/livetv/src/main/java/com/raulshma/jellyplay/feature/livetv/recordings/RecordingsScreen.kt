@@ -128,7 +128,11 @@ fun RecordingsScreen(
                         // whole tab keeps a single vertical scroll (no nested
                         // scrollers to fight for height).
                         val rows = uiState.recordings.chunked(GRID_COLUMNS)
-                        items(items = rows, key = { row -> row.first().id }) { row ->
+                        items(
+                            items = rows,
+                            key = { row -> "${row.first().id}:${row.last().id}" },
+                            contentType = { "recording_row" },
+                        ) { row ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()

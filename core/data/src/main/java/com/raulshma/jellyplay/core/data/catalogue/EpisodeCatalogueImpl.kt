@@ -364,18 +364,20 @@ class EpisodeCatalogueImpl @Inject constructor(
         epochAtStart: Long,
     ): Result<EpisodeCatalogueSnapshot> = runCatching {
         val seasons = offlineRepository.getSeasonsForSeries(seriesId).first().map { it.toMediaItem() }
-        // Fresh per-season Room reads (matches OfflinePlaybackFacade). Every
-        // season is resolved here by its real id (no ""-key orphan edge is
-        // possible offline), so a season with zero downloaded episodes is
-        // "fetched but empty" — recorded as an empty list so the per-season UI
-        // shows its empty state and the series play button stops waiting on a
-        // season that will never load. Dropping emptied seasons made them
-        // indistinguishable from a not-yet-fetched season → infinite spinner +
-        // "Finding Episode" after the last episode of a season was removed.
+        // One series-scoped read instead of one flow-chain per season (each
+        // season entry below still gets its own key so a season with zero
+        // downloaded episodes is "fetched but empty" — recorded as an empty
+        // list so the per-season UI shows its empty state and the series play
+        // button stops waiting on a season that will never load. Dropping
+        // emptied seasons made them indistinguishable from a not-yet-fetched
+        // season → infinite spinner + "Finding Episode" after the last
+        // episode of a season was removed.
+        val episodesBySeason = offlineRepository.getEpisodesForSeries(seriesId)
+            .map { it.toMediaItem() }
+            .groupBy { it.seasonId }
         val grouped = mutableMapOf<String, List<MediaItem>>()
         seasons.forEach { season ->
-            val episodes = offlineRepository.getEpisodesForSeason(season.id).first().map { it.toMediaItem() }
-            grouped[season.id] = episodes
+            grouped[season.id] = episodesBySeason[season.id] ?: emptyList()
         }
         buildSnapshot(seriesId, seasons, grouped, epochAtStart)
     }

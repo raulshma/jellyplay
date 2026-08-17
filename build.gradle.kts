@@ -10,7 +10,9 @@ plugins {
 }
 
 subprojects {
-    if (name != "website") {
+    // Kover instrumentation is meaningless for the macrobenchmark producer and
+    // for the shared test-fixtures module (both excluded from aggregation below).
+    if (name != "website" && name != "baselineprofile" && name != "testing") {
         apply(plugin = "org.jetbrains.kotlinx.kover")
     }
 
@@ -22,9 +24,30 @@ subprojects {
     pluginManager.withPlugin("org.jetbrains.kotlin.plugin.compose") {
         extensions.configure<org.jetbrains.kotlin.compose.compiler.gradle.ComposeCompilerGradlePluginExtension>("composeCompiler") {
             stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("compose-stability.conf"))
-            if (project.hasProperty("enableComposeMetrics")) {
+            // hasProperty() would be true for the gradle.properties default
+            // "enableComposeMetrics=false" — parse the value instead.
+            if (providers.gradleProperty("enableComposeMetrics").map(String::toBoolean).getOrElse(false)) {
                 metricsDestination = layout.buildDirectory.dir("compose-metrics")
                 reportsDestination = layout.buildDirectory.dir("compose-reports")
+            }
+        }
+    }
+
+    // Explicit Kotlin JVM target, centralized. With AGP 9 built-in Kotlin no
+    // module applies the Kotlin plugin, and the compiler's jvmTarget silently
+    // follows each module's compileOptions.targetCompatibility; pinning it once
+    // here (matching the Java 17 every module already declares) makes the
+    // target explicit without a per-module block.
+    listOf(
+        "com.android.application",
+        "com.android.library",
+        "com.android.test",
+    ).forEach { agp ->
+        pluginManager.withPlugin(agp) {
+            extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension>("kotlin") {
+                compilerOptions {
+                    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+                }
             }
         }
     }
@@ -32,7 +55,7 @@ subprojects {
 
 dependencies {
     subprojects.forEach {
-        if (it.name != "website" && it.name != "baselineprofile") {
+        if (it.name != "website" && it.name != "baselineprofile" && it.name != "testing") {
             kover(it)
         }
     }

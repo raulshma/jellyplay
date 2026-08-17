@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsSource
+import com.raulshma.jellyplay.core.model.lruMapOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,11 +43,12 @@ class AudioLyricsManager @Inject constructor(
     val lyricsOffsetMs: StateFlow<Long> = _lyricsOffsetMs.asStateFlow()
 
     /**
-     * Per-item offset memory (session-scoped). The current item id is
+     * Per-item offset memory (session-scoped, LRU-capped so an all-night
+     * queue session doesn't grow it without bound). The current item id is
      * captured in [fetchLyrics]/[applyLyrics] so the offset is restored when
      * the user returns to a previously-adjusted track.
      */
-    private val perItemOffsets = mutableMapOf<String, Long>()
+    private val perItemOffsets = lruMapOf<String, Long>(MAX_REMEMBERED_OFFSETS)
     private var currentItemId: String? = null
 
     /**
@@ -170,5 +172,8 @@ class AudioLyricsManager @Inject constructor(
         const val DEFAULT_OFFSET_MS = 300L
         const val MIN_OFFSET_MS = -500L
         const val MAX_OFFSET_MS = 500L
+
+        /** Cap for the session-scoped per-item offset memory (see [perItemOffsets]). */
+        private const val MAX_REMEMBERED_OFFSETS = 64
     }
 }

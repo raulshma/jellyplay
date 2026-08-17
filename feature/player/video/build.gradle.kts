@@ -25,6 +25,9 @@ android {
 
     testOptions {
         unitTests {
+            // Robolectric must serve src/main/assets (FontProviderTest copies the
+            // bundled subfont.ttf asset into cacheDir) and src/main/res to tests.
+            isIncludeAndroidResources = true
             isReturnDefaultValues = true
         }
     }

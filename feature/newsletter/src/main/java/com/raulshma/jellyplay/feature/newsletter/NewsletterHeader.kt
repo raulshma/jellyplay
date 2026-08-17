@@ -13,13 +13,14 @@ import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
+private val HEADER_DATE_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy")
+
 @Composable
 fun NewsletterHeader(
     serverName: String,
     modifier: Modifier = Modifier,
 ) {
     val today = LocalDate.now()
-    val dateFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy")
     val greeting = when (today.dayOfWeek) {
         java.time.DayOfWeek.SATURDAY, java.time.DayOfWeek.SUNDAY -> "Weekend Digest"
         else -> "Your Daily Digest"
@@ -43,7 +44,7 @@ fun NewsletterHeader(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = today.format(dateFormatter),
+            text = today.format(HEADER_DATE_FORMATTER),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

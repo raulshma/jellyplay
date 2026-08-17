@@ -51,6 +51,21 @@ interface OfflineMediaDao {
     )
     fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaWithPlayback>>
 
+    /**
+     * Every episode under a series in one query (season/index ordered — the same
+     * order materializing each season's [getEpisodesForSeason] flow produces),
+     * with playback state joined. Replaces the per-season flow fan-out on
+     * offline series-detail / catalogue paths.
+     */
+    @Query(
+        """
+        SELECT * FROM offline_media_with_playback
+        WHERE seriesId = :seriesId AND mediaType = 'EPISODE'
+        ORDER BY seasonNumber ASC, episodeNumber ASC
+        """
+    )
+    suspend fun getEpisodesForSeries(seriesId: String): List<OfflineMediaWithPlayback>
+
     @Query(
         """
         SELECT * FROM offline_media_with_playback
@@ -63,6 +78,14 @@ interface OfflineMediaDao {
     /** Metadata-only single-row lookup (cast-reference, series-link reads). */
     @Query("SELECT * FROM offline_media WHERE id = :id")
     suspend fun getById(id: String): OfflineMediaEntity?
+
+    /**
+     * Metadata-only batch lookup. Prefetches the distinct parent series rows for
+     * episode artwork resolution in one query instead of re-querying the shared
+     * `seriesId` once per episode.
+     */
+    @Query("SELECT * FROM offline_media WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<String>): List<OfflineMediaEntity>
 
     /** Metadata-only reactive single-row lookup. */
     @Query("SELECT * FROM offline_media WHERE id = :id")

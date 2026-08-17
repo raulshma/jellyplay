@@ -83,6 +83,20 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         run: chmod +x ./gradlew
 
+      # Generates the ART baseline/startup profile on a headless Gradle Managed
+      # Device (ubuntu runners expose /dev/kvm) and writes baseline-prof.txt +
+      # startup-prof.txt into the app's phoneRelease sources; the
+      # androidx.baselineprofile consumer plugin merges them into the release
+      # APK automatically during assemble. Phone only — the :baselineprofile
+      # generator module targets the phone applicationId.
+      - name: Generate Baseline Profile
+        if: matrix.flavor == 'phone'
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew :app:generatePhoneReleaseBaselineProfile -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}"
+
       - name: Build Android App (Release - ${{ matrix.flavor }})
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}

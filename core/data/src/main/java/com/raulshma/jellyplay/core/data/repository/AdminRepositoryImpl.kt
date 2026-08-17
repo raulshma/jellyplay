@@ -51,13 +51,14 @@ class AdminRepositoryImpl @Inject constructor(
 
     override suspend fun getSystemInfo(): Result<SystemInfo> = apiClient.getSystemInfo()
 
-    override suspend fun getUsersOverview(): Result<UsersOverview> {
-        val usersResult = apiClient.getManagedUsers()
-        val meResult = apiClient.getCurrentUserId()
-        return usersResult.map { users ->
+    override suspend fun getUsersOverview(): Result<UsersOverview> = coroutineScope {
+        // Independent round-trips — run concurrently (sum → max latency).
+        val usersDeferred = async { apiClient.getManagedUsers() }
+        val meDeferred = async { apiClient.getCurrentUserId() }
+        usersDeferred.await().map { users ->
             UsersOverview(
                 users = users,
-                currentUserId = meResult.getOrNull(),
+                currentUserId = meDeferred.await().getOrNull(),
                 adminCount = users.activeAdminCount(),
             )
         }
@@ -69,17 +70,18 @@ class AdminRepositoryImpl @Inject constructor(
     override suspend fun deleteUser(userId: String): Result<Unit> =
         apiClient.deleteUser(userId)
 
-    override suspend fun getUserEditorContext(userId: String): Result<UserEditorContext> {
-        val userResult = apiClient.getManagedUser(userId)
-        val libsResult = apiClient.getLibraryFoldersForEditor()
-        val meResult = apiClient.getCurrentUserId()
-        val allUsersResult = apiClient.getManagedUsers()
-        return userResult.map { user ->
+    override suspend fun getUserEditorContext(userId: String): Result<UserEditorContext> = coroutineScope {
+        // All four round-trips are independent — run concurrently.
+        val userDeferred = async { apiClient.getManagedUser(userId) }
+        val libsDeferred = async { apiClient.getLibraryFoldersForEditor() }
+        val meDeferred = async { apiClient.getCurrentUserId() }
+        val allUsersDeferred = async { apiClient.getManagedUsers() }
+        userDeferred.await().map { user ->
             UserEditorContext(
                 user = user,
-                libraries = libsResult.getOrNull().orEmpty(),
-                currentUserId = meResult.getOrNull(),
-                adminCount = allUsersResult.getOrNull().orEmpty().activeAdminCount(),
+                libraries = libsDeferred.await().getOrNull().orEmpty(),
+                currentUserId = meDeferred.await().getOrNull(),
+                adminCount = allUsersDeferred.await().getOrNull().orEmpty().activeAdminCount(),
             )
         }
     }

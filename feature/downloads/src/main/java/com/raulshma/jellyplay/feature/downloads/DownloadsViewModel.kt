@@ -16,6 +16,9 @@ import com.raulshma.jellyplay.core.ui.feedback.UiText
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -69,8 +72,9 @@ class DownloadsViewModel @Inject constructor(
         offlineRepository.getUpdatesCount().stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     /** Items with updates, reactive — drives the resync sheet content. */
-    val updateRows: kotlinx.coroutines.flow.Flow<List<OfflineSyncUpdate>> =
+    val updateRows: StateFlow<List<OfflineSyncUpdate>> =
         offlineRepository.getItemsWithUpdates()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Live batch resync progress (per-item phase + aggregate counts). */
     val resyncProgress: StateFlow<ResyncBatchProgress> = syncManager.batchProgress
@@ -177,9 +181,7 @@ class DownloadsViewModel @Inject constructor(
         val targets = _uiState.value.downloads.filter { it.id in _uiState.value.selectedIds }
         if (targets.isEmpty()) return
         launch {
-            targets.forEach { item ->
-                downloadRepository.deleteDownload(item.id)
-            }
+            bulkMap(targets) { downloadRepository.deleteDownload(it.id) }
             clearSelection()
             userMessageBus.info(UiText.Resource(R.string.downloads_deleted_message))
         }
@@ -191,9 +193,7 @@ class DownloadsViewModel @Inject constructor(
             .filter { it.id in _uiState.value.selectedIds && it.status == DownloadStatus.DOWNLOADING }
         if (targets.isEmpty()) return
         launch {
-            targets.forEach { item ->
-                downloadRepository.pauseDownload(item.id)
-            }
+            bulkMap(targets) { downloadRepository.pauseDownload(it.id) }
         }
     }
 
@@ -203,9 +203,9 @@ class DownloadsViewModel @Inject constructor(
             .filter { it.id in _uiState.value.selectedIds && it.status == DownloadStatus.PAUSED }
         if (targets.isEmpty()) return
         launch {
-            targets.forEach { item ->
-                downloadRepository.resumeDownload(item.id)
-                downloadRepository.enqueueDownload(item.id)
+            bulkMap(targets) {
+                downloadRepository.resumeDownload(it.id)
+                downloadRepository.enqueueDownload(it.id)
             }
         }
     }
@@ -222,9 +222,7 @@ class DownloadsViewModel @Inject constructor(
         }
         if (targets.isEmpty()) return
         launch {
-            targets.forEach { item ->
-                downloadRepository.cancelDownload(item.id)
-            }
+            bulkMap(targets) { downloadRepository.cancelDownload(it.id) }
         }
     }
 
@@ -240,9 +238,7 @@ class DownloadsViewModel @Inject constructor(
             .filter { it.status == DownloadStatus.DOWNLOADING }
         if (targets.isEmpty()) return
         launch {
-            targets.forEach { item ->
-                downloadRepository.pauseDownload(item.id)
-            }
+            bulkMap(targets) { downloadRepository.pauseDownload(it.id) }
         }
     }
 
@@ -257,10 +253,25 @@ class DownloadsViewModel @Inject constructor(
             .filter { it.status == DownloadStatus.FAILED }
         if (targets.isEmpty()) return
         launch {
-            targets.forEach { item ->
-                downloadRepository.retryDownload(item.id)
-                downloadRepository.enqueueDownload(item.id)
+            bulkMap(targets) {
+                downloadRepository.retryDownload(it.id)
+                downloadRepository.enqueueDownload(it.id)
             }
+        }
+    }
+
+    /**
+     * Runs [action] for every target concurrently instead of serially — each
+     * repository call bundles WorkManager ops + file cleanup + a DB
+     * transaction, so a 50-item selection paid 50 sequential round-trips.
+     * Same shape as OfflineRepositoryImpl.deleteArtifactsParallel.
+     */
+    private suspend inline fun <T> bulkMap(
+        targets: List<T>,
+        crossinline action: suspend (T) -> Unit,
+    ) {
+        coroutineScope {
+            targets.map { item -> async { action(item) } }.awaitAll()
         }
     }
 

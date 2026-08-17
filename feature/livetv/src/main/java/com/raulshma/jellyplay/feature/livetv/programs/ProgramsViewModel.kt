@@ -15,6 +15,8 @@ import javax.inject.Inject
 /** A titled horizontal row of programs (mirrors jellyfin-web `getProgramSections`). */
 @Immutable
 data class ProgramRow(
+    /** Stable per-section id ("on-now", "shows", …) — the LazyColumn key. */
+    val id: String,
     val title: String,
     val programs: List<LiveTvProgram>,
 )
@@ -100,9 +102,9 @@ class ProgramsViewModel @Inject constructor(
                         val existing = _uiState.value.rows
                         val refreshedOnNow = onNow.await().getOrDefault(emptyList())
                         if (existing.isEmpty()) {
-                            listOf(ProgramRow("On Now", refreshedOnNow))
+                            listOf(ProgramRow("on-now", "On Now", refreshedOnNow))
                         } else {
-                            existing.toMutableList().also { it[0] = ProgramRow("On Now", refreshedOnNow) }
+                            existing.toMutableList().also { it[0] = ProgramRow("on-now", "On Now", refreshedOnNow) }
                         }
                     }
                     lastFullRender = now
@@ -122,12 +124,12 @@ class ProgramsViewModel @Inject constructor(
         kids: List<LiveTvProgram>,
         news: List<LiveTvProgram>,
     ): List<ProgramRow> = buildList {
-        if (onNow.isNotEmpty()) add(ProgramRow("On Now", onNow))
-        if (shows.isNotEmpty()) add(ProgramRow("Shows", shows))
-        if (movies.isNotEmpty()) add(ProgramRow("Movies", movies))
-        if (sports.isNotEmpty()) add(ProgramRow("Sports", sports))
-        if (kids.isNotEmpty()) add(ProgramRow("Kids", kids))
-        if (news.isNotEmpty()) add(ProgramRow("News", news))
+        if (onNow.isNotEmpty()) add(ProgramRow("on-now", "On Now", onNow))
+        if (shows.isNotEmpty()) add(ProgramRow("shows", "Shows", shows))
+        if (movies.isNotEmpty()) add(ProgramRow("movies", "Movies", movies))
+        if (sports.isNotEmpty()) add(ProgramRow("sports", "Sports", sports))
+        if (kids.isNotEmpty()) add(ProgramRow("kids", "Kids", kids))
+        if (news.isNotEmpty()) add(ProgramRow("news", "News", news))
     }
 
     fun getImageUrl(itemId: String, imageTag: String?): String =

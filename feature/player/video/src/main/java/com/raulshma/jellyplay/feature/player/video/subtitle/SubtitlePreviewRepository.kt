@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.media3.common.util.UnstableApi
+import com.raulshma.jellyplay.core.model.lruMapOf
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -36,15 +37,12 @@ class SubtitlePreviewRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val okHttpClient: OkHttpClient,
 ) {
-    // Access-order LinkedHashMap: reads (get) re-order to MRU, and
+    // Access-order LRU map: reads (get) re-order to MRU, and the factory's
     // removeEldestEntry evicts the LRU once the cap is exceeded. All access is
     // confined to withContext(Dispatchers.IO) / clearCache, matching the prior
     // mutableMapOf concurrency model.
     private val cache: MutableMap<String, List<TimedCue>> =
-        object : LinkedHashMap<String, List<TimedCue>>(MAX_CACHED_SUBTITLE_TRACKS, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<TimedCue>>?): Boolean =
-                size > MAX_CACHED_SUBTITLE_TRACKS
-        }
+        lruMapOf<String, List<TimedCue>>(MAX_CACHED_SUBTITLE_TRACKS)
 
     /**
      * Resolves [source] to its bytes, maps its codec/extension to a MIME type,

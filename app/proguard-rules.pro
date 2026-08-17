@@ -7,24 +7,8 @@
 -keepattributes InnerClasses
 -keepattributes EnclosingMethod
 
--keepclassmembers class kotlinx.serialization.json.** {
-    *** Companion;
-}
--keepclasseswithmembers class kotlinx.serialization.json.** {
-    kotlinx.serialization.KSerializer serializer(...);
-}
--keepclassmembers class **$serializer {
-    *** Companion;
-    *** writeObject(...);
-    *** readObject(...);
-}
--keepclassmembers class ** {
-    *** Companion;
-    kotlinx.serialization.KSerializer serializer(...);
-}
--keep,includedescriptorclasses class com.raulshma.jellyplay.**$$serializer { *; }
-
--keep class org.jellyfin.sdk.model.api.** { *; }
+# kotlinx-serialization and the Jellyfin SDK ship consumer R8 rules covering
+# serializer lookup and org.jellyfin.sdk.model.api.** — no app-level keeps needed.
 
 -keep class com.raulshma.jellyplay.core.data.worker.DownloadWorker { *; }
 
@@ -35,6 +19,9 @@
     @dagger.hilt.android.lifecycle.HiltViewModel <init>(...);
 }
 
+# TODO(perf): likely over-broad — kotlinx-serialization rules may already cover
+# NavKey routes; verify with R8 -printusage + on-device nav smoke before removing
+# (see docs/performance-analysis.md §1.5).
 -keep class com.raulshma.jellyplay.core.ui.navigation.Route** { *; }
 
 # libmpv - JNI library, must keep all classes and methods

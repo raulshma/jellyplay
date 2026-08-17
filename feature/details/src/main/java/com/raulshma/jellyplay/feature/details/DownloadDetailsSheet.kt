@@ -774,13 +774,15 @@ private fun DownloadedFilesSection(
                     value = inventory.totalSizeBytes.formatBytes(),
                 )
                 // Group by category preserving the enum's stable order (MEDIA → IMAGE).
-                inventory.entries
-                    .groupBy { it.category }
-                    .toSortedMap(compareBy { it.ordinal })
-                    .forEach { (category, entries) ->
-                        Spacer(Modifier.height(10.dp))
-                        CategoryGroup(category = category, entries = entries, context = context)
-                    }
+                val groupedEntries = remember(inventory) {
+                    inventory.entries
+                        .groupBy { it.category }
+                        .toSortedMap(compareBy { it.ordinal })
+                }
+                groupedEntries.forEach { (category, entries) ->
+                    Spacer(Modifier.height(10.dp))
+                    CategoryGroup(category = category, entries = entries, context = context)
+                }
             }
         }
     }

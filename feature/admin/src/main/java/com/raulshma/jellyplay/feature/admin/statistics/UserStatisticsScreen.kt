@@ -66,7 +66,7 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.StaggeredSection
+import com.raulshma.jellyplay.core.ui.components.AnimatedSectionEntrance
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.R
@@ -169,13 +169,13 @@ fun UserStatisticsScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     item {
-                        StaggeredSection(visible = true, index = 0) {
+                        AnimatedSectionEntrance(visible = true) {
                             PluginStatusBanner(pluginStatus = state.pluginStatus)
                         }
                     }
 
                     item {
-                        StaggeredSection(visible = true, index = 1) {
+                        AnimatedSectionEntrance(visible = true) {
                             SummaryRow(
                                 totalUsers = state.totalUsers.toLong(),
                                 activeThisWeek = state.activeThisWeek.toLong(),
@@ -189,7 +189,7 @@ fun UserStatisticsScreen(
                         key = { it.userId },
                         contentType = { "userStat" },
                     ) { user ->
-                        StaggeredSection(visible = true, index = state.users.indexOf(user) + 2) {
+                        AnimatedSectionEntrance(visible = true) {
                             UserStatisticsCard(
                                 user = user,
                                 pluginStatus = state.pluginStatus,
