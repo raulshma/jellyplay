@@ -170,6 +170,8 @@ fun Instant.offsetDp(windowStart: Instant): Float =
 
 private val ISO_PARSER: DateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME
 
+private val TIME_HEADER_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
 /**
  * Parse the loose ISO-8601 timestamp produced by `BaseItemDto.startDate.toString()`.
  * Returns `null` on parse failure — callers should treat missing timestamps as
@@ -201,5 +203,5 @@ fun String.toInstantOrNull(): Instant? = try {
 /** Format an [Instant] for the time-header (e.g. "14:30"). */
 fun Instant.formatTimeHeader(): String {
     val local = LocalDateTime.ofInstant(this, ZoneOffset.systemDefault())
-    return local.format(DateTimeFormatter.ofPattern("HH:mm"))
+    return local.format(TIME_HEADER_FORMATTER)
 }

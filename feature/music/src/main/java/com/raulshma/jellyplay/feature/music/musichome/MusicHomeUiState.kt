@@ -4,7 +4,6 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.feature.music.R
 
@@ -57,5 +56,4 @@ data class MusicHomeUiState(
     val error: String? = null,
     val homeMode: HomeMode = HomeMode.VIDEO,
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
-    val offlineLibrary: List<OfflineMediaItem> = emptyList(),
 )

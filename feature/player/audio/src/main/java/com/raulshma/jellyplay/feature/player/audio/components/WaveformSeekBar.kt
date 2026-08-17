@@ -65,13 +65,15 @@ fun WaveformSeekBar(
 ) {
     var isDragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(progress) }
-    var phaseShift by remember { mutableFloatStateOf(0f) }
+    // Pause freezes the wave at its last phase rather than snapping back to 0,
+    // so the paused waveform keeps the shape the user was just hearing.
+    val phaseState = remember { mutableFloatStateOf(0f) }
     val isAnimating = isPlaying || isDragging
     LaunchedEffect(isAnimating) {
         if (!isAnimating) return@LaunchedEffect
         while (true) {
             withFrameNanos { nanoTime ->
-                phaseShift = ((nanoTime / 1_000_000f) % 2000f) / 2000f * (2 * PI).toFloat()
+                phaseState.floatValue = ((nanoTime / 1_000_000f) % 2000f) / 2000f * (2 * PI).toFloat()
             }
         }
     }
@@ -84,10 +86,6 @@ fun WaveformSeekBar(
         animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
         label = "amplitudeRatio",
     )
-
-    // Pause freezes the wave at its last phase rather than snapping back to 0,
-    // so the paused waveform keeps the shape the user was just hearing.
-    val currentPhase = phaseShift
 
     val density = LocalDensity.current
     val strokeWidthPx = remember(density) { with(density) { 4.dp.toPx() } }
@@ -160,7 +158,7 @@ fun WaveformSeekBar(
                             val x = width * i / steps
                             val normalizedX = x / width
                             val y = centerY + amplitude * sin(
-                                (normalizedX * WAVE_FREQUENCY * 2 * PI + currentPhase).toFloat()
+                                (normalizedX * WAVE_FREQUENCY * 2 * PI + phaseState.floatValue).toFloat()
                             ).toFloat()
                             if (i == 0) wavePath.moveTo(x, y) else wavePath.lineTo(x, y)
                         }
@@ -173,7 +171,7 @@ fun WaveformSeekBar(
                         }
 
                         val dotY = centerY + amplitude * sin(
-                            (clamped * WAVE_FREQUENCY * 2 * PI + currentPhase).toFloat()
+                            (clamped * WAVE_FREQUENCY * 2 * PI + phaseState.floatValue).toFloat()
                         ).toFloat()
                         drawCircle(
                             color = activeColor,

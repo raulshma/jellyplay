@@ -25,7 +25,7 @@ import javax.inject.Singleton
 @Singleton
 class AppShortcutManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val audioPlaybackManager: AudioPlaybackManager,
+    private val audioPlaybackManagerLazy: dagger.Lazy<AudioPlaybackManager>,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -34,6 +34,7 @@ class AppShortcutManager @Inject constructor(
 
     fun observePlaybackForDynamicShortcuts() {
         scope.launch {
+            val audioPlaybackManager = audioPlaybackManagerLazy.get()
             combine(
                 audioPlaybackManager.currentPlayingItemId.filterNotNull(),
                 audioPlaybackManager.title,
@@ -83,7 +84,7 @@ class AppShortcutManager @Inject constructor(
     }
 
     private suspend fun createShortcutIcon(): IconCompat {
-        val artworkUrl = audioPlaybackManager.albumArtUrl.value
+        val artworkUrl = audioPlaybackManagerLazy.get().albumArtUrl.value
         if (artworkUrl.isNullOrBlank()) return createDefaultIcon()
 
         // ShortcutManagerCompat renders the icon at the system shortcut size

@@ -158,13 +158,23 @@ internal object DownloadNotificationHelper {
     }
 
     /**
+     * Last count handed to [refreshSummary] (null = never posted this process).
+     * The count only changes on download lifecycle transitions, but the 2 s
+     * progress ticks re-invoke [refreshSummary] with the same value — the memo
+     * skips the notification rebuild + re-post until the count actually changes.
+     */
+    private var lastSummaryCount: Int? = null
+
+    /**
      * Posts (or dismisses when [inFlightCount] == 0) the group summary. Called
      * from every download lifecycle transition so the shade collapses the active
      * transfers into a single row and clears itself when the last one ends.
      */
     fun refreshSummary(context: Context, inFlightCount: Int) {
+        if (inFlightCount == lastSummaryCount) return
         if (inFlightCount <= 0) {
             NotificationManagerCompat.from(context).cancel(SUMMARY_NOTIFICATION_ID)
+            lastSummaryCount = 0
             return
         }
         if (!canPostNotifications(context)) return
@@ -182,6 +192,7 @@ internal object DownloadNotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
         NotificationManagerCompat.from(context).notify(SUMMARY_NOTIFICATION_ID, notification)
+        lastSummaryCount = inFlightCount
     }
 
     fun formatProgressText(

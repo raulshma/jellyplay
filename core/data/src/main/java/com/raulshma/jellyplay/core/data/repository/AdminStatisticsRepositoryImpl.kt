@@ -78,17 +78,21 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getAllUsersWithStatistics(): Result<List<UserStatistics>> = runCatching {
-        val users = apiClient.getUsers().getOrThrow()
-        val sessions = apiClient.getSessions().getOrDefault(emptyList())
-        val activeUserIds = sessions.map { it.userId }.toSet()
         val pluginAvailable = _pluginStatus.value == PlaybackReportingStatus.AVAILABLE
 
-        val pluginActivity = if (pluginAvailable) {
-            apiClient.getPlaybackReportingUserActivity(days = 30).getOrDefault(emptyList())
-        } else emptyList()
-        val pluginMap = pluginActivity.associateBy { it.userId }
-
         coroutineScope {
+            val usersDeferred = async { apiClient.getUsers().getOrThrow() }
+            val sessionsDeferred = async { apiClient.getSessions().getOrDefault(emptyList()) }
+            val pluginDeferred = async {
+                if (pluginAvailable) {
+                    apiClient.getPlaybackReportingUserActivity(days = 30).getOrDefault(emptyList())
+                } else emptyList()
+            }
+
+            val users = usersDeferred.await()
+            val activeUserIds = sessionsDeferred.await().map { it.userId }.toSet()
+            val pluginMap = pluginDeferred.await().associateBy { it.userId }
+
             users.map { user ->
                 async {
                     statsSemaphore.withPermit {

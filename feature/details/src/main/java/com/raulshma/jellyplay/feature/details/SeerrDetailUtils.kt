@@ -46,11 +46,12 @@ internal fun List<SeerrCast>.toCastMembers(): List<SeerrCastMember> =
  *
  * Extracted verbatim from `SeerrDetailScreen.kt`.
  */
+private val ISO_INPUT_FORMAT = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
+private val SHORT_OUTPUT_FORMAT = java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy", java.util.Locale.US)
+
 internal fun formatDate(dateStr: String): String {
     return try {
-        val input = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-        val output = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.US)
-        input.parse(dateStr)?.let { output.format(it) } ?: dateStr.take(10)
+        java.time.LocalDate.parse(dateStr, ISO_INPUT_FORMAT).format(SHORT_OUTPUT_FORMAT)
     } catch (_: Exception) {
         dateStr.take(10)
     }

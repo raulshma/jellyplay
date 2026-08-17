@@ -18,8 +18,6 @@ data class LiveTvPlayerUiState(
     val isBuffering: Boolean = true,
     val isPlaying: Boolean = false,
     val isAtLiveEdge: Boolean = true,
-    val positionMs: Long = 0L,
-    val durationMs: Long = -1L,
     val engineState: LiveEngineState = LiveEngineState.IDLE,
     val errorMessage: String? = null,
     /** Full technical detail for the last error (stacktrace-grade), shown in

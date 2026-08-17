@@ -15,6 +15,16 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads ORDER BY createdAt DESC LIMIT :limit")
     fun getAllDownloads(limit: Int = 500): Flow<List<DownloadEntity>>
 
+    /**
+     * One page of `COMPLETED` audio (`MUSIC`/`AUDIO`) downloads, newest
+     * first. The media-library DOWNLOADS browse page previously fetched
+     * [getAllDownloads]' full 500-row window and filtered/sliced it in
+     * Kotlin on every page request; this resolves the same filter, order,
+     * and window in one query.
+     */
+    @Query("SELECT * FROM downloads WHERE status = 'COMPLETED' AND mediaType IN ('MUSIC', 'AUDIO') ORDER BY createdAt DESC LIMIT :limit OFFSET :offset")
+    suspend fun getCompletedAudioDownloads(limit: Int, offset: Int): List<DownloadEntity>
+
     @Query("SELECT * FROM downloads WHERE id = :id")
     suspend fun getDownloadById(id: String): DownloadEntity?
 
@@ -176,6 +186,23 @@ interface DownloadDao {
     @Query("UPDATE downloads SET pausedReason = :reason WHERE id = :id")
     suspend fun updatePausedReason(id: String, reason: String?)
 
+    /**
+     * Single-statement status transition that also writes the pause reason
+     * (user pause / reconnect auto-resume). Replaces the former
+     * updateProgress + updatePausedReason pair — same end state, one commit and
+     * one invalidation per action instead of two.
+     */
+    @Query("UPDATE downloads SET downloadedBytes = :bytes, status = :status, pausedReason = :reason WHERE id = :id")
+    suspend fun updateProgressWithPausedReason(id: String, bytes: Long, status: String, reason: String?)
+
+    /**
+     * Manual resume/retry in one statement: status back to `PENDING`, pause
+     * reason cleared, auto-retry budget reset — the exact end state of the
+     * former updateProgress + updatePausedReason + resetRetryCount triple.
+     */
+    @Query("UPDATE downloads SET downloadedBytes = :bytes, status = 'PENDING', pausedReason = NULL, retryCount = 0 WHERE id = :id")
+    suspend fun markPendingForManualResume(id: String, bytes: Long)
+
     @Query("UPDATE downloads SET retryCount = retryCount + 1 WHERE id = :id")
     suspend fun incrementRetryCount(id: String)
 
@@ -213,33 +240,31 @@ interface DownloadDao {
 
     /**
      * Aggregated `(totalSizeBytes, downloadedBytes)` per series, summing every
-     * downloaded episode that belongs to each series id in [seriesIds].
+     * downloaded episode that belongs to each series id in [seriesIds] — one
+     * GROUP BY pass instead of the former two correlated SUM subqueries per
+     * series row.
      *
      * A SERIES row has no `downloads` entry of its own — episodes are
      * downloaded individually (each row carries `seriesId`). Joining via
      * `offline_media.seriesId` (instead of `downloads.seriesId`) recovers
      * legacy orphan rows whose `downloads.seriesId` is NULL but whose
      * `offline_media` episode row still carries the correct link — the same
-     * recovery join used by [getDownloadsForSeriesViaOfflineMedia].
+     * recovery join used by [getDownloadsForSeriesViaOfflineMedia]. A series
+     * with no joined download rows produces no row here; the repository maps a
+     * missing aggregate row to 0.
      *
      * Reactive so storage summaries update as episode downloads progress;
      * Room re-emits on any write to `downloads` or `offline_media`.
      */
     @Query(
         """
-        SELECT om.id AS seriesId,
-            COALESCE((
-                SELECT SUM(d.totalSizeBytes) FROM downloads d
-                INNER JOIN offline_media m ON m.id = d.mediaItemId
-                WHERE m.seriesId = om.id
-            ), 0) AS totalSizeBytes,
-            COALESCE((
-                SELECT SUM(d.downloadedBytes) FROM downloads d
-                INNER JOIN offline_media m ON m.id = d.mediaItemId
-                WHERE m.seriesId = om.id
-            ), 0) AS downloadedBytes
-        FROM offline_media om
-        WHERE om.mediaType = 'SERIES' AND om.id IN (:seriesIds)
+        SELECT m.seriesId AS seriesId,
+            COALESCE(SUM(d.totalSizeBytes), 0) AS totalSizeBytes,
+            COALESCE(SUM(d.downloadedBytes), 0) AS downloadedBytes
+        FROM downloads d
+        INNER JOIN offline_media m ON m.id = d.mediaItemId
+        WHERE m.seriesId IN (:seriesIds)
+        GROUP BY m.seriesId
         """
     )
     fun getSeriesSizeAggregatesFlow(seriesIds: List<String>): Flow<List<SeriesSizeAggregate>>

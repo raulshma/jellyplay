@@ -308,24 +308,24 @@ class EpisodeCatalogueImpl @Inject constructor(
     private suspend fun loadOnline(
         seriesId: String,
         epochAtStart: Long,
-    ): Result<EpisodeCatalogueSnapshot> {
-        val seasonsResult = apiClient.getSeasons(seriesId)
-        val seasons = seasonsResult.getOrElse {
-            return Result.failure(it)
-        }
+    ): Result<EpisodeCatalogueSnapshot> = coroutineScope {
+        val seasonsDeferred = async { apiClient.getSeasons(seriesId) }
         // Single round-trip for the full episode set, grouped by season id —
         // exact groupBy semantics of MediaRepositoryImpl.getAllEpisodesGrouped.
-        val groupedResult = apiClient.getAllEpisodes(seriesId).map { all ->
-            all.groupBy { it.seasonId ?: "" }
-        }
-        val grouped = groupedResult.getOrElse {
+        val grouped = async {
+            apiClient.getAllEpisodes(seriesId).map { all -> all.groupBy { it.seasonId ?: "" } }
+        }.await().getOrElse {
             // Fall back to per-season fan-out (older server that rejected the
             // unfiltered query). Caps concurrency at MAX_PARALLEL_SEASON_FETCHES.
-            return Result.success(
+            val seasons = seasonsDeferred.await().getOrElse { err ->
+                return@coroutineScope Result.failure(err)
+            }
+            return@coroutineScope Result.success(
                 fanOutSeasons(seriesId, seasons, epochAtStart),
             )
         }
-        return Result.success(buildSnapshot(seriesId, seasons, grouped, epochAtStart))
+        val seasons = seasonsDeferred.await().getOrElse { return@coroutineScope Result.failure(it) }
+        Result.success(buildSnapshot(seriesId, seasons, grouped, epochAtStart))
     }
 
     /**

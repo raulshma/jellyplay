@@ -61,7 +61,7 @@ class MainViewModel @Inject constructor(
     val syncPlayManager: com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager,
     val webSocketClient: com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient,
     private val apiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient,
-    val audioPlaybackManager: AudioPlaybackManager,
+    private val audioPlaybackManagerLazy: dagger.Lazy<AudioPlaybackManager>,
     val videoMiniPlayerState: VideoMiniPlayerState,
     val appShortcutManager: AppShortcutManager,
     val remoteControlReceiver: RemoteControlReceiver,
@@ -79,6 +79,8 @@ class MainViewModel @Inject constructor(
     private val cacheMaintenanceInitializer: com.raulshma.jellyplay.startup.CacheMaintenanceInitializer,
     private val appUpdateRepository: AppUpdateRepository,
 ) : JellyPlayViewModel() {
+
+    val audioPlaybackManager: AudioPlaybackManager get() = audioPlaybackManagerLazy.get()
 
     val serverHealth = serverHealthMonitor.serverHealth
 

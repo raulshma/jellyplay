@@ -63,7 +63,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         PlaybackOutboxEntity::class,
         HomeSectionCacheEntity::class,
     ],
-    version = 47,
+    version = 48,
     exportSchema = true,
     views = [OfflineMediaWithPlayback::class],
 )

@@ -773,6 +773,13 @@ internal fun DetailContentBody(
                             state.episodes
                         }
                     }
+                    val downloadedEpisodeIds = remember(isLocalOrigin, state.episodes, state.downloadedEpisodeIds) {
+                        when {
+                            isLocalOrigin -> state.episodes.values.flatten().map { it.id }.toSet()
+                            state.downloadedEpisodeIds.isNotEmpty() -> state.downloadedEpisodeIds
+                            else -> null
+                        }
+                    }
                     SeasonsSection(
                         seriesItem = item,
                         seasons = state.seasons,
@@ -807,11 +814,7 @@ internal fun DetailContentBody(
                         // downloaded; for a REMOTE series we surface the loaded
                         // downloadedEpisodeIds (populated when the download sheet
                         // opened) so the trash badge matches the on-disk truth.
-                        downloadedEpisodeIds = when {
-                            isLocalOrigin -> state.episodes.values.flatten().map { it.id }.toSet()
-                            state.downloadedEpisodeIds.isNotEmpty() -> state.downloadedEpisodeIds
-                            else -> null
-                        },
+                        downloadedEpisodeIds = downloadedEpisodeIds,
                         onEpisodeDeleteClick = { episode -> callbacks.onDeleteEpisode(episode.id) },
                         // Resolve a downloaded episode thumbnail from DetailAssets before
                         // falling back to the server image url (which won't load offline).

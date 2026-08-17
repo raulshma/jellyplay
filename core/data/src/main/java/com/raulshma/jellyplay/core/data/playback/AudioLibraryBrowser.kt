@@ -20,8 +20,12 @@ import com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 class AudioLibraryBrowser(
     private val scope: CoroutineScope,
@@ -32,6 +36,22 @@ class AudioLibraryBrowser(
     private val streamingQualityProvider: () -> StreamingQuality,
     private val adaptiveBitrateSelector: AdaptiveBitrateSelector,
 ) {
+    private val resolvePermits = Semaphore(4)
+
+    /**
+     * Resolves [items] concurrently (bounded by [resolvePermits], on
+     * [Dispatchers.IO]) while preserving input order: deferreds are awaited
+     * in list order, so result order matches the sequential
+     * `buildPlayableMediaItem(...)?.let { add(it) }` loops this replaces.
+     * Null results are dropped, as before.
+     */
+    private suspend fun <T, R> mapConcurrently(items: List<T>, block: suspend (T) -> R?): List<R> =
+        coroutineScope {
+            items.map { item ->
+                async(Dispatchers.IO) { resolvePermits.withPermit { block(item) } }
+            }.mapNotNull { it.await() }
+        }
+
     /**
      * Builds the [MediaLibrarySession] every audio path uses — the initial
      * session and the post-crossfade rebuild. Both call sites share this one
@@ -124,22 +144,16 @@ class AudioLibraryBrowser(
                         }
                     }
                     parentId == "DOWNLOADS" -> {
-                        val downloads = try {
-                            downloadRepository.getAllDownloads().first()
+                        val completedAudioDownloads = try {
+                            downloadRepository.getCompletedAudioDownloads(
+                                limit = pageSize,
+                                offset = page * pageSize,
+                            )
                         } catch (_: Exception) {
                             emptyList()
                         }
-                        val completedAudioDownloads = downloads.filter {
-                            it.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED &&
-                                    (it.mediaType == com.raulshma.jellyplay.core.model.MediaType.MUSIC ||
-                                     it.mediaType == com.raulshma.jellyplay.core.model.MediaType.AUDIO)
-                        }
-                        val start = (page * pageSize).coerceAtMost(completedAudioDownloads.size)
-                        val end = ((page + 1) * pageSize).coerceAtMost(completedAudioDownloads.size)
-                        if (start < end) {
-                            completedAudioDownloads.subList(start, end).forEach { dl ->
-                                list.add(mapDownloadToPlayableMediaItem(dl))
-                            }
+                        completedAudioDownloads.forEach { dl ->
+                            list.add(mapDownloadToPlayableMediaItem(dl))
                         }
                     }
                     parentId.startsWith("ARTIST_|") -> {
@@ -216,26 +230,26 @@ class AudioLibraryBrowser(
                         mediaId.startsWith("ARTIST_|") -> {
                             val artistId = mediaId.removePrefix("ARTIST_|")
                             val albums = mediaRepository.getArtistAlbums(artistId).getOrNull() ?: emptyList()
-                            for (album in albums) {
-                                val tracks = mediaRepository.getAlbumTracks(album.id).getOrNull() ?: emptyList()
-                                for (track in tracks) {
-                                    buildPlayableMediaItem(track.id)?.let { resolvedList.add(it) }
-                                }
-                            }
+                            val tracks = mapConcurrently(albums) { album ->
+                                mediaRepository.getAlbumTracks(album.id).getOrNull() ?: emptyList()
+                            }.flatten()
+                            resolvedList.addAll(mapConcurrently(tracks) { track ->
+                                buildPlayableMediaItem(track.id)
+                            })
                         }
                         mediaId.startsWith("ALBUM_|") -> {
                             val albumId = mediaId.removePrefix("ALBUM_|")
                             val tracks = mediaRepository.getAlbumTracks(albumId).getOrNull() ?: emptyList()
-                            for (track in tracks) {
-                                buildPlayableMediaItem(track.id)?.let { resolvedList.add(it) }
-                            }
+                            resolvedList.addAll(mapConcurrently(tracks) { track ->
+                                buildPlayableMediaItem(track.id)
+                            })
                         }
                         mediaId.startsWith("PLAYLIST_|") -> {
                             val playlistId = mediaId.removePrefix("PLAYLIST_|")
                             val playlistItems = mediaRepository.getPlaylistItems(playlistId).getOrNull() ?: emptyList()
-                            for (pi in playlistItems) {
-                                buildPlayableMediaItem(pi.id)?.let { resolvedList.add(it) }
-                            }
+                            resolvedList.addAll(mapConcurrently(playlistItems) { pi ->
+                                buildPlayableMediaItem(pi.id)
+                            })
                         }
                         mediaId.startsWith("TRACK_|") -> {
                             val trackId = mediaId.removePrefix("TRACK_|")
@@ -408,12 +422,15 @@ class AudioLibraryBrowser(
     }
 
     internal suspend fun buildPlayableMediaItem(itemId: String, startPositionMs: Long = 0L): MediaItem? {
-        val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
-        // The completed-download predicate lives once in PlaybackSourceResolver.
-        // resolveLocalSource returns the file URI + title (offlineItem name
-        // preferred) without a getMediaDetail round-trip; artist/album still
-        // come from the detail fetch above.
-        val local = playbackSourceResolver.resolveLocalSource(itemId)
+        val (detail, local) = coroutineScope {
+            val detailJob = async { mediaRepository.getMediaDetail(itemId).getOrNull() }
+            // The completed-download predicate lives once in PlaybackSourceResolver.
+            // resolveLocalSource returns the file URI + title (offlineItem name
+            // preferred) without a getMediaDetail round-trip; artist/album still
+            // come from the detail fetch.
+            val localJob = async { playbackSourceResolver.resolveLocalSource(itemId) }
+            detailJob.await() to localJob.await()
+        }
 
         if (local != null) {
             val name = detail?.item?.name ?: local.title

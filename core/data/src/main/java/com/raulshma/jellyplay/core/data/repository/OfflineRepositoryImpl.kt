@@ -35,6 +35,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
+import androidx.collection.LruCache
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -83,7 +84,7 @@ class OfflineRepositoryImpl @Inject constructor(
                     // resolver substitutes an existing local file when one is
                     // beside the download, else preserves the original value.
                     flow<OfflineMediaItem?> { emit(withContext(Dispatchers.IO) { resolveItemArtwork(item) }) }
-                }
+                }.distinctUntilChanged()
             }
         }.distinctUntilChanged()
 
@@ -151,7 +152,8 @@ class OfflineRepositoryImpl @Inject constructor(
                             row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
                         }
                     }
-                }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+                }.distinctUntilChanged()
+                    .flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
             }
         }.distinctUntilChanged()
 
@@ -170,7 +172,8 @@ class OfflineRepositoryImpl @Inject constructor(
                 rows.map { row ->
                     row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
                 }
-            }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+            }.distinctUntilChanged()
+                .flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
         }.distinctUntilChanged()
 
     override suspend fun getEpisodesForSeries(seriesId: String): List<OfflineMediaItem> {
@@ -223,6 +226,11 @@ class OfflineRepositoryImpl @Inject constructor(
         cleanupOrphans()
     }
 
+    private suspend fun offlineMediaById(downloads: List<DownloadEntity>): Map<String, OfflineMediaEntity> {
+        if (downloads.isEmpty()) return emptyMap()
+        return offlineMediaDao.getByIds(downloads.map { it.mediaItemId }).associateBy { it.id }
+    }
+
     override suspend fun deleteOfflineSeries(seriesId: String) {
         // Union the direct seriesId lookup with the offline_media join so legacy
         // episode downloads (whose downloads.seriesId was never populated before
@@ -246,8 +254,8 @@ class OfflineRepositoryImpl @Inject constructor(
         // Capture the deleted episodes' cast ids before the rows are removed so
         // the cast images written beside each episode at fetch time can be
         // pruned afterward (reference scan runs post-delete).
-        val deletedCastIds = downloads.map { offlineMediaDao.getById(it.mediaItemId) }
-            .filterNotNull()
+        val mediaById = offlineMediaById(downloads)
+        val deletedCastIds = downloads.mapNotNull { mediaById[it.mediaItemId] }
             .flatMap(::castIdsOf)
             .distinct()
         database.withTransaction {
@@ -277,8 +285,8 @@ class OfflineRepositoryImpl @Inject constructor(
             .mapNotNull { File(it).parentFile }
             .distinct()
             .toList()
-        val deletedCastIds = downloads.map { offlineMediaDao.getById(it.mediaItemId) }
-            .filterNotNull()
+        val mediaById = offlineMediaById(downloads)
+        val deletedCastIds = downloads.mapNotNull { mediaById[it.mediaItemId] }
             .flatMap(::castIdsOf)
             .distinct()
         database.withTransaction {
@@ -831,12 +839,29 @@ internal val offlineJson: Json = Json {
     encodeDefaults = true
 }
 
+/**
+ * Memo caches for the pure JSON-column decodes below: the library/episodes/
+ * season flows re-map every row on each Room re-emission (2 s progress ticks
+ * during transfers), and the decodes are deterministic, so equal inputs always
+ * yield equal outputs.
+ */
+private val castDecodeCache = LruCache<String, List<OfflinePersonInfo>>(256)
+private val providerIdsDecodeCache = LruCache<String, Map<String, String>>(256)
+private val externalUrlsDecodeCache = LruCache<String, List<com.raulshma.jellyplay.core.model.ExternalUrl>>(256)
+
+private inline fun <T : Any> memoizedDecode(cache: LruCache<String, T>, json: String, fallback: T, decode: () -> T): T {
+    cache.get(json)?.let { return it }
+    val value = runCatching(decode).getOrDefault(fallback)
+    cache.put(json, value)
+    return value
+}
+
 /** Decodes a [peopleJson] blob into a cast list, tolerating null/garbage rows. */
 internal fun decodeCast(peopleJson: String?): List<OfflinePersonInfo> {
     if (peopleJson.isNullOrBlank()) return emptyList()
-    return runCatching {
-        offlineJson.decodeFromString<List<OfflinePersonInfo>>(peopleJson)
-    }.getOrDefault(emptyList())
+    return memoizedDecode(castDecodeCache, peopleJson, emptyList()) {
+        offlineJson.decodeFromString(peopleJson)
+    }
 }
 
 /** Encodes a cast list into the persisted JSON column form. */
@@ -854,15 +879,15 @@ internal fun encodeExternalUrls(urls: List<com.raulshma.jellyplay.core.model.Ext
 /** Decodes a [providerIdsJson] blob into a map, tolerating null/garbage. */
 private fun decodeProviderIds(providerIdsJson: String?): Map<String, String> {
     if (providerIdsJson.isNullOrBlank()) return emptyMap()
-    return runCatching {
-        offlineJson.decodeFromString<Map<String, String>>(providerIdsJson)
-    }.getOrDefault(emptyMap())
+    return memoizedDecode(providerIdsDecodeCache, providerIdsJson, emptyMap()) {
+        offlineJson.decodeFromString(providerIdsJson)
+    }
 }
 
 /** Decodes a [externalUrlsJson] blob into a URL list, tolerating null/garbage. */
 private fun decodeExternalUrls(externalUrlsJson: String?): List<com.raulshma.jellyplay.core.model.ExternalUrl> {
     if (externalUrlsJson.isNullOrBlank()) return emptyList()
-    return runCatching {
-        offlineJson.decodeFromString<List<com.raulshma.jellyplay.core.model.ExternalUrl>>(externalUrlsJson)
-    }.getOrDefault(emptyList())
+    return memoizedDecode(externalUrlsDecodeCache, externalUrlsJson, emptyList()) {
+        offlineJson.decodeFromString(externalUrlsJson)
+    }
 }

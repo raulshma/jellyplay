@@ -151,9 +151,8 @@ class SeerrDetailUtilsTest {
 
     @Test
     fun `formatDate falls back to first 10 chars when not a date`() {
-        // SimpleDateFormat parses leniently (month 13 rolls into next year), so a
-        // genuine fallback only happens for non-date-shaped input: "garbage" yields
-        // a parse exception and returns the first 10 chars verbatim.
+        // LocalDate parsing is strict: non-date-shaped input throws and the
+        // fallback returns the first 10 chars verbatim.
         assertEquals("totally!!!", formatDate("totally!!!"))
     }
 

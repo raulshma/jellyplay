@@ -114,6 +114,9 @@ class DownloadRepositoryImpl @Inject constructor(
             entities.map { it.toDownloadItem() }
         }.distinctUntilChanged()
 
+    override suspend fun getCompletedAudioDownloads(limit: Int, offset: Int): List<DownloadItem> =
+        downloadDao.getCompletedAudioDownloads(limit, offset).map { it.toDownloadItem() }
+
     override fun getDownloadByMediaItemIdFlow(mediaItemId: String): Flow<DownloadItem?> =
         downloadDao.getDownloadByMediaItemIdFlow(mediaItemId).map { it?.toDownloadItem() }
 
@@ -245,10 +248,12 @@ class DownloadRepositoryImpl @Inject constructor(
             // promptly. Without this the worker keeps polling DB status until its
             // next tick discovers the row is PAUSED.
             cancelWorkForDownload(id)
-            downloadDao.updateProgress(id, entity.downloadedBytes, DownloadStatus.PAUSED.name)
-            // Mark as user-initiated so the reconnect auto-resume leaves it
-            // alone; only NETWORK interruptions auto-resume.
-            downloadDao.updatePausedReason(id, DownloadPauseReason.USER.persistedValue)
+            // Status + user-initiated reason in one UPDATE — mark as
+            // user-initiated so the reconnect auto-resume leaves it alone; only
+            // NETWORK interruptions auto-resume.
+            downloadDao.updateProgressWithPausedReason(
+                id, entity.downloadedBytes, DownloadStatus.PAUSED.name, DownloadPauseReason.USER.persistedValue,
+            )
         }
         refreshDownloadSummary()
     }
@@ -256,11 +261,9 @@ class DownloadRepositoryImpl @Inject constructor(
     override suspend fun resumeDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
         if (DownloadStates.isPausedOrFailed(entity.status)) {
-            downloadDao.updateProgress(id, entity.downloadedBytes, DownloadStatus.PENDING.name)
             // Manual resume/retry clears both the pause reason and the
             // auto-retry budget — the user has taken ownership of this row.
-            downloadDao.updatePausedReason(id, null)
-            downloadDao.resetRetryCount(id)
+            downloadDao.markPendingForManualResume(id, entity.downloadedBytes)
         }
         refreshDownloadSummary()
     }
@@ -299,10 +302,9 @@ class DownloadRepositoryImpl @Inject constructor(
     }
 
     override suspend fun retryDownload(id: String): Result<Unit> = runCatching {
-        downloadDao.updateProgress(id, 0L, DownloadStatus.PENDING.name)
-        // A manual retry starts fresh — clear the auto-retry budget and reason.
-        downloadDao.updatePausedReason(id, null)
-        downloadDao.resetRetryCount(id)
+        // A manual retry starts fresh — reset the bytes, clear the auto-retry
+        // budget and reason, all in one UPDATE.
+        downloadDao.markPendingForManualResume(id, 0L)
         refreshDownloadSummary()
     }
 
@@ -330,8 +332,12 @@ class DownloadRepositoryImpl @Inject constructor(
                 // shared with the recovery initializer and the multi-connection
                 // strategy.
                 val startBytes = DownloadStates.resumeByteOffset(row.status, row.downloadedBytes)
-                downloadDao.updateProgress(row.id, startBytes, DownloadStatus.PENDING.name)
-                downloadDao.updatePausedReason(row.id, null)
+                // Status + cleared pause reason in one UPDATE; the retry budget
+                // is deliberately preserved (the eligibility check above already
+                // dead-lettered exhausted rows).
+                downloadDao.updateProgressWithPausedReason(
+                    row.id, startBytes, DownloadStatus.PENDING.name, null,
+                )
                 enqueueDownload(row.id)
             } catch (e: Exception) {
                 // One bad row/enqueue must not abort the whole batch — the other
@@ -440,7 +446,13 @@ class DownloadRepositoryImpl @Inject constructor(
             // inside startDownload skips its own aggregate query.
             val batchCurrentBytes = storagePolicy.enforce()
 
-            val detail = mediaRepository.getMediaDetail(seriesId).getOrThrow()
+            // Detail fetch and episode catalogue are independent round-trips —
+            // start both before awaiting either so series download setup pays
+            // max(detail, catalogue) instead of detail + catalogue.
+            val detailDeferred = async { mediaRepository.getMediaDetail(seriesId).getOrThrow() }
+            val snapshotDeferred = async { episodeCatalogue.loadSeriesEpisodes(seriesId) }
+
+            val detail = detailDeferred.await()
             val imageUrl = playbackRepository.getImageUrl(seriesId, maxWidth = 300)
             val backdropUrl = playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
 
@@ -452,7 +464,7 @@ class DownloadRepositoryImpl @Inject constructor(
             // the catalogue) replaces the former getSeasons + per-season
             // getEpisodes fan-out. On failure, fall back to an empty snapshot so
             // the series metadata is still persisted and the run doesn't abort.
-            val snapshot = episodeCatalogue.loadSeriesEpisodes(seriesId)
+            val snapshot = snapshotDeferred.await()
                 .getOrElse { EpisodeCatalogueSnapshot(seriesId, emptyList(), emptyMap(), emptySet(), emptyList(), 0L) }
             val seasons = snapshot.seasons
             val targetSeasons = if (episodeIds != null) {

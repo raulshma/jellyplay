@@ -5,7 +5,6 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.TrackWithAlbumFallback
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -34,7 +33,6 @@ class MusicHomeViewModel @Inject constructor(
     private val audioQueueFacade: AudioQueueFacade,
     private val downloadRepository: DownloadRepository,
     private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
-    private val offlineRepository: OfflineRepository,
     private val offlineModeManager: OfflineModeManager,
     private val userMessageBus: UserMessageBus,
 ) : JellyPlayViewModel() {
@@ -59,11 +57,6 @@ class MusicHomeViewModel @Inject constructor(
                 } else {
                     loadSections()
                 }
-            }
-        }
-        launch {
-            offlineRepository.getOfflineLibrary().collect { items ->
-                _uiState.update { it.copy(offlineLibrary = items) }
             }
         }
     }

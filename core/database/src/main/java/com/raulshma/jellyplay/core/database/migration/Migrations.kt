@@ -939,8 +939,20 @@ val MIGRATION_46_47 = object : Migration(46, 47) {
     }
 }
 
+// Index the two `sync_baseline` flag columns consumed by the "items with
+// updates" sheet query and the badge-count flow — both filter on
+// `syncUpdateAvailable = 1 OR syncMediaChanged = 1` and re-run on every
+// baseline write (a batch check writes one row per item), which full-scanned
+// the table. Schema-additive only; no table data changes.
+val MIGRATION_47_48 = object : Migration(47, 48) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_baseline_syncUpdateAvailable ON sync_baseline(syncUpdateAvailable)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_baseline_syncMediaChanged ON sync_baseline(syncMediaChanged)")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v47 migration chain, with the
+ * The complete, correctly-ordered v1→v48 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -995,4 +1007,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_44_45,
         MIGRATION_45_46,
         MIGRATION_46_47,
+        MIGRATION_47_48,
     )

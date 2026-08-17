@@ -30,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -201,7 +200,7 @@ internal fun SlideToUnlockOverlay(
                             .size(56.dp)
                             .clip(CircleShape)
                             .background(playerOnScrim().copy(alpha = 0.15f + progress * 0.15f))
-                            .alpha(1f - progress * 0.7f),
+                            .graphicsLayer { alpha = 1f - progress * 0.7f },
                         contentAlignment = Alignment.Center,
                     ) {
                         Crossfade(

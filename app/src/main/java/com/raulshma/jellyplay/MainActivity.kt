@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.core.ui.components.colorBlindFilter
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -87,7 +88,7 @@ class MainActivity : FragmentActivity() {
         // preserved — the splash stays up via setKeepOnScreenCondition until
         // session restore completes, overlapping the Cast init.
         if (packageManager.hasSystemFeature("com.google.android.gms.cast")) {
-            lifecycleScope.launch {
+            lifecycleScope.launch(Dispatchers.Default) {
                 runCatching { com.google.android.gms.cast.framework.CastContext.getSharedInstance(this@MainActivity) }
             }
         }
@@ -99,10 +100,6 @@ class MainActivity : FragmentActivity() {
         // that color through the outgoing splash — producing a visible "splash
         // flashes back in" artifact after Home had already rendered. Letting
         // the system remove the splash the instant the gate releases avoids it.
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
-        )
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             window.navigationBarColor = android.graphics.Color.parseColor("#66000000") // Translucent black
         }

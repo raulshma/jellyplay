@@ -501,11 +501,7 @@ private fun MainContent(
     }
 
     val audioPlaybackManager: AudioPlaybackManager = viewModel.audioPlaybackManager
-    val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsStateWithLifecycle()
     val audioItemId by audioPlaybackManager.currentPlayingItemId.collectAsStateWithLifecycle()
-    val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
-    val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
-    val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
     val libraryFolders by viewModel.libraryFolders.collectAsStateWithLifecycle()
     var isMiniPlayerDismissed by remember { mutableStateOf(false) }
     val showMiniPlayer by remember {
@@ -752,9 +748,9 @@ private fun MainContent(
             val onAmbientClick: () -> Unit = {
                 navigator.navigate(
                     Route.Ambient(
-                        imageUrl = audioArtworkUrl,
-                        title = audioTitle,
-                        artist = audioArtist,
+                        imageUrl = audioPlaybackManager.albumArtUrl.value,
+                        title = audioPlaybackManager.title.value,
+                        artist = audioPlaybackManager.artist.value,
                     )
                 )
             }
@@ -787,14 +783,9 @@ private fun MainContent(
                     tvDrawerListState = tvDrawerListState,
                     libraryFolders = libraryFolders,
                     hiddenNavItems = preferences.hiddenNavItems,
-                    nowPlayingTitle = audioTitle.takeIf { audioItemId != null },
                     nowPlayingEnabled = audioItemId != null,
                     showMiniPlayer = showMiniPlayer,
                     audioPlaybackManager = audioPlaybackManager,
-                    isAudioPlaying = isAudioPlaying,
-                    audioTitle = audioTitle,
-                    audioArtist = audioArtist,
-                    audioArtworkUrl = audioArtworkUrl,
                     onDismissMiniPlayer = { isMiniPlayerDismissed = true },                )
             } else {
                 if (!isFullScreenRoute) {
@@ -842,11 +833,7 @@ private fun MainContent(
                         bottomNavOffsetHeightPx = bottomNavOffsetHeightPx,
                         showMiniPlayer = showMiniPlayer,
                         audioPlaybackManager = audioPlaybackManager,
-                        isAudioPlaying = isAudioPlaying,
                         audioItemId = audioItemId,
-                        audioTitle = audioTitle,
-                        audioArtist = audioArtist,
-                        audioArtworkUrl = audioArtworkUrl,
                         onDismissMiniPlayer = { isMiniPlayerDismissed = true },                        animatedNavBarColor = animatedNavBarColor,
                         showNavBarLabels = preferences.navBarShowLabels,
                         offlineMode = offlineMode,
@@ -917,15 +904,12 @@ private fun TvContent(
     tvDrawerListState: androidx.compose.foundation.lazy.LazyListState,
     libraryFolders: List<com.raulshma.jellyplay.core.model.LibraryFolder>,
     hiddenNavItems: Set<String> = emptySet(),
-    nowPlayingTitle: String?,
     nowPlayingEnabled: Boolean,
     showMiniPlayer: Boolean,
     audioPlaybackManager: AudioPlaybackManager,
-    isAudioPlaying: Boolean,
-    audioTitle: String,
-    audioArtist: String,
-    audioArtworkUrl: String,
     onDismissMiniPlayer: () -> Unit,) {
+    val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
+    val nowPlayingTitle = audioTitle.takeIf { nowPlayingEnabled }
     TvMaterial3Theme(
         colorScheme = tvDarkColorScheme(
             background = MaterialTheme.colorScheme.background,
@@ -1003,6 +987,9 @@ private fun TvContent(
                     // (MiniPlayer applies tvFocusIndicator); this is the host
                     // wiring gap for TV navigation.
                     if (showMiniPlayer) {
+                        val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsStateWithLifecycle()
+                        val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
+                        val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
@@ -1059,11 +1046,7 @@ private fun PhoneContent(
     bottomNavOffsetHeightPx: androidx.compose.runtime.MutableFloatState,
     showMiniPlayer: Boolean,
     audioPlaybackManager: AudioPlaybackManager,
-    isAudioPlaying: Boolean,
     audioItemId: String?,
-    audioTitle: String,
-    audioArtist: String,
-    audioArtworkUrl: String,
     onDismissMiniPlayer: () -> Unit,    animatedNavBarColor: Color,
     showNavBarLabels: Boolean,
     offlineMode: com.raulshma.jellyplay.core.model.OfflineMode = com.raulshma.jellyplay.core.model.OfflineMode.ONLINE,
@@ -1200,61 +1183,66 @@ private fun PhoneContent(
                         surpriseRequests = surpriseRequests,
                     )
                 }
-                if (showMiniPlayer && isExpanded) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = systemNavBarBottom + 2.dp)
-                    ) {
-                        MiniPlayer(
-                            isVisible = true,
-                            title = audioTitle,
-                            artist = audioArtist,
-                            artworkUri = audioArtworkUrl,
-                            isPlaying = isAudioPlaying,
-                            onClick = onNowPlayingClick,
-                            onClose = {
-                                audioPlaybackManager.stopAndRelease()
-                                onDismissMiniPlayer()
-                            },
-                            onPlayPause = {
-                                audioPlaybackManager.togglePlayPause()
-                            },
-                            onSkipNext = {
-                                audioPlaybackManager.skipToNext()
-                            },
-                        )
-                    }
-                }
-                if (!isExpanded && showMiniPlayer) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = systemNavBarBottom + 60.dp)
-                            .offset {
-                                val maxOffset = Dimensions.floatingNavHeight.toPx()
-                                val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
-                                IntOffset(x = 0, y = yOffset.roundToInt())
-                            }
-                    ) {
-                        MiniPlayer(
-                            isVisible = true,
-                            title = audioTitle,
-                            artist = audioArtist,
-                            artworkUri = audioArtworkUrl,
-                            isPlaying = isAudioPlaying,
-                            onClick = onNowPlayingClick,
-                            onClose = {
-                                audioPlaybackManager.stopAndRelease()
-                                onDismissMiniPlayer()
-                            },
-                            onPlayPause = {
-                                audioPlaybackManager.togglePlayPause()
-                            },
-                            onSkipNext = {
-                                audioPlaybackManager.skipToNext()
-                            },
-                        )
+                if (showMiniPlayer) {
+                    val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsStateWithLifecycle()
+                    val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
+                    val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
+                    val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
+                    if (isExpanded) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = systemNavBarBottom + 2.dp)
+                        ) {
+                            MiniPlayer(
+                                isVisible = true,
+                                title = audioTitle,
+                                artist = audioArtist,
+                                artworkUri = audioArtworkUrl,
+                                isPlaying = isAudioPlaying,
+                                onClick = onNowPlayingClick,
+                                onClose = {
+                                    audioPlaybackManager.stopAndRelease()
+                                    onDismissMiniPlayer()
+                                },
+                                onPlayPause = {
+                                    audioPlaybackManager.togglePlayPause()
+                                },
+                                onSkipNext = {
+                                    audioPlaybackManager.skipToNext()
+                                },
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = systemNavBarBottom + 60.dp)
+                                .offset {
+                                    val maxOffset = Dimensions.floatingNavHeight.toPx()
+                                    val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
+                                    IntOffset(x = 0, y = yOffset.roundToInt())
+                                }
+                        ) {
+                            MiniPlayer(
+                                isVisible = true,
+                                title = audioTitle,
+                                artist = audioArtist,
+                                artworkUri = audioArtworkUrl,
+                                isPlaying = isAudioPlaying,
+                                onClick = onNowPlayingClick,
+                                onClose = {
+                                    audioPlaybackManager.stopAndRelease()
+                                    onDismissMiniPlayer()
+                                },
+                                onPlayPause = {
+                                    audioPlaybackManager.togglePlayPause()
+                                },
+                                onSkipNext = {
+                                    audioPlaybackManager.skipToNext()
+                                },
+                            )
+                        }
                     }
                 }                // Play On persistent transport bar — visible while a Jellyfin
                 // remote session is active and the full-screen companion is not

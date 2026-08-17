@@ -138,20 +138,24 @@ fun DownloadsScreen(
     // Action-bar predicates: a bulk control is enabled only when the current
     // selection actually contains an item of the matching status, so the bar
     // never offers a no-op (e.g. Pause with only paused items selected).
-    val selectedItems = if (selectionMode) downloads.filter { it.id in selectedIds } else emptyList()
-    val hasPauseable = selectedItems.any { it.status == DownloadStatus.DOWNLOADING }
-    val hasResumable = selectedItems.any { it.status == DownloadStatus.PAUSED }
-    val hasCancellable = selectedItems.any {
-        it.status == DownloadStatus.PENDING ||
-            it.status == DownloadStatus.QUEUED ||
-            it.status == DownloadStatus.DOWNLOADING ||
-            it.status == DownloadStatus.PAUSED
+    val selectedItems = remember(selectionMode, downloads, selectedIds) {
+        if (selectionMode) downloads.filter { it.id in selectedIds } else emptyList()
+    }
+    val hasPauseable = remember(selectedItems) { selectedItems.any { it.status == DownloadStatus.DOWNLOADING } }
+    val hasResumable = remember(selectedItems) { selectedItems.any { it.status == DownloadStatus.PAUSED } }
+    val hasCancellable = remember(selectedItems) {
+        selectedItems.any {
+            it.status == DownloadStatus.PENDING ||
+                it.status == DownloadStatus.QUEUED ||
+                it.status == DownloadStatus.DOWNLOADING ||
+                it.status == DownloadStatus.PAUSED
+        }
     }
     // Global action predicates: the app-bar Pause All / Retry all failed
     // buttons are only enabled when the matching status exists anywhere in the
     // list, so neither offers a no-op (mirrors the selection-bar predicates).
-    val hasAnyDownloading = downloads.any { it.status == DownloadStatus.DOWNLOADING }
-    val hasAnyFailed = downloads.any { it.status == DownloadStatus.FAILED }
+    val hasAnyDownloading = remember(downloads) { downloads.any { it.status == DownloadStatus.DOWNLOADING } }
+    val hasAnyFailed = remember(downloads) { downloads.any { it.status == DownloadStatus.FAILED } }
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 

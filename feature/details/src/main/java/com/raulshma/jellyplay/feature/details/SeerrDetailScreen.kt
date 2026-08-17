@@ -1405,6 +1405,17 @@ private fun EpisodeRow(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             if (stillUrl != null) {
+                val surfaceContainerLow = MaterialTheme.colorScheme.surfaceContainerLow
+                val scrimBrush = remember(surfaceContainerLow) {
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Transparent,
+                            surfaceContainerLow.copy(alpha = 0.9f),
+                            surfaceContainerLow,
+                        ),
+                    )
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1419,16 +1430,7 @@ private fun EpisodeRow(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color.Transparent,
-                                        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.9f),
-                                        MaterialTheme.colorScheme.surfaceContainerLow,
-                                    ),
-                                )
-                            )
+                            .background(scrimBrush)
                     )
                     Text(
                         text = "${episode.episodeNumber}",

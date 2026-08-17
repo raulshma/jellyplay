@@ -33,7 +33,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -544,43 +546,50 @@ internal class UnifiedMediaDetailProviderImpl @Inject constructor(
         // fetch (plan 08's freshness lever), then the per-type dispatch below
         // drops the type-scoped caches (series catalogue, album tracks,
         // collection items) the snapshot derivation reads right after.
-        val result = mediaRepository.getMediaDetail(itemId, force = force)
-        result
-            .onSuccess { detail ->
-                if (force) cacheInvalidation.invalidateFor(detail)
-                val usable = playbackSourceResolver.resolveUsableDownload(itemId) != null
-                val seriesData = loadSeriesData(detail, offline = false)
-                val album = loadAlbumTracks(detail, offline = false)
-                content.value = ContentResolution.Resolved(
-                    contentGen = targetGen,
-                    origin = DetailOrigin.REMOTE,
-                    detail = detail,
-                    seasons = seriesData.seasons,
-                    episodesBySeason = seriesData.episodesBySeason,
-                    fetchedSeasonIds = seriesData.fetchedSeasonIds,
-                    sortedEpisodes = seriesData.sortedEpisodes,
-                    albumTracks = album,
-                    localSubtitles = emptyList(),
-                    assets = DetailAssets(),
-                    seriesAggregate = null,
-                    confirmedUsable = usable,
-                )
-            }
-            .onFailure { err ->
-                val local = offlineRepository.getOfflineDetail(itemId).first()
-                if (local != null) {
-                    publishLocal(targetGen, DetailOrigin.LOCAL_REMOTE_FAILURE, local)
-                } else {
-                    val accessDenied = (err as? ApiException)?.isAccessDenied == true
-                    content.value = ContentResolution.Failed(
+        coroutineScope {
+            // resolveUsableDownload needs only itemId — start it before the
+            // detail fetch so the Room read overlaps the network round-trip.
+            val usableDeferred = async { playbackSourceResolver.resolveUsableDownload(itemId) != null }
+            val result = mediaRepository.getMediaDetail(itemId, force = force)
+            result
+                .onSuccess { detail ->
+                    if (force) cacheInvalidation.invalidateFor(detail)
+                    val seriesDeferred = async { loadSeriesData(detail, offline = false) }
+                    val albumDeferred = async { loadAlbumTracks(detail, offline = false) }
+                    val usable = usableDeferred.await()
+                    val seriesData = seriesDeferred.await()
+                    val album = albumDeferred.await()
+                    content.value = ContentResolution.Resolved(
                         contentGen = targetGen,
-                        error = DetailLoadError(
-                            message = err.message ?: "Failed to load details",
-                            isAccessDenied = accessDenied,
-                        ),
+                        origin = DetailOrigin.REMOTE,
+                        detail = detail,
+                        seasons = seriesData.seasons,
+                        episodesBySeason = seriesData.episodesBySeason,
+                        fetchedSeasonIds = seriesData.fetchedSeasonIds,
+                        sortedEpisodes = seriesData.sortedEpisodes,
+                        albumTracks = album,
+                        localSubtitles = emptyList(),
+                        assets = DetailAssets(),
+                        seriesAggregate = null,
+                        confirmedUsable = usable,
                     )
                 }
-            }
+                .onFailure { err ->
+                    val local = offlineRepository.getOfflineDetail(itemId).first()
+                    if (local != null) {
+                        publishLocal(targetGen, DetailOrigin.LOCAL_REMOTE_FAILURE, local)
+                    } else {
+                        val accessDenied = (err as? ApiException)?.isAccessDenied == true
+                        content.value = ContentResolution.Failed(
+                            contentGen = targetGen,
+                            error = DetailLoadError(
+                                message = err.message ?: "Failed to load details",
+                                isAccessDenied = accessDenied,
+                            ),
+                        )
+                    }
+                }
+        }
     }
 
     private suspend fun Session.resolveLocal(targetGen: Long, origin: DetailOrigin) {

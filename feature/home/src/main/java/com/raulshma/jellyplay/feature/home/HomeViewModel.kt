@@ -681,7 +681,7 @@ class HomeViewModel @Inject constructor(
      * on the offline home. Loads the series' seasons and downloaded episodes
      * (the same [OfflineRepository] calls the detail provider uses) and exposes
      * them via [HomeUiState.seriesDelete] for the sheet to render.
-     * `getEpisodesForSeason` reads the offline store, so the resulting episode
+     * `getEpisodesForSeries` reads the offline store, so the resulting episode
      * map is already pre-filtered to downloaded episodes — exactly what the
      * sheet expects.
      */
@@ -691,8 +691,9 @@ class HomeViewModel @Inject constructor(
         }
         launch {
             val seasonsOff = offlineRepository.getSeasonsForSeries(series.id).first()
+            val episodesBySeasonOff = offlineRepository.getEpisodesForSeries(series.id).groupBy { it.seasonId }
             val episodesOffBySeason = seasonsOff.associate { season ->
-                season.id to offlineRepository.getEpisodesForSeason(season.id).first()
+                season.id to (episodesBySeasonOff[season.id] ?: emptyList())
             }
             val downloadedBySeason = episodesOffBySeason.filterValues { it.isNotEmpty() }
             val seasons = seasonsOff.filter { it.id in downloadedBySeason }.map { it.toMediaItem() }

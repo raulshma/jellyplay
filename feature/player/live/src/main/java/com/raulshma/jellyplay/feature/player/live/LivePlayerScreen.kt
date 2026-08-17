@@ -272,19 +272,25 @@ fun LivePlayerScreen(
                 exit = playerBottomControlsExit(),
                 modifier = Modifier.align(Alignment.BottomCenter),
             ) {
-                val canSeek = state.durationMs > 0L && !state.isAtLiveEdge
+                // High-frequency DVR-window values are collected here (not via
+                // the screen-root uiState) so the 500 ms position tick
+                // recomposes only this bar, mirroring the VOD leaf-collected
+                // position flows.
+                val positionMs by viewModel.positionMs.collectAsStateWithLifecycle()
+                val durationMs by viewModel.durationMs.collectAsStateWithLifecycle()
+                val canSeek = durationMs > 0L && !state.isAtLiveEdge
                 LivePlayerBottomBar(
                     isPlaying = state.isPlaying,
                     canSeek = canSeek,
                     isAtLiveEdge = state.isAtLiveEdge,
-                    positionMs = state.positionMs,
-                    durationMs = state.durationMs,
+                    positionMs = positionMs,
+                    durationMs = durationMs,
                     onPlayPause = viewModel::togglePlayPause,
                     onSeekBack = {
-                        viewModel.seekWithinDvr((state.positionMs - 10_000L).coerceAtLeast(0L))
+                        viewModel.seekWithinDvr((positionMs - 10_000L).coerceAtLeast(0L))
                     },
                     onSeekForward = {
-                        viewModel.seekWithinDvr(state.positionMs + 10_000L)
+                        viewModel.seekWithinDvr(positionMs + 10_000L)
                     },
                     onPlayFromStart = viewModel::playFromStart,
                     onChannelUp = { viewModel.channelUp(audioStreamIndex, subtitleStreamIndex) },

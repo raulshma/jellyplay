@@ -1770,7 +1770,7 @@ fun VideoPlayerScreen(
                 sleepTimerRemainingFlow = viewModel.sleepTimerRemainingMs,
                 onSleepTimerClick = onSleepTimerClick,
                 supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
-                videoFiltersActive = uiState.videoEffects != com.raulshma.jellyplay.core.model.VideoEffectsConfig(),
+                videoFiltersActive = !uiState.videoEffects.isNeutral,
                 onVideoFilterClick = onVideoFilterClick,
                 supportsScreenshot = uiState.engineCapabilities.supportsScreenshot,
                 onScreenshotClick = onScreenshotClick,

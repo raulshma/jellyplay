@@ -93,6 +93,16 @@ class LiveTvPlayerViewModel @Inject constructor(
     private val _state = MutableStateFlow(LiveTvPlayerUiState())
     val state: StateFlow<LiveTvPlayerUiState> = _state.asStateFlow()
 
+    // High-frequency DVR-window streams kept OUT of [LiveTvPlayerUiState] so
+    // the 500 ms position tick invalidates only the leaf that renders it (the
+    // bottom-bar seek bar), not the whole screen — mirrors the VOD player's
+    // dedicated position/duration flows.
+    private val _positionMs = MutableStateFlow(0L)
+    val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
+
+    private val _durationMs = MutableStateFlow(-1L)
+    val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
+
     private var engine: LivePlayerEngine? = null
     private var initialized = false
     private var preMuteVolume: Float? = null
@@ -616,9 +626,9 @@ class LiveTvPlayerViewModel @Inject constructor(
             .launchIn(viewModelScope)
         eng.isAtLiveEdge.onEach { _state.value = _state.value.copy(isAtLiveEdge = it) }
             .launchIn(viewModelScope)
-        eng.positionMs.onEach { _state.value = _state.value.copy(positionMs = it) }
+        eng.positionMs.onEach { _positionMs.value = it }
             .launchIn(viewModelScope)
-        eng.durationMs.onEach { _state.value = _state.value.copy(durationMs = it) }
+        eng.durationMs.onEach { _durationMs.value = it }
             .launchIn(viewModelScope)
     }
 
@@ -668,15 +678,19 @@ class LiveTvPlayerViewModel @Inject constructor(
             startDateUtc = fmt.format(now),
             endDateUtc = fmt.format(end),
         ).getOrNull().orEmpty()
-        val current = programs.firstOrNull { p ->
-            val start = p.startDate?.let { runCatching { Instant.parse(it) }.getOrNull() }
-            val finish = p.endDate?.let { runCatching { Instant.parse(it) }.getOrNull() }
+        val parsed = programs.map { p ->
+            Triple(
+                p,
+                p.startDate?.let { runCatching { Instant.parse(it) }.getOrNull() },
+                p.endDate?.let { runCatching { Instant.parse(it) }.getOrNull() },
+            )
+        }
+        val current = parsed.firstOrNull { (_, start, finish) ->
             start != null && finish != null && !now.isBefore(start) && now.isBefore(finish)
-        }
-        val next = programs.firstOrNull { p ->
-            val start = p.startDate?.let { runCatching { Instant.parse(it) }.getOrNull() }
+        }?.first
+        val next = parsed.firstOrNull { (p, start, _) ->
             start != null && start.isAfter(now) && p.id != current?.id
-        }
+        }?.first
         _state.value = _state.value.copy(currentProgram = current, nextProgram = next)
     }
 
@@ -702,7 +716,7 @@ class LiveTvPlayerViewModel @Inject constructor(
     fun playFromStart() {
         // Guard: only restart when a DVR window exists. Mirrors the seek-bar
         // gate (LiveSeekBar returns early when durationMs <= 0).
-        if (_state.value.durationMs <= 0L) return
+        if (_durationMs.value <= 0L) return
         engine?.seekTo(0L)
     }
 
@@ -801,6 +815,8 @@ class LiveTvPlayerViewModel @Inject constructor(
         // player is never restored on a later unmute (e.g. mute → leave screen →
         // return to a fresh engine). isMuted is reset via the fresh uiState below.
         preMuteVolume = null
+        _positionMs.value = 0L
+        _durationMs.value = -1L
         _state.value = LiveTvPlayerUiState()
     }
 

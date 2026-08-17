@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.ui.animation
 
 import androidx.compose.foundation.ScrollState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -24,30 +24,35 @@ fun Modifier.horizontalFadingEdges(
     length: Dp = 16.dp,
 ): Modifier = this
     .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-    .drawWithContent {
-        drawContent()
+    .drawWithCache {
         val width = size.width
         val lengthPx = length.toPx()
+        val leadingFade = Brush.horizontalGradient(
+            colors = listOf(Color.Transparent, Color.Black),
+            startX = 0f,
+            endX = lengthPx,
+        )
+        val trailingFade = Brush.horizontalGradient(
+            colors = listOf(Color.Black, Color.Transparent),
+            startX = width - lengthPx,
+            endX = width,
+        )
 
-        if (scrollState.value > 0) {
-            drawRect(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(Color.Transparent, Color.Black),
-                    startX = 0f,
-                    endX = lengthPx,
-                ),
-                blendMode = BlendMode.DstIn,
-            )
-        }
+        onDrawWithContent {
+            drawContent()
 
-        if (scrollState.value < scrollState.maxValue) {
-            drawRect(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(Color.Black, Color.Transparent),
-                    startX = width - lengthPx,
-                    endX = width,
-                ),
-                blendMode = BlendMode.DstIn,
-            )
+            if (scrollState.value > 0) {
+                drawRect(
+                    brush = leadingFade,
+                    blendMode = BlendMode.DstIn,
+                )
+            }
+
+            if (scrollState.value < scrollState.maxValue) {
+                drawRect(
+                    brush = trailingFade,
+                    blendMode = BlendMode.DstIn,
+                )
+            }
         }
     }

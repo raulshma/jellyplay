@@ -19,6 +19,14 @@ interface DownloadRepository : OfflineDownloadWriter {
 
     fun getAllDownloads(): Flow<List<DownloadItem>>
 
+    /**
+     * One page of completed audio (`MUSIC`/`AUDIO`) downloads, newest first —
+     * the media-library DOWNLOADS browse page's window. Same filter and order
+     * the caller previously applied over [getAllDownloads], resolved in one
+     * query instead of a full-table fetch per page request.
+     */
+    suspend fun getCompletedAudioDownloads(limit: Int, offset: Int): List<DownloadItem>
+
     fun getDownloadByMediaItemIdFlow(mediaItemId: String): Flow<DownloadItem?>
 
     fun getActiveDownloadCount(): Flow<Int>
