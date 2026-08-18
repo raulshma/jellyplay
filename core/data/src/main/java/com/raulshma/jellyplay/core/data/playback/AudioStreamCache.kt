@@ -182,7 +182,10 @@ open class AudioStreamCache @Inject constructor(
 
     /** Releases the cache, deletes its directory, and reopens empty. */
     suspend fun clear(): Unit = withContext(Dispatchers.IO) {
-        synchronized(this) {
+        // Lock the cache instance — the same monitor the @Synchronized accessors
+        // use. A bare `this` here would capture the withContext CoroutineScope
+        // and race the readers instead of excluding them.
+        synchronized(this@AudioStreamCache) {
             cache?.release()
             cache = null
             available = false

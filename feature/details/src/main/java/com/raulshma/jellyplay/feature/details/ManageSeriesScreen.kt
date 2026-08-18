@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.raulshma.jellyplay.core.ui.components.rememberStableCallback
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -260,9 +261,9 @@ private fun ManageSeriesContent(
                     // this, three fresh lambdas are allocated per visible row
                     // per recomposition, forcing EpisodeRow to recompose even
                     // when its inputs are unchanged.
-                    val onToggleMonitored = remember(episode.id) { { onToggleEpisodeMonitored(episode) } }
-                    val onSearch = remember(episode.id) { { onSearchEpisode(episode) } }
-                    val onDelete = remember(episode.id) { { onRequestDeleteEpisode(episode) } }
+                    val onToggleMonitored = rememberStableCallback { onToggleEpisodeMonitored(episode) }
+                    val onSearch = rememberStableCallback { onSearchEpisode(episode) }
+                    val onDelete = rememberStableCallback { onRequestDeleteEpisode(episode) }
                     EpisodeRow(
                         episode = episode,
                         isLoading = (state.actionTarget as? ActionTarget.Episode)?.episodeId == episode.id,

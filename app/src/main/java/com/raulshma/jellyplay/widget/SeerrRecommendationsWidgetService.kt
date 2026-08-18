@@ -66,11 +66,9 @@ class SeerrRecommendationsWidgetService : RemoteViewsService() {
             // rationale: skipping loads on unchanged versions left the widget
             // blank when the factory was recreated after a worker run that
             // short-circuited the version bump.
-            // Snapshot flows are eagerly warmed on the store's scope, so these
-            // are memory reads — no DataStore disk IO on the main thread
-            // (`onDataSetChanged` is posted to the main-thread handler). On a
-            // cold process the store does one bounded warm-up read instead of
-            // serving the empty placeholder.
+            // Memory reads from the store's eagerly-warmed snapshots — no
+            // DataStore disk IO on the main thread. Cold-process warm-up
+            // behavior: see WidgetDataStore's *Snapshot() docs.
             val (version, fresh) = store.seerrWidgetVersion.value to store.seerrWidgetItemsSnapshot()
             items = fresh
             loadedVersion = version

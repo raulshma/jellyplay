@@ -47,7 +47,8 @@ class NowPlayingWidgetUpdater @Inject constructor(
     // Read/written from both the metadata and position collectors, which run
     // as separate coroutines on the Dispatchers.Default pool — volatile so a
     // position-tick thread always sees the metadata push that just landed.
-    @Volatile private var lastPushFingerprint: PushFingerprint? = null
+    // Compared via [sameRenderAs], never structural equals (see below).
+    @Volatile private var lastPushedRender: WidgetPushSnapshot? = null
 
     fun start() {
         if (metadataJob?.isActive == true) return
@@ -92,7 +93,7 @@ class NowPlayingWidgetUpdater @Inject constructor(
         lastArtwork?.let { if (!it.isRecycled) it.recycle() }
         lastArtwork = null
         lastItemId = null
-        lastPushFingerprint = null
+        lastPushedRender = null
     }
 
     private suspend fun observeMetadata() {
@@ -156,12 +157,11 @@ class NowPlayingWidgetUpdater @Inject constructor(
     private fun pushPositionUpdate() {
         // Position-only path: sends a partial RemoteViews (position label +
         // progress bar) instead of re-parceling the artwork bitmap and
-        // re-wiring click intents at 1 Hz. Guarded by a fingerprint so no
+        // re-wiring click intents at 1 Hz. Guarded by render equality so no
         // redundant partial push crosses the binder.
         val snapshot = readPushSnapshot()
-        val fingerprint = snapshot.toFingerprint()
-        if (fingerprint == lastPushFingerprint) return
-        lastPushFingerprint = fingerprint
+        if (lastPushedRender?.sameRenderAs(snapshot) == true) return
+        lastPushedRender = snapshot
 
         NowPlayingWidget.updateAllWidgetsPosition(
             context = context,
@@ -171,7 +171,7 @@ class NowPlayingWidgetUpdater @Inject constructor(
         )
     }
 
-    private fun loadArtwork(url: String?): Bitmap? {
+    private suspend fun loadArtwork(url: String?): Bitmap? {
         if (url.isNullOrBlank()) return null
         return WidgetImageLoader.loadPoster(context, url, cornerRadiusDp = 12f)
     }
@@ -192,7 +192,7 @@ class NowPlayingWidgetUpdater @Inject constructor(
     )
 
     private fun pushUpdate(snapshot: WidgetPushSnapshot, albumArt: Bitmap?) {
-        lastPushFingerprint = snapshot.toFingerprint()
+        lastPushedRender = snapshot
         NowPlayingWidget.updateAllWidgets(
             context = context,
             title = snapshot.title,
@@ -205,27 +205,19 @@ class NowPlayingWidgetUpdater @Inject constructor(
         )
     }
 
-    /** Equality key for the last pushed widget render — see [pushPositionUpdate]. */
-    private data class PushFingerprint(
-        val title: String,
-        val subtitle: String?,
-        val isPlaying: Boolean,
-        val positionBucketSec: Long,
-        val durationSec: Long,
-        val artUrl: String?,
-        val isEmptyState: Boolean,
-    )
-
-    /** Position bucketed to whole seconds — the partial push ticks at 1 Hz anyway. */
-    private fun WidgetPushSnapshot.toFingerprint() = PushFingerprint(
-        title = title,
-        subtitle = subtitle,
-        isPlaying = isPlaying,
-        positionBucketSec = positionMs / 1_000L,
-        durationSec = durationMs / 1_000L,
-        artUrl = artUrl,
-        isEmptyState = isEmptyState,
-    )
+    /**
+     * Equality key for the last pushed widget render — see [pushPositionUpdate].
+     * Position and duration are bucketed to whole seconds because the partial
+     * push ticks at 1 Hz anyway.
+     */
+    private fun WidgetPushSnapshot.sameRenderAs(other: WidgetPushSnapshot): Boolean =
+        title == other.title &&
+            subtitle == other.subtitle &&
+            isPlaying == other.isPlaying &&
+            positionMs / 1_000L == other.positionMs / 1_000L &&
+            durationMs / 1_000L == other.durationMs / 1_000L &&
+            artUrl == other.artUrl &&
+            isEmptyState == other.isEmptyState
 
     private data class WidgetPushSnapshot(
         val title: String,

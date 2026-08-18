@@ -71,11 +71,9 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
             // the version bump in [WidgetPersistHelper] because the content
             // was unchanged. Always reading is cheap (single DataStore read)
             // and makes the widget resilient to those edge cases.
-            // Snapshot flows are eagerly warmed on the store's scope, so these
-            // are memory reads — no DataStore disk IO on the main thread
-            // (`onDataSetChanged` is posted to the main-thread handler). On a
-            // cold process the store does one bounded warm-up read instead of
-            // serving the empty placeholder.
+            // Memory reads from the store's eagerly-warmed snapshots — no
+            // DataStore disk IO on the main thread. Cold-process warm-up
+            // behavior: see WidgetDataStore's *Snapshot() docs.
             val (fresh, version) = store.libraryWidgetItemsSnapshot() to store.libraryWidgetVersion.value
             items = fresh
             loadedVersion = version

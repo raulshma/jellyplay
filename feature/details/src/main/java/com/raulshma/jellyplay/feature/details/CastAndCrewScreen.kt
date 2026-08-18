@@ -34,6 +34,7 @@ import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
+import com.raulshma.jellyplay.core.ui.components.rememberStableCallback
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 
 private enum class CastCrewTab { CAST, CREW }
@@ -153,7 +154,7 @@ fun CastAndCrewScreen(
                         imageUrl = remember(person.id) {
                             if (person.hasPortrait()) viewModel.getImageUrl(person.id) else ""
                         },
-                        onClick = remember(person.id) { { onPersonClick(person.id) } },
+                        onClick = rememberStableCallback { onPersonClick(person.id) },
                         modifier = itemModifier,
                     )
                 }

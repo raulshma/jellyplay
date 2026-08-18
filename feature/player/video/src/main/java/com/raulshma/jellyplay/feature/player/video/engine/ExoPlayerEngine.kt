@@ -616,20 +616,8 @@ class ExoPlayerEngine(
         // over stale activeTrackIsAss=true from a prior ASS track.
         activeTrackIsAss = false
         // Mirror the per-item state resets of release()+rebuild for the fields
-        // the fresh path re-establishes; stale cues from the previous item
-        // would otherwise linger into the new one's loading window.
-        _currentCues.value = emptyList()
-        _availableTracks.value = emptyList()
-        lastSelectedTextTrackId = null
-        subtitleTrackAutoDisabled = false
-        // Same for the stats/progress fields release() clears: without these
-        // the previous episode's buffered position, decoder counters, and
-        // "Stats for Nerds" snapshot surface briefly on the new item.
-        lastVideoStats = null
-        videoDecoderCounters = null
-        wasPlayingBeforeActivityPause = false
-        _bufferedPositionMs.value = 0L
-        _videoStats.value = EngineVideoStats()
+        // the fresh path re-establishes.
+        resetItemScopedState()
 
         trackSelector?.let { applyRequestTrackSelection(it, request, exoCfg) }
 
@@ -638,6 +626,25 @@ class ExoPlayerEngine(
         attachMediaItemAndPrepare(exo, mediaItem, subtitleConfigs, request)
 
         applyAudioEffects()
+    }
+
+    /**
+     * The per-item state both [release] and [reusePlayerForRequest] must
+     * clear: stale cues from the previous item would linger into the new
+     * one's loading window, and the previous episode's buffered position,
+     * decoder counters, and "Stats for Nerds" snapshot would surface briefly
+     * on the new item.
+     */
+    private fun resetItemScopedState() {
+        _currentCues.value = emptyList()
+        _availableTracks.value = emptyList()
+        lastSelectedTextTrackId = null
+        subtitleTrackAutoDisabled = false
+        lastVideoStats = null
+        videoDecoderCounters = null
+        wasPlayingBeforeActivityPause = false
+        _bufferedPositionMs.value = 0L
+        _videoStats.value = EngineVideoStats()
     }
 
     /**
@@ -827,20 +834,12 @@ class ExoPlayerEngine(
         currentMediaItem = null
         serverDurationMs = 0L
         currentSubtitleConfigs.clear()
-        lastVideoStats = null
-        videoDecoderCounters = null
         releaseAudioEffects()
         cachedVolume = 1f
         lastUnmuteVolume = 1f
-        wasPlayingBeforeActivityPause = false
         _playbackState.value = EnginePlaybackState.IDLE
         _isPlaying.value = false
-        _availableTracks.value = emptyList()
-        _bufferedPositionMs.value = 0L
-        _videoStats.value = EngineVideoStats()
-        _currentCues.value = emptyList()
-        lastSelectedTextTrackId = null
-        subtitleTrackAutoDisabled = false
+        resetItemScopedState()
 
         // Drop the libass overlay + handler so the next load() rebuilds them
         // fresh. The AssSubtitleView is a child of the (now-cleared) subtitle

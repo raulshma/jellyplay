@@ -228,22 +228,6 @@ class NowPlayingWidget : AppWidgetProvider() {
         null
     }
 
-    /**
-     * Lazy process-wide memo table for click PendingIntents — get-map, build,
-     * put. Concurrent access from widget broadcasts is safe; a race only ever
-     * builds the same instance twice, which is benign.
-     */
-    private class PendingIntentCache<K : Any> {
-        @Volatile private var map: MutableMap<K, PendingIntent>? = null
-
-        fun getOrCreate(key: K, build: (K) -> PendingIntent): PendingIntent {
-            map?.get(key)?.let { return it }
-            val pending = build(key)
-            (map ?: ConcurrentHashMap<K, PendingIntent>().also { map = it }).put(key, pending)
-            return pending
-        }
-    }
-
     companion object {
         private const val TAG = "NowPlayingWidget"
 
@@ -494,10 +478,10 @@ class NowPlayingWidget : AppWidgetProvider() {
         // and seek zones (200+), so one table keyed by request code covers all
         // of them. Races only ever build the same instance twice, which is
         // benign.
-        private val pendingIntents = PendingIntentCache<Int>()
+        private val pendingIntents = ConcurrentHashMap<Int, PendingIntent>()
 
         private fun cachedOpenAppPending(context: Context): PendingIntent =
-            pendingIntents.getOrCreate(REQ_OPEN_APP) {
+            pendingIntents.computeIfAbsent(REQ_OPEN_APP) {
                 PendingIntent.getActivity(
                     context, REQ_OPEN_APP, openAppIntent(context),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
@@ -513,7 +497,7 @@ class NowPlayingWidget : AppWidgetProvider() {
             context: Context,
             action: String,
             requestCode: Int,
-        ): PendingIntent = pendingIntents.getOrCreate(requestCode) {
+        ): PendingIntent = pendingIntents.computeIfAbsent(requestCode) {
             broadcastPending(context, action, requestCode)
         }
 
@@ -521,7 +505,7 @@ class NowPlayingWidget : AppWidgetProvider() {
             context: Context,
             percent: Int,
             requestCode: Int,
-        ): PendingIntent = pendingIntents.getOrCreate(requestCode) {
+        ): PendingIntent = pendingIntents.computeIfAbsent(requestCode) {
             seekPending(context, percent, requestCode)
         }
 

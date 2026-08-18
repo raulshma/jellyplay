@@ -71,12 +71,9 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
 
         override fun onDataSetChanged() {
             val maxCount = store.getWidgetConfigForIdSync(appWidgetId).continueWatchingItemCount
-            // Snapshot flows are eagerly warmed on the store's scope, so this is
-            // a memory read — no DataStore disk IO on the main thread
-            // (`onDataSetChanged` is posted to the main-thread handler, only
-            // `getViewAt` runs on a background thread). On a cold process the
-            // store does one bounded warm-up read instead of serving the empty
-            // placeholder.
+            // Memory read from the store's eagerly-warmed snapshot — no
+            // DataStore disk IO on the main thread. Cold-process warm-up
+            // behavior: see WidgetDataStore's *Snapshot() docs.
             items = store.continueWatchingSnapshot().take(maxCount)
             // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.
             // A slow URL is bounded by `WidgetImageLoader`'s internal timeout.

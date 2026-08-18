@@ -46,6 +46,18 @@ import com.raulshma.jellyplay.core.ui.preview.rememberReleaseDismiss
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 
 /**
+ * Border override for [MediaCardScaffold]. When [alpha] is non-null the
+ * stroke is drawn inside a graphics layer whose alpha this lambda resolves at
+ * draw time (instead of being passed to the Card as a fixed stroke) — lets
+ * callers animate a border glow without recomposing; the layer-property read
+ * invalidates drawing only.
+ */
+class AnimatedCardBorder(
+    val stroke: BorderStroke,
+    val alpha: (() -> Float)? = null,
+)
+
+/**
  * The deep module behind the media-card family.
  *
  * Owns the card scaffold that every poster/wide card re-implemented by hand:
@@ -88,14 +100,7 @@ fun MediaCardScaffold(
     sharedElementKey: String? = null,
     scrimBrush: Brush? = null,
     scrimHeight: Dp = 60.dp,
-    border: BorderStroke? = null,
-    /**
-     * When non-null, [border] is drawn inside a graphics layer whose alpha is
-     * resolved by this lambda at draw time (instead of being passed to the
-     * Card as a fixed stroke). Lets callers animate a border glow without
-     * recomposing — the layer-property read invalidates drawing only.
-     */
-    borderAlpha: (() -> Float)? = null,
+    border: AnimatedCardBorder? = null,
     titleColor: Color = MaterialTheme.colorScheme.onSurface,
     previewFactory: ((sourceBounds: Rect?) -> MediaPreview)? = null,
     onLongPress: (() -> Unit)? = null,
@@ -144,11 +149,12 @@ fun MediaCardScaffold(
         .aspectRatio(aspectRatio)
         .then(sharedImageModifier)
 
-    val resolvedBorder = border ?: themeVariant.cardBorder(
+    val resolvedBorder = border?.stroke ?: themeVariant.cardBorder(
         primary = MaterialTheme.colorScheme.primary,
         secondary = MaterialTheme.colorScheme.secondary,
         outline = MaterialTheme.colorScheme.outline,
     )
+    val borderAlpha = border?.alpha
     val surfaceColor = MaterialTheme.colorScheme.surface
     val resolvedScrimBrush = scrimBrush ?: remember(surfaceColor) {
         Brush.verticalGradient(

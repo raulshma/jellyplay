@@ -201,10 +201,12 @@ fun SeerrMediaCard(
         aspectRatio = 2f / 3f,
         enabled = !isLoading,
         clipToShape = clipToShape,
-        border = if (isLoading) loadingBorder else null,
-        borderAlpha = if (isLoading) {
-            // Read inside the scaffold's graphicsLayer lambda — draw-phase only.
-            { glowAlpha.value }
+        border = if (isLoading) {
+            AnimatedCardBorder(
+                stroke = loadingBorder,
+                // Read inside the scaffold's graphicsLayer lambda — draw-phase only.
+                alpha = { glowAlpha.value },
+            )
         } else null,
         titleColor = if (isLoading) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
         previewFactory = previewFactory,

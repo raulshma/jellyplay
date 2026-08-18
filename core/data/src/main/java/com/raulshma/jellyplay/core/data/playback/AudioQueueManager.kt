@@ -30,12 +30,9 @@ interface AudioQueueManager {
     /**
      * Bulk append. One queue emission + one player mutation instead of N, so
      * the queue is persisted (full-list DELETE+INSERT) once rather than
-     * O(N²) rows across N transactions. Default delegates per-item for
-     * implementations that don't override it.
+     * O(N²) rows across N transactions.
      */
-    fun addToQueueAll(items: List<AudioQueueItem>) {
-        items.forEach(::addToQueue)
-    }
+    fun addToQueueAll(items: List<AudioQueueItem>)
     fun removeFromQueue(index: Int)
     fun clearQueue()
     fun moveQueueItem(fromIndex: Int, toIndex: Int)
