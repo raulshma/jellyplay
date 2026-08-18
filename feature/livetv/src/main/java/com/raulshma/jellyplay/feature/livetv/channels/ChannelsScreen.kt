@@ -148,13 +148,13 @@ fun ChannelsScreen(
                         val imageUrl = remember(channel.id, channel.imageTag) {
                             viewModel.getImageUrl(channel.id, channel.imageTag)
                         }
-                        val memoizedClick = rememberStableCallback(channel.id, channel.name) {
+                        val memoizedClick = rememberStableCallback {
                             onChannelClick(channel.id, channel.name)
                         }
-                        val memoizedPlay = rememberStableCallback(channel.id, channel.name) {
+                        val memoizedPlay = rememberStableCallback {
                             onPlayChannel(channel.id, channel.name)
                         }
-                        val memoizedFavoriteToggle = rememberStableCallback(channel.id) {
+                        val memoizedFavoriteToggle = rememberStableCallback {
                             viewModel.toggleFavorite(channel.id)
                         }
                         ChannelCard(

@@ -236,6 +236,11 @@ class OfflineRepositoryImpl @Inject constructor(
             playbackStateDao.deleteById(id)
             syncBaselineDao.deleteById(id)
         }
+        // The deleted row's artifacts (and possibly its whole dir) are gone;
+        // cached local artwork paths for it and its series siblings would
+        // dangle until process death. Deletes are rare — a full evict is
+        // cheap and the next read re-resolves from disk.
+        artworkMemoCache.evictAll()
         // Prune cast images after the row is gone so the reference scan only
         // counts surviving rows.
         cleanupOrphanedCastArtwork(
@@ -284,6 +289,9 @@ class OfflineRepositoryImpl @Inject constructor(
             playbackStateDao.deleteBySeriesId(seriesId)
             syncBaselineDao.deleteBySeriesId(seriesId)
         }
+        // Series-scoped artwork cleanup above removed episode-dir artifacts
+        // the memo may still resolve to — drop it and re-resolve from disk.
+        artworkMemoCache.evictAll()
         cleanupOrphanedCastArtwork(episodeDirs, deletedCastIds)
         cleanupOrphans()
     }
@@ -315,6 +323,9 @@ class OfflineRepositoryImpl @Inject constructor(
             playbackStateDao.deleteBySeasonId(seasonId)
             syncBaselineDao.deleteBySeasonId(seasonId)
         }
+        // Deleted episode artifacts may have served as this series' cached
+        // artwork source — drop the memo and re-resolve from disk.
+        artworkMemoCache.evictAll()
         cleanupOrphanedCastArtwork(episodeDirs, deletedCastIds)
         cleanupOrphans()
     }
@@ -614,16 +625,14 @@ class OfflineRepositoryImpl @Inject constructor(
         if (items.isEmpty()) return items
         return withContext(Dispatchers.IO) {
             val keys = items.map(::artworkInputKey)
-            // Byte-count-only re-emissions (2 s download progress ticks) are
-            // full cache hits: no series-prefetch queries, no File.exists
-            // stats — only cheap copy-or-same instance projections.
-            val allCached = items.indices.all { i ->
-                val cached = artworkMemoCache.get(items[i].id)
-                cached != null && cached.first == keys[i]
-            }
+            // Snapshot each entry ONCE: a second get() after the all-cached
+            // check could miss (a concurrent collector's puts evicting LRU
+            // entries between the two reads) and trip the non-null assertion.
+            val cachedEntries = items.map { artworkMemoCache.get(it.id) }
+            val allCached = cachedEntries.indices.all { i -> cachedEntries[i]?.first == keys[i] }
             if (allCached) {
                 items.mapIndexed { i, item ->
-                    applyResolvedArtwork(item, requireNotNull(artworkMemoCache.get(item.id)).second)
+                    applyResolvedArtwork(item, cachedEntries[i]!!.second)
                 }
             } else {
                 // All episodes of a season share one seriesId — prefetch each

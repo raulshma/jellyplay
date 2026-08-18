@@ -490,16 +490,19 @@ class NowPlayingWidget : AppWidgetProvider() {
         // Click PendingIntents are process-stable (fixed request codes, fixed
         // intents) — memoized so full widget pushes don't force the system's
         // PendingIntent table rewrite (FLAG_UPDATE_CURRENT) on every rebuild.
-        // Races only ever build the same instance twice, which is benign.
-        @Volatile private var cachedOpenApp: PendingIntent? = null
-        private val broadcastPendingCache = PendingIntentCache<String>()
-        private val seekPendingCache = PendingIntentCache<Int>()
+        // Request codes are unique across open-app (100), transports (101–105)
+        // and seek zones (200+), so one table keyed by request code covers all
+        // of them. Races only ever build the same instance twice, which is
+        // benign.
+        private val pendingIntents = PendingIntentCache<Int>()
 
         private fun cachedOpenAppPending(context: Context): PendingIntent =
-            cachedOpenApp ?: PendingIntent.getActivity(
-                context, REQ_OPEN_APP, openAppIntent(context),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            ).also { cachedOpenApp = it }
+            pendingIntents.getOrCreate(REQ_OPEN_APP) {
+                PendingIntent.getActivity(
+                    context, REQ_OPEN_APP, openAppIntent(context),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            }
 
         private fun openAppIntent(context: Context): Intent =
             Intent(context, MainActivity::class.java).apply {
@@ -510,7 +513,7 @@ class NowPlayingWidget : AppWidgetProvider() {
             context: Context,
             action: String,
             requestCode: Int,
-        ): PendingIntent = broadcastPendingCache.getOrCreate(action) {
+        ): PendingIntent = pendingIntents.getOrCreate(requestCode) {
             broadcastPending(context, action, requestCode)
         }
 
@@ -518,7 +521,7 @@ class NowPlayingWidget : AppWidgetProvider() {
             context: Context,
             percent: Int,
             requestCode: Int,
-        ): PendingIntent = seekPendingCache.getOrCreate(percent) {
+        ): PendingIntent = pendingIntents.getOrCreate(requestCode) {
             seekPending(context, percent, requestCode)
         }
 

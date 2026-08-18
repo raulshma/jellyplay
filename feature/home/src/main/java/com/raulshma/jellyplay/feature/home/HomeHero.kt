@@ -267,15 +267,15 @@ fun HeroHeader(
     val playPulseAlphaState: androidx.compose.runtime.State<Float>
     val ratingPulseState: androidx.compose.runtime.State<Float>
 
-    if (isVisible && !reducedMotion) {
+    // The infinite animations run only while the hero is on screen and is the
+    // focal element (near the top, not scrolled under content). The slow
+    // 12 s breath and the high-frequency (1.8 s) play-pulse loops otherwise
+    // drive continuous draw-phase layer redraws that compete with scroll work
+    // and stack on the 1920×1080 backdrop decode; collapsed values match each
+    // animation's frame-0 state so the layers render identically at rest.
+    if (isVisible && isProminent && !reducedMotion) {
         val heroTransition = rememberInfiniteTransition(label = "hero_animations")
-        // Slow breath runs only while the hero is the focal element. A 12s
-        // cycle drives a continuous draw-phase redraw of the 1920x1080
-        // backdrop; during scroll (hero partially visible at top) that redraw
-        // competes with the scroll work. Gating on isProminent collapses it
-        // to a static scale while scrolling — the 12s breath is imperceptible
-        // mid-scroll anyway.
-        breathScaleState = if (isProminent) heroTransition.animateFloat(
+        breathScaleState = heroTransition.animateFloat(
             initialValue = 1.0f,
             targetValue = 1.04f,
             animationSpec = infiniteRepeatable(
@@ -283,47 +283,34 @@ fun HeroHeader(
                 repeatMode = RepeatMode.Reverse
             ),
             label = "breath"
-        ) else androidx.compose.runtime.mutableStateOf(1.0f)
-
-        // The high-frequency (1.8s) play-pulse loops drive ~60Hz draw-phase
-        // layer redraws. Only run them when the hero is the focal element
-        // (near the top, not scrolled under content); collapse to static
-        // otherwise to cut continuous redraws during scroll.
-        if (isProminent) {
-            playPulseScaleState = heroTransition.animateFloat(
-                initialValue = 1.0f,
-                targetValue = 1.35f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "playPulseScale"
-            )
-
-            playPulseAlphaState = heroTransition.animateFloat(
-                initialValue = 0.45f,
-                targetValue = 0.0f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "playPulseAlpha"
-            )
-
-            ratingPulseState = heroTransition.animateFloat(
-                initialValue = 0.9f,
-                targetValue = 1.1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(HERO_RATING_PULSE_DURATION_MS, easing = FancyTransitionEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "ratingPulse"
-            )
-        } else {
-            playPulseScaleState = androidx.compose.runtime.mutableStateOf(1.0f)
-            playPulseAlphaState = androidx.compose.runtime.mutableStateOf(0.45f)
-            ratingPulseState = androidx.compose.runtime.mutableStateOf(0.9f)
-        }
+        )
+        playPulseScaleState = heroTransition.animateFloat(
+            initialValue = 1.0f,
+            targetValue = 1.35f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "playPulseScale"
+        )
+        playPulseAlphaState = heroTransition.animateFloat(
+            initialValue = 0.45f,
+            targetValue = 0.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "playPulseAlpha"
+        )
+        ratingPulseState = heroTransition.animateFloat(
+            initialValue = 0.9f,
+            targetValue = 1.1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(HERO_RATING_PULSE_DURATION_MS, easing = FancyTransitionEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "ratingPulse"
+        )
     } else {
         breathScaleState = androidx.compose.runtime.mutableStateOf(1.0f)
         playPulseScaleState = androidx.compose.runtime.mutableStateOf(1.0f)

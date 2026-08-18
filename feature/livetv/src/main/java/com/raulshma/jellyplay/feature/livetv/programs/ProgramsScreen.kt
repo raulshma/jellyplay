@@ -172,8 +172,8 @@ private fun ProgramRowSection(
                 val imageUrl = remember(program.id, program.imageTag) {
                     getImageUrl(program.id, program.imageTag)
                 }
-                val memoizedClick = rememberStableCallback(program.id) { onItemClick(program) }
-                val memoizedLongPress = rememberStableCallback(program.id) { onItemLongPress(program) }
+                val memoizedClick = rememberStableCallback { onItemClick(program) }
+                val memoizedLongPress = rememberStableCallback { onItemLongPress(program) }
                 ProgramCard(
                     program = program,
                     imageUrl = imageUrl,

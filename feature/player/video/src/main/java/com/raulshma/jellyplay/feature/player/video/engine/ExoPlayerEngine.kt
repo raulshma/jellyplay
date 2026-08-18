@@ -379,7 +379,10 @@ class ExoPlayerEngine(
         val headers: Map<String, String>,
         val assSession: Boolean,
         val pauseOnAudioFocusLoss: Boolean,
-        val drmProvider: Any?,
+        // The provider itself (not its product): providers have no equals,
+        // so data-class equality degrades to identity — same instance means
+        // same DRM hook, different instance forces the rebuild path.
+        val drmProvider: EngineDrmSessionManagerProvider?,
     )
 
     private var lastRebuildInputs: LoadRebuildInputs? = null
@@ -619,6 +622,14 @@ class ExoPlayerEngine(
         _availableTracks.value = emptyList()
         lastSelectedTextTrackId = null
         subtitleTrackAutoDisabled = false
+        // Same for the stats/progress fields release() clears: without these
+        // the previous episode's buffered position, decoder counters, and
+        // "Stats for Nerds" snapshot surface briefly on the new item.
+        lastVideoStats = null
+        videoDecoderCounters = null
+        wasPlayingBeforeActivityPause = false
+        _bufferedPositionMs.value = 0L
+        _videoStats.value = EngineVideoStats()
 
         trackSelector?.let { applyRequestTrackSelection(it, request, exoCfg) }
 

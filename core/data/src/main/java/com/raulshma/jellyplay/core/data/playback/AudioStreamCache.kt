@@ -98,7 +98,13 @@ open class AudioStreamCache @Inject constructor(
      * — memoized in [cachedUpstreamFactory]/[cachedCacheFactory] instead of
      * being rebuilt per player creation and per [warmTrack] prefetch.
      * Invalidated by [clear]; custom upstreams (tests) bypass the memo.
+     *
+     * Synchronized with [clear] so the memo can never hand out a factory
+     * wrapping a [SimpleCache] that [clear] just released: without the lock a
+     * reader between [ensureCache] and the memo write would keep using a dead
+     * cache (silently — FLAG_IGNORE_CACHE_ON_ERROR masks it).
      */
+    @Synchronized
     fun getCacheDataSourceFactory(upstream: DataSource.Factory): DataSource.Factory {
         if (upstream === cachedUpstreamFactory) {
             cachedCacheFactory?.let { return it }

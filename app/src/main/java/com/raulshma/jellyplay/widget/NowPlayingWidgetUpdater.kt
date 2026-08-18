@@ -123,15 +123,7 @@ class NowPlayingWidgetUpdater @Inject constructor(
                     lastArtwork?.let { if (!it.isRecycled) it.recycle() }
                     lastArtwork = art
                 }
-                pushUpdate(
-                    title = snapshot.title,
-                    subtitle = snapshot.artist.ifBlank { null },
-                    isPlaying = snapshot.isPlaying,
-                    albumArt = lastArtwork,
-                    positionMs = audioPlaybackManager.currentPosition.value,
-                    durationMs = audioPlaybackManager.duration.value,
-                    isEmptyState = snapshot.itemId == null,
-                )
+                pushUpdate(readPushSnapshot(), lastArtwork)
             }
     }
 
@@ -166,77 +158,66 @@ class NowPlayingWidgetUpdater @Inject constructor(
         // progress bar) instead of re-parceling the artwork bitmap and
         // re-wiring click intents at 1 Hz. Guarded by a fingerprint so no
         // redundant partial push crosses the binder.
-        val title = audioPlaybackManager.title.value
-        val subtitle = audioPlaybackManager.artist.value.ifBlank { null }
-        val isPlaying = audioPlaybackManager.isPlaying.value
-        val positionMs = audioPlaybackManager.currentPosition.value
-        val durationMs = audioPlaybackManager.duration.value
-        val isEmptyState = audioPlaybackManager.currentPlayingItemId.value == null
-
-        val fingerprint = fingerprintOf(
-            title = title,
-            subtitle = subtitle,
-            isPlaying = isPlaying,
-            positionMs = positionMs,
-            durationMs = durationMs,
-            artUrl = audioPlaybackManager.albumArtUrl.value,
-            isEmptyState = isEmptyState,
-        )
+        val snapshot = readPushSnapshot()
+        val fingerprint = snapshot.toFingerprint()
         if (fingerprint == lastPushFingerprint) return
         lastPushFingerprint = fingerprint
 
         NowPlayingWidget.updateAllWidgetsPosition(
             context = context,
-            positionMs = positionMs,
-            durationMs = durationMs,
-            isPlaying = isPlaying,
+            positionMs = snapshot.positionMs,
+            durationMs = snapshot.durationMs,
+            isPlaying = snapshot.isPlaying,
         )
     }
 
-    private suspend fun loadArtwork(url: String?): Bitmap? {
+    private fun loadArtwork(url: String?): Bitmap? {
         if (url.isNullOrBlank()) return null
         return WidgetImageLoader.loadPoster(context, url, cornerRadiusDp = 12f)
     }
 
-    private fun pushUpdate(
-        title: String,
-        subtitle: String?,
-        isPlaying: Boolean,
-        albumArt: Bitmap?,
-        positionMs: Long = 0L,
-        durationMs: Long = 0L,
-        isEmptyState: Boolean = false,
-    ) {
-        lastPushFingerprint = fingerprintOf(
-            title = title,
-            subtitle = subtitle,
-            isPlaying = isPlaying,
-            positionMs = positionMs,
-            durationMs = durationMs,
-            artUrl = audioPlaybackManager.albumArtUrl.value,
-            isEmptyState = isEmptyState,
-        )
+    /**
+     * Everything a full widget push renders, read from the manager in one
+     * pass. Also the sole input to [PushFingerprint], so the fingerprint and
+     * the push can never disagree about which values were observed.
+     */
+    private fun readPushSnapshot(): WidgetPushSnapshot = WidgetPushSnapshot(
+        title = audioPlaybackManager.title.value,
+        subtitle = audioPlaybackManager.artist.value.ifBlank { null },
+        isPlaying = audioPlaybackManager.isPlaying.value,
+        positionMs = audioPlaybackManager.currentPosition.value,
+        durationMs = audioPlaybackManager.duration.value,
+        artUrl = audioPlaybackManager.albumArtUrl.value,
+        isEmptyState = audioPlaybackManager.currentPlayingItemId.value == null,
+    )
+
+    private fun pushUpdate(snapshot: WidgetPushSnapshot, albumArt: Bitmap?) {
+        lastPushFingerprint = snapshot.toFingerprint()
         NowPlayingWidget.updateAllWidgets(
             context = context,
-            title = title,
-            subtitle = subtitle,
-            isPlaying = isPlaying,
+            title = snapshot.title,
+            subtitle = snapshot.subtitle,
+            isPlaying = snapshot.isPlaying,
             albumArt = albumArt,
-            positionMs = positionMs,
-            durationMs = durationMs,
-            isEmptyState = isEmptyState,
+            positionMs = snapshot.positionMs,
+            durationMs = snapshot.durationMs,
+            isEmptyState = snapshot.isEmptyState,
         )
     }
 
-    private fun fingerprintOf(
-        title: String,
-        subtitle: String?,
-        isPlaying: Boolean,
-        positionMs: Long,
-        durationMs: Long,
-        artUrl: String?,
-        isEmptyState: Boolean,
-    ): PushFingerprint = PushFingerprint(
+    /** Equality key for the last pushed widget render — see [pushPositionUpdate]. */
+    private data class PushFingerprint(
+        val title: String,
+        val subtitle: String?,
+        val isPlaying: Boolean,
+        val positionBucketSec: Long,
+        val durationSec: Long,
+        val artUrl: String?,
+        val isEmptyState: Boolean,
+    )
+
+    /** Position bucketed to whole seconds — the partial push ticks at 1 Hz anyway. */
+    private fun WidgetPushSnapshot.toFingerprint() = PushFingerprint(
         title = title,
         subtitle = subtitle,
         isPlaying = isPlaying,
@@ -246,13 +227,12 @@ class NowPlayingWidgetUpdater @Inject constructor(
         isEmptyState = isEmptyState,
     )
 
-    /** Equality key for the last pushed widget render — see [pushPositionUpdate]. */
-    private data class PushFingerprint(
+    private data class WidgetPushSnapshot(
         val title: String,
         val subtitle: String?,
         val isPlaying: Boolean,
-        val positionBucketSec: Long,
-        val durationSec: Long,
+        val positionMs: Long,
+        val durationMs: Long,
         val artUrl: String?,
         val isEmptyState: Boolean,
     )

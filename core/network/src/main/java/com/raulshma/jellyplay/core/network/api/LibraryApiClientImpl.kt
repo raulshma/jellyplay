@@ -259,43 +259,42 @@ class LibraryApiClientImpl @Inject constructor(
                 }
             }
 
-            if (HomeSectionType.RECOMMENDATIONS in enabledSections) {
-                // Launched right after the seed lists resolved (above), so the
-                // /Items/Similar fan-out overlapped the per-folder latest-media
-                // chain instead of starting after it.
-                recommendationsDeferred!!.await()
-                    .onSuccess { result ->
-                        if (result.items.isNotEmpty()) {
-                            sections.add(HomeSection(
-                                "recommendations",
-                                "Recommended For You",
-                                HomeSectionType.RECOMMENDATIONS,
-                                result.items,
-                                seedItem = result.seedItem,
-                            ))
-                        } else {
-                            // Fallback "For You" source when there are no similarity
-                            // seeds yet (new user, no watch history): surface favorited
-                            // / liked items so the home page still has discovery content
-                            //. Mirrors the search "Suggestions" data source.
-                            getSearchSuggestions(limit = 20)
-                                .onSuccess { search ->
-                                    if (search.items.isNotEmpty()) {
-                                        sections.add(HomeSection(
-                                            "recommendations",
-                                            "Recommended For You",
-                                            HomeSectionType.RECOMMENDATIONS,
-                                            search.items,
-                                        ))
-                                    }
+            // The deferred is non-null exactly when RECOMMENDATIONS is enabled
+            // (same condition that launched it above) — null-safe chaining
+            // keeps that invariant local instead of resting on an `!!` tied
+            // to a distant guard.
+            recommendationsDeferred?.await()
+                ?.onSuccess { result ->
+                    if (result.items.isNotEmpty()) {
+                        sections.add(HomeSection(
+                            "recommendations",
+                            "Recommended For You",
+                            HomeSectionType.RECOMMENDATIONS,
+                            result.items,
+                            seedItem = result.seedItem,
+                        ))
+                    } else {
+                        // Fallback "For You" source when there are no similarity
+                        // seeds yet (new user, no watch history): surface favorited
+                        // / liked items so the home page still has discovery content
+                        //. Mirrors the search "Suggestions" data source.
+                        getSearchSuggestions(limit = 20)
+                            .onSuccess { search ->
+                                if (search.items.isNotEmpty()) {
+                                    sections.add(HomeSection(
+                                        "recommendations",
+                                        "Recommended For You",
+                                        HomeSectionType.RECOMMENDATIONS,
+                                        search.items,
+                                    ))
                                 }
-                        }
+                            }
                     }
-                    .onFailure {
-                        if (firstError == null) firstError = it
-                        failedTypes.add(HomeSectionType.RECOMMENDATIONS)
-                    }
-            }
+                }
+                ?.onFailure {
+                    if (firstError == null) firstError = it
+                    failedTypes.add(HomeSectionType.RECOMMENDATIONS)
+                }
 
             // Append user-pinned sections (collections / playlists / favorites /
             // genres / studios). They are always fetched regardless of the
