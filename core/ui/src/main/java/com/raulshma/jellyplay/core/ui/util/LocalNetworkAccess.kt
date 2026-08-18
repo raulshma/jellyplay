@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.core.network
+package com.raulshma.jellyplay.core.ui.util
 
 import android.Manifest
 import android.content.Context

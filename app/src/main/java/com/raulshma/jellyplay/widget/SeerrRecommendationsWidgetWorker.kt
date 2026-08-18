@@ -11,8 +11,8 @@ import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
 import com.raulshma.jellyplay.core.model.SeerrWidgetSource
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.network.seerr.buildBackdropUrl
-import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.model.seerr.buildBackdropUrl
+import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first

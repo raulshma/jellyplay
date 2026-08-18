@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
+import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -27,6 +28,7 @@ import org.junit.Test
 class SeerrRepositoryImplExtendedTest {
 
     private val seerrApiClient: SeerrApiClient = mockk(relaxed = true)
+    private val tmdbApiClient: TmdbApiClient = mockk(relaxed = true)
     private val seerrPreferencesStore: SeerrPreferencesStore = mockk(relaxed = true)
     private val secureCredentialsStore: SeerrSecureCredentialsStore = mockk(relaxed = true)
 
@@ -47,14 +49,14 @@ class SeerrRepositoryImplExtendedTest {
         coEvery { seerrApiClient.getRequestCount(any(), any()) } returns Result.success(mockk(relaxed = true))
         coEvery { seerrApiClient.getCurrentUser(any(), any()) } returns
             Result.success(SeerrCurrentUser(permissions = 2L))
-        repository = SeerrRepositoryImpl(seerrApiClient, seerrPreferencesStore, secureCredentialsStore)
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore)
     }
 
     private fun rebuildWith(prefs: SeerrPreferences, apiKey: String = "test-api-key", cookie: String = "") {
         every { seerrPreferencesStore.preferences } returns MutableStateFlow(prefs)
         every { secureCredentialsStore.getApiKey() } returns apiKey
         every { secureCredentialsStore.getSessionCookie() } returns cookie
-        repository = SeerrRepositoryImpl(seerrApiClient, seerrPreferencesStore, secureCredentialsStore)
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore)
     }
 
     // region credentials resolution by authMethod

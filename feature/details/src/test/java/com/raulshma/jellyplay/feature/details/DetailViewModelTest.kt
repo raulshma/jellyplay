@@ -46,7 +46,6 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.RemoteConnectivity
-import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -206,7 +205,6 @@ class DetailViewModelTest {
             remoteDiscovery = RemoteDiscoveryClients(
                 seerrRepository = seerrRepository,
                 seerrRequestDelegate = mockk<SeerrRequestDelegate>(relaxed = true),
-                tmdbApiClient = mockk<TmdbApiClient>(relaxed = true),
                 arrRepository = mockk<ArrRepository>(relaxed = true),
                 offlineModeManager = offlineModeManager,
             ),

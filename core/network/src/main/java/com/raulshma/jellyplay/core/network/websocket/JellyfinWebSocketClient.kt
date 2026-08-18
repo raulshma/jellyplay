@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.websocket
 
 import android.util.Log
+import com.raulshma.jellyplay.core.model.ConnectionCredentials
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -74,29 +75,23 @@ class JellyfinWebSocketClient @Inject constructor(
     // out the socket in admin-only sessions and broke realtime task updates.
     private var keepAliveJob: Job? = null
 
-    fun connect(
-        serverAddress: String,
-        accessToken: String,
-        device: String,
-        deviceName: String = "JellyPlay",
-        client: String = "JellyPlay",
-    ) {
+    fun connect(credentials: ConnectionCredentials) {
         if (isConnected.value &&
-            serverUrl == serverAddress &&
-            token == accessToken &&
-            deviceId == device &&
-            this.deviceName == deviceName &&
-            clientName == client
+            serverUrl == credentials.serverAddress &&
+            token == credentials.accessToken &&
+            deviceId == credentials.deviceId &&
+            deviceName == credentials.deviceName &&
+            clientName == credentials.clientName
         ) {
             Log.d(TAG, "WebSocket already connected to this server, skipping connect")
             return
         }
         disconnect()
-        serverUrl = serverAddress
-        token = accessToken
-        deviceId = device
-        this.deviceName = deviceName
-        clientName = client
+        serverUrl = credentials.serverAddress
+        token = credentials.accessToken
+        deviceId = credentials.deviceId
+        deviceName = credentials.deviceName
+        clientName = credentials.clientName
         reconnectAttempts.set(0)
         connectInternal()
     }

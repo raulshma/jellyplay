@@ -35,8 +35,16 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.core.view.WindowCompat
 import com.raulshma.jellyplay.R
+import com.raulshma.jellyplay.core.data.network.NetworkMonitor
+import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
+import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
+import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
+import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
+import com.raulshma.jellyplay.core.ui.util.LocalNetworkAccess
 import com.raulshma.jellyplay.core.ui.components.BlueLightFilterBox
 import com.raulshma.jellyplay.core.ui.components.HandModeProvider
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
@@ -53,6 +61,17 @@ import javax.inject.Inject
 class MainActivity : FragmentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
+
+    // Cross-cutting shell infrastructure, injected here (the shell host)
+    // instead of re-exported through MainViewModel — the ViewModel exposes
+    // only the signals it owns plus the coordinator seam.
+    @Inject lateinit var userMessageBus: UserMessageBus
+    @Inject lateinit var pinRateLimiter: PinRateLimiter
+    @Inject lateinit var securityStore: SecurityStore
+    @Inject lateinit var networkMonitor: NetworkMonitor
+    @Inject lateinit var audioPlaybackManagerLazy: dagger.Lazy<AudioPlaybackManager>
+    @Inject lateinit var remoteNavigationBridge: RemoteNavigationBridge
+    @Inject lateinit var remoteControlReceiver: RemoteControlReceiver
 
     private var backgroundedAt = 0L
     private var isPinUnlocked = mutableStateOf(false)
@@ -98,7 +117,7 @@ class MainActivity : FragmentActivity() {
                 runCatching { com.google.android.gms.cast.framework.CastContext.getSharedInstance(this@MainActivity) }
             }
         }
-        splashScreen.setKeepOnScreenCondition { viewModel.isRestoring.value }
+        splashScreen.setKeepOnScreenCondition { viewModel.sessionCoordinator.isRestoring.value }
         // No custom setOnExitAnimationListener: the system default splash exit
         // is a clean cross-fade to the first composed frame. A manual listener
         // holds the splash view alive across an alpha fade, and because the
@@ -126,15 +145,27 @@ class MainActivity : FragmentActivity() {
         // work for returning users on cold start. The session restore in
         // MainViewModel runs concurrently; on denial, connections to LAN hosts
         // simply fail fast (and recover once the permission is later granted).
-        if (com.raulshma.jellyplay.core.network.LocalNetworkAccess.enforced &&
-            !com.raulshma.jellyplay.core.network.LocalNetworkAccess.isGranted(this)
+        if (LocalNetworkAccess.enforced &&
+            !LocalNetworkAccess.isGranted(this)
         ) {
             requestLocalNetworkPermissionLauncher.launch(
-                com.raulshma.jellyplay.core.network.LocalNetworkAccess.PERMISSION
+                LocalNetworkAccess.PERMISSION
             )
         }
 
         handleIncomingIntent(intent)
+
+        // Bundled once here so the shell host's five cross-cutting services
+        // travel to JellyPlayApp → MainContent as one value; the
+        // AudioPlaybackManager stays lazy inside it (resolved only in the
+        // authenticated branch).
+        val shellInfra = com.raulshma.jellyplay.shell.ShellInfra(
+            userMessageBus = userMessageBus,
+            networkStatus = networkMonitor.networkStatus,
+            audioPlaybackManagerLazy = audioPlaybackManagerLazy,
+            remoteNavigationBridge = remoteNavigationBridge,
+            remoteControlReceiver = remoteControlReceiver,
+        )
 
         // Pre-Android 13 per-app language: observe the saved language and apply
         // it on cold start, then recreate when the user changes it at runtime.
@@ -199,12 +230,6 @@ class MainActivity : FragmentActivity() {
                         },
                         modifier = Modifier.size(1.dp),
                     )
-                }
-            }
-
-            androidx.compose.runtime.LaunchedEffect(viewModel) {
-                viewModel.globalMessage.collect { msg ->
-                    viewModel.userMessageBus.info(msg)
                 }
             }
 
@@ -275,7 +300,7 @@ class MainActivity : FragmentActivity() {
                                 // Surface the rate-limit lockout to the user when present.
                                 val context = LocalContext.current
                                 val lockoutState = remember(preferences.pinLockoutUntilEpochMs) {
-                                    viewModel.pinRateLimiter.getPinLockoutState()
+                                    pinRateLimiter.getPinLockoutState()
                                 }
                                 val now = remember { System.currentTimeMillis() }
                                 val lockoutActive = lockoutState.isLockedOut && lockoutState.lockoutUntilEpochMs > now
@@ -296,7 +321,7 @@ class MainActivity : FragmentActivity() {
                                             // may have triggered it on a previous attempt
                                             // since the last composition. This counter read
                                             // is cheap and stays on the caller thread.
-                                            val currentLockout = viewModel.pinRateLimiter.getPinLockoutState()
+                                            val currentLockout = pinRateLimiter.getPinLockoutState()
                                             val currentNow = System.currentTimeMillis()
                                             if (currentLockout.isLockedOut && currentLockout.lockoutUntilEpochMs > currentNow) {
                                                 val remainingMs = currentLockout.lockoutUntilEpochMs - currentNow
@@ -308,13 +333,13 @@ class MainActivity : FragmentActivity() {
                                             // accounting and optional hash upgrade follow it.
                                             pinVerifying = true
                                             lifecycleScope.launch {
-                                                val valid = viewModel.securityStore.verifyPinOffMainThread(pin)
+                                                val valid = securityStore.verifyPinOffMainThread(pin)
                                                 if (valid) {
                                                     isPinUnlocked.value = true
                                                     pinError = null
-                                                    viewModel.pinRateLimiter.resetPinLockout()
+                                                    pinRateLimiter.resetPinLockout()
                                                 } else {
-                                                    val newState = viewModel.pinRateLimiter.recordFailedPinAttempt()
+                                                    val newState = pinRateLimiter.recordFailedPinAttempt()
                                                     pinError = if (newState.isLockedOut) {
                                                         formatLockoutMessage(context, newState.lockoutUntilEpochMs - System.currentTimeMillis())
                                                     } else {
@@ -333,7 +358,10 @@ class MainActivity : FragmentActivity() {
                                     },
                                 )
                             } else {
-                                JellyPlayApp(viewModel = viewModel)
+                                JellyPlayApp(
+                                    viewModel = viewModel,
+                                    infra = shellInfra,
+                                )
                             }
                         }
                     }

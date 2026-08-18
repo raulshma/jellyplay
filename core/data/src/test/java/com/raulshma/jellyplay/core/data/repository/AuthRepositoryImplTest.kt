@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.network.api.ApiException
 import androidx.room.withTransaction
 import io.mockk.coEvery
@@ -36,6 +37,7 @@ import org.junit.Test
 class AuthRepositoryImplTest {
 
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    private val webSocketClient: JellyfinWebSocketClient = mockk(relaxed = true)
     private val database: JellyPlayDatabase = mockk(relaxed = true)
     private val serverDao: ServerDao = mockk(relaxed = true)
     private val userDao: UserDao = mockk(relaxed = true)
@@ -90,6 +92,7 @@ class AuthRepositoryImplTest {
         every { userDao.getUsersForServer(any()) } returns flowOf(emptyList())
         repository = AuthRepositoryImpl(
             apiClient = apiClient,
+            webSocketClient = webSocketClient,
             database = database,
             serverDao = serverDao,
             userDao = userDao,

@@ -289,21 +289,21 @@ class VideoPlayerResetEquivalenceTest {
 
     private fun driveSessionMutations() {
         // ── Sleep slice: running timed timer + last-used duration ──
-        viewModel.startSleepTimer(15_000L)
+        viewModel.sleepTimer.startSleepTimer(15_000L)
 
         // ── Audio-effects slice: every user effect to a non-default value ──
-        viewModel.toggleNightMode()
-        viewModel.setNightModeStrength(EffectStrength.HIGH)
-        viewModel.setDecoderMode(DecoderMode.SW_ONLY)
-        viewModel.setAudioPassthrough(true)
-        viewModel.setAudioNormalizationMode(AudioNormalizationMode.TRACK)
-        viewModel.setChannelMixMode(ChannelMixMode.SURROUND_UPMIX)
-        viewModel.toggleBassBoost()
-        viewModel.setBassBoostStrength(EffectStrength.HIGH)
-        viewModel.toggleVirtualizer()
-        viewModel.setVirtualizerStrength(750)
-        viewModel.setReverbPreset(ReverbPreset.LARGE_HALL)
-        viewModel.setAudioDelay(250L)
+        viewModel.effects.toggleNightMode()
+        viewModel.effects.setNightModeStrength(EffectStrength.HIGH)
+        viewModel.effects.setDecoderMode(DecoderMode.SW_ONLY)
+        viewModel.effects.setAudioPassthrough(true)
+        viewModel.effects.setAudioNormalizationMode(AudioNormalizationMode.TRACK)
+        viewModel.effects.setChannelMixMode(ChannelMixMode.SURROUND_UPMIX)
+        viewModel.effects.toggleBassBoost()
+        viewModel.effects.setBassBoostStrength(EffectStrength.HIGH)
+        viewModel.effects.toggleVirtualizer()
+        viewModel.effects.setVirtualizerStrength(750)
+        viewModel.effects.setReverbPreset(ReverbPreset.LARGE_HALL)
+        viewModel.effects.setAudioDelay(250L)
 
         // ── Dialogue boost (residual UiState, per-item resolver-driven) ──
         viewModel.setDialogueBoostStrength(EffectStrength.HIGH)
@@ -312,21 +312,21 @@ class VideoPlayerResetEquivalenceTest {
         coEvery { playbackRepository.getRemoteSubtitles("item-1") } returns Result.success(
             listOf(RemoteSubtitleInfo(id = "s1", name = "English"))
         )
-        viewModel.loadRemoteSubtitles()
+        viewModel.subtitles.loadRemoteSubtitles()
         coEvery { playbackRepository.searchRemoteSubtitles("item-1", "eng") } returns Result.success(
             listOf(RemoteSubtitleInfo(id = "os1", name = "OpenSub en"))
         )
-        viewModel.searchRemoteSubtitles("eng")
+        viewModel.subtitles.searchRemoteSubtitles("eng")
 
         // ── A/B repeat: armed window ──
-        viewModel.setAbRepeatEnabled(true)
+        viewModel.abRepeat.setEnabled(true)
         viewModel.seekTo(1_000L)
-        viewModel.setAbRepeatPointA()
+        viewModel.abRepeat.setPointA()
         viewModel.seekTo(5_000L)
-        viewModel.setAbRepeatPointB()
+        viewModel.abRepeat.setPointB()
 
         // ── SyncPlay group display: joined group ──
-        viewModel.joinSyncPlay("group-1")
+        viewModel.syncPlay.joinGroup("group-1")
 
         // ── Residual probes: whitelisted (persists) vs not (resets) ──
         viewModel.setSubtitleStyle(SubtitleStyle(fontSize = 40)) // whitelisted
@@ -347,14 +347,14 @@ class VideoPlayerResetEquivalenceTest {
         assertEquals(2.0f, before.playbackSpeed, 0.001f)
         assertTrue(before.showVideoStats)
         assertEquals(40, before.subtitleStyle.fontSize)
-        assertTrue(viewModel.sleepTimerState.value.sleepTimerActive)
-        assertTrue(viewModel.effectsState.value.nightModeEnabled)
-        assertEquals(250L, viewModel.effectsState.value.audioDelayMs)
-        assertTrue(viewModel.subtitleState.value.hasSearchedSubtitles)
-        assertEquals(1, viewModel.subtitleState.value.remoteSubtitles.size)
-        assertTrue(viewModel.abRepeatState.value.isActive)
-        assertTrue(viewModel.syncPlayState.value.isInSyncPlaySession)
-        assertEquals("group-1", viewModel.syncPlayState.value.syncPlayGroupName)
+        assertTrue(viewModel.sleepTimer.state.value.sleepTimerActive)
+        assertTrue(viewModel.effects.state.value.nightModeEnabled)
+        assertEquals(250L, viewModel.effects.state.value.audioDelayMs)
+        assertTrue(viewModel.subtitles.state.value.hasSearchedSubtitles)
+        assertEquals(1, viewModel.subtitles.state.value.remoteSubtitles.size)
+        assertTrue(viewModel.abRepeat.state.value.isActive)
+        assertTrue(viewModel.syncPlay.state.value.isInSyncPlaySession)
+        assertEquals("group-1", viewModel.syncPlay.state.value.syncPlayGroupName)
 
         // ── The item switch (routes through releaseInternals) ──
         viewModel.initialize("item-2", null, 0L)
@@ -368,12 +368,12 @@ class VideoPlayerResetEquivalenceTest {
                 sleepTimerEndOfEpisode = false,
                 sleepTimerLastUsedDurationMs = 15_000L,
             ),
-            viewModel.sleepTimerState.value,
+            viewModel.sleepTimer.state.value,
         )
 
         // User audio effects PERSIST (former whitelist lines 3094-3106 died;
         // persistence is the default). audioDelayMs nuance: see class KDoc.
-        val effects = viewModel.effectsState.value
+        val effects = viewModel.effects.state.value
         assertTrue(effects.nightModeEnabled)
         assertEquals(EffectStrength.HIGH, effects.nightModeStrength)
         assertEquals(DecoderMode.SW_ONLY, effects.decoderMode)
@@ -392,7 +392,7 @@ class VideoPlayerResetEquivalenceTest {
         // Subtitle workflow RESETS (never whitelisted).
         assertEquals(
             com.raulshma.jellyplay.feature.player.video.state.SubtitleState(),
-            viewModel.subtitleState.value,
+            viewModel.subtitles.state.value,
         )
 
         // Track state RESETS (never whitelisted).
@@ -405,7 +405,7 @@ class VideoPlayerResetEquivalenceTest {
         // the residual UiState follows the bridge's state.
         assertEquals(
             com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState(),
-            viewModel.syncPlayState.value,
+            viewModel.syncPlay.state.value,
         )
         assertFalse(viewModel.uiState.value.isInSyncPlaySession)
 
@@ -414,7 +414,7 @@ class VideoPlayerResetEquivalenceTest {
         // UiState mirror while the controller kept its stale points — the loop
         // monitor could seek the next episode back to the previous episode's A
         // point, and one tap resurrected them. Now the single home is cleared.
-        assertEquals(AbRepeatState(), viewModel.abRepeatState.value)
+        assertEquals(AbRepeatState(), viewModel.abRepeat.state.value)
 
         // Dialogue boost (residual, per-item resolver-driven) resets so it
         // can't bleed into the next item before the resolver re-applies.
@@ -475,25 +475,25 @@ class VideoPlayerResetEquivalenceTest {
     @Test
     fun itemSwitch_stopsAbRepeatLoop_andTapCannotResurrect() {
         viewModel.initialize("item-1", null, 0L)
-        viewModel.setAbRepeatEnabled(true)
+        viewModel.abRepeat.setEnabled(true)
         viewModel.seekTo(1_000L)
-        viewModel.setAbRepeatPointA()
+        viewModel.abRepeat.setPointA()
         viewModel.seekTo(5_000L)
-        viewModel.setAbRepeatPointB()
-        assertTrue(viewModel.abRepeatState.value.isActive)
+        viewModel.abRepeat.setPointB()
+        assertTrue(viewModel.abRepeat.state.value.isActive)
 
         viewModel.initialize("item-2", null, 0L)
 
         // Window cleared…
-        assertNull(viewModel.abRepeatState.value.aMs)
-        assertNull(viewModel.abRepeatState.value.bMs)
-        assertFalse(viewModel.abRepeatState.value.isActive)
+        assertNull(viewModel.abRepeat.state.value.aMs)
+        assertNull(viewModel.abRepeat.state.value.bMs)
+        assertFalse(viewModel.abRepeat.state.value.isActive)
 
         // …and a single toggle tap does NOT resurrect the previous episode's
         // points (previous behaviour: the stale mirror came back alive).
-        viewModel.setAbRepeatEnabled(true)
-        assertNull(viewModel.abRepeatState.value.aMs)
-        assertNull(viewModel.abRepeatState.value.bMs)
-        assertFalse(viewModel.abRepeatState.value.isActive)
+        viewModel.abRepeat.setEnabled(true)
+        assertNull(viewModel.abRepeat.state.value.aMs)
+        assertNull(viewModel.abRepeat.state.value.bMs)
+        assertFalse(viewModel.abRepeat.state.value.isActive)
     }
 }

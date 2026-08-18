@@ -40,7 +40,8 @@ import kotlinx.coroutines.flow.StateFlow
  *    then pauses the local engine.
  *  - [buildCastOptions] / [buildCastSubtitleConfigurations]: pure builders.
  *  - the one-line transport delegators ([castPlay] / [castPause] /
- *    [castSeekTo] / [setCastVolume]) and the disconnect resume ([onCastDisconnected]).
+ *    [castSeekTo] / [setCastVolume] / [disconnect]) and the disconnect resume
+ *    ([onCastDisconnected]).
  *  - the 9 cast-state pass-through flows + `isBackgroundCasting` /
  *    `backgroundCastingEnabled` (the background-cast transport controls live in
  *    the VM because they own the system [MediaSession]).
@@ -85,6 +86,7 @@ internal class PlayerCastController(
     fun castPause() = castManager.pause()
     fun castSeekTo(positionMs: Long) = castManager.seekTo(positionMs)
     fun setCastVolume(volume: Float) = castManager.setVolume(volume)
+    fun disconnect(context: android.content.Context) = castManager.disconnect(context)
 
     /**
      * Resume local playback when a cast session disconnects mid-item — only if

@@ -98,6 +98,9 @@ internal class AbRepeatController(
         _events.tryEmit(AbRepeatEvent.PointASet(a))
     }
 
+    /** Sets the A point to the current [positionFlow] value. */
+    fun setPointA() = setPointA(positionFlow.value)
+
     /** Sets the B point to the current playback position (clamped above A). */
     fun setPointB(ms: Long) {
         val a = _state.value.aMs
@@ -106,6 +109,9 @@ internal class AbRepeatController(
         armed = true
         if (_state.value.isActive) _events.tryEmit(AbRepeatEvent.PointBSet(_state.value.aMs!!, b))
     }
+
+    /** Sets the B point to the current [positionFlow] value. */
+    fun setPointB() = setPointB(positionFlow.value)
 
     fun clear() {
         _state.value = AbRepeatState()

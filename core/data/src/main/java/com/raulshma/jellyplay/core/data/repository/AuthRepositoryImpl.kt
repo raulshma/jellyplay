@@ -7,11 +7,13 @@ import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.model.ConnectionCredentials
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import androidx.room.withTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +21,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -35,13 +38,14 @@ import javax.inject.Singleton
 @Singleton
 class AuthRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
+    private val webSocketClient: JellyfinWebSocketClient,
     private val database: JellyPlayDatabase,
     private val serverDao: ServerDao,
     private val userDao: UserDao,
     private val serverIdentityStore: ServerIdentityStore,
     private val tokenCipher: TokenCipher,
     private val json: Json,
-) : AuthRepository {
+) : AuthRepository, RealtimeConnection {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -428,6 +432,17 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun postCapabilities(): Result<Unit> = apiClient.postCapabilities()
+
+    // ── Realtime session ──
+
+    override fun serverUrl(): String? = apiClient.getServerUrl()
+
+    override val isConnected: StateFlow<Boolean>
+        get() = webSocketClient.isConnected
+
+    override fun connect(credentials: ConnectionCredentials) = webSocketClient.connect(credentials)
+
+    override fun disconnect() = webSocketClient.disconnect()
 
     private suspend fun persistSession(server: ServerInfo, user: UserInfo, fallbackUsername: String = "") {
         val existingServer = serverDao.getServerById(server.id)

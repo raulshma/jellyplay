@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.seerr.*
+import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,7 @@ private const val POLL_INTERVAL_MS = 60_000L
 @Singleton
 class SeerrRepositoryImpl @Inject constructor(
     private val seerrApiClient: SeerrApiClient,
+    private val tmdbApiClient: TmdbApiClient,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val secureCredentialsStore: SeerrSecureCredentialsStore,
 ) : SeerrRepository {
@@ -210,6 +212,9 @@ class SeerrRepositoryImpl @Inject constructor(
             result.getOrNull()?.let { putCached("similar_${tmdbId}_${mediaType.name}", it) }
         }
     }
+
+    override suspend fun getTmdbVideos(tmdbId: Int, mediaType: MediaType): Result<List<SeerrRelatedVideo>> =
+        tmdbApiClient.getVideos(tmdbId, mediaType)
 
     override suspend fun requestMedia(
         tmdbId: Int,

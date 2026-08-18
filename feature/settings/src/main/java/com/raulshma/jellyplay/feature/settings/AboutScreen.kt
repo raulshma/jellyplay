@@ -285,9 +285,10 @@ fun AboutScreen(
                         onClick = {
                             // Result (update available or "up to date" with
                             // release notes) is shown in the app-wide update
-                            // sheet driven by MainViewModel, not inline here —
-                            // avoids the stale "(v)" status that drifted from a
-                            // local copy of the version string.
+                            // sheet driven by the app shell's UpdateCoordinator,
+                            // not inline here — avoids the stale "(v)" status
+                            // that drifted from a local copy of the version
+                            // string.
                             onCheckForUpdates()
                         },
                     )

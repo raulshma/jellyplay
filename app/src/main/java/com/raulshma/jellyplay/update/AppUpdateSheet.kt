@@ -59,7 +59,7 @@ fun AppUpdateSheet(
     onRedownload: () -> Unit,
     onCancel: () -> Unit,
     onDismiss: () -> Unit,
-    buildInstallIntent: () -> Intent,
+    buildInstallIntent: () -> Intent?,
 ) {
     // No active update flow — nothing to render.
     if (state is UpdateState.Idle) return
@@ -108,7 +108,7 @@ fun AppUpdateSheet(
                 )
                 is UpdateState.Downloaded -> DownloadedContent(
                     info = state.info,
-                    onInstall = { onInstall(buildInstallIntent()) },
+                    onInstall = { buildInstallIntent()?.let(onInstall) },
                     onRedownload = onRedownload,
                     onDismiss = onDismiss,
                 )

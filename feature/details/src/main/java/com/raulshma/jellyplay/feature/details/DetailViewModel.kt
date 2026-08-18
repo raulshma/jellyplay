@@ -23,7 +23,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
-import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -1169,7 +1169,7 @@ class DetailViewModel @Inject internal constructor(
                     _uiState.update { it.copy(relatedVideos = videos) }
                 }
             } else {
-                val videosResult = remoteDiscovery.tmdbApiClient.getVideos(tmdbId, mediaType == MediaType.MOVIE)
+                val videosResult = remoteDiscovery.seerrRepository.getTmdbVideos(tmdbId, mediaType)
                 if (generation == seerrDataGeneration) {
                     val videos = videosResult.getOrElse { emptyList() }
                     _uiState.update { it.copy(relatedVideos = videos) }

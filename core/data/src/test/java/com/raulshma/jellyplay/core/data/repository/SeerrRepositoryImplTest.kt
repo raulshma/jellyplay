@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrStatusResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestCount
 import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
+import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -24,6 +25,7 @@ import org.junit.Test
 class SeerrRepositoryImplTest {
 
     private val seerrApiClient: SeerrApiClient = mockk(relaxed = true)
+    private val tmdbApiClient: TmdbApiClient = mockk(relaxed = true)
     private val seerrPreferencesStore: SeerrPreferencesStore = mockk(relaxed = true)
     private val secureCredentialsStore: SeerrSecureCredentialsStore = mockk(relaxed = true)
 
@@ -42,7 +44,7 @@ class SeerrRepositoryImplTest {
         every { secureCredentialsStore.getSessionCookie() } returns ""
         coEvery { seerrApiClient.getRequestCount(any(), any()) } returns Result.success(SeerrRequestCount())
         coEvery { seerrApiClient.getCurrentUser(any(), any()) } returns Result.success(SeerrCurrentUser(permissions = 2L))
-        repository = SeerrRepositoryImpl(seerrApiClient, seerrPreferencesStore, secureCredentialsStore)
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore)
     }
 
     @Test
@@ -51,7 +53,7 @@ class SeerrRepositoryImplTest {
             SeerrPreferences(enabled = true, serverUrl = "")
         )
         every { secureCredentialsStore.getApiKey() } returns ""
-        repository = SeerrRepositoryImpl(seerrApiClient, seerrPreferencesStore, secureCredentialsStore)
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore)
 
         val result = repository.testConnection()
 
@@ -78,7 +80,7 @@ class SeerrRepositoryImplTest {
             SeerrPreferences(enabled = true, serverUrl = "")
         )
         every { secureCredentialsStore.getApiKey() } returns ""
-        repository = SeerrRepositoryImpl(seerrApiClient, seerrPreferencesStore, secureCredentialsStore)
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore)
 
         val result = repository.search("test query")
 

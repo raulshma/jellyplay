@@ -24,7 +24,6 @@ import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
-import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -39,9 +38,6 @@ import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
-import com.raulshma.jellyplay.core.model.AudioNormalizationMode
-import com.raulshma.jellyplay.core.model.ChannelMixMode
-import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -53,7 +49,6 @@ import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackPrefScope
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -278,7 +273,9 @@ class VideoPlayerViewModel @Inject constructor(
     private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
     private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
     private val sessionManager: PlaybackSessionManager,
-    private val castManager: CastManager,
+    // Public: the screen's cast UI (route button, disconnect handler) needs the
+    // manager directly; every playback-side use stays private above.
+    val castManager: CastManager,
     private val jellyfinRemotePlayCastStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy,
     private val syncPlayManager: SyncPlayManager,
     private val okHttpClient: OkHttpClient,
@@ -326,12 +323,6 @@ class VideoPlayerViewModel @Inject constructor(
     private val _videoStats = MutableStateFlow(EngineVideoStats())
     val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
 
-    // Sleep-timer countdown, sourced directly from SleepTimerManager. Kept OUT
-    // of [uiState] (mirroring the high-frequency streams above) so a 5 s tick —
-    // or the 100 ms fade-out burst — does not copy the wide [uiState] and
-    // re-invalidate the screen root. Collected only by the leaf composables
-    // that render the countdown (overflow-menu label, SleepTimerSheet).
-    val sleepTimerRemainingMs: StateFlow<Long> = sleepTimerManager.remainingMs
     // ---------------------------------------------------------------------------
 
     /**
@@ -468,7 +459,7 @@ class VideoPlayerViewModel @Inject constructor(
             am?.let { it.isLowRamDevice || it.memoryClass <= 256 } ?: false
         },
     )
-    private val subtitleManager = SubtitleManager(
+    internal val subtitles = SubtitleManager(
         context = context,
         playbackRepository = playbackRepository,
         mediaRepository = mediaRepository,
@@ -482,19 +473,19 @@ class VideoPlayerViewModel @Inject constructor(
         onMediaDetailRefreshed = { detail -> applyMediaDetailAndSourceState(detail) },
         getCurrentMediaDetail = { mediaDetail },
     )
-    private val sleepTimerController = SleepTimerController(
+    internal val sleepTimer = SleepTimerController(
         sleepTimerManager = sleepTimerManager,
         audioStore = audioStore,
         scope = scope,
         getEngine = { playerSessionManager.engine },
         isMuted = { _uiState.value.isMuted },
     )
-    private val abRepeatController = AbRepeatController(
+    internal val abRepeat = AbRepeatController(
         scope = scope,
         getEngine = { playerSessionManager.engine },
         positionFlow = currentPositionMs,
     ).also { it.start() }
-    private val playerCastController = PlayerCastController(
+    internal val cast = PlayerCastController(
         castManager = castManager,
         playbackRepository = playbackRepository,
         adaptiveBitrateManager = adaptiveBitrateManager,
@@ -555,8 +546,6 @@ class VideoPlayerViewModel @Inject constructor(
     fun onUserInteraction() {
         engineEventCoordinator.onUserInteraction()
     }
-
-    val castManagerField: CastManager = castManager
 
     private var lastSeekPositionMs: Long? = null
     private var lastSeekTimestamp: Long = 0L
@@ -693,7 +682,7 @@ class VideoPlayerViewModel @Inject constructor(
             _videoStats.value = videoStats
         },
     )
-    private val syncPlayBridge = SyncPlayBridge(
+    internal val syncPlay = SyncPlayBridge(
         syncPlayManager = syncPlayManager,
         getMediaEngine = { playerSessionManager.engine },
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
@@ -756,7 +745,7 @@ class VideoPlayerViewModel @Inject constructor(
         outputs = sessionLoadOutputs,
         hooks = SessionLoadHooks(
             reconcileSyncPlayQueue = { itemId, mediaSourceId, startPositionTicks ->
-                syncPlayBridge.reconcileQueueForItem(itemId, mediaSourceId, startPositionTicks)
+                syncPlay.reconcileQueueForItem(itemId, mediaSourceId, startPositionTicks)
             },
             shouldAttemptCinemaMode = { agg, itemId, startPositionTicks ->
                 shouldAttemptCinemaMode(agg, itemId, startPositionTicks)
@@ -982,7 +971,7 @@ class VideoPlayerViewModel @Inject constructor(
      * Equalizer, and Video Effects stay inline because their state lives
      * outside this controller (per-item repo / VM field / cinema gate).
      */
-    private val videoEffectsController = VideoEffectsController(
+    internal val effects = VideoEffectsController(
         scope = scope,
         audioStore = audioStore,
         audioEffectsStore = audioEffectsStore,
@@ -990,26 +979,17 @@ class VideoPlayerViewModel @Inject constructor(
         syncConfig = { updateConfigWithUiState() },
     )
 
-    // ── Controller-owned state slices ───────────────────────────────────────
-    // Each migrated controller owns its slice as a MutableStateFlow and exposes
-    // the read-only view here. The screen collects these at the leaf composables
-    // that render them; the residual [uiState] keeps only session + prefs-mirror
-    // state. Commands keep the VM's thin delegating wrappers so screen call
-    // sites stay stable.
-    val sleepTimerState: StateFlow<com.raulshma.jellyplay.feature.player.video.state.SleepTimerState>
-        get() = sleepTimerController.state
+    // ── Controller slice handles ────────────────────────────────────────────
+    // Each migrated controller owns its slice as a MutableStateFlow and is
+    // exposed directly; the screen collects `handle.state` (and any
+    // per-slice streams) at the leaf composables that render it, and calls
+    // commands on the handle directly. The residual [uiState] keeps only
+    // session + prefs-mirror state. The ViewModel does NOT relay slice
+    // commands: it keeps only real orchestration (load/session/lifecycle and
+    // cross-controller flows like background-cast detach).
 
     val trackState: StateFlow<com.raulshma.jellyplay.feature.player.video.state.TrackState>
         get() = trackSelectionHelper.state
-
-    val subtitleState: StateFlow<com.raulshma.jellyplay.feature.player.video.state.SubtitleState>
-        get() = subtitleManager.state
-
-    val effectsState: StateFlow<com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState>
-        get() = videoEffectsController.state
-
-    val syncPlayState: StateFlow<com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState>
-        get() = syncPlayBridge.state
 
     init {
         castManager.acquireConsumer()
@@ -1049,12 +1029,12 @@ class VideoPlayerViewModel @Inject constructor(
                 //  - the sleep timer's last-used duration,
                 //  - the per-item audio/subtitle override flags, and
                 //  - the Subtitle Manager's default search language.
-                sleepTimerController.seedLastUsedDurationMs(agg.audio.sleepTimerDurationMs)
+                sleepTimer.seedLastUsedDurationMs(agg.audio.sleepTimerDurationMs)
                 trackSelectionHelper.onStoredSelectionChanged(
                     playerSessionManager.sessionState.value.currentItemId
                         ?.let { agg.engine.mediaStreamSelections[it] }
                 )
-                subtitleManager.seedDefaultSearchLanguage(
+                subtitles.seedDefaultSearchLanguage(
                     agg.subtitle.preferredSubtitleLanguage ?: "eng"
                 )
                 // Subtitle-style change needs an engine-config rebuild.
@@ -1098,7 +1078,7 @@ class VideoPlayerViewModel @Inject constructor(
         // Pass-out protection (interaction clock + poller) and the play-state
         // resume reset live in [EngineEventCoordinator]; the PassOutPause
         // decision is executed by executeEngineDecision().
-        syncPlayBridge.start()
+        syncPlay.start()
 
         // Mirror the bridge's session flag into the residual UiState: it feeds
         // SegmentProjection/toSegmentInput() inside segmentOverlayState's
@@ -1106,7 +1086,7 @@ class VideoPlayerViewModel @Inject constructor(
         // the segment projection to the bridge. One-way derived mirror — the
         // bridge's SyncPlayUiState.isInSyncPlaySession stays the single home.
         launch {
-            syncPlayBridge.state.map { it.isInSyncPlaySession }.distinctUntilChanged()
+            syncPlay.state.map { it.isInSyncPlaySession }.distinctUntilChanged()
                 .collect { inSession ->
                     if (_uiState.value.isInSyncPlaySession != inSession) {
                         _uiState.update { it.copy(isInSyncPlaySession = inSession) }
@@ -1220,7 +1200,7 @@ class VideoPlayerViewModel @Inject constructor(
                     // the same fields this collector used to write into UiState.
                     // bass/virtualizer/reverb keep their live values (they were
                     // never seeded here) and persist across items by design.
-                    videoEffectsController.seedFromPreferences(
+                    effects.seedFromPreferences(
                         audioDelayMs = agg.audio.audioDelayMs,
                         decoderMode = agg.playback.decoderMode,
                         audioPassthrough = agg.playback.audioPassthrough,
@@ -1231,7 +1211,7 @@ class VideoPlayerViewModel @Inject constructor(
                         channelMixMode = agg.audio.channelMixMode,
                         channelMixEnabled = agg.audio.channelMixEnabled,
                     )
-                    playerCastController.updateCastStrategyForEngine(engine)
+                    cast.updateCastStrategyForEngine(engine)
                     notifyUnsupportedAudioDelayIfNeeded(engine, agg.audio.audioDelayMs)
                     // Expose whether a "next" action is available for the PiP
                     // window. Reads mediaDetail — a VM-owned slice — so it
@@ -1287,7 +1267,7 @@ class VideoPlayerViewModel @Inject constructor(
                                 EnginePlaybackState.ENDED -> 4
                                 EnginePlaybackState.ERROR -> 1
                             }
-                            syncPlayBridge.onPlaybackStateChanged(stateInt)
+                            syncPlay.onPlaybackStateChanged(stateInt)
                             // Auto-exit PiP when playback ends or errors so the
                             // window does not linger on a frozen frame. Pause is
                             // intentionally excluded — users pause to read.
@@ -1327,7 +1307,7 @@ class VideoPlayerViewModel @Inject constructor(
                     _uiState.update { s ->
                         if (s.isPlaying == isPlaying) s else s.copy(isPlaying = isPlaying)
                     }
-                    syncPlayBridge.onIsPlayingChanged(isPlaying)
+                    syncPlay.onIsPlayingChanged(isPlaying)
                     // Mirror play state so the Activity can render the correct
                     // play/pause icon on the PiP window.
                     pipController.setPlaying(isPlaying)
@@ -1664,7 +1644,7 @@ class VideoPlayerViewModel @Inject constructor(
         trickplayManager.clear()
 
         if (wasInSyncPlay) {
-            syncPlayBridge.reattachSession()
+            syncPlay.reattachSession()
         }
 
         // The ordered load spine (SyncPlay reconcile → prefs projection →
@@ -2131,13 +2111,6 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    fun toggleNightMode() = videoEffectsController.toggleNightMode()
-
-    fun setNightModeStrength(strength: com.raulshma.jellyplay.core.model.EffectStrength) =
-        videoEffectsController.setNightModeStrength(strength)
-
-    fun setAudioDelay(ms: Long) = videoEffectsController.setAudioDelay(ms)
-
     /**
      * Surfaces a one-time heads-up when the user has a non-zero audio-delay
      * preference (set on mpv/LibVLC) but the active engine can't apply it
@@ -2377,8 +2350,6 @@ class VideoPlayerViewModel @Inject constructor(
         progressReporter.startProgressReporting()
     }
 
-    fun setDecoderMode(mode: DecoderMode) = videoEffectsController.setDecoderMode(mode)
-
     fun retryWithEngine(playerType: PlayerType) {
         val currentPos = playerSessionManager.engine?.currentPositionMs ?: 0L
         val currentSpeed = _uiState.value.playbackSpeed
@@ -2443,9 +2414,6 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    fun setAudioPassthrough(enabled: Boolean) =
-        videoEffectsController.setAudioPassthrough(enabled)
-
     fun setFrameRateMatching(enabled: Boolean) {
         _uiState.update { it.copy(frameRateMatching = enabled) }
         launch {
@@ -2474,29 +2442,6 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    fun setAudioNormalizationMode(mode: AudioNormalizationMode) =
-        videoEffectsController.setAudioNormalizationMode(mode)
-
-    fun toggleAudioNormalization() = videoEffectsController.toggleAudioNormalization()
-
-    fun setChannelMixMode(mode: ChannelMixMode) =
-        videoEffectsController.setChannelMixMode(mode)
-
-    fun toggleChannelMix() = videoEffectsController.toggleChannelMix()
-
-    fun toggleBassBoost() = videoEffectsController.toggleBassBoost()
-
-    fun setBassBoostStrength(strength: EffectStrength) =
-        videoEffectsController.setBassBoostStrength(strength)
-
-    fun toggleVirtualizer() = videoEffectsController.toggleVirtualizer()
-
-    fun setVirtualizerStrength(strength: Int) =
-        videoEffectsController.setVirtualizerStrength(strength)
-
-    fun setReverbPreset(preset: ReverbPreset) =
-        videoEffectsController.setReverbPreset(preset)
-
     fun setVideoEffects(effects: VideoEffectsConfig) {
         _uiState.update { it.copy(videoEffects = effects) }
         updateConfigWithUiStateDebounced()
@@ -2513,7 +2458,7 @@ class VideoPlayerViewModel @Inject constructor(
      private fun updateConfigWithUiState() {
         val config = EngineConfigBuilder.build(
             state = _uiState.value,
-            effects = videoEffectsController.state.value,
+            effects = effects.state.value,
             equalizerEnabled = equalizerEnabled,
             agg = cachedAggregate,
         )
@@ -2559,7 +2504,7 @@ class VideoPlayerViewModel @Inject constructor(
                 val currentPlaylistItemId = group?.playingPlaylistItemId
                 val previousExistsInQueue = group?.playlistItemMap?.values?.contains(previous.id) == true
                 if (currentPlaylistItemId != null && previousExistsInQueue) {
-                    syncPlayBridge.sendPreviousItem(currentPlaylistItemId)
+                    syncPlay.sendPreviousItem(currentPlaylistItemId)
                     return@launch
                 }
             }
@@ -2595,7 +2540,7 @@ class VideoPlayerViewModel @Inject constructor(
                 val currentPlaylistItemId = group?.playingPlaylistItemId
                 val nextExistsInQueue = group?.playlistItemMap?.values?.contains(next.id) == true
                 if (currentPlaylistItemId != null && nextExistsInQueue) {
-                    syncPlayBridge.sendNextItem(currentPlaylistItemId)
+                    syncPlay.sendNextItem(currentPlaylistItemId)
                     return@launch
                 }
             }
@@ -2834,66 +2779,6 @@ class VideoPlayerViewModel @Inject constructor(
     fun getImageUrl(itemId: String, maxWidth: Int = 400): String =
         imageUrlProvider.getImageUrl(itemId, maxWidth = maxWidth)
 
-    // region Subtitle Manager — delegates to [subtitleManager] (extracted collaborator)
-
-    fun loadRemoteSubtitles() = subtitleManager.loadRemoteSubtitles()
-
-    fun downloadSubtitle(subtitleInfo: com.raulshma.jellyplay.core.model.RemoteSubtitleInfo) =
-        subtitleManager.downloadSubtitle(subtitleInfo)
-
-    fun addLocalSubtitle(uri: Uri, fileName: String) = subtitleManager.addLocalSubtitle(uri, fileName)
-
-    /**
-     * Resets the Subtitle Manager's search/cultures state. Called when the sheet
-     * opens (or the playback item changes) so results from a previous item don't
-     * leak into a new one. Cultures are reloaded on demand since they may
-     * be item-scoped on some servers.
-     */
-    fun resetSubtitleManagerState() = subtitleManager.resetSubtitleManagerState()
-
-    /**
-     * Loads the language cultures the server understands for subtitle
-     * upload/search selection. Idempotent: a no-op once cultures are already
-     * populated for the current item (e.g. across tab switches / reopens).
-     */
-    fun loadSubtitleCultures() = subtitleManager.loadSubtitleCultures()
-
-    /**
-     * Language-scoped remote subtitle search (OpenSubtitles via the server).
-     * Results populate the Search tab and are kept separate from the Download
-     * tab's server-default list. A failure surfaces as [SubtitleState.subtitleSearchError]
-     * (distinct from an empty result) so the UI can invite retry rather than
-     * implying "no subtitles exist".
-     */
-    fun searchRemoteSubtitles(language: String) = subtitleManager.searchRemoteSubtitles(language)
-
-    /** Loads the user's configured subtitle providers into UiState (chip visibility). */
-    fun loadConfiguredSubtitleProviders() = subtitleManager.loadConfiguredProviders()
-
-    /**
-     * Concurrent cross-provider subtitle search (Jellyfin + Wyzie +
-     * OpenSubtitles). Results merge into [SubtitleState.providerSearchResults]
-     * with per-provider error chips. See [SubtitleManager.searchAllProviders].
-     */
-    fun searchAllSubtitleProviders(language: String) = subtitleManager.searchAllProviders(language)
-
-    /**
-     * Downloads a subtitle from any provider. Jellyfin rows route through the
-     * server-side poll; external providers side-load the bytes locally. See
-     * [SubtitleManager.downloadProviderSubtitle].
-     */
-    fun downloadProviderSubtitle(result: com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult) =
-        subtitleManager.downloadProviderSubtitle(result)
-
-    /**
-     * Uploads a local subtitle file to the current item, then reloads the
-     * media detail so the new stream appears in the track list — mirroring
-     * [downloadSubtitle]'s refresh and the editor's upload path. See
-     * [SubtitleManager.uploadSubtitle] for the size-cap rationale.
-     */
-    fun uploadSubtitle(uri: Uri, fileName: String, language: String?, isForced: Boolean, isHearingImpaired: Boolean) =
-        subtitleManager.uploadSubtitle(uri, fileName, language, isForced, isHearingImpaired)
-
     /**
      * Re-applies [mediaDetail] and refreshes the shared source/stream/aspect-ratio
      * UiState fields after a subtitle download/upload adds a new stream. The
@@ -2923,61 +2808,11 @@ class VideoPlayerViewModel @Inject constructor(
 
     // endregion
 
-    fun joinSyncPlay(groupId: String) {
-        syncPlayBridge.joinGroup(groupId)
-    }
-
-    fun leaveSyncPlay() {
-        syncPlayBridge.leaveGroup()
-    }
-
-    fun syncPlayTogglePlayPause() {
-        syncPlayBridge.togglePlayPause()
-    }
-
-    fun syncPlaySeekTo(positionMs: Long) {
-        syncPlayBridge.seekTo(positionMs)
-    }
-
-    fun syncPlaySetIgnoreWait(ignore: Boolean) {
-        syncPlayBridge.setIgnoreWait(ignore)
-    }
-
-    fun syncPlayStop() {
-        syncPlayBridge.sendStop()
-    }
-
-    val syncPlayNotifications: SharedFlow<String>
-        get() = syncPlayBridge.notifications
-
-    val syncPlayIgnoreWait: StateFlow<Boolean>
-        get() = syncPlayBridge.ignoreWait
-
-    val isCastAvailable: Boolean get() = playerCastController.isCastAvailable
-    val isCastConnected: Boolean get() = playerCastController.isCastConnected
-    val castPositionMs: StateFlow<Long> get() = playerCastController.castPositionMs
-    val castDurationMs: StateFlow<Long> get() = playerCastController.castDurationMs
-    val castIsPlaying: StateFlow<Boolean> get() = playerCastController.castIsPlaying
-    val castVolumeFlow: StateFlow<Float> get() = playerCastController.castVolumeFlow
-    val isConnectedFlow: StateFlow<Boolean> get() = playerCastController.isConnectedFlow
-    val isConnectingFlow: StateFlow<Boolean> get() = playerCastController.isConnectingFlow
-    val castSessionEvents: SharedFlow<CastSessionEvent> get() = playerCastController.castSessionEvents
-
-    val isInSyncPlaySession: Boolean
-        get() = syncPlayBridge.isInSession
-
-    fun castToDevice() = playerCastController.castToDevice()
-
-    fun setCastVolume(volume: Float) = playerCastController.setCastVolume(volume)
-
-    fun onCastDisconnected() = playerCastController.onCastDisconnected()
-
-    fun castPlay() = playerCastController.castPlay()
-
-    fun castPause() = playerCastController.castPause()
-
-    fun castSeekTo(positionMs: Long) = playerCastController.castSeekTo(positionMs)
-
+    /**
+     * Background-cast orchestration: swaps the media-session owner between the
+     * cast player and the local engine. Real cross-controller flow — the cast
+     * slice's own transport lives on [cast].
+     */
     @OptIn(UnstableApi::class)
     fun detachForBackgroundCast() {
         castManager.markBackgroundCasting(true)
@@ -3002,10 +2837,6 @@ class VideoPlayerViewModel @Inject constructor(
             mediaSessionController.createForPlayer(player, "jellyplay_video_$itemId", itemId)
         }
     }
-
-    val isBackgroundCasting: Boolean get() = playerCastController.isBackgroundCasting
-
-    val backgroundCastingEnabled: Boolean get() = playerCastController.backgroundCastingEnabled
 
     fun toggleVideoStats() {
         val newValue = !_uiState.value.showVideoStats
@@ -3076,7 +2907,7 @@ class VideoPlayerViewModel @Inject constructor(
         loadJob?.cancel()
         loadJob = null
         progressReporter.cancelJobs()
-        syncPlayBridge.reset()
+        syncPlay.reset()
         releaseVideoMediaSession()
         playerSessionManager.release()
         playerLifecycleManager.reset()
@@ -3095,8 +2926,8 @@ class VideoPlayerViewModel @Inject constructor(
         // rebuild. Sleep timer + audio effects deliberately persist (no call).
         trackSelectionHelper.reset()
         trackSelectionHelper.resetForItem()
-        subtitleManager.resetForItem()
-        abRepeatController.resetForItem()
+        subtitles.resetForItem()
+        abRepeat.resetForItem()
         mediaDetail = null
         autoplayController.setEnabled(false)
         equalizerEnabled = false
@@ -3149,22 +2980,6 @@ class VideoPlayerViewModel @Inject constructor(
         _videoStats.value = EngineVideoStats()
     }
 
-    fun startSleepTimer(durationMs: Long) = sleepTimerController.startSleepTimer(durationMs)
-
-    fun startSleepTimerEndOfEpisode() = sleepTimerController.startSleepTimerEndOfEpisode()
-
-    fun cancelSleepTimer() = sleepTimerController.cancelSleepTimer()
-
-    fun triggerSleepTimerEndOfEpisode() = sleepTimerController.triggerSleepTimerEndOfEpisode()
-
-    // ── A/B repeat (G2) ──
-    fun setAbRepeatEnabled(enabled: Boolean) = abRepeatController.setEnabled(enabled)
-    fun setAbRepeatPointA() = abRepeatController.setPointA(_currentPositionMs.value)
-    fun setAbRepeatPointB() = abRepeatController.setPointB(_currentPositionMs.value)
-    fun clearAbRepeat() = abRepeatController.clear()
-    val abRepeatState: StateFlow<AbRepeatState> get() = abRepeatController.state
-    val abRepeatEvents: SharedFlow<AbRepeatEvent> get() = abRepeatController.events
-
     private val releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // @Volatile: set in release()/performRelease() (off Main) and read in
@@ -3195,7 +3010,7 @@ class VideoPlayerViewModel @Inject constructor(
         engineEventCoordinator.dispose()
         // Tear down audio-focus + becoming-noisy (idempotent; safe if never registered).
         playerAudioLifecycle.release()
-        sleepTimerController.onRelease()
+        sleepTimer.onRelease()
         releaseInternals()
         // Full teardown: clear the transport too (releaseInternals keeps it so
         // PiP stays usable across per-item reloads while the VM is alive).

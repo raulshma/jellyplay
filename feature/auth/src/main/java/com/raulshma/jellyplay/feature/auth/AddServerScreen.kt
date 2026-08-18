@@ -63,7 +63,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.raulshma.jellyplay.feature.auth.R
 import com.raulshma.jellyplay.core.model.DiscoveredServer
-import com.raulshma.jellyplay.core.network.LocalNetworkAccess
+import com.raulshma.jellyplay.core.ui.util.LocalNetworkAccess
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode

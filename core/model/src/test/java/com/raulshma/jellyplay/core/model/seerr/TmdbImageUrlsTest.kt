@@ -1,11 +1,10 @@
-package com.raulshma.jellyplay.core.network.seerr
+package com.raulshma.jellyplay.core.model.seerr
 
-import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-class SeerrImageHelperTest {
+class TmdbImageUrlsTest {
 
     @Test
     fun `buildPosterUrl builds w500 poster url`() {

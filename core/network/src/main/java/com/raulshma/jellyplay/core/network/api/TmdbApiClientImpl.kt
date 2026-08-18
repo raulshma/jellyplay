@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.coroutines.CancellationException
@@ -36,8 +37,8 @@ class TmdbApiClientImpl @Inject constructor(
         val site: String? = null,
     )
 
-    override suspend fun getVideos(tmdbId: Int, isMovie: Boolean): Result<List<SeerrRelatedVideo>> {
-        val typeStr = if (isMovie) "movie" else "tv"
+    override suspend fun getVideos(tmdbId: Int, mediaType: MediaType): Result<List<SeerrRelatedVideo>> {
+        val typeStr = if (mediaType == MediaType.MOVIE) "movie" else "tv"
         val url = "https://api.themoviedb.org/3/$typeStr/$tmdbId/videos?api_key=$apiKey"
         val request = Request.Builder()
             .url(url)

@@ -50,6 +50,14 @@ internal class SleepTimerController(
     val state: StateFlow<SleepTimerState> = _state.asStateFlow()
 
     /**
+     * Countdown display, sourced directly from [SleepTimerManager]. Kept OUT
+     * of any wide state bag (and out of [state]) so a 5 s tick — or the 100 ms
+     * fade-out burst — re-invalidates only the leaf composables that render
+     * the countdown (overflow-menu label, SleepTimerSheet).
+     */
+    val remainingMs: StateFlow<Long> get() = sleepTimerManager.remainingMs
+
+    /**
      * Volume captured when a timed timer starts fading, so [cancelSleepTimer]
      * restores the user's level instead of slamming to 1f. Null while muted
      * (mute wins — the fade also skips writes while muted, so there is nothing

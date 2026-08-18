@@ -397,15 +397,15 @@ class VideoPlayerViewModelTest {
 
     @Test
     fun toggleNightMode_flipsEnabled() {
-        val before = viewModel.effectsState.value.nightModeEnabled
-        viewModel.toggleNightMode()
-        assertEquals(!before, viewModel.effectsState.value.nightModeEnabled)
+        val before = viewModel.effects.state.value.nightModeEnabled
+        viewModel.effects.toggleNightMode()
+        assertEquals(!before, viewModel.effects.state.value.nightModeEnabled)
     }
 
     @Test
     fun setNightModeStrength_updatesState() {
-        viewModel.setNightModeStrength(EffectStrength.HIGH)
-        assertEquals(EffectStrength.HIGH, viewModel.effectsState.value.nightModeStrength)
+        viewModel.effects.setNightModeStrength(EffectStrength.HIGH)
+        assertEquals(EffectStrength.HIGH, viewModel.effects.state.value.nightModeStrength)
     }
 
     @Test
