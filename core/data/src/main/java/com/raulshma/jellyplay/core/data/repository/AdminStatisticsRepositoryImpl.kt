@@ -13,7 +13,10 @@ import com.raulshma.jellyplay.core.model.CleanupActionType
 import com.raulshma.jellyplay.core.model.ContentBreakdown
 import com.raulshma.jellyplay.core.model.JellyfinUser
 import com.raulshma.jellyplay.core.model.MediaCleanupConfig
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaItemStub
+import com.raulshma.jellyplay.core.model.PlaybackActivityPoint
+import com.raulshma.jellyplay.core.model.PlaybackReportingActivity
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.ScanPhase
 import com.raulshma.jellyplay.core.model.ScanProgress
@@ -22,6 +25,7 @@ import com.raulshma.jellyplay.core.model.UserStatistics
 import com.raulshma.jellyplay.core.model.WatchedMediaItem
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -852,12 +856,12 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
      * fan-outs overlap (none of these calls depends on breakdown results).
      */
     private data class EnhancedDeferreds(
-        val weeklyActivity: kotlinx.coroutines.Deferred<List<com.raulshma.jellyplay.core.model.PlaybackReportingActivity>>,
-        val sixMonthCount: kotlinx.coroutines.Deferred<List<com.raulshma.jellyplay.core.model.PlaybackActivityPoint>>,
-        val musicGenreBreakdown: kotlinx.coroutines.Deferred<List<com.raulshma.jellyplay.core.model.ContentBreakdown>>,
-        val musicArtistBreakdown: kotlinx.coroutines.Deferred<List<com.raulshma.jellyplay.core.model.ContentBreakdown>>,
-        val musicTopItems: kotlinx.coroutines.Deferred<Pair<Int, List<com.raulshma.jellyplay.core.model.MediaItem>>>,
-        val audioPlayCount: kotlinx.coroutines.Deferred<Int>,
+        val weeklyActivity: Deferred<List<PlaybackReportingActivity>>,
+        val sixMonthCount: Deferred<List<PlaybackActivityPoint>>,
+        val musicGenreBreakdown: Deferred<List<ContentBreakdown>>,
+        val musicArtistBreakdown: Deferred<List<ContentBreakdown>>,
+        val musicTopItems: Deferred<Pair<Int, List<MediaItem>>>,
+        val audioPlayCount: Deferred<Int>,
     )
 
     private data class EnhancedStatistics(

@@ -22,8 +22,10 @@ import kotlinx.coroutines.runBlocking
  * [WidgetDataStore.libraryWidgetItems].
  *
  * `onDataSetChanged` runs on the main thread; items are read from the
- * store's eagerly-warmed [kotlinx.coroutines.flow.StateFlow] snapshots so
- * no DataStore disk IO blocks it. The
+ * store's eagerly-warmed [kotlinx.coroutines.flow.StateFlow] snapshots, so
+ * no DataStore disk IO blocks them once warmed. On a cold process the
+ * first read pays one bounded (≤1 s) warm-up — see [WidgetDataStore]'s
+ * *Snapshot() docs. The
  * [LibraryRecommendationsWidget] calls
  * [AppWidgetManager.notifyAppWidgetViewDataChanged] whenever the data
  * changes, which re-binds the factory.
@@ -72,8 +74,8 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
             // was unchanged. Always reading is cheap (single DataStore read)
             // and makes the widget resilient to those edge cases.
             // Memory reads from the store's eagerly-warmed snapshots — no
-            // DataStore disk IO on the main thread. Cold-process warm-up
-            // behavior: see WidgetDataStore's *Snapshot() docs.
+            // DataStore disk IO on the main thread once warmed (cold-process
+            // behavior: see WidgetDataStore's *Snapshot() docs).
             val (fresh, version) = store.libraryWidgetItemsSnapshot() to store.libraryWidgetVersion.value
             items = fresh
             loadedVersion = version

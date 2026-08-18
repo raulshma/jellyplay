@@ -131,6 +131,14 @@ fun AnimatedHeroHeader(
         }
     }
 
+    // Stable wrapper instance (the rememberStableCallback idiom, which is
+    // typed for () -> Unit): a fresh `{ parallaxOffsetState.value }` per
+    // recomposition would hand HeroHeader a new lambda on every parent
+    // invalidation and un-skip the whole header.
+    val parallaxOffset: () -> Float = remember(parallaxOffsetState) {
+        { parallaxOffsetState.value }
+    }
+
     val heroIsVisible by remember {
         derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.index == 0 } || listState.layoutInfo.totalItemsCount == 0 }
     }
@@ -174,7 +182,7 @@ fun AnimatedHeroHeader(
             backgroundColor = backgroundColor,
             contentPadding = contentPadding,
             homeBackdropEnabled = homeBackdropEnabled,
-            parallaxOffset = { parallaxOffsetState.value },
+            parallaxOffset = parallaxOffset,
             onClick = { onItemClick(currentFeatured.id) },
             onDetailsClick = onDetailsClick?.let { { it(currentFeatured.id) } },
             onFocusChange = onFocusChange,

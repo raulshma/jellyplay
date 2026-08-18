@@ -157,10 +157,18 @@ class NowPlayingWidgetUpdater @Inject constructor(
     private fun pushPositionUpdate() {
         // Position-only path: sends a partial RemoteViews (position label +
         // progress bar) instead of re-parceling the artwork bitmap and
-        // re-wiring click intents at 1 Hz. Guarded by render equality so no
-        // redundant partial push crosses the binder.
+        // re-wiring click intents at 1 Hz.
         val snapshot = readPushSnapshot()
-        if (lastPushedRender?.sameRenderAs(snapshot) == true) return
+        val last = lastPushedRender
+        // The partial RemoteViews cannot re-render title/subtitle/artwork/
+        // empty-state — if any of those moved, defer to the metadata
+        // collector's full push instead of ticking the progress bar under
+        // stale metadata (the ticker can win the race while that collector
+        // is still loading the new artwork).
+        if (last?.sameNonPositionRenderAs(snapshot) != true) return
+        // Otherwise guarded by render equality so no redundant partial push
+        // crosses the binder.
+        if (last.sameRenderAs(snapshot)) return
         lastPushedRender = snapshot
 
         NowPlayingWidget.updateAllWidgetsPosition(
@@ -178,8 +186,9 @@ class NowPlayingWidgetUpdater @Inject constructor(
 
     /**
      * Everything a full widget push renders, read from the manager in one
-     * pass. Also the sole input to [PushFingerprint], so the fingerprint and
-     * the push can never disagree about which values were observed.
+     * pass. Also the sole input to the render-equality guards, so those
+     * guards and the pushes can never disagree about which values were
+     * observed.
      */
     private fun readPushSnapshot(): WidgetPushSnapshot = WidgetPushSnapshot(
         title = audioPlaybackManager.title.value,
@@ -216,6 +225,18 @@ class NowPlayingWidgetUpdater @Inject constructor(
             isPlaying == other.isPlaying &&
             positionMs / 1_000L == other.positionMs / 1_000L &&
             durationMs / 1_000L == other.durationMs / 1_000L &&
+            artUrl == other.artUrl &&
+            isEmptyState == other.isEmptyState
+
+    /**
+     * Equality on everything the position-only partial push cannot render.
+     * [isPlaying] stays out of it: the partial push renders it into the
+     * position label ("Paused ·"), and the transport icon correction rides
+     * the metadata collector's full push.
+     */
+    private fun WidgetPushSnapshot.sameNonPositionRenderAs(other: WidgetPushSnapshot): Boolean =
+        title == other.title &&
+            subtitle == other.subtitle &&
             artUrl == other.artUrl &&
             isEmptyState == other.isEmptyState
 

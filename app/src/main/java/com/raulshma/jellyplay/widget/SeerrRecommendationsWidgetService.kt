@@ -23,8 +23,9 @@ import kotlinx.coroutines.runBlocking
  *
  * `onDataSetChanged` is posted to the main-thread handler (only `getViewAt`
  * runs on a background thread); items are read from the store's eagerly
- * warmed [kotlinx.coroutines.flow.StateFlow] snapshots so no DataStore disk
- * IO blocks it.
+ * warmed [kotlinx.coroutines.flow.StateFlow] snapshots, so no DataStore
+ * disk IO blocks them once warmed — on a cold process the first read pays
+ * one bounded (≤1 s) warm-up (see [WidgetDataStore]'s *Snapshot() docs).
  */
 class SeerrRecommendationsWidgetService : RemoteViewsService() {
 
@@ -67,8 +68,8 @@ class SeerrRecommendationsWidgetService : RemoteViewsService() {
             // blank when the factory was recreated after a worker run that
             // short-circuited the version bump.
             // Memory reads from the store's eagerly-warmed snapshots — no
-            // DataStore disk IO on the main thread. Cold-process warm-up
-            // behavior: see WidgetDataStore's *Snapshot() docs.
+            // DataStore disk IO on the main thread once warmed (cold-process
+            // behavior: see WidgetDataStore's *Snapshot() docs).
             val (version, fresh) = store.seerrWidgetVersion.value to store.seerrWidgetItemsSnapshot()
             items = fresh
             loadedVersion = version

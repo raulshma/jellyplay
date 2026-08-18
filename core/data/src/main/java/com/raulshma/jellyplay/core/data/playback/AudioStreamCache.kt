@@ -124,7 +124,15 @@ open class AudioStreamCache @Inject constructor(
     @Volatile private var cachedUpstreamFactory: DataSource.Factory? = null
     @Volatile private var cachedCacheFactory: DataSource.Factory? = null
 
-    /** Builds the OkHttp-backed upstream factory used by both player and warmer. */
+    /**
+     * Builds the OkHttp-backed upstream factory used by both player and warmer.
+     * Synchronized like the other memo accessors so concurrent callers can't
+     * build racing instances (a loser's write would make callers hold a
+     * factory that no longer `===`s the memo, silently bypassing the
+     * [cachedCacheFactory] fast path) and so [clear]'s invalidation can't
+     * interleave with a memo write.
+     */
+    @Synchronized
     fun buildUpstreamFactory(): DataSource.Factory {
         cachedUpstreamFactory?.let { return it }
         val httpFactory = OkHttpDataSource.Factory(streamingOkHttpClient)
