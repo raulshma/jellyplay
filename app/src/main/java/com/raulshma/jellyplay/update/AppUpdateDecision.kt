@@ -64,12 +64,13 @@ object AppUpdateDecision {
 
     /**
      * The version a [dismissUpdate] of [state] should stamp, or `null` when the
-     * state isn't dismissible from a prompt/install-ready sheet (Idle,
-     * Downloading, Checking, NoUpdate, Error). Used so the 24h suppression only
-     * applies to versions the user actually saw and dismissed.
+     * state isn't dismissible from an update sheet (Idle, Checking, NoUpdate,
+     * Error). Used so the 24h suppression only applies to versions the user
+     * actually saw and dismissed.
      */
     fun dismissedVersion(state: UpdateState): String? = when (state) {
         is UpdateState.UpdateAvailable -> state.info.latestVersion
+        is UpdateState.Downloading -> state.info.latestVersion
         is UpdateState.Downloaded -> state.info.latestVersion
         else -> null
     }

@@ -124,6 +124,44 @@ class UpdateCoordinatorTest {
         assertEquals(UpdateState.Idle, coordinator.updateState.value)
     }
 
+    @Test
+    fun `cancelDownload cancels active download and restores update available state`() = runTest(dispatcher) {
+        val info = updateInfo("1.2.3")
+        coEvery { appUpdateRepository.downloadApk(info, any()) } coAnswers {
+            kotlinx.coroutines.awaitCancellation()
+        }
+
+        coordinator.startUpdateDownload(info)
+        testScheduler.advanceTimeBy(100)
+
+        assertTrue(coordinator.updateState.value is UpdateState.Downloading)
+
+        coordinator.cancelDownload()
+        advanceUntilIdle()
+
+        val state = coordinator.updateState.value
+        assertTrue(state is UpdateState.UpdateAvailable)
+        assertEquals("1.2.3", (state as UpdateState.UpdateAvailable).info.latestVersion)
+    }
+
+    @Test
+    fun `dismissUpdate cancels active download and transitions to Idle`() = runTest(dispatcher) {
+        val info = updateInfo("1.2.3")
+        coEvery { appUpdateRepository.downloadApk(info, any()) } coAnswers {
+            kotlinx.coroutines.awaitCancellation()
+        }
+
+        coordinator.startUpdateDownload(info)
+        testScheduler.advanceTimeBy(100)
+
+        assertTrue(coordinator.updateState.value is UpdateState.Downloading)
+
+        coordinator.dismissUpdate()
+        advanceUntilIdle()
+
+        assertEquals(UpdateState.Idle, coordinator.updateState.value)
+    }
+
     private fun updateInfo(latestVersion: String, isAvailable: Boolean = true) = AppUpdateInfo(
         latestVersion = latestVersion,
         htmlUrl = "https://github.com/raulshma/JellyPlay/releases/tag/v$latestVersion",

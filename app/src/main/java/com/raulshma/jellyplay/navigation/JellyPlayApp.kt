@@ -302,7 +302,7 @@ private fun UpdateSheetOverlay(update: UpdateCoordinator) {
                 runCatching { context.startActivity(intent) }
             },
             onRedownload = { update.redownloadUpdate() },
-            onCancel = { update.dismissUpdate() },
+            onCancel = { update.cancelDownload() },
             onDismiss = { update.dismissUpdate() },
             buildInstallIntent = { update.buildInstallIntent() },
         )

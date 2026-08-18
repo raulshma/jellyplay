@@ -156,8 +156,9 @@ class AppUpdateDecisionTest {
     // ── dismissedVersion ──────────────────────────────────────────────
 
     @Test
-    fun `dismissedVersion extracts from UpdateAvailable and Downloaded`() {
+    fun `dismissedVersion extracts from UpdateAvailable, Downloading, and Downloaded`() {
         assertEquals("1.2.3", AppUpdateDecision.dismissedVersion(UpdateState.UpdateAvailable(info("1.2.3"))))
+        assertEquals("1.2.3", AppUpdateDecision.dismissedVersion(UpdateState.Downloading(info("1.2.3"), 0.5f, 500L, 1000L)))
         assertEquals("1.2.3", AppUpdateDecision.dismissedVersion(UpdateState.Downloaded(info("1.2.3"), File("x.apk"))))
     }
 
@@ -166,7 +167,6 @@ class AppUpdateDecisionTest {
         assertNull(AppUpdateDecision.dismissedVersion(UpdateState.Idle))
         assertNull(AppUpdateDecision.dismissedVersion(UpdateState.Checking))
         assertNull(AppUpdateDecision.dismissedVersion(UpdateState.Error("boom")))
-        assertNull(AppUpdateDecision.dismissedVersion(UpdateState.Downloading(info("1.2.3"), 0f, 0L, 0L)))
         assertNull(AppUpdateDecision.dismissedVersion(UpdateState.NoUpdate(info("1.2.3"))))
     }
 }

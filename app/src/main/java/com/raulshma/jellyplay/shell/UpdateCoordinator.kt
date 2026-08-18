@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.update.UpdateState
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,6 +38,8 @@ class UpdateCoordinator @Inject constructor(
      */
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
+
+    private var downloadJob: Job? = null
 
     /**
      * User's "download updates automatically" preference, mirrored from
@@ -161,14 +164,35 @@ class UpdateCoordinator @Inject constructor(
      */
     fun startUpdateDownload(info: AppUpdateInfo) {
         if (info.downloadAssetUrl == null) return
-        commandScope.launch {
-            _updateState.value = UpdateState.Downloading(info, 0f, 0L, info.releaseSize)
-            val result = appUpdateRepository.downloadApk(info) { fraction, read, total ->
-                _updateState.value = UpdateState.Downloading(info, fraction, read, total)
+        downloadJob?.cancel()
+        downloadJob = commandScope.launch {
+            try {
+                _updateState.value = UpdateState.Downloading(info, 0f, 0L, info.releaseSize)
+                val result = appUpdateRepository.downloadApk(info) { fraction, read, total ->
+                    _updateState.value = UpdateState.Downloading(info, fraction, read, total)
+                }
+                result
+                    .onSuccess { file -> _updateState.value = UpdateState.Downloaded(info, file) }
+                    .onFailure { _updateState.value = UpdateState.Error(it.message ?: "Download failed") }
+            } finally {
+                if (downloadJob == coroutineContext[Job]) {
+                    downloadJob = null
+                }
             }
-            result
-                .onSuccess { file -> _updateState.value = UpdateState.Downloaded(info, file) }
-                .onFailure { _updateState.value = UpdateState.Error(it.message ?: "Download failed") }
+        }
+    }
+
+    /**
+     * Cancels any in-flight download and returns to [UpdateState.UpdateAvailable]
+     * so the user stays on the sheet with release notes and action buttons
+     * instead of resuming the download in the background.
+     */
+    fun cancelDownload() {
+        downloadJob?.cancel()
+        downloadJob = null
+        val state = _updateState.value
+        if (state is UpdateState.Downloading) {
+            _updateState.value = UpdateState.UpdateAvailable(state.info)
         }
     }
 
@@ -197,14 +221,16 @@ class UpdateCoordinator @Inject constructor(
             ?.let { appUpdateRepository.buildInstallIntent(it) }
 
     /**
-     * Hides the update sheet without changing download state. When dismissed
-     * from an [UpdateState.UpdateAvailable] prompt or an install-ready
-     * [UpdateState.Downloaded] sheet, stamps the version + time so the
-     * launch-time auto-check / restore stays quiet for the same version for
-     * 24h. The downloaded APK is retained on disk either way. Manual checks
-     * still surface the result regardless of dismissal.
+     * Hides the update sheet and cancels any active download. When dismissed
+     * from an [UpdateState.UpdateAvailable] prompt, [UpdateState.Downloading]
+     * sheet, or an install-ready [UpdateState.Downloaded] sheet, stamps the
+     * version + time so the launch-time auto-check / restore stays quiet for the
+     * same version for 24h. The downloaded APK (if any) is retained on disk.
+     * Manual checks still surface the result regardless of dismissal.
      */
     fun dismissUpdate() {
+        downloadJob?.cancel()
+        downloadJob = null
         val dismissedVersion = AppUpdateDecision.dismissedVersion(_updateState.value)
         if (dismissedVersion != null) {
             commandScope.launch {
