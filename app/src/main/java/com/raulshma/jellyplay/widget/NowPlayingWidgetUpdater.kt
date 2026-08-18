@@ -44,6 +44,11 @@ class NowPlayingWidgetUpdater @Inject constructor(
     private var lastArtwork: Bitmap? = null
     private var lastItemId: String? = null
 
+    // Read/written from both the metadata and position collectors, which run
+    // as separate coroutines on the Dispatchers.Default pool — volatile so a
+    // position-tick thread always sees the metadata push that just landed.
+    @Volatile private var lastPushFingerprint: PushFingerprint? = null
+
     fun start() {
         if (metadataJob?.isActive == true) return
         val appWidgetManager = AppWidgetManager.getInstance(context)
@@ -87,6 +92,7 @@ class NowPlayingWidgetUpdater @Inject constructor(
         lastArtwork?.let { if (!it.isRecycled) it.recycle() }
         lastArtwork = null
         lastItemId = null
+        lastPushFingerprint = null
     }
 
     private suspend fun observeMetadata() {
@@ -122,6 +128,8 @@ class NowPlayingWidgetUpdater @Inject constructor(
                     subtitle = snapshot.artist.ifBlank { null },
                     isPlaying = snapshot.isPlaying,
                     albumArt = lastArtwork,
+                    positionMs = audioPlaybackManager.currentPosition.value,
+                    durationMs = audioPlaybackManager.duration.value,
                     isEmptyState = snapshot.itemId == null,
                 )
             }
@@ -154,14 +162,34 @@ class NowPlayingWidgetUpdater @Inject constructor(
     }
 
     private fun pushPositionUpdate() {
-        pushUpdate(
-            title = audioPlaybackManager.title.value,
-            subtitle = audioPlaybackManager.artist.value.ifBlank { null },
-            isPlaying = audioPlaybackManager.isPlaying.value,
-            albumArt = lastArtwork,
-            positionMs = audioPlaybackManager.currentPosition.value,
-            durationMs = audioPlaybackManager.duration.value,
-            isEmptyState = audioPlaybackManager.currentPlayingItemId.value == null,
+        // Position-only path: sends a partial RemoteViews (position label +
+        // progress bar) instead of re-parceling the artwork bitmap and
+        // re-wiring click intents at 1 Hz. Guarded by a fingerprint so no
+        // redundant partial push crosses the binder.
+        val title = audioPlaybackManager.title.value
+        val subtitle = audioPlaybackManager.artist.value.ifBlank { null }
+        val isPlaying = audioPlaybackManager.isPlaying.value
+        val positionMs = audioPlaybackManager.currentPosition.value
+        val durationMs = audioPlaybackManager.duration.value
+        val isEmptyState = audioPlaybackManager.currentPlayingItemId.value == null
+
+        val fingerprint = fingerprintOf(
+            title = title,
+            subtitle = subtitle,
+            isPlaying = isPlaying,
+            positionMs = positionMs,
+            durationMs = durationMs,
+            artUrl = audioPlaybackManager.albumArtUrl.value,
+            isEmptyState = isEmptyState,
+        )
+        if (fingerprint == lastPushFingerprint) return
+        lastPushFingerprint = fingerprint
+
+        NowPlayingWidget.updateAllWidgetsPosition(
+            context = context,
+            positionMs = positionMs,
+            durationMs = durationMs,
+            isPlaying = isPlaying,
         )
     }
 
@@ -179,6 +207,15 @@ class NowPlayingWidgetUpdater @Inject constructor(
         durationMs: Long = 0L,
         isEmptyState: Boolean = false,
     ) {
+        lastPushFingerprint = fingerprintOf(
+            title = title,
+            subtitle = subtitle,
+            isPlaying = isPlaying,
+            positionMs = positionMs,
+            durationMs = durationMs,
+            artUrl = audioPlaybackManager.albumArtUrl.value,
+            isEmptyState = isEmptyState,
+        )
         NowPlayingWidget.updateAllWidgets(
             context = context,
             title = title,
@@ -190,6 +227,35 @@ class NowPlayingWidgetUpdater @Inject constructor(
             isEmptyState = isEmptyState,
         )
     }
+
+    private fun fingerprintOf(
+        title: String,
+        subtitle: String?,
+        isPlaying: Boolean,
+        positionMs: Long,
+        durationMs: Long,
+        artUrl: String?,
+        isEmptyState: Boolean,
+    ): PushFingerprint = PushFingerprint(
+        title = title,
+        subtitle = subtitle,
+        isPlaying = isPlaying,
+        positionBucketSec = positionMs / 1_000L,
+        durationSec = durationMs / 1_000L,
+        artUrl = artUrl,
+        isEmptyState = isEmptyState,
+    )
+
+    /** Equality key for the last pushed widget render — see [pushPositionUpdate]. */
+    private data class PushFingerprint(
+        val title: String,
+        val subtitle: String?,
+        val isPlaying: Boolean,
+        val positionBucketSec: Long,
+        val durationSec: Long,
+        val artUrl: String?,
+        val isEmptyState: Boolean,
+    )
 
     private data class MetadataSnapshot(
         val itemId: String?,

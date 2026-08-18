@@ -148,9 +148,10 @@ class AudioQueueFacadeTest {
 
         val started = outcome as AudioQueueOutcome.Started
         assertEquals(-1, started.startIndex)
-        verifyOrder {
-            queueManager.addToQueue(match { it.id == "t1" })
-            queueManager.addToQueue(match { it.id == "t2" })
+        // Bulk seam: one addToQueueAll (single queue emission + persistence)
+        // instead of per-item appends.
+        verify(exactly = 1) {
+            queueManager.addToQueueAll(match { items -> items.map { it.id } == listOf("t1", "t2") })
         }
     }
 
@@ -230,6 +231,7 @@ class AudioQueueFacadeTest {
         val mutationThreads = CopyOnWriteArrayList<String>()
         every { queueManager.playQueue(any(), any()) } answers { mutationThreads.add(Thread.currentThread().name) }
         every { queueManager.addToQueue(any()) } answers { mutationThreads.add(Thread.currentThread().name) }
+        every { queueManager.addToQueueAll(any()) } answers { mutationThreads.add(Thread.currentThread().name) }
 
         // The pre-facade bug: DetailViewModel/InstantMixActions built the queue
         // on Default and called playQueue right there (IllegalStateException on

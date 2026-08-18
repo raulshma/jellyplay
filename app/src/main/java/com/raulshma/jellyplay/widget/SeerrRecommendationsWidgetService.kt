@@ -14,7 +14,6 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -22,8 +21,10 @@ import kotlinx.coroutines.runBlocking
  * [RemoteViewsFactory] that loads cached items from
  * [WidgetDataStore.seerrWidgetItems].
  *
- * The factory runs on a worker thread provided by the platform, so the
- * synchronous [runBlocking] call is safe.
+ * `onDataSetChanged` is posted to the main-thread handler (only `getViewAt`
+ * runs on a background thread); items are read from the store's eagerly
+ * warmed [kotlinx.coroutines.flow.StateFlow] snapshots so no DataStore disk
+ * IO blocks it.
  */
 class SeerrRecommendationsWidgetService : RemoteViewsService() {
 
@@ -65,9 +66,12 @@ class SeerrRecommendationsWidgetService : RemoteViewsService() {
             // rationale: skipping loads on unchanged versions left the widget
             // blank when the factory was recreated after a worker run that
             // short-circuited the version bump.
-            val (version, fresh) = runBlocking {
-                store.seerrWidgetVersion.first() to store.seerrWidgetItems.first()
-            }
+            // Snapshot flows are eagerly warmed on the store's scope, so these
+            // are memory reads — no DataStore disk IO on the main thread
+            // (`onDataSetChanged` is posted to the main-thread handler). On a
+            // cold process the store does one bounded warm-up read instead of
+            // serving the empty placeholder.
+            val (version, fresh) = store.seerrWidgetVersion.value to store.seerrWidgetItemsSnapshot()
             items = fresh
             loadedVersion = version
             // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.

@@ -30,11 +30,21 @@ import javax.inject.Singleton
 @Singleton
 class JellyfinApiEngine @Inject constructor(
     @ApplicationContext val context: Context,
-    val jellyfin: Jellyfin,
-    val okHttpClient: OkHttpClient,
+    // dagger.Lazy defers construction of both the Jellyfin SDK instance and
+    // the shared OkHttpClient off the synchronous Hilt graph: MainViewModel's
+    // constructor chain resolves this engine on the main thread before
+    // setContent, and provideJellyfin/provideOkHttpClient both do real work
+    // (DataStore-backed device-id read, PackageManager binder call, disk cache
+    // mkdirs). First .get() happens inside suspend repository code well after
+    // ServerIdentityStore.identity (Eagerly-started) has populated, so the
+    // runBlocking fallback in provideJellyfin never fires on the main thread.
+    private val jellyfinLazy: dagger.Lazy<Jellyfin>,
+    private val okHttpClientLazy: dagger.Lazy<OkHttpClient>,
     private val deviceProfileProvider: DeviceProfileProvider,
     private val addressRouter: ServerAddressRouter,
 ) {
+    val jellyfin: Jellyfin get() = jellyfinLazy.get()
+    val okHttpClient: OkHttpClient get() = okHttpClientLazy.get()
     private val _currentServer = MutableStateFlow<ServerInfo?>(null)
     val currentServer: StateFlow<ServerInfo?> = _currentServer.asStateFlow()
 

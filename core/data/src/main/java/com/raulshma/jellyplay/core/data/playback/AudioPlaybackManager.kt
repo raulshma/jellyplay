@@ -683,6 +683,11 @@ class AudioPlaybackManager @Inject constructor(
                     }
 
                     queueLoadingJob?.cancel()
+                    // The pre-warm below builds MediaItems for the ENTIRE
+                    // queue; the default 25-entry cache would evict the head
+                    // before the tail is built (75+ repeated repo lookups for
+                    // a 100-track playlist). Size the LRU to the queue.
+                    mediaItemCache.resize(queueItems.size.coerceAtLeast(25))
                     queueLoadingJob = scope.launch(Dispatchers.IO) {
                         coroutineScope {
                             val afterJob = async { buildMediaItemsForQueueItems(queueItems.subList(playIndex + 1, queueItems.size)) }
@@ -813,6 +818,22 @@ class AudioPlaybackManager @Inject constructor(
         scope.launch {
             buildMediaItemForQueueItem(item)?.let { mediaItem ->
                 player.addMediaItem(mediaItem)
+            }
+        }
+    }
+
+    override fun addToQueueAll(items: List<AudioQueueItem>) {
+        assertMainThread("addToQueueAll")
+        if (items.isEmpty()) return
+        // Single queue emission → single full-list persistence, and a single
+        // ordered player append. Iterating addToQueue would emit + persist the
+        // whole list per item (O(N²) row writes in N transactions).
+        _queue.value = _queue.value + items
+        val player = exoPlayer ?: return
+        scope.launch {
+            val mediaItems = items.mapNotNull { buildMediaItemForQueueItem(it) }
+            if (mediaItems.isNotEmpty()) {
+                player.addMediaItems(mediaItems)
             }
         }
     }

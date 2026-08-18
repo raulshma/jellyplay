@@ -136,6 +136,23 @@ class LibraryApiClientImpl @Inject constructor(
             val nextUpResult = nextUpDeferred.await()
             val foldersResult = foldersDeferred.await()
 
+            // Launch the recommendations chain now: it depends only on the
+            // Continue Watching / Next Up seeds above (already resolved), not
+            // on the per-folder latest-media fan-out below — overlapping the
+            // two chains turns home-load wall clock from
+            // latestChain + recommendationsChain into max(...) while keeping
+            // section emission order unchanged (awaited at its original spot).
+            val recommendationsDeferred: kotlinx.coroutines.Deferred<Result<RecommendationResult>>? =
+                if (HomeSectionType.RECOMMENDATIONS in enabledSections) {
+                    // Reuse the Continue Watching + Next Up lists already fetched
+                    // above as recommendation seeds instead of re-hitting the
+                    // /Items/Resume and /Shows/NextUp endpoints a second time.
+                    val recommendationSeeds =
+                        continueWatchingResult.getOrDefault(emptyList()) +
+                            nextUpResult.getOrDefault(emptyList())
+                    async { getRecommendations(limit = 20, seeds = recommendationSeeds) }
+                } else null
+
             var continueWatchingIds = emptySet<String>()
 
             if (HomeSectionType.CONTINUE_WATCHING in enabledSections) {
@@ -243,13 +260,10 @@ class LibraryApiClientImpl @Inject constructor(
             }
 
             if (HomeSectionType.RECOMMENDATIONS in enabledSections) {
-                // Reuse the Continue Watching + Next Up lists already fetched
-                // above as recommendation seeds instead of re-hitting the
-                // /Items/Resume and /Shows/NextUp endpoints a second time.
-                val recommendationSeeds =
-                    continueWatchingResult.getOrDefault(emptyList()) +
-                        nextUpResult.getOrDefault(emptyList())
-                getRecommendations(limit = 20, seeds = recommendationSeeds)
+                // Launched right after the seed lists resolved (above), so the
+                // /Items/Similar fan-out overlapped the per-folder latest-media
+                // chain instead of starting after it.
+                recommendationsDeferred!!.await()
                     .onSuccess { result ->
                         if (result.items.isNotEmpty()) {
                             sections.add(HomeSection(

@@ -15,9 +15,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,13 +51,21 @@ class WidgetDataStore @Inject constructor(
     private val sharedPrefs: Flow<Preferences> = dataStore.data
     private val json = Json { ignoreUnknownKeys = true }
 
-    val continueWatching: Flow<List<MediaItem>> =
-        sharedPrefs.map { prefs ->
+    // Set by the onEach probes below the moment each eager snapshot receives
+    // its first real emission — separates "warmed, memory reads from here on"
+    // from "still warming, the StateFlow holds the placeholder default" for
+    // the sync *Snapshot() accessors.
+    private val continueWatchingLoaded = AtomicBoolean(false)
+    private val libraryItemsLoaded = AtomicBoolean(false)
+    private val seerrItemsLoaded = AtomicBoolean(false)
+
+    val continueWatching: StateFlow<List<MediaItem>> =
+        sharedPrefs.onEach { continueWatchingLoaded.set(true) }.map { prefs ->
             prefs[Keys.CONTINUE_WATCHING]?.let {
                 try { json.decodeFromString<List<MediaItem>>(it) }
                 catch (_: Exception) { emptyList() }
             } ?: emptyList()
-        }
+        }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     val widgetConfig: Flow<WidgetConfig> =
         sharedPrefs.map { prefs ->
@@ -61,30 +74,32 @@ class WidgetDataStore @Inject constructor(
             } ?: WidgetConfig()
         }
 
-    val libraryWidgetItems: Flow<List<LibraryWidgetItem>> =
-        sharedPrefs.map { prefs ->
+    val libraryWidgetItems: StateFlow<List<LibraryWidgetItem>> =
+        sharedPrefs.onEach { libraryItemsLoaded.set(true) }.map { prefs ->
             prefs[Keys.LIBRARY_WIDGET_ITEMS]?.let {
                 try { json.decodeFromString<List<LibraryWidgetItem>>(it) }
                 catch (_: Exception) { emptyList() }
             } ?: emptyList()
-        }
+        }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
-    val libraryWidgetVersion: Flow<Long> =
+    val libraryWidgetVersion: StateFlow<Long> =
         sharedPrefs.map { it[Keys.LIBRARY_WIDGET_VERSION] ?: 0L }
+            .stateIn(scope, SharingStarted.Eagerly, 0L)
 
     val libraryWidgetUpdatedAtMs: Flow<Long> =
         sharedPrefs.map { it[Keys.LIBRARY_WIDGET_UPDATED_AT_MS] ?: 0L }
 
-    val seerrWidgetItems: Flow<List<SeerrWidgetItem>> =
-        sharedPrefs.map { prefs ->
+    val seerrWidgetItems: StateFlow<List<SeerrWidgetItem>> =
+        sharedPrefs.onEach { seerrItemsLoaded.set(true) }.map { prefs ->
             prefs[Keys.SEERR_WIDGET_ITEMS]?.let {
                 try { json.decodeFromString<List<SeerrWidgetItem>>(it) }
                 catch (_: Exception) { emptyList() }
             } ?: emptyList()
-        }
+        }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
-    val seerrWidgetVersion: Flow<Long> =
+    val seerrWidgetVersion: StateFlow<Long> =
         sharedPrefs.map { it[Keys.SEERR_WIDGET_VERSION] ?: 0L }
+            .stateIn(scope, SharingStarted.Eagerly, 0L)
 
     val seerrWidgetUpdatedAtMs: Flow<Long> =
         sharedPrefs.map { it[Keys.SEERR_WIDGET_UPDATED_AT_MS] ?: 0L }
@@ -117,6 +132,40 @@ class WidgetDataStore @Inject constructor(
         val (perWidget, legacy) = widgetConfigSnapshot.value
         return perWidget[appWidgetId] ?: legacy ?: WidgetConfig()
     }
+
+    /**
+     * Sync item snapshots for the AppWidget render path — `onDataSetChanged`
+     * runs on the main thread. Instant memory read once the eager snapshot
+     * has materialized. On a cold process (store just constructed, snapshot
+     * still warming) each does ONE bounded disk read (1 s cap) so the first
+     * widget refresh after process death renders the persisted payload
+     * instead of the empty placeholder — which could otherwise sit on the
+     * home screen until the next worker-triggered refresh. A timed-out
+     * warmup falls back to the placeholder, same as before.
+     */
+    fun continueWatchingSnapshot(): List<MediaItem> =
+        if (continueWatchingLoaded.get()) {
+            continueWatching.value
+        } else {
+            runBlocking { withTimeoutOrNull(SNAPSHOT_WARMUP_TIMEOUT_MS) { continueWatching.first() } }
+                ?: continueWatching.value
+        }
+
+    fun libraryWidgetItemsSnapshot(): List<LibraryWidgetItem> =
+        if (libraryItemsLoaded.get()) {
+            libraryWidgetItems.value
+        } else {
+            runBlocking { withTimeoutOrNull(SNAPSHOT_WARMUP_TIMEOUT_MS) { libraryWidgetItems.first() } }
+                ?: libraryWidgetItems.value
+        }
+
+    fun seerrWidgetItemsSnapshot(): List<SeerrWidgetItem> =
+        if (seerrItemsLoaded.get()) {
+            seerrWidgetItems.value
+        } else {
+            runBlocking { withTimeoutOrNull(SNAPSHOT_WARMUP_TIMEOUT_MS) { seerrWidgetItems.first() } }
+                ?: seerrWidgetItems.value
+        }
 
     fun getWidgetConfigForId(appWidgetId: Int): Flow<WidgetConfig> =
         sharedPrefs.map { prefs ->
@@ -184,6 +233,11 @@ class WidgetDataStore @Inject constructor(
     /** Persists the current continue-watching shelf so widgets can render it offline / on cold start. */
     suspend fun setContinueWatching(items: List<MediaItem>) {
         dataStore.edit { it[Keys.CONTINUE_WATCHING] = json.encodeToString(items) }
+    }
+
+    private companion object {
+        /** Cap on the one-time cold-process disk read behind the *Snapshot() accessors. */
+        private const val SNAPSHOT_WARMUP_TIMEOUT_MS = 1_000L
     }
 
     private object Keys {

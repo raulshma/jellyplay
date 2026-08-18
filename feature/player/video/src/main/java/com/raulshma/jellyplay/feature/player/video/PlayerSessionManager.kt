@@ -450,16 +450,29 @@ class PlayerSessionManager(
         playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
         mimeType: String? = null,
     ) {
-        // Release the outgoing engine and null the reference before creating the
-        // replacement, so a failure in create()/setup can never leave the field
-        // pointing at an already-released engine.
-        try {
-            _engine.value?.release()
-        } finally {
-            _engine.value = null
+        // Reuse the live engine when the player type is unchanged (the common
+        // binge-watch/autoplay case): every engine's load() resets per-item
+        // state, and ExoPlayerEngine fast-paths an unchanged-config load with
+        // setMediaItem+prepare instead of a full teardown/rebuild — keeping the
+        // media-session wiring and audio-effect chain attached and avoiding a
+        // rebuffer at every episode boundary. First creation, an engine
+        // switch, or a released engine takes the original release+create path.
+        val existingEngine = _engine.value
+        val eng = if (existingEngine != null && playerType == lastPlayerType) {
+            existingEngine
+        } else {
+            // Release the outgoing engine and null the reference before creating
+            // the replacement, so a failure in create()/setup can never leave the
+            // field pointing at an already-released engine.
+            try {
+                _engine.value?.release()
+            } finally {
+                _engine.value = null
+            }
+            playerEngineFactory.create(playerType).also { created ->
+                _engine.value = created
+            }
         }
-        val eng = playerEngineFactory.create(playerType)
-        _engine.value = eng
         lastPlayerType = playerType
 
         playerLifecycleManager.activeCallbacks = eng

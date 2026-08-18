@@ -21,9 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 /**
  * Home-screen widget that surfaces Seerr (Jellyseerr/Overseerr)
@@ -224,23 +222,22 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
                 context.applicationContext,
                 WidgetEntryPoint::class.java,
             )
-            runBlocking {
-                entryPoint.widgetDataStore().getWidgetConfigForId(appWidgetId).first()
-            }.seerrSource.displayName
+            // Sync snapshot accessor — `onUpdate`/`onAppWidgetOptionsChanged` run
+            // on the main thread, so a blocking DataStore read is not acceptable.
+            entryPoint.widgetDataStore().getWidgetConfigForIdSync(appWidgetId).seerrSource.displayName
         }.getOrDefault(SeerrWidgetSource.TRENDING.displayName)
 
         // Widget-independent server-configured read (serverUrl pref is set) —
         // callers looping over widget IDs should hoist this out of the loop.
+        // `preferences` is an eagerly-started StateFlow, so `.value` is a
+        // memory read safe for the main thread.
         private fun hasServerConfigured(context: Context): Boolean {
             val entryPoint = EntryPointAccessors.fromApplication(
                 context.applicationContext,
                 WidgetEntryPoint::class.java,
             )
             return runCatching {
-                runBlocking {
-                    val prefs = entryPoint.seerrPreferencesStore().preferences.first()
-                    prefs.serverUrl.isNotBlank()
-                }
+                entryPoint.seerrPreferencesStore().preferences.value.serverUrl.isNotBlank()
             }.getOrDefault(false)
         }
     }

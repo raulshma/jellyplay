@@ -300,20 +300,28 @@ fun SearchScreen(
                 .fillMaxSize()
                 .imePadding(),
         ) {
-            // ═══════════════════════════════════════════════════════════════
-            // ── Header Section (cinematic dark, white-on-dark text)
-            // ═══════════════════════════════════════════════════════════════
+            // ── Header Section (cinematic dark, white-on-dark text) ──
+            // The screen root re-executes per keystroke (query state is read
+            // here); remember the static header brush + display style so each
+            // keystroke doesn't re-allocate them.
+            val headerGradientBrush = remember(backgroundColor) {
+                Brush.verticalGradient(
+                    colors = listOf(
+                        backgroundColor.copy(alpha = 0.95f),
+                        backgroundColor,
+                    ),
+                )
+            }
+            val headlineLarge = MaterialTheme.typography.headlineLarge
+            val headerTitleStyle = remember(headlineLarge) {
+                headlineLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                )
+            }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                backgroundColor.copy(alpha = 0.95f),
-                                backgroundColor,
-                            ),
-                        )
-                    )
+                    .background(headerGradientBrush)
                     .statusBarsPadding()
                     .padding(top = 16.dp),
             ) {
@@ -335,9 +343,7 @@ fun SearchScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = stringResource(R.string.search_title),
-                                style = MaterialTheme.typography.headlineLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                ),
+                                style = headerTitleStyle,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(

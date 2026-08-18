@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import javax.inject.Inject
 
 data class PluginsState(
@@ -240,7 +241,11 @@ class PluginsViewModel @Inject constructor(
 
     private fun startInstallationPolling() {
         launch {
-            hasActiveInstalls.collect { active ->
+            // collectLatest (not collect): a plain collect suspends forever
+            // inside the `while (active)` loop with the captured true value,
+            // so a false emission can never restart the collector and polling
+            // would outlive the installs until ViewModel clear.
+            hasActiveInstalls.collectLatest { active ->
                 while (active) {
                     delay(5000)
                     fetchActiveInstallations()

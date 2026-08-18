@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -93,9 +94,6 @@ fun SeerrMediaCard(
         }
     }
 
-    val effectiveShimmerOffset = if (isLoading) shimmerOffset.value else 0f
-    val effectiveGlowAlpha = if (isLoading) glowAlpha.value else 0f
-
     // --- Derived display state ----------------------------------------------
     val isUpcoming = remember(item.releaseDate, item.firstAirDate) {
         val dateStr = item.releaseDate ?: item.firstAirDate
@@ -125,19 +123,22 @@ fun SeerrMediaCard(
     val hasRequest = item.mediaInfo?.requests?.isNotEmpty() == true
 
     // --- Border: animated glow when loading, themed default otherwise --------
+    // The glow animates entirely at draw phase: a static remembered
+    // BorderStroke with the full-alpha gradient, and the scaffold draws it
+    // inside a layer whose alpha reads glowAlpha at draw time — no
+    // recomposition and no per-tick stroke allocation. Layer alpha multiplies
+    // the same gradient, so the rendered stroke is identical to rebuilding the
+    // color list per frame.
     val glowColor = MaterialTheme.colorScheme.primary
-    val glowBorderColors = remember(glowColor, effectiveGlowAlpha) {
-        listOf(
-            glowColor.copy(alpha = effectiveGlowAlpha * 0.6f),
-            glowColor.copy(alpha = effectiveGlowAlpha),
-            glowColor.copy(alpha = effectiveGlowAlpha * 0.6f),
-        )
-    }
-    val loadingBorder = remember(glowBorderColors) {
+    val loadingBorder = remember(glowColor) {
         BorderStroke(
             width = 1.5.dp,
             brush = Brush.linearGradient(
-                colors = glowBorderColors,
+                colors = listOf(
+                    glowColor.copy(alpha = 0.6f),
+                    glowColor.copy(alpha = 1f),
+                    glowColor.copy(alpha = 0.6f),
+                ),
                 start = Offset.Zero,
                 end = Offset(1000f, 1500f),
             ),
@@ -201,19 +202,29 @@ fun SeerrMediaCard(
         enabled = !isLoading,
         clipToShape = clipToShape,
         border = if (isLoading) loadingBorder else null,
+        borderAlpha = if (isLoading) {
+            // Read inside the scaffold's graphicsLayer lambda — draw-phase only.
+            { glowAlpha.value }
+        } else null,
         titleColor = if (isLoading) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
         previewFactory = previewFactory,
         overlays = {
             if (isLoading) {
-                val shimmerBrush = Brush.linearGradient(
-                    colors = shimmerColors,
-                    start = Offset(effectiveShimmerOffset, 0f),
-                    end = Offset(effectiveShimmerOffset + 400f, 400f),
-                )
+                // Shimmer sweep drawn behind-phase: the animated offset is read
+                // inside the draw lambda, so each tick redraws this overlay
+                // without recomposing the card (or any sibling loading card).
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .background(shimmerBrush)
+                        .drawBehind {
+                            drawRect(
+                                Brush.linearGradient(
+                                    colors = shimmerColors,
+                                    start = Offset(shimmerOffset.value, 0f),
+                                    end = Offset(shimmerOffset.value + 400f, 400f),
+                                ),
+                            )
+                        }
                 )
             }
 

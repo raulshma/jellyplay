@@ -360,54 +360,62 @@ class ExoPlayerEngine(
         }
     }
 
+    /**
+     * Construction-relevant inputs of the last player build. When a new
+     * [load] carries an identical set, the existing player is reused with a
+     * bare [androidx.media3.common.Player.setMediaItem] + prepare — the
+     * common binge-watch/autoplay case where renderers factory (decoder mode,
+     * fallback, audio-processor chain), LoadControl buffers, DRM hook, auth
+     * and the ASS session shape are all unchanged. Any delta takes the full
+     * teardown/rebuild path, so behavior stays identical to a fresh engine.
+     */
+    private data class LoadRebuildInputs(
+        val decoderMode: com.raulshma.jellyplay.core.model.DecoderMode,
+        val exoCfg: ExoPlayerEngineConfig,
+        val minBufferMs: Int,
+        val maxBufferMs: Int,
+        val serverUrl: String?,
+        val authToken: String?,
+        val headers: Map<String, String>,
+        val assSession: Boolean,
+        val pauseOnAudioFocusLoss: Boolean,
+        val drmProvider: Any?,
+    )
+
+    private var lastRebuildInputs: LoadRebuildInputs? = null
+
     override fun load(request: PlaybackRequest) {
         ensurePlayerThread("load")
-        release()
         recreateEngineScopeIfInactive()
 
         currentNormalizationGain = request.normalizationGain
 
         val exoCfg = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
+        val assForRequest = AssSupport.hasAssSubtitles(request)
+        val inputs = LoadRebuildInputs(
+            decoderMode = currentConfig.decoderMode,
+            exoCfg = exoCfg,
+            minBufferMs = request.minBufferMs,
+            maxBufferMs = request.maxBufferMs,
+            serverUrl = request.serverUrl,
+            authToken = request.authToken,
+            headers = request.headers,
+            assSession = assForRequest,
+            pauseOnAudioFocusLoss = currentConfig.pauseOnAudioFocusLoss,
+            drmProvider = currentConfig.drmSessionManagerProvider,
+        )
+
+        val existingPlayer = player
+        if (existingPlayer != null && inputs == lastRebuildInputs) {
+            reusePlayerForRequest(existingPlayer, request, exoCfg, assForRequest)
+            return
+        }
+
+        release()
+        lastRebuildInputs = inputs
 
         val selector = DefaultTrackSelector(context)
-        if (request.preferredAudioLanguage != null) {
-            selector.setParameters(
-                selector.buildUponParameters().setPreferredAudioLanguage(request.preferredAudioLanguage)
-            )
-        }
-        if (request.preferredSubtitleLanguage != null) {
-            selector.setParameters(
-                selector.buildUponParameters().setPreferredTextLanguage(request.preferredSubtitleLanguage)
-            )
-        }
-        if (request.maxVideoBitrate != null) {
-            // Local val captures the non-null value: maxVideoBitrate now lives
-            // in :feature:player:core (different module), so Kotlin can no
-            // longer smart-cast the cross-module public property. We are inside
-            // the null-check branch, so !! is provably safe.
-            val maxVideoBitrate = request.maxVideoBitrate!!
-            selector.setParameters(
-                selector.buildUponParameters().setMaxVideoBitrate(maxVideoBitrate)
-            )
-        }
-        if (exoCfg.preferredVideoMimeTypes.isNotEmpty()) {
-            selector.setParameters(
-                selector.buildUponParameters().setPreferredVideoMimeTypes(*exoCfg.preferredVideoMimeTypes.toTypedArray())
-            )
-        }
-        if (exoCfg.audioOffloadMode != com.raulshma.jellyplay.core.model.ExoAudioOffloadMode.DISABLED) {
-            // Media3 surfaces audio offload through the track selector, not the
-            // ExoPlayer.Builder. Map the pref onto AudioOffloadPreferences and
-            // push it into the parameters so the selector prefers offload-decodable
-            // tracks when the user has enabled (or required) the mode.
-            selector.setParameters(
-                selector.buildUponParameters().setAudioOffloadPreferences(
-                    androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.Builder()
-                        .setAudioOffloadMode(exoCfg.audioOffloadMode.value)
-                        .build(),
-                ),
-            )
-        }
+        applyRequestTrackSelection(selector, request, exoCfg)
         trackSelector = selector
 
         val rendererMode = when (currentConfig.decoderMode) {
@@ -455,7 +463,7 @@ class ExoPlayerEngine(
         // when an ASS/SSA subtitle source is present. Non-ASS sessions keep the
         // existing DefaultSubtitleParserFactory path untouched, so the existing
         // engine tests (which never carry ASS sources) are unaffected.
-        assEnabledForSession = AssSupport.hasAssSubtitles(request)
+        assEnabledForSession = assForRequest
         // Reset the active-track ASS flag: a reused engine (load() called again
         // without release()) must not carry over stale activeTrackIsAss=true from
         // a prior ASS track, which would hide subtitles until the next select.
@@ -578,66 +586,75 @@ class ExoPlayerEngine(
         }
 
         // Build media item
-        val metadataBuilder = MediaMetadata.Builder().setTitle(request.title)
-        if (request.artworkUri != null) {
-            metadataBuilder.setArtworkUri(Uri.parse(request.artworkUri))
-        }
+        val subtitleConfigs = buildSubtitleConfigurations(request)
+        val mediaItem = buildRequestMediaItem(request, subtitleConfigs)
+        attachMediaItemAndPrepare(exo, mediaItem, subtitleConfigs, request)
 
-        val subtitleConfigs = request.externalSubtitles.mapNotNull { sub ->
-            val mimeType = sub.mimeType ?: SubtitleMimeMapper.mapCodecToMime(sub.codec ?: sub.label) ?: return@mapNotNull null
-            MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.url))
-                .setId(sub.id)
-                .setMimeType(mimeType)
-                .setLanguage(sub.language)
-                .setLabel(sub.label)
-                .setSelectionFlags(
-                    (if (sub.isDefault) C.SELECTION_FLAG_DEFAULT else 0) or
-                    (if (sub.isForced) C.SELECTION_FLAG_FORCED else 0)
-                )
-                .build()
-        }
+        applyAudioEffects()
+    }
 
-        val mediaItem = MediaItem.Builder()
-            .setUri(request.uri)
-            .apply {
-                // MIME-type hint so DefaultMediaSourceFactory selects the right
-                // MediaSource (HlsMediaSource vs progressive extractor):
-                //  - Caller-provided hint wins (offline container sniffing).
-                //  - Transcoded streams are served as Jellyfin HLS master
-                //    playlists (master.m3u8) — without the hint ExoPlayer
-                //    relies on extension detection, which is fragile when the
-                //    query string trails the .m3u8 path. The official Jellyfin
-                //    Android client pins APPLICATION_M3U8 the same way. This is
-                //    also what makes native HLS seeking (segment + EXTINF
-                //    resolution) reliable on a transcode.
-                val inferredMime = when {
-                    request.mimeType != null -> request.mimeType
-                    request.uri.contains(".m3u8", ignoreCase = true) -> MimeTypes.APPLICATION_M3U8
-                    else -> null
-                }
-                inferredMime?.let { setMimeType(it) }
-            }
-            .setSubtitleConfigurations(subtitleConfigs)
-            .setMediaMetadata(metadataBuilder.build())
-            .build()
+    /**
+     * Fast path for an unchanged-config reload on a live player (the
+     * binge-watch/autoplay case): swap the media item and prepare instead of
+     * tearing down and rebuilding the whole ExoPlayer — no DefaultRenderers
+     * reflection scan, no re-created LoadControl/media-source factories, and
+     * the player keeps its state (buffers may partially survive where the
+     * timeline allows). Rendered behavior matches a fresh engine; only
+     * construction latency and the inter-item rebuffer disappear.
+     */
+    private fun reusePlayerForRequest(
+        exo: ExoPlayer,
+        request: PlaybackRequest,
+        exoCfg: ExoPlayerEngineConfig,
+        assForRequest: Boolean,
+    ) {
+        assEnabledForSession = assForRequest
+        // Reset the active-track ASS flag: the reused engine must not carry
+        // over stale activeTrackIsAss=true from a prior ASS track.
+        activeTrackIsAss = false
+        // Mirror the per-item state resets of release()+rebuild for the fields
+        // the fresh path re-establishes; stale cues from the previous item
+        // would otherwise linger into the new one's loading window.
+        _currentCues.value = emptyList()
+        _availableTracks.value = emptyList()
+        lastSelectedTextTrackId = null
+        subtitleTrackAutoDisabled = false
 
+        trackSelector?.let { applyRequestTrackSelection(it, request, exoCfg) }
+
+        val subtitleConfigs = buildSubtitleConfigurations(request)
+        val mediaItem = buildRequestMediaItem(request, subtitleConfigs)
+        attachMediaItemAndPrepare(exo, mediaItem, subtitleConfigs, request)
+
+        applyAudioEffects()
+    }
+
+    /**
+     * Common tail of the rebuild ([load]) and reuse ([reusePlayerForRequest])
+     * paths: record the item-scoped state, then start playback with the resume
+     * position folded into a single prepare. With a non-zero subtitle delay
+     * configured at boot (typically a persisted per-item correction), the
+     * onConfigChanged → refreshSubtitlesForOffsetChange reload never ran —
+     * updateConfig fires before load() creates the player, so the reload
+     * no-ops and the saved delay only took effect once re-adjusted
+     * mid-playback. Reload once at the requested start position so Media3
+     * re-parses cues through the OffsettingSubtitleParserFactory with the
+     * delay applied — the same proven path the live slider uses.
+     * setMediaItem(item, startPosMs) folds the seek into the reload so there
+     * is a single prepare (no double-buffer) and the resume position is
+     * preserved; the no-delay path seeks after prepare instead.
+     */
+    private fun attachMediaItemAndPrepare(
+        exo: ExoPlayer,
+        mediaItem: MediaItem,
+        subtitleConfigs: List<MediaItem.SubtitleConfiguration>,
+        request: PlaybackRequest,
+    ) {
         currentMediaItem = mediaItem
         serverDurationMs = request.serverDurationMs
         currentSubtitleConfigs.clear()
         currentSubtitleConfigs.addAll(subtitleConfigs)
         if (currentConfig.subtitleDelayMs != 0L) {
-            // A non-zero subtitle delay configured at boot (typically a persisted
-            // per-item correction) never ran the onConfigChanged →
-            // refreshSubtitlesForOffsetChange reload: updateConfig fires before
-            // load() creates the player, so player/currentMediaItem are null at
-            // boot and refreshSubtitlesForOffsetChange() no-ops. The saved delay
-            // therefore only took effect once the user re-adjusted it
-            // mid-playback (which fires the reload with the player alive). Reload
-            // once here at the requested start position so Media3 re-parses cues
-            // through the OffsettingSubtitleParserFactory with the delay applied
-            // — the same proven path the live slider uses. setMediaItem(item,
-            // startPosMs) folds the seek into the reload so there is a single
-            // prepare (no double-buffer) and the resume position is preserved.
             exo.setMediaItem(mediaItem, request.startPositionMs)
             exo.prepare()
             exo.play()
@@ -649,8 +666,99 @@ class ExoPlayerEngine(
             }
             exo.play()
         }
+    }
 
-        applyAudioEffects()
+    /**
+     * Request-scoped track-selection parameters. Built from bare defaults —
+     * not `buildUponParameters()` — so a reused selector never carries
+     * preferred languages, a bitrate cap, or overrides from the previous
+     * item; a fresh selector in the rebuild path gets the same base.
+     */
+    private fun applyRequestTrackSelection(
+        selector: DefaultTrackSelector,
+        request: PlaybackRequest,
+        exoCfg: ExoPlayerEngineConfig,
+    ) {
+        val params = DefaultTrackSelector.Parameters.Builder(context)
+        if (request.preferredAudioLanguage != null) {
+            params.setPreferredAudioLanguage(request.preferredAudioLanguage)
+        }
+        if (request.preferredSubtitleLanguage != null) {
+            params.setPreferredTextLanguage(request.preferredSubtitleLanguage)
+        }
+        if (request.maxVideoBitrate != null) {
+            // Local val captures the non-null value: maxVideoBitrate now lives
+            // in :feature:player:core (different module), so Kotlin can no
+            // longer smart-cast the cross-module public property. We are inside
+            // the null-check branch, so !! is provably safe.
+            params.setMaxVideoBitrate(request.maxVideoBitrate!!)
+        }
+        if (exoCfg.preferredVideoMimeTypes.isNotEmpty()) {
+            params.setPreferredVideoMimeTypes(*exoCfg.preferredVideoMimeTypes.toTypedArray())
+        }
+        if (exoCfg.audioOffloadMode != com.raulshma.jellyplay.core.model.ExoAudioOffloadMode.DISABLED) {
+            // Media3 surfaces audio offload through the track selector, not the
+            // ExoPlayer.Builder. Map the pref onto AudioOffloadPreferences and
+            // push it into the parameters so the selector prefers offload-decodable
+            // tracks when the user has enabled (or required) the mode.
+            params.setAudioOffloadPreferences(
+                androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.Builder()
+                    .setAudioOffloadMode(exoCfg.audioOffloadMode.value)
+                    .build(),
+            )
+        }
+        selector.setParameters(params)
+    }
+
+    private fun buildSubtitleConfigurations(
+        request: PlaybackRequest,
+    ): List<MediaItem.SubtitleConfiguration> =
+        request.externalSubtitles.mapNotNull { sub ->
+            val mimeType = sub.mimeType ?: SubtitleMimeMapper.mapCodecToMime(sub.codec ?: sub.label) ?: return@mapNotNull null
+            MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.url))
+                .setId(sub.id)
+                .setMimeType(mimeType)
+                .setLanguage(sub.language)
+                .setLabel(sub.label)
+                .setSelectionFlags(
+                    (if (sub.isDefault) C.SELECTION_FLAG_DEFAULT else 0) or
+                        (if (sub.isForced) C.SELECTION_FLAG_FORCED else 0)
+                )
+                .build()
+        }
+
+    private fun buildRequestMediaItem(
+        request: PlaybackRequest,
+        subtitleConfigs: List<MediaItem.SubtitleConfiguration>,
+    ): MediaItem {
+        val metadataBuilder = MediaMetadata.Builder().setTitle(request.title)
+        if (request.artworkUri != null) {
+            metadataBuilder.setArtworkUri(Uri.parse(request.artworkUri))
+        }
+
+        return MediaItem.Builder()
+            .setUri(request.uri)
+            .apply {
+                // MIME-type hint so DefaultMediaSourceFactory selects the right
+                // MediaSource (HlsMediaSource vs progressive extractor):
+                //  - Caller-provided hint wins (offline container sniffing).
+                //  - Transcoded streams are served as Jellyfin HLS master
+                // playlists (master.m3u8) — without the hint ExoPlayer
+                // relies on extension detection, which is fragile when the
+                // query string trails the .m3u8 path. The official Jellyfin
+                // Android client pins APPLICATION_M3U8 the same way. This is
+                // also what makes native HLS seeking (segment + EXTINF
+                // resolution) reliable on a transcode.
+                val inferredMime = when {
+                    request.mimeType != null -> request.mimeType
+                    request.uri.contains(".m3u8", ignoreCase = true) -> MimeTypes.APPLICATION_M3U8
+                    else -> null
+                }
+                inferredMime?.let { setMimeType(it) }
+            }
+            .setSubtitleConfigurations(subtitleConfigs)
+            .setMediaMetadata(metadataBuilder.build())
+            .build()
     }
 
     private fun createAuthenticatedDataSourceFactory(

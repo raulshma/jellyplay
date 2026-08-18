@@ -118,12 +118,18 @@ class SearchViewModel @Inject constructor(
 
     private var seerrSearchJob: Job? = null
 
+    // Tracked like seerrSearchJob: an untracked offline scan could complete
+    // after a newer query published its results and overwrite them with
+    // stale rows (plus a wasted duplicate DB scan per keystroke burst).
+    private var offlineSearchJob: Job? = null
+
     val pagedResults: Flow<PagingData<MediaItem>> = combine(
         queryFlow.flow.debounce(mediaSearchEngine.debounceMs).distinctUntilChanged(),
         _filters.flow,
     ) { q, f -> q to f }
         .flatMapLatest { (currentQuery, filters) ->
             seerrSearchJob?.cancel()
+            offlineSearchJob?.cancel()
             _seerrResults.set(emptyList())
             _seerrSearchError.set(false)
             if (currentQuery.isBlank()) {
@@ -131,7 +137,7 @@ class SearchViewModel @Inject constructor(
                 flowOf(PagingData.empty())
             } else {
                 seerrSearchJob = launch { searchSeerr(currentQuery) }
-                launch { searchOffline(currentQuery) }
+                offlineSearchJob = launch { searchOffline(currentQuery) }
                 mediaRepository.searchPaged(
                     query = currentQuery,
                     filters = filters,

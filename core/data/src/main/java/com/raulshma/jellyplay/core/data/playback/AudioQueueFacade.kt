@@ -195,7 +195,7 @@ class DefaultAudioQueueFacade @Inject constructor(
             tracks.map { it.toQueueItem(albumFallback, imageMaxWidth) }
         }
         return withContext(Dispatchers.Main) {
-            items.forEach(queueManager::addToQueue)
+            queueManager.addToQueueAll(items)
             AudioQueueOutcome.Started(items, startIndex = -1)
         }
     }

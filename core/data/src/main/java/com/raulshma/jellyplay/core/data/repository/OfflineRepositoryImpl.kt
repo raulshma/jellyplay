@@ -70,6 +70,15 @@ class OfflineRepositoryImpl @Inject constructor(
     private val database: JellyPlayDatabase,
 ) : OfflineRepository {
 
+    /**
+     * Per-item artwork memo (see [ArtworkInputKey]): maps item id to its
+     * last resolution inputs and result so download progress ticks skip the
+     * FS stats + series-prefetch queries entirely. Same memoization pattern
+     * as the file-level JSON decode caches below.
+     */
+    private val artworkMemoCache =
+        androidx.collection.LruCache<String, Pair<ArtworkInputKey, ResolvedArtwork>>(512)
+
     override fun getOfflineDetail(id: String): Flow<OfflineMediaItem?> =
         offlineMediaDao.getByIdWithPlaybackFlow(id).flatMapLatest { row ->
             if (row == null) {
@@ -494,12 +503,73 @@ class OfflineRepositoryImpl @Inject constructor(
      * table writes, not per recomposition.
      */
     private suspend fun resolveItemArtwork(item: OfflineMediaItem): OfflineMediaItem =
-        resolveItemArtwork(item, SeriesPrefetch())
+        resolveItemArtwork(item, artworkInputKey(item), SeriesPrefetch())
+
+    /**
+     * Memoization seam for the artwork pass: everything the resolver reads
+     * (its FS stats and series-prefetch queries) is a pure function of these
+     * inputs, so a cached result can be replayed when they are unchanged.
+     * Byte-count-only download progress ticks — the 2 s cadence during active
+     * transfers — never appear in the key, which is what keeps ~1000 stats +
+     * 2 queries per tick off the offline screen. Only the download's
+     * completed-ness is keyed, not the full status: artwork appears beside
+     * the file when the download completes, so COMPLETED↔not transitions must
+     * re-resolve — but a PAUSED↔DOWNLOADING flip changes nothing the resolver
+     * reads and keeps the memo hit.
+     */
+    private data class ArtworkInputKey(
+        val id: String,
+        val mediaType: MediaType,
+        val seriesId: String?,
+        val posterPath: String?,
+        val backdropPath: String?,
+        val downloadPath: String?,
+        val downloadIsComplete: Boolean,
+        val cast: List<OfflinePersonInfo>,
+    )
+
+    private data class ResolvedArtwork(
+        val posterPath: String?,
+        val backdropPath: String?,
+        val cast: List<OfflinePersonInfo>,
+    )
+
+    private fun artworkInputKey(item: OfflineMediaItem) = ArtworkInputKey(
+        id = item.id,
+        mediaType = item.mediaType,
+        seriesId = item.seriesId,
+        posterPath = item.posterPath,
+        backdropPath = item.backdropPath,
+        downloadPath = item.downloadPath,
+        downloadIsComplete = item.downloadStatus == DownloadStatus.COMPLETED,
+        cast = item.cast,
+    )
+
+    private fun applyResolvedArtwork(
+        item: OfflineMediaItem,
+        resolved: ResolvedArtwork,
+    ): OfflineMediaItem =
+        if (resolved.posterPath == item.posterPath &&
+            resolved.backdropPath == item.backdropPath &&
+            resolved.cast === item.cast
+        ) {
+            item
+        } else {
+            item.copy(
+                posterPath = resolved.posterPath,
+                backdropPath = resolved.backdropPath,
+                cast = resolved.cast,
+            )
+        }
 
     private suspend fun resolveItemArtwork(
         item: OfflineMediaItem,
+        key: ArtworkInputKey,
         prefetch: SeriesPrefetch,
     ): OfflineMediaItem {
+        artworkMemoCache.get(item.id)?.let { (cachedKey, resolved) ->
+            if (cachedKey == key) return applyResolvedArtwork(item, resolved)
+        }
         // First: the item's own artifact beside its media file (all types).
         val ownDir = item.downloadPath
             ?.takeIf { it.isNotBlank() }
@@ -524,21 +594,9 @@ class OfflineRepositoryImpl @Inject constructor(
         } else {
             item.cast
         }
-        // Fast path: nothing on the row needed artwork resolution (no remote
-        // poster/backdrop and no cast, or cast but no artifact dir). Avoids a
-        // copy() allocation on the hot library-grid read path.
-        return if (posterResolved == item.posterPath &&
-            backdropResolved == item.backdropPath &&
-            resolvedCast === item.cast
-        ) {
-            item
-        } else {
-            item.copy(
-                posterPath = posterResolved,
-                backdropPath = backdropResolved,
-                cast = resolvedCast,
-            )
-        }
+        val resolved = ResolvedArtwork(posterResolved, backdropResolved, resolvedCast)
+        artworkMemoCache.put(item.id, key to resolved)
+        return applyResolvedArtwork(item, resolved)
     }
 
     /**
@@ -555,16 +613,30 @@ class OfflineRepositoryImpl @Inject constructor(
     private suspend fun resolveArtworkList(items: List<OfflineMediaItem>): List<OfflineMediaItem> {
         if (items.isEmpty()) return items
         return withContext(Dispatchers.IO) {
-            // All episodes of a season share one seriesId — prefetch each
-            // distinct parent series row once instead of re-querying it per
-            // episode on every emission. Same for each SERIES item's
-            // downloaded-episode dir (one projected query for the whole
-            // list instead of a getDownloadsForSeries round-trip per series).
-            val prefetch = SeriesPrefetch(
-                seriesRowsById = prefetchSeriesRows(items),
-                seriesDirsById = prefetchSeriesArtifactDirs(items),
-            )
-            items.map { resolveItemArtwork(it, prefetch) }
+            val keys = items.map(::artworkInputKey)
+            // Byte-count-only re-emissions (2 s download progress ticks) are
+            // full cache hits: no series-prefetch queries, no File.exists
+            // stats — only cheap copy-or-same instance projections.
+            val allCached = items.indices.all { i ->
+                val cached = artworkMemoCache.get(items[i].id)
+                cached != null && cached.first == keys[i]
+            }
+            if (allCached) {
+                items.mapIndexed { i, item ->
+                    applyResolvedArtwork(item, requireNotNull(artworkMemoCache.get(item.id)).second)
+                }
+            } else {
+                // All episodes of a season share one seriesId — prefetch each
+                // distinct parent series row once instead of re-querying it per
+                // episode on every emission. Same for each SERIES item's
+                // downloaded-episode dir (one projected query for the whole
+                // list instead of a getDownloadsForSeries round-trip per series).
+                val prefetch = SeriesPrefetch(
+                    seriesRowsById = prefetchSeriesRows(items),
+                    seriesDirsById = prefetchSeriesArtifactDirs(items),
+                )
+                items.mapIndexed { i, item -> resolveItemArtwork(item, keys[i], prefetch) }
+            }
         }
     }
 

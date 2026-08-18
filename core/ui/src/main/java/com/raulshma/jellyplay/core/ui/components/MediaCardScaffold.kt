@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.ui.components
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -88,6 +89,13 @@ fun MediaCardScaffold(
     scrimBrush: Brush? = null,
     scrimHeight: Dp = 60.dp,
     border: BorderStroke? = null,
+    /**
+     * When non-null, [border] is drawn inside a graphics layer whose alpha is
+     * resolved by this lambda at draw time (instead of being passed to the
+     * Card as a fixed stroke). Lets callers animate a border glow without
+     * recomposing — the layer-property read invalidates drawing only.
+     */
+    borderAlpha: (() -> Float)? = null,
     titleColor: Color = MaterialTheme.colorScheme.onSurface,
     previewFactory: ((sourceBounds: Rect?) -> MediaPreview)? = null,
     onLongPress: (() -> Unit)? = null,
@@ -167,6 +175,13 @@ fun MediaCardScaffold(
                     clip = clipToShape
                     shape = cardShape
                 }
+                .then(
+                    if (borderAlpha != null && resolvedBorder != null) {
+                        Modifier
+                            .graphicsLayer { alpha = borderAlpha().coerceIn(0f, 1f) }
+                            .border(resolvedBorder, cardShape)
+                    } else Modifier
+                )
                 .jellyFocusIndicator(focusInteraction, cardShape)
                 .combinedClickable(
                     interactionSource = interactionSource,
@@ -180,7 +195,7 @@ fun MediaCardScaffold(
                     enabled = enabled,
                 ),
             shape = cardShape,
-            border = resolvedBorder,
+            border = if (borderAlpha != null) null else resolvedBorder,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Box {

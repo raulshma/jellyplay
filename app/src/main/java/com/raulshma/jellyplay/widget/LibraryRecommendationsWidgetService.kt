@@ -14,7 +14,6 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -22,9 +21,9 @@ import kotlinx.coroutines.runBlocking
  * [RemoteViewsFactory] that loads cached items from
  * [WidgetDataStore.libraryWidgetItems].
  *
- * Factory operations are synchronous, so the Hilt entry point is used
- * to grab a [WidgetDataStore] handle and the latest list is loaded
- * with [runBlocking] on each [onDataSetChanged] call. The
+ * `onDataSetChanged` runs on the main thread; items are read from the
+ * store's eagerly-warmed [kotlinx.coroutines.flow.StateFlow] snapshots so
+ * no DataStore disk IO blocks it. The
  * [LibraryRecommendationsWidget] calls
  * [AppWidgetManager.notifyAppWidgetViewDataChanged] whenever the data
  * changes, which re-binds the factory.
@@ -72,9 +71,12 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
             // the version bump in [WidgetPersistHelper] because the content
             // was unchanged. Always reading is cheap (single DataStore read)
             // and makes the widget resilient to those edge cases.
-            val (fresh, version) = runBlocking {
-                store.libraryWidgetItems.first() to store.libraryWidgetVersion.first()
-            }
+            // Snapshot flows are eagerly warmed on the store's scope, so these
+            // are memory reads — no DataStore disk IO on the main thread
+            // (`onDataSetChanged` is posted to the main-thread handler). On a
+            // cold process the store does one bounded warm-up read instead of
+            // serving the empty placeholder.
+            val (fresh, version) = store.libraryWidgetItemsSnapshot() to store.libraryWidgetVersion.value
             items = fresh
             loadedVersion = version
             // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.

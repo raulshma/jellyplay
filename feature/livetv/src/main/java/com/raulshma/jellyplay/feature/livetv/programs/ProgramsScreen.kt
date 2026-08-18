@@ -48,6 +48,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.rememberStableCallback
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -165,11 +166,19 @@ private fun ProgramRowSection(
             modifier = Modifier.tvFocusRestorer(),
         ) {
             items(items = row.programs, key = { it.id }) { program ->
+                // Memoized per-item derivations + click lambdas keep ProgramCard
+                // skippable across uiState emissions — the LibraryScreen grid
+                // pattern.
+                val imageUrl = remember(program.id, program.imageTag) {
+                    getImageUrl(program.id, program.imageTag)
+                }
+                val memoizedClick = rememberStableCallback(program.id) { onItemClick(program) }
+                val memoizedLongPress = rememberStableCallback(program.id) { onItemLongPress(program) }
                 ProgramCard(
                     program = program,
-                    imageUrl = getImageUrl(program.id, program.imageTag),
-                    onClick = { onItemClick(program) },
-                    onLongClick = { onItemLongPress(program) },
+                    imageUrl = imageUrl,
+                    onClick = memoizedClick,
+                    onLongClick = memoizedLongPress,
                 )
             }
         }

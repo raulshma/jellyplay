@@ -132,12 +132,19 @@ class OfflineSyncManager @Inject constructor(
         }
 
         syncBaselineDao.setSyncChecking(itemId, 1)
+        // Both terminal paths below (persistCheckResult / recordError) already
+        // clear the checking flag in their upsert; the finally only needs to
+        // write on paths that reached neither (e.g. cancellation mid-check) —
+        // a per-item redundant UPDATE would re-invalidate the sync-baseline
+        // observers once more per item in every batch.
+        var checkingFlagCleared = false
         try {
             // Force read: bypass the TTL detail cache so we get a fresh fetch,
             // not a stale read.
             val fresh = mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
             if (fresh == null) {
                 recordError(itemId, baseline)
+                checkingFlagCleared = true
                 return ResyncCheckResult(itemId, baseline.toOfflineSyncState().copy(status = SyncStatus.ERROR))
             }
             val result = comparator.diff(baseline.toSyncBaseline(), fresh, itemId)
@@ -152,13 +159,17 @@ class OfflineSyncManager @Inject constructor(
                 // resync and swallow a real change).
                 retainedSegmentsSignature = baseline.syncedSegmentsSignature,
             )
+            checkingFlagCleared = true
             return result
         } catch (e: Exception) {
             Log.w(TAG, "Freshness check failed for $itemId", e)
             recordError(itemId, baseline)
+            checkingFlagCleared = true
             return ResyncCheckResult(itemId, baseline.toOfflineSyncState().copy(status = SyncStatus.ERROR))
         } finally {
-            syncBaselineDao.setSyncChecking(itemId, 0)
+            if (!checkingFlagCleared) {
+                syncBaselineDao.setSyncChecking(itemId, 0)
+            }
         }
     }
 

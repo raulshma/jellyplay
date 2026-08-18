@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberStableCallback
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -140,14 +141,30 @@ fun ChannelsScreen(
                         key = { it.id },
                         contentType = { "channel" },
                     ) { channel ->
+                        // Memoized per-item derivations + click lambdas keep
+                        // ChannelCard skippable across uiState emissions
+                        // (favorite toggle, refresh) — the LibraryScreen grid
+                        // pattern.
+                        val imageUrl = remember(channel.id, channel.imageTag) {
+                            viewModel.getImageUrl(channel.id, channel.imageTag)
+                        }
+                        val memoizedClick = rememberStableCallback(channel.id, channel.name) {
+                            onChannelClick(channel.id, channel.name)
+                        }
+                        val memoizedPlay = rememberStableCallback(channel.id, channel.name) {
+                            onPlayChannel(channel.id, channel.name)
+                        }
+                        val memoizedFavoriteToggle = rememberStableCallback(channel.id) {
+                            viewModel.toggleFavorite(channel.id)
+                        }
                         ChannelCard(
                             channel = channel,
-                            imageUrl = viewModel.getImageUrl(channel.id, channel.imageTag),
+                            imageUrl = imageUrl,
                             isNowPlaying = channel.id == nowPlayingChannelId,
                             isFavorite = channel.id in favoriteChannelIds,
-                            onClick = { onChannelClick(channel.id, channel.name) },
-                            onPlay = { onPlayChannel(channel.id, channel.name) },
-                            onFavoriteToggle = { viewModel.toggleFavorite(channel.id) },
+                            onClick = memoizedClick,
+                            onPlay = memoizedPlay,
+                            onFavoriteToggle = memoizedFavoriteToggle,
                         )
                     }
                 }

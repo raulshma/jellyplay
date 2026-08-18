@@ -1248,14 +1248,14 @@ class MediaRepositoryImpl @Inject constructor(
                     times.forEach { timeMs -> lines.add(LyricsLine(timeMs = timeMs, text = "")) }
                 } else {
                     times.forEach { timeMs ->
-                        val adjustedWords = if (words.isNotEmpty()) {
-                            words.map { it.copy(timeMs = it.timeMs) }
-                        } else emptyList()
+                        // `words.map { it.copy(timeMs = it.timeMs) }` was an
+                        // identity copy of every word-timed line — the parsed
+                        // immutable list is already the final shape.
                         lines.add(
                             LyricsLine(
                                 timeMs = timeMs,
                                 text = text,
-                                words = adjustedWords,
+                                words = words,
                             )
                         )
                     }

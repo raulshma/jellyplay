@@ -203,8 +203,18 @@ class AudioLibraryBrowser(
                         }
                         mediaId.startsWith("PLAYLIST_|") -> {
                             val id = mediaId.removePrefix("PLAYLIST_|")
-                            val playlists = mediaRepository.getPlaylists().getOrNull() ?: emptyList()
-                            playlists.find { it.id == id }?.let { mapPlaylistToMediaItem(it) }
+                            // Single-item detail fetch — the mapper only reads
+                            // id + name, so a synthetic Playlist from the detail
+                            // is equivalent without pulling every playlist from
+                            // the server (the sibling ARTIST_/ALBUM_ approach).
+                            mediaRepository.getMediaDetail(id).getOrNull()?.let { detail ->
+                                mapPlaylistToMediaItem(
+                                    com.raulshma.jellyplay.core.model.Playlist(
+                                        id = detail.item.id,
+                                        name = detail.item.name,
+                                    )
+                                )
+                            }
                         }
                         else -> null
                     }

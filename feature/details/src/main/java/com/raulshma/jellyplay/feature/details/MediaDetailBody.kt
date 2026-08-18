@@ -1220,25 +1220,39 @@ private fun VideosSection(
     // per video per recomposition.
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
-    val videoCardBorder = when {
-        isSynthwave -> {
-            androidx.compose.foundation.BorderStroke(
-                width = 1.5.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary,
-                        MaterialTheme.colorScheme.secondary
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val outlineColor = MaterialTheme.colorScheme.outline
+    val videoCardBorder = remember(isSynthwave, isSoothing, primaryColor, secondaryColor, outlineColor) {
+        when {
+            isSynthwave -> {
+                androidx.compose.foundation.BorderStroke(
+                    width = 1.5.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(primaryColor, secondaryColor)
                     )
                 )
-            )
+            }
+            isSoothing -> {
+                androidx.compose.foundation.BorderStroke(
+                    width = 0.8.dp,
+                    color = outlineColor.copy(alpha = 0.35f)
+                )
+            }
+            else -> null
         }
-        isSoothing -> {
-            androidx.compose.foundation.BorderStroke(
-                width = 0.8.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-            )
-        }
-        else -> null
+    }
+    // Same hoist for the per-card bottom scrim: identical for every video,
+    // so build it once instead of per card per recomposition.
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val videoScrimBrush = remember(surfaceColor) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color.Transparent,
+                surfaceColor.copy(alpha = 0.85f)
+            ),
+            startY = 100f
+        )
     }
     Column {
         FadingItem {
@@ -1301,15 +1315,7 @@ private fun VideosSection(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            colors = listOf(
-                                                Color.Transparent,
-                                                MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-                                            ),
-                                            startY = 100f
-                                        )
-                                    )
+                                    .background(videoScrimBrush)
                             )
 
                             Text(

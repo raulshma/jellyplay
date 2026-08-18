@@ -92,21 +92,38 @@ open class AudioStreamCache @Inject constructor(
     /**
      * Wraps [upstream] in a [CacheDataSource.Factory]. If the cache is
      * unavailable, returns [upstream] unchanged (passthrough).
+     *
+     * Production callers always pass our own [buildUpstreamFactory] result, so
+     * both the upstream chain and the derived cache factory are process-stable
+     * — memoized in [cachedUpstreamFactory]/[cachedCacheFactory] instead of
+     * being rebuilt per player creation and per [warmTrack] prefetch.
+     * Invalidated by [clear]; custom upstreams (tests) bypass the memo.
      */
     fun getCacheDataSourceFactory(upstream: DataSource.Factory): DataSource.Factory {
+        if (upstream === cachedUpstreamFactory) {
+            cachedCacheFactory?.let { return it }
+        }
         val sc = ensureCache() ?: return upstream
-        return CacheDataSource.Factory()
+        val factory = CacheDataSource.Factory()
             .setCache(sc)
             .setUpstreamDataSourceFactory(upstream)
             .setCacheKeyFactory(cacheKeyFactory)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        if (upstream === cachedUpstreamFactory) {
+            cachedCacheFactory = factory
+        }
+        return factory
     }
+
+    @Volatile private var cachedUpstreamFactory: DataSource.Factory? = null
+    @Volatile private var cachedCacheFactory: DataSource.Factory? = null
 
     /** Builds the OkHttp-backed upstream factory used by both player and warmer. */
     fun buildUpstreamFactory(): DataSource.Factory {
+        cachedUpstreamFactory?.let { return it }
         val httpFactory = OkHttpDataSource.Factory(streamingOkHttpClient)
             .setUserAgent("JellyPlay")
-        return DefaultDataSource.Factory(context, httpFactory)
+        return DefaultDataSource.Factory(context, httpFactory).also { cachedUpstreamFactory = it }
     }
 
     /** Bytes currently held in the cache. */
@@ -163,6 +180,10 @@ open class AudioStreamCache @Inject constructor(
             cache?.release()
             cache = null
             available = false
+            // The memoized factories reference the released SimpleCache —
+            // drop them so the next request rebuilds against the fresh cache.
+            cachedCacheFactory = null
+            cachedUpstreamFactory = null
         }
         resolveCacheDir().deleteRecursively()
         resolveCacheDir().mkdirs()
