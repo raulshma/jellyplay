@@ -68,6 +68,13 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+private val SynthwaveBackgroundBrush = Brush.verticalGradient(
+    colors = listOf(
+        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_BACKGROUND,
+        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_BACKGROUND_END,
+    )
+)
+
 @Composable
 fun rememberScreenBackgroundColor(
     artworkColor: Color? = null,
@@ -142,14 +149,7 @@ fun JellyPlayScreenScaffold(
 
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
     val backgroundModifier = if (themeVariant == com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE) {
-        Modifier.background(
-            Brush.verticalGradient(
-                colors = listOf(
-                    com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_BACKGROUND,
-                    com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_BACKGROUND_END,
-                )
-            )
-        )
+        Modifier.background(SynthwaveBackgroundBrush)
     } else {
         Modifier.background(backgroundColor)
     }

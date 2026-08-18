@@ -10,9 +10,7 @@ import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collectLatest
 import javax.inject.Inject
 
 @Immutable
@@ -41,8 +39,6 @@ class AdminDashboardViewModel @Inject constructor(
     private val _uiState = stateFlow(AdminDashboardState())
     val uiState: StateFlow<AdminDashboardState> = _uiState.flow
 
-    private val hasRunningTasks = MutableStateFlow(false)
-
     /**
      * Deadline (via [System.currentTimeMillis]) up to which an IDLE scan task
      * is treated as RUNNING. Set when the user triggers a scan: the server
@@ -56,9 +52,19 @@ class AdminDashboardViewModel @Inject constructor(
 
     init {
         loadDashboard()
-        startAutoRefresh()
+        observeScheduledTasks()
         observeScanLibraryTask()
     }
+
+    /**
+     * Tasks currently executing — shared by the REST seed and the WS push
+     * below. Hidden tasks are excluded on both paths: the REST fetch asks for
+     * all tasks (`isHidden = null`), so the filter must live here rather than
+     * only in the WS collector, or a hidden RUNNING task from the seed would
+     * vanish on the first WS push.
+     */
+    private fun List<ScheduledTaskInfo>.running() =
+        filter { !it.isHidden && it.state == TaskState.RUNNING }
 
     fun loadDashboard() {
         launch {
@@ -68,8 +74,7 @@ class AdminDashboardViewModel @Inject constructor(
             try {
                 val summary = adminRepository.getDashboardSummary().getOrThrow()
 
-                val running = summary.tasks.filter { task -> task.state == TaskState.RUNNING }
-                hasRunningTasks.value = running.isNotEmpty()
+                val running = summary.tasks.running()
                 // Seed the scan state from the initial REST snapshot so the
                 // button reflects an in-progress scan before the first WS
                 // push lands. Subsequent updates come from [observeScanLibraryTask].
@@ -79,7 +84,12 @@ class AdminDashboardViewModel @Inject constructor(
                         isLoading = false,
                         systemInfo = summary.systemInfo,
                         itemCounts = summary.itemCounts,
-                        runningTasks = running,
+                        // Initial snapshot only: seeds the running-task card
+                        // before the first WS push. While pushes land
+                        // (replay = 1 + 1 Hz cadence) the socket owns this
+                        // field — but a silent socket must not freeze it
+                        // either; see [wsTasksFresh].
+                        runningTasks = if (wsTasksFresh()) it.runningTasks else running,
                         sessions = summary.sessions,
                         recentActivity = summary.recentActivity,
                     )
@@ -90,27 +100,41 @@ class AdminDashboardViewModel @Inject constructor(
         }
     }
 
-    private var refreshJob: kotlinx.coroutines.Job? = null
-
-    private fun startAutoRefresh() {
-        refreshJob?.cancel()
-        refreshJob = launch {
-            hasRunningTasks.collectLatest { running ->
-                while (running) {
-                    delay(15000)
-                    refreshRunningTasks()
-                }
-            }
-        }
+    /**
+     * True while WS task pushes are recent enough to be trusted over a REST
+     * snapshot (1 Hz cadence; 30 s of silence means the socket is dead).
+     * Freshness is judged from the channel's push timestamp, not from
+     * collection: the shared flow replays its last emission to every new
+     * collector, and that replay can be arbitrarily old.
+     */
+    private fun wsTasksFresh(): Boolean {
+        val lastPushAtMs = adminRepository.scheduledTasksLastPushAtMs
+        return lastPushAtMs != 0L &&
+            System.currentTimeMillis() - lastPushAtMs < WS_PUSH_STALE_AFTER_MS
     }
 
-    private suspend fun refreshRunningTasks() {
-        val result = adminRepository.getScheduledTasks()
-        val tasks = result.getOrNull() ?: return
-        val running = tasks.filter { task -> task.state == TaskState.RUNNING }
-        hasRunningTasks.value = running.isNotEmpty()
-        _uiState.update {
-            it.copy(runningTasks = running)
+    /**
+     * Live running-task list from the WebSocket `ScheduledTasksInfo` push
+     * (full list, 1 Hz, over the shared socket — the same single source of
+     * truth [observeScanLibraryTask] reads). Replaces the prior 15 s REST
+     * polling loop, which raced the socket as a second source of truth.
+     *
+     * [loadDashboard]'s REST snapshot seeds
+     * [AdminDashboardState.runningTasks] only while pushes are landing
+     * ([wsTasksFresh]); afterwards the socket owns the field, so a slow
+     * REST response can never flicker the UI back to older data. Hidden
+     * tasks are filtered out by [running], on both the REST seed and the
+     * WS push.
+     */
+    private fun observeScheduledTasks() {
+        launch {
+            adminRepository.scheduledTasks.collect { tasks ->
+                _uiState.update {
+                    it.copy(
+                        runningTasks = tasks.running(),
+                    )
+                }
+            }
         }
     }
 
@@ -246,14 +270,14 @@ class AdminDashboardViewModel @Inject constructor(
         _uiState.update { it.copy(libraryScanState = nextState) }
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        refreshJob?.cancel()
-    }
-
     private companion object {
         // Jellyfin scheduled-task key for "Scan media library".
         const val KEY_SCAN_LIBRARY = "RefreshLibrary"
+
+        // WS task pushes arrive at 1 Hz; past this much silence the socket
+        // is considered dead and REST snapshots may refresh runningTasks
+        // again (see [wsTasksFresh]).
+        private const val WS_PUSH_STALE_AFTER_MS = 30_000L
 
         // How long to keep the optimistic Running state after the user taps
         // "Scan Library", waiting for the server to flip the task to RUNNING.

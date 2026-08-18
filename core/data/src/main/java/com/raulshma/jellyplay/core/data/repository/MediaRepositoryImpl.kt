@@ -783,7 +783,9 @@ class MediaRepositoryImpl @Inject constructor(
                     return@runCatching LyricsResult(lines = emptyList(), source = LyricsSource.LRCLIB)
                 }
                 if (!trackSynced.isNullOrBlank()) {
-                    val lines = parseLrc(trackSynced)
+                    // Regex-heavy parse over the full synced blob — keep it off the
+                    // Main dispatcher this suspend path is usually called on.
+                    val lines = withContext(Dispatchers.Default) { parseLrc(trackSynced) }
                     if (lines.isNotEmpty()) {
                         lyricsCacheDao.upsert(
                             LyricsCacheEntity(
@@ -842,7 +844,9 @@ class MediaRepositoryImpl @Inject constructor(
             val trackSynced = track.syncedLyrics
             val trackPlain = track.plainLyrics
             val lines = if (!trackSynced.isNullOrBlank()) {
-                parseLrc(trackSynced)
+                // Regex-heavy parse over the full synced blob — keep it off the
+                // Main dispatcher this suspend path is usually called on.
+                withContext(Dispatchers.Default) { parseLrc(trackSynced) }
             } else if (!trackPlain.isNullOrBlank()) {
                 trackPlain.lineSequence().filter { it.isNotBlank() }
                     .map { LyricsLine(timeMs = 0L, text = it.trim()) }.toList()
@@ -1261,7 +1265,13 @@ class MediaRepositoryImpl @Inject constructor(
                     }
                 }
             }
-            return lines.sortedBy { it.timeMs }
+            // LRC files are usually authored already in time order — skip the
+            // sorted copy when the parse produced an ordered list.
+            return if ((1 until lines.size).all { lines[it - 1].timeMs <= lines[it].timeMs }) {
+                lines
+            } else {
+                lines.sortedBy { it.timeMs }
+            }
         }
 
         /**

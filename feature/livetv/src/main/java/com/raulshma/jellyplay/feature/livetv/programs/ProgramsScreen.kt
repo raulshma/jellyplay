@@ -77,6 +77,9 @@ fun ProgramsScreen(
         tag = "programs_init",
     )
 
+    val onItemLongPress = remember(viewModel) { { program: LiveTvProgram -> viewModel.requestRecord(program) } }
+    val getImageUrl = remember(viewModel) { { id: String, tag: String? -> viewModel.getImageUrl(id, tag) } }
+
     when {
         uiState.isLoading && uiState.rows.isEmpty() -> {
             ScreenLoadingState(modifier = Modifier.fillMaxSize())
@@ -120,8 +123,8 @@ fun ProgramsScreen(
                             contentPad = contentPad,
                             spacing = spacing,
                             onItemClick = onProgramClick,
-                            onItemLongPress = { viewModel.requestRecord(it) },
-                            getImageUrl = { id, tag -> viewModel.getImageUrl(id, tag) },
+                            onItemLongPress = onItemLongPress,
+                            getImageUrl = getImageUrl,
                         )
                     }
                 }

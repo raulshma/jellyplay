@@ -55,6 +55,17 @@ class MediaInfoApiClientImpl @Inject constructor(
         } catch (_: Exception) { "" }
     }
 
+    /**
+     * Active endpoint + auth token for the raw-OkHttp endpoints in this client
+     * (the SDK calls use `requireApi` instead). Fails like every caller used
+     * to: not-connected / not-authenticated as [IllegalStateException].
+     */
+    private fun requireSession(): Pair<String, String> {
+        val server = engine.currentServer.value?.address ?: throw IllegalStateException("Not connected")
+        val token = engine.currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
+        return server to token
+    }
+
     override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> = engine.apiResultWithRetry {
         coroutineScope {
             val serverName = async { getCachedServerName() }
@@ -183,8 +194,7 @@ class MediaInfoApiClientImpl @Inject constructor(
     }
 
     override suspend fun sendNewsletter(): Result<Unit> = engine.apiResultWithRetry {
-        val server = engine.currentServer.value?.address ?: throw IllegalStateException("Not connected")
-        val token = engine.currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
+        val (server, token) = requireSession()
         val request = Request.Builder()
             .url("${server}/newsletter/send")
             .header("X-Emby-Token", token)
@@ -196,8 +206,7 @@ class MediaInfoApiClientImpl @Inject constructor(
     }
 
     override suspend fun sendTestNewsletter(): Result<Unit> = engine.apiResultWithRetry {
-        val server = engine.currentServer.value?.address ?: throw IllegalStateException("Not connected")
-        val token = engine.currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
+        val (server, token) = requireSession()
         val request = Request.Builder()
             .url("${server}/newsletter/test")
             .header("X-Emby-Token", token)
@@ -509,8 +518,7 @@ class MediaInfoApiClientImpl @Inject constructor(
     }
 
     override suspend fun checkPlaybackReportingPlugin(): Result<PlaybackReportingStatus> = engine.apiResultWithRetry {
-        val server = engine.currentServer.value?.address ?: throw IllegalStateException("Not connected")
-        val token = engine.currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
+        val (server, token) = requireSession()
         val url = "${server}/user_usage_stats/type_filter_list"
         val request = Request.Builder()
             .url(url)
@@ -526,8 +534,7 @@ class MediaInfoApiClientImpl @Inject constructor(
     }
 
     override suspend fun getPlaybackReportingUserActivity(days: Int): Result<List<PlaybackReportingActivity>> = engine.apiResultWithRetry {
-        val server = engine.currentServer.value?.address ?: throw IllegalStateException("Not connected")
-        val token = engine.currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
+        val (server, token) = requireSession()
         val url = "${server}/user_usage_stats/user_activity?days=$days"
         val request = Request.Builder()
             .url(url)
@@ -570,8 +577,7 @@ class MediaInfoApiClientImpl @Inject constructor(
     }
 
     override suspend fun getPlaybackReportingPlayActivity(days: Int, dataType: String, filter: String?): Result<List<PlaybackActivityPoint>> = engine.apiResultWithRetry {
-        val server = engine.currentServer.value?.address ?: throw IllegalStateException("Not connected")
-        val token = engine.currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
+        val (server, token) = requireSession()
 
         val currentUserId = engine.currentUser.value?.id
         var targetUserId: String? = null
@@ -641,8 +647,7 @@ class MediaInfoApiClientImpl @Inject constructor(
     }
 
     override suspend fun getPlaybackReportingUserItems(userId: String, date: String, filter: String?): Result<List<PlaybackReportingDetail>> = engine.apiResultWithRetry {
-        val server = engine.currentServer.value?.address ?: throw IllegalStateException("Not connected")
-        val token = engine.currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
+        val (server, token) = requireSession()
         val filterParam = filter?.let { "&filter=$it" } ?: ""
         val url = "${server}/user_usage_stats/$userId/$date/GetItems?$filterParam"
         val request = Request.Builder()
@@ -670,8 +675,7 @@ class MediaInfoApiClientImpl @Inject constructor(
     }
 
     override suspend fun getPlaybackReportingBreakdown(breakdownType: String, days: Int, filter: String?): Result<List<ContentBreakdown>> = engine.apiResultWithRetry {
-        val server = engine.currentServer.value?.address ?: throw IllegalStateException("Not connected")
-        val token = engine.currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
+        val (server, token) = requireSession()
         val filterParam = filter?.let { "&filter=$it" } ?: ""
         val url = "${server}/user_usage_stats/$breakdownType/BreakdownReport?days=$days$filterParam"
         val request = Request.Builder()
@@ -699,8 +703,7 @@ class MediaInfoApiClientImpl @Inject constructor(
     }
 
     override suspend fun getPlaybackReportingArtistBreakdown(days: Int, filter: String?): Result<List<ContentBreakdown>> = engine.apiResultWithRetry {
-        val server = engine.currentServer.value?.address ?: throw IllegalStateException("Not connected")
-        val token = engine.currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
+        val (server, token) = requireSession()
         val filterParam = filter?.let { "&filter=$it" } ?: ""
         val url = "${server}/user_usage_stats/Parent/BreakdownReport?days=$days$filterParam"
         val request = Request.Builder()

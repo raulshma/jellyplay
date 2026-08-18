@@ -27,7 +27,13 @@ data class HomeSectionQuery(
      * the in-memory home-sections cache and the Room-backed SWR snapshot. Lives
      * here so a new query field only needs to be added in one place — the value
      * object — rather than threaded through every signature that derives a key.
+     *
+     * Memoized per instance (all fields are immutable vals); `copy()` produces
+     * a fresh instance, and with it a fresh key.
      */
-    fun cacheKey(): String =
+    fun cacheKey(): String = cachedKey
+
+    private val cachedKey by lazy {
         "${enabledSections.sortedBy { it.name }}|$libraryHomeSectionOverrides|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections"
+    }
 }

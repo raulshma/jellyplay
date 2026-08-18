@@ -580,9 +580,10 @@ internal fun DetailContentBody(
                 }
                 state.capabilities.localStreamInfo && source != null -> {
                     // Quality + audio (read-only, probed) share a single badge row
-                    // with the interactive local subtitle pill, matching the remote
-                    // section's 3-pill layout. Subtitles are only passed when the
-                    // manifest advertises them.
+                    // with the local subtitle pill, matching the remote section's
+                    // 3-pill layout. The pill always renders (OFF when the manifest
+                    // advertises no bundled subtitles); it is only interactive when
+                    // a list is passed.
                     LocalMediaInfoSection(
                         mediaStreams = source.mediaStreams,
                         subtitles = if (state.capabilities.localSubtitleSelection) state.localSubtitles else emptyList(),

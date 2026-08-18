@@ -25,6 +25,10 @@ class PlayerEngineFactory @Inject constructor(
     @ApplicationContext private val context: Context,
     @Named("streaming") private val streamingOkHttpClient: OkHttpClient,
     private val fontProvider: FontProvider,
+    // Nullable + defaulted so direct constructions (tests) compile unchanged;
+    // Hilt injects the real singleton (it passes every constructor parameter,
+    // so the default only applies to Kotlin callers that omit it).
+    private val videoStreamCache: VideoStreamCache? = null,
 ) {
 
     @Volatile
@@ -62,7 +66,7 @@ class PlayerEngineFactory @Inject constructor(
 
     fun create(playerType: PlayerType): MediaEngine {
         return when (playerType) {
-            PlayerType.EXO_PLAYER -> ExoPlayerEngine(context, streamingOkHttpClient, getSharedBandwidthMeter(), fontProvider)
+            PlayerType.EXO_PLAYER -> ExoPlayerEngine(context, streamingOkHttpClient, getSharedBandwidthMeter(), fontProvider, videoStreamCache)
             PlayerType.MPV -> MpvPlayerEngine(context, fontProvider)
             PlayerType.LIBVLC -> LibVlcPlayerEngine(context, fontProvider)
             // External playback is launched in a third-party app; progress is

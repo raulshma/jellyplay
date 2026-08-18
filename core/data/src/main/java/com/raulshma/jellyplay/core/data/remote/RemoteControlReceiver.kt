@@ -117,6 +117,17 @@ class RemoteControlReceiver @Inject constructor(
         }
     }
 
+    /**
+     * First-item detail with one silent retry: transient fetch failures are
+     * not cached, so the retry recovers what the old two-fetch shape gave
+     * for free — and serves both the banner title and the playback domain,
+     * instead of fixing the domain to VIDEO when only the first attempt
+     * failed.
+     */
+    private suspend fun fetchFirstItemDetail(id: String) =
+        mediaRepository.getMediaDetail(id).getOrNull()
+            ?: mediaRepository.getMediaDetail(id).getOrNull()
+
     // ── Play ──────────────────────────────────────────────────────────────
 
     private suspend fun handlePlayMessage(data: JSONObject) {
@@ -136,7 +147,23 @@ class RemoteControlReceiver @Inject constructor(
             controllingUserId = data.optString("ControllingUserId", ""),
         )
 
-        val domain = resolveDomain(request)
+        // The dispatcher pick and the banner title both derive from the first
+        // item's detail — one getMediaDetail fetch serves both (the old shape
+        // issued two sequential calls) on the remote-command latency path.
+        val firstItemId = request.itemIds.firstOrNull()
+        val firstDetail = firstItemId?.let { fetchFirstItemDetail(it) }
+        val bannerTitle = firstDetail?.item?.name.orEmpty()
+
+        val domain = if (firstItemId == null) {
+            PlaybackDomain.UNKNOWN
+        } else if (firstDetail == null) {
+            PlaybackDomain.VIDEO
+        } else {
+            when (firstDetail.item.mediaType) {
+                MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM -> PlaybackDomain.AUDIO
+                else -> PlaybackDomain.VIDEO
+            }
+        }
         val dispatcher = when (domain) {
             PlaybackDomain.VIDEO -> videoDispatcher
             PlaybackDomain.AUDIO -> audioDispatcher
@@ -145,11 +172,10 @@ class RemoteControlReceiver @Inject constructor(
 
         dispatcher.play(request)
         // Also notify UI to surface a "Now playing" banner.
-        val title = resolveTitle(request.itemIds.firstOrNull())
         _playEvents.tryEmit(
             PlayEventPayload(
                 itemId = request.itemIds.first(),
-                title = title,
+                title = bannerTitle,
                 startPositionTicks = request.startPositionTicks,
             )
         )
@@ -162,22 +188,6 @@ class RemoteControlReceiver @Inject constructor(
         // from the receiver would race with the player's reports under a
         // different sessionId, which surfaces as a jittery position ticker on
         // the controlling device (Jellyfin web, Android, etc.).
-    }
-
-    private suspend fun resolveTitle(itemId: String?): String {
-        if (itemId.isNullOrBlank()) return ""
-        val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
-        return detail?.item?.name.orEmpty()
-    }
-
-    private suspend fun resolveDomain(request: PlayRequest): PlaybackDomain {
-        val firstId = request.itemIds.firstOrNull() ?: return PlaybackDomain.UNKNOWN
-        val detail = mediaRepository.getMediaDetail(firstId).getOrNull() ?: return PlaybackDomain.VIDEO
-        return when (detail.item.mediaType) {
-            MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM -> PlaybackDomain.AUDIO
-            MediaType.LIVE_TV, MediaType.CHANNEL -> PlaybackDomain.VIDEO
-            else -> PlaybackDomain.VIDEO
-        }
     }
 
     // ── Playstate ─────────────────────────────────────────────────────────

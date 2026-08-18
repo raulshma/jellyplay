@@ -38,6 +38,9 @@ class AdminRepositoryImpl @Inject constructor(
     override val scheduledTasks: Flow<List<ScheduledTaskInfo>>
         get() = realtimeTasks.tasks
 
+    override val scheduledTasksLastPushAtMs: Long
+        get() = realtimeTasks.lastPushAtMs
+
     override val libraryScanTask: Flow<ScheduledTaskInfo?>
         get() = realtimeTasks.scanLibraryTask
 

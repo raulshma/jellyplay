@@ -45,6 +45,10 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     // reads) to the IO block below, so the player's Main-thread font handoff to
     // libass hits a warm cache instead of reading disk.
     @Inject lateinit var fontProviderProvider: javax.inject.Provider<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>
+    // Defers the video byte cache's SQLite index open + span directory scan to
+    // the IO block below, so the first cacheable playback doesn't pay that
+    // disk work on the player thread.
+    @Inject lateinit var videoStreamCacheProvider: javax.inject.Provider<com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache>
     // javax.inject.Provider defers Hilt construction of AudioPlaybackManager
     // (and its transitive 14-dep graph: AudioLibraryBrowser,
     // AudioProgressReporter, AudioCrossfader, QueueUndoStack, LruCache(25), …)
@@ -102,6 +106,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         applicationScope.launch(Dispatchers.IO) {
             runCatching { networkOfflineStore.networkOffline.first() }
             runCatching { fontProviderProvider.get().prewarm() }
+            runCatching { videoStreamCacheProvider.get().prewarm() }
             audioPlaybackManagerProvider.get().start()
             nowPlayingWidgetUpdaterProvider.get().start()
         }

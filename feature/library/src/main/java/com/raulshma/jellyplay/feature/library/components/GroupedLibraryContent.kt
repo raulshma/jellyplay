@@ -39,7 +39,7 @@ import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.displayTitle
 import com.raulshma.jellyplay.core.ui.components.libraryListSubtitle
 import com.raulshma.jellyplay.core.ui.components.rememberSeriesImageFallback
-import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.ui.components.rememberProgressFraction
 import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 
@@ -220,7 +220,7 @@ fun GroupedLibraryContent(
                     val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                         { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                     }
-                    val itemProgress = item.progressFraction()
+                    val itemProgress = item.rememberProgressFraction()
                     val cardImage = com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage(
                         item = item,
                         itemImageUrl = remember(item.id) { getImageUrl(item.id) },

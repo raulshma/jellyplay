@@ -123,6 +123,12 @@ internal fun GestureOverlay(
     val currentOnStartGesture by rememberUpdatedState(onStartGesture)
     val currentOnCancelOverlays by rememberUpdatedState(onCancelOverlays)
 
+    // Bound-haptic checks below must see the live values, but adding them as
+    // pointerInput keys would restart the handler mid-gesture — read through
+    // remembered state like the callbacks, same pattern.
+    val currentVolumeValue by rememberUpdatedState(volumeValue)
+    val currentBrightnessValue by rememberUpdatedState(brightnessValue)
+
     val context = LocalContext.current
 
     val edgeThresholdPx = with(LocalDensity.current) { 40.dp.toPx() }
@@ -235,7 +241,7 @@ internal fun GestureOverlay(
                                     val now = SystemClock.elapsedRealtime()
                                     if (change.position.x > halfWidth) {
                                         currentOnVolumeGesture(delta)
-                                        if ((volumeValue <= 0f && delta < 0f) || (volumeValue >= 1f && delta > 0f)) {
+                                        if ((currentVolumeValue <= 0f && delta < 0f) || (currentVolumeValue >= 1f && delta > 0f)) {
                                             if (now - prevVolumeBoundHapticTime > hapticMinInterval) {
                                                 prevVolumeBoundHapticTime = now
                                                 currentOnHapticPulse()
@@ -243,7 +249,7 @@ internal fun GestureOverlay(
                                         }
                                     } else {
                                         currentOnBrightnessGesture(delta)
-                                        if ((brightnessValue <= 0f && delta < 0f) || (brightnessValue >= 1f && delta > 0f)) {
+                                        if ((currentBrightnessValue <= 0f && delta < 0f) || (currentBrightnessValue >= 1f && delta > 0f)) {
                                             if (now - prevBrightnessBoundHapticTime > hapticMinInterval) {
                                                 prevBrightnessBoundHapticTime = now
                                                 currentOnHapticPulse()

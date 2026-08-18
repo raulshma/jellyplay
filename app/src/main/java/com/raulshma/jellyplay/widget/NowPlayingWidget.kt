@@ -357,19 +357,19 @@ class NowPlayingWidget : AppWidgetProvider() {
             val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
             if (appWidgetIds.isEmpty()) return
 
+            val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
+            views.setTextViewText(
+                R.id.widget_position,
+                formatPosition(positionMs, durationMs, isPlaying),
+            )
+            if (durationMs > 0L) {
+                val progress = ((positionMs.toFloat() / durationMs) * 1_000f).toInt()
+                    .coerceIn(0, 1_000)
+                views.setProgressBar(R.id.widget_progress, 1_000, progress, false)
+            } else {
+                views.setProgressBar(R.id.widget_progress, 1_000, 0, false)
+            }
             for (appWidgetId in appWidgetIds) {
-                val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
-                views.setTextViewText(
-                    R.id.widget_position,
-                    formatPosition(positionMs, durationMs, isPlaying),
-                )
-                if (durationMs > 0L) {
-                    val progress = ((positionMs.toFloat() / durationMs) * 1_000f).toInt()
-                        .coerceIn(0, 1_000)
-                    views.setProgressBar(R.id.widget_progress, 1_000, progress, false)
-                } else {
-                    views.setProgressBar(R.id.widget_progress, 1_000, 0, false)
-                }
                 appWidgetManager.partiallyUpdateAppWidget(appWidgetId, views)
             }
         }

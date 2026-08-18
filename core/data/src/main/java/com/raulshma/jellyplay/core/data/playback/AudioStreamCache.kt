@@ -23,7 +23,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
-import java.net.URI
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -218,15 +217,5 @@ open class AudioStreamCache @Inject constructor(
     }
 
     /** Strips `api_key=...` from the query string so cache keys are token-invariant. */
-    internal fun stripApiKey(url: String): String {
-        return try {
-            val uri = URI(url)
-            val query = uri.rawQuery ?: return url
-            val filtered = query.split("&").filterNot { it.startsWith("api_key=") }.joinToString("&")
-            val newQuery = if (filtered.isEmpty()) null else filtered
-            URI(uri.scheme, uri.userInfo, uri.host, uri.port, uri.path, newQuery, uri.fragment).toString()
-        } catch (e: Exception) {
-            url.replace(Regex("[?&]api_key=[^&]*"), "").replace(Regex("\\?&"), "?").replace(Regex("&&"), "&")
-        }
-    }
+    internal fun stripApiKey(url: String): String = stripVolatileQueryParams(url, STRIP_SAFE_QUERY_PARAMS)
 }

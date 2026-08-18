@@ -2,6 +2,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -32,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -196,6 +198,19 @@ private fun MainHomeContent(
             networkStatus = networkStatus,
             serverHealth = serverHealth,
         )
+    }
+
+    val activity = LocalActivity.current
+    var homeFullyDrawn by remember { mutableStateOf(false) }
+    LaunchedEffect(state.currentUser != null, !state.isLoading) {
+        if (!homeFullyDrawn && state.currentUser != null && !state.isLoading) {
+            // Effect bodies run post-composition but before the frame is on
+            // screen — wait for the first drawn frame so TTFD measures
+            // content the user actually sees.
+            withFrameNanos { }
+            homeFullyDrawn = true
+            activity?.reportFullyDrawn()
+        }
     }
 
     val activeDownloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
@@ -525,7 +540,7 @@ private fun MainHomeContent(
                                 onConfigureHomeLayout = onConfigureHomeLayout,
                                 onConfigureLibraries = onConfigureLibraries,
                                 onSeeAllClick = remember(callbacks) { { type, libraryId, collectionType, title -> callbacks.onSeeAllClick(type, libraryId, collectionType, title) } },
-                                onFocusedMediaItem = { item -> tvFocusedItem = item },
+                                onFocusedMediaItem = remember { { item: MediaItem -> tvFocusedItem = item } },
                             ),
                             listState = listState,
                             density = density,

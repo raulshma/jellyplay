@@ -19,6 +19,14 @@ import javax.inject.Singleton
 internal const val AUDIO_CACHE_DIR_NAME = "audio_cache"
 
 /**
+ * Name of the video byte cache subdirectory under [Context.cacheDir]. Public:
+ * the video player module's `VideoStreamCache` opens the directory this name
+ * points at (the same way `AudioStreamCache` uses [AUDIO_CACHE_DIR_NAME],
+ * which stays `internal` because its consumer is this module).
+ */
+const val VIDEO_CACHE_DIR_NAME = "video_cache"
+
+/**
  * Manages the application's HTTP/image caches and honours the
  * [com.raulshma.jellyplay.core.model.legacy.UserPreferences.autoDeleteCache]
  * preference: when enabled, caches are cleared when the app goes to the
@@ -30,9 +38,9 @@ internal const val AUDIO_CACHE_DIR_NAME = "audio_cache"
  * re-fetch on demand). Downloaded media lives under a separate directory
  * and is never touched here.
  *
- * The [AUDIO_CACHE_DIR_NAME] subdirectory is **excluded** from the sweep
- * because it holds in-flight data referenced by ExoPlayer; sweeping it
- * mid-playback would corrupt reads.
+ * The [AUDIO_CACHE_DIR_NAME] and [VIDEO_CACHE_DIR_NAME] subdirectories are
+ * **excluded** from the sweep because they hold in-flight data referenced by
+ * ExoPlayer; sweeping them mid-playback would corrupt reads.
  */
 @Singleton
 class CacheManager @Inject constructor(
@@ -43,9 +51,10 @@ class CacheManager @Inject constructor(
 
     /**
      * Subdirectories of [Context.cacheDir] that must survive the auto-delete
-     * sweep. The audio byte cache holds in-flight data referenced by ExoPlayer.
+     * sweep. The audio and video byte caches hold in-flight data referenced
+     * by ExoPlayer.
      */
-    private val protectedSubdirs = setOf(AUDIO_CACHE_DIR_NAME)
+    private val protectedSubdirs = setOf(AUDIO_CACHE_DIR_NAME, VIDEO_CACHE_DIR_NAME)
 
     /** Test hook: overrides the cache directory resolved from [Context]. */
     internal var cacheDirOverride: File? = null
@@ -96,7 +105,7 @@ class CacheManager @Inject constructor(
         var total = 0L
         dir.listFiles()?.forEach { child ->
             if (child.isDirectory && child.name in protectedSubdirs) {
-                return@forEach // preserve audio_cache
+                return@forEach // preserve the media byte caches
             }
             total += if (child.isDirectory) {
                 val sub = getDirSize(child)

@@ -16,9 +16,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,7 +38,6 @@ class DlnaCastStrategy @Inject constructor(
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val discoveryMutex = Mutex()
 
     private val ssdpDiscovery = SsdpDiscovery { wifiManager }
 
@@ -71,7 +69,11 @@ class DlnaCastStrategy @Inject constructor(
     private var connectedDevice: UpnpDevice? = null
 
     private var deviceFetchJob: Job? = null
-    private val deviceCache = mutableMapOf<String, UpnpDevice>()
+
+    // ConcurrentHashMap: discovery coroutines (Dispatchers.Default) write while
+    // resolveDevice reads from connect()'s caller thread — every access is a
+    // single atomic op, so reads stay lock-free and no mutex is needed.
+    private val deviceCache = ConcurrentHashMap<String, UpnpDevice>()
 
     @Volatile
     private var discoveryActive = false
@@ -89,9 +91,7 @@ class DlnaCastStrategy @Inject constructor(
         deviceFetchJob?.cancel()
         deviceFetchJob = null
         scope.launch {
-            discoveryMutex.withLock {
-                deviceCache.clear()
-            }
+            deviceCache.clear()
         }
         _discoveredDevices.value = emptyList()
         _isAvailable.value = false
@@ -144,9 +144,7 @@ class DlnaCastStrategy @Inject constructor(
     private suspend fun fetchDeviceDetails(locationUrl: String) {
         try {
             val device = UpnpDeviceParser.fetchAndParse(locationUrl, okHttpClient) ?: return
-            discoveryMutex.withLock {
-                deviceCache[locationUrl] = device
-            }
+            deviceCache[locationUrl] = device
             if (discoveryActive) {
                 val currentLocations = ssdpDiscovery.discoveredLocations.value.values.toList()
                 refreshDeviceList(currentLocations)

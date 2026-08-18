@@ -64,7 +64,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicato
 import com.raulshma.jellyplay.core.ui.components.libraryListSubtitle
 import com.raulshma.jellyplay.core.ui.components.displayTitle
 import com.raulshma.jellyplay.core.ui.components.rememberSeriesImageFallback
-import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.ui.components.rememberProgressFraction
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -788,7 +788,7 @@ fun LibraryScreen(
                                                 val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                                                     { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                 }
-                                                val itemProgress = item.progressFraction()
+                                                val itemProgress = item.rememberProgressFraction()
                                                 // Seasons fall back to the parent series poster when the
                                                 // season's own artwork 404s in the thumb view too.
                                                 val fallbackUrls = item.rememberSeriesImageFallback(viewModel::getImageUrl)
@@ -832,11 +832,12 @@ fun LibraryScreen(
                                                 val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                                                     { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                 }
-                                                val itemProgress = item.progressFraction()
+                                                val itemProgress = item.rememberProgressFraction()
                                                 // Per-item collection: only photo-folder cards subscribe,
                                                 // and only the affected card recomposes on a prefetch merge.
                                                 val photoFolderChildImageUrls by if (item.mediaType == MediaType.PHOTO_FOLDER) {
-                                                    viewModel.photoFolderChildUrlsFor(item.id).collectAsStateWithLifecycle(emptyList())
+                                                    remember(item.id) { viewModel.photoFolderChildUrlsFor(item.id) }
+                                                        .collectAsStateWithLifecycle(emptyList())
                                                 } else {
                                                     androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptyList()) }
                                                 }
@@ -894,7 +895,7 @@ fun LibraryScreen(
                                                     val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                                                         { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                     }
-                                                    val itemProgress = item.progressFraction()
+                                                    val itemProgress = item.rememberProgressFraction()
                                                     val cardImage = com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage(
                                                         item = item,
                                                         itemImageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },

@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.DynamicsCompressorAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.HighPassFilterAudioProcessor
+import com.raulshma.jellyplay.core.data.playback.isSessionKeyedUrl
 import com.raulshma.jellyplay.core.data.playback.LoudnessEnhancerHelper
 import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
@@ -57,6 +58,7 @@ import com.raulshma.jellyplay.core.model.ExoAudioOffloadMode
 import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
+import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleRenderDefaults
@@ -108,6 +110,9 @@ class ExoPlayerEngine(
     private val streamingOkHttpClient: OkHttpClient,
     bandwidthMeter: DefaultBandwidthMeter? = null,
     private val fontProvider: FontProvider,
+    // Nullable + defaulted so non-Hilt constructions (contract tests) compile
+    // unchanged; a null cache simply disables byte caching (passthrough).
+    private val videoStreamCache: VideoStreamCache? = null,
 ) : BasePlayerEngine() {
 
     @Volatile
@@ -383,6 +388,13 @@ class ExoPlayerEngine(
         // so data-class equality degrades to identity — same instance means
         // same DRM hook, different instance forces the rebuild path.
         val drmProvider: EngineDrmSessionManagerProvider?,
+        // Whether the data source chain gets the byte-level [VideoStreamCache]
+        // wrapper. Part of the equality set because the wrapper is baked into
+        // the player's MediaSourceFactory: a reused player keeps its existing
+        // chain, so an eligibility flip between items (direct play → transcode,
+        // clear → DRM) MUST take the teardown/rebuild path instead of leaking
+        // the cached chain onto a non-cacheable item (or vice versa).
+        val streamCacheEligible: Boolean,
     )
 
     private var lastRebuildInputs: LoadRebuildInputs? = null
@@ -395,6 +407,7 @@ class ExoPlayerEngine(
 
         val exoCfg = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
         val assForRequest = AssSupport.hasAssSubtitles(request)
+        val streamCacheEligible = isStreamCacheEligible(request)
         val inputs = LoadRebuildInputs(
             decoderMode = currentConfig.decoderMode,
             exoCfg = exoCfg,
@@ -406,6 +419,7 @@ class ExoPlayerEngine(
             assSession = assForRequest,
             pauseOnAudioFocusLoss = currentConfig.pauseOnAudioFocusLoss,
             drmProvider = currentConfig.drmSessionManagerProvider,
+            streamCacheEligible = streamCacheEligible,
         )
 
         val existingPlayer = player
@@ -500,7 +514,12 @@ class ExoPlayerEngine(
             setSubtitleParserFactory(offsetFactory)
         }
 
-        val dataSourceFactory = createAuthenticatedDataSourceFactory(request.serverUrl, request.authToken, request.headers)
+        val dataSourceFactory = createAuthenticatedDataSourceFactory(
+            serverUrl = request.serverUrl,
+            token = request.authToken,
+            headers = request.headers,
+            enableStreamCache = streamCacheEligible,
+        )
 
         // On the ASS path, wrap the extractors with Matroska+ASS support (for
         // ASS embedded in MKV) and the renderers with the libass text renderer;
@@ -769,7 +788,7 @@ class ExoPlayerEngine(
                 // resolution) reliable on a transcode.
                 val inferredMime = when {
                     request.mimeType != null -> request.mimeType
-                    request.uri.contains(".m3u8", ignoreCase = true) -> MimeTypes.APPLICATION_M3U8
+                    isHlsRequest(request) -> MimeTypes.APPLICATION_M3U8
                     else -> null
                 }
                 inferredMime?.let { setMimeType(it) }
@@ -779,28 +798,56 @@ class ExoPlayerEngine(
             .build()
     }
 
+    /**
+     * Builds the media [DataSource.Factory] chain:
+     * `[VideoStreamCache] → auth ResolvingDataSource → OkHttp/Default`.
+     *
+     * Route media streams through the shared app OkHttp stack rather than a
+     * standalone HttpURLConnection: the injected client carries the shared
+     * connection pool, the BandwidthInterceptor that feeds adaptive bitrate
+     * selection, and HTTP/2 multiplexing — so the highest-bandwidth traffic
+     * reuses the same wiring as every other request. OkHttp follows
+     * cross-protocol redirects by default, and the "streaming" qualifier
+     * already sets a >=30s read timeout. The ResolvingDataSource auth wrapper
+     * composes unchanged.
+     *
+     * Constraint: the shared client's OkHttp disk Cache does NOT cover media
+     * bytes — ExoPlayer's progressive source issues `206 Partial Content`
+     * range requests, which OkHttp's Cache never stores (it only caches
+     * complete 200 responses). Backward seeks and re-opened segments would
+     * therefore re-fetch from the network. [enableStreamCache] (see
+     * [isStreamCacheEligible]) adds the [VideoStreamCache] CacheDataSource
+     * layer around the HTTP base factory for content-stable URLs only, which
+     * serves and fills a byte-range cache with volatile-param-stripped keys.
+     * The layer sits below [DefaultDataSource]'s scheme routing (and the auth
+     * resolver above it), so side-loaded local/content subtitle URIs bypass
+     * the cache entirely — only media bytes are ever pinned.
+     */
     private fun createAuthenticatedDataSourceFactory(
         serverUrl: String?,
         token: String?,
-        headers: Map<String, String>
+        headers: Map<String, String>,
+        enableStreamCache: Boolean,
     ): DataSource.Factory {
-        // Route media streams through the shared app OkHttp stack rather than a
-        // standalone HttpURLConnection. The injected client carries the shared
-        // connection pool, the user-sized disk Cache, the BandwidthInterceptor
-        // that feeds adaptive bitrate selection, and HTTP/2 multiplexing — so
-        // the highest-bandwidth traffic reuses the same wiring as every other
-        // request. OkHttp follows cross-protocol redirects by default, and the
-        // "streaming" qualifier already sets a >=30s read timeout. The
-        // ResolvingDataSource auth wrapper below composes on top unchanged.
         val httpDataSourceFactory = OkHttpDataSource.Factory(streamingOkHttpClient)
             .setUserAgent("JellyPlay")
             .setDefaultRequestProperties(headers)
 
-        val baseFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+        // Cache the HTTP base only: DefaultDataSource routes file/content/asset
+        // URIs through its own non-base sources, keeping them out of the cache.
+        // Passthrough (returns the upstream unchanged) when the cache
+        // directory cannot be opened — playback never breaks.
+        val baseFactory: DataSource.Factory = if (enableStreamCache && videoStreamCache != null) {
+            videoStreamCache.getCacheDataSourceFactory(httpDataSourceFactory)
+        } else {
+            httpDataSourceFactory
+        }
+
+        var factory: DataSource.Factory = DefaultDataSource.Factory(context, baseFactory)
 
         val authority = serverUrl?.let { Uri.parse(it).authority }
         if (authority != null && token != null) {
-            return ResolvingDataSource.Factory(baseFactory) { dataSpec ->
+            factory = ResolvingDataSource.Factory(factory) { dataSpec ->
                 if (dataSpec.uri.authority.equals(authority, ignoreCase = true)) {
                     dataSpec.withRequestHeaders(
                         mapOf("X-Emby-Token" to token) + dataSpec.httpRequestHeaders
@@ -810,8 +857,62 @@ class ExoPlayerEngine(
                 }
             }
         }
-        return baseFactory
+
+        return factory
     }
+
+    /**
+     * Scopes the video byte cache to content-stable, cacheable requests only:
+     *
+     *  - **DRM**: a configured [EngineDrmSessionManagerProvider] skips the
+     *    cache entirely — DRM content must not have ciphertext (or license
+     *    boundaries) pinned in a shared byte cache, and offline license
+     *    semantics are out of scope here.
+     *  - **Direct Play / Direct Stream only**: transcode URLs are
+     *    session-keyed (a fresh PlaybackInfo re-POST mints a new one), so
+     *    caching them would churn the LRU for single-use entries. The same
+     *    rejection applies to DIRECT_STREAM URLs resolved from the server's
+     *    transcode endpoint: they carry `PlaySessionId`/`TranscodingJobId`
+     *    even when the play method says direct stream, while the client-built
+     *    `?static=true` direct URLs never do.
+     *  - **No HLS**: Jellyfin serves transcodes/remuxes as `.m3u8` master
+     *    playlists (mirrors the MIME inference in [buildRequestMediaItem]);
+     *    their segment URLs churn the cache the same way.
+     *  - **No live streams**: `LiveStreamId` direct streams grow at the live
+     *    edge — cached spans would never complete and go stale.
+     *  - **HTTP(S) only**: local/offline files must not copy bytes into the
+     *    cache directory.
+     *
+     * A `null` [PlaybackRequest.playMethod] (no server resolution) is treated
+     * as non-cacheable. Offline/local files carry a `DIRECT_PLAY` default
+     * (the PlayerSessionManager offline path) and are excluded by the
+     * HTTP(S) check above.
+     */
+    private fun isStreamCacheEligible(request: PlaybackRequest): Boolean {
+        if (currentConfig.drmSessionManagerProvider != null) return false
+        val uri = request.uri
+        if (!uri.startsWith("http", ignoreCase = true)) return false
+        val playMethod = request.playMethod ?: return false
+        if (playMethod != PlayMethod.DIRECT_PLAY && playMethod != PlayMethod.DIRECT_STREAM) return false
+        if (isHlsRequest(request)) return false
+        // Session-scoped params (PlaySessionId/TranscodingJobId/LiveStreamId)
+        // are defined once in SESSION_SCOPED_QUERY_PARAMS and rejected here —
+        // they are never key-normalized: VideoStreamCache's key factory keeps
+        // them intact as the backstop.
+        if (isSessionKeyedUrl(uri)) return false
+        return true
+    }
+
+    /**
+     * True when the request points at an HLS playlist: an explicit
+     * `application/vnd.apple.mpegurl` MIME hint or a `.m3u8` path (the query
+     * string can trail the extension, defeating extension detection). Single
+     * source for the MIME inference in [buildRequestMediaItem] and the
+     * stream-cache rejection in [isStreamCacheEligible].
+     */
+    private fun isHlsRequest(request: PlaybackRequest): Boolean =
+        request.mimeType == MimeTypes.APPLICATION_M3U8 ||
+            request.uri.contains(".m3u8", ignoreCase = true)
 
     override fun release() {
         ensurePlayerThread("release")

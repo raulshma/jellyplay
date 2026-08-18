@@ -512,6 +512,7 @@ class PlayerSessionManager(
                 else null,
             serverUrl = serverUrl,
             authToken = token,
+            playMethod = playMethod,
             minBufferMs = agg.videoPlayer.videoPreloadBufferSize.minBufferMs,
             maxBufferMs = agg.videoPlayer.videoPreloadBufferSize.maxBufferMs,
             normalizationGain = detail.item.normalizationGain,
@@ -596,6 +597,7 @@ class PlayerSessionManager(
             maxVideoBitrate = engineMaxBitrate,
             uriOverride = url,
             externalSubtitlesOverride = rebuiltSubtitles,
+            playMethodOverride = playMethod,
         )
         return resolved
     }
@@ -661,6 +663,7 @@ class PlayerSessionManager(
             maxVideoBitrate = engineMaxBitrate,
             uriOverride = url,
             externalSubtitlesOverride = rebuiltSubtitles,
+            playMethodOverride = playMethod,
         )
         return resolved
     }
@@ -672,6 +675,7 @@ class PlayerSessionManager(
         maxVideoBitrate: Int? = null,
         uriOverride: String? = null,
         externalSubtitlesOverride: List<SubtitleSource>? = null,
+        playMethodOverride: PlayMethod? = null,
     ) {
         val last = lastPlaybackRequest ?: return
         val agg = aggregateStore.aggregate.value
@@ -704,6 +708,10 @@ class PlayerSessionManager(
             maxVideoBitrate = maxVideoBitrate,
             uri = uriOverride ?: last.uri,
             externalSubtitles = externalSubtitlesOverride ?: last.externalSubtitles,
+            // A URL swap (mode/quality/stream-index reload) re-resolves the
+            // play method with it; without this the stale Direct-Play method
+            // would survive a switch to a transcode URL.
+            playMethod = playMethodOverride ?: last.playMethod,
         )
         lastPlaybackRequest = request
         eng.load(request)

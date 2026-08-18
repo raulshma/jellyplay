@@ -681,18 +681,25 @@ fun SearchScreen(
                             horizontalArrangement = Arrangement.spacedBy(spacing),
                             contentPadding = PaddingValues(end = contentPad),
                         ) { _, seerrItem, itemModifier ->
-                            SeerrMediaCard(
-                                item = seerrItem,
-                                imageUrl = seerrItem.posterUrl,
-                                isLoading = seerrLoadingState.isLoading(seerrItem.id),
-                                onClick = {
+                            val onClick = remember(seerrItem.id, seerrItem.mediaType, onNavigate) {
+                                {
                                     seerrLoadingState.startLoading(seerrItem.id)
                                     viewModel.prefetchSeerrDetails(seerrItem.id, seerrItem.mediaType) {
                                         seerrLoadingState.stopLoading(seerrItem.id)
                                         onNavigate(Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
                                     }
-                                },
-                                onRequestClick = { requestItem = seerrItem },
+                                }
+                            }
+                            // Keyed on the whole item, not just id: a refreshed
+                            // list can return a new object for the same id,
+                            // and the request dialog must show that object.
+                            val onRequestClick = remember(seerrItem) { { requestItem = seerrItem } }
+                            SeerrMediaCard(
+                                item = seerrItem,
+                                imageUrl = seerrItem.posterUrl,
+                                isLoading = seerrLoadingState.isLoading(seerrItem.id),
+                                onClick = onClick,
+                                onRequestClick = onRequestClick,
                                 modifier = itemModifier.width(seerrCardWidth),
                             )
                         }

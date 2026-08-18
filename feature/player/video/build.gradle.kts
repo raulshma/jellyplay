@@ -64,6 +64,9 @@ dependencies {
     implementation(libs.media3.cast)
     implementation(libs.media3.datasource)
     implementation(libs.media3.datasource.okhttp)
+    // StandaloneDatabaseProvider backs the video SimpleCache's index
+    // (VideoStreamCache), mirroring the audio cache in :core:data.
+    implementation(libs.media3.database)
     // FFmpeg software audio decoder for codecs the platform can't decode
     // (DTS, MLP/TrueHD, EAC3, etc.). DefaultRenderersFactory loads it via
     // reflection when EXTENSION_RENDERER_MODE is ON (the default HW_PREFERRED

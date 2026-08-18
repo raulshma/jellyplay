@@ -90,7 +90,6 @@ class NowPlayingWidgetUpdater @Inject constructor(
         positionJob?.cancel()
         metadataJob = null
         positionJob = null
-        lastArtwork?.let { if (!it.isRecycled) it.recycle() }
         lastArtwork = null
         lastItemId = null
         lastPushedRender = null
@@ -116,12 +115,10 @@ class NowPlayingWidgetUpdater @Inject constructor(
             .collectLatest { snapshot ->
                 if (snapshot.itemId != lastItemId) {
                     lastItemId = snapshot.itemId
-                    lastArtwork?.let { if (!it.isRecycled) it.recycle() }
                     lastArtwork = null
                 }
                 val art = loadArtwork(snapshot.artUrl)
                 if (art != null) {
-                    lastArtwork?.let { if (!it.isRecycled) it.recycle() }
                     lastArtwork = art
                 }
                 pushUpdate(readPushSnapshot(), lastArtwork)

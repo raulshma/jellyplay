@@ -43,11 +43,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableFloatState
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -119,9 +120,9 @@ fun PhotoViewerScreen(
         viewModel.load(itemId, parentId)
     }
 
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
+    val scale = remember { mutableFloatStateOf(1f) }
+    val offsetX = remember { mutableFloatStateOf(0f) }
+    val offsetY = remember { mutableFloatStateOf(0f) }
     var showControls by remember { mutableStateOf(true) }
     var showInfo by remember { mutableStateOf(false) }
     var showFilmstrip by remember { mutableStateOf(false) }
@@ -129,9 +130,7 @@ fun PhotoViewerScreen(
     val rootFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(currentIndex) {
-        scale = 1f
-        offsetX = 0f
-        offsetY = 0f
+        resetPhotoTransform(scale, offsetX, offsetY)
     }
 
     LaunchedEffect(showFilmstrip) {
@@ -269,14 +268,14 @@ fun PhotoViewerScreen(
                     scale = scale,
                     offsetX = offsetX,
                     offsetY = offsetY,
-                    onScaleChange = { scale = it },
-                    onOffsetChange = { x, y -> offsetX = x; offsetY = y },
+                    onScaleChange = { scale.value = it },
+                    onOffsetChange = { x, y -> offsetX.value = x; offsetY.value = y },
                     onTap = { if (!isTv) showControls = !showControls },
                     onDoubleTap = { currentScale ->
                         if (currentScale > 1f) {
-                            scale = 1f; offsetX = 0f; offsetY = 0f
+                            resetPhotoTransform(scale, offsetX, offsetY)
                         } else {
-                            scale = 2.5f
+                            scale.value = 2.5f
                         }
                     },
                     colorFilter = photoColorFilter,
@@ -561,13 +560,24 @@ fun PhotoViewerScreen(
     }
 }
 
+/** Resets the pinch/pan transform to its identity — photo switch and double-tap zoom-out share it. */
+private fun resetPhotoTransform(
+    scale: MutableFloatState,
+    offsetX: MutableFloatState,
+    offsetY: MutableFloatState,
+) {
+    scale.value = 1f
+    offsetX.value = 0f
+    offsetY.value = 0f
+}
+
 @Composable
 private fun PhotoImage(
     photo: com.raulshma.jellyplay.core.model.MediaItem,
     viewModel: PhotoViewerViewModel,
-    scale: Float,
-    offsetX: Float,
-    offsetY: Float,
+    scale: State<Float>,
+    offsetX: State<Float>,
+    offsetY: State<Float>,
     onScaleChange: (Float) -> Unit,
     onOffsetChange: (x: Float, y: Float) -> Unit,
     onTap: () -> Unit,
@@ -579,16 +589,6 @@ private fun PhotoImage(
     }
     var lastTapTime by remember { mutableStateOf(0L) }
 
-    // Read the live transform values inside the gesture coroutine. The
-    // pointerInput key is `photo.id`, so without this the lambda captures the
-    // scale/offset that were current when the gesture handler was set up
-    // (always 1f / 0f after a navigation reset) — a subsequent zoom (e.g. via
-    // double-tap) would not be reflected, so the pan branch never ran and the
-    // swipe-to-navigate branch fired instead, jumping to the next photo.
-    val currentScale by rememberUpdatedState(scale)
-    val currentOffsetX by rememberUpdatedState(offsetX)
-    val currentOffsetY by rememberUpdatedState(offsetY)
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -597,9 +597,9 @@ private fun PhotoImage(
                     val firstDown = awaitFirstDown()
                     firstDown.consume()
 
-                    var gestureScale = currentScale
-                    var gestureOffsetX = currentOffsetX
-                    var gestureOffsetY = currentOffsetY
+                    var gestureScale = scale.value
+                    var gestureOffsetX = offsetX.value
+                    var gestureOffsetY = offsetY.value
 
                     val downPosition = firstDown.position
                     var isMultiTouch = false
@@ -704,10 +704,10 @@ private fun PhotoImage(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    translationX = offsetX
-                    translationY = offsetY
+                    scaleX = scale.value
+                    scaleY = scale.value
+                    translationX = offsetX.value
+                    translationY = offsetY.value
                 },
             contentScale = ContentScale.Fit,
             size = coil3.size.Size.ORIGINAL,

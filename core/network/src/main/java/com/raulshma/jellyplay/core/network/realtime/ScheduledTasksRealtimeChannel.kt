@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
-import org.json.JSONArray
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,6 +45,16 @@ class ScheduledTasksRealtimeChannel @Inject constructor(
     private val webSocketClient: JellyfinWebSocketClient,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
+    /**
+     * Wall time of the last successfully parsed ScheduledTasksInfo push
+     * (0 = none this process). Freshness signal for [tasks] consumers: the
+     * shared flow replays its last emission to every new collector, and that
+     * replay can be arbitrarily old when the socket has since died — judge
+     * recency from this stamp, not from collection time.
+     */
+    @Volatile var lastPushAtMs: Long = 0L
+        private set
+
     private val rawTasks: Flow<List<ScheduledTaskInfo>> = callbackFlow {
         // Tracks (re)connection so we can re-subscribe after a socket drop.
         var lastConnected = webSocketClient.isConnected.value
@@ -64,7 +73,11 @@ class ScheduledTasksRealtimeChannel @Inject constructor(
         val eventsJob: Job = scope.launch {
             webSocketClient.events.collect { event ->
                 if (event.type == MESSAGE_SCHEDULED_TASKS_INFO) {
-                    val parsed = parseTasks(event)
+                    // A malformed push is skipped entirely — no emission (the
+                    // last good list stays) and no [lastPushAtMs] stamp (a
+                    // push we cannot parse is not evidence of freshness).
+                    val parsed = parseTasks(event) ?: return@collect
+                    lastPushAtMs = System.currentTimeMillis()
                     trySend(parsed)
                 }
             }
@@ -95,7 +108,8 @@ class ScheduledTasksRealtimeChannel @Inject constructor(
     /**
      * The full scheduled-task list as last pushed by the server. Emits on every
      * server push whose parsed contents differ from the previous emission.
-     * Empty list until the first push lands.
+     * Nothing until the first successfully parsed push lands; malformed
+     * pushes are skipped so the last good list stays.
      */
     val tasks: Flow<List<ScheduledTaskInfo>> = rawTasks
 
@@ -119,11 +133,8 @@ class ScheduledTasksRealtimeChannel @Inject constructor(
         webSocketClient.sendMessage(MESSAGE_SCHEDULED_TASKS_STOP)
     }
 
-    private fun parseTasks(event: WebSocketEvent): List<ScheduledTaskInfo> {
-        // The payload is an array — read it from the event's pre-parsed
-        // dataArray instead of re-parsing the whole rawText envelope (this
-        // channel receives the full TaskInfo[] push once per second).
-        val data = event.dataArray ?: JSONArray()
+    private fun parseTasks(event: WebSocketEvent): List<ScheduledTaskInfo>? {
+        val data = event.dataArray ?: return null
         return try {
             buildList {
                 for (i in 0 until data.length()) {
@@ -133,7 +144,7 @@ class ScheduledTasksRealtimeChannel @Inject constructor(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse ScheduledTasksInfo payload", e)
-            emptyList()
+            null
         }
     }
 

@@ -12,6 +12,8 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import javax.inject.Inject
 
+private val DATE_LABEL_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE, MMM d")
+
 /** Timers grouped by their start date, matching jellyfin-web `getTimersHtml`. */
 @Immutable
 data class TimerDateGroup(
@@ -87,10 +89,10 @@ class ScheduleViewModel @Inject constructor(
 
     private fun parseDateLabel(iso: String): String? = runCatching {
         OffsetDateTime.parse(iso, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-            .format(DateTimeFormatter.ofPattern("EEE, MMM d"))
+            .format(DATE_LABEL_FORMATTER)
     }.recoverCatching {
         java.time.LocalDateTime.parse(
             iso.replace("Z", "").replace("T", " ").substringBefore('+').trim()
-        ).format(DateTimeFormatter.ofPattern("EEE, MMM d"))
+        ).format(DATE_LABEL_FORMATTER)
     }.getOrNull()
 }
