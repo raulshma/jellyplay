@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Deep module for the home screen's pending-sync surface: everything the UI
@@ -97,8 +98,12 @@ class SyncStatusStateHolder(
         MutableStateFlow<Map<String, ResolvedMediaRef>>(emptyMap())
     val pendingItemDetails: StateFlow<Map<String, ResolvedMediaRef>> = _pendingItemDetails.asStateFlow()
 
-    /** Item ids currently being resolved, to dedupe concurrent callers. */
-    private val pendingResolveInFlight = mutableSetOf<String>()
+    /**
+     * Item ids currently being resolved, to dedupe concurrent callers.
+     * Concurrent set: mutated from [scope.launch] coroutines, so it must not
+     * rely on the consumer's scope being confined to a single thread.
+     */
+    private val pendingResolveInFlight: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     /**
      * Ensures the [pendingItemDetails] map holds a resolution for every id in

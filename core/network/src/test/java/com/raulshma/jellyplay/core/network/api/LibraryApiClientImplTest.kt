@@ -113,9 +113,29 @@ class LibraryApiClientImplTest {
     @Test
     fun `forced query leaves the sub-cache usable for subsequent normal reads`() = runTest {
         client.getHomeSections(latestOnlyQuery)                    // populates: 1 fetch
-        client.getHomeSections(latestOnlyQuery, force = true)      // bypasses:  2 fetches
+        client.getHomeSections(latestOnlyQuery, force = true)      // bypasses: 2 fetches
         client.getHomeSections(latestOnlyQuery)                    // cache hit: still 2
 
         coVerify(exactly = 2) { client.getLatestMedia(any(), any()) }
+    }
+
+    @Test
+    fun `forced query memoises the pulled rows for subsequent normal reads`() = runTest {
+        // The forced fetch must refresh the sub-cache, not just bypass its
+        // read: otherwise the next (non-forced) periodic refresh would serve
+        // the PRE-pull rows for up to the TTL and freshly-swiped content
+        // would visibly revert.
+        coEvery { client.getLatestMedia(any(), any()) } returnsMany listOf(
+            Result.success(listOf(latestItem("stale-row"))),
+            Result.success(listOf(latestItem("pulled-row"))),
+        )
+
+        client.getHomeSections(latestOnlyQuery)                // fetch 1: stale-row
+        client.getHomeSections(latestOnlyQuery, force = true)  // fetch 2: pulled-row
+
+        // No third fetch — and the served rows are the PULLED ones.
+        coVerify(exactly = 2) { client.getLatestMedia(any(), any()) }
+        val sections = client.getHomeSections(latestOnlyQuery).getOrThrow().sections
+        assertTrue(sections.any { it.items.any { item -> item.id == "pulled-row" } })
     }
 }

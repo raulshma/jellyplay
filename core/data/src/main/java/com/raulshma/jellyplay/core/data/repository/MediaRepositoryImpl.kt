@@ -105,9 +105,10 @@ class MediaRepositoryImpl @Inject constructor(
      * The single owner of identity transitions (see [HomeSession]). Replaces
      * this repo's own `lastStableIdentity` mirror + `init {}` observer: the
      * cache-invalidation collector below now subscribes to
-     * [HomeSession.transitions], and the synchronous identity reads for cache
-     * keying go through [HomeSession.currentIdentitySnapshot] (the SWR paths
-     * use the suspend [HomeSession.currentIdentity]).
+     * [HomeSession.transitions], and identity reads for cache keying go
+     * through [HomeSession.currentIdentity] (the suspend source-flow read —
+     * the mirror lags a switch by a dispatch, which would key fetches under
+     * the previous identity).
      */
     private val homeSession: HomeSession,
 ) : MediaRepository, MediaRepositoryCacheInvalidation {
@@ -137,7 +138,7 @@ class MediaRepositoryImpl @Inject constructor(
     private fun invalidateDetailCache(itemId: String? = null) {
         detailCacheEpoch.incrementAndGet()
         if (itemId != null) {
-            val identity = currentIdentity()
+            val identity = currentIdentitySnapshot()
             detailCache.remove(identity, itemId)
             // similarCache keys are `similar_${itemId}_$limit` (the limit is
             // part of the key so a different limit never serves a truncated
@@ -161,7 +162,7 @@ class MediaRepositoryImpl @Inject constructor(
     // external caller needs this knob anymore.
     private fun invalidateCollectionItemsCache(collectionId: String) {
         // Keys are `collection_${id}_${startIndex}_${limit}`, so evict by prefix.
-        collectionItemsCache.removeByKeyPrefix(currentIdentity(), "collection_$collectionId")
+        collectionItemsCache.removeByKeyPrefix(currentIdentitySnapshot(), "collection_$collectionId")
     }
 
     /**
@@ -202,13 +203,28 @@ class MediaRepositoryImpl @Inject constructor(
     )
 
     /**
-     * The current `(serverId, userId)` as a [CacheIdentity], read
-     * synchronously from the [HomeSession] identity mirror. Returns
+     * The current `(serverId, userId)` as a [CacheIdentity], read from the
+     * session source flow (via [HomeSession.currentIdentity]). Returns
      * [CacheIdentity.UNKNOWN] before login / after logout — nothing cached
      * under that key can leak across users, since no real identity ever
-     * collides with it.
+     * collides with it. The source read matters right after a switch: the
+     * [HomeSession] identity mirror is updated asynchronously, and keying a
+     * fetch against the lagging mirror would read/write the PREVIOUS
+     * identity's cache entries in that window.
      */
-    private fun currentIdentity(): CacheIdentity {
+    private suspend fun currentIdentity(): CacheIdentity {
+        val identity = homeSession.currentIdentity() ?: return CacheIdentity.UNKNOWN
+        return CacheIdentity.ofOrNull(identity.serverId, identity.userId)
+    }
+
+    /**
+     * Synchronous mirror variant for non-suspend callers (the self-invalidate
+     * paths below). Mirror staleness is benign there: these are best-effort
+     * evictions, and an identity switch clears the caches wholesale via the
+     * transitions collector regardless of which identity an entry was keyed
+     * under.
+     */
+    private fun currentIdentitySnapshot(): CacheIdentity {
         val identity = homeSession.currentIdentitySnapshot() ?: return CacheIdentity.UNKNOWN
         return CacheIdentity.ofOrNull(identity.serverId, identity.userId)
     }
@@ -1074,7 +1090,7 @@ class MediaRepositoryImpl @Inject constructor(
      * call site never re-derives "is this item part of a series?" locally.
      */
     private fun invalidateUserDataCaches(itemId: String, seriesIdHint: String? = null) {
-        val identity = currentIdentity()
+        val identity = currentIdentitySnapshot()
         // Read the cached detail first to discover whether this item belongs
         // to a series (either is the series or is an episode of one) so we can
         // drop the series-scoped seasons/episodes caches too.
@@ -1094,7 +1110,7 @@ class MediaRepositoryImpl @Inject constructor(
     }
 
     private fun cachedSeriesId(itemId: String): String? {
-        val cached = detailCache.get(currentIdentity(), itemId) ?: return null
+        val cached = detailCache.get(currentIdentitySnapshot(), itemId) ?: return null
         return cached.item.seriesId
             ?: cached.takeIf { it.item.mediaType == MediaType.SERIES }?.item?.id
     }

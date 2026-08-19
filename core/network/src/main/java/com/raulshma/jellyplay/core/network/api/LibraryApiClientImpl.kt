@@ -310,8 +310,10 @@ class LibraryApiClientImpl @Inject constructor(
 
     /**
      * Shared read/write shape of the home sub-call caches: consult [cache]
-     * first unless [force] (pull-to-refresh), and memoise a successful fetch
-     * unless forced. Keys are scoped to the current [CacheIdentity] so a
+     * first unless [force] (pull-to-refresh), and memoise every successful
+     * fetch — including a forced one, so the freshly pulled rows survive the
+     * next periodic refresh instead of the pre-pull rows reverting for up to
+     * the TTL. Keys are scoped to the current [CacheIdentity] so a
      * user/server switch can never serve the previous identity's rows.
      */
     private suspend fun cachedHomeSubCall(
@@ -327,9 +329,7 @@ class LibraryApiClientImpl @Inject constructor(
             cache.get(identity, cacheKey)?.let { return Result.success(it) }
         }
         return fetch().also { result ->
-            if (!force) {
-                result.getOrNull()?.let { cache.put(identity, cacheKey, it) }
-            }
+            result.getOrNull()?.let { cache.put(identity, cacheKey, it) }
         }
     }
 
@@ -340,7 +340,8 @@ class LibraryApiClientImpl @Inject constructor(
      * changes less often than that, so a short TTL skips the redundant fan-out.
      * Only the home path uses this — browse/library screens still go straight to
      * [getLatestMedia] for fresh data. [force] (pull-to-refresh) bypasses the
-     * cache read and write and goes straight to the uncached call.
+     * cache read but still memoises a successful fetch, so the pulled rows
+     * are what the next periodic refresh serves.
      */
     private suspend fun getLatestMediaForHome(parentId: String, limit: Int, force: Boolean = false): Result<List<MediaItem>> =
         cachedHomeSubCall(homeLatestMediaCache, parentId, limit, force) { getLatestMedia(parentId, limit) }
@@ -351,8 +352,9 @@ class LibraryApiClientImpl @Inject constructor(
      * recommendations fan-out (up to 5 concurrent `getSimilarItems` calls) is
      * the single most expensive part of a home refresh; seeds rarely change
      * within the TTL window, so back-to-back refreshes skip it entirely.
-     * [force] (pull-to-refresh) bypasses the cache read and write and goes
-     * straight to the uncached call.
+     * [force] (pull-to-refresh) bypasses the cache read but still memoises a
+     * successful fetch, so the pulled rows are what the next periodic
+     * refresh serves.
      */
     private suspend fun getSimilarItemsForHome(seedId: String, limit: Int, force: Boolean = false): Result<List<MediaItem>> =
         cachedHomeSubCall(homeSimilarCache, seedId, limit, force) { getSimilarItems(seedId, limit) }

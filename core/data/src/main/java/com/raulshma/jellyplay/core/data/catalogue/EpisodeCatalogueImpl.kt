@@ -72,7 +72,7 @@ class EpisodeCatalogueImpl @Inject constructor(
     /**
      * The single owner of identity transitions (see [HomeSession]). Replaces
      * this catalogue's own `lastStableIdentity` mirror + `init {}` observer;
-     * [currentIdentity] reads the shared mirror synchronously.
+     * [currentIdentity] reads the session source flow.
      */
     private val homeSession: HomeSession,
 ) : EpisodeCatalogue {
@@ -104,7 +104,26 @@ class EpisodeCatalogueImpl @Inject constructor(
         }
     }
 
-    private fun currentIdentity(): CacheIdentity {
+    /**
+     * The current `(serverId, userId)` as a [CacheIdentity], read from the
+     * session source flow (via [HomeSession.currentIdentity]) — the mirror
+     * lags a switch by a dispatch, and keying a load against the lagging
+     * mirror would read/write the PREVIOUS identity's snapshot in that
+     * window. Returns [CacheIdentity.UNKNOWN] before login / after logout —
+     * nothing cached under that key can leak across users.
+     */
+    private suspend fun currentIdentity(): CacheIdentity {
+        val identity = homeSession.currentIdentity() ?: return CacheIdentity.UNKNOWN
+        return CacheIdentity.ofOrNull(identity.serverId, identity.userId)
+    }
+
+    /**
+     * Synchronous mirror variant for the non-suspend [invalidateSeries]:
+     * a best-effort eviction, and identity switches clear the whole cache
+     * via the transitions collector regardless of which identity the entry
+     * was keyed under.
+     */
+    private fun currentIdentitySnapshot(): CacheIdentity {
         val identity = homeSession.currentIdentitySnapshot() ?: return CacheIdentity.UNKNOWN
         return CacheIdentity.ofOrNull(identity.serverId, identity.userId)
     }
@@ -275,7 +294,7 @@ class EpisodeCatalogueImpl @Inject constructor(
 
     override fun invalidateSeries(seriesId: String) {
         epoch.incrementAndGet()
-        cache.remove(currentIdentity(), cacheKey(seriesId))
+        cache.remove(currentIdentitySnapshot(), cacheKey(seriesId))
     }
 
     override fun invalidateAll() {

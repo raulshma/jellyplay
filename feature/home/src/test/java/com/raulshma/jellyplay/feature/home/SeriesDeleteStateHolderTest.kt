@@ -128,6 +128,41 @@ class SeriesDeleteStateHolderTest {
         assertNull(holder.state.value)
     }
 
+    @Test
+    fun dismiss_cancelsInFlightLoad_soItCannotRepublishState() = runTest {
+        stubSeries(seasons = listOf(season("season1")), episodes = listOf(episode("e1", "season1")))
+        val holder = buildHolder()
+
+        holder.requestSeriesDelete(series()) // load queued on the test scheduler
+        holder.dismiss()                     // dismissed before the load runs
+        assertNull(holder.state.value)
+
+        runCurrent()
+
+        // The cancelled load must not reopen the sheet with loaded state.
+        assertNull(holder.state.value)
+    }
+
+    @Test
+    fun requestSeriesDelete_cancelsPreviousSeriesLoad() = runTest {
+        // Opening series A, dismissing, then quickly opening B: A's slower
+        // load must die with the dismiss/re-request, not publish last and
+        // render B's sheet with A's data.
+        every { offlineRepository.getSeasonsForSeries("s1") } returns flowOf(listOf(season("season1")))
+        coEvery { offlineRepository.getEpisodesForSeries("s1") } returns listOf(episode("e1", "season1"))
+        every { offlineRepository.getSeasonsForSeries("s2") } returns flowOf(listOf(season("season2")))
+        coEvery { offlineRepository.getEpisodesForSeries("s2") } returns listOf(episode("e2", "season2"))
+        val holder = buildHolder()
+
+        holder.requestSeriesDelete(series())                    // A's load queued
+        holder.requestSeriesDelete(series().copy(id = "s2"))    // cancels A, queues B
+        runCurrent()
+
+        val state = holder.state.value!!
+        assertEquals("s2", state.seriesId)
+        assertEquals(listOf("e2"), state.episodesBySeason["season2"]!!.map { it.id })
+    }
+
     /**
      * THE pin: the sheet snapshot must be captured BEFORE dismissal. The
      * shared OfflineDeleteActions reads its providers lazily; if the holder

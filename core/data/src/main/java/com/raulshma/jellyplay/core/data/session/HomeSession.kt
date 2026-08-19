@@ -80,10 +80,13 @@ sealed interface HomeSessionTransition {
  *  - [currentIdentity] is the sanctioned suspend read of the source flow
  *    (`.first()`), promoted from `MediaRepositoryImpl`'s SWR bypass — safe to
  *    call from collectors that may run before this class's own collector has
- *    processed an emission.
- *  - [currentIdentitySnapshot] is the synchronous mirror read for cache
- *    KEYING (call sites that cannot suspend); before login / after logout it
- *    is `null`, which callers map to [com.raulshma.jellyplay.core.model.CacheIdentity.UNKNOWN].
+ *    processed an emission. ALL identity-keyed cache reads/writes should use
+ *    it: the mirror below lags a switch by one dispatch, and keying against
+ *    a lagging mirror reads/writes the previous identity's entries.
+ *  - [currentIdentitySnapshot] is the synchronous mirror read for callers
+ *    that cannot suspend (best-effort evictions, where staleness is benign
+ *    because identity switches clear the caches wholesale); before login /
+ *    after logout it is `null`, which callers map to [com.raulshma.jellyplay.core.model.CacheIdentity.UNKNOWN].
  *
  * Collector scope: this class builds its own long-lived
  * `SupervisorJob() + Dispatchers.Default` scope (the same local-scope idiom as

@@ -13,8 +13,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
+import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.userApi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -136,6 +139,48 @@ class AuthApiClientImplTest {
 
         authClient.setServer(testServer)
         assertEquals(testServer, engine.currentServer.value)
+    }
+
+    @Test
+    fun `failed authenticateUser restores the previous session`() = runTest {
+        // A wrong password (or a dead server) mid-login must not sign the user
+        // out of the working session: the pre-auth adopt publishes
+        // SignedOut(previousIdentity) — which observers treat destructively
+        // (cache drop + SWR snapshot clear) — so the failure path has to put
+        // the captured (server, user) pair back atomically.
+        val jellyfin = mockk<Jellyfin>(relaxed = true)
+        val unauthenticatedApi = mockk<ApiClient>(relaxed = true)
+        // Full-arity matchers: partial matchers send mockk's overload auto-
+        // hinting down a path that executes the real final createApi.
+        every {
+            jellyfin.createApi(any(), any(), any(), any(), any())
+        } returns unauthenticatedApi
+        coEvery { unauthenticatedApi.userApi.authenticateUserByName(any()) } throws
+            java.io.IOException("auth round-trip failed")
+        val localEngine = JellyfinApiEngine(
+            context = mockk(relaxed = true),
+            jellyfinLazy = dagger.Lazy { jellyfin },
+            okHttpClientLazy = dagger.Lazy { OkHttpClient() },
+            deviceProfileProvider = DeviceProfileProvider(DeviceCodecCapabilities()),
+            addressRouter = ServerAddressRouter(),
+        )
+        val client = AuthApiClientImpl(
+            engine = localEngine,
+            libraryClient = LibraryApiClientImpl(localEngine, mockk(relaxed = true)),
+            addressRouter = ServerAddressRouter(),
+        )
+        localEngine.updateSession(testServer, testUser)
+        assertEquals(ActiveSession(testServer, testUser), localEngine.session.value)
+
+        val result = client.authenticateUser(testServer, username = "testuser", password = "wrong")
+
+        assertTrue(result.isFailure)
+        assertEquals(
+            "failed login must restore the previous session, not destroy it",
+            ActiveSession(testServer, testUser),
+            localEngine.session.value,
+        )
+        assertEquals(testUser, localEngine.currentUser.value)
     }
 
     @Test

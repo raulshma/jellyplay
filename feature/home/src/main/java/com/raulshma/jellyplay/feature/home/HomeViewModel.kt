@@ -577,9 +577,11 @@ class HomeViewModel @Inject constructor(
     )
 
     /**
-     * Switches the active user. The [AuthRepository.currentUser] collector in
-     * [init] re-runs the full home refresh on the resulting user change, so no
-     * callback or explicit reload is needed here — the UI observes the flow.
+     * Switches the active user. The atomic session publish this triggers is
+     * classified by [HomeSession] as a `UserSwitched` transition, and the
+     * `homeSession.transitions` collector in [init] re-runs the home refresh
+     * on it — no callback or explicit reload is needed here; the UI observes
+     * the flow.
      */
     fun switchUser(userId: String) {
         launch {

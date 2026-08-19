@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -122,30 +123,46 @@ class AuthApiClientImpl @Inject constructor(
         username: String,
         password: String,
     ): Result<UserInfo> = engine.apiResultWithRetry {
-        // Atomically adopt the target server AND drop any previously signed-in
-        // user: two separate updateServer/updateUser calls would publish a
-        // synthetic (newServer, oldUser) identity to session observers while
-        // the network round-trip below is in flight.
-        engine.authMutex.withLock { engine.updateSession(serverInfo, null) }
-        val client = engine.jellyfin.createApi(serverInfo.address)
-        val authResult = client.userApi.authenticateUserByName(
-            AuthenticateUserByName(
-                username = username,
-                pw = password,
+        // Capture the working session before the pre-auth adopt: the adopt
+        // publishes SignedOut(previousIdentity), and identity observers react
+        // destructively to that (cache drop + previous identity's SWR
+        // snapshot clear). If the round-trip below then fails (wrong
+        // password, unreachable server), the catch puts the captured pair
+        // back atomically so a failed login doesn't sign the user out of
+        // the working session. RetryPolicy re-runs this block against the
+        // restored pair, so the capture is idempotent across attempts.
+        val previousSession = engine.session.value
+        val previousApi = engine.api
+        try {
+            // Atomically adopt the target server AND drop any previously
+            // signed-in user: two separate updateServer/updateUser calls
+            // would publish a synthetic (newServer, oldUser) identity to
+            // session observers while the network round-trip below is in
+            // flight.
+            engine.authMutex.withLock { engine.updateSession(serverInfo, null) }
+            val client = engine.jellyfin.createApi(serverInfo.address)
+            val authResult = client.userApi.authenticateUserByName(
+                AuthenticateUserByName(
+                    username = username,
+                    pw = password,
+                )
+            ).content
+            val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
+            val authenticatedClient = engine.jellyfin.createApi(
+                baseUrl = serverInfo.address,
+                accessToken = accessTokenValue,
             )
-        ).content
-        val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
-        val authenticatedClient = engine.jellyfin.createApi(
-            baseUrl = serverInfo.address,
-            accessToken = accessTokenValue,
-        )
-        engine.updateApi(authenticatedClient)
-        val userDto = authResult.user ?: throw Exception("Authentication failed")
-        val userInfo = userDto.toUserInfo(serverInfo.address, accessTokenValue, fallbackName = username)
-        // Single atomic publish of the authenticated (server, user) pair —
-        // same critical-section shape the pre-auth adopt used above.
-        publishAuthenticatedSession(serverInfo, userInfo)
-        userInfo
+            engine.updateApi(authenticatedClient)
+            val userDto = authResult.user ?: throw Exception("Authentication failed")
+            val userInfo = userDto.toUserInfo(serverInfo.address, accessTokenValue, fallbackName = username)
+            // Single atomic publish of the authenticated (server, user) pair —
+            // same critical-section shape the pre-auth adopt used above.
+            publishAuthenticatedSession(serverInfo, userInfo)
+            userInfo
+        } catch (t: Throwable) {
+            restoreSession(previousSession, previousApi)
+            throw t
+        }
     }
 
     override suspend fun setServer(serverInfo: ServerInfo) {
@@ -215,23 +232,33 @@ class AuthApiClientImpl @Inject constructor(
         serverInfo: ServerInfo,
         secret: String,
     ): Result<UserInfo> = engine.apiResultWithRetry {
-        // Atomic adopt-server-and-drop-user — see authenticateUserByName above.
-        engine.authMutex.withLock { engine.updateSession(serverInfo, null) }
-        val client = engine.jellyfin.createApi(serverInfo.address)
-        val authResult = client.userApi.authenticateWithQuickConnect(
-            QuickConnectDto(secret = secret)
-        ).content
-        val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
-        val authenticatedClient = engine.jellyfin.createApi(
-            baseUrl = serverInfo.address,
-            accessToken = accessTokenValue,
-        )
-        engine.updateApi(authenticatedClient)
-        val userDto = authResult.user ?: throw Exception("Quick Connect authentication failed")
-        val userInfo = userDto.toUserInfo(serverInfo.address, accessTokenValue, fallbackName = "")
-        // Single atomic publish of the authenticated (server, user) pair.
-        publishAuthenticatedSession(serverInfo, userInfo)
-        userInfo
+        // Same capture/restore discipline as authenticateUserByName: a failed
+        // Quick Connect round-trip (expired/declined secret) must not leave
+        // the previous session destroyed by the pre-auth adopt below.
+        val previousSession = engine.session.value
+        val previousApi = engine.api
+        try {
+            // Atomic adopt-server-and-drop-user — see authenticateUserByName above.
+            engine.authMutex.withLock { engine.updateSession(serverInfo, null) }
+            val client = engine.jellyfin.createApi(serverInfo.address)
+            val authResult = client.userApi.authenticateWithQuickConnect(
+                QuickConnectDto(secret = secret)
+            ).content
+            val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
+            val authenticatedClient = engine.jellyfin.createApi(
+                baseUrl = serverInfo.address,
+                accessToken = accessTokenValue,
+            )
+            engine.updateApi(authenticatedClient)
+            val userDto = authResult.user ?: throw Exception("Quick Connect authentication failed")
+            val userInfo = userDto.toUserInfo(serverInfo.address, accessTokenValue, fallbackName = "")
+            // Single atomic publish of the authenticated (server, user) pair.
+            publishAuthenticatedSession(serverInfo, userInfo)
+            userInfo
+        } catch (t: Throwable) {
+            restoreSession(previousSession, previousApi)
+            throw t
+        }
     }
 
     /**
@@ -275,6 +302,24 @@ class AuthApiClientImpl @Inject constructor(
                 ),
                 userInfo,
             )
+        }
+    }
+
+    /**
+     * Puts a captured pre-auth session back after a failed login attempt.
+     * Pairs with the pre-auth adopt in the login paths: without this, a wrong
+     * password (or a declined Quick Connect) would leave the app signed out
+     * and the previous identity's cached home cleared. Runs under
+     * [kotlinx.coroutines.NonCancellable] so the restore survives caller
+     * cancellation, and re-points the API client at the captured one in case
+     * the failure landed after `updateApi` had already switched servers.
+     */
+    private suspend fun restoreSession(previousSession: ActiveSession?, previousApi: org.jellyfin.sdk.api.client.ApiClient?) {
+        withContext(NonCancellable) {
+            engine.authMutex.withLock {
+                engine.updateApi(previousApi)
+                engine.updateSession(previousSession?.server, previousSession?.user)
+            }
         }
     }
 

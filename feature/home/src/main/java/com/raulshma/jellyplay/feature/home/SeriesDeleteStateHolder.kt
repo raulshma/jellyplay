@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.toMediaItem
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -52,17 +53,24 @@ internal class SeriesDeleteStateHolder(
     /** Non-null while the delete-episodes sheet is open; null once dismissed. */
     val state: StateFlow<HomeSeriesDeleteState?> = _state.asStateFlow()
 
+    /** The in-flight sheet load, if any — see [requestSeriesDelete]. */
+    private var loadJob: Job? = null
+
     /**
      * Opens the sheet for [series]: raises the loading flag, loads the
      * series' seasons and downloaded episodes (the same [OfflineRepository]
      * calls the detail provider uses) and publishes the rendered state.
      * `getEpisodesForSeries` reads the offline store, so the resulting episode
      * map is already pre-filtered to downloaded episodes — exactly what the
-     * sheet expects.
+     * sheet expects. Cancels any in-flight load for a previous series first:
+     * without that, opening series A, dismissing and quickly opening B could
+     * let A's slower load publish last and render B's sheet with A's data
+     * (and a load racing [dismiss] would reopen a dismissed sheet).
      */
     fun requestSeriesDelete(series: MediaItem) {
+        loadJob?.cancel()
         _state.value = HomeSeriesDeleteState(series.id, emptyList(), emptyMap(), 0L, isLoading = true)
-        scope.launch {
+        loadJob = scope.launch {
             val seasonsOff = offlineRepository.getSeasonsForSeries(series.id).first()
             val episodesBySeasonOff = offlineRepository.getEpisodesForSeries(series.id).groupBy { it.seasonId }
             val episodesOffBySeason = seasonsOff.associate { season ->
@@ -88,8 +96,9 @@ internal class SeriesDeleteStateHolder(
         }
     }
 
-    /** Closes the sheet. */
+    /** Closes the sheet. A load still in flight is cancelled so it can't republish state after dismissal. */
     fun dismiss() {
+        loadJob?.cancel()
         _state.value = null
     }
 
