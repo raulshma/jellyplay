@@ -28,6 +28,7 @@ class AuthApiClientImpl @Inject constructor(
 
     override val currentServer: Flow<ServerInfo?> = engine.currentServer
     override val currentUser: Flow<UserInfo?> = engine.currentUser
+    override val session: Flow<Pair<ServerInfo, UserInfo>?> = engine.session
 
     /**
      * Probes exactly [address] via the router's dedicated probe client. This
@@ -113,7 +114,11 @@ class AuthApiClientImpl @Inject constructor(
         username: String,
         password: String,
     ): Result<UserInfo> = engine.apiResultWithRetry {
-        engine.authMutex.withLock { engine.updateServer(serverInfo) }
+        // Atomically adopt the target server AND drop any previously signed-in
+        // user: two separate updateServer/updateUser calls would publish a
+        // synthetic (newServer, oldUser) identity to session observers while
+        // the network round-trip below is in flight.
+        engine.authMutex.withLock { engine.updateSession(serverInfo, null) }
         val client = engine.jellyfin.createApi(serverInfo.address)
         val authResult = client.userApi.authenticateUserByName(
             AuthenticateUserByName(
@@ -142,13 +147,17 @@ class AuthApiClientImpl @Inject constructor(
                 policy.enabledFolders?.map { it.toString() } ?: emptyList()
             } else emptyList(),
         )
+        // Single atomic publish of the authenticated (server, user) pair —
+        // same critical-section shape the pre-auth adopt used above.
         engine.authMutex.withLock {
-            engine.updateUser(userInfo)
-            engine.updateServer(serverInfo.copy(
-                userId = userInfo.id,
-                accessToken = userInfo.accessToken,
-                isConnected = true,
-            ))
+            engine.updateSession(
+                serverInfo.copy(
+                    userId = userInfo.id,
+                    accessToken = userInfo.accessToken,
+                    isConnected = true,
+                ),
+                userInfo,
+            )
         }
         userInfo
     }
@@ -177,10 +186,10 @@ class AuthApiClientImpl @Inject constructor(
 
     override suspend fun disconnect() {
         engine.updateApi(null)
-        engine.authMutex.withLock {
-            engine.updateUser(null)
-            engine.updateServer(null)
-        }
+        // One atomic publish of the cleared pair (matches the atomic publish
+        // discipline of the login paths) — session observers see stable → null
+        // in a single step.
+        engine.authMutex.withLock { engine.updateSession(null, null) }
         // Defensive: clear any stale favorite flags cached against the previous
         // server so a server switch can't surface them. No behavior change in
         // normal use (the cache is eventually-consistent via API reads).
@@ -220,7 +229,8 @@ class AuthApiClientImpl @Inject constructor(
         serverInfo: ServerInfo,
         secret: String,
     ): Result<UserInfo> = engine.apiResultWithRetry {
-        engine.authMutex.withLock { engine.updateServer(serverInfo) }
+        // Atomic adopt-server-and-drop-user — see authenticateUserByName above.
+        engine.authMutex.withLock { engine.updateSession(serverInfo, null) }
         val client = engine.jellyfin.createApi(serverInfo.address)
         val authResult = client.userApi.authenticateWithQuickConnect(
             QuickConnectDto(secret = secret)
@@ -246,13 +256,16 @@ class AuthApiClientImpl @Inject constructor(
                 policy.enabledFolders?.map { it.toString() } ?: emptyList()
             } else emptyList(),
         )
+        // Single atomic publish of the authenticated (server, user) pair.
         engine.authMutex.withLock {
-            engine.updateUser(userInfo)
-            engine.updateServer(serverInfo.copy(
-                userId = userInfo.id,
-                accessToken = userInfo.accessToken,
-                isConnected = true,
-            ))
+            engine.updateSession(
+                serverInfo.copy(
+                    userId = userInfo.id,
+                    accessToken = userInfo.accessToken,
+                    isConnected = true,
+                ),
+                userInfo,
+            )
         }
         userInfo
     }

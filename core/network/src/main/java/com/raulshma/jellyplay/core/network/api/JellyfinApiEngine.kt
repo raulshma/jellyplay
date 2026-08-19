@@ -51,6 +51,22 @@ class JellyfinApiEngine @Inject constructor(
     private val _currentUser = MutableStateFlow<UserInfo?>(null)
     val currentUser: StateFlow<UserInfo?> = _currentUser.asStateFlow()
 
+    /**
+     * The server+user pair published as ONE atomic value. `currentServer` and
+     * `currentUser` are separate StateFlows, so any caller that updates them
+     * as two assignments (login / switchUser / disconnect) lets a
+     * `combine(currentServer, currentUser)` downstream observe a synthetic
+     * mixed `(newServer, oldUser)` intermediate — an identity that never
+     * existed. This flow is updated inside the same critical sections (see
+     * [updateSession]) so a session transition is always observed as a single
+     * step from one stable pair to the next, or to/from `null`. `null` means
+     * "no fully-established identity" (either side missing), matching the
+     * `if (server != null && user != null)` projection consumers used to
+     * derive from the separate flows.
+     */
+    private val _session = MutableStateFlow<Pair<ServerInfo, UserInfo>?>(null)
+    val session: StateFlow<Pair<ServerInfo, UserInfo>?> = _session.asStateFlow()
+
     val authMutex = Mutex()
 
     @Volatile
@@ -83,11 +99,35 @@ class JellyfinApiEngine @Inject constructor(
 
     fun updateServer(server: ServerInfo?) {
         _currentServer.value = server
+        publishSession(server, _currentUser.value)
         if (server == null) addressRouter.clear() else addressRouter.configure(server)
     }
 
     fun updateUser(user: UserInfo?) {
         _currentUser.value = user
+        publishSession(_currentServer.value, user)
+    }
+
+    /**
+     * Atomically adopts BOTH sides of the session in one critical-section
+     * step, so [session] observers never see the mixed intermediate that two
+     * separate [updateServer]+[updateUser] calls would produce. Callers that
+     * know both sides at once (the login / switchUser / disconnect paths in
+     * [AuthApiClientImpl]) must use this; [updateServer]/[updateUser] remain
+     * for legitimate single-side updates and pair with the current other side
+     * (e.g. `updateUser(token-refreshed-user)` re-publishes the same
+     * identity).
+     */
+    fun updateSession(server: ServerInfo?, user: UserInfo?) {
+        _currentServer.value = server
+        _currentUser.value = user
+        publishSession(server, user)
+        if (server == null) addressRouter.clear() else addressRouter.configure(server)
+    }
+
+    /** Publishes the combined pair; a missing side collapses the session to null. */
+    private fun publishSession(server: ServerInfo?, user: UserInfo?) {
+        _session.value = if (server != null && user != null) server to user else null
     }
 
     fun updateApi(api: ApiClient?) {
@@ -107,7 +147,9 @@ class JellyfinApiEngine @Inject constructor(
         val user = _currentUser.value
         _api = user?.let { jellyfin.createApi(baseUrl = address, accessToken = it.accessToken) }
         if (user != null) {
-            _currentUser.value = user.copy(serverAddress = address)
+            // updateUser (not a raw assignment) so the combined session flow
+            // republishes the pair with the mirrored address.
+            updateUser(user.copy(serverAddress = address))
         }
     }
 

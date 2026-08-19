@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.data.catalogue
 
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.session.HomeSessionTransition
 import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.TtlCache
@@ -14,7 +16,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlin.coroutines.coroutineContext
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -22,7 +23,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -69,6 +69,12 @@ import javax.inject.Singleton
 class EpisodeCatalogueImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val offlineRepository: OfflineRepository,
+    /**
+     * The single owner of identity transitions (see [HomeSession]). Replaces
+     * this catalogue's own `lastStableIdentity` mirror + `init {}` observer;
+     * [currentIdentity] reads the shared mirror synchronously.
+     */
+    private val homeSession: HomeSession,
 ) : EpisodeCatalogue {
 
     private val cache = TtlCache<EpisodeCatalogueSnapshot>(
@@ -77,46 +83,30 @@ class EpisodeCatalogueImpl @Inject constructor(
     )
 
     /**
-     * Long-lived scope for the identity observer only. The loads themselves run
-     * on the caller's scope (via `coroutineScope { async { … } }`) so they
-     * inherit the caller's dispatcher and cancellation; this scope never hosts
-     * a load.
+     * Long-lived scope for the identity-transition observer only. The loads
+     * themselves run on the caller's scope (via `coroutineScope { async { … } }`)
+     * so they inherit the caller's dispatcher and cancellation; this scope
+     * never hosts a load.
      */
     private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    /**
-     * The last stable `(serverId, userId)` mirror. `currentServer`/`currentUser`
-     * are not `StateFlow`s at the [JellyfinApiClient] boundary, so there's no
-     * `.value` to read; the mirror is the synchronous source for
-     * [currentIdentity]. `null` before login / after logout.
-     */
-    private val lastStableIdentity = AtomicReference<Pair<String, String>?>(null)
-
     init {
-        // Self-invalidate on identity change so a user/server switch can't serve
-        // the previous identity's catalogue for up to the TTL. Same rules as
-        // MediaRepositoryImpl's observer: empty→stable and stable→stable-same
-        // don't invalidate; everything else does.
+        // Self-invalidate on identity change so a user/server switch can't
+        // serve the previous identity's catalogue for up to the TTL. SignedIn
+        // (session restore / first login) does NOT invalidate — that was rule
+        // 4 of the observer this replaced, and anything cached under the
+        // pre-login (UNKNOWN) identity misses by construction anyway. User
+        // switch, server switch and sign-out each drop the whole catalogue.
         cacheScope.launch {
-            combine(apiClient.currentServer, apiClient.currentUser) { server, user ->
-                if (server != null && user != null) server.id to user.id else null
-            }.collect { identity ->
-                val previous = lastStableIdentity.getAndSet(identity)
-                val shouldInvalidate = when {
-                    previous == null && identity == null -> false
-                    previous == null && identity != null -> false
-                    previous != null && identity == null -> true
-                    previous != identity -> true
-                    else -> false
-                }
-                if (shouldInvalidate) invalidateAll()
+            homeSession.transitions.collect {
+                if (it !is HomeSessionTransition.SignedIn) invalidateAll()
             }
         }
     }
 
     private fun currentIdentity(): CacheIdentity {
-        val (serverId, userId) = lastStableIdentity.get() ?: return CacheIdentity.UNKNOWN
-        return CacheIdentity.ofOrNull(serverId, userId)
+        val identity = homeSession.currentIdentitySnapshot() ?: return CacheIdentity.UNKNOWN
+        return CacheIdentity.ofOrNull(identity.serverId, identity.userId)
     }
 
     // Single-flight coordination — the in-flight Deferred map + epoch, keyed by

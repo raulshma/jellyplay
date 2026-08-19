@@ -31,14 +31,14 @@ import org.junit.Test
  */
 class MediaRepositoryCacheInvalidationTest {
 
-    private val serverFlow = MutableStateFlow<ServerInfo?>(null)
-    private val userFlow = MutableStateFlow<UserInfo?>(null)
+    // Atomic (server, user) session flow consumed by the shared HomeSession
+    // detector — one value per identity step (see JellyfinApiEngine.session).
+    private val sessionFlow = MutableStateFlow<Pair<ServerInfo, UserInfo>?>(null)
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
     private val networkMonitor: NetworkMonitor = mockk(relaxed = true)
 
     private fun buildRepository(): MediaRepositoryImpl {
-        every { apiClient.currentServer } returns serverFlow
-        every { apiClient.currentUser } returns userFlow
+        every { apiClient.session } returns sessionFlow
         coEvery { apiClient.getMediaDetail(any()) } returns Result.success(mockk<MediaDetail>(relaxed = true))
         every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
         val lrcLibApi: LrcLibApi = mockk(relaxed = true)
@@ -46,9 +46,11 @@ class MediaRepositoryCacheInvalidationTest {
         val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true)
         val playedStateSync: PlayedStateSync = mockk(relaxed = true)
         val offlineRepository: OfflineRepository = mockk(relaxed = true)
+        val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(apiClient)
         val episodeCatalogue = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl(
             apiClient,
             offlineRepository,
+            homeSession,
         )
         return MediaRepositoryImpl(
             apiClient,
@@ -60,6 +62,7 @@ class MediaRepositoryCacheInvalidationTest {
             episodeCatalogue,
             mockk<UserDataRealtimeChannel>(relaxed = true),
             SystemTimeSource(),
+            homeSession,
         )
     }
 
@@ -79,16 +82,15 @@ class MediaRepositoryCacheInvalidationTest {
     @Test
     fun `cache survives an identity emission that does not change`() = runBlocking {
         val repository = buildRepository()
-        userFlow.value = userInfo("user-A")
-        serverFlow.value = serverInfo("server-1")
+        sessionFlow.value = serverInfo("server-1") to userInfo("user-A")
         waitForCacheObserver()
 
         repository.getMediaDetail("item-1")
         repository.getMediaDetail("item-1")
 
-        // Re-emit the same identity — no invalidation expected.
-        serverFlow.value = serverInfo("server-1")
-        userFlow.value = userInfo("user-A")
+        // Re-emit the same identity (new pair object, same ids) — no
+        // invalidation expected.
+        sessionFlow.value = serverInfo("server-1") to userInfo("user-A")
         waitForCacheObserver()
 
         repository.getMediaDetail("item-1")
@@ -98,14 +100,13 @@ class MediaRepositoryCacheInvalidationTest {
     @Test
     fun `cache is invalidated when user changes`() = runBlocking {
         val repository = buildRepository()
-        userFlow.value = userInfo("user-A")
-        serverFlow.value = serverInfo("server-1")
+        sessionFlow.value = serverInfo("server-1") to userInfo("user-A")
         waitForCacheObserver()
 
         repository.getMediaDetail("item-1")
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
 
-        userFlow.value = userInfo("user-B")
+        sessionFlow.value = serverInfo("server-1") to userInfo("user-B")
         waitForCacheObserver()
 
         repository.getMediaDetail("item-1")
@@ -115,14 +116,13 @@ class MediaRepositoryCacheInvalidationTest {
     @Test
     fun `cache is invalidated when server changes`() = runBlocking {
         val repository = buildRepository()
-        userFlow.value = userInfo("user-A")
-        serverFlow.value = serverInfo("server-1")
+        sessionFlow.value = serverInfo("server-1") to userInfo("user-A")
         waitForCacheObserver()
 
         repository.getMediaDetail("item-1")
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
 
-        serverFlow.value = serverInfo("server-2")
+        sessionFlow.value = serverInfo("server-2") to userInfo("user-A")
         waitForCacheObserver()
 
         repository.getMediaDetail("item-1")
@@ -136,16 +136,15 @@ class MediaRepositoryCacheInvalidationTest {
         // Session restore: identity is established before the first fetch (the
         // realistic ordering — DataStore restores server/user, then the UI
         // loads). The observer must treat this as a restore, not a switch.
-        userFlow.value = userInfo("user-A")
-        serverFlow.value = serverInfo("server-1")
+        sessionFlow.value = serverInfo("server-1") to userInfo("user-A")
         waitForCacheObserver()
 
         repository.getMediaDetail("item-1")
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
 
-        // Re-emit the same identity — still a restore, no invalidation expected.
-        serverFlow.value = serverInfo("server-1")
-        userFlow.value = userInfo("user-A")
+        // Re-emit the same identity (new pair object, same ids) — still a
+        // restore, no invalidation expected.
+        sessionFlow.value = serverInfo("server-1") to userInfo("user-A")
         waitForCacheObserver()
 
         repository.getMediaDetail("item-1")
@@ -155,14 +154,13 @@ class MediaRepositoryCacheInvalidationTest {
     @Test
     fun `cache is invalidated on logout (user becomes null)`() = runBlocking {
         val repository = buildRepository()
-        userFlow.value = userInfo("user-A")
-        serverFlow.value = serverInfo("server-1")
+        sessionFlow.value = serverInfo("server-1") to userInfo("user-A")
         waitForCacheObserver()
 
         repository.getMediaDetail("item-1")
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
 
-        userFlow.value = null
+        sessionFlow.value = null
         waitForCacheObserver()
 
         repository.getMediaDetail("item-1")

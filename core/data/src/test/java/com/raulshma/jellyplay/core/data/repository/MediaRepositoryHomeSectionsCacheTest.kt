@@ -50,8 +50,11 @@ import java.time.ZoneId
  */
 class MediaRepositoryHomeSectionsCacheTest {
 
-    private val serverFlow = MutableStateFlow<ServerInfo?>(null)
-    private val userFlow = MutableStateFlow<UserInfo?>(null)
+    // Atomic (server, user) session flow — what the shared HomeSession
+    // detector consumes (see JellyfinApiEngine.session). One value per
+    // identity step, replacing the separate server/user flows the repo's own
+    // observer used to combine.
+    private val sessionFlow = MutableStateFlow<Pair<ServerInfo, UserInfo>?>(null)
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
     private val networkMonitor: NetworkMonitor = mockk(relaxed = true)
     private val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true) {
@@ -62,16 +65,17 @@ class MediaRepositoryHomeSectionsCacheTest {
     private val fakeTimeSource = FakeTimeSource()
 
     private fun buildRepository(): MediaRepositoryImpl {
-        every { apiClient.currentServer } returns serverFlow
-        every { apiClient.currentUser } returns userFlow
+        every { apiClient.session } returns sessionFlow
         every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
         val lrcLibApi: LrcLibApi = mockk(relaxed = true)
         val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
         val playedStateSync: PlayedStateSync = mockk(relaxed = true)
         val offlineRepository: OfflineRepository = mockk(relaxed = true)
+        val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(apiClient)
         val episodeCatalogue = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl(
             apiClient,
             offlineRepository,
+            homeSession,
         )
         return MediaRepositoryImpl(
             apiClient,
@@ -83,6 +87,7 @@ class MediaRepositoryHomeSectionsCacheTest {
             episodeCatalogue,
             mockk<UserDataRealtimeChannel>(relaxed = true),
             fakeTimeSource,
+            homeSession,
         )
     }
 
@@ -92,19 +97,18 @@ class MediaRepositoryHomeSectionsCacheTest {
 
     private fun homeSection(tag: String) = mockk<HomeSection>(relaxed = true)
 
-    /** Waits long enough for the `Dispatchers.Default` collector to observe the latest emission. */
+    /** Waits long enough for the `Dispatchers.Default` identity chain (HomeSession → repo) to observe the latest emission. */
     private suspend fun waitForCacheObserver() {
         delay(150)
     }
 
     private suspend fun signIn(serverId: String, userId: String) {
-        serverFlow.value = serverInfo(serverId)
-        userFlow.value = userInfo(userId)
+        sessionFlow.value = serverInfo(serverId) to userInfo(userId)
         waitForCacheObserver()
     }
 
     private suspend fun switchUser(userId: String) {
-        userFlow.value = userInfo(userId)
+        sessionFlow.value = serverInfo("server-1") to userInfo(userId)
         waitForCacheObserver()
     }
 

@@ -48,13 +48,19 @@ class MediaRepositoryImplTest {
     @Before
     fun setup() {
         every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
+        // Real (permanently-null) session flow behind the shared HomeSession
+        // identity detector — this suite never switches identity, so
+        // CacheIdentity.UNKNOWN is the expected key surface.
+        every { apiClient.session } returns MutableStateFlow(null)
         // The repository delegates getSeasons/getEpisodes/getAllEpisodesGrouped
         // to a real EpisodeCatalogueImpl, which in turn calls back into the
         // mocked apiClient — so the existing series/episodes stubs keep working
         // end-to-end through the catalogue transplant.
+        val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(apiClient)
         val episodeCatalogue = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl(
             apiClient,
             offlineRepository,
+            homeSession,
         )
         repository = MediaRepositoryImpl(
             apiClient,
@@ -66,6 +72,7 @@ class MediaRepositoryImplTest {
             episodeCatalogue,
             mockk<UserDataRealtimeChannel>(relaxed = true),
             SystemTimeSource(),
+            homeSession,
         )
     }
 

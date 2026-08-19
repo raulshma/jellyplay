@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.data.catalogue
 
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.session.SessionIdentity
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
@@ -12,7 +14,11 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,19 +45,27 @@ class EpisodeCatalogueImplTest {
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
 
-    // Identity flows driving the impl's observer. Default to null (logged-out)
-    // so identity is [CacheIdentity.UNKNOWN] — same default surface the repo
-    // tests rely on.
-    private val serverFlow = MutableStateFlow<ServerInfo?>(null)
-    private val userFlow = MutableStateFlow<UserInfo?>(null)
+    // Atomic session flow driving the shared HomeSession identity detector.
+    // Default null (logged-out) so identity is [CacheIdentity.UNKNOWN] — same
+    // default surface the repo tests rely on. Replaces the separate
+    // server/user flows the catalogue's own observer used to watch.
+    private val sessionFlow = MutableStateFlow<Pair<ServerInfo, UserInfo>?>(null)
 
+    private lateinit var homeSession: HomeSession
     private lateinit var catalogue: EpisodeCatalogueImpl
 
     @Before
     fun setup() {
-        every { apiClient.currentServer } returns serverFlow
-        every { apiClient.currentUser } returns userFlow
-        catalogue = EpisodeCatalogueImpl(apiClient, offlineRepository)
+        every { apiClient.session } returns sessionFlow
+        // Real HomeSession (production scope — Dispatchers.Default, like
+        // the catalogue's own observer it replaces); see
+        // HomeSessionTest for the classifier's dedicated suite.
+        homeSession = HomeSession(apiClient)
+        catalogue = EpisodeCatalogueImpl(
+            apiClient,
+            offlineRepository,
+            homeSession,
+        )
     }
 
     // ── online happy paths ──────────────────────────────────────────────
@@ -368,12 +382,15 @@ class EpisodeCatalogueImplTest {
         )
 
         catalogue.loadSeriesEpisodes("series-1")
-        // Log in as one user, then switch — the observer must self-invalidate.
-        serverFlow.value = ServerInfo(id = "server-A", name = "A", address = "https://a")
-        userFlow.value = UserInfo(id = "user-1", name = "U1", serverAddress = "https://a", accessToken = "tok")
-        waitForIdentityObserver()
-        userFlow.value = UserInfo(id = "user-2", name = "U2", serverAddress = "https://a", accessToken = "tok")
-        waitForIdentityObserver()
+        // Log in as one user, then switch — the transition must self-invalidate.
+        // One atomic session value per step (the engine's publish contract).
+        val serverA = ServerInfo(id = "server-A", name = "A", address = "https://a")
+        sessionFlow.value = serverA to
+            UserInfo(id = "user-1", name = "U1", serverAddress = "https://a", accessToken = "tok")
+        waitForIdentity(SessionIdentity("server-A", "user-1"))
+        sessionFlow.value = serverA to
+            UserInfo(id = "user-2", name = "U2", serverAddress = "https://a", accessToken = "tok")
+        waitForIdentity(SessionIdentity("server-A", "user-2"))
         catalogue.loadSeriesEpisodes("series-1")
 
         coVerify(atLeast = 2) { apiClient.getAllEpisodes("series-1") }
@@ -489,13 +506,22 @@ class EpisodeCatalogueImplTest {
     // ── helpers ─────────────────────────────────────────────────────────
 
     /**
-     * The identity observer runs on the catalogue's [Dispatchers.Default]
-     * cacheScope, not the test dispatcher, so [runTest]'s virtual clock doesn't
-     * drive it. Yielding the test coroutine lets it make progress; poll the
-     * cache effect (a re-fetch) rather than the observer directly.
+     * The identity chain runs on real dispatchers, not the test dispatcher,
+     * so [runTest]'s virtual `delay` advances no wall-clock time and cannot
+     * await it. Instead of a fixed virtual delay (which raced the shared
+     * HomeSession classifier's Dispatchers.Default hop), poll the classifier's
+     * synchronous mirror until it reports [identity] — on the Default
+     * dispatcher, so each poll `delay` is real time during which the
+     * classifier makes progress. Bounded by [withTimeoutOrNull].
      */
-    private suspend fun waitForIdentityObserver() {
-        kotlinx.coroutines.delay(50)
+    private suspend fun waitForIdentity(identity: SessionIdentity) {
+        withContext(Dispatchers.Default) {
+            withTimeoutOrNull(2_000) {
+                while (homeSession.currentIdentitySnapshot() != identity) {
+                    delay(10)
+                }
+            }
+        }
     }
 
     private fun seasonItem(id: String) = MediaItem(

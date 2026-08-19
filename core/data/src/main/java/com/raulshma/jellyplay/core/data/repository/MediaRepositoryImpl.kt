@@ -13,6 +13,8 @@ import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
 import com.raulshma.jellyplay.core.data.paging.FavoritesPagingSource
 import com.raulshma.jellyplay.core.data.paging.MediaPagingSource
 import com.raulshma.jellyplay.core.data.paging.SearchPagingSource
+import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.session.HomeSessionTransition
 import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
@@ -62,14 +64,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -102,6 +101,15 @@ class MediaRepositoryImpl @Inject constructor(
      * injected here so the 24h ceiling is unit-testable with a fake.
      */
     private val timeSource: TimeSource,
+    /**
+     * The single owner of identity transitions (see [HomeSession]). Replaces
+     * this repo's own `lastStableIdentity` mirror + `init {}` observer: the
+     * cache-invalidation collector below now subscribes to
+     * [HomeSession.transitions], and the synchronous identity reads for cache
+     * keying go through [HomeSession.currentIdentitySnapshot] (the SWR paths
+     * use the suspend [HomeSession.currentIdentity]).
+     */
+    private val homeSession: HomeSession,
 ) : MediaRepository, MediaRepositoryCacheInvalidation {
 
     private val detailCache = TtlCache<MediaDetail>(
@@ -194,17 +202,15 @@ class MediaRepositoryImpl @Inject constructor(
     )
 
     /**
-     * The current `(serverId, userId)` as a [CacheIdentity], read synchronously
-     * from the [lastStableIdentity] mirror maintained by the `init {}` observer.
-     * `Flow<ServerInfo?>` / `Flow<UserInfo?>` are not `StateFlow`s at this
-     * interface boundary, so there's no `.value` to read; the mirror is the
-     * authoritative synchronous source. Returns [CacheIdentity.UNKNOWN] before
-     * login / after logout — nothing cached under that key can leak across
-     * users, since no real identity ever collides with it.
+     * The current `(serverId, userId)` as a [CacheIdentity], read
+     * synchronously from the [HomeSession] identity mirror. Returns
+     * [CacheIdentity.UNKNOWN] before login / after logout — nothing cached
+     * under that key can leak across users, since no real identity ever
+     * collides with it.
      */
     private fun currentIdentity(): CacheIdentity {
-        val (serverId, userId) = lastStableIdentity.get() ?: return CacheIdentity.UNKNOWN
-        return CacheIdentity.ofOrNull(serverId, userId)
+        val identity = homeSession.currentIdentitySnapshot() ?: return CacheIdentity.UNKNOWN
+        return CacheIdentity.ofOrNull(identity.serverId, identity.userId)
     }
 
     /**
@@ -232,49 +238,37 @@ class MediaRepositoryImpl @Inject constructor(
      */
     private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    /**
-     * Tracks the last observed stable (serverId, userId) pair. `null` means we're in an
-     * "empty" state (logged out / restoring session). Non-null means we have a stable
-     * identity whose replacement by a different value should trigger cache invalidation.
-     * Kept as a pair (not a flattened key) so the observer can clear the *previous*
-     * identity's persisted home-section SWR rows by identity — see [init].
-     */
-    private val lastStableIdentity = AtomicReference<Pair<String, String>?>(null)
-
     init {
-        // Observe active server/user changes and self-invalidate caches. This closes a
-        // privacy + correctness gap where the previous user's home sections / detail data was
-        // served for up to 10 minutes (the longest TTL) after `switchUser` or
-        // `switchServerAddress`. Implemented as a self-collection so we don't introduce a
-        // `data → auth` dependency edge; the flows are exposed by `JellyfinApiClient` which
-        // `MediaRepositoryImpl` already depends on.
+        // Observe identity transitions from [HomeSession] (the single owner —
+        // previously this repo, EpisodeCatalogueImpl and HomeViewModel each
+        // maintained their own last-identity mirror over the separate
+        // server/user flows) and self-invalidate caches. Closes a privacy +
+        // correctness gap where the previous user's home sections / detail
+        // data was served for up to 10 minutes (the longest TTL) after
+        // `switchUser` or `switchServerAddress`.
         //
-        // Invalidation rules:
-        //  - Empty  → Stable : no invalidation (session restore from a fresh process).
-        //  - Stable → Empty  : invalidate (user logged out — clear their data for privacy).
-        //  - Stable → Stable : invalidate only if the identity actually changed.
-        //  - Empty  → Empty  : never invalidates.
+        // Invalidation rules (identical to the observer this replaces):
+        //  - SignedIn            : NOTHING — session restore / first login;
+        //                          caches are identity-keyed and there is no
+        //                          previous identity to drop (rule 4 of the
+        //                          old observer).
+        //  - User/ServerSwitched : wholesale drop + clear the PREVIOUS
+        //                          identity's persisted home-section SWR rows.
+        //  - SignedOut           : wholesale drop + clear the logged-out
+        //                          identity's rows (privacy).
         cacheScope.launch {
-            combine(apiClient.currentServer, apiClient.currentUser) { server, user ->
-                if (server != null && user != null) server.id to user.id else null
-            }.collect { identity ->
-                val previous = lastStableIdentity.getAndSet(identity)
-                val shouldInvalidate = when {
-                    previous == null && identity == null -> false
-                    previous == null && identity != null -> false // session restore, no prior data
-                    previous != null && identity == null -> true  // logout: clear for privacy
-                    previous != identity -> true                  // user or server switch
-                    else -> false
-                }
-                if (shouldInvalidate) {
+            homeSession.transitions.collect { transition ->
+                if (transition !is HomeSessionTransition.SignedIn) {
                     invalidateCaches()
                     // Clear the PREVIOUS identity's persisted home-section SWR
                     // rows — scoped, not wholesale, so a multi-account server
-                    // keeps the other users' snapshots for their next cold open.
-                    // Runs here (where we hold the previous identity) rather than
-                    // in invalidateCaches() (which has no identity context).
-                    previous?.let { (serverId, userId) ->
-                        clearHomeSectionsForIdentity(serverId, userId)
+                    // keeps the other users' snapshots for their next cold
+                    // open. Runs here (where the transition carries the
+                    // previous identity) rather than in invalidateCaches()
+                    // (which has no identity context). Null only on SignedIn,
+                    // which is excluded above.
+                    transition.previousIdentity?.let { previous ->
+                        clearHomeSectionsForIdentity(previous.serverId, previous.userId)
                     }
                 }
             }
@@ -328,14 +322,14 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun getCachedHomeSections(
         query: HomeSectionQuery,
     ): HomeSectionsResult? {
-        // Read identity directly from the source flows rather than the volatile
-        // mirror fields: this runs from the Home VM's currentUser collector,
-        // which can fire before the repo's identity observer has written the
-        // mirror. .first() is suspend + non-blocking and guarantees the current
-        // value, so the SWR read never misses due to an observe ordering race.
-        val server = apiClient.currentServer.first() ?: return null
-        val user = apiClient.currentUser.first() ?: return null
-        val entity = homeSectionCacheDao.get(server.id, user.id, query.cacheKey()) ?: return null
+        // Read identity from the source flow (via HomeSession's sanctioned
+        // suspend read), not the mirror: this runs from the Home VM's
+        // currentUser collector, which can fire before the session's identity
+        // observer has written the mirror. .first() is suspend + non-blocking
+        // and guarantees the current value, so the SWR read never misses due
+        // to an observe ordering race.
+        val identity = homeSession.currentIdentity() ?: return null
+        val entity = homeSectionCacheDao.get(identity.serverId, identity.userId, query.cacheKey()) ?: return null
         // SWR staleness ceiling (HomeFreshness): a snapshot older than 24h
         // must not instant-paint — return null so a cold open shows the
         // spinner instead of ancient content, then the normal refresh
@@ -349,8 +343,7 @@ class MediaRepositoryImpl @Inject constructor(
     }
 
     private suspend fun persistHomeSectionsSnapshot(cacheKey: String, result: HomeSectionsResult) {
-        val server = apiClient.currentServer.first() ?: return
-        val user = apiClient.currentUser.first() ?: return
+        val identity = homeSession.currentIdentity() ?: return
         runCatching {
             // Encode off the caller's (Main) dispatcher — this runs on every
             // successful home refresh (min. once/minute in foreground).
@@ -359,8 +352,8 @@ class MediaRepositoryImpl @Inject constructor(
             }
             homeSectionCacheDao.upsert(
                 HomeSectionCacheEntity(
-                    serverId = server.id,
-                    userId = user.id,
+                    serverId = identity.serverId,
+                    userId = identity.userId,
                     cacheKey = cacheKey,
                     payloadJson = payloadJson,
                     // Wall-clock on purpose: this value must survive a reboot to

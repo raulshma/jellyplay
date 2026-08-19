@@ -10,6 +10,17 @@ interface AuthApiClient {
     val currentServer: Flow<ServerInfo?>
     val currentUser: Flow<UserInfo?>
 
+    /**
+     * The `(server, user)` pair published atomically by the engine: a session
+     * transition is observed as one step (stable pair → stable pair, or
+     * →/from null), never the synthetic `(newServer, oldUser)` intermediate
+     * that `combine(currentServer, currentUser)` produces across a two-step
+     * publish (login / switchUser / disconnect). `null` means no fully
+     * established identity. Identity observers should consume this instead of
+     * combining the two separate flows.
+     */
+    val session: Flow<Pair<ServerInfo, UserInfo>?>
+
     suspend fun connectToServer(address: String): Result<ServerInfo>
 
     suspend fun getServerInfo(address: String): Result<ServerInfo>

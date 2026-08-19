@@ -63,6 +63,11 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
     testImplementation(project(":core:testing"))
+    // Test-only: HomeViewModelTest builds a real HomeSession (the shared
+    // identity detector), whose constructor consumes JellyfinApiClient — a
+    // core:network type core:data exposes only as `implementation`, so this
+    // module's tests need it on their own classpath to mock it.
+    testImplementation(project(":core:network"))
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.compose.bom))

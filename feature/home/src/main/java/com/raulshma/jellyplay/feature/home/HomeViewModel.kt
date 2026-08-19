@@ -20,6 +20,8 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
+import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.session.HomeSessionTransition
 import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolder
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -53,6 +55,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -60,6 +63,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
@@ -91,6 +95,13 @@ class HomeViewModel @Inject constructor(
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val authRepository: AuthRepository,
+    /**
+     * The single owner of identity transitions (replaces this VM's own
+     * previousUserId mirror). Drives the scroll reset + refresh routing in
+     * init; `authRepository.currentUser` is still collected separately below
+     * purely as the uiState.currentUser mirror.
+     */
+    private val homeSession: HomeSession,
     private val arrRepository: ArrRepository,
     private val tvWatchNextScheduler: TvWatchNextScheduler,
     private val continueWatchingBroadcaster: ContinueWatchingBroadcaster,
@@ -269,25 +280,60 @@ class HomeViewModel @Inject constructor(
         runCatching { ProcessLifecycleOwner.get().lifecycle.addObserver(this) }
 
         launch {
-            var previousUserId: String? = null
-            authRepository.currentUser.collectLatest { user ->
+            // uiState.currentUser mirror only — the refresh/scroll routing on
+            // identity changes moved to the HomeSession collector below.
+            authRepository.currentUser.collect { user ->
                 _uiState.update { it.copy(currentUser = user) }
-
-                val userId = user?.id
-                if (userId == null) {
-                    if (previousUserId != null) {
-                        resetHomeScrollPosition()
-                        refresher.onSignedOut()
-                    }
-                } else if (previousUserId != userId) {
-                    resetHomeScrollPosition()
-                    // SWR snapshot paint, sign-in fetch outside the refresh
-                    // job, loop restart — all refresh policy lives in the
-                    // refresher (see refreshForUserSwitch).
-                    refresher.refreshForUserSwitch()
-                }
-                previousUserId = userId
             }
+        }
+
+        launch {
+            // Identity-change routing, now owned by HomeSession (the single
+            // detector — previously this VM's own previousUserId mirror over
+            // currentUser).
+            //
+            // `transitions` has replay 0, so a sign-in that happened before
+            // this VM existed can only be caught by a one-shot identity read —
+            // but reading BEFORE subscribing could miss a transition emitted
+            // between the read and the subscription (home stuck on the
+            // spinner). Subscribe-first-then-check: the collector signals via
+            // [onSubscription] + a [CompletableDeferred] that it is live, and
+            // only then does the fallback read run. A sign-in racing the
+            // handshake may trigger both the transition handler and the
+            // fallback refresh — refreshForUserSwitch coalesces through the
+            // refresher's refreshJob, so that overlap is benign.
+            val subscribed = CompletableDeferred<Unit>()
+            val collector = launch {
+                // collectLatest (like the previousUserId collector this
+                // replaced): a transition arriving mid-refresh cancels the
+                // stale handler instead of queueing behind it.
+                homeSession.transitions
+                    .onSubscription { subscribed.complete(Unit) }
+                    .collectLatest { transition ->
+                        when (transition) {
+                            HomeSessionTransition.SignedIn,
+                            is HomeSessionTransition.UserSwitched,
+                            is HomeSessionTransition.ServerSwitched -> {
+                                resetHomeScrollPosition()
+                                // SWR snapshot paint, sign-in fetch outside
+                                // the refresh job, loop restart — all refresh
+                                // policy lives in the refresher (see
+                                // refreshForUserSwitch).
+                                refresher.refreshForUserSwitch()
+                            }
+                            is HomeSessionTransition.SignedOut -> {
+                                resetHomeScrollPosition()
+                                refresher.onSignedOut()
+                            }
+                        }
+                    }
+            }
+            subscribed.await()
+            if (homeSession.currentIdentity() != null) {
+                resetHomeScrollPosition()
+                refresher.refreshForUserSwitch()
+            }
+            collector.join()
         }
 
         launch {

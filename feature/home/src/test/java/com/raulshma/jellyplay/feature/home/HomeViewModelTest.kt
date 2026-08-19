@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.search.MediaSearchPreviewState
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
@@ -44,10 +45,12 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
+import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -56,6 +59,8 @@ import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -148,6 +153,21 @@ class HomeViewModelTest {
     private lateinit var fakeTimeSource: FakeTimeSource
 
     private val userFlow = MutableStateFlow<UserInfo?>(null)
+
+    /**
+     * Identity plumbing for the VM's HomeSession collector (the single
+     * identity detector): a mock JellyfinApiClient exposes a real atomic
+     * session flow, and the shared real [HomeSession] runs on the rule's test
+     * dispatcher so `runCurrent()` drives classification → transition → VM
+     * routing deterministically. [userFlow] above still feeds the separate
+     * uiState.currentUser mirror collector.
+     */
+    private val sessionFlow = MutableStateFlow<Pair<ServerInfo, UserInfo>?>(null)
+    private val sessionApiClient: JellyfinApiClient = mockk(relaxed = true)
+    private val homeSession: HomeSession by lazy {
+        HomeSession(sessionApiClient, CoroutineScope(SupervisorJob() + mainDispatcherRule.testDispatcher))
+    }
+
     /**
      * Backing flow for mediaRepository.userDataChanges — the refresher inside
      * the VM collects it from init, so it must be a real flow, not a relaxed
@@ -196,6 +216,7 @@ class HomeViewModelTest {
         )
 
         every { authRepository.currentUser } returns userFlow
+        every { sessionApiClient.session } returns sessionFlow
         every { mediaRepository.userDataChanges } returns userDataEvents
         every { homeDiscoveryStore.homeDiscovery } returns homeDiscoveryFlow
         every { appearanceStore.appearance } returns appearanceFlow
@@ -234,6 +255,7 @@ class HomeViewModelTest {
         seerrRequestDelegate = seerrRequestDelegate,
         seerrPreferencesStore = seerrPreferencesStore,
         authRepository = authRepository,
+        homeSession = homeSession,
         arrRepository = arrRepository,
         tvWatchNextScheduler = tvWatchNextScheduler,
         continueWatchingBroadcaster = continueWatchingBroadcaster,
@@ -256,7 +278,7 @@ class HomeViewModelTest {
         viewModel = buildViewModel()
 
         // Triggers the sign-in path: previousUserId null → userId set → fetch.
-        userFlow.value = userInfo("u1")
+        signIn("u1")
         runCurrent()
 
         val sections = viewModel.uiState.value.sections
@@ -289,7 +311,7 @@ class HomeViewModelTest {
             ),
         )
         viewModel = buildViewModel()
-        userFlow.value = userInfo("u1")
+        signIn("u1")
         runCurrent()
 
         viewModel.markItemPlayed(item("cw1"))
@@ -326,11 +348,11 @@ class HomeViewModelTest {
             HomeSectionsResult(sections = listOf(section(HomeSectionType.CONTINUE_WATCHING))),
         )
         viewModel = buildViewModel()
-        userFlow.value = userInfo("u1")
+        signIn("u1")
         runCurrent()
         assertFalse(viewModel.uiState.value.sections.isEmpty())
 
-        userFlow.value = null
+        signOut()
         runCurrent()
 
         assertTrue(viewModel.uiState.value.sections.isEmpty())
@@ -343,7 +365,7 @@ class HomeViewModelTest {
             mediaRepository.getHomeSections(any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
         viewModel = buildViewModel()
-        userFlow.value = userInfo("u1")
+        signIn("u1")
         runCurrent()
 
         // Drive the offline→online transition path: the offlineMode collector's
@@ -377,7 +399,7 @@ class HomeViewModelTest {
             mediaRepository.getHomeSections(any())
         } coAnswers { CompletableDeferred<Result<HomeSectionsResult>>().await() }
         viewModel = buildViewModel()
-        userFlow.value = userInfo("u1")
+        signIn("u1")
         runCurrent()
 
         every { offlineModeManager.isOffline } returns true
@@ -406,7 +428,7 @@ class HomeViewModelTest {
             mediaRepository.getHomeSections(any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
         viewModel = buildViewModel()
-        userFlow.value = userInfo("u1")
+        signIn("u1")
         runCurrent()
 
         // Reset invocation count after the sign-in fetch.
@@ -611,7 +633,7 @@ class HomeViewModelTest {
         } returns Result.failure(RuntimeException("Connection timeout"))
         viewModel = buildViewModel()
 
-        userFlow.value = userInfo("u1")
+        signIn("u1")
         runCurrent()
 
         assertEquals("Connection timeout", viewModel.uiState.value.error)
@@ -653,6 +675,28 @@ class HomeViewModelTest {
         assertEquals("http://server/item-99/backdrop", backdropUrl)
         stopPeriodicRefresh()
     }
+
+    /**
+     * Signs in on BOTH surfaces, like the real login path: the atomic session
+     * pair (drives HomeSession → the VM's refresh routing) and the plain
+     * currentUser flow (drives the uiState.currentUser mirror).
+     */
+    private fun signIn(userId: String) {
+        userFlow.value = userInfo(userId)
+        sessionFlow.value = serverInfo() to userInfo(userId)
+    }
+
+    /** Signs out on both surfaces — see [signIn]. */
+    private fun signOut() {
+        userFlow.value = null
+        sessionFlow.value = null
+    }
+
+    private fun serverInfo() = ServerInfo(
+        id = "s1",
+        name = "Test Server",
+        address = "http://server",
+    )
 
     private fun userInfo(id: String) = UserInfo(
         id = id,
