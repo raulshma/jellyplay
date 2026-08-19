@@ -5,13 +5,13 @@ import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
-import com.raulshma.jellyplay.core.data.repository.USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
+import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -99,33 +99,8 @@ internal class HomeRefresher(
     private val androidTvWatchNextEnabledProvider: () -> Boolean,
 ) {
 
-    companion object {
-        private const val REFRESH_INTERVAL_FOREGROUND_MS = 60_000L
-
-        // Background polling is slowed to a 15-minute cadence. The Home VM
-        // survives while its nav entry is in the back stack, so a short
-        // background interval kept fanning out up to 5 Seerr requests while
-        // the user was on a different screen entirely. The existing
-        // onResume-if-stale refresh (see [start]) re-syncs immediately when
-        // the user returns to the foreground, so the longer background
-        // interval costs nothing in freshness.
-        private const val REFRESH_INTERVAL_BACKGROUND_MS = 15 * 60_000L
-        private const val MIN_REFRESH_INTERVAL_MS = 30_000L
-
-        /**
-         * Minimum spacing for UserDataChanged-driven refreshes. The server
-         * echoes these to every session of the user — including this device's
-         * own ~10s playback-position saves — so the 30s
-         * [MIN_REFRESH_INTERVAL_MS] would force a cache-bypassing refetch
-         * (and a home-snapshot persist) behind the player for the whole
-         * playback session. Matching the foreground periodic cadence bounds
-         * that to one refresh per minute.
-         */
-        private const val USER_DATA_REFRESH_MIN_INTERVAL_MS = 60_000L
-
-        /** TTL for Seerr discover sections (trending/popular change slowly). */
-        private const val DISCOVER_TTL_MS = 10 * 60_000L
-    }
+    // All cadence/TTL constants live in core:model's HomeFreshness — the one
+    // seam for the home freshness policy shared with the cache layers below.
 
     private val _state = MutableStateFlow(HomeRefreshState())
     val state: StateFlow<HomeRefreshState> = _state.asStateFlow()
@@ -136,8 +111,8 @@ internal class HomeRefresher(
     private var isAppInForeground = true
     // Set when a user-data change lands while backgrounded; consumed by [start].
     private var pendingUserDataRefresh = false
-    // Discover-sections TTL gate (see DISCOVER_TTL_MS / fetchDiscoverSections).
-    private val discoverCache = TtlCacheGate(DISCOVER_TTL_MS)
+    // Discover-sections TTL gate (see HomeFreshness.DISCOVER_TTL_MS / fetchDiscoverSections).
+    private val discoverCache = TtlCacheGate(HomeFreshness.DISCOVER_TTL_MS)
     private var lastContinueWatchingIds: Set<String> = emptySet()
 
     init {
@@ -412,7 +387,7 @@ internal class HomeRefresher(
         scope.launch {
             offlineModeManager.checkNetworkAndAutoDetect()
             val now = timeSource.nowEpochMillis()
-            if (now - lastRefreshTime >= REFRESH_INTERVAL_FOREGROUND_MS) {
+            if (now - lastRefreshTime >= HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS) {
                 fetchOnce()
             }
         }
@@ -465,7 +440,7 @@ internal class HomeRefresher(
     private fun observeUserDataChanges() {
         scope.launch {
             mediaRepository.userDataChanges
-                .debounce(USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS)
+                .debounce(HomeFreshness.USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS)
                 .collect {
                     when {
                         // Offline behaves like backgrounded: arm the pending
@@ -484,14 +459,15 @@ internal class HomeRefresher(
     /**
      * Silent forced refresh after a user-data change. force = true because
      * server-side changes must bypass the TtlCache'd home sections. Guarded
-     * by [USER_DATA_REFRESH_MIN_INTERVAL_MS] against [lastRefreshTime] (same
-     * clock the refresh path writes) so a push arriving right after a
-     * regular refresh doesn't re-fetch, and so the server's echo of this
-     * device's own playback saves cannot force-refresh more than once a
-     * minute. No spinner: isRefreshing/isLoading stay untouched.
+     * by [HomeFreshness.USER_DATA_REFRESH_MIN_INTERVAL_MS] against
+     * [lastRefreshTime] (same clock the refresh path writes) so a push
+     * arriving right after a regular refresh doesn't re-fetch, and so the
+     * server's echo of this device's own playback saves cannot force-refresh
+     * more than once a minute. No spinner: isRefreshing/isLoading stay
+     * untouched.
      */
     private fun refreshAfterUserDataChange() {
-        if (timeSource.nowEpochMillis() - lastRefreshTime < USER_DATA_REFRESH_MIN_INTERVAL_MS) return
+        if (timeSource.nowEpochMillis() - lastRefreshTime < HomeFreshness.USER_DATA_REFRESH_MIN_INTERVAL_MS) return
         // Tracked in refreshJob so onStop cancels the forced fetch with it;
         // the periodic loop continues in the same job once the fetch lands
         // (a separate startPeriodicRefresh() call here would either be
@@ -537,7 +513,11 @@ internal class HomeRefresher(
      */
     private suspend fun periodicRefreshLoop() {
         while (true) {
-            val interval = if (isAppInForeground) REFRESH_INTERVAL_FOREGROUND_MS else REFRESH_INTERVAL_BACKGROUND_MS
+            val interval = if (isAppInForeground) {
+                HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS
+            } else {
+                HomeFreshness.REFRESH_INTERVAL_BACKGROUND_MS
+            }
             // ±10% jitter avoids synchronized refresh storms when multiple
             // devices hit the server on the same fixed mark.
             val jitter = (interval * 0.1f * (kotlin.random.Random.nextFloat() * 2f - 1f)).toLong()
@@ -549,7 +529,7 @@ internal class HomeRefresher(
             if (offlineModeManager.isOffline) continue
 
             val now = timeSource.nowEpochMillis()
-            if (now - lastRefreshTime < MIN_REFRESH_INTERVAL_MS) continue
+            if (now - lastRefreshTime < HomeFreshness.MIN_REFRESH_INTERVAL_MS) continue
 
             fetchOnce()
             lastRefreshTime = timeSource.nowEpochMillis()
@@ -594,10 +574,10 @@ internal class HomeRefresher(
         if (!prefs.enabled || !prefs.discoverEnabled) return
         if (offlineModeManager.networkStatus.value == NetworkStatus.Local) return
         // Trending/popular change slowly; cache discover results for
-        // DISCOVER_TTL_MS so "just sitting on Home" doesn't fan out up to 5
-        // Seerr round-trips per minute (periodic refresh + per pref change).
-        // A user-initiated refresh (swipe-to-refresh) bypasses this gate via
-        // [invalidateDiscoverCache].
+        // HomeFreshness.DISCOVER_TTL_MS so "just sitting on Home" doesn't fan
+        // out up to 5 Seerr round-trips per minute (periodic refresh + per
+        // pref change). A user-initiated refresh (swipe-to-refresh) bypasses
+        // this gate via [invalidateDiscoverCache].
         val now = timeSource.nowEpochMillis()
         if (!discoverCache.shouldFetch(now)) return
 

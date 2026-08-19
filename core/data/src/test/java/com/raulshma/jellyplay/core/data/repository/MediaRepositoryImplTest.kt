@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.util.SystemTimeSource
 import com.raulshma.jellyplay.core.network.LrcLibApi
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import io.mockk.coEvery
@@ -64,6 +65,7 @@ class MediaRepositoryImplTest {
             playedStateSync,
             episodeCatalogue,
             mockk<UserDataRealtimeChannel>(relaxed = true),
+            SystemTimeSource(),
         )
     }
 

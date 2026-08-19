@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.network.api
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.Genre
+import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -94,9 +95,10 @@ class LibraryApiClientImpl @Inject constructor(
     // folder + up to 5 getSimilarItems calls. Latest/recommendations change far
     // less often than Continue Watching / Next Up, so a short TTL here skips
     // those round-trips on back-to-back refreshes while CW/NextUp stay live.
-    // Mirrors the 2-minute TTL the repo already uses for the same concepts.
-    private val homeLatestMediaCache = TtlCache<List<MediaItem>>(ttlMs = HOME_SUBCALL_CACHE_TTL_MS)
-    private val homeSimilarCache = TtlCache<List<MediaItem>>(ttlMs = HOME_SUBCALL_CACHE_TTL_MS)
+    // Mirrors the 2-minute TTL the repo uses for the same concepts — both
+    // values are [HomeFreshness.NETWORK_SUBCALL_TTL_MS], one policy constant.
+    private val homeLatestMediaCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
+    private val homeSimilarCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
 
     override suspend fun getHomeSections(
         query: HomeSectionQuery,
@@ -1369,11 +1371,5 @@ class LibraryApiClientImpl @Inject constructor(
         } catch (_: Exception) {
             emptyList()
         }
-    }
-
-    private companion object {
-        // Matches MediaRepositoryImpl's LATEST_CACHE_TTL_MS so the home path's
-        // sub-call caches and the repo's same-concept caches expire in lockstep.
-        private const val HOME_SUBCALL_CACHE_TTL_MS = 2 * 60 * 1000L
     }
 }

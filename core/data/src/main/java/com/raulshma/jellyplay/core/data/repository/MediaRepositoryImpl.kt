@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import androidx.annotation.VisibleForTesting
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
+import android.os.SystemClock
 import android.util.Log
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
@@ -17,6 +19,7 @@ import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
+import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
@@ -31,6 +34,7 @@ import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.LyricsSource
@@ -92,6 +96,12 @@ class MediaRepositoryImpl @Inject constructor(
      * the identity-switch observer above needs no involvement of its own.
      */
     private val userDataRealtimeChannel: UserDataRealtimeChannel,
+    /**
+     * Wall-clock seam for the SWR staleness check in [getCachedHomeSections]
+     * (`HomeFreshness.isRoomSnapshotFresh`). Already Hilt-bound in `DataModule`;
+     * injected here so the 24h ceiling is unit-testable with a fake.
+     */
+    private val timeSource: TimeSource,
 ) : MediaRepository, MediaRepositoryCacheInvalidation {
 
     private val detailCache = TtlCache<MediaDetail>(
@@ -171,9 +181,16 @@ class MediaRepositoryImpl @Inject constructor(
     // folded into a single-entry TtlCache so the home path shares the same
     // identity-keyed primitive as every other cache here. Identity-keyed so a
     // user/server switch can't serve the previous identity's payload.
+    // TTL comes from the shared home freshness policy (HomeFreshness); the
+    // clock is indirected through [cacheClockMs] so tests can retarget it
+    // after construction.
+    @VisibleForTesting
+    internal var cacheClockMs: () -> Long = SystemClock::elapsedRealtime
+
     private val homeSectionsCache = TtlCache<HomeSectionsResult>(
         maxSize = 1,
-        ttlMs = HOME_SECTIONS_CACHE_TTL_MS,
+        ttlMs = HomeFreshness.REPO_MEMORY_TTL_MS,
+        clock = { cacheClockMs() },
     )
 
     /**
@@ -319,6 +336,13 @@ class MediaRepositoryImpl @Inject constructor(
         val server = apiClient.currentServer.first() ?: return null
         val user = apiClient.currentUser.first() ?: return null
         val entity = homeSectionCacheDao.get(server.id, user.id, query.cacheKey()) ?: return null
+        // SWR staleness ceiling (HomeFreshness): a snapshot older than 24h
+        // must not instant-paint — return null so a cold open shows the
+        // spinner instead of ancient content, then the normal refresh
+        // proceeds and upserts a fresh row.
+        if (!HomeFreshness.isRoomSnapshotFresh(entity.fetchedAt, timeSource.nowEpochMillis())) {
+            return null
+        }
         // Decode the payload off the caller's (Main) dispatcher — this is the
         // cold-open critical path and the blob spans hundreds of MediaItems.
         return withContext(Dispatchers.Default) { entity.payload }
@@ -343,7 +367,8 @@ class MediaRepositoryImpl @Inject constructor(
                     // serve the next cold open, and monotonic clocks reset on
                     // boot. The in-memory TTL above uses SystemClock.elapsedRealtime
                     // (monotonic) because it only compares two readings within one
-                    // process. fetchedAt isn't read for a TTL today.
+                    // process. fetchedAt is now load-bearing: getCachedHomeSections
+                    // reads it against HomeFreshness's 24h SWR staleness ceiling.
                     fetchedAt = System.currentTimeMillis(),
                 ),
             )
@@ -1232,8 +1257,6 @@ class MediaRepositoryImpl @Inject constructor(
         private const val DETAIL_CACHE_MAX_ENTRIES = 30
         /** 2 minutes — short enough that server changes are reflected quickly. */
         private const val DETAIL_CACHE_TTL_MS = 2 * 60 * 1000L
-        /** 60 seconds — prevents burst API calls on repeated home screen loads. */
-        private const val HOME_SECTIONS_CACHE_TTL_MS = 60 * 1000L
         /** 10 minutes — library folders change rarely during a session. */
         private const val FOLDERS_CACHE_TTL_MS = 10 * 60 * 1000L
         /** 2 minutes — "latest" content should feel fresh on re-entry. */

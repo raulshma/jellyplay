@@ -10,7 +10,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
-import com.raulshma.jellyplay.core.data.repository.USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS
+import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DetailCapabilities
@@ -405,7 +405,7 @@ class DetailViewModel @Inject internal constructor(
             val burstIds = mutableSetOf<String>()
             mediaRepository.userDataChanges
                 .onEach { change -> burstIds += change.itemIds }
-                .debounce(USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS)
+                .debounce(HomeFreshness.USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS)
                 .collect {
                     val changedIds = burstIds.toList()
                     burstIds.clear()

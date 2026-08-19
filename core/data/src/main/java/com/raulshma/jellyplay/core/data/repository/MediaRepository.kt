@@ -229,10 +229,3 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
 
     suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int = 4): List<String>
 }
-
-/**
- * Debounce screens apply when coalescing bursts of `UserDataChanged` pushes
- * into one refresh (the server emits one change per item). Shared so every
- * [MediaRepository.userDataChanges] collector settles on the same cadence.
- */
-const val USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS: Long = 1_000L
