@@ -90,8 +90,8 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         super.attachBaseContext(base)
         // Earliest hook in app startup — before ContentProviders and onCreate,
         // so debug StrictMode sees the whole init path. The debug source set
-        // backs installDebugStrictMode with real policies; the main source set
-        // ships a no-op, so release builds compile none of it.
+        // backs installDebugStrictMode with real policies; the release source
+        // set ships a no-op, so release builds compile none of it.
         installDebugStrictMode()
     }
 

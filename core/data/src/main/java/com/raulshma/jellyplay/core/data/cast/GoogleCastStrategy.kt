@@ -104,7 +104,7 @@ class GoogleCastStrategy @Inject constructor(
     private fun ensureListenersRegistered() {
         if (sessionListenerRegistered && castStateListenerRegistered) return
         try {
-            val castContext = CastContext.getSharedInstance(appContext)
+            val castContext = withCastDiskReadsPermitted { CastContext.getSharedInstance(appContext) }
             if (!sessionListenerRegistered) {
                 castContext.sessionManager.addSessionManagerListener(sessionListener, CastSession::class.java)
                 _isConnected.value = castContext.sessionManager.currentCastSession?.isConnected == true
@@ -173,7 +173,7 @@ class GoogleCastStrategy @Inject constructor(
 
     override fun disconnect(context: Context) {
         try {
-            val castContext = CastContext.getSharedInstance(context)
+            val castContext = withCastDiskReadsPermitted { CastContext.getSharedInstance(context) }
             castContext.sessionManager.endCurrentSession(true)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to end session", e)
@@ -186,7 +186,7 @@ class GoogleCastStrategy @Inject constructor(
         // CastContext after logout). Idempotent: guarded by the *Registered
         // flags so calling twice is a no-op.
         try {
-            val castContext = CastContext.getSharedInstance(appContext)
+            val castContext = withCastDiskReadsPermitted { CastContext.getSharedInstance(appContext) }
             if (sessionListenerRegistered) {
                 castContext.sessionManager.removeSessionManagerListener(sessionListener, CastSession::class.java)
                 sessionListenerRegistered = false

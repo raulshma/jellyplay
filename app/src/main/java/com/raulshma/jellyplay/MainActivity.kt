@@ -35,6 +35,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.core.view.WindowCompat
 import com.raulshma.jellyplay.R
+import com.raulshma.jellyplay.core.data.cast.withCastDiskReadsPermitted
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
@@ -52,8 +53,6 @@ import com.raulshma.jellyplay.core.ui.components.colorBlindFilter
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -76,11 +75,11 @@ class MainActivity : FragmentActivity() {
     private var backgroundedAt = 0L
     private var isPinUnlocked = mutableStateOf(false)
 
-    // Cast prewarm started in onCreate (Dispatchers.Default). The hidden
-    // media-route button in setContent waits on this job so its
-    // setUpMediaRouteButton never races — and pays the Play-Services bind on
-    // Main before — the prewarm has finished.
-    private var castPrewarmJob: Job? = null
+    // Set in onCreate before setContent: whether the one-time CastContext
+    // initialization succeeded. The hidden media-route button in setContent
+    // composes only on success so its setUpMediaRouteButton resolves the
+    // cached CastContext instead of re-triggering the Dynamite dex load.
+    private var castPreinitialized = false
 
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -105,18 +104,21 @@ class MainActivity : FragmentActivity() {
         // in landscape with no control to unlock it. UNSPECIFIED follows the
         // system auto-rotate setting, matching the fresh-install default.
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        // Initialize Cast SDK off the main thread. The MediaRouteButton in
-        // setContent is only set up once this job completes, and
-        // CastButtonFactory.setUpMediaRouteButton resolves CastContext on the
-        // calling (main) thread, so the JNI/Play-Services binding is paid
-        // here — overlapped with the splash (kept up via
-        // setKeepOnScreenCondition until session restore completes) rather
-        // than on the first composed frame when restore wins the race.
-        if (packageManager.hasSystemFeature("com.google.android.gms.cast")) {
-            castPrewarmJob = lifecycleScope.launch(Dispatchers.Default) {
-                runCatching { com.google.android.gms.cast.framework.CastContext.getSharedInstance(this@MainActivity) }
-            }
-        }
+        // Initialize the Cast SDK here on Main — getSharedInstance is
+        // main-thread-only, so the old Dispatchers.Default prewarm always
+        // threw (silently swallowed), leaving the first composed frame to
+        // pay the full Dynamite dex load mid-composition. Running it in
+        // onCreate, before setContent and while the splash starting-window
+        // still covers the screen, hides that one-time cost; the dex reads
+        // are third-party and unavoidable, so debug StrictMode permits them.
+        // Every later getSharedInstance caller (the hidden route button
+        // below, CastManager, GoogleCastStrategy) hits the cached singleton.
+        castPreinitialized = packageManager.hasSystemFeature("com.google.android.gms.cast") &&
+            runCatching {
+                withCastDiskReadsPermitted {
+                    com.google.android.gms.cast.framework.CastContext.getSharedInstance(this)
+                }
+            }.isSuccess
         splashScreen.setKeepOnScreenCondition { viewModel.sessionCoordinator.isRestoring.value }
         // No custom setOnExitAnimationListener: the system default splash exit
         // is a clean cross-fade to the first composed frame. A manual listener
@@ -201,18 +203,12 @@ class MainActivity : FragmentActivity() {
                 var pinVerifying by rememberSaveable { mutableStateOf(false) }
             val context = androidx.compose.ui.platform.LocalContext.current
 
-            // Hidden Cast media-route button, composed only after the Cast
-            // prewarm job from onCreate completes — immediately if it already
-            // has, or when Cast is unsupported and no job was started (the
-            // factory's fallback plain View keeps that path identical).
-            // Sequencing here keeps the Play-Services bind off the first
-            // composed frame; the button setup itself is unchanged.
-            var castPrewarmed by remember { mutableStateOf(castPrewarmJob?.isCompleted ?: true) }
-            LaunchedEffect(castPrewarmJob) {
-                castPrewarmJob?.join()
-                castPrewarmed = true
-            }
-            if (castPrewarmed) {
+            // Hidden Cast media-route button, composed only when the onCreate
+            // CastContext prewarm succeeded — so setUpMediaRouteButton
+            // resolves the cached singleton and does no dex I/O. When Cast is
+            // unavailable the branch is skipped outright, matching the old
+            // fallback plain View (nothing references the invisible button).
+            if (remember { castPreinitialized }) {
                 Box(
                     modifier = Modifier
                         .size(1.dp)

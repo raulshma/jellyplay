@@ -425,7 +425,7 @@ class CastManager @Inject constructor(
     private fun ensureGoogleSessionListener() {
         if (googleSessionListenerRegistered) return
         try {
-            val castContext = CastContext.getSharedInstance(context)
+            val castContext = withCastDiskReadsPermitted { CastContext.getSharedInstance(context) }
             castContext.sessionManager.addSessionManagerListener(googleSessionListener, CastSession::class.java)
             googleSessionListenerRegistered = true
         } catch (_: Exception) {}
@@ -436,7 +436,7 @@ class CastManager @Inject constructor(
         if (castPlayer != null) return castPlayer
         if (released) return null
         try {
-            val castContext = CastContext.getSharedInstance(context)
+            val castContext = withCastDiskReadsPermitted { CastContext.getSharedInstance(context) }
             sessionAvailabilityListener = object : SessionAvailabilityListener {
                 override fun onCastSessionAvailable() {}
                 override fun onCastSessionUnavailable() {
@@ -586,7 +586,7 @@ class CastManager @Inject constructor(
         // Singleton retains a reference to a dead CastContext.
         if (googleSessionListenerRegistered) {
             try {
-                val castContext = CastContext.getSharedInstance(context)
+                val castContext = withCastDiskReadsPermitted { CastContext.getSharedInstance(context) }
                 castContext.sessionManager.removeSessionManagerListener(
                     googleSessionListener, CastSession::class.java,
                 )
