@@ -132,9 +132,9 @@ class HomeRefresherTest {
             librarySyncHook = librarySyncHook,
             offlineModeManager = offlineModeManager,
             planProvider = {
-                HomeSectionPlan(
+                HomeSectionPrefs(
                     query = HomeSectionQuery(),
-                    order = HomeSectionType.CONFIGURABLE,
+                    homeSectionOrder = HomeSectionType.CONFIGURABLE,
                     mergeContinueWatchingAndNextUp = false,
                 )
             },
@@ -343,6 +343,7 @@ class HomeRefresherTest {
      */
     private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
         override fun nowEpochMillis(): Long = nowMs
+        override fun nowElapsedRealtimeMillis(): Long = nowMs
         override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 }

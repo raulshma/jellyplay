@@ -10,7 +10,9 @@ class HomeSectionDescriptorTest {
     fun staticTypes_carryNetworkRowIdentity() {
         // The ids/titles the network impl previously hardcoded at every
         // construction site — pinned here so the descriptor can never silently
-        // change a persisted/cache-keyed id or a rendered row header.
+        // change a persisted/cache-keyed id or a rendered row header (the
+        // header is the displayName; the old separate `title` field once
+        // drifted to "NextUp" while every other surface showed "Next Up").
         assertEquals("continue_watching" to "Continue Watching", staticIdentity(HomeSectionType.CONTINUE_WATCHING))
         assertEquals("next_up" to "Next Up", staticIdentity(HomeSectionType.NEXT_UP))
         assertEquals("recently_added" to "Recently Added", staticIdentity(HomeSectionType.RECENTLY_ADDED))
@@ -18,13 +20,15 @@ class HomeSectionDescriptorTest {
     }
 
     @Test
-    fun staticTypes_rowTitleMatchesDisplayName() {
+    fun staticTypes_renderRowHeaderFromDisplayName() {
         // Guards the drift this catalogue fixed: NEXT_UP's network title once
-        // read "NextUp" while every other surface showed "Next Up".
+        // read "NextUp" while every other surface showed "Next Up". The row
+        // header is built from the descriptor's single displayName now, so
+        // this pins that section() keeps using it.
         HomeSectionType.entries
             .filter { it.descriptor.id != null }
             .forEach { type ->
-                assertEquals(type.displayName, type.descriptor.title)
+                assertEquals(type.displayName, type.descriptor.section(items = emptyList()).title)
             }
     }
 
@@ -32,7 +36,6 @@ class HomeSectionDescriptorTest {
     fun latestMedia_resolvesPerLibraryIdentityAtFetchTime() {
         val descriptor = HomeSectionType.LATEST_MEDIA.descriptor
         assertNull(descriptor.id)
-        assertNull(descriptor.title)
         assertEquals("latest_folder-42", descriptor.idFor("folder-42"))
         assertEquals("Latest Movies", descriptor.titleFor("Movies"))
     }
@@ -41,7 +44,6 @@ class HomeSectionDescriptorTest {
     fun pinned_resolvesCompositeIdButCarriesInstanceTitle() {
         val descriptor = HomeSectionType.PINNED.descriptor
         assertNull(descriptor.id)
-        assertNull(descriptor.title)
         assertEquals("pinned_COLLECTION_7", descriptor.idFor("COLLECTION_7"))
     }
 
@@ -50,7 +52,6 @@ class HomeSectionDescriptorTest {
         listOf(HomeSectionType.FAVORITES, HomeSectionType.LIVE_TV, HomeSectionType.DOWNLOADED)
             .forEach { type ->
                 assertNull(type.descriptor.id)
-                assertNull(type.descriptor.title)
             }
     }
 
@@ -88,6 +89,6 @@ class HomeSectionDescriptorTest {
 
     private fun staticIdentity(type: HomeSectionType): Pair<String, String> {
         val descriptor = type.descriptor
-        return requireNotNull(descriptor.id) to requireNotNull(descriptor.title)
+        return requireNotNull(descriptor.id) to descriptor.displayName
     }
 }

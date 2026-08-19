@@ -40,9 +40,8 @@ internal class SeriesDeleteStateHolder(
 ) {
 
     /**
-     * Shared delete module for the series-scoped paths (default providers:
-     * Home's only provider-driven path is [deleteOfflineEpisodes], which
-     * captures the sheet snapshot per call — see its KDoc).
+     * Shared delete module for every series-scoped path in this holder — the
+     * episode path passes its snapshot per call (see [deleteOfflineEpisodes]).
      */
     private val deleteActions = OfflineDeleteActions(
         scope = scope,
@@ -115,23 +114,21 @@ internal class SeriesDeleteStateHolder(
     /**
      * Deletes the selected downloaded episodes for the open sheet via the
      * shared [OfflineDeleteActions] (whole-season collapse + per-episode
-     * fallback + unknown-id defense). The sheet snapshot is captured BEFORE
-     * dismissal because the shared module reads its content lazily off the
-     * providers — after [dismiss] clears the state the live providers would
-     * return empty and the collapse would silently degrade to per-episode
-     * deletes. Clearing the sheet immediately lets it dismiss while the
-     * deletes run in the background.
+     * fallback + unknown-id defense). The sheet snapshot is passed per call
+     * and read synchronously BEFORE [dismiss] clears the state — after
+     * dismissal the live state is gone and the collapse would silently
+     * degrade to per-episode deletes. Clearing the sheet immediately lets it
+     * dismiss while the deletes run in the background.
      */
     fun deleteOfflineEpisodes(episodeIds: Set<String>) {
         if (episodeIds.isEmpty()) return
         val state = _state.value ?: return
+        deleteActions.deleteOfflineEpisodes(
+            episodeIds = episodeIds,
+            episodes = state.episodesBySeason,
+            seasons = state.seasons,
+        )
         dismiss()
-        OfflineDeleteActions(
-            scope = scope,
-            offlineRepository = offlineRepository,
-            episodesProvider = { state.episodesBySeason },
-            seasonsProvider = { state.seasons },
-        ).deleteOfflineEpisodes(episodeIds)
     }
 
     /** Deletes the entire downloaded series and closes the sheet. */

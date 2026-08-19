@@ -158,8 +158,8 @@ class HomeViewModel @Inject constructor(
     /**
      * The section-preference mirrors, bundled in one [HomeSectionPrefs] value
      * so the prefs collector below diffs and adopts each emission with a
-     * single comparison/assignment (the fetch plan derives from it via
-     * [HomeSectionPrefs.toPlan]).
+     * single comparison/assignment; the refresher consumes the snapshot
+     * directly via its planProvider.
      */
     private var sectionPrefs = HomeSectionPrefs()
     private var androidTvWatchNextEnabled = true
@@ -194,7 +194,7 @@ class HomeViewModel @Inject constructor(
         tvWatchNextScheduler = tvWatchNextScheduler,
         librarySyncHook = librarySyncHook,
         offlineModeManager = offlineModeManager,
-        planProvider = { sectionPrefs.toPlan() },
+        planProvider = { sectionPrefs },
         seerrPreferencesProvider = { seerrPreferences },
         discoverEnabledProvider = { _uiState.value.discoverEnabled },
         directArrEnabledProvider = { _uiState.value.directArrEnabled },
@@ -283,16 +283,18 @@ class HomeViewModel @Inject constructor(
             // detector — previously this VM's own previousUserId mirror over
             // currentUser).
             //
-            // `transitions` has replay 0, so a sign-in that happened before
-            // this VM existed can only be caught by a one-shot identity read —
-            // but reading BEFORE subscribing could miss a transition emitted
-            // between the read and the subscription (home stuck on the
-            // spinner). Subscribe-first-then-check: the collector signals via
-            // [onSubscription] + a [CompletableDeferred] that it is live, and
-            // only then does the fallback read run. A sign-in racing the
-            // handshake may trigger both the transition handler and the
-            // fallback refresh — refreshForUserSwitch coalesces through the
-            // refresher's refreshJob, so that overlap is benign.
+            // `transitions` replays its latest emission, so a sign-in that
+            // happened before this VM existed is delivered to this collector
+            // directly. The subscribe-first-then-check handshake below still
+            // covers the never-transitioned start state (fresh install /
+            // signed out), where nothing exists to replay and reading BEFORE
+            // subscribing could miss a transition emitted between the read
+            // and the subscription (home stuck on the spinner). The collector
+            // signals via [onSubscription] + a [CompletableDeferred] that it
+            // is live, and only then does the fallback read run. A sign-in
+            // racing the handshake may trigger both the transition handler
+            // and the fallback refresh — refreshForUserSwitch coalesces
+            // through the refresher's refreshJob, so that overlap is benign.
             val subscribed = CompletableDeferred<Unit>()
             launch {
                 // collectLatest (like the previousUserId collector this
@@ -648,8 +650,8 @@ class HomeViewModel @Inject constructor(
     /**
      * Deletes the selected episodes for the open sheet — see
      * [SeriesDeleteStateHolder.deleteOfflineEpisodes]. The sheet snapshot is
-     * captured BEFORE dismissal there (the shared module reads its providers
-     * lazily), so the sheet can dismiss while the deletes run in background.
+     * read BEFORE dismissal there (passed per call into the shared module), so
+     * the sheet can dismiss while the deletes run in background.
      */
     fun deleteOfflineEpisodes(episodeIds: Set<String>) =
         seriesDeleteStateHolder.deleteOfflineEpisodes(episodeIds)
@@ -830,7 +832,10 @@ class HomeViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        ProcessLifecycleOwner.get().lifecycle.removeObserver(this)
+        // Symmetric with the runCatching-wrapped addObserver in init: JVM unit
+        // tests lack the process LifecycleOwner, so removal must not crash
+        // onCleared for a VM whose addObserver was swallowed.
+        runCatching { ProcessLifecycleOwner.get().lifecycle.removeObserver(this) }
         refresher.stop()
     }
 }

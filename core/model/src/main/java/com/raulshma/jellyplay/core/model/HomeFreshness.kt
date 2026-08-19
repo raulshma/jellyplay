@@ -70,9 +70,10 @@ object HomeFreshness {
      * on a cold open. Deliberately wall-clock (epoch millis on both
      * parameters): `fetchedAt` must survive a reboot to serve the next cold
      * open, and monotonic clocks reset on boot. The two memory TTLs above are
-     * the opposite split — they run on `SystemClock.elapsedRealtime` (via
-     * [TtlCache]'s clock lambda) because they only ever compare two readings
-     * within one process.
+     * the opposite split — they run on a monotonic clock ([TtlCache]'s
+     * contract; in the repo, its clock lambda reads the injected TimeSource's
+     * monotonic `elapsedRealtime`) because they only ever compare two
+     * readings within one process.
      *
      * Fresh iff `now - fetchedAt < [ROOM_SWR_STALE_MS]`; a snapshot exactly at
      * the ceiling is stale. A stale snapshot must not instant-paint — return

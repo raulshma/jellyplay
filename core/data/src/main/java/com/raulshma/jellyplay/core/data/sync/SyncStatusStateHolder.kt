@@ -121,8 +121,11 @@ class SyncStatusStateHolder(
             _pendingItemDetails.value = _pendingItemDetails.value.filterKeys { it in keep }
         }
         for (id in keep) {
-            if (_pendingItemDetails.value.containsKey(id) || id in pendingResolveInFlight) continue
-            pendingResolveInFlight += id
+            if (_pendingItemDetails.value.containsKey(id)) continue
+            // add() is the atomic check-and-claim: a separate `in` check
+            // followed by `+=` lets two concurrent callers both pass and
+            // double-resolve the same id.
+            if (!pendingResolveInFlight.add(id)) continue
             scope.launch {
                 try {
                     val resolved = offlineFirstItemResolver.resolveMediaRef(id)

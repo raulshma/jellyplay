@@ -92,7 +92,7 @@ internal class HomeRefresher(
     private val offlineModeManager: OfflineModeManager,
     // Per-call inputs — the VM's mutable preference mirrors stay in the VM
     // and are re-read through these providers on every fetch:
-    private val planProvider: () -> HomeSectionPlan,
+    private val planProvider: () -> HomeSectionPrefs,
     private val seerrPreferencesProvider: () -> SeerrPreferences,
     private val discoverEnabledProvider: () -> Boolean,
     private val directArrEnabledProvider: () -> Boolean,
@@ -107,6 +107,11 @@ internal class HomeRefresher(
 
     private val refreshMutex = Mutex()
     private var refreshJob: Job? = null
+    // Standalone discover fetches (pref-enable trigger) run outside
+    // [refreshJob] — replacing the refresh job for them would cancel an
+    // in-flight full refresh — but they are still tracked so [stop] and the
+    // identity transitions can cancel an abandoned fan-out.
+    private var discoverJob: Job? = null
     private var lastRefreshTime = 0L
     private var isAppInForeground = true
     // Set when a user-data change lands while backgrounded; consumed by [start].
@@ -213,7 +218,7 @@ internal class HomeRefresher(
                         // caller's dispatcher.
                         val finalSections = orderHomeSections(
                             sections = fetchedSections,
-                            order = plan.order,
+                            order = plan.homeSectionOrder,
                             mergeContinueWatchingAndNextUp = plan.mergeContinueWatchingAndNextUp,
                         )
 
@@ -338,6 +343,10 @@ internal class HomeRefresher(
      */
     suspend fun refreshForUserSwitch() {
         refreshJob?.cancel()
+        // An in-flight standalone discover fetch belongs to the previous
+        // identity; letting it land would repopulate the just-cleared
+        // discoverSections with the previous user's rows.
+        discoverJob?.cancel()
         val plan = planProvider()
         val cachedSections = orderedCachedSections(plan)
         _state.update {
@@ -363,6 +372,7 @@ internal class HomeRefresher(
      */
     fun onSignedOut() {
         refreshJob?.cancel()
+        discoverJob?.cancel()
         _state.update { it.copy(sections = emptyList(), discoverSections = emptyMap(), error = null, isLoading = true) }
     }
 
@@ -429,11 +439,13 @@ internal class HomeRefresher(
         }
     }
 
-    /** onStop: cancel the refresh job (forced fetch and/or loop) and drop it. */
+    /** onStop: cancel the refresh job (forced fetch and/or loop), the standalone discover fetch, and drop them. */
     fun stop() {
         isAppInForeground = false
         refreshJob?.cancel()
         refreshJob = null
+        discoverJob?.cancel()
+        discoverJob = null
     }
 
     /**
@@ -448,10 +460,13 @@ internal class HomeRefresher(
      * Discover-only fetch (pref- and TTL-gated), used when the user enables
      * Discover so rows appear before the next full refresh would pick them
      * up. Runs in [scope] outside the refresh mutex — same as before
-     * extraction.
+     * extraction — but in a tracked, replaceable [discoverJob] so [stop] and
+     * the identity transitions cancel an in-flight fan-out instead of letting
+     * it run to completion abandoned.
      */
     fun fetchDiscover() {
-        scope.launch { fetchDiscoverSections(seerrPreferencesProvider()) }
+        discoverJob?.cancel()
+        discoverJob = scope.launch { fetchDiscoverSections(seerrPreferencesProvider()) }
     }
 
     /**
@@ -575,14 +590,14 @@ internal class HomeRefresher(
      * by the user-switch paint ([refreshForUserSwitch]) and the cold-open
      * path in [fetchOnce].
      */
-    private suspend fun orderedCachedSections(plan: HomeSectionPlan): List<HomeSection>? =
+    private suspend fun orderedCachedSections(plan: HomeSectionPrefs): List<HomeSection>? =
         runCatching { mediaRepository.getCachedHomeSections(plan.query) }
             .getOrNull()
             ?.takeIf { it.sections.isNotEmpty() }
             ?.let { cached ->
                 orderHomeSections(
                     sections = cached.sections,
-                    order = plan.order,
+                    order = plan.homeSectionOrder,
                     mergeContinueWatchingAndNextUp = plan.mergeContinueWatchingAndNextUp,
                 )
             }
@@ -617,9 +632,9 @@ internal class HomeRefresher(
         val today = timeSource.today(ZoneOffset.systemDefault()).toString()
 
         // coroutineScope, not the outer VM scope: the Seerr fan-out must be a
-        // child of the calling refresh job (or the fetchDiscover launch), so
-        // [stop] / the VM's going-online timeout cancels in-flight requests —
-        // launching on the VM scope let them escape cancellation and run to
+        // child of the calling refresh job (or the tracked fetchDiscover job),
+        // so [stop] / the VM's going-online timeout cancels in-flight requests
+        // — launching on the VM scope let them escape cancellation and run to
         // completion abandoned.
         val newSections = coroutineScope {
             val deferredResults = mutableListOf<Pair<DiscoverSectionType, Deferred<Result<SeerrSearchResponse>>>>()
@@ -667,37 +682,20 @@ internal enum class RefreshTrigger {
 }
 
 /**
- * One consistent snapshot of the VM's section-preference mirrors: the fetch
- * query plus the display ordering rules. Bundled so a fetch can never
- * observe a half-updated preference set — the VM's pref collector writes the
- * mirrors in one pass and the provider re-snapshots on every read.
- */
-internal data class HomeSectionPlan(
-    val query: HomeSectionQuery,
-    val order: List<HomeSectionType>,
-    val mergeContinueWatchingAndNextUp: Boolean,
-)
-
-/**
  * One snapshot of the VM's section-preference mirrors: the fetch query (all
  * seven [HomeSectionQuery] inputs, NESTED so each is declared exactly once —
  * not mirrored field-for-field here) plus the display-only ordering rules.
  * Bundled so the prefs collector can diff and adopt an emission with a single
- * `!=` / assignment; adding a section preference means adding it to
- * [HomeSectionQuery] (fetch inputs) or here (display-only) — not to scattered
- * field listings on the VM.
+ * `!=` / assignment and the refresher can consume one consistent snapshot per
+ * fetch; adding a section preference means adding it to [HomeSectionQuery]
+ * (fetch inputs) or here (display-only) — not to scattered field listings on
+ * the VM.
  */
 internal data class HomeSectionPrefs(
     val query: HomeSectionQuery = HomeSectionQuery(),
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
     val mergeContinueWatchingAndNextUp: Boolean = false,
 ) {
-    /** The [HomeSectionPlan] every fetch consumes — see [HomeRefresher]'s planProvider. */
-    fun toPlan(): HomeSectionPlan = HomeSectionPlan(
-        query = query,
-        order = homeSectionOrder,
-        mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
-    )
 
     /**
      * Copy with [type]'s membership in the enabled-sections set toggled —

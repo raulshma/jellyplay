@@ -296,12 +296,14 @@ class MediaRepositoryHomeSectionsCacheTest {
     )
 
     /**
-     * Controllable [TimeSource] for the SWR wall-clock check — same shape as
-     * feature/home's FakeTimeSource; kept local because core:data deliberately
-     * hosts no test fakes (see TimeSource's KDoc).
+     * Controllable [TimeSource] for the SWR wall-clock check and the
+     * in-memory TTL's monotonic clock — same shape as feature/home's
+     * FakeTimeSource; kept local because core:data deliberately hosts no test
+     * fakes (see TimeSource's KDoc).
      */
     private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
         override fun nowEpochMillis(): Long = nowMs
+        override fun nowElapsedRealtimeMillis(): Long = nowMs
         override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 }

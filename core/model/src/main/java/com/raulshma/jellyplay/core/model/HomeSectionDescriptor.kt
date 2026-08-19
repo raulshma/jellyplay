@@ -4,7 +4,8 @@ import androidx.compose.runtime.Immutable
 
 /**
  * Deep module: the single owner of a home section's identity — its network row
- * id, header title, user-facing name/description and configurability.
+ * id, user-facing name/description (the name doubles as the rendered row
+ * header for single-row sections) and configurability.
  *
  * Previously this identity was fragmented across three layers: the display
  * strings lived on the [HomeSectionType] enum, the row id/title literals were
@@ -20,7 +21,7 @@ import androidx.compose.runtime.Immutable
  * Renaming a constant silently orphans persisted state; display strings may
  * evolve freely here.
  *
- * Dynamic sections carry no static id/title: LATEST_MEDIA fans out one row per
+ * Dynamic sections carry no static id: LATEST_MEDIA fans out one row per
  * Jellyfin library (id `"latest_<libraryId>"`, title `"Latest <Library>"`),
  * and PINNED rows are fully instance-defined (the user's pin title under a
  * `"pinned_<pinId>"` id). Those resolve at fetch time via [idFor]/[titleFor].
@@ -33,9 +34,7 @@ class HomeSectionDescriptor(
     val type: HomeSectionType,
     /** Static row id for single-row sections; `null` when resolved per instance ([idFor]) or never fetched. */
     val id: String?,
-    /** Static header title for single-row sections; `null` when resolved per instance ([titleFor]) or never fetched. */
-    val title: String?,
-    /** Human-readable name shown by config UIs. The enum's `displayName` delegates here. */
+    /** Human-readable name shown by config UIs and rendered as the row header by [section]. The enum's `displayName` delegates here. */
     val displayName: String,
     /** One-line explanation shown by config UIs. The enum's `description` delegates here. */
     val description: String,
@@ -65,14 +64,14 @@ class HomeSectionDescriptor(
             .replace("{name}", libraryName)
 
     /**
-     * Builds the single [HomeSection] row for static types (non-null
-     * [id]/[title]). Calling it for a dynamic type is a programming error and
-     * fails fast — dynamic rows must resolve their identity per instance via
-     * [idFor]/[titleFor] at the fetch site.
+     * Builds the single [HomeSection] row for static types (non-null [id]),
+     * headed by [displayName]. Calling it for a dynamic type is a programming
+     * error and fails fast — dynamic rows must resolve their identity per
+     * instance via [idFor]/[titleFor] at the fetch site.
      */
     fun section(items: List<MediaItem>, seedItem: MediaItem? = null): HomeSection = HomeSection(
         id = checkNotNull(id) { "$type has no static section id" },
-        title = checkNotNull(title) { "$type has no static section title" },
+        title = displayName,
         type = type,
         items = items,
         seedItem = seedItem,
@@ -89,7 +88,6 @@ val HomeSectionType.descriptor: HomeSectionDescriptor
         HomeSectionType.CONTINUE_WATCHING -> HomeSectionDescriptor(
             type = this,
             id = "continue_watching",
-            title = "Continue Watching",
             displayName = "Continue Watching",
             description = "Resume watching in-progress media",
             isConfigurable = true,
@@ -97,7 +95,6 @@ val HomeSectionType.descriptor: HomeSectionDescriptor
         HomeSectionType.NEXT_UP -> HomeSectionDescriptor(
             type = this,
             id = "next_up",
-            title = "Next Up",
             displayName = "Next Up",
             description = "Next unwatched episodes of your shows",
             isConfigurable = true,
@@ -105,7 +102,6 @@ val HomeSectionType.descriptor: HomeSectionDescriptor
         HomeSectionType.RECENTLY_ADDED -> HomeSectionDescriptor(
             type = this,
             id = "recently_added",
-            title = "Recently Added",
             displayName = "Recently Added",
             description = "Recently added items across all libraries",
             isConfigurable = true,
@@ -113,7 +109,6 @@ val HomeSectionType.descriptor: HomeSectionDescriptor
         HomeSectionType.LATEST_MEDIA -> HomeSectionDescriptor(
             type = this,
             id = null,
-            title = null,
             displayName = "Latest Media",
             description = "Latest items from each library",
             isConfigurable = true,
@@ -123,7 +118,6 @@ val HomeSectionType.descriptor: HomeSectionDescriptor
         HomeSectionType.FAVORITES -> HomeSectionDescriptor(
             type = this,
             id = null,
-            title = null,
             displayName = "Favorites",
             description = "Your favorited items",
             isConfigurable = false,
@@ -131,7 +125,6 @@ val HomeSectionType.descriptor: HomeSectionDescriptor
         HomeSectionType.LIVE_TV -> HomeSectionDescriptor(
             type = this,
             id = null,
-            title = null,
             displayName = "Live TV",
             description = "Live television channels",
             isConfigurable = false,
@@ -139,7 +132,6 @@ val HomeSectionType.descriptor: HomeSectionDescriptor
         HomeSectionType.DOWNLOADED -> HomeSectionDescriptor(
             type = this,
             id = null,
-            title = null,
             displayName = "Downloaded",
             description = "Offline downloaded items",
             isConfigurable = false,
@@ -147,7 +139,6 @@ val HomeSectionType.descriptor: HomeSectionDescriptor
         HomeSectionType.RECOMMENDATIONS -> HomeSectionDescriptor(
             type = this,
             id = "recommendations",
-            title = "Recommended For You",
             displayName = "Recommended For You",
             description = "Personalized picks based on your watch history",
             isConfigurable = true,
@@ -155,7 +146,6 @@ val HomeSectionType.descriptor: HomeSectionDescriptor
         HomeSectionType.PINNED -> HomeSectionDescriptor(
             type = this,
             id = null,
-            title = null,
             displayName = "Pinned",
             description = "Collections and shelves you have pinned to home",
             isConfigurable = false,

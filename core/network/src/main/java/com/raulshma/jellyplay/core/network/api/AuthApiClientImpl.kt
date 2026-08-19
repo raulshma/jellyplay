@@ -123,53 +123,13 @@ class AuthApiClientImpl @Inject constructor(
         username: String,
         password: String,
     ): Result<UserInfo> = engine.apiResultWithRetry {
-        // Capture and pre-auth adopt in ONE critical section: the capture is
-        // atomic with everything restoreSession might undo, so a concurrent
-        // identity write between the two can't be silently clobbered by the
-        // restore. The adopt runs only when NO session is established —
-        // adopting over a working session would publish SignedOut(previous),
-        // and identity observers react destructively to that (cache drop +
-        // previous identity's SWR snapshot clear): a failed login attempt
-        // would wipe the signed-in user's cached home. The round-trip below
-        // runs unlocked; success replaces the pair atomically
-        // (publishAuthenticatedSession), and failure restores the captured
-        // values only if no other flow published in between (restoreSession
-        // re-checks under the mutex — a concurrent publish wins over the
-        // restore). RetryPolicy re-runs this block against the same captured
-        // state, so the capture is idempotent across attempts.
-        val (previousSession, previousApi) = engine.authMutex.withLock {
-            val session = engine.session.value
-            val api = engine.api
-            if (session == null) {
-                // Signed-out path: point currentServer at the target server.
-                // Identity stays null → no transition fires, nothing to wipe;
-                // the follow-up login republishes a real pair.
-                engine.updateSession(serverInfo, null)
-            }
-            session to api
-        }
-        try {
-            val client = engine.jellyfin.createApi(serverInfo.address)
-            val authResult = client.userApi.authenticateUserByName(
+        atomicLogin(serverInfo, fallbackName = username) { client ->
+            client.userApi.authenticateUserByName(
                 AuthenticateUserByName(
                     username = username,
                     pw = password,
                 )
             ).content
-            val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
-            val authenticatedClient = engine.jellyfin.createApi(
-                baseUrl = serverInfo.address,
-                accessToken = accessTokenValue,
-            )
-            val userDto = authResult.user ?: throw Exception("Authentication failed")
-            val userInfo = userDto.toUserInfo(serverInfo.address, accessTokenValue, fallbackName = username)
-            // Single atomic publish of the authenticated (server, user) pair —
-            // same critical-section shape the pre-auth adopt used above.
-            publishAuthenticatedSession(serverInfo, userInfo, authenticatedClient)
-            userInfo
-        } catch (t: Throwable) {
-            restoreSession(previousSession, previousApi)
-            throw t
         }
     }
 
@@ -245,29 +205,57 @@ class AuthApiClientImpl @Inject constructor(
         serverInfo: ServerInfo,
         secret: String,
     ): Result<UserInfo> = engine.apiResultWithRetry {
-        // Same capture/adopt/restore discipline as authenticateUserByName:
-        // one critical section, adopt only on the signed-out path, so a
-        // failed Quick Connect round-trip (expired/declined secret) neither
-        // signs the previous session out nor wipes its cached home.
+        atomicLogin(serverInfo, fallbackName = "") { client ->
+            client.userApi.authenticateWithQuickConnect(
+                QuickConnectDto(secret = secret)
+            ).content
+        }
+    }
+
+    /**
+     * Shared capture/adopt/try/publish/restore spine for both login paths
+     * (name/password, Quick Connect), so the session discipline can't drift
+     * between them. Capture and pre-auth adopt happen in ONE critical
+     * section: the capture is atomic with everything [restoreSession] might
+     * undo, so a concurrent identity write between the two can't be silently
+     * clobbered by the restore. The adopt runs only when NO session is
+     * established — adopting over a working session would publish
+     * SignedOut(previous), and identity observers react destructively to that
+     * (cache drop + previous identity's SWR snapshot clear): a failed login
+     * attempt would wipe the signed-in user's cached home. The round-trip
+     * ([authenticate] lambda) runs unlocked; success replaces the pair
+     * atomically ([publishAuthenticatedSession]), and failure restores the
+     * captured values only if no other flow published in between
+     * ([restoreSession] re-checks under the mutex — a concurrent publish wins
+     * over the restore). RetryPolicy re-runs the caller's block against the
+     * same captured state, so the capture is idempotent across attempts.
+     */
+    private suspend fun atomicLogin(
+        serverInfo: ServerInfo,
+        fallbackName: String,
+        authenticate: suspend (org.jellyfin.sdk.api.client.ApiClient) -> org.jellyfin.sdk.model.api.AuthenticationResult,
+    ): UserInfo {
         val (previousSession, previousApi) = engine.authMutex.withLock {
             val session = engine.session.value
             val api = engine.api
-            if (session == null) engine.updateSession(serverInfo, null)
+            if (session == null) {
+                // Signed-out path: point currentServer at the target server.
+                // Identity stays null → no transition fires, nothing to wipe;
+                // the follow-up login republishes a real pair.
+                engine.updateSession(serverInfo, null)
+            }
             session to api
         }
-        try {
+        return try {
             val client = engine.jellyfin.createApi(serverInfo.address)
-            val authResult = client.userApi.authenticateWithQuickConnect(
-                QuickConnectDto(secret = secret)
-            ).content
+            val authResult = authenticate(client)
             val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
             val authenticatedClient = engine.jellyfin.createApi(
                 baseUrl = serverInfo.address,
                 accessToken = accessTokenValue,
             )
-            val userDto = authResult.user ?: throw Exception("Quick Connect authentication failed")
-            val userInfo = userDto.toUserInfo(serverInfo.address, accessTokenValue, fallbackName = "")
-            // Single atomic publish of the authenticated (server, user) pair.
+            val userDto = authResult.user ?: throw Exception("Authentication failed")
+            val userInfo = userDto.toUserInfo(serverInfo.address, accessTokenValue, fallbackName = fallbackName)
             publishAuthenticatedSession(serverInfo, userInfo, authenticatedClient)
             userInfo
         } catch (t: Throwable) {

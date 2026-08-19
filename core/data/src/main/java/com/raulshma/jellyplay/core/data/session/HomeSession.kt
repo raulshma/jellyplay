@@ -124,11 +124,23 @@ class HomeSession constructor(
     private val lastStableIdentity = AtomicReference<SessionIdentity?>(null)
 
     private val _transitions = MutableSharedFlow<HomeSessionTransition>(
-        replay = 0,
+        // Replay 1: the singleton collectors in MediaRepositoryImpl's and
+        // EpisodeCatalogueImpl's init must not silently miss a transition
+        // emitted before their subscription — the miss payload includes the
+        // wholesale invalidation AND the previous identity's SWR privacy
+        // clear. Every handler is an idempotent invalidation, so re-delivering
+        // the latest transition to a late subscriber is always safe.
+        replay = 1,
         extraBufferCapacity = TRANSITIONS_BUFFER_CAPACITY,
     )
 
-    /** Identity changes, in order. Replay 0 — see the KDoc on [currentIdentity] for first-read needs. */
+    /**
+     * Identity changes, in order. Replay 1 — a late subscriber is re-delivered
+     * the latest transition (handlers are idempotent invalidations), so the
+     * privacy clear can't be missed; the never-transitioned start state
+     * (fresh install, signed out) has nothing to replay and needs the
+     * one-shot identity reads instead.
+     */
     val transitions: SharedFlow<HomeSessionTransition> = _transitions.asSharedFlow()
 
     init {

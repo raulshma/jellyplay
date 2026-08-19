@@ -93,9 +93,13 @@ class MediaRepositoryImpl @Inject constructor(
      */
     private val userDataRealtimeChannel: UserDataRealtimeChannel,
     /**
-     * Wall-clock seam for the SWR staleness check in [getCachedHomeSections]
-     * (`HomeFreshness.isRoomSnapshotFresh`). Already Hilt-bound in `DataModule`;
-     * injected here so the 24h ceiling is unit-testable with a fake.
+     * Clock seam for the freshness gates in this repo: the wall-clock read
+     * drives the SWR staleness check in [getCachedHomeSections]
+     * (`HomeFreshness.isRoomSnapshotFresh`), the monotonic read drives the
+     * in-memory [TtlCache] clock (whose contract requires a monotonic source
+     * — a wall-clock NTP jump would mass-expire or extend every entry).
+     * Already Hilt-bound in `DataModule`; injected here so both ceilings are
+     * unit-testable with one fake.
      */
     private val timeSource: TimeSource,
     /**
@@ -188,12 +192,13 @@ class MediaRepositoryImpl @Inject constructor(
     // identity-keyed primitive as every other cache here. Identity-keyed so a
     // user/server switch can't serve the previous identity's payload.
     // TTL comes from the shared home freshness policy (HomeFreshness); the
-    // clock is the injected [timeSource] — the same seam the Room SWR
-    // ceiling uses, so tests drive both freshness gates with one fake.
+    // clock is the injected [timeSource]'s MONOTONIC read — TtlCache's
+    // contract requires one, and the same fake drives the Room SWR ceiling's
+    // wall-clock read.
     private val homeSectionsCache = TtlCache<HomeSectionsResult>(
         maxSize = 1,
         ttlMs = HomeFreshness.REPO_MEMORY_TTL_MS,
-        clock = { timeSource.nowEpochMillis() },
+        clock = { timeSource.nowElapsedRealtimeMillis() },
     )
 
     /**
@@ -342,8 +347,9 @@ class MediaRepositoryImpl @Inject constructor(
                     // Wall-clock on purpose: this value must survive a reboot to
                     // serve the next cold open, and monotonic clocks reset on
                     // boot. Goes through the injected [TimeSource] (wall-clock
-                    // in production) — the same clock the in-memory TTL above
-                    // reads, so both freshness gates share one test fake.
+                    // read in production) — the in-memory TTL above uses the
+                    // same seam's monotonic read, so both freshness gates
+                    // share one test fake.
                     // fetchedAt is load-bearing: getCachedHomeSections reads it
                     // against HomeFreshness's 24h SWR staleness ceiling.
                     fetchedAt = timeSource.nowEpochMillis(),

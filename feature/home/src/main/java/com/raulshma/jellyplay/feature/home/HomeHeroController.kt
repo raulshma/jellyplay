@@ -96,14 +96,25 @@ internal fun rememberHeroController(
 ): HeroController {
     val context = LocalContext.current
     val isTvForRotation = remember(context) { context.isTv() }
-    val controller = remember {
+    // Keyed on the lambda so a replaced provider (new VM) can't leave the
+    // controller resolving backdrops through a stale capture. The call site
+    // remembers the lambda per view model, so this re-runs only on a real VM
+    // change — never per recomposition.
+    val controller = remember(getBackdropUrl) {
         HeroController(getBackdropUrl, initialAutoRotateEnabled = !isTvForRotation)
     }
 
     // Sync candidates during composition, not in a LaunchedEffect (which runs
     // post-composition and would render one frame with stale candidates), so
     // HomeScreen reads a fresh featuredItem in the same frame the list changes.
-    remember(featuredCandidates) {
+    // INVARIANT: this deliberate snapshot-state write during composition stays
+    // safe only while `featuredCandidates` never derives from the controller's
+    // own output (candidates/featuredItem) — a derived input would feed the
+    // write back into the next composition (the recomposition-loop pattern
+    // Compose warns about). Keyed on the controller too, so a rebuilt
+    // controller can never sit with empty candidates until the list happens
+    // to change.
+    remember(getBackdropUrl, featuredCandidates) {
         controller.updateCandidates(featuredCandidates)
         true
     }
