@@ -46,11 +46,9 @@ import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
-import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
@@ -156,15 +154,13 @@ class HomeViewModel @Inject constructor(
     fun ensurePendingItemDetails(itemIds: Collection<String>) =
         syncStatus.ensurePendingItemDetails(itemIds)
 
-    private var enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE.toSet()
-    private var homeSectionOrder = HomeSectionType.CONFIGURABLE
-    private var libraryHomeSectionOverrides = emptyMap<String, Set<HomeSectionType>>()
-    private var mergeContinueWatchingAndNextUp = false
-    private var nextUpMaxDays = 0
-    private var nextUpRewatching = false
-    private var nextUpExcludedSeriesIds = emptySet<String>()
-    private var hiddenCwItemIds = emptySet<String>()
-    private var pinnedHomeSections = emptyList<PinnedHomeSection>()
+    /**
+     * The section-preference mirrors, bundled in one [HomeSectionPrefs] value
+     * so the prefs collector below diffs and adopts each emission with a
+     * single comparison/assignment (the fetch plan derives from it via
+     * [HomeSectionPrefs.toPlan]).
+     */
+    private var sectionPrefs = HomeSectionPrefs()
     private var androidTvWatchNextEnabled = true
     private var seerrPreferences = SeerrPreferences()
 
@@ -197,13 +193,7 @@ class HomeViewModel @Inject constructor(
         tvWatchNextScheduler = tvWatchNextScheduler,
         librarySyncHook = librarySyncHook,
         offlineModeManager = offlineModeManager,
-        planProvider = {
-            HomeSectionPlan(
-                query = currentHomeSectionQuery(),
-                order = homeSectionOrder,
-                mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
-            )
-        },
+        planProvider = { sectionPrefs.toPlan() },
         seerrPreferencesProvider = { seerrPreferences },
         discoverEnabledProvider = { _uiState.value.discoverEnabled },
         directArrEnabledProvider = { _uiState.value.directArrEnabled },
@@ -346,28 +336,21 @@ class HomeViewModel @Inject constructor(
             ) { home, appearance, experimental, playback ->
                 HomePrefs(home, appearance, experimental, playback)
             }.collect { prefs ->
-                val homeSectionPrefsChanged = hasSeenHomePreferences && (
-                    prefs.home.enabledHomeSectionTypes != enabledHomeSectionTypes ||
-                        prefs.home.homeSectionOrder != homeSectionOrder ||
-                        prefs.home.libraryHomeSectionOverrides != libraryHomeSectionOverrides ||
-                        prefs.home.mergeContinueWatchingAndNextUp != mergeContinueWatchingAndNextUp ||
-                        prefs.home.nextUpMaxDays != nextUpMaxDays ||
-                        prefs.home.nextUpRewatching != nextUpRewatching ||
-                        prefs.home.nextUpExcludedSeriesIds != nextUpExcludedSeriesIds ||
-                        prefs.home.hiddenCwItemIds != hiddenCwItemIds ||
-                        prefs.home.pinnedHomeSections != pinnedHomeSections
+                val newSectionPrefs = HomeSectionPrefs(
+                    enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes,
+                    homeSectionOrder = prefs.home.homeSectionOrder,
+                    libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides,
+                    mergeContinueWatchingAndNextUp = prefs.home.mergeContinueWatchingAndNextUp,
+                    nextUpMaxDays = prefs.home.nextUpMaxDays,
+                    nextUpRewatching = prefs.home.nextUpRewatching,
+                    nextUpExcludedSeriesIds = prefs.home.nextUpExcludedSeriesIds,
+                    hiddenCwItemIds = prefs.home.hiddenCwItemIds,
+                    pinnedHomeSections = prefs.home.pinnedHomeSections,
                 )
+                val homeSectionPrefsChanged = hasSeenHomePreferences && newSectionPrefs != sectionPrefs
 
                 hasSeenHomePreferences = true
-                enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes
-                homeSectionOrder = prefs.home.homeSectionOrder
-                libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides
-                mergeContinueWatchingAndNextUp = prefs.home.mergeContinueWatchingAndNextUp
-                nextUpMaxDays = prefs.home.nextUpMaxDays
-                nextUpRewatching = prefs.home.nextUpRewatching
-                nextUpExcludedSeriesIds = prefs.home.nextUpExcludedSeriesIds
-                hiddenCwItemIds = prefs.home.hiddenCwItemIds
-                pinnedHomeSections = prefs.home.pinnedHomeSections
+                sectionPrefs = newSectionPrefs
                 androidTvWatchNextEnabled = prefs.playback.androidTvWatchNextEnabled
                 _uiState.update { it.copy(
                     homeMode = prefs.home.homeMode,
@@ -801,7 +784,7 @@ class HomeViewModel @Inject constructor(
      * row appears/disappears with no extra wiring.
      */
     fun setSectionVisible(type: HomeSectionType, visible: Boolean) {
-        val updated = enabledHomeSectionTypes.toMutableSet().apply {
+        val updated = sectionPrefs.enabledHomeSectionTypes.toMutableSet().apply {
             if (visible) add(type) else remove(type)
         }
         preferencesEditor.setEnabledHomeSectionTypes(updated)
@@ -814,11 +797,11 @@ class HomeViewModel @Inject constructor(
      * re-apply it on the next emission.
      */
     fun moveSection(type: HomeSectionType, up: Boolean) {
-        val index = homeSectionOrder.indexOf(type)
+        val index = sectionPrefs.homeSectionOrder.indexOf(type)
         if (index == -1) return
         val target = if (up) index - 1 else index + 1
-        if (target !in homeSectionOrder.indices) return
-        val updated = homeSectionOrder.toMutableList().apply {
+        if (target !in sectionPrefs.homeSectionOrder.indices) return
+        val updated = sectionPrefs.homeSectionOrder.toMutableList().apply {
             val removed = removeAt(index)
             add(target, removed)
         }
@@ -832,29 +815,12 @@ class HomeViewModel @Inject constructor(
      * set; an empty set removes the key (restoring default-enabled state).
      */
     fun setLibrarySectionVisible(libraryId: String, type: HomeSectionType, visible: Boolean) {
-        val current = libraryHomeSectionOverrides.toMutableMap()
+        val current = sectionPrefs.libraryHomeSectionOverrides.toMutableMap()
         val disabled = current[libraryId].orEmpty().toMutableSet()
         if (visible) disabled.remove(type) else disabled.add(type)
         if (disabled.isEmpty()) current.remove(libraryId) else current[libraryId] = disabled
         preferencesEditor.setLibraryHomeSectionOverrides(current)
     }
-
-    /**
-     * Snapshots the section-preference mirrors into the query half of the
-     * [HomeSectionPlan] handed to [HomeRefresher] on every fetch (the
-     * ordering half comes from the same mirrors). Keeping this a single
-     * snapshot per fetch is what lets the refresher never observe a
-     * half-applied preference change.
-     */
-    private fun currentHomeSectionQuery(): HomeSectionQuery = HomeSectionQuery(
-        enabledSections = enabledHomeSectionTypes,
-        libraryHomeSectionOverrides = libraryHomeSectionOverrides,
-        nextUpRewatching = nextUpRewatching,
-        nextUpMaxDays = nextUpMaxDays,
-        nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
-        hiddenCwItemIds = hiddenCwItemIds,
-        pinnedSections = pinnedHomeSections,
-    )
 
     override fun onStart(owner: LifecycleOwner) {
         super.onStart(owner)

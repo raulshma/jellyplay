@@ -361,14 +361,20 @@ class LibraryApiClientImpl @Inject constructor(
 
     /**
      * The current `(serverId, userId)` as a [CacheIdentity], read from the
-     * engine's [StateFlow]s. The home sub-call caches are identity-keyed so a
-     * user/server switch can't serve the previous identity's latest-media /
+     * engine's atomic [JellyfinApiEngine.session] flow. Reading
+     * `currentServer` and `currentUser` as two separate StateFlow snapshots
+     * could observe a synthetic `(newServer, oldUser)` mid-switch and key the
+     * caches under an identity that never existed; the session flow publishes
+     * both sides as one value. The home sub-call caches are identity-keyed so
+     * a user/server switch can't serve the previous identity's latest-media /
      * recommendations — wrong identity misses by construction, so no parallel
      * cross-boundary clearer is needed. Falls back to [CacheIdentity.UNKNOWN]
      * before login / after logout; nothing cached under that key can leak.
      */
-    private fun currentHomeCacheIdentity(): CacheIdentity =
-        CacheIdentity.ofOrNull(engine.currentServer.value?.id, engine.currentUser.value?.id)
+    private fun currentHomeCacheIdentity(): CacheIdentity {
+        val session = engine.session.value
+        return CacheIdentity.ofOrNull(session?.server?.id, session?.user?.id)
+    }
     private suspend fun fetchPinnedSections(
         pinnedSections: List<PinnedHomeSection>,
     ): List<HomeSection> {

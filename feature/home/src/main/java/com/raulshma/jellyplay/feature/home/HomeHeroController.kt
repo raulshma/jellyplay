@@ -33,10 +33,11 @@ import kotlinx.coroutines.flow.collectLatest
  * pass. Previously this traversed all sections up to 3 times (filter+flatMap of
  * LATEST_MEDIA, then a full flatMap+filter fallback, then another bare flatMap).
  *
- * Preference order: up to 3 movies/series from each LATEST_MEDIA section; if
- * that yields nothing, every movie/series across all sections; if that still
- * yields nothing, every item. The result is identical to the old multi-pass
- * version but computed in one traversal with a single fallback sweep.
+ * Preference order: up to 3 movies/series total, taken from the LATEST_MEDIA
+ * sections in order; if that yields nothing, every movie/series across all
+ * sections; if that still yields nothing, every item. The result is identical
+ * to the old multi-pass version but computed in one traversal with a single
+ * fallback sweep.
  */
 internal fun selectFeaturedCandidates(sections: List<HomeSection>): List<MediaItem> =
     buildList {

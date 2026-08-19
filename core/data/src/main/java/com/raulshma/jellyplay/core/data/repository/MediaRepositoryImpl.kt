@@ -376,9 +376,12 @@ class MediaRepositoryImpl @Inject constructor(
                     // serve the next cold open, and monotonic clocks reset on
                     // boot. The in-memory TTL above uses SystemClock.elapsedRealtime
                     // (monotonic) because it only compares two readings within one
-                    // process. fetchedAt is now load-bearing: getCachedHomeSections
-                    // reads it against HomeFreshness's 24h SWR staleness ceiling.
-                    fetchedAt = System.currentTimeMillis(),
+                    // process. Goes through the injected [TimeSource] (wall-clock
+                    // in production) so it stays consistent with the
+                    // getCachedHomeSections staleness read under a test fake.
+                    // fetchedAt is load-bearing: getCachedHomeSections reads it
+                    // against HomeFreshness's 24h SWR staleness ceiling.
+                    fetchedAt = timeSource.nowEpochMillis(),
                 ),
             )
         }

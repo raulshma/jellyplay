@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.model.OfflineMode
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -123,9 +124,22 @@ class SyncStatusStateHolder(
             if (_pendingItemDetails.value.containsKey(id) || id in pendingResolveInFlight) continue
             pendingResolveInFlight += id
             scope.launch {
-                val resolved = offlineFirstItemResolver.resolveMediaRef(id)
-                _pendingItemDetails.update { current -> current + (id to resolved) }
-                pendingResolveInFlight -= id
+                try {
+                    val resolved = offlineFirstItemResolver.resolveMediaRef(id)
+                    _pendingItemDetails.update { current -> current + (id to resolved) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // The resolver absorbs domain failures (not-found, offline
+                    // fallbacks); anything thrown here is infrastructure-level.
+                    // Swallow and leave the id unresolved so the next ensure
+                    // call retries it — rethrowing would crash the consumer's
+                    // scope over a title lookup.
+                } finally {
+                    // Release the dedup slot on every exit path; missing it on
+                    // failure would wedge the id as permanently "in-flight".
+                    pendingResolveInFlight -= id
+                }
             }
         }
     }

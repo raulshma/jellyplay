@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.toMediaItem
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,28 +72,37 @@ internal class SeriesDeleteStateHolder(
         loadJob?.cancel()
         _state.value = HomeSeriesDeleteState(series.id, emptyList(), emptyMap(), 0L, isLoading = true)
         loadJob = scope.launch {
-            val seasonsOff = offlineRepository.getSeasonsForSeries(series.id).first()
-            val episodesBySeasonOff = offlineRepository.getEpisodesForSeries(series.id).groupBy { it.seasonId }
-            val episodesOffBySeason = seasonsOff.associate { season ->
-                season.id to (episodesBySeasonOff[season.id] ?: emptyList())
+            try {
+                val seasonsOff = offlineRepository.getSeasonsForSeries(series.id).first()
+                val episodesBySeasonOff = offlineRepository.getEpisodesForSeries(series.id).groupBy { it.seasonId }
+                val episodesOffBySeason = seasonsOff.associate { season ->
+                    season.id to (episodesBySeasonOff[season.id] ?: emptyList())
+                }
+                val downloadedBySeason = episodesOffBySeason.filterValues { it.isNotEmpty() }
+                val seasons = seasonsOff.filter { it.id in downloadedBySeason }.map { it.toMediaItem() }
+                val episodesBySeason = downloadedBySeason.mapValues { (_, eps) -> eps.map { it.toMediaItem() } }
+                // Per-episode on-disk sizes from the offline store, so the delete
+                // sheet's freed-space figure is exact for partial selections too.
+                val episodeSizeBytes = downloadedBySeason.values
+                    .flatten()
+                    .associate { it.id to it.totalSizeBytes }
+                val totalSizeBytes = episodesOffBySeason.values.flatten().sumOf { it.totalSizeBytes }
+                _state.value = HomeSeriesDeleteState(
+                    seriesId = series.id,
+                    seasons = seasons,
+                    episodesBySeason = episodesBySeason,
+                    totalSizeBytes = totalSizeBytes,
+                    episodeSizeBytes = episodeSizeBytes,
+                    isLoading = false,
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // A failed load closes the sheet: the state has no error field,
+                // and leaving isLoading = true would wedge the spinner forever.
+                // The user can reopen the sheet to retry.
+                _state.value = null
             }
-            val downloadedBySeason = episodesOffBySeason.filterValues { it.isNotEmpty() }
-            val seasons = seasonsOff.filter { it.id in downloadedBySeason }.map { it.toMediaItem() }
-            val episodesBySeason = downloadedBySeason.mapValues { (_, eps) -> eps.map { it.toMediaItem() } }
-            // Per-episode on-disk sizes from the offline store, so the delete
-            // sheet's freed-space figure is exact for partial selections too.
-            val episodeSizeBytes = downloadedBySeason.values
-                .flatten()
-                .associate { it.id to it.totalSizeBytes }
-            val totalSizeBytes = episodesOffBySeason.values.flatten().sumOf { it.totalSizeBytes }
-            _state.value = HomeSeriesDeleteState(
-                seriesId = series.id,
-                seasons = seasons,
-                episodesBySeason = episodesBySeason,
-                totalSizeBytes = totalSizeBytes,
-                episodeSizeBytes = episodeSizeBytes,
-                isLoading = false,
-            )
         }
     }
 

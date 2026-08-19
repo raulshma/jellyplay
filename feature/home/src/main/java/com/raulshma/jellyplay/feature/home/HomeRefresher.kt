@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -612,29 +613,37 @@ internal class HomeRefresher(
 
         val today = timeSource.today(ZoneOffset.systemDefault()).toString()
 
-        val deferredResults = mutableListOf<Pair<DiscoverSectionType, Deferred<Result<SeerrSearchResponse>>>>()
+        // coroutineScope, not the outer VM scope: the Seerr fan-out must be a
+        // child of the calling refresh job (or the fetchDiscover launch), so
+        // [stop] / the VM's going-online timeout cancels in-flight requests —
+        // launching on the VM scope let them escape cancellation and run to
+        // completion abandoned.
+        val newSections = coroutineScope {
+            val deferredResults = mutableListOf<Pair<DiscoverSectionType, Deferred<Result<SeerrSearchResponse>>>>()
 
-        if (prefs.discoverTrending) {
-            deferredResults.add(DiscoverSectionType.TRENDING to scope.async { seerrRepository.getTrending() })
-        }
-        if (prefs.discoverPopularMovies) {
-            deferredResults.add(DiscoverSectionType.POPULAR_MOVIES to scope.async { seerrRepository.getDiscoverMovies() })
-        }
-        if (prefs.discoverPopularTv) {
-            deferredResults.add(DiscoverSectionType.POPULAR_TV to scope.async { seerrRepository.getDiscoverTv() })
-        }
-        if (prefs.discoverUpcomingMovies) {
-            deferredResults.add(DiscoverSectionType.UPCOMING_MOVIES to scope.async { seerrRepository.getDiscoverMovies(primaryReleaseDateGte = today) })
-        }
-        if (prefs.discoverUpcomingTv) {
-            deferredResults.add(DiscoverSectionType.UPCOMING_TV to scope.async { seerrRepository.getDiscoverTv(firstAirDateGte = today) })
-        }
-
-        val newSections = mutableMapOf<DiscoverSectionType, List<SeerrSearchItem>>()
-        for ((type, deferred) in deferredResults) {
-            deferred.await().onSuccess { response ->
-                newSections[type] = response.results
+            if (prefs.discoverTrending) {
+                deferredResults.add(DiscoverSectionType.TRENDING to async { seerrRepository.getTrending() })
             }
+            if (prefs.discoverPopularMovies) {
+                deferredResults.add(DiscoverSectionType.POPULAR_MOVIES to async { seerrRepository.getDiscoverMovies() })
+            }
+            if (prefs.discoverPopularTv) {
+                deferredResults.add(DiscoverSectionType.POPULAR_TV to async { seerrRepository.getDiscoverTv() })
+            }
+            if (prefs.discoverUpcomingMovies) {
+                deferredResults.add(DiscoverSectionType.UPCOMING_MOVIES to async { seerrRepository.getDiscoverMovies(primaryReleaseDateGte = today) })
+            }
+            if (prefs.discoverUpcomingTv) {
+                deferredResults.add(DiscoverSectionType.UPCOMING_TV to async { seerrRepository.getDiscoverTv(firstAirDateGte = today) })
+            }
+
+            val sections = mutableMapOf<DiscoverSectionType, List<SeerrSearchItem>>()
+            for ((type, deferred) in deferredResults) {
+                deferred.await().onSuccess { response ->
+                    sections[type] = response.results
+                }
+            }
+            sections
         }
 
         discoverCache.markFetched(timeSource.nowEpochMillis())
@@ -665,6 +674,41 @@ internal data class HomeSectionPlan(
     val order: List<HomeSectionType>,
     val mergeContinueWatchingAndNextUp: Boolean,
 )
+
+/**
+ * One snapshot of the VM's section-preference mirrors: every preference that
+ * (a) feeds the fetch [HomeSectionPlan] and (b) decides whether a preference
+ * emission should trigger a refresh. Bundled so the prefs collector can diff
+ * and adopt an emission with a single `!=` / assignment; adding a section
+ * preference means adding it here and to [toPlan] — not to four scattered
+ * field listings on the VM.
+ */
+internal data class HomeSectionPrefs(
+    val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
+    val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
+    val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
+    val mergeContinueWatchingAndNextUp: Boolean = false,
+    val nextUpMaxDays: Int = 0,
+    val nextUpRewatching: Boolean = false,
+    val nextUpExcludedSeriesIds: Set<String> = emptySet(),
+    val hiddenCwItemIds: Set<String> = emptySet(),
+    val pinnedHomeSections: List<PinnedHomeSection> = emptyList(),
+) {
+    /** The [HomeSectionPlan] every fetch consumes — see [HomeRefresher]'s planProvider. */
+    fun toPlan(): HomeSectionPlan = HomeSectionPlan(
+        query = HomeSectionQuery(
+            enabledSections = enabledHomeSectionTypes,
+            libraryHomeSectionOverrides = libraryHomeSectionOverrides,
+            nextUpRewatching = nextUpRewatching,
+            nextUpMaxDays = nextUpMaxDays,
+            nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
+            hiddenCwItemIds = hiddenCwItemIds,
+            pinnedSections = pinnedHomeSections,
+        ),
+        order = homeSectionOrder,
+        mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
+    )
+}
 
 /**
  * The refresh-owned slice of the home UiState: everything the fetch

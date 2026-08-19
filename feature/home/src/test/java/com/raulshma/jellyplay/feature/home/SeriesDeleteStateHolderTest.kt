@@ -163,6 +163,19 @@ class SeriesDeleteStateHolderTest {
         assertEquals(listOf("e2"), state.episodesBySeason["season2"]!!.map { it.id })
     }
 
+    @Test
+    fun requestSeriesDelete_failedLoad_closesSheetInsteadOfStuckSpinner() = runTest {
+        every { offlineRepository.getSeasonsForSeries("s1") } throws RuntimeException("room broke")
+        val holder = buildHolder()
+
+        holder.requestSeriesDelete(series())
+        runCurrent()
+
+        // The state has no error field: a failed load must close the sheet,
+        // not leave isLoading = true wedged on screen forever.
+        assertNull(holder.state.value)
+    }
+
     /**
      * THE pin: the sheet snapshot must be captured BEFORE dismissal. The
      * shared OfflineDeleteActions reads its providers lazily; if the holder

@@ -33,6 +33,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -176,6 +177,32 @@ class SyncStatusStateHolderTest {
 
         assertEquals(setOf("b", "c"), holder.pendingItemDetails.value.keys)
         coVerify(exactly = 1) { offlineFirstItemResolver.resolveMediaRef("b") }
+    }
+
+    @Test
+    fun ensurePendingItemDetails_resolverFailure_releasesDedupSlotAndRetries() = runTest {
+        // The resolver absorbs domain failures itself; an exception here means
+        // infrastructure trouble (e.g. Room). The holder must neither crash
+        // its scope nor wedge the id as permanently in-flight.
+        var attempts = 0
+        coEvery { offlineFirstItemResolver.resolveMediaRef("item-1") } coAnswers {
+            attempts++
+            if (attempts == 1) throw RuntimeException("room broke")
+            ResolvedMediaRef(item = null, posterUrl = "http://server/img")
+        }
+        val holder = buildHolder()
+
+        holder.ensurePendingItemDetails(listOf("item-1"))
+        runCurrent()
+        assertTrue(holder.pendingItemDetails.value.isEmpty())
+
+        // The second ensure re-launches the resolve only because the first
+        // attempt released the dedup slot on its failure exit path.
+        holder.ensurePendingItemDetails(listOf("item-1"))
+        runCurrent()
+
+        coVerify(exactly = 2) { offlineFirstItemResolver.resolveMediaRef("item-1") }
+        assertEquals(1, holder.pendingItemDetails.value.size)
     }
 
     @Test
