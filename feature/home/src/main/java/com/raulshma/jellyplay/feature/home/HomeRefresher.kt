@@ -418,12 +418,13 @@ internal class HomeRefresher(
         }
         // A user-data change that arrived while backgrounded refreshes now —
         // bypassing the 60s stale check above, but still subject to the
-        // user-data throttle inside refreshAfterUserDataChange. Runs AFTER
-        // startPeriodicRefresh so the deferred refresh's job (forced fetch +
-        // loop) replaces the bare periodic loop instead of being cancelled
-        // by it.
+        // user-data throttle inside refreshAfterUserDataChange. The pending
+        // flag is NOT cleared here: when the throttle blocks, the flag stays
+        // armed so the next onStart retries instead of silently dropping the
+        // change to the periodic loop. Runs AFTER startPeriodicRefresh so the
+        // deferred refresh's job (forced fetch + loop) replaces the bare
+        // periodic loop instead of being cancelled by it.
         if (pendingUserDataRefresh) {
-            pendingUserDataRefresh = false
             refreshAfterUserDataChange()
         }
     }
@@ -697,6 +698,48 @@ internal data class HomeSectionPrefs(
         order = homeSectionOrder,
         mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
     )
+
+    /**
+     * Copy with [type]'s membership in the enabled-sections set toggled —
+     * the policy behind the inline section-config sheet's visibility toggle.
+     */
+    fun withSectionVisible(type: HomeSectionType, visible: Boolean): HomeSectionPrefs =
+        copy(query = query.copy(enabledSections = query.enabledSections.toMutableSet().apply {
+            if (visible) add(type) else remove(type)
+        }))
+
+    /**
+     * Copy with [type] swapped with its neighbour in the section order
+     * ([up] or down), or null when no swap is possible (type absent, or
+     * already at the requested edge) so callers can skip the write.
+     */
+    fun withSectionMoved(type: HomeSectionType, up: Boolean): HomeSectionPrefs? {
+        val index = homeSectionOrder.indexOf(type)
+        if (index == -1) return null
+        val target = if (up) index - 1 else index + 1
+        if (target !in homeSectionOrder.indices) return null
+        return copy(homeSectionOrder = homeSectionOrder.toMutableList().apply {
+            val removed = removeAt(index)
+            add(target, removed)
+        })
+    }
+
+    /**
+     * Copy with [type]'s disabled-state toggled for [libraryId]. The override
+     * map is keyed by library id with the DISABLED types as its value set; an
+     * empty set removes the key (restoring default-enabled state).
+     */
+    fun withLibrarySectionVisible(
+        libraryId: String,
+        type: HomeSectionType,
+        visible: Boolean,
+    ): HomeSectionPrefs {
+        val overrides = query.libraryHomeSectionOverrides.toMutableMap()
+        val disabled = overrides[libraryId].orEmpty().toMutableSet()
+        if (visible) disabled.remove(type) else disabled.add(type)
+        if (disabled.isEmpty()) overrides.remove(libraryId) else overrides[libraryId] = disabled
+        return copy(query = query.copy(libraryHomeSectionOverrides = overrides))
+    }
 }
 
 /**

@@ -45,9 +45,9 @@ import java.time.ZoneId
  * [delay] to let the collector process each flow emission before asserting.
  *
  * Also covers the two freshness policies that had zero expiry coverage before
- * HomeFreshness: the 60s in-memory TTL (via the repo's [MediaRepositoryImpl.cacheClockMs]
- * test seam) and the 24h Room SWR staleness ceiling (via [FakeTimeSource] and
- * a DAO-stubbed `HomeSectionCacheEntity.fetchedAt`).
+ * HomeFreshness: the 60s in-memory TTL and the 24h Room SWR staleness ceiling
+ * (both via [FakeTimeSource]; the ceiling additionally stubs
+ * `HomeSectionCacheEntity.fetchedAt`).
  */
 class MediaRepositoryHomeSectionsCacheTest {
 
@@ -204,18 +204,17 @@ class MediaRepositoryHomeSectionsCacheTest {
 
     @Test
     fun `getHomeSections re-fetches once the 60s memory TTL expires`() = runBlocking {
-        // The TTL expiry itself had zero coverage: retarget the repo's cache
-        // clock (the TtlCache normally reads SystemClock.elapsedRealtime) and
-        // walk it past HomeFreshness.REPO_MEMORY_TTL_MS between two calls.
+        // The TTL expiry itself had zero coverage: walk the shared fake clock
+        // (the TtlCache reads the injected [TimeSource], same as the SWR
+        // ceiling) past HomeFreshness.REPO_MEMORY_TTL_MS between two calls.
         val repository = buildRepository()
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        var cacheNowMs = 0L
-        repository.cacheClockMs = { cacheNowMs }
+        fakeTimeSource.nowMs = 1_000L
 
-        repository.getHomeSections(HomeSectionQuery()) // cached at t=0
-        cacheNowMs += HomeFreshness.REPO_MEMORY_TTL_MS + 1_000L // 61s later
+        repository.getHomeSections(HomeSectionQuery()) // cached at t=1000
+        fakeTimeSource.nowMs += HomeFreshness.REPO_MEMORY_TTL_MS + 1_000L // 61s later
         repository.getHomeSections(HomeSectionQuery())
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }

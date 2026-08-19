@@ -130,12 +130,13 @@ class AuthApiClientImpl @Inject constructor(
         // adopting over a working session would publish SignedOut(previous),
         // and identity observers react destructively to that (cache drop +
         // previous identity's SWR snapshot clear): a failed login attempt
-        // would wipe the signed-in user's cached home. With a session
-        // active, nothing publishes during the round-trip below; success
-        // replaces the pair atomically (publishAuthenticatedSession), and
-        // failure restores values the round-trip never touched (idempotent).
-        // RetryPolicy re-runs this block against the same captured state, so
-        // the capture is idempotent across attempts.
+        // would wipe the signed-in user's cached home. The round-trip below
+        // runs unlocked; success replaces the pair atomically
+        // (publishAuthenticatedSession), and failure restores the captured
+        // values only if no other flow published in between (restoreSession
+        // re-checks under the mutex — a concurrent publish wins over the
+        // restore). RetryPolicy re-runs this block against the same captured
+        // state, so the capture is idempotent across attempts.
         val (previousSession, previousApi) = engine.authMutex.withLock {
             val session = engine.session.value
             val api = engine.api
@@ -160,12 +161,11 @@ class AuthApiClientImpl @Inject constructor(
                 baseUrl = serverInfo.address,
                 accessToken = accessTokenValue,
             )
-            engine.updateApi(authenticatedClient)
             val userDto = authResult.user ?: throw Exception("Authentication failed")
             val userInfo = userDto.toUserInfo(serverInfo.address, accessTokenValue, fallbackName = username)
             // Single atomic publish of the authenticated (server, user) pair —
             // same critical-section shape the pre-auth adopt used above.
-            publishAuthenticatedSession(serverInfo, userInfo)
+            publishAuthenticatedSession(serverInfo, userInfo, authenticatedClient)
             userInfo
         } catch (t: Throwable) {
             restoreSession(previousSession, previousApi)
@@ -196,11 +196,16 @@ class AuthApiClientImpl @Inject constructor(
     }
 
     override suspend fun disconnect() {
-        engine.updateApi(null)
         // One atomic publish of the cleared pair (matches the atomic publish
         // discipline of the login paths) — session observers see stable → null
-        // in a single step.
-        engine.authMutex.withLock { engine.updateSession(null, null) }
+        // in a single step. updateApi stays INSIDE the lock: a failover's
+        // rebuildApiFor (mutex-held) that already passed its `_api == null`
+        // early-return could otherwise resurrect a live client on top of the
+        // null-out below, leaving an authenticated client with a null session.
+        engine.authMutex.withLock {
+            engine.updateApi(null)
+            engine.updateSession(null, null)
+        }
         // Defensive: clear any stale favorite flags cached against the previous
         // server so a server switch can't surface them. No behavior change in
         // normal use (the cache is eventually-consistent via API reads).
@@ -260,11 +265,10 @@ class AuthApiClientImpl @Inject constructor(
                 baseUrl = serverInfo.address,
                 accessToken = accessTokenValue,
             )
-            engine.updateApi(authenticatedClient)
             val userDto = authResult.user ?: throw Exception("Quick Connect authentication failed")
             val userInfo = userDto.toUserInfo(serverInfo.address, accessTokenValue, fallbackName = "")
             // Single atomic publish of the authenticated (server, user) pair.
-            publishAuthenticatedSession(serverInfo, userInfo)
+            publishAuthenticatedSession(serverInfo, userInfo, authenticatedClient)
             userInfo
         } catch (t: Throwable) {
             restoreSession(previousSession, previousApi)
@@ -301,10 +305,19 @@ class AuthApiClientImpl @Inject constructor(
     /**
      * Single atomic publish of the authenticated (server, user) pair — one
      * critical-section step, so session observers never see the server
-     * connected but its user missing (or vice versa).
+     * connected but its user missing (or vice versa). The API client is
+     * re-pointed INSIDE the same lock: a failover's rebuildApiFor (mutex-held)
+     * landing between an unguarded updateApi and this publish would rebuild
+     * the client from the OLD user's token while the session claims the new
+     * one — requests then spoke as the wrong user until something rebuilt.
      */
-    private suspend fun publishAuthenticatedSession(serverInfo: ServerInfo, userInfo: UserInfo) {
+    private suspend fun publishAuthenticatedSession(
+        serverInfo: ServerInfo,
+        userInfo: UserInfo,
+        authenticatedClient: org.jellyfin.sdk.api.client.ApiClient,
+    ) {
         engine.authMutex.withLock {
+            engine.updateApi(authenticatedClient)
             engine.updateSession(
                 serverInfo.copy(
                     userId = userInfo.id,
@@ -320,14 +333,23 @@ class AuthApiClientImpl @Inject constructor(
      * Puts a captured pre-auth session back after a failed login attempt.
      * Pairs with the pre-auth adopt in the login paths: without this, a wrong
      * password (or a declined Quick Connect) would leave the app signed out
-     * and the previous identity's cached home cleared. Runs under
+     * and the previous identity's cached home cleared. The login round-trip
+     * runs with authMutex RELEASED, so a concurrent auth flow may have
+     * published its own session in the meantime — the restore only runs when
+     * the session still equals the captured value (checked under the mutex);
+     * otherwise the newer publish wins and both the session and the API
+     * client are left untouched. Runs under
      * [kotlinx.coroutines.NonCancellable] so the restore survives caller
      * cancellation, and re-points the API client at the captured one in case
-     * the failure landed after `updateApi` had already switched servers.
+     * the failure landed after a client swap had already happened.
      */
-    private suspend fun restoreSession(previousSession: ActiveSession?, previousApi: org.jellyfin.sdk.api.client.ApiClient?) {
+    private suspend fun restoreSession(
+        previousSession: ActiveSession?,
+        previousApi: org.jellyfin.sdk.api.client.ApiClient?,
+    ) {
         withContext(NonCancellable) {
             engine.authMutex.withLock {
+                if (engine.session.value != previousSession) return@withLock
                 engine.updateApi(previousApi)
                 engine.updateSession(previousSession?.server, previousSession?.user)
             }

@@ -294,7 +294,7 @@ class HomeViewModel @Inject constructor(
             // fallback refresh — refreshForUserSwitch coalesces through the
             // refresher's refreshJob, so that overlap is benign.
             val subscribed = CompletableDeferred<Unit>()
-            val collector = launch {
+            launch {
                 // collectLatest (like the previousUserId collector this
                 // replaced): a transition arriving mid-refresh cancels the
                 // stale handler instead of queueing behind it.
@@ -324,7 +324,9 @@ class HomeViewModel @Inject constructor(
                 resetHomeScrollPosition()
                 refresher.refreshForUserSwitch()
             }
-            collector.join()
+            // No join() on the collector: it never completes (hot flow for the
+            // VM's lifetime), and structured concurrency already keeps this
+            // coroutine from completing while the child collector runs.
         }
 
         launch {
@@ -787,10 +789,9 @@ class HomeViewModel @Inject constructor(
      * row appears/disappears with no extra wiring.
      */
     fun setSectionVisible(type: HomeSectionType, visible: Boolean) {
-        val updated = sectionPrefs.query.enabledSections.toMutableSet().apply {
-            if (visible) add(type) else remove(type)
-        }
-        preferencesEditor.setEnabledHomeSectionTypes(updated)
+        preferencesEditor.setEnabledHomeSectionTypes(
+            sectionPrefs.withSectionVisible(type, visible).query.enabledSections,
+        )
     }
 
     /**
@@ -800,29 +801,19 @@ class HomeViewModel @Inject constructor(
      * re-apply it on the next emission.
      */
     fun moveSection(type: HomeSectionType, up: Boolean) {
-        val index = sectionPrefs.homeSectionOrder.indexOf(type)
-        if (index == -1) return
-        val target = if (up) index - 1 else index + 1
-        if (target !in sectionPrefs.homeSectionOrder.indices) return
-        val updated = sectionPrefs.homeSectionOrder.toMutableList().apply {
-            val removed = removeAt(index)
-            add(target, removed)
-        }
-        preferencesEditor.edit { homeDiscovery.setHomeSectionOrder(updated) }
+        val updated = sectionPrefs.withSectionMoved(type, up) ?: return
+        preferencesEditor.edit { homeDiscovery.setHomeSectionOrder(updated.homeSectionOrder) }
     }
 
     /**
      * Toggles a per-library section (currently LATEST_MEDIA) from the inline
-     * section-config sheet, mirroring Settings → Configure Libraries. The
-     * override map is keyed by library id with the DISABLED types as its value
-     * set; an empty set removes the key (restoring default-enabled state).
+     * section-config sheet, mirroring Settings → Configure Libraries.
      */
     fun setLibrarySectionVisible(libraryId: String, type: HomeSectionType, visible: Boolean) {
-        val current = sectionPrefs.query.libraryHomeSectionOverrides.toMutableMap()
-        val disabled = current[libraryId].orEmpty().toMutableSet()
-        if (visible) disabled.remove(type) else disabled.add(type)
-        if (disabled.isEmpty()) current.remove(libraryId) else current[libraryId] = disabled
-        preferencesEditor.setLibraryHomeSectionOverrides(current)
+        preferencesEditor.setLibraryHomeSectionOverrides(
+            sectionPrefs.withLibrarySectionVisible(libraryId, type, visible)
+                .query.libraryHomeSectionOverrides,
+        )
     }
 
     override fun onStart(owner: LifecycleOwner) {

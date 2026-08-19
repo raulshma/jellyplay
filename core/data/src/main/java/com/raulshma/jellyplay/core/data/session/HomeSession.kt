@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.session
 
+import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -167,6 +168,32 @@ class HomeSession constructor(
      * caller can suspend.
      */
     fun currentIdentitySnapshot(): SessionIdentity? = lastStableIdentity.get()
+
+    /**
+     * [currentIdentity] mapped to the [CacheIdentity] key the identity-keyed
+     * caches (`TtlCache`, Room snapshots) use. The source-flow read matters
+     * right after a switch: the [lastStableIdentity] mirror is updated
+     * asynchronously, and keying a fetch against the lagging mirror would
+     * read/write the PREVIOUS identity's cache entries in that window.
+     * Returns [CacheIdentity.UNKNOWN] before login / after logout — nothing
+     * cached under that key can leak across users, since no real identity
+     * ever collides with it.
+     */
+    suspend fun cacheIdentity(): CacheIdentity {
+        val identity = currentIdentity() ?: return CacheIdentity.UNKNOWN
+        return CacheIdentity.ofOrNull(identity.serverId, identity.userId)
+    }
+
+    /**
+     * Synchronous [CacheIdentity] variant of [currentIdentitySnapshot] for
+     * non-suspend callers (best-effort evictions). Mirror staleness is benign
+     * there: identity switches clear the caches wholesale via [transitions]
+     * regardless of which identity an entry was keyed under.
+     */
+    fun cacheIdentitySnapshot(): CacheIdentity {
+        val identity = currentIdentitySnapshot() ?: return CacheIdentity.UNKNOWN
+        return CacheIdentity.ofOrNull(identity.serverId, identity.userId)
+    }
 
     private companion object {
         /** Small buffer so a burst of switches never suspends the collector. */
