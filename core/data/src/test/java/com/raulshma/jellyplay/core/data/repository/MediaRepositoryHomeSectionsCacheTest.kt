@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.NetworkStatus
@@ -92,12 +93,12 @@ class MediaRepositoryHomeSectionsCacheTest {
     fun `getHomeSections caches result on repeat calls`() = runBlocking {
         val repository = buildRepository()
         signIn("server-1", "user-A")
-        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
         repository.getHomeSections(HomeSectionQuery())
         repository.getHomeSections(HomeSectionQuery())
 
-        coVerify(exactly = 1) { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
@@ -108,25 +109,25 @@ class MediaRepositoryHomeSectionsCacheTest {
         // MediaRepositoryImplTest).
         val repository = buildRepository()
         signIn("server-1", "user-A")
-        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
         repository.getHomeSections(HomeSectionQuery())
         repository.getHomeSections(HomeSectionQuery(), force = true)
 
-        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
     fun `getHomeSections re-fetches after the internal wholesale invalidation`() = runBlocking {
         val repository = buildRepository()
         signIn("server-1", "user-A")
-        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
         repository.getHomeSections(HomeSectionQuery())
         repository.invalidateCaches()
         repository.getHomeSections(HomeSectionQuery())
 
-        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
@@ -136,45 +137,45 @@ class MediaRepositoryHomeSectionsCacheTest {
         // for the next user within the TTL window.
         val repository = buildRepository()
         signIn("server-1", "user-A")
-        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
         repository.getHomeSections(HomeSectionQuery()) // populates user-A entry
 
         // Switch to user B on the same server.
         switchUser("user-B")
-        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("B")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("B")
 
         repository.getHomeSections(HomeSectionQuery())
 
         // Two distinct network fetches — user A's cached entry did NOT serve user B.
-        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
     fun `toggleFavorite invalidates the home-sections cache`() = runBlocking {
         val repository = buildRepository()
         signIn("server-1", "user-A")
-        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
         coEvery { apiClient.toggleFavorite(any()) } returns Result.success(true)
 
         repository.getHomeSections(HomeSectionQuery())
         repository.toggleFavorite("item-1")
         repository.getHomeSections(HomeSectionQuery())
 
-        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
     fun `markPlayed invalidates the home-sections cache`() = runBlocking {
         val repository = buildRepository()
         signIn("server-1", "user-A")
-        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
         repository.getHomeSections(HomeSectionQuery())
         repository.markPlayed("item-1")
         repository.getHomeSections(HomeSectionQuery())
 
-        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 
     private fun userInfo(id: String) = UserInfo(

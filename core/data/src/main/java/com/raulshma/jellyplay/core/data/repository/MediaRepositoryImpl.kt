@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
+import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
@@ -291,15 +292,9 @@ class MediaRepositoryImpl @Inject constructor(
         // to run as a global cache drop (plan 08).
         if (force) homeSectionsCache.remove(identity, cacheKey)
         homeSectionsCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        return apiClient.getHomeSections(
-            enabledSections = query.enabledSections,
-            libraryHomeSectionOverrides = query.libraryHomeSectionOverrides,
-            nextUpRewatching = query.nextUpRewatching,
-            nextUpMaxDays = query.nextUpMaxDays,
-            nextUpExcludedSeriesIds = query.nextUpExcludedSeriesIds,
-            hiddenCwItemIds = query.hiddenCwItemIds,
-            pinnedSections = query.pinnedSections,
-        ).also { result ->
+        // The query value object crosses the repo → network seam intact; force
+        // propagates so the network layer's sub-call caches are bypassed too.
+        return apiClient.getHomeSections(query, force).also { result ->
             result.getOrNull()?.let { homeResult ->
                 homeSectionsCache.put(identity, cacheKey, homeResult)
                 // Persist the snapshot for stale-while-revalidate on cold open.

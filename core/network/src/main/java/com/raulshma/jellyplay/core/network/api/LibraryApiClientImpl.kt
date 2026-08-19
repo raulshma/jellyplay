@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFilters
@@ -98,15 +99,19 @@ class LibraryApiClientImpl @Inject constructor(
     private val homeSimilarCache = TtlCache<List<MediaItem>>(ttlMs = HOME_SUBCALL_CACHE_TTL_MS)
 
     override suspend fun getHomeSections(
-        enabledSections: Set<HomeSectionType>,
-        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>>,
-        nextUpRewatching: Boolean,
-        nextUpMaxDays: Int,
-        nextUpExcludedSeriesIds: Set<String>,
-        hiddenCwItemIds: Set<String>,
-        pinnedSections: List<PinnedHomeSection>,
+        query: HomeSectionQuery,
+        force: Boolean,
     ): Result<HomeSectionsResult> = engine.apiResultWithRetry {
         coroutineScope {
+            // Destructure once so the per-section logic below keeps reading the
+            // same local names it did when these were positional parameters.
+            val enabledSections = query.enabledSections
+            val libraryHomeSectionOverrides = query.libraryHomeSectionOverrides
+            val nextUpRewatching = query.nextUpRewatching
+            val nextUpMaxDays = query.nextUpMaxDays
+            val nextUpExcludedSeriesIds = query.nextUpExcludedSeriesIds
+            val hiddenCwItemIds = query.hiddenCwItemIds
+            val pinnedSections = query.pinnedSections
             val sections = mutableListOf<HomeSection>()
             val failedTypes = mutableSetOf<HomeSectionType>()
             var firstError: Throwable? = null
@@ -151,7 +156,7 @@ class LibraryApiClientImpl @Inject constructor(
                     val recommendationSeeds =
                         continueWatchingResult.getOrDefault(emptyList()) +
                             nextUpResult.getOrDefault(emptyList())
-                    async { getRecommendations(limit = 20, seeds = recommendationSeeds) }
+                    async { getRecommendations(limit = 20, seeds = recommendationSeeds, force = force) }
                 } else null
 
             var continueWatchingIds = emptySet<String>()
@@ -201,7 +206,7 @@ class LibraryApiClientImpl @Inject constructor(
                             .map { folder ->
                                 async {
                                     semaphore.acquire()
-                                    try { folder to getLatestMediaForHome(folder.id, limit = 16) }
+                                    try { folder to getLatestMediaForHome(folder.id, limit = 16, force = force) }
                                     finally { semaphore.release() }
                                 }
                             }
@@ -310,14 +315,19 @@ class LibraryApiClientImpl @Inject constructor(
      * `/Items/Latest` call per library folder on each refresh; latest-in-library
      * changes less often than that, so a short TTL skips the redundant fan-out.
      * Only the home path uses this — browse/library screens still go straight to
-     * [getLatestMedia] for fresh data.
+     * [getLatestMedia] for fresh data. [force] (pull-to-refresh) bypasses the
+     * cache read and write and goes straight to the uncached call.
      */
-    private suspend fun getLatestMediaForHome(parentId: String, limit: Int): Result<List<MediaItem>> {
+    private suspend fun getLatestMediaForHome(parentId: String, limit: Int, force: Boolean = false): Result<List<MediaItem>> {
         val identity = currentHomeCacheIdentity()
         val cacheKey = "${parentId}_$limit"
-        homeLatestMediaCache.get(identity, cacheKey)?.let { return Result.success(it) }
+        if (!force) {
+            homeLatestMediaCache.get(identity, cacheKey)?.let { return Result.success(it) }
+        }
         return getLatestMedia(parentId, limit).also { result ->
-            result.getOrNull()?.let { homeLatestMediaCache.put(identity, cacheKey, it) }
+            if (!force) {
+                result.getOrNull()?.let { homeLatestMediaCache.put(identity, cacheKey, it) }
+            }
         }
     }
 
@@ -327,13 +337,19 @@ class LibraryApiClientImpl @Inject constructor(
      * recommendations fan-out (up to 5 concurrent `getSimilarItems` calls) is
      * the single most expensive part of a home refresh; seeds rarely change
      * within the TTL window, so back-to-back refreshes skip it entirely.
+     * [force] (pull-to-refresh) bypasses the cache read and write and goes
+     * straight to the uncached call.
      */
-    private suspend fun getSimilarItemsForHome(seedId: String, limit: Int): Result<List<MediaItem>> {
+    private suspend fun getSimilarItemsForHome(seedId: String, limit: Int, force: Boolean = false): Result<List<MediaItem>> {
         val identity = currentHomeCacheIdentity()
         val cacheKey = "${seedId}_$limit"
-        homeSimilarCache.get(identity, cacheKey)?.let { return Result.success(it) }
+        if (!force) {
+            homeSimilarCache.get(identity, cacheKey)?.let { return Result.success(it) }
+        }
         return getSimilarItems(seedId, limit).also { result ->
-            result.getOrNull()?.let { homeSimilarCache.put(identity, cacheKey, it) }
+            if (!force) {
+                result.getOrNull()?.let { homeSimilarCache.put(identity, cacheKey, it) }
+            }
         }
     }
 
@@ -889,6 +905,17 @@ class LibraryApiClientImpl @Inject constructor(
     override suspend fun getRecommendations(
         limit: Int,
         seeds: List<MediaItem>,
+    ): Result<RecommendationResult> = getRecommendations(limit, seeds, force = false)
+
+    /**
+     * Force-aware core of [getRecommendations]: the home path passes through the
+     * [force] it received so a pull-to-refresh also bypasses the similar-items
+     * sub-cache; callers without a force argument keep the cached behavior.
+     */
+    private suspend fun getRecommendations(
+        limit: Int,
+        seeds: List<MediaItem>,
+        force: Boolean,
     ): Result<RecommendationResult> = runCatching {
         // Reuse caller-supplied seeds when available (e.g. the home screen has
         // already fetched Continue Watching + Next Up) to avoid duplicate
@@ -916,7 +943,7 @@ class LibraryApiClientImpl @Inject constructor(
                         // TTL window, so back-to-back refreshes (60s cadence) skip
                         // the fan-out. Also benefits the detail screen's re-entry.
                         val perSeedLimit = limit / seedItems.size + 2
-                        getSimilarItemsForHome(seed.id, perSeedLimit).getOrDefault(emptyList())
+                        getSimilarItemsForHome(seed.id, perSeedLimit, force).getOrDefault(emptyList())
                     }
                     finally { semaphore.release() }
                 }

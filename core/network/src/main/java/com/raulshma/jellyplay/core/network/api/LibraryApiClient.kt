@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.network.api
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
-import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.LibraryFolder
@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.RecommendationResult
@@ -20,13 +19,15 @@ import com.raulshma.jellyplay.core.model.Studio
 
 interface LibraryApiClient {
     suspend fun getHomeSections(
-        enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
-        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
-        nextUpRewatching: Boolean = false,
-        nextUpMaxDays: Int = 0,
-        nextUpExcludedSeriesIds: Set<String> = emptySet(),
-        hiddenCwItemIds: Set<String> = emptySet(),
-        pinnedSections: List<PinnedHomeSection> = emptyList(),
+        query: HomeSectionQuery = HomeSectionQuery(),
+        /**
+         * Bypasses the short-TTL latest-media / similar-items sub-call caches
+         * for this read (manual refresh / pull-to-refresh): the underlying
+         * `/Items/Latest` and `/Items/Similar` fan-outs re-hit the server, so
+         * a forced refresh now refreshes those rows too instead of only the
+         * Continue Watching / Next Up sections.
+         */
+        force: Boolean = false,
     ): Result<HomeSectionsResult>
 
     suspend fun getLatestMedia(parentId: String, limit: Int = 16): Result<List<MediaItem>>

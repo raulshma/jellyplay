@@ -1,17 +1,21 @@
-package com.raulshma.jellyplay.core.data.repository
-
-import com.raulshma.jellyplay.core.model.HomeSectionType
-import com.raulshma.jellyplay.core.model.PinnedHomeSection
+package com.raulshma.jellyplay.core.model
 
 /**
- * Bundles the inputs to [MediaRepository.getHomeSections] that always travel
- * together from the preferences collector in `HomeViewModel`. Replaces the
- * 7-argument call so callers don't have to keep the parameter order in sync
- * with the repository signature.
+ * Bundles the seven inputs to the home-sections fetch that always travel
+ * together from the preferences collector in `HomeViewModel`. The value object
+ * crosses the repository → network seam intact: `LibraryApiClient.getHomeSections`
+ * consumes it directly instead of re-declaring each field as a positional
+ * parameter, so callers don't have to keep the parameter order in sync with
+ * the boundary signature.
  *
- * Defaults mirror [MediaRepository.getHomeSections] so a query built from only
- * the enabled sections (the common case outside the home screen — TV Watch Next,
- * UserDataSyncWorker, widget workers) reads the same as before.
+ * Lives in `core:model` (with its only type dependencies, [HomeSectionType]
+ * and [PinnedHomeSection]) because it is shared by `core:data` and
+ * `core:network`, whose sole common ancestor is this module — same precedent
+ * as [TtlCache]/[CacheIdentity].
+ *
+ * Defaults mirror the repository/network defaults so a query built from only
+ * the enabled sections (the common case outside the home screen — TV Watch
+ * Next, UserDataSyncWorker, widget workers) reads the same as before.
  */
 data class HomeSectionQuery(
     val enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
