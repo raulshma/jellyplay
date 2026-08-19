@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -66,59 +67,150 @@ class HomeHeroControllerTest {
     }
 
     @Test
-    fun heroController_toggleSurprise_togglesStateAndRestoresAutoRotate() {
-        var surprise = false
-        var autoRotate = false
-        val controller = HeroController(
-            featuredItem = item("m1", MediaType.MOVIE),
-            backdropUrl = "http://example.com/bg.jpg",
-            showSurprise = surprise,
-            setShowSurprise = { surprise = it },
-            autoRotateEnabled = autoRotate,
-            setAutoRotateEnabled = { autoRotate = it },
-            focusInHero = true,
-            setFocusInHero = {},
+    fun heroController_toggleSurprise_onPicksNewCandidateAndPausesAutoRotate() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = false)
+        controller.updateCandidates(
+            listOf(
+                item("m1", MediaType.MOVIE),
+                item("m2", MediaType.MOVIE),
+            ),
         )
 
-        // Turning surprise mode ON (when old showSurprise is false)
+        // Turning surprise mode ON: the pick excludes the current index, so with
+        // two candidates the featured item must move to the other one.
         controller.toggleSurprise()
-        assertTrue(surprise)
 
-        // Turning surprise mode OFF (when old showSurprise is true) -> autoRotate should become true
-        val controllerOff = HeroController(
-            featuredItem = item("m1", MediaType.MOVIE),
-            backdropUrl = "http://example.com/bg.jpg",
-            showSurprise = surprise, // true now
-            setShowSurprise = { surprise = it },
-            autoRotateEnabled = autoRotate,
-            setAutoRotateEnabled = { autoRotate = it },
-            focusInHero = true,
-            setFocusInHero = {},
-        )
-        controllerOff.toggleSurprise()
-        assertFalse(surprise)
-        assertTrue(autoRotate)
+        assertTrue(controller.showSurprise)
+        assertFalse(controller.autoRotateEnabled)
+        assertEquals("m2", controller.featuredItem?.id)
     }
 
     @Test
-    fun heroController_onFocusChange_updatesFocusState() {
-        var focusedState = false
-        val controller = HeroController(
-            featuredItem = null,
-            backdropUrl = null,
-            showSurprise = false,
-            setShowSurprise = {},
-            autoRotateEnabled = true,
-            setAutoRotateEnabled = {},
-            focusInHero = focusedState,
-            setFocusInHero = { focusedState = it },
+    fun heroController_toggleSurprise_offRestoresAutoRotate() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = false)
+        controller.updateCandidates(
+            listOf(
+                item("m1", MediaType.MOVIE),
+                item("m2", MediaType.MOVIE),
+            ),
         )
 
-        controller.onFocusChange(true)
-        assertTrue(focusedState)
+        controller.toggleSurprise()
+        // Turning surprise mode OFF (when old showSurprise is true) -> autoRotate should become true
+        controller.toggleSurprise()
+
+        assertFalse(controller.showSurprise)
+        assertTrue(controller.autoRotateEnabled)
+    }
+
+    @Test
+    fun heroController_onSurpriseArmed_showsSurpriseAndPausesAutoRotate() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        controller.updateCandidates(
+            listOf(
+                item("m1", MediaType.MOVIE),
+                item("m2", MediaType.MOVIE),
+            ),
+        )
+
+        controller.onSurpriseArmed()
+
+        assertTrue(controller.showSurprise)
+        assertFalse(controller.autoRotateEnabled)
+        assertEquals("m2", controller.featuredItem?.id)
+    }
+
+    @Test
+    fun heroController_rotationTick_wrapsAroundToFirstCandidate() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        controller.updateCandidates(
+            listOf(
+                item("m1", MediaType.MOVIE),
+                item("m2", MediaType.MOVIE),
+                item("m3", MediaType.MOVIE),
+            ),
+        )
+
+        controller.rotationTick()
+        assertEquals("m2", controller.featuredItem?.id)
+        controller.rotationTick()
+        assertEquals("m3", controller.featuredItem?.id)
+        controller.rotationTick()
+        assertEquals("m1", controller.featuredItem?.id)
+    }
+
+    @Test
+    fun heroController_rotationTick_withEmptyCandidates_isNoOp() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+
+        controller.rotationTick()
+
+        assertNull(controller.featuredItem)
+        assertNull(controller.backdropUrl)
+    }
+
+    @Test
+    fun heroController_onFocusChange_updatesFocusState_andSnapStartsUnsettled() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        assertFalse(controller.focusSnapSettled)
 
         controller.onFocusChange(false)
-        assertFalse(focusedState)
+        assertFalse(controller.focusInHero)
+
+        controller.onFocusChange(true)
+        assertTrue(controller.focusInHero)
+    }
+
+    @Test
+    fun heroController_backdropUrl_delegatesToCtorLambda() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        controller.updateCandidates(listOf(item("m1", MediaType.MOVIE)))
+
+        assertEquals("url/m1", controller.backdropUrl)
+    }
+
+    @Test
+    fun heroController_updateCandidates_preservesStillValidIndex() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        controller.updateCandidates(
+            listOf(
+                item("m1", MediaType.MOVIE),
+                item("m2", MediaType.MOVIE),
+                item("m3", MediaType.MOVIE),
+            ),
+        )
+        controller.rotationTick()
+        assertEquals("m2", controller.featuredItem?.id)
+
+        controller.updateCandidates(
+            listOf(
+                item("n1", MediaType.MOVIE),
+                item("n2", MediaType.MOVIE),
+                item("n3", MediaType.MOVIE),
+            ),
+        )
+        assertEquals("n2", controller.featuredItem?.id)
+    }
+
+    @Test
+    fun heroController_updateCandidates_shrunkPoolYieldsNullFeaturedItem() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        controller.updateCandidates(
+            listOf(
+                item("m1", MediaType.MOVIE),
+                item("m2", MediaType.MOVIE),
+                item("m3", MediaType.MOVIE),
+            ),
+        )
+        controller.rotationTick()
+        controller.rotationTick()
+
+        // The index is deliberately not clamped: a shrunk pool yields a null
+        // featured item until the index is valid again.
+        controller.updateCandidates(listOf(item("m1", MediaType.MOVIE)))
+
+        assertNull(controller.featuredItem)
+        assertNull(controller.backdropUrl)
     }
 
     private fun item(id: String, type: MediaType) = MediaItem(

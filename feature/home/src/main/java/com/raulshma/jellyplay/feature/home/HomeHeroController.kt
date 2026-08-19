@@ -79,7 +79,10 @@ internal fun rememberHeroHeight(): Dp {
 /**
  * Owns the hero rotation state and its effects: the featured-item index, the
  * "Surprise Me" pick, auto-rotation while idle, and snapping the list back to
- * the top when the hero receives focus (TV). All cadences (8s idle / 2s while
+ * the top when the hero receives focus (TV). The [HeroController] class holds
+ * all state and transitions; this composable only constructs it once and
+ * dispatches the effects (candidate updates, the launch-shortcut arm, the idle
+ * rotation cadences, and the TV snap-to-top). All cadences (8s idle / 2s while
  * scrolling) and the `isAtLeast(RESUMED)` gate are preserved from the inline
  * implementation previously in `MainHomeContent`.
  */
@@ -90,12 +93,19 @@ internal fun rememberHeroController(
     heroFocusRequester: androidx.compose.ui.focus.FocusRequester,
     getBackdropUrl: (String) -> String,
 ): HeroController {
-    var showSurprise by remember { mutableStateOf(false) }
-    var featuredIndex by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
     val isTvForRotation = remember(context) { context.isTv() }
-    var autoRotateEnabled by remember { mutableStateOf(!isTvForRotation) }
-    var focusInHero by remember { mutableStateOf(true) }
+    val controller = remember {
+        HeroController(getBackdropUrl, initialAutoRotateEnabled = !isTvForRotation)
+    }
+
+    // Sync candidates during composition, not in a LaunchedEffect (which runs
+    // post-composition and would render one frame with stale candidates), so
+    // HomeScreen reads a fresh featuredItem in the same frame the list changes.
+    remember(featuredCandidates) {
+        controller.updateCandidates(featuredCandidates)
+        true
+    }
 
     // Honor the "Surprise Me" launcher shortcut when the
     // app-level signal arms, flip the same state the menu item uses, then clear
@@ -104,43 +114,22 @@ internal fun rememberHeroController(
     val surpriseArmed by surpriseController.armed.collectAsStateWithLifecycle()
     LaunchedEffect(surpriseArmed) {
         if (surpriseArmed) {
-            showSurprise = true
+            controller.onSurpriseArmed()
             surpriseController.consume()
         }
     }
 
-    LaunchedEffect(showSurprise) {
-        if (showSurprise && featuredCandidates.isNotEmpty()) {
-            // Exclude the currently-displayed hero from the candidate pool so a
-            // "Surprise Me" tap always produces a visible change. With a small
-            // pool (e.g. N=3 from LATEST_MEDIA) the naive pick had a 1/N chance
-            // of re-selecting the same item, making the feature appear to no-op.
-            val previousIndex = featuredIndex
-            featuredIndex = if (featuredCandidates.size > 1) {
-                (0 until featuredCandidates.size).filter { it != previousIndex }.random()
-            } else {
-                0
-            }
-            autoRotateEnabled = false
-        }
-    }
-
-    val featuredItem = remember(featuredCandidates, featuredIndex) {
-        featuredCandidates.getOrNull(featuredIndex)
-    }
-    val backdropUrl = remember(featuredItem?.id) { featuredItem?.let { getBackdropUrl(it.id) } }
-
     val isTv = LocalTvMode.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    LaunchedEffect(featuredCandidates, listState, autoRotateEnabled) {
-        if (featuredCandidates.isEmpty() || !autoRotateEnabled || !focusInHero) return@LaunchedEffect
+    LaunchedEffect(featuredCandidates, listState, controller.autoRotateEnabled) {
+        if (featuredCandidates.isEmpty() || !controller.autoRotateEnabled || !controller.focusInHero) return@LaunchedEffect
         snapshotFlow { listState.isScrollInProgress }
             .collectLatest { isScrolling ->
                 if (!lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@collectLatest
                 if (!isScrolling) {
                     delay(8000)
-                    if (autoRotateEnabled && focusInHero) {
-                        featuredIndex = (featuredIndex + 1) % featuredCandidates.size
+                    if (controller.autoRotateEnabled && controller.focusInHero) {
+                        controller.rotationTick()
                     }
                 } else {
                     delay(2000)
@@ -151,48 +140,83 @@ internal fun rememberHeroController(
     // When the hero actually receives focus, snap the list back to the top so
     // the full hero is visible. The first emission is skipped so a freshly
     // (re)composed Home doesn't snap before per-row focus restoration runs.
-    var heroFocusScrollSettled by remember { mutableStateOf(false) }
-    LaunchedEffect(focusInHero) {
-        if (!heroFocusScrollSettled) {
-            heroFocusScrollSettled = true
-        } else if (focusInHero && isTv) {
+    LaunchedEffect(controller.focusInHero) {
+        if (!controller.focusSnapSettled) {
+            controller.focusSnapSettled = true
+        } else if (controller.focusInHero && isTv) {
             listState.scrollToItem(0, 0)
         }
     }
 
-    return HeroController(
-        featuredItem = featuredItem,
-        backdropUrl = backdropUrl,
-        showSurprise = showSurprise,
-        setShowSurprise = { showSurprise = it },
-        autoRotateEnabled = autoRotateEnabled,
-        setAutoRotateEnabled = { autoRotateEnabled = it },
-        focusInHero = focusInHero,
-        setFocusInHero = { focusInHero = it },
-    )
+    return controller
 }
 
 @Stable
 internal class HeroController(
-    val featuredItem: MediaItem?,
-    val backdropUrl: String?,
-    private val showSurprise: Boolean,
-    private val setShowSurprise: (Boolean) -> Unit,
-    val autoRotateEnabled: Boolean,
-    private val setAutoRotateEnabled: (Boolean) -> Unit,
-    val focusInHero: Boolean,
-    val setFocusInHero: (Boolean) -> Unit,
+    private val getBackdropUrl: (String) -> String,
+    initialAutoRotateEnabled: Boolean,
 ) {
+    /** The index is deliberately not clamped on updates: a shrunk pool yields a null [featuredItem] until it is valid again. */
+    var candidates: List<MediaItem> by mutableStateOf(emptyList())
+        private set
+    private var featuredIndex by mutableIntStateOf(0)
+    var showSurprise: Boolean by mutableStateOf(false)
+        private set
+    var autoRotateEnabled: Boolean by mutableStateOf(initialAutoRotateEnabled)
+        private set
+    var focusInHero: Boolean by mutableStateOf(true)
+        private set
+
+    /** First-emission skip flag for the composable's snap-to-top effect. */
+    internal var focusSnapSettled: Boolean by mutableStateOf(false)
+
+    val featuredItem: MediaItem? get() = candidates.getOrNull(featuredIndex)
+    val backdropUrl: String? get() = featuredItem?.let { getBackdropUrl(it.id) }
+
+    fun updateCandidates(items: List<MediaItem>) {
+        candidates = items
+    }
+
     /**
      * Surprise-Me toggle: flips state and re-enables rotation when turning off.
-     * `showSurprise` here is the pre-flip value, so after flipping to
-     * `!showSurprise`, re-enabling rotation when that new value is false means
-     * re-enabling when the old value was true (i.e. we just turned it off).
+     * `was` is the pre-flip value, so after flipping to `!was`, re-enabling
+     * rotation when `was` is true means re-enabling when we just turned it off;
+     * turning it on instead runs the surprise pick.
      */
     fun toggleSurprise() {
-        setShowSurprise(!showSurprise)
-        if (showSurprise) setAutoRotateEnabled(true)
+        val was = showSurprise
+        showSurprise = !was
+        if (was) autoRotateEnabled = true else onSurpriseShown()
     }
+
+    /** Launch-shortcut path: arms surprise mode and runs the same pick as [toggleSurprise] turning on. */
+    fun onSurpriseArmed() {
+        showSurprise = true
+        onSurpriseShown()
+    }
+
+    private fun onSurpriseShown() {
+        if (candidates.isNotEmpty()) {
+            // Exclude the currently-displayed hero from the candidate pool so a
+            // "Surprise Me" tap always produces a visible change. With a small
+            // pool (e.g. N=3 from LATEST_MEDIA) the naive pick had a 1/N chance
+            // of re-selecting the same item, making the feature appear to no-op.
+            val previousIndex = featuredIndex
+            featuredIndex = if (candidates.size > 1) {
+                (0 until candidates.size).filter { it != previousIndex }.random()
+            } else {
+                0
+            }
+            autoRotateEnabled = false
+        }
+    }
+
+    fun rotationTick() {
+        if (candidates.isNotEmpty()) featuredIndex = (featuredIndex + 1) % candidates.size
+    }
+
     /** Notifies the controller that hero focus changed (used to drive the snap-to-top). */
-    fun onFocusChange(focused: Boolean) = setFocusInHero(focused)
+    fun onFocusChange(focused: Boolean) {
+        focusInHero = focused
+    }
 }
