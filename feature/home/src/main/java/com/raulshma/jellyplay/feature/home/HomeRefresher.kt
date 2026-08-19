@@ -436,7 +436,7 @@ internal class HomeRefresher(
      * Resets the discover-sections TTL so the next [fetchDiscoverSections]
      * actually hits the network. Called on user-initiated refresh.
      */
-    fun invalidateDiscoverCache() {
+    private fun invalidateDiscoverCache() {
         discoverCache.invalidate()
     }
 
@@ -559,8 +559,9 @@ internal class HomeRefresher(
             val now = timeSource.nowEpochMillis()
             if (now - lastRefreshTime < HomeFreshness.MIN_REFRESH_INTERVAL_MS) continue
 
+            // fetchOnce owns the single lastRefreshTime clock and stamps it on
+            // every exit path (including the offline skip), so no re-stamp here.
             fetchOnce()
-            lastRefreshTime = timeSource.nowEpochMillis()
         }
     }
 

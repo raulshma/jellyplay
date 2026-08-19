@@ -309,6 +309,31 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     /**
+     * Shared read/write shape of the home sub-call caches: consult [cache]
+     * first unless [force] (pull-to-refresh), and memoise a successful fetch
+     * unless forced. Keys are scoped to the current [CacheIdentity] so a
+     * user/server switch can never serve the previous identity's rows.
+     */
+    private suspend fun cachedHomeSubCall(
+        cache: TtlCache<List<MediaItem>>,
+        keyPart: String,
+        limit: Int,
+        force: Boolean,
+        fetch: suspend () -> Result<List<MediaItem>>,
+    ): Result<List<MediaItem>> {
+        val identity = currentHomeCacheIdentity()
+        val cacheKey = "${keyPart}_$limit"
+        if (!force) {
+            cache.get(identity, cacheKey)?.let { return Result.success(it) }
+        }
+        return fetch().also { result ->
+            if (!force) {
+                result.getOrNull()?.let { cache.put(identity, cacheKey, it) }
+            }
+        }
+    }
+
+    /**
      * Home-path wrapper around [getLatestMedia] that consults [homeLatestMediaCache]
      * first. The home screen refreshes every 60s (foreground) and re-issues one
      * `/Items/Latest` call per library folder on each refresh; latest-in-library
@@ -317,18 +342,8 @@ class LibraryApiClientImpl @Inject constructor(
      * [getLatestMedia] for fresh data. [force] (pull-to-refresh) bypasses the
      * cache read and write and goes straight to the uncached call.
      */
-    private suspend fun getLatestMediaForHome(parentId: String, limit: Int, force: Boolean = false): Result<List<MediaItem>> {
-        val identity = currentHomeCacheIdentity()
-        val cacheKey = "${parentId}_$limit"
-        if (!force) {
-            homeLatestMediaCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        }
-        return getLatestMedia(parentId, limit).also { result ->
-            if (!force) {
-                result.getOrNull()?.let { homeLatestMediaCache.put(identity, cacheKey, it) }
-            }
-        }
-    }
+    private suspend fun getLatestMediaForHome(parentId: String, limit: Int, force: Boolean = false): Result<List<MediaItem>> =
+        cachedHomeSubCall(homeLatestMediaCache, parentId, limit, force) { getLatestMedia(parentId, limit) }
 
     /**
      * Home-path wrapper around [getSimilarItems] (via [getRecommendations]) that
@@ -339,18 +354,8 @@ class LibraryApiClientImpl @Inject constructor(
      * [force] (pull-to-refresh) bypasses the cache read and write and goes
      * straight to the uncached call.
      */
-    private suspend fun getSimilarItemsForHome(seedId: String, limit: Int, force: Boolean = false): Result<List<MediaItem>> {
-        val identity = currentHomeCacheIdentity()
-        val cacheKey = "${seedId}_$limit"
-        if (!force) {
-            homeSimilarCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        }
-        return getSimilarItems(seedId, limit).also { result ->
-            if (!force) {
-                result.getOrNull()?.let { homeSimilarCache.put(identity, cacheKey, it) }
-            }
-        }
-    }
+    private suspend fun getSimilarItemsForHome(seedId: String, limit: Int, force: Boolean = false): Result<List<MediaItem>> =
+        cachedHomeSubCall(homeSimilarCache, seedId, limit, force) { getSimilarItems(seedId, limit) }
 
     /**
      * The current `(serverId, userId)` as a [CacheIdentity], read from the

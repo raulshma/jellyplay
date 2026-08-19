@@ -419,26 +419,26 @@ class HomeDiscoveryStore @Inject constructor(
             } else cachedEnabledHomeSectionTypes.value
         }
 
-        private fun readHomeSectionOrder(prefs: Preferences): List<HomeSectionType> {
-            val raw = prefs[sectionOrderKey]
-            return if (raw != cachedHomeSectionOrder.raw) {
-                try {
-                    raw?.let {
-                        val parsed = try {
-                            json.decodeFromString<List<String>>(it)
-                        } catch (_: Exception) {
-                            json.decodeFromString<Set<String>>(it).toList()
-                        }
-                        val mapped = parsed.mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
-                        buildList {
-                            addAll(mapped)
-                            addAll(HomeSectionType.CONFIGURABLE.filterNot { it in mapped })
-                        }
-                    } ?: HomeSectionType.CONFIGURABLE
-                } catch (_: Exception) { HomeSectionType.CONFIGURABLE }
-                    .also { cachedHomeSectionOrder = ParsedCache(raw, it) }
-            } else cachedHomeSectionOrder.value
-        }
+        private fun readHomeSectionOrder(prefs: Preferences): List<HomeSectionType> = cachedJson(
+            raw = prefs[sectionOrderKey],
+            cache = cachedHomeSectionOrder,
+            default = HomeSectionType.CONFIGURABLE,
+            parse = { raw ->
+                // Dual-format: the list is canonical, but the legacy format was
+                // a Set — decode either.
+                val parsed = try {
+                    json.decodeFromString<List<String>>(raw)
+                } catch (_: Exception) {
+                    json.decodeFromString<Set<String>>(raw).toList()
+                }
+                val mapped = parsed.mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
+                buildList {
+                    addAll(mapped)
+                    addAll(HomeSectionType.CONFIGURABLE.filterNot { it in mapped })
+                }
+            },
+            cacheRef = { cachedHomeSectionOrder = it },
+        )
 
         /**
          * Reads the per-library section overrides from the active user's
@@ -447,37 +447,29 @@ class HomeDiscoveryStore @Inject constructor(
          * and inside [ensureNamespacedMigration]; this read just decodes the
          * typed override map.
          */
-        private fun readLibraryHomeSectionOverrides(prefs: Preferences): Map<String, Set<HomeSectionType>> {
-            val raw = prefs[librarySectionOverridesKey]
-            return if (raw != cachedLibraryHomeSectionOverrides.raw) {
-                try {
-                    raw?.let {
-                        json.decodeFromString<Map<String, Set<HomeSectionType>>>(it)
-                    } ?: emptyMap()
-                } catch (_: Exception) { emptyMap() }
-                    .also { cachedLibraryHomeSectionOverrides = ParsedCache(raw, it) }
-            } else cachedLibraryHomeSectionOverrides.value
-        }
+        private fun readLibraryHomeSectionOverrides(prefs: Preferences): Map<String, Set<HomeSectionType>> = cachedJson(
+            raw = prefs[librarySectionOverridesKey],
+            cache = cachedLibraryHomeSectionOverrides,
+            default = emptyMap(),
+            parse = { json.decodeFromString<Map<String, Set<HomeSectionType>>>(it) },
+            cacheRef = { cachedLibraryHomeSectionOverrides = it },
+        )
 
-        private fun readPinnedHomeSections(prefs: Preferences): List<PinnedHomeSection> {
-            val raw = prefs[pinnedSectionsKey]
-            return if (raw != cachedPinnedHomeSections.raw) {
-                try {
-                    raw?.let { json.decodeFromString<List<PinnedHomeSection>>(it) } ?: emptyList()
-                } catch (_: Exception) { emptyList() }
-                    .also { cachedPinnedHomeSections = ParsedCache(raw, it) }
-            } else cachedPinnedHomeSections.value
-        }
+        private fun readPinnedHomeSections(prefs: Preferences): List<PinnedHomeSection> = cachedJson(
+            raw = prefs[pinnedSectionsKey],
+            cache = cachedPinnedHomeSections,
+            default = emptyList(),
+            parse = { json.decodeFromString<List<PinnedHomeSection>>(it) },
+            cacheRef = { cachedPinnedHomeSections = it },
+        )
 
-        private fun readHomeLayoutPresets(prefs: Preferences): List<HomeLayoutPreset> {
-            val raw = prefs[layoutPresetsKey]
-            return if (raw != cachedHomeLayoutPresets.raw) {
-                try {
-                    raw?.let { json.decodeFromString<List<HomeLayoutPreset>>(it) } ?: emptyList()
-                } catch (_: Exception) { emptyList() }
-                    .also { cachedHomeLayoutPresets = ParsedCache(raw, it) }
-            } else cachedHomeLayoutPresets.value
-        }
+        private fun readHomeLayoutPresets(prefs: Preferences): List<HomeLayoutPreset> = cachedJson(
+            raw = prefs[layoutPresetsKey],
+            cache = cachedHomeLayoutPresets,
+            default = emptyList(),
+            parse = { json.decodeFromString<List<HomeLayoutPreset>>(it) },
+            cacheRef = { cachedHomeLayoutPresets = it },
+        )
 
         private fun readNextUpExcludedSeriesIds(prefs: Preferences): Set<String> = cachedJson(
             raw = prefs[nextUpExcludedSeriesIdsKey],

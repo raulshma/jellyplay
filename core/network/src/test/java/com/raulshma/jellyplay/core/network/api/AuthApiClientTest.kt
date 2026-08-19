@@ -1,10 +1,15 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.network.failover.AddressProbeResult
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
+import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
@@ -131,5 +136,47 @@ class AuthApiClientImplTest {
 
         authClient.setServer(testServer)
         assertEquals(testServer, engine.currentServer.value)
+    }
+
+    @Test
+    fun `connectToServer while signed in adopts new server and drops user atomically`() = runTest {
+        // Settings → Server Management → Add Server reaches connectToServer
+        // while a user is signed in. The adopt must be one atomic step — a
+        // single-sided updateServer would publish a synthetic
+        // (newServer, oldUser) ActiveSession that HomeSession classifies as a
+        // real identity switch, clearing Room under the wrong user.
+        val probeRouter = mockk<ServerAddressRouter>(relaxed = true)
+        every { probeRouter.activeAddress } returns MutableStateFlow(null)
+        coEvery { probeRouter.probe("https://new.example.com") } returns AddressProbeResult(
+            reachable = true,
+            serverId = "server-2",
+            serverName = "New Server",
+        )
+        val probeEngine = JellyfinApiEngine(
+            context = mockk(relaxed = true),
+            jellyfinLazy = dagger.Lazy { mockk<Jellyfin>(relaxed = true) },
+            okHttpClientLazy = dagger.Lazy { OkHttpClient() },
+            deviceProfileProvider = DeviceProfileProvider(DeviceCodecCapabilities()),
+            addressRouter = probeRouter,
+        )
+        val client = AuthApiClientImpl(
+            engine = probeEngine,
+            libraryClient = LibraryApiClientImpl(probeEngine, mockk(relaxed = true)),
+            addressRouter = probeRouter,
+        )
+        probeEngine.updateSession(testServer, testUser)
+        assertEquals(ActiveSession(testServer, testUser), probeEngine.session.value)
+
+        val result = client.connectToServer("new.example.com")
+
+        assertEquals("server-2", result.getOrNull()?.id)
+        assertNull(
+            "the signed-in user must be dropped with the old session",
+            probeEngine.currentUser.value,
+        )
+        assertNull(
+            "no synthetic (newServer, oldUser) session may be published",
+            probeEngine.session.value,
+        )
     }
 }

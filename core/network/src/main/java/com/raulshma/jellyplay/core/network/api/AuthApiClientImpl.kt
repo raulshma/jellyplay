@@ -64,7 +64,14 @@ class AuthApiClientImpl @Inject constructor(
                 withContext(Dispatchers.IO) {
                     try {
                         val info = probeServerInfo(normalizedAddress)
-                        engine.authMutex.withLock { engine.updateServer(info) }
+                        // Atomically adopt the probed server AND drop any signed-in
+                        // user: this path is reachable while authenticated
+                        // (Settings → Server Management → Add Server), and a
+                        // single-sided updateServer would publish a synthetic
+                        // (newServer, oldUser) ActiveSession — driving HomeSession
+                        // to emit a ServerSwitched and clear Room under the wrong
+                        // identity. The follow-up login republishes a real pair.
+                        engine.authMutex.withLock { engine.updateSession(info, null) }
                         info
                     } catch (e: Exception) {
                         Log.e("JellyfinApi", "connectToServer failed for $normalizedAddress", e)
@@ -134,32 +141,10 @@ class AuthApiClientImpl @Inject constructor(
         )
         engine.updateApi(authenticatedClient)
         val userDto = authResult.user ?: throw Exception("Authentication failed")
-        val policy = userDto.policy
-        val userInfo = UserInfo(
-            id = userDto.id.toString(),
-            name = userDto.name ?: username,
-            serverAddress = serverInfo.address,
-            accessToken = accessTokenValue,
-            isAdmin = policy?.isAdministrator ?: false,
-            canDeleteContent = policy?.enableContentDeletion ?: false,
-            maxParentalAgeRating = policy?.maxParentalRating,
-            primaryImageTag = userDto.primaryImageTag,
-            enabledFolderIds = if (policy?.enableAllFolders == false) {
-                policy.enabledFolders?.map { it.toString() } ?: emptyList()
-            } else emptyList(),
-        )
+        val userInfo = userDto.toUserInfo(serverInfo.address, accessTokenValue, fallbackName = username)
         // Single atomic publish of the authenticated (server, user) pair —
         // same critical-section shape the pre-auth adopt used above.
-        engine.authMutex.withLock {
-            engine.updateSession(
-                serverInfo.copy(
-                    userId = userInfo.id,
-                    accessToken = userInfo.accessToken,
-                    isConnected = true,
-                ),
-                userInfo,
-            )
-        }
+        publishAuthenticatedSession(serverInfo, userInfo)
         userInfo
     }
 
@@ -243,21 +228,44 @@ class AuthApiClientImpl @Inject constructor(
         )
         engine.updateApi(authenticatedClient)
         val userDto = authResult.user ?: throw Exception("Quick Connect authentication failed")
-        val policy = userDto.policy
-        val userInfo = UserInfo(
-            id = userDto.id.toString(),
-            name = userDto.name ?: "",
-            serverAddress = serverInfo.address,
-            accessToken = accessTokenValue,
+        val userInfo = userDto.toUserInfo(serverInfo.address, accessTokenValue, fallbackName = "")
+        // Single atomic publish of the authenticated (server, user) pair.
+        publishAuthenticatedSession(serverInfo, userInfo)
+        userInfo
+    }
+
+    /**
+     * Maps an authentication response's user DTO to the model [UserInfo].
+     * Shared by every auth path (name/password, Quick Connect) so policy
+     * fields can't drift between them.
+     */
+    private fun org.jellyfin.sdk.model.api.UserDto.toUserInfo(
+        serverAddress: String,
+        accessToken: String,
+        fallbackName: String,
+    ): UserInfo {
+        val policy = policy
+        return UserInfo(
+            id = id.toString(),
+            name = name ?: fallbackName,
+            serverAddress = serverAddress,
+            accessToken = accessToken,
             isAdmin = policy?.isAdministrator ?: false,
             canDeleteContent = policy?.enableContentDeletion ?: false,
             maxParentalAgeRating = policy?.maxParentalRating,
-            primaryImageTag = userDto.primaryImageTag,
+            primaryImageTag = primaryImageTag,
             enabledFolderIds = if (policy?.enableAllFolders == false) {
                 policy.enabledFolders?.map { it.toString() } ?: emptyList()
             } else emptyList(),
         )
-        // Single atomic publish of the authenticated (server, user) pair.
+    }
+
+    /**
+     * Single atomic publish of the authenticated (server, user) pair — one
+     * critical-section step, so session observers never see the server
+     * connected but its user missing (or vice versa).
+     */
+    private suspend fun publishAuthenticatedSession(serverInfo: ServerInfo, userInfo: UserInfo) {
         engine.authMutex.withLock {
             engine.updateSession(
                 serverInfo.copy(
@@ -268,7 +276,6 @@ class AuthApiClientImpl @Inject constructor(
                 userInfo,
             )
         }
-        userInfo
     }
 
     override suspend fun postCapabilities(): Result<Unit> = engine.apiResultWithRetry {
