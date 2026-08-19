@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
 import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
@@ -58,6 +59,10 @@ data class PreferenceSliceGraph(
     val videoPlayerStore: VideoPlayerStore,
     val downloadsStore: DownloadsStore,
     val engineStore: PlayerEngineStore,
+    // Home-discovery keys are namespaced per active user (u_<userId>::) — the
+    // identity store is exposed so tests can drive user switches through the
+    // same production seam (active_user_id in the shared file).
+    val identityStore: ServerIdentityStore,
     val homeDiscoveryStore: HomeDiscoveryStore,
     val audioStore: AudioStore,
     val audioEffectsStore: AudioEffectsStore,
@@ -92,7 +97,8 @@ fun createPreferenceSliceGraph(
     val videoPlayerStore = VideoPlayerStore(dataStore, scope)
     val downloadsStore = DownloadsStore(dataStore, scope)
     val engineStore = PlayerEngineStore(dataStore, scope)
-    val homeDiscoveryStore = HomeDiscoveryStore(dataStore, scope)
+    val identityStore = ServerIdentityStore(dataStore, scope)
+    val homeDiscoveryStore = HomeDiscoveryStore(dataStore, scope, identityStore)
     val audioStore = AudioStore(dataStore, scope)
     val audioEffectsStore = AudioEffectsStore(dataStore, scope)
     val audioCacheStore = AudioCacheStore(dataStore, scope)
@@ -129,7 +135,7 @@ fun createPreferenceSliceGraph(
     )
     return PreferenceSliceGraph(
         playbackStore, appearanceStore, videoPlayerStore, downloadsStore, engineStore,
-        homeDiscoveryStore, audioStore, audioEffectsStore, audioCacheStore, libraryStore,
+        identityStore, homeDiscoveryStore, audioStore, audioEffectsStore, audioCacheStore, libraryStore,
         navigationStore, networkOfflineStore, notificationStore, screensaverStore,
         securityStore, subtitleLanguageStore, syncPlayCastStore, experimentalStore,
         appRuntimeStateStore, projections,
