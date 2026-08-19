@@ -405,19 +405,17 @@ class HomeDiscoveryStore @Inject constructor(
             ContinueWatchingClickBehavior.valueOf(prefs[continueWatchingClickBehaviorKey] ?: ContinueWatchingClickBehavior.DETAILS.name)
         } catch (_: Exception) { ContinueWatchingClickBehavior.DETAILS }
 
-        private fun readEnabledHomeSectionTypes(prefs: Preferences): Set<HomeSectionType> {
-            val raw = prefs[enabledSectionTypesKey]
-            return if (raw != cachedEnabledHomeSectionTypes.raw) {
-                try {
-                    raw?.let {
-                        json.decodeFromString<Set<String>>(it)
-                            .mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
-                            .toSet()
-                    } ?: HomeSectionType.CONFIGURABLE.toSet()
-                } catch (_: Exception) { HomeSectionType.CONFIGURABLE.toSet() }
-                    .also { cachedEnabledHomeSectionTypes = ParsedCache(raw, it) }
-            } else cachedEnabledHomeSectionTypes.value
-        }
+        private fun readEnabledHomeSectionTypes(prefs: Preferences): Set<HomeSectionType> = cachedJson(
+            raw = prefs[enabledSectionTypesKey],
+            cache = cachedEnabledHomeSectionTypes,
+            default = HomeSectionType.CONFIGURABLE.toSet(),
+            parse = { raw ->
+                json.decodeFromString<Set<String>>(raw)
+                    .mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
+                    .toSet()
+            },
+            cacheRef = { cachedEnabledHomeSectionTypes = it },
+        )
 
         private fun readHomeSectionOrder(prefs: Preferences): List<HomeSectionType> = cachedJson(
             raw = prefs[sectionOrderKey],

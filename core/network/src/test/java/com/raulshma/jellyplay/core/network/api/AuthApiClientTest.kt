@@ -10,6 +10,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
@@ -144,10 +145,12 @@ class AuthApiClientImplTest {
     @Test
     fun `failed authenticateUser restores the previous session`() = runTest {
         // A wrong password (or a dead server) mid-login must not sign the user
-        // out of the working session: the pre-auth adopt publishes
-        // SignedOut(previousIdentity) — which observers treat destructively
-        // (cache drop + SWR snapshot clear) — so the failure path has to put
-        // the captured (server, user) pair back atomically.
+        // out of the working session. The pre-auth adopt is skipped while a
+        // session is established precisely so the attempt never publishes
+        // SignedOut(previousIdentity) — observers treat that transition
+        // destructively (cache drop + SWR snapshot clear), which would wipe
+        // the signed-in user's cached home on every failed attempt. The
+        // session must stay published for the whole round-trip.
         val jellyfin = mockk<Jellyfin>(relaxed = true)
         val unauthenticatedApi = mockk<ApiClient>(relaxed = true)
         // Full-arity matchers: partial matchers send mockk's overload auto-
@@ -172,16 +175,29 @@ class AuthApiClientImplTest {
         localEngine.updateSession(testServer, testUser)
         assertEquals(ActiveSession(testServer, testUser), localEngine.session.value)
 
+        // Observe the session flow for the whole attempt: the invariant is
+        // that no SignedOut intermediate is EVER published mid-round-trip
+        // (identity observers react destructively to it).
+        val sessionsSeen = mutableListOf<ActiveSession?>()
+        val sessionCollector = launch { localEngine.session.collect { sessionsSeen.add(it) } }
+
         val result = client.authenticateUser(testServer, username = "testuser", password = "wrong")
 
+        sessionCollector.cancel()
         assertTrue(result.isFailure)
         assertEquals(
-            "failed login must restore the previous session, not destroy it",
+            "failed login must leave the previous session intact",
             ActiveSession(testServer, testUser),
             localEngine.session.value,
         )
         assertEquals(testUser, localEngine.currentUser.value)
+        assertTrue(
+            "no SignedOut intermediate may be published mid-attempt: saw $sessionsSeen",
+            sessionsSeen.isNotEmpty() &&
+                sessionsSeen.all { it == ActiveSession(testServer, testUser) },
+        )
     }
+
 
     @Test
     fun `connectToServer while signed in adopts new server and drops user atomically`() = runTest {

@@ -90,7 +90,12 @@ class JellyfinApiEngine @Inject constructor(
         // URLs — REST, images via imageApi — follow the active address too.
         engineScope.launch {
             addressRouter.activeAddress.drop(1).collect { address ->
-                if (address != null) rebuildApiFor(address)
+                // Under authMutex: rebuildApiFor republishes the session via
+                // updateUser, and without the lock an address failover could
+                // interleave with an authMutex-guarded updateSession — publishing
+                // the mixed (currentServer, refreshedUser) pair the atomic
+                // session exists to prevent.
+                if (address != null) authMutex.withLock { rebuildApiFor(address) }
             }
         }
     }
@@ -141,7 +146,9 @@ class JellyfinApiEngine @Inject constructor(
      * stays valid) and mirroring the address into the published user so
      * URL-building consumers see the active endpoint. Only retargets an
      * existing client — creating one from here would race setUser's
-     * authoritative construction.
+     * authoritative construction. MUST be called while holding [authMutex]:
+     * it republishes the combined session, and an unguarded publish could
+     * interleave with an authMutex-guarded [updateSession].
      */
     private fun rebuildApiFor(address: String) {
         if (_api == null) return

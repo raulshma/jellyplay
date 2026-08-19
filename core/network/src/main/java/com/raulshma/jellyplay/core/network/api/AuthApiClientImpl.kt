@@ -123,23 +123,31 @@ class AuthApiClientImpl @Inject constructor(
         username: String,
         password: String,
     ): Result<UserInfo> = engine.apiResultWithRetry {
-        // Capture the working session before the pre-auth adopt: the adopt
-        // publishes SignedOut(previousIdentity), and identity observers react
-        // destructively to that (cache drop + previous identity's SWR
-        // snapshot clear). If the round-trip below then fails (wrong
-        // password, unreachable server), the catch puts the captured pair
-        // back atomically so a failed login doesn't sign the user out of
-        // the working session. RetryPolicy re-runs this block against the
-        // restored pair, so the capture is idempotent across attempts.
-        val previousSession = engine.session.value
-        val previousApi = engine.api
+        // Capture and pre-auth adopt in ONE critical section: the capture is
+        // atomic with everything restoreSession might undo, so a concurrent
+        // identity write between the two can't be silently clobbered by the
+        // restore. The adopt runs only when NO session is established —
+        // adopting over a working session would publish SignedOut(previous),
+        // and identity observers react destructively to that (cache drop +
+        // previous identity's SWR snapshot clear): a failed login attempt
+        // would wipe the signed-in user's cached home. With a session
+        // active, nothing publishes during the round-trip below; success
+        // replaces the pair atomically (publishAuthenticatedSession), and
+        // failure restores values the round-trip never touched (idempotent).
+        // RetryPolicy re-runs this block against the same captured state, so
+        // the capture is idempotent across attempts.
+        val (previousSession, previousApi) = engine.authMutex.withLock {
+            val session = engine.session.value
+            val api = engine.api
+            if (session == null) {
+                // Signed-out path: point currentServer at the target server.
+                // Identity stays null → no transition fires, nothing to wipe;
+                // the follow-up login republishes a real pair.
+                engine.updateSession(serverInfo, null)
+            }
+            session to api
+        }
         try {
-            // Atomically adopt the target server AND drop any previously
-            // signed-in user: two separate updateServer/updateUser calls
-            // would publish a synthetic (newServer, oldUser) identity to
-            // session observers while the network round-trip below is in
-            // flight.
-            engine.authMutex.withLock { engine.updateSession(serverInfo, null) }
             val client = engine.jellyfin.createApi(serverInfo.address)
             val authResult = client.userApi.authenticateUserByName(
                 AuthenticateUserByName(
@@ -232,14 +240,17 @@ class AuthApiClientImpl @Inject constructor(
         serverInfo: ServerInfo,
         secret: String,
     ): Result<UserInfo> = engine.apiResultWithRetry {
-        // Same capture/restore discipline as authenticateUserByName: a failed
-        // Quick Connect round-trip (expired/declined secret) must not leave
-        // the previous session destroyed by the pre-auth adopt below.
-        val previousSession = engine.session.value
-        val previousApi = engine.api
+        // Same capture/adopt/restore discipline as authenticateUserByName:
+        // one critical section, adopt only on the signed-out path, so a
+        // failed Quick Connect round-trip (expired/declined secret) neither
+        // signs the previous session out nor wipes its cached home.
+        val (previousSession, previousApi) = engine.authMutex.withLock {
+            val session = engine.session.value
+            val api = engine.api
+            if (session == null) engine.updateSession(serverInfo, null)
+            session to api
+        }
         try {
-            // Atomic adopt-server-and-drop-user — see authenticateUserByName above.
-            engine.authMutex.withLock { engine.updateSession(serverInfo, null) }
             val client = engine.jellyfin.createApi(serverInfo.address)
             val authResult = client.userApi.authenticateWithQuickConnect(
                 QuickConnectDto(secret = secret)

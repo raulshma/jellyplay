@@ -141,7 +141,8 @@ class HomeSession constructor(
                         previous == null && identity == null -> null
                         previous == null -> HomeSessionTransition.SignedIn
                         identity == null -> HomeSessionTransition.SignedOut(previous)
-                        previous == identity -> null
+                        // previous == identity is impossible here: distinctUntilChanged
+                        // drops re-emissions before they reach this collector.
                         previous.serverId == identity!!.serverId ->
                             HomeSessionTransition.UserSwitched(previous)
                         else -> HomeSessionTransition.ServerSwitched(previous)

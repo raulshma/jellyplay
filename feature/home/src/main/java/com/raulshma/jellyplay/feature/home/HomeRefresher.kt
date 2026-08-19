@@ -16,7 +16,6 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -400,20 +399,23 @@ internal class HomeRefresher(
 
     /**
      * onStart: network re-check, stale fetch, periodic-loop start, then the
-     * deferred user-data flush — in that ORDER. See the comment at the
-     * pending flush below: the forced job must replace the bare loop, not be
-     * cancelled by it.
+     * deferred user-data flush — in that ORDER. The stale-check and the loop
+     * share ONE [refreshJob] (a bare scope.launch here was invisible to
+     * [stop], so a fetch started at onStart kept running after an immediate
+     * onStop); the loop continues in the same job once the (possible) stale
+     * fetch lands. The deferred flush below REPLACES this job — its forced
+     * fetch supersedes the stale-check.
      */
     fun start() {
         isAppInForeground = true
-        scope.launch {
+        replaceRefreshJob {
             offlineModeManager.checkNetworkAndAutoDetect()
             val now = timeSource.nowEpochMillis()
             if (now - lastRefreshTime >= HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS) {
                 fetchOnce()
             }
+            periodicRefreshLoop()
         }
-        startPeriodicRefresh()
         // A user-data change that arrived while backgrounded refreshes now —
         // bypassing the 60s stale check above, but still subject to the
         // user-data throttle inside refreshAfterUserDataChange. Runs AFTER
@@ -676,35 +678,22 @@ internal data class HomeSectionPlan(
 )
 
 /**
- * One snapshot of the VM's section-preference mirrors: every preference that
- * (a) feeds the fetch [HomeSectionPlan] and (b) decides whether a preference
- * emission should trigger a refresh. Bundled so the prefs collector can diff
- * and adopt an emission with a single `!=` / assignment; adding a section
- * preference means adding it here and to [toPlan] — not to four scattered
+ * One snapshot of the VM's section-preference mirrors: the fetch query (all
+ * seven [HomeSectionQuery] inputs, NESTED so each is declared exactly once —
+ * not mirrored field-for-field here) plus the display-only ordering rules.
+ * Bundled so the prefs collector can diff and adopt an emission with a single
+ * `!=` / assignment; adding a section preference means adding it to
+ * [HomeSectionQuery] (fetch inputs) or here (display-only) — not to scattered
  * field listings on the VM.
  */
 internal data class HomeSectionPrefs(
-    val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
+    val query: HomeSectionQuery = HomeSectionQuery(),
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
-    val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
     val mergeContinueWatchingAndNextUp: Boolean = false,
-    val nextUpMaxDays: Int = 0,
-    val nextUpRewatching: Boolean = false,
-    val nextUpExcludedSeriesIds: Set<String> = emptySet(),
-    val hiddenCwItemIds: Set<String> = emptySet(),
-    val pinnedHomeSections: List<PinnedHomeSection> = emptyList(),
 ) {
     /** The [HomeSectionPlan] every fetch consumes — see [HomeRefresher]'s planProvider. */
     fun toPlan(): HomeSectionPlan = HomeSectionPlan(
-        query = HomeSectionQuery(
-            enabledSections = enabledHomeSectionTypes,
-            libraryHomeSectionOverrides = libraryHomeSectionOverrides,
-            nextUpRewatching = nextUpRewatching,
-            nextUpMaxDays = nextUpMaxDays,
-            nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
-            hiddenCwItemIds = hiddenCwItemIds,
-            pinnedSections = pinnedHomeSections,
-        ),
+        query = query,
         order = homeSectionOrder,
         mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
     )

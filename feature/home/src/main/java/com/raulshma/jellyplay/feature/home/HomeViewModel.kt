@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -337,15 +338,17 @@ class HomeViewModel @Inject constructor(
                 HomePrefs(home, appearance, experimental, playback)
             }.collect { prefs ->
                 val newSectionPrefs = HomeSectionPrefs(
-                    enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes,
+                    query = HomeSectionQuery(
+                        enabledSections = prefs.home.enabledHomeSectionTypes,
+                        libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides,
+                        nextUpRewatching = prefs.home.nextUpRewatching,
+                        nextUpMaxDays = prefs.home.nextUpMaxDays,
+                        nextUpExcludedSeriesIds = prefs.home.nextUpExcludedSeriesIds,
+                        hiddenCwItemIds = prefs.home.hiddenCwItemIds,
+                        pinnedSections = prefs.home.pinnedHomeSections,
+                    ),
                     homeSectionOrder = prefs.home.homeSectionOrder,
-                    libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides,
                     mergeContinueWatchingAndNextUp = prefs.home.mergeContinueWatchingAndNextUp,
-                    nextUpMaxDays = prefs.home.nextUpMaxDays,
-                    nextUpRewatching = prefs.home.nextUpRewatching,
-                    nextUpExcludedSeriesIds = prefs.home.nextUpExcludedSeriesIds,
-                    hiddenCwItemIds = prefs.home.hiddenCwItemIds,
-                    pinnedHomeSections = prefs.home.pinnedHomeSections,
                 )
                 val homeSectionPrefsChanged = hasSeenHomePreferences && newSectionPrefs != sectionPrefs
 
@@ -784,7 +787,7 @@ class HomeViewModel @Inject constructor(
      * row appears/disappears with no extra wiring.
      */
     fun setSectionVisible(type: HomeSectionType, visible: Boolean) {
-        val updated = sectionPrefs.enabledHomeSectionTypes.toMutableSet().apply {
+        val updated = sectionPrefs.query.enabledSections.toMutableSet().apply {
             if (visible) add(type) else remove(type)
         }
         preferencesEditor.setEnabledHomeSectionTypes(updated)
@@ -815,7 +818,7 @@ class HomeViewModel @Inject constructor(
      * set; an empty set removes the key (restoring default-enabled state).
      */
     fun setLibrarySectionVisible(libraryId: String, type: HomeSectionType, visible: Boolean) {
-        val current = sectionPrefs.libraryHomeSectionOverrides.toMutableMap()
+        val current = sectionPrefs.query.libraryHomeSectionOverrides.toMutableMap()
         val disabled = current[libraryId].orEmpty().toMutableSet()
         if (visible) disabled.remove(type) else disabled.add(type)
         if (disabled.isEmpty()) current.remove(libraryId) else current[libraryId] = disabled
