@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
+import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
@@ -20,6 +21,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
+import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolder
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
@@ -37,7 +39,6 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
@@ -48,26 +49,18 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
-import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.ui.components.UndoableAction
-import com.raulshma.jellyplay.core.ui.components.undoActionChannel
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import javax.inject.Inject
@@ -107,13 +100,6 @@ class HomeViewModel @Inject constructor(
 
     companion object {
         /**
-         * Cap on cached photo-folder child-URL entries. Photo folders are a
-         * fixed, small set per server, but the map is append-only (`+`) and a
-         * long-lived VM could accumulate stale entries across library changes.
-         * Evict oldest entries beyond this cap.
-         */
-        private const val PHOTO_FOLDER_CACHE_CAP = 50
-        /**
          * Hard deadline on the offline→online fetch. There is no withTimeout
          * anywhere down the getHomeSections / fetchDiscoverSections /
          * fetchRecentlyGrabbed chain — only OkHttp's per-call read timeout
@@ -123,93 +109,41 @@ class HomeViewModel @Inject constructor(
          * spinners spinning until the app is restarted.
          */
         private const val GOING_ONLINE_TIMEOUT_MS = 30_000L
-
-        /**
-         * How long the offline→online fetch will wait for the playback outbox
-         * to drain before fetching Continue Watching / Next Up. The drain
-         * (PlaybackSyncWorker) replays offline marks to the server; if we fetch
-         * before it completes, CW can still list items the user just marked
-         * unplayed. The drain is usually near-instant on reconnect, so this is a
-         * short cap — on timeout we fetch anyway (the next periodic refresh or
-         * pull-to-refresh re-syncs).
-         */
-        private const val OUTBOX_DRAIN_WAIT_MS = 8_000L
     }
 
     private val _uiState = stateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.flow
 
-    /**
-     * Applies [transform] to the nested [HomeSearchState] in one update, so the
-     * ~12 search-mutation sites don't each repeat
-     * `it.copy(searchState = it.searchState.copy(...))`.
-     */
-    private fun updateSearch(transform: (HomeSearchState) -> HomeSearchState) {
-        _uiState.update { it.copy(searchState = transform(it.searchState)) }
-    }
-
     val activeDownloadCount: StateFlow<Int> = downloadRepository.getActiveDownloadCount()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     /**
-     * Count of playback events queued in the offline outbox. Surfaced to the
-     * home header so the user can see that their offline watch progress is
-     * pending sync (and that it will flush automatically on reconnect).
+     * The home screen's pending-sync surface — outbox badge count, sync
+     * details sheet entries and per-id metadata, the manual drain trigger and
+     * the offline→online drain gate. Core/data holder (see
+     * [SyncStatusStateHolder]); re-exposed SearchViewModel-style so the
+     * header/sheet call sites observe the same flows as before.
      */
-    val pendingSyncCount: StateFlow<Int> = playbackOutboxRepository.countFlow()
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
+    private val syncStatus = SyncStatusStateHolder(
+        scope = scope,
+        playbackOutboxRepository = playbackOutboxRepository,
+        playbackSyncScheduler = playbackSyncScheduler,
+        offlineFirstItemResolver = offlineFirstItemResolver,
+        offlineModeManager = offlineModeManager,
+    )
 
-    /**
-     * Reactive snapshot of pending outbox entries (oldest-first), for the
-     * sync details sheet. Only collected while the sheet is open, so it does
-     * not add steady-state flow cost.
-     */
-    val pendingSyncEntries: StateFlow<List<PlaybackOutboxEntry>> =
-        playbackOutboxRepository.getAllFlow()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** Count of queued playback events — see [SyncStatusStateHolder.pendingSyncCount]. */
+    val pendingSyncCount: StateFlow<Int> get() = syncStatus.pendingSyncCount
 
-    /**
-     * Resolved media metadata (title + poster URL) keyed by outbox `itemId`,
-     * for rendering per-row context in the sync details sheet. Resolution is
-     * **offline-first** (owned by [OfflineFirstItemResolver] in the data layer)
-     * and falls back to a network `getMediaDetail` lookup only when the item
-     * was watched but never downloaded. Entries are populated on demand via
-     * [ensurePendingItemDetails] and pruned to the currently-queued ids so the
-     * map never grows unbounded. `item == null` (with a network-derived URL)
-     * marks a resolved-but-not-found id so we don't refetch it every
-     * recomposition.
-     */
-    private val _pendingItemDetails =
-        MutableStateFlow<Map<String, ResolvedMediaRef>>(emptyMap())
-    val pendingItemDetails: StateFlow<Map<String, ResolvedMediaRef>> = _pendingItemDetails
+    /** Pending outbox rows for the sync details sheet — see [SyncStatusStateHolder.pendingSyncEntries]. */
+    val pendingSyncEntries: StateFlow<List<PlaybackOutboxEntry>> get() = syncStatus.pendingSyncEntries
 
-    /** Item ids currently being resolved, to dedupe concurrent callers. */
-    private val pendingResolveInFlight = mutableSetOf<String>()
+    /** Per-row resolved metadata for the sheet — see [SyncStatusStateHolder.pendingItemDetails]. */
+    val pendingItemDetails: StateFlow<Map<String, ResolvedMediaRef>> get() = syncStatus.pendingItemDetails
 
-    /**
-     * Ensures the [pendingItemDetails] map holds a resolution for every id in
-     * [itemIds], pruning any stale entries that are no longer queued. Cheap to
-     * call on every recomposition — already-resolved and in-flight ids are
-     * skipped. Safe to call with an empty collection (clears the map). When to
-     * resolve is a UI-sheet policy that stays here; how to resolve is the
-     * resolver's (data-layer) policy.
-     */
-    fun ensurePendingItemDetails(itemIds: Collection<String>) {
-        val keep = itemIds.toSet()
-        // Drop resolutions for ids that are no longer queued.
-        if (_pendingItemDetails.value.keys.any { it !in keep }) {
-            _pendingItemDetails.value = _pendingItemDetails.value.filterKeys { it in keep }
-        }
-        for (id in keep) {
-            if (_pendingItemDetails.value.containsKey(id) || id in pendingResolveInFlight) continue
-            pendingResolveInFlight += id
-            launch {
-                val resolved = offlineFirstItemResolver.resolveMediaRef(id)
-                _pendingItemDetails.update { current -> current + (id to resolved) }
-                pendingResolveInFlight -= id
-            }
-        }
-    }
+    /** See [SyncStatusStateHolder.ensurePendingItemDetails]. */
+    fun ensurePendingItemDetails(itemIds: Collection<String>) =
+        syncStatus.ensurePendingItemDetails(itemIds)
 
     private var enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE.toSet()
     private var homeSectionOrder = HomeSectionType.CONFIGURABLE
@@ -223,7 +157,8 @@ class HomeViewModel @Inject constructor(
     private var androidTvWatchNextEnabled = true
     private var seerrPreferences = SeerrPreferences()
 
-    private var homeScrollPosition = HomeScrollPosition()
+    /** Saved home-list scroll anchor (see [ScrollPositionStore]); the VM's get/save/reset methods are delegates. */
+    private val scrollPositionStore = ScrollPositionStore()
 
     /**
      * The home screen's entire refresh policy — fetch cadence, throttles,
@@ -264,42 +199,61 @@ class HomeViewModel @Inject constructor(
         androidTvWatchNextEnabledProvider = { androidTvWatchNextEnabled },
     )
 
-    private val searchQueryFlow: MutableStateFlow<String> = MutableStateFlow("")
+    /**
+     * The home search bar's entire state surface — live query, results slice,
+     * active flag, recent history and the undo channel — behind one holder
+     * (see [HomeSearchStateHolder]). The query/history/undo flows are
+     * re-exposed directly (SearchViewModel style); [HomeSearchStateHolder.searchState]
+     * and [HomeSearchStateHolder.isSearchActive] are folded into
+     * [HomeUiState] by the two collectors in [init].
+     */
+    private val searchStateHolder = HomeSearchStateHolder(scope, mediaSearchEngine)
 
     /**
-     * Read-only view of the search query string. Kept in lockstep with
-     * [HomeUiState.searchState]'s `query` field (both are written by
-     * `updateSearchQuery`/`clearSearch`), but exposed separately so the home
-     * screen can read it in a leaf composable without recomposing the whole
-     * `MainHomeContent` body on every keystroke — mirrors the `scrollFraction`
-     * deferral pattern in `HomeScrollState`.
+     * Read-only view of the live search query — see
+     * [HomeSearchStateHolder.searchQuery] for why it is NOT part of uiState.
      */
-    val searchQuery: StateFlow<String> = searchQueryFlow
+    val searchQuery: StateFlow<String> get() = searchStateHolder.searchQuery
+
+    /** Recent searches for the active user — see [HomeSearchStateHolder.searchHistory]. */
+    val searchHistory: StateFlow<List<SearchHistoryItem>> get() = searchStateHolder.searchHistory
+
+    /** Recoverable-action snackbars — see [HomeSearchStateHolder.undoActions]. */
+    val undoActions get() = searchStateHolder.undoActions
 
     /**
-     * Recent searches for the active user — keyed on the active user and
-     * gated by the hide-history preference inside
-     * [MediaSearchEngine.recentHistory]. Exposed via stateIn (not an init
-     * collector) so the underlying Room flow is only collected while the
-     * search overlay is actually on screen.
+     * The photo-folder child-URL cache (see [PhotoFolderChildUrlsStore]).
+     * Re-exposed so the photo-row call sites observe the same flow as before.
      */
-    val searchHistory: StateFlow<List<SearchHistoryItem>> = mediaSearchEngine.recentHistory()
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    private val photoFolderChildUrlsStore = PhotoFolderChildUrlsStore(scope, photoFolderPrefetcher)
 
-    /** Recoverable-action snackbars for home (search-history delete/clear).
-     * Home previously had no SnackbarHost at all */
-    private val _undoActions = undoActionChannel()
-    val undoActions = _undoActions.receiveAsFlow()
+    /** Cached folder-id → child-image-URLs map for the photo rows. */
+    val photoFolderChildUrls: StateFlow<Map<String, List<String>>> get() = photoFolderChildUrlsStore.childUrls
+
+    fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) =
+        photoFolderChildUrlsStore.prefetch(items)
 
     /**
      * All users persisted for the current server. Backs the home app-bar quick
-     * user switcher. Mirrored into [HomeUiState.currentServerUsers] so the
-     * UI observes a single state object; the underlying flow is
-     * DB-backed ([AuthRepository.currentServerUsers]) so it's already populated
-     * after login — no extra fetch.
+     * user switcher, which collects this flow directly (leaf-collected, like
+     * `searchQuery`, rather than mirrored into [HomeUiState] — the mirror was
+     * never read by the orchestrator and only churned uiState equality). The
+     * underlying flow is DB-backed ([AuthRepository.currentServerUsers]) so
+     * it's already populated after login — no extra fetch.
      */
     val currentServerUsers: StateFlow<List<UserInfo>> = authRepository.currentServerUsers
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * The offline home's advanced "delete downloaded episodes" sheet for a
+     * series card — sheet state plus its four actions, behind one holder (see
+     * [SeriesDeleteStateHolder]; the snapshot-before-dismiss invariant is
+     * documented and pinned there). [state][SeriesDeleteStateHolder.state] is
+     * folded into [HomeUiState.seriesDelete] by the init collector; the four
+     * methods below are one-line delegates so the sheet's call sites are
+     * unchanged.
+     */
+    private val seriesDeleteStateHolder = SeriesDeleteStateHolder(scope, offlineRepository)
 
     /**
      * Encapsulates all Seerr request UI state (result, servers, loading, seasons).
@@ -323,27 +277,16 @@ class HomeViewModel @Inject constructor(
                 if (userId == null) {
                     if (previousUserId != null) {
                         resetHomeScrollPosition()
-                        _uiState.update { it.copy(favorites = emptyList()) }
                         refresher.onSignedOut()
                     }
                 } else if (previousUserId != userId) {
                     resetHomeScrollPosition()
-                    _uiState.update { it.copy(favorites = emptyList()) }
                     // SWR snapshot paint, sign-in fetch outside the refresh
                     // job, loop restart — all refresh policy lives in the
                     // refresher (see refreshForUserSwitch).
                     refresher.refreshForUserSwitch()
                 }
                 previousUserId = userId
-            }
-        }
-
-        // Mirror the server's persisted user list into UI state so the home
-        // app-bar user switcher can decide whether to render (≥2 users)
-        // without the UI subscribing to the repo flow directly.
-        launch {
-            currentServerUsers.collect { users ->
-                _uiState.update { it.copy(currentServerUsers = users) }
             }
         }
 
@@ -454,7 +397,7 @@ class HomeViewModel @Inject constructor(
                             // processed the mark yet. The drain is fast on
                             // reconnect; on timeout we fetch anyway and the next
                             // periodic refresh / pull-to-refresh re-syncs.
-                            awaitOutboxDrained()
+                            syncStatus.awaitOutboxDrained()
                             // Cap the post-toggle fetch so a hung network call
                             // cannot leave isGoingOnline (and isLoading) stuck
                             // on — the symptom was the Go Online button + app
@@ -497,21 +440,22 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // The inline-search kernel (debounce, cancel-and-replace, parallel
-        // Jellyfin + gated Seerr fetch, result-gated history save) lives in
-        // [MediaSearchEngine]; this collector only folds its emissions into the
-        // search slice of HomeUiState. The local settings-search collector that
-        // used to sit beside it moved to the UI layer (HomeTopDockScrim) so the
-        // VM no longer needs an Android Context.
+        // Fold the search holder's two UI-shaped slices into HomeUiState (same
+        // fold pattern as the Seerr/refresher collectors below) so the UI
+        // observes a single state object. The per-keystroke query stays on the
+        // holder's own flow (re-exposed as `searchQuery`), NOT in uiState —
+        // see HomeSearchStateHolder's KDoc for the recomposition contract.
+        // The search kernel itself (debounce, cancel-and-replace, parallel
+        // Jellyfin + gated Seerr fetch, history policy) lives in the holder /
+        // MediaSearchEngine; these collectors only fold emissions.
         launch {
-            mediaSearchEngine.preview(searchQueryFlow).collect { state ->
-                updateSearch {
-                    it.copy(
-                        jellyfinResults = state.jellyfin,
-                        seerrResults = state.seerr,
-                        isSearching = state.isSearching,
-                    )
-                }
+            searchStateHolder.searchState.collect { search ->
+                _uiState.update { it.copy(searchState = search) }
+            }
+        }
+        launch {
+            searchStateHolder.isSearchActive.collect { active ->
+                _uiState.update { it.copy(isSearchActive = active) }
             }
         }
 
@@ -521,7 +465,7 @@ class HomeViewModel @Inject constructor(
         // services + seasons firing together when the request dialog opens)
         // coalesce into a single _uiState update instead of five back-to-back
         // copies. `requestItem` is set separately (selectSeerrRequestItem) and
-        // is preserved by copying only the five merged fields here.
+        // is preserved by re-copying the existing value over the merged slice.
         launch {
             combine(
                 seerrRequestStateHolder.requestResult,
@@ -530,19 +474,25 @@ class HomeViewModel @Inject constructor(
                 seerrRequestStateHolder.isLoadingServices,
                 seerrRequestStateHolder.tvSeasons,
             ) { result, radarr, sonarr, loading, seasons ->
-                SeerrRequestSlice(result, radarr, sonarr, loading, seasons)
-            }.distinctUntilChanged().collect { slice ->
+                SeerrRequestState(
+                    result = result,
+                    radarrServers = radarr,
+                    sonarrServers = sonarr,
+                    isLoadingServices = loading,
+                    tvSeasons = seasons,
+                )
+            }.distinctUntilChanged().collect { merged ->
                 _uiState.update {
-                    it.copy(
-                        seerrRequestState = it.seerrRequestState.copy(
-                            result = slice.result,
-                            radarrServers = slice.radarrServers,
-                            sonarrServers = slice.sonarrServers,
-                            isLoadingServices = slice.isLoadingServices,
-                            tvSeasons = slice.tvSeasons,
-                        ),
-                    )
+                    it.copy(seerrRequestState = merged.copy(requestItem = it.seerrRequestState.requestItem))
                 }
+            }
+        }
+
+        // Fold the series-delete sheet holder into HomeUiState.seriesDelete
+        // (same fold pattern) so the sheet keeps observing one state object.
+        launch {
+            seriesDeleteStateHolder.state.collect { seriesDelete ->
+                _uiState.update { it.copy(seriesDelete = seriesDelete) }
             }
         }
 
@@ -589,15 +539,6 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /** Intermediate holder for the five combined Seerr flows. */
-    private data class SeerrRequestSlice(
-        val result: com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult?,
-        val radarrServers: List<com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail>,
-        val sonarrServers: List<com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail>,
-        val isLoadingServices: Boolean,
-        val tvSeasons: List<com.raulshma.jellyplay.core.model.seerr.SeerrSeason>,
-    )
-
     fun onEvent(event: HomeUiEvent) {
         when (event) {
             is HomeUiEvent.Refresh -> refresh()
@@ -621,32 +562,10 @@ class HomeViewModel @Inject constructor(
     fun getBackdropUrl(itemId: String): String =
         imageUrlProvider.getBackdropUrl(itemId)
 
-    private val _photoFolderChildUrls = MutableStateFlow<Map<String, List<String>>>(emptyMap())
-    val photoFolderChildUrls: StateFlow<Map<String, List<String>>> = _photoFolderChildUrls
+    fun getHomeScrollPosition(): HomeScrollPosition = scrollPositionStore.get()
 
-    fun prefetchPhotoFolderChildUrls(items: List<com.raulshma.jellyplay.core.model.MediaItem>) {
-        launch {
-            val current = _photoFolderChildUrls.value
-            val results = photoFolderPrefetcher.prefetch(items, alreadyFetched = current.keys)
-            if (results.isNotEmpty()) {
-                // Merge then evict the oldest entries beyond PHOTO_FOLDER_CACHE_CAP
-                // so the map stays bounded for the VM's lifetime.
-                val merged = _photoFolderChildUrls.value + results
-                _photoFolderChildUrls.value =
-                    if (merged.size <= PHOTO_FOLDER_CACHE_CAP) merged
-                    else merged.entries.drop(merged.size - PHOTO_FOLDER_CACHE_CAP).associate { it.key to it.value }
-            }
-        }
-    }
-
-    fun getHomeScrollPosition(): HomeScrollPosition = homeScrollPosition
-
-    fun saveHomeScrollPosition(firstVisibleItemIndex: Int, firstVisibleItemScrollOffset: Int) {
-        homeScrollPosition = HomeScrollPosition(
-            firstVisibleItemIndex = firstVisibleItemIndex.coerceAtLeast(0),
-            firstVisibleItemScrollOffset = firstVisibleItemScrollOffset.coerceAtLeast(0),
-        )
-    }
+    fun saveHomeScrollPosition(firstVisibleItemIndex: Int, firstVisibleItemScrollOffset: Int) =
+        scrollPositionStore.save(firstVisibleItemIndex, firstVisibleItemScrollOffset)
 
     /**
      * Marks a home-row item (quick actions) played/unplayed.
@@ -662,9 +581,9 @@ class HomeViewModel @Inject constructor(
      * algorithm the detail screen and downloads library use. Constructed with
      * no `onContentMutated` because Home's reactive `offlineLibrary` Room flow
      * (see the init collector) refreshes on its own once rows are deleted.
-     * Providers default to empty: Home's only provider-driven path is
-     * [deleteOfflineEpisodes], which captures the sheet snapshot per call (see
-     * its KDoc).
+     * Used only for the quick-action delete; the series delete-episodes sheet
+     * goes through [seriesDeleteStateHolder], which captures its snapshot
+     * providers per call.
      */
     private val offlineDeleteActions = OfflineDeleteActions(
         scope = scope,
@@ -682,79 +601,23 @@ class HomeViewModel @Inject constructor(
         offlineDeleteActions.deleteDownload(item)
     }
 
-    /**
-     * Opens the advanced "delete downloaded episodes" sheet for a series card
-     * on the offline home. Loads the series' seasons and downloaded episodes
-     * (the same [OfflineRepository] calls the detail provider uses) and exposes
-     * them via [HomeUiState.seriesDelete] for the sheet to render.
-     * `getEpisodesForSeries` reads the offline store, so the resulting episode
-     * map is already pre-filtered to downloaded episodes — exactly what the
-     * sheet expects.
-     */
-    fun requestSeriesDelete(series: MediaItem) {
-        _uiState.update {
-            it.copy(seriesDelete = HomeSeriesDeleteState(series.id, emptyList(), emptyMap(), 0L, isLoading = true))
-        }
-        launch {
-            val seasonsOff = offlineRepository.getSeasonsForSeries(series.id).first()
-            val episodesBySeasonOff = offlineRepository.getEpisodesForSeries(series.id).groupBy { it.seasonId }
-            val episodesOffBySeason = seasonsOff.associate { season ->
-                season.id to (episodesBySeasonOff[season.id] ?: emptyList())
-            }
-            val downloadedBySeason = episodesOffBySeason.filterValues { it.isNotEmpty() }
-            val seasons = seasonsOff.filter { it.id in downloadedBySeason }.map { it.toMediaItem() }
-            val episodesBySeason = downloadedBySeason.mapValues { (_, eps) -> eps.map { it.toMediaItem() } }
-            // Per-episode on-disk sizes from the offline store, so the delete
-            // sheet's freed-space figure is exact for partial selections too.
-            val episodeSizeBytes = downloadedBySeason.values
-                .flatten()
-                .associate { it.id to it.totalSizeBytes }
-            val totalSizeBytes = episodesOffBySeason.values.flatten().sumOf { it.totalSizeBytes }
-            _uiState.update {
-                it.copy(
-                    seriesDelete = HomeSeriesDeleteState(
-                        seriesId = series.id,
-                        seasons = seasons,
-                        episodesBySeason = episodesBySeason,
-                        totalSizeBytes = totalSizeBytes,
-                        episodeSizeBytes = episodeSizeBytes,
-                        isLoading = false,
-                    ),
-                )
-            }
-        }
-    }
+    /** Opens the delete-episodes sheet for [series] — see [SeriesDeleteStateHolder.requestSeriesDelete]. */
+    fun requestSeriesDelete(series: MediaItem) = seriesDeleteStateHolder.requestSeriesDelete(series)
 
-    fun dismissSeriesDelete() {
-        _uiState.update { it.copy(seriesDelete = null) }
-    }
+    /** Closes the sheet — see [SeriesDeleteStateHolder.dismiss]. */
+    fun dismissSeriesDelete() = seriesDeleteStateHolder.dismiss()
 
     /**
-     * Deletes the selected downloaded episodes for the open series sheet via
-     * the shared [OfflineDeleteActions] (whole-season collapse + per-episode
-     * fallback + unknown-id defense). The sheet snapshot is captured BEFORE
-     * dismissal because the shared module reads its content lazily off the
-     * providers — after `dismissSeriesDelete()` clears `uiState.seriesDelete`
-     * the live providers would return empty and the collapse would silently
-     * degrade to per-episode deletes. Clearing the sheet immediately lets it
-     * dismiss while the deletes run in the background.
+     * Deletes the selected episodes for the open sheet — see
+     * [SeriesDeleteStateHolder.deleteOfflineEpisodes]. The sheet snapshot is
+     * captured BEFORE dismissal there (the shared module reads its providers
+     * lazily), so the sheet can dismiss while the deletes run in background.
      */
-    fun deleteOfflineEpisodes(episodeIds: Set<String>) {
-        if (episodeIds.isEmpty()) return
-        val state = _uiState.value.seriesDelete ?: return
-        dismissSeriesDelete()
-        OfflineDeleteActions(
-            scope = scope,
-            offlineRepository = offlineRepository,
-            episodesProvider = { state.episodesBySeason },
-            seasonsProvider = { state.seasons },
-        ).deleteOfflineEpisodes(episodeIds)
-    }
+    fun deleteOfflineEpisodes(episodeIds: Set<String>) =
+        seriesDeleteStateHolder.deleteOfflineEpisodes(episodeIds)
 
-    fun deleteOfflineSeries(seriesId: String) {
-        dismissSeriesDelete()
-        offlineDeleteActions.deleteOfflineSeries(seriesId)
-    }
+    /** Deletes the entire series and closes the sheet — see [SeriesDeleteStateHolder.deleteOfflineSeries]. */
+    fun deleteOfflineSeries(seriesId: String) = seriesDeleteStateHolder.deleteOfflineSeries(seriesId)
 
 
     /**
@@ -787,19 +650,18 @@ class HomeViewModel @Inject constructor(
     }
 
     fun resetHomeScrollPosition() {
-        homeScrollPosition = HomeScrollPosition()
+        scrollPositionStore.reset()
     }
 
     /**
-     * Manual refresh. The scroll reset (and the favorites clear) are the only
-     * preamble pieces that live here — pure VM-owned state the refresher
-     * cannot see. Everything else (loader raise, content/error clear,
-     * discover-cache invalidation, forced fetch, loop restart) is
-     * [RefreshTrigger.Manual] policy inside the refresher; see its KDoc.
+     * Manual refresh. The scroll reset is the only preamble piece that lives
+     * here — pure VM-owned state the refresher cannot see. Everything else
+     * (loader raise, content/error clear, discover-cache invalidation, forced
+     * fetch, loop restart) is [RefreshTrigger.Manual] policy inside the
+     * refresher; see its KDoc.
      */
     private fun refresh() {
         resetHomeScrollPosition()
-        _uiState.update { it.copy(favorites = emptyList()) }
         refresher.request(RefreshTrigger.Manual)
     }
 
@@ -819,35 +681,12 @@ class HomeViewModel @Inject constructor(
         offlineModeManager.toggleManualOffline()
     }
 
-    /**
-     * Manually drain the playback outbox. The drain worker requires a network
-     * connection (NetworkType.CONNECTED constraint), so the button is a no-op
-     * while offline — the user is told this in the sheet rather than firing a
-     * work request that can't run. On reconnect the worker drains anyway.
-     */
-    private fun syncNow() {
-        if (offlineModeManager.offlineMode.value != OfflineMode.ONLINE) return
-        playbackSyncScheduler.enqueueNow()
-    }
+    /** Manually drain the playback outbox — see [SyncStatusStateHolder.syncNow]. */
+    private fun syncNow() = syncStatus.syncNow()
 
-    private fun updateSearchQuery(query: String) {
-        // Only the rarely-changing blank/nonblank signal touches _uiState.
-        // Writing the per-keystroke query string here would change HomeUiState
-        // equality on every keystroke and recompose the whole MainHomeContent
-        // body. The live query lives on searchQueryFlow, read in a leaf.
-        _uiState.update {
-            it.copy(
-                searchState = it.searchState.copy(isSearching = if (query.isBlank()) false else it.searchState.isSearching),
-                isSearchActive = query.isNotBlank(),
-            )
-        }
-        searchQueryFlow.value = query
-    }
+    private fun updateSearchQuery(query: String) = searchStateHolder.updateSearchQuery(query)
 
-    private fun clearSearch() {
-        _uiState.update { it.copy(searchState = HomeSearchState(), isSearchActive = false) }
-        searchQueryFlow.value = ""
-    }
+    private fun clearSearch() = searchStateHolder.clearSearch()
 
     private fun selectSeerrRequestItem(item: SeerrSearchItem?) {
         _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(requestItem = item)) }
@@ -880,49 +719,11 @@ class HomeViewModel @Inject constructor(
         seerrRequestStateHolder.prefetchDetails(tmdbId, mediaType, onDone)
     }
 
-    fun deleteSearchHistoryItem(id: Long) {
-        // Capture the query before deleting so Undo can re-save it (the DB row id
-        // changes on re-insert; the query text is what matters). Undo is
-        // presentation, so it stays here on top of the engine primitives.
-        val item = searchHistory.value.firstOrNull { it.id == id }
-        launch {
-            mediaSearchEngine.deleteHistoryItem(id)
-            if (item != null) {
-                _undoActions.trySend(
-                    UndoableAction(
-                        message = "Removed \"${item.query}\" from search history",
-                        onUndo = {
-                            launch {
-                                mediaSearchEngine.recordHistory(item.query, jellyfinHadResults = true)
-                            }
-                        },
-                    ),
-                )
-            }
-        }
-    }
+    /** Deletes one history row (undo re-records it) — see [HomeSearchStateHolder.deleteSearchHistoryItem]. */
+    fun deleteSearchHistoryItem(id: Long) = searchStateHolder.deleteSearchHistoryItem(id)
 
-    fun clearSearchHistory() {
-        launch {
-            // Snapshot before clearing so Undo can restore the full set.
-            val snapshot = searchHistory.value
-            mediaSearchEngine.clearHistory()
-            if (snapshot.isNotEmpty()) {
-                _undoActions.trySend(
-                    UndoableAction(
-                        message = "Cleared search history",
-                        onUndo = {
-                            launch {
-                                snapshot.forEach {
-                                    mediaSearchEngine.recordHistory(it.query, jellyfinHadResults = true)
-                                }
-                            }
-                        },
-                    ),
-                )
-            }
-        }
-    }
+    /** Clears the history (undo re-records the snapshot) — see [HomeSearchStateHolder.clearSearchHistory]. */
+    fun clearSearchHistory() = searchStateHolder.clearSearchHistory()
 
     /**
      * Called when a settings search result is tapped from the home search bar.
@@ -986,22 +787,6 @@ class HomeViewModel @Inject constructor(
         if (visible) disabled.remove(type) else disabled.add(type)
         if (disabled.isEmpty()) current.remove(libraryId) else current[libraryId] = disabled
         preferencesEditor.setLibraryHomeSectionOverrides(current)
-    }
-
-    /**
-     * Waits for the playback outbox to drain (count reaches 0) so the server
-     * has processed offline watched/unwatched marks before a home-section fetch
-     * reads Continue Watching / Next Up. Returns immediately when nothing is
-     * pending; on [OUTBOX_DRAIN_WAIT_MS] timeout it returns regardless so the
-     * fetch proceeds (a later periodic refresh re-syncs). Dead-lettered entries
-     * are excluded from the count, so a persistently-undeliverable mark won't
-     * stall the wait indefinitely.
-     */
-    private suspend fun awaitOutboxDrained() {
-        if (playbackOutboxRepository.count() == 0) return
-        withTimeoutOrNull(OUTBOX_DRAIN_WAIT_MS) {
-            playbackOutboxRepository.countFlow().first { it == 0 }
-        }
     }
 
     /**

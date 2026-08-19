@@ -19,7 +19,6 @@ import com.raulshma.jellyplay.core.model.UserInfo
 @Immutable
 data class HomeUiState(
     val sections: List<HomeSection> = emptyList(),
-    val favorites: List<MediaItem> = emptyList(),
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     /** True while a manual offline→online transition is in progress, so the
@@ -67,11 +66,6 @@ data class HomeUiState(
     /** Whether the DIRECT_ARR_INTEGRATION experimental flag is enabled. */
     val directArrEnabled: Boolean = false,
     val currentUser: UserInfo? = null,
-    /**
-     * All users persisted for the current server. Drives the home app-bar
-     * quick user switcher : the chip only renders when there are ≥2 users.
-     */
-    val currentServerUsers: List<UserInfo> = emptyList(),
     /**
      * Mirror of the user's enabled home section types (from prefs). Consumed
      * only by the inline section-config sheet so it can show the current

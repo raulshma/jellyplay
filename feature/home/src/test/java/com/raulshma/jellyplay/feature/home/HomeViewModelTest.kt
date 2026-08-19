@@ -8,10 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
-import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
-import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.AppliedMutation
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
@@ -46,7 +43,6 @@ import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.UserDataChange
@@ -63,7 +59,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -80,15 +75,18 @@ import java.time.ZoneId
 /**
  * Real HomeViewModel tests. Instantiates the VM with MockK deps + a fake
  * [TimeSource], then drives it through the branches the previous tautological
- * test suite skipped: section fetch + ordering, offline transitions, search,
- * and sign-in reset.
+ * test suite skipped: section fetch + ordering, offline transitions, and
+ * sign-in reset.
  *
  * Harness mirrors `DetailViewModelTest`: MockK + [MainDispatcherRule] + runTest.
  * Uses [runCurrent] (not `advanceUntilIdle`) so the refresher's periodic
  * `while(true)` loop's `delay` doesn't drive virtual time unbounded. The
- * refresh policy itself (cadence, throttles, user-data-push deferral, CW
- * side-effects) is tested directly in [HomeRefresherTest] — no VM, no
- * Robolectric; this suite keeps only VM-level UiState/collector policy.
+ * concern-owned extractions from this VM each have their own JVM suite —
+ * [HomeRefresherTest] (refresh policy), `ScrollPositionStoreTest`,
+ * `PhotoFolderChildUrlsStoreTest`, `HomeSearchStateHolderTest`,
+ * `SeriesDeleteStateHolderTest` (all in this package) and
+ * `SyncStatusStateHolderTest` in :core:data — so this suite keeps only
+ * VM-level UiState/collector policy and the pass-through seams.
  */
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -115,10 +113,18 @@ class HomeViewModelTest {
     private lateinit var preferencesEditor: PreferencesEditor
     private lateinit var widgetDataStore: WidgetDataStore
 
-    /** Inline-search kernel — targeted fake instead of five collaborators. */
+    /**
+     * Inline-search kernel — targeted fake instead of five collaborators.
+     * Passed through to the VM's HomeSearchStateHolder, whose init collects
+     * `preview` from construction, so the stub must stay.
+     */
     private val mediaSearchEngine: MediaSearchEngine = mockk(relaxed = true)
 
-    /** Offline-first title+poster resolution delegated to the data layer. */
+    /**
+     * Offline-first title+poster resolution — passed through to the VM's
+     * SyncStatusStateHolder; no remaining test here resolves ids (the
+     * resolution policy is pinned by SyncStatusStateHolderTest).
+     */
     private val offlineFirstItemResolver: OfflineFirstItemResolver = mockk(relaxed = true)
 
     private lateinit var seerrRepository: SeerrRepository
@@ -129,8 +135,16 @@ class HomeViewModelTest {
     private lateinit var tvWatchNextScheduler: TvWatchNextScheduler
     private lateinit var continueWatchingBroadcaster: ContinueWatchingBroadcaster
     private lateinit var librarySyncHook: LibrarySyncHook
-    private lateinit var playbackOutboxRepository: PlaybackOutboxRepository
-    private lateinit var playbackSyncScheduler: PlaybackSyncScheduler
+
+    /**
+     * Outbox/sync collaborators — passed through to the VM's
+     * SyncStatusStateHolder. Relaxed mocks are enough here: the remaining
+     * offline→online tests only hit `count()` (relaxed → 0, drain short-
+     * circuits); the sync surface itself is pinned by
+     * SyncStatusStateHolderTest.
+     */
+    private val playbackOutboxRepository: PlaybackOutboxRepository = mockk(relaxed = true)
+    private val playbackSyncScheduler: PlaybackSyncScheduler = mockk(relaxed = true)
     private lateinit var fakeTimeSource: FakeTimeSource
 
     private val userFlow = MutableStateFlow<UserInfo?>(null)
@@ -147,8 +161,6 @@ class HomeViewModelTest {
     private val seerrPrefsFlow = MutableStateFlow(SeerrPreferences())
     private val offlineModeFlow = MutableStateFlow(OfflineMode.ONLINE)
     private val networkStatusFlow = MutableStateFlow(NetworkStatus.Online)
-    private val outboxCountFlow = MutableStateFlow(0)
-    private val outboxEntriesFlow = MutableStateFlow<List<PlaybackOutboxEntry>>(emptyList())
 
     private lateinit var viewModel: HomeViewModel
 
@@ -176,16 +188,12 @@ class HomeViewModelTest {
         tvWatchNextScheduler = mockk(relaxed = true)
         continueWatchingBroadcaster = mockk(relaxed = true)
         librarySyncHook = mockk(relaxed = true)
-        playbackOutboxRepository = mockk(relaxed = true)
-        playbackSyncScheduler = mockk(relaxed = true)
         fakeTimeSource = FakeTimeSource()
 
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
         every { mediaSearchEngine.preview(any()) } returns flowOf(
             MediaSearchPreviewState(query = "", jellyfin = emptyList(), seerr = emptyList(), isSearching = false)
         )
-        coEvery { offlineFirstItemResolver.resolveMediaRef(any()) } returns
-            ResolvedMediaRef(item = null, posterUrl = "http://server/img")
 
         every { authRepository.currentUser } returns userFlow
         every { mediaRepository.userDataChanges } returns userDataEvents
@@ -198,8 +206,6 @@ class HomeViewModelTest {
         every { offlineModeManager.networkStatus } returns networkStatusFlow
         every { offlineModeManager.isOffline } returns false
         every { downloadRepository.getActiveDownloadCount() } returns flowOf(0)
-        every { playbackOutboxRepository.countFlow() } returns outboxCountFlow
-        every { playbackOutboxRepository.getAllFlow() } returns outboxEntriesFlow
         every { offlineRepository.getOfflineLibrary() } returns flowOf(emptyList())
         every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)
     }
@@ -358,53 +364,6 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun syncNow_whenOnline_enqueuesDrain() = runTest {
-        viewModel = buildViewModel()
-        viewModel.onEvent(HomeUiEvent.SyncNow)
-        // The drain worker must be enqueued exactly once; the worker itself
-        // carries the NetworkType.CONNECTED constraint, but the VM gate also
-        // short-circuits while offline.
-        verify(exactly = 1) { playbackSyncScheduler.enqueueNow() }
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun syncNow_whenOffline_skipsEnqueue() = runTest {
-        viewModel = buildViewModel()
-        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
-        runCurrent()
-        viewModel.onEvent(HomeUiEvent.SyncNow)
-        verify(exactly = 0) { playbackSyncScheduler.enqueueNow() }
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun pendingSyncEntries_emitsWhatRepositoryProduces() = runTest {
-        val entry = PlaybackOutboxEntry(
-            id = "e1",
-            itemId = "item-1",
-            eventType = PlaybackOutboxEventType.PROGRESS,
-            sessionId = "s1",
-            positionTicks = 10_000_000L,
-            isPaused = false,
-            playMethod = PlayMethod.DIRECT_PLAY,
-            mediaSourceId = null,
-            recordedAt = 1L,
-            createdAt = 1L,
-        )
-        outboxEntriesFlow.value = listOf(entry)
-        viewModel = buildViewModel()
-        // pendingSyncEntries is stateIn(WhileSubscribed) — needs a live
-        // subscriber to pull, then its .value reflects the upstream emission.
-        val job = launch { viewModel.pendingSyncEntries.collect { } }
-        runCurrent()
-
-        assertEquals(listOf(entry), viewModel.pendingSyncEntries.value)
-        job.cancel()
-        stopPeriodicRefresh()
-    }
-
-    @Test
     fun offlineToOnline_clearsIsGoingOnline_whenFetchTimesOut() = runTest {
         // Regression: a hung getHomeSections call (half-open socket, unvalidated
         // captive portal that still reports INTERNET, etc.) previously parked
@@ -439,38 +398,6 @@ class HomeViewModelTest {
             viewModel.uiState.value.isLoading,
         )
         stopPeriodicRefresh()
-    }
-
-    @Test
-    fun search_keepsLatestQuery_afterSupersededEntry() = runTest {
-        viewModel = buildViewModel()
-
-        viewModel.onEvent(HomeUiEvent.UpdateSearchQuery("bat"))
-        viewModel.onEvent(HomeUiEvent.UpdateSearchQuery("batman"))
-        runCurrent()
-
-        // Query is the latest value; the intermediate "bat" was superseded by
-        // the debounce + distinctUntilChanged chain. The live query now lives
-        // on the VM's searchQuery flow (read by the leaf), not searchState.
-        assertEquals("batman", viewModel.searchQuery.value)
-        assertTrue(viewModel.uiState.value.isSearchActive)
-    }
-
-    @Test
-    fun clearSearch_resetsSearchState() = runTest {
-        viewModel = buildViewModel()
-
-        viewModel.onEvent(HomeUiEvent.UpdateSearchQuery("hello"))
-        runCurrent()
-
-        viewModel.onEvent(HomeUiEvent.ClearSearch)
-        runCurrent()
-
-        val search = viewModel.uiState.value.searchState
-        assertEquals("", viewModel.searchQuery.value)
-        assertFalse(viewModel.uiState.value.isSearchActive)
-        assertTrue(search.jellyfinResults.isEmpty())
-        assertTrue(search.seerrResults.isEmpty())
     }
 
     @Test
@@ -632,45 +559,6 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun ensurePendingItemDetails_mapsResolverResultIntoState() = runTest {
-        // The offline-first fork itself is pinned by OfflineFirstItemResolverTest
-        // in :core:data; here we only pin that the VM caches the resolver's
-        // answer per outbox id.
-        coEvery { offlineFirstItemResolver.resolveMediaRef("item-1") } returns ResolvedMediaRef(
-            item = MediaItem(id = "item-1", name = "Offline Movie", mediaType = MediaType.MOVIE),
-            posterUrl = "file:///offline/poster.jpg",
-        )
-        viewModel = buildViewModel()
-
-        viewModel.ensurePendingItemDetails(listOf("item-1"))
-        runCurrent()
-
-        val resolved = viewModel.pendingItemDetails.value["item-1"]
-        assertEquals("Offline Movie", resolved?.item?.name)
-        assertEquals("file:///offline/poster.jpg", resolved?.posterUrl)
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun ensurePendingItemDetails_prunesStaleKeys_andDedupesInFlight() = runTest {
-        viewModel = buildViewModel()
-
-        viewModel.ensurePendingItemDetails(listOf("a", "b"))
-        runCurrent()
-        assertEquals(setOf("a", "b"), viewModel.pendingItemDetails.value.keys)
-
-        // Second call with overlapping ids must not re-launch resolves for
-        // already-resolved keys (dedup), and ids dropped from the input are
-        // pruned from the map.
-        viewModel.ensurePendingItemDetails(listOf("b", "c"))
-        runCurrent()
-
-        assertEquals(setOf("b", "c"), viewModel.pendingItemDetails.value.keys)
-        coVerify(exactly = 1) { offlineFirstItemResolver.resolveMediaRef("b") }
-        stopPeriodicRefresh()
-    }
-
-    @Test
     fun refresh_resetsScrollAndFetchesSections() = runTest {
         coEvery {
             mediaRepository.getHomeSections(any(), any())
@@ -713,35 +601,6 @@ class HomeViewModelTest {
         runCurrent()
 
         assertFalse(viewModel.uiState.value.newsletterBannerVisible)
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun saveHomeScrollPosition_storesPositiveValues_andClampsNegatives() = runTest {
-        viewModel = buildViewModel()
-
-        viewModel.saveHomeScrollPosition(3, 150)
-        var pos = viewModel.getHomeScrollPosition()
-        assertEquals(3, pos.firstVisibleItemIndex)
-        assertEquals(150, pos.firstVisibleItemScrollOffset)
-
-        viewModel.saveHomeScrollPosition(-10, -50)
-        pos = viewModel.getHomeScrollPosition()
-        assertEquals(0, pos.firstVisibleItemIndex)
-        assertEquals(0, pos.firstVisibleItemScrollOffset)
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun prefetchPhotoFolderChildUrls_callsPrefetcher_andUpdatesState() = runTest {
-        val items = listOf(item("p1"))
-        coEvery { photoFolderPrefetcher.prefetch(items, any()) } returns mapOf("p1" to listOf("url1", "url2"))
-        viewModel = buildViewModel()
-
-        viewModel.prefetchPhotoFolderChildUrls(items)
-        runCurrent()
-
-        assertEquals(mapOf("p1" to listOf("url1", "url2")), viewModel.photoFolderChildUrls.value)
         stopPeriodicRefresh()
     }
 

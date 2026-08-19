@@ -1,0 +1,123 @@
+package com.raulshma.jellyplay.feature.home
+
+import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.toMediaItem
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+
+/**
+ * Owns the offline home's advanced "delete downloaded episodes" sheet for a
+ * series card: the sheet's [HomeSeriesDeleteState] (seasons, downloaded
+ * episodes, sizes, loading flag) plus the four actions that drive it. The VM
+ * folds [state] into [HomeUiState.seriesDelete] with one collector (same fold
+ * pattern as the refresher/Seerr collectors) and forwards the action methods,
+ * so the sheet's UI call sites are unchanged.
+ *
+ * Why a holder: the sheet state and its actions are one concern with a
+ * non-obvious invariant (the snapshot-before-dismiss capture below) that had
+ * zero test coverage while living on the VM — constructing the VM in a test
+ * required Robolectric + the whole lifecycle stack. Here it is testable with
+ * a mocked [OfflineRepository] alone.
+ *
+ * Deletion itself is delegated to the shared core/data [OfflineDeleteActions]
+ * (whole-season collapse + per-episode fallback + unknown-id defense), the
+ * same module the detail screen and downloads library use. Home's reactive
+ * `offlineLibrary` Room flow refreshes on its own once rows are deleted, so
+ * no content-mutated callback is needed.
+ */
+internal class SeriesDeleteStateHolder(
+    /** The VM's scope: sheet loads and deletes must die with the VM. */
+    private val scope: CoroutineScope,
+    private val offlineRepository: OfflineRepository,
+) {
+
+    /**
+     * Shared delete module for the series-scoped paths (default providers:
+     * Home's only provider-driven path is [deleteOfflineEpisodes], which
+     * captures the sheet snapshot per call — see its KDoc).
+     */
+    private val deleteActions = OfflineDeleteActions(
+        scope = scope,
+        offlineRepository = offlineRepository,
+    )
+
+    private val _state = MutableStateFlow<HomeSeriesDeleteState?>(null)
+
+    /** Non-null while the delete-episodes sheet is open; null once dismissed. */
+    val state: StateFlow<HomeSeriesDeleteState?> = _state.asStateFlow()
+
+    /**
+     * Opens the sheet for [series]: raises the loading flag, loads the
+     * series' seasons and downloaded episodes (the same [OfflineRepository]
+     * calls the detail provider uses) and publishes the rendered state.
+     * `getEpisodesForSeries` reads the offline store, so the resulting episode
+     * map is already pre-filtered to downloaded episodes — exactly what the
+     * sheet expects.
+     */
+    fun requestSeriesDelete(series: MediaItem) {
+        _state.value = HomeSeriesDeleteState(series.id, emptyList(), emptyMap(), 0L, isLoading = true)
+        scope.launch {
+            val seasonsOff = offlineRepository.getSeasonsForSeries(series.id).first()
+            val episodesBySeasonOff = offlineRepository.getEpisodesForSeries(series.id).groupBy { it.seasonId }
+            val episodesOffBySeason = seasonsOff.associate { season ->
+                season.id to (episodesBySeasonOff[season.id] ?: emptyList())
+            }
+            val downloadedBySeason = episodesOffBySeason.filterValues { it.isNotEmpty() }
+            val seasons = seasonsOff.filter { it.id in downloadedBySeason }.map { it.toMediaItem() }
+            val episodesBySeason = downloadedBySeason.mapValues { (_, eps) -> eps.map { it.toMediaItem() } }
+            // Per-episode on-disk sizes from the offline store, so the delete
+            // sheet's freed-space figure is exact for partial selections too.
+            val episodeSizeBytes = downloadedBySeason.values
+                .flatten()
+                .associate { it.id to it.totalSizeBytes }
+            val totalSizeBytes = episodesOffBySeason.values.flatten().sumOf { it.totalSizeBytes }
+            _state.value = HomeSeriesDeleteState(
+                seriesId = series.id,
+                seasons = seasons,
+                episodesBySeason = episodesBySeason,
+                totalSizeBytes = totalSizeBytes,
+                episodeSizeBytes = episodeSizeBytes,
+                isLoading = false,
+            )
+        }
+    }
+
+    /** Closes the sheet. */
+    fun dismiss() {
+        _state.value = null
+    }
+
+    /**
+     * Deletes the selected downloaded episodes for the open sheet via the
+     * shared [OfflineDeleteActions] (whole-season collapse + per-episode
+     * fallback + unknown-id defense). The sheet snapshot is captured BEFORE
+     * dismissal because the shared module reads its content lazily off the
+     * providers — after [dismiss] clears the state the live providers would
+     * return empty and the collapse would silently degrade to per-episode
+     * deletes. Clearing the sheet immediately lets it dismiss while the
+     * deletes run in the background.
+     */
+    fun deleteOfflineEpisodes(episodeIds: Set<String>) {
+        if (episodeIds.isEmpty()) return
+        val state = _state.value ?: return
+        dismiss()
+        OfflineDeleteActions(
+            scope = scope,
+            offlineRepository = offlineRepository,
+            episodesProvider = { state.episodesBySeason },
+            seasonsProvider = { state.seasons },
+        ).deleteOfflineEpisodes(episodeIds)
+    }
+
+    /** Deletes the entire downloaded series and closes the sheet. */
+    fun deleteOfflineSeries(seriesId: String) {
+        dismiss()
+        deleteActions.deleteOfflineSeries(seriesId)
+    }
+}

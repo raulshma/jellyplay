@@ -64,7 +64,7 @@ import java.time.ZoneOffset
  *  * [HomeViewModel] keeps only UI-shaped orchestration: folding [state]
  *    into its single UiState object, the scroll reset on manual refresh, the
  *    offline→online timeout wrapper, and sign-in/out side effects it already
- *    owns (favorites clear, `isGoingOnline`).
+ *    owns (`isGoingOnline`).
  *  * Per-call inputs (the section plan, Seerr prefs, feature flags) stay
  *    mirrored in the VM and cross the seam as read-only providers, so a
  *    preference change can never half-apply mid-fetch.
@@ -384,7 +384,7 @@ internal class HomeRefresher(
     /**
      * Sign-out reset: cancels the pending refresh job and clears all
      * refresh-owned content + error, raising the loading flag. The VM
-     * clears its own mirrors (favorites, scroll position) around this call.
+     * clears its own mirror (scroll position) around this call.
      */
     fun onSignedOut() {
         refreshJob?.cancel()

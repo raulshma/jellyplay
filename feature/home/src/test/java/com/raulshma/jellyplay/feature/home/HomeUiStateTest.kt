@@ -15,7 +15,6 @@ class HomeUiStateTest {
     fun defaultState_hasCorrectDefaults() {
         val state = HomeUiState()
         assertTrue(state.sections.isEmpty())
-        assertTrue(state.favorites.isEmpty())
         assertTrue(state.isLoading)
         assertFalse(state.isRefreshing)
         assertNull(state.error)
