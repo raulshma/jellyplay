@@ -17,10 +17,10 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 
 /**
  * A stable [ImageVector] for each [HomeSectionType], used by the home section
- * rows and the inline section-config sheet. Centralised here so the home and
- * settings features share a single mapping rather than each spelling out a
- * `when` — currently duplicated in `AppearanceSettingsScreen` (which only
- * covers the four configurable types) and would otherwise drift.
+ * rows, the inline section-config sheet and the settings screens. Centralised
+ * here so every surface shares a single mapping — the settings reorder list
+ * previously spelled out its own partial `when` (with a `Folder` fallback)
+ * that had already drifted from this one.
  *
  * Returns a sensible icon for every section type, falling back to a folder.
  */

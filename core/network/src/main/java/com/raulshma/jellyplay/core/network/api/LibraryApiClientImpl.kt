@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.lruMapOf
 import com.raulshma.jellyplay.core.model.isAudioType
+import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.model.PersonInfo
@@ -161,7 +162,7 @@ class LibraryApiClientImpl @Inject constructor(
                         val filtered = list.filter { it.id !in hiddenCwItemIds }
                         if (filtered.isNotEmpty()) {
                             continueWatchingIds = filtered.map { it.id }.toSet()
-                            sections.add(HomeSection("continue_watching", "Continue Watching", HomeSectionType.CONTINUE_WATCHING, filtered))
+                            sections.add(HomeSectionType.CONTINUE_WATCHING.descriptor.section(filtered))
                         }
                     }
                     .onFailure {
@@ -177,7 +178,9 @@ class LibraryApiClientImpl @Inject constructor(
                         val filtered = list.filter { it.id !in continueWatchingIds }
                             .filter { it.seriesId == null || it.seriesId !in nextUpExcludedSeriesIds }
                         if (filtered.isNotEmpty()) {
-                            sections.add(HomeSection("next_up", "NextUp", HomeSectionType.NEXT_UP, filtered))
+                            // Title comes from the descriptor ("Next Up") — the
+                            // pre-descriptor literal here had drifted to "NextUp".
+                            sections.add(HomeSectionType.NEXT_UP.descriptor.section(filtered))
                         }
                     }
                     .onFailure {
@@ -214,8 +217,15 @@ class LibraryApiClientImpl @Inject constructor(
                                 val latestEnabledForFolder = HomeSectionType.LATEST_MEDIA in enabledSections &&
                                     HomeSectionType.LATEST_MEDIA !in disabledForFolder
                                 if (latest.isNotEmpty() && latestEnabledForFolder) {
-                                    val sectionId = "latest_${folder.id}"
-                                    sections.add(HomeSection(sectionId, "Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest, libraryId = folder.id, collectionType = folder.collectionType))
+                                    val descriptor = HomeSectionType.LATEST_MEDIA.descriptor
+                                    sections.add(HomeSection(
+                                        id = descriptor.idFor(folder.id),
+                                        title = descriptor.titleFor(folder.name),
+                                        type = HomeSectionType.LATEST_MEDIA,
+                                        items = latest,
+                                        libraryId = folder.id,
+                                        collectionType = folder.collectionType,
+                                    ))
                                 }
                             }.onFailure {
                                 // A per-folder Latest Media 403 (e.g. a stale
@@ -247,12 +257,7 @@ class LibraryApiClientImpl @Inject constructor(
                     .distinctBy { it.id }
                     .filter { it.id !in continueWatchingIds }
                 if (recentlyAddedItems.isNotEmpty()) {
-                    val recentlyAddedSection = HomeSection(
-                        "recently_added",
-                        "Recently Added",
-                        HomeSectionType.RECENTLY_ADDED,
-                        recentlyAddedItems,
-                    )
+                    val recentlyAddedSection = HomeSectionType.RECENTLY_ADDED.descriptor.section(recentlyAddedItems)
                     val latestMediaLastIndex = sections.indexOfLast { it.type == HomeSectionType.LATEST_MEDIA }
                     val insertIndex = if (latestMediaLastIndex >= 0) latestMediaLastIndex + 1 else sections.size
                     sections.add(insertIndex, recentlyAddedSection)
@@ -266,13 +271,7 @@ class LibraryApiClientImpl @Inject constructor(
             recommendationsDeferred?.await()
                 ?.onSuccess { result ->
                     if (result.items.isNotEmpty()) {
-                        sections.add(HomeSection(
-                            "recommendations",
-                            "Recommended For You",
-                            HomeSectionType.RECOMMENDATIONS,
-                            result.items,
-                            seedItem = result.seedItem,
-                        ))
+                        sections.add(HomeSectionType.RECOMMENDATIONS.descriptor.section(result.items, seedItem = result.seedItem))
                     } else {
                         // Fallback "For You" source when there are no similarity
                         // seeds yet (new user, no watch history): surface favorited
@@ -281,12 +280,7 @@ class LibraryApiClientImpl @Inject constructor(
                         getSearchSuggestions(limit = 20)
                             .onSuccess { search ->
                                 if (search.items.isNotEmpty()) {
-                                    sections.add(HomeSection(
-                                        "recommendations",
-                                        "Recommended For You",
-                                        HomeSectionType.RECOMMENDATIONS,
-                                        search.items,
-                                    ))
+                                    sections.add(HomeSectionType.RECOMMENDATIONS.descriptor.section(search.items))
                                 }
                             }
                     }
@@ -366,7 +360,7 @@ class LibraryApiClientImpl @Inject constructor(
                         val items = getPinnedSectionItems(pinned)
                         if (items.isNotEmpty()) {
                             HomeSection(
-                                id = "pinned_${pinned.id}",
+                                id = HomeSectionType.PINNED.descriptor.idFor(pinned.id),
                                 title = pinned.title,
                                 type = HomeSectionType.PINNED,
                                 items = items,

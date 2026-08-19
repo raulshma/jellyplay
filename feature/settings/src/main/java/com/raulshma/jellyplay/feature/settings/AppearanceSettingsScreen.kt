@@ -52,6 +52,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.shape.CircleShape
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.homeSectionIcon
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.ConsumeSettingsItemIndex
@@ -954,13 +955,7 @@ fun AppearanceSettingsScreen(
                     homeSectionOrder.forEachIndexed { index, sectionType ->
                         val enabled = sectionType in preferences.enabledHomeSectionTypes
                         SettingReorderableToggleItem(
-                            icon = when (sectionType) {
-                                HomeSectionType.CONTINUE_WATCHING -> Tabler.Outline.PlayerPlay
-                                HomeSectionType.NEXT_UP -> Tabler.Outline.PlayerSkipForward
-                                HomeSectionType.RECENTLY_ADDED -> Tabler.Outline.Clock
-                                HomeSectionType.LATEST_MEDIA -> Tabler.Outline.LayersLinked
-                                else -> Tabler.Outline.Folder
-                            },
+                            icon = homeSectionIcon(sectionType),
                             title = sectionType.displayName,
                             subtitle = sectionType.description,
                             checked = enabled,
