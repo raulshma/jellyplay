@@ -704,4 +704,39 @@
     <item quantity="one">%1$d Episode</item>
     <item quantity="other">%1$d Episoden</item>
     </plurals>
+
+    <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
+    <string name="transcode_reasons_title">Warum wird transcodiert?</string>
+    <string name="transcode_reason_unknown">Server meldete: %1$s</string>
+    <string name="transcode_reason_container_not_supported">Der Dateicontainer wird für Direct Play nicht unterstützt.</string>
+    <string name="transcode_reason_video_codec_not_supported">Der Videocodec wird von den Dekodern dieses Geräts nicht unterstützt.</string>
+    <string name="transcode_reason_audio_codec_not_supported">Der Audiocodec wird von den Dekodern dieses Geräts nicht unterstützt.</string>
+    <string name="transcode_reason_video_bitrate">Die Videobitrate überschreitet das Qualitätslimit für Streaming.</string>
+    <string name="transcode_reason_audio_bitrate">Die Audiobitrate überschreitet das Qualitätslimit für Streaming.</string>
+    <string name="transcode_reason_container_bitrate">Die Gesamtbitrate überschreitet das Qualitätslimit für Streaming.</string>
+    <string name="transcode_reason_video_bit_depth">Die Videobittiefe (z. B. 10-Bit) wird für Direct Play nicht unterstützt.</string>
+    <string name="transcode_reason_audio_bit_depth">Die Audiobittiefe wird für Direct Play nicht unterstützt.</string>
+    <string name="transcode_reason_audio_channels">Der Ton hat mehr Kanäle, als das Geräteprofil erlaubt.</string>
+    <string name="transcode_reason_audio_profile">Das Audioprofil (z. B. DTS-HD, Atmos) wird für Direct Play nicht unterstützt.</string>
+    <string name="transcode_reason_audio_sample_rate">Die Audio-Abtastrate wird für Direct Play nicht unterstützt.</string>
+    <string name="transcode_reason_audio_is_external">Die Tonspur liegt außerhalb des Containers und kann nicht direkt gestreamt werden.</string>
+    <string name="transcode_reason_secondary_audio">Eine sekundäre Tonspur (z. B. Kommentar) erzwingt Transcodierung.</string>
+    <string name="transcode_reason_interlaced">Interlaced-Video wird für Direct Play nicht unterstützt.</string>
+    <string name="transcode_reason_anamorphic">Anamorphe Videocodierung wird für Direct Play nicht unterstützt.</string>
+    <string name="transcode_reason_ref_frames">Das Video hat zu viele Referenzbilder für den Gerätedekoder.</string>
+    <string name="transcode_reason_video_codec_tag">Der Videocodec-Tag ist unüblich und wird für Direct Play nicht erkannt.</string>
+    <string name="transcode_reason_video_framerate">Die Bildwiederholrate des Videos wird für Direct Play nicht unterstützt.</string>
+    <string name="transcode_reason_video_level">Der Codec-Level des Videos ist zu hoch für den Gerätedekoder.</string>
+    <string name="transcode_reason_video_profile">Das Videocodec-Profil wird für Direct Play nicht unterstützt.</string>
+    <string name="transcode_reason_video_range">Der Videobereich (z. B. HDR, Dolby Vision) wird für Direct Play nicht unterstützt.</string>
+    <string name="transcode_reason_video_resolution">Die Videoauflösung überschreitet die Direct-Play-Grenze.</string>
+    <string name="transcode_reason_subtitle_codec">Das Untertitelformat muss vom Server eingebrannt werden.</string>
+    <string name="transcode_reason_stream_count">Die Datei hat mehr Streams, als das Geräteprofil erlaubt.</string>
+    <string name="transcode_reason_direct_play_error">Der Server konnte den Originalstream nicht für Direct Play prüfen.</string>
+    <string name="transcode_reason_unknown_video_info">Der Server konnte die Videostream-Details nicht ermitteln und hat zur Sicherheit transcodiert.</string>
+    <string name="transcode_reason_unknown_audio_info">Der Server konnte die Audiostream-Details nicht ermitteln und hat zur Sicherheit transcodiert.</string>
+    <string name="transcode_reason_hint_engine">Probiere eine andere Player-Engine (mpv oder VLC) — sie kann dies möglicherweise direkt abspielen.</string>
+    <string name="transcode_reason_hint_decoder">Den Dekoder auf Software/FFmpeg umzustellen könnte das beheben.</string>
+    <string name="transcode_reason_hint_quality">Erhöhe das Streaming-Qualitätslimit in der Qualitätsauswahl.</string>
+    <string name="transcode_reason_hint_subtitle">Wähle einen SRT-/externen Untertitel, um das Einbrennen zu vermeiden.</string>
 </resources>

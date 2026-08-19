@@ -309,6 +309,9 @@ class PlaybackRepositoryImpl @Inject constructor(
     override suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps> =
         apiClient.getCreditTimestamps(itemId)
 
+    override suspend fun fetchActiveTranscodeReasons(itemId: String): List<String> =
+        apiClient.fetchActiveTranscodeReasons(itemId).getOrDefault(emptyList())
+
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> {
         val cached = segmentsCache.get(itemId)
         if (cached != null) {

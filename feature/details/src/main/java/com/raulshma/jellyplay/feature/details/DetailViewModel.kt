@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
+import com.raulshma.jellyplay.core.data.repository.USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DetailCapabilities
@@ -36,6 +37,7 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,14 +48,16 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
 class DetailViewModel @Inject internal constructor(
     // Context only for the storage probe behind [getAvailableStorageBytes];
@@ -388,6 +392,32 @@ class DetailViewModel @Inject internal constructor(
         launch { stores.libraryStore.setCompactEpisodeList(enabled) }
     }
 
+    init {
+        // Live refresh on server `UserDataChanged` pushes (e.g. another
+        // client flipping played/favorite on the item on screen). The server
+        // emits one change per item, so ids are accumulated across the
+        // debounce window and membership is checked at the drain — plain
+        // debounce would keep only the last change of a burst and miss the
+        // earlier items. Refresh reuses the pull-to-refresh path, which owns
+        // the per-type cache invalidation and keeps the current content
+        // visible under the Refreshing state.
+        launch {
+            val burstIds = mutableSetOf<String>()
+            mediaRepository.userDataChanges
+                .onEach { change -> burstIds += change.itemIds }
+                .debounce(USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS)
+                .collect {
+                    val changedIds = burstIds.toList()
+                    burstIds.clear()
+                    val itemId = currentItemId ?: return@collect
+                    if (_uiState.value.detail?.item?.id != itemId) return@collect
+                    if (itemId in changedIds) {
+                        loadItemInternal(itemId, refresh = true)
+                    }
+                }
+        }
+    }
+
     fun loadItem(itemId: String) {
         loadItemInternal(itemId, refresh = false)
     }
@@ -453,6 +483,7 @@ class DetailViewModel @Inject internal constructor(
                     seerrRecommendations = emptyList(),
                     seerrSimilar = emptyList(),
                     relatedVideos = emptyList(),
+                    tmdbReviews = emptyList(),
                     sonarrServersResolved = false,
                 )
             }
@@ -1136,6 +1167,7 @@ class DetailViewModel @Inject internal constructor(
                     seerrRecommendations = emptyList(),
                     seerrSimilar = emptyList(),
                     relatedVideos = emptyList(),
+                    tmdbReviews = emptyList(),
                 )
             }
 
@@ -1146,6 +1178,17 @@ class DetailViewModel @Inject internal constructor(
 
             val tmdbId = resolveTmdbId(detail) // top-level fn in TmdbIdResolver.kt
             if (tmdbId == null) return@launch
+
+            // Reviews come straight from TMDB — neither the Seerr connection nor
+            // the recommendations preference gates them. Separate launch so the
+            // review section doesn't serialize behind the Seerr fetches below.
+            launch {
+                val reviews = remoteDiscovery.seerrRepository.getTmdbReviews(tmdbId, mediaType)
+                    .getOrElse { emptyList() }
+                if (generation == seerrDataGeneration) {
+                    _uiState.update { it.copy(tmdbReviews = reviews.take(5)) }
+                }
+            }
 
             // Read the already-resolved Seerr connection booleans from the
             // published [uiState] aggregator — NOT [_uiState]. The flags are

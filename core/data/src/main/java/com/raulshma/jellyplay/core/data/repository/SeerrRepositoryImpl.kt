@@ -216,6 +216,13 @@ class SeerrRepositoryImpl @Inject constructor(
     override suspend fun getTmdbVideos(tmdbId: Int, mediaType: MediaType): Result<List<SeerrRelatedVideo>> =
         tmdbApiClient.getVideos(tmdbId, mediaType)
 
+    override suspend fun getTmdbReviews(tmdbId: Int, mediaType: MediaType): Result<List<TmdbReview>> {
+        getCached<List<TmdbReview>>("tmdb_reviews_${tmdbId}_${mediaType.name}")?.let { return Result.success(it) }
+        return tmdbApiClient.getReviews(tmdbId, mediaType).also { result ->
+            result.getOrNull()?.let { putCached("tmdb_reviews_${tmdbId}_${mediaType.name}", it) }
+        }
+    }
+
     override suspend fun requestMedia(
         tmdbId: Int,
         mediaType: String,

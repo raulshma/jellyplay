@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.RemoteConnectivity
+import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -56,12 +57,14 @@ import io.mockk.Runs
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
@@ -104,6 +107,9 @@ class DetailViewModelTest {
     /** Per-item provider flow, so tests can emit Loaded/Error/attachment ticks. */
     private val providerFlows = mutableMapOf<String, MutableStateFlow<DetailLoadState>>()
 
+    /** Hot flow behind mediaRepository.userDataChanges; tests emit into it. */
+    private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 64)
+
     @Before
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
@@ -133,8 +139,14 @@ class DetailViewModelTest {
         // side-effect launch doesn't crash casting the relaxed-mock Result default.
         // Individual tests override this to drive the availability booleans.
         coEvery { playbackRepository.getMediaSegments(any()) } returns Result.success(emptyList())
+        // Default stubs for the TMDB straight-fetches (trailers/reviews; these run
+        // even with Seerr disconnected) so the discovery launch doesn't crash
+        // casting the relaxed-mock Result default. Individual tests override these.
+        coEvery { seerrRepository.getTmdbVideos(any(), any()) } returns Result.success(emptyList())
+        coEvery { seerrRepository.getTmdbReviews(any(), any()) } returns Result.success(emptyList())
         // Provider refresh is a no-op by default; tests that drive refresh override.
         coEvery { mediaDetailProvider.refresh(any()) } returns Unit
+        every { mediaRepository.userDataChanges } returns userDataEvents
         // Successful user-data mutations update the provider's active replay
         // snapshot in production; most tests only exercise the ViewModel state.
         coEvery { mediaDetailProvider.applyOptimisticItemState(any(), any(), any()) } returns Unit
@@ -1004,6 +1016,103 @@ class DetailViewModelTest {
 
             assertEquals(listOf(recItem), viewModel.uiState.value.seerrRecommendations)
             assertEquals(listOf(recItem), viewModel.uiState.value.seerrSimilar)
+        }
+
+    // Reviews come straight from TMDB, so the fetch must run even while Seerr
+    // is DISCONNECTED and recommendations are disabled — proving the reviews
+    // path is not gated on the Seerr connection or recommendations preference.
+    @Test
+    fun loadSeerrData_fetchesTmdbReviews() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            every { seerrRepository.isConnected() } returns MutableStateFlow(false)
+            every { seerrRepository.isRecommendationsEnabled() } returns MutableStateFlow(false)
+            every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
+            buildViewModel()
+
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+
+            stubProvider(
+                "m1",
+                remoteSnapshot(
+                    MediaDetail(
+                        item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
+                        providerIds = mapOf("tmdb" to "123"),
+                    ),
+                ),
+            )
+            val review = com.raulshma.jellyplay.core.model.seerr.TmdbReview(
+                id = "r1",
+                author = "Reviewer",
+                content = "Great movie.",
+            )
+            coEvery { seerrRepository.getTmdbReviews(123, MediaType.MOVIE) } returns Result.success(listOf(review))
+
+            viewModel.loadItem("m1")
+            advanceUntilIdle()
+
+            assertEquals(listOf(review), viewModel.uiState.value.tmdbReviews)
+        }
+
+    // ── Live refresh on server UserDataChanged pushes ─────────────────────
+    // The init-block collector debounces bursts but must accumulate item ids
+    // across the window — the server emits one change per item, so keeping
+    // only the last change of a burst would miss earlier items.
+
+    @Test
+    fun userDataChange_forCurrentItem_refreshesDetail() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            stubProvider(
+                "m1",
+                remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
+            )
+            viewModel.loadItem("m1")
+            advanceUntilIdle()
+
+            userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("m1")))
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { mediaDetailProvider.refresh("m1") }
+        }
+
+    @Test
+    fun userDataChange_forOtherItems_doesNotRefreshDetail() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            stubProvider(
+                "m1",
+                remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
+            )
+            viewModel.loadItem("m1")
+            advanceUntilIdle()
+
+            userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("other-1", "other-2")))
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { mediaDetailProvider.refresh(any()) }
+        }
+
+    // Regression for the drain-set fix: the current item arrives in the FIRST
+    // push of a burst; a later push for other items restarts the debounce
+    // window. Only the merged id set may be consulted at the drain, so the
+    // refresh must still fire.
+    @Test
+    fun userDataChange_burstKeepsEarlierItemIdAfterWindowRestart() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            stubProvider(
+                "m1",
+                remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
+            )
+            viewModel.loadItem("m1")
+            advanceUntilIdle()
+
+            userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("m1")))
+            advanceTimeBy(500)
+            userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("other")))
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { mediaDetailProvider.refresh("m1") }
         }
 
     // Regression: when the provider snapshot groups episodes under a key that

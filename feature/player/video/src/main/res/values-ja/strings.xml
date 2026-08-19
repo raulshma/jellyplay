@@ -328,4 +328,5 @@
     <string name="a11y_brightness_decrease">明るさを下げる</string>
     <string name="a11y_volume_increase">音量を上げる</string>
     <string name="a11y_volume_decrease">音量を下げる</string>
+    <string name="player_direct_play_fallback">ダイレクトプレイに失敗しました — トランスコードに切り替えます（%1$s）</string>
 </resources>

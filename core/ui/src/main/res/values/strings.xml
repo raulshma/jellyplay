@@ -723,4 +723,43 @@
     <item quantity="one">%1$d episode</item>
     <item quantity="other">%1$d episodes</item>
     </plurals>
+
+    <!-- Transcode-reason surfacing ("Why am I transcoding?"). Explanations
+         map 1:1 to server TranscodeReasons tokens; hints point at in-app
+         remedies (decoder picker, quality sheet, engine switch). Shared by
+         the video stats overlay, playback error dialog, and Live TV
+         fallback banner. -->
+    <string name="transcode_reasons_title">Why am I transcoding?</string>
+    <string name="transcode_reason_unknown">Server reported: %1$s</string>
+    <string name="transcode_reason_container_not_supported">The file container is not supported for direct play.</string>
+    <string name="transcode_reason_video_codec_not_supported">The video codec is not supported by this device\'s decoders.</string>
+    <string name="transcode_reason_audio_codec_not_supported">The audio codec is not supported by this device\'s decoders.</string>
+    <string name="transcode_reason_video_bitrate">The video bitrate exceeds the streaming quality limit.</string>
+    <string name="transcode_reason_audio_bitrate">The audio bitrate exceeds the streaming quality limit.</string>
+    <string name="transcode_reason_container_bitrate">The overall bitrate exceeds the streaming quality limit.</string>
+    <string name="transcode_reason_video_bit_depth">The video bit depth (e.g. 10-bit) is not supported for direct play.</string>
+    <string name="transcode_reason_audio_bit_depth">The audio bit depth is not supported for direct play.</string>
+    <string name="transcode_reason_audio_channels">The audio has more channels than the device profile allows.</string>
+    <string name="transcode_reason_audio_profile">The audio profile (e.g. DTS-HD, Atmos) is not supported for direct play.</string>
+    <string name="transcode_reason_audio_sample_rate">The audio sample rate is not supported for direct play.</string>
+    <string name="transcode_reason_audio_is_external">The audio track is external to the container and cannot be direct streamed.</string>
+    <string name="transcode_reason_secondary_audio">A secondary audio track (e.g. commentary) forced transcoding.</string>
+    <string name="transcode_reason_interlaced">Interlaced video is not supported for direct play.</string>
+    <string name="transcode_reason_anamorphic">Anamorphic video encoding is not supported for direct play.</string>
+    <string name="transcode_reason_ref_frames">The video has too many reference frames for the device decoder.</string>
+    <string name="transcode_reason_video_codec_tag">The video codec tag is uncommon and not recognized for direct play.</string>
+    <string name="transcode_reason_video_framerate">The video frame rate is not supported for direct play.</string>
+    <string name="transcode_reason_video_level">The codec level of the video is too high for the device decoder.</string>
+    <string name="transcode_reason_video_profile">The video codec profile is not supported for direct play.</string>
+    <string name="transcode_reason_video_range">The video range (e.g. HDR, Dolby Vision) is not supported for direct play.</string>
+    <string name="transcode_reason_video_resolution">The video resolution exceeds the direct play limit.</string>
+    <string name="transcode_reason_subtitle_codec">The subtitle format must be burned in by the server.</string>
+    <string name="transcode_reason_stream_count">The file has more streams than the device profile allows.</string>
+    <string name="transcode_reason_direct_play_error">The server failed to probe the original stream for direct play.</string>
+    <string name="transcode_reason_unknown_video_info">The server could not determine the video stream details, so it transcoded to be safe.</string>
+    <string name="transcode_reason_unknown_audio_info">The server could not determine the audio stream details, so it transcoded to be safe.</string>
+    <string name="transcode_reason_hint_engine">Try another player engine (mpv or VLC) — it may direct play this.</string>
+    <string name="transcode_reason_hint_decoder">Switching the decoder to Software/FFmpeg may fix this.</string>
+    <string name="transcode_reason_hint_quality">Raise the streaming quality limit in the quality picker.</string>
+    <string name="transcode_reason_hint_subtitle">Choose an SRT/external subtitle to avoid burn-in.</string>
 </resources>

@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.extendedColors
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.model.formatFixed
+import com.raulshma.jellyplay.core.ui.player.FormattedTranscodeReason
 import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import java.text.SimpleDateFormat
@@ -51,6 +52,9 @@ fun VideoStatsOverlay(
     playerType: String,
     decoderMode: String,
     audioSessionId: Int,
+    /** Server-reported transcode reasons, pre-formatted; empty when direct
+     *  playing so the "why transcoding" block is hidden entirely. */
+    transcodeReasons: List<FormattedTranscodeReason> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     val stats by statsFlow.collectAsStateWithLifecycle()
@@ -121,6 +125,24 @@ fun VideoStatsOverlay(
             StatsRow(stringResource(R.string.player_video_stats_stream_bitrate), formatBitrate(
                 stats.videoBitrate ?: (stats.audioBitrate ?: 0)
             ))
+            if (transcodeReasons.isNotEmpty()) {
+                transcodeReasons.forEach { reason ->
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(
+                            text = reason.explanation,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = playerOnScrim().copy(alpha = 0.9f),
+                        )
+                        reason.hint?.let { hint ->
+                            Text(
+                                text = hint,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = playerOnScrim().copy(alpha = 0.65f),
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         StatsSection(stringResource(R.string.player_video_stats_performance)) {

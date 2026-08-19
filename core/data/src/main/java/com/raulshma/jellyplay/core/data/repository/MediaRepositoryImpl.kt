@@ -41,6 +41,7 @@ import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
+import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
@@ -48,6 +49,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.LrcLibApi
+import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -83,6 +85,12 @@ class MediaRepositoryImpl @Inject constructor(
      * both live in `core:data` and Hilt resolves the direction.
      */
     private val episodeCatalogue: EpisodeCatalogue,
+    /**
+     * Server-push user-data changes over the shared WebSocket. Re-exported
+     * verbatim as [userDataChanges]; the channel's current-user filter means
+     * the identity-switch observer above needs no involvement of its own.
+     */
+    private val userDataRealtimeChannel: UserDataRealtimeChannel,
 ) : MediaRepository, MediaRepositoryCacheInvalidation {
 
     private val detailCache = TtlCache<MediaDetail>(
@@ -971,6 +979,9 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun syncPlayMovePlaylistItem(playlistItemId: String, newIndex: Int): Result<Unit> =
         apiClient.syncPlayMovePlaylistItem(playlistItemId, newIndex)
+
+    override val userDataChanges: Flow<UserDataChange>
+        get() = userDataRealtimeChannel.changes
 
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> {
         // Fan-out (online API + best-effort offline mirror, or local apply +

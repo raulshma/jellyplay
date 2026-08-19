@@ -328,4 +328,5 @@
     <string name="a11y_brightness_decrease">밝기 낮추기</string>
     <string name="a11y_volume_increase">볼륨 높이기</string>
     <string name="a11y_volume_decrease">볼륨 낮추기</string>
+    <string name="player_direct_play_fallback">다이렉트 재생 실패 — 트랜스코딩으로 전환합니다 (%1$s)</string>
 </resources>

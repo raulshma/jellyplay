@@ -49,6 +49,7 @@ import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
@@ -59,6 +60,7 @@ import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -129,6 +131,8 @@ class HomeViewModelTest {
     private lateinit var fakeTimeSource: FakeTimeSource
 
     private val userFlow = MutableStateFlow<UserInfo?>(null)
+    /** Hot flow behind mediaRepository.userDataChanges; tests emit into it. */
+    private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 64)
     private val homeDiscoveryFlow = MutableStateFlow(HomeDiscoverySlice())
     private val appearanceFlow = MutableStateFlow(AppearanceSlice())
     private val experimentalFlow = MutableStateFlow(ExperimentalSlice())
@@ -177,6 +181,7 @@ class HomeViewModelTest {
             ResolvedMediaRef(item = null, posterUrl = "http://server/img")
 
         every { authRepository.currentUser } returns userFlow
+        every { mediaRepository.userDataChanges } returns userDataEvents
         every { homeDiscoveryStore.homeDiscovery } returns homeDiscoveryFlow
         every { appearanceStore.appearance } returns appearanceFlow
         every { experimentalStore.experimental } returns experimentalFlow
@@ -738,6 +743,119 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun userDataChange_inForeground_triggersForcedRefresh() = runTest {
+        coEvery {
+            mediaRepository.getHomeSections(any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        viewModel = buildViewModel()
+        userFlow.value = userInfo("u1")
+        runCurrent()
+
+        // Past the 60s user-data throttle window since the sign-in fetch
+        // (lastRefreshTime = the fake's 1_000), so the change refresh may run.
+        fakeTimeSource.nowMs = 61_000L
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), force = true) }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun userDataChange_burstIsDebouncedIntoSingleForcedRefresh() = runTest {
+        coEvery {
+            mediaRepository.getHomeSections(any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        viewModel = buildViewModel()
+        userFlow.value = userInfo("u1")
+        runCurrent()
+
+        fakeTimeSource.nowMs = 61_000L
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
+        // A second change inside the debounce window restarts the timer; only
+        // the merged refresh may run.
+        advanceTimeBy(500)
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i2")))
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), force = true) }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun userDataChange_withinMinRefreshInterval_isThrottled() = runTest {
+        coEvery {
+            mediaRepository.getHomeSections(any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        viewModel = buildViewModel()
+        userFlow.value = userInfo("u1")
+        runCurrent()
+
+        // lastRefreshTime is the sign-in fetch's 1_000; a change 5s later sits
+        // inside the 60s user-data throttle window → no forced fetch.
+        fakeTimeSource.nowMs = 6_000L
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), force = true) }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun userDataChange_whileBackgrounded_defersRefreshUntilOnStart() = runTest {
+        coEvery {
+            mediaRepository.getHomeSections(any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        viewModel = buildViewModel()
+        userFlow.value = userInfo("u1")
+        runCurrent()
+
+        viewModel.onStop(mockk(relaxed = true))
+        runCurrent()
+        // Past the 60s user-data throttle window. onStart's stale check fires
+        // at this age too, but its fetch is non-forced — so any forced fetch
+        // below can only come from the deferred user-data refresh.
+        fakeTimeSource.nowMs = 61_000L
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
+        advanceTimeBy(1_000)
+        runCurrent()
+        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), force = true) }
+
+        viewModel.onStart(mockk(relaxed = true))
+        runCurrent()
+        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), force = true) }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun userDataChange_whileOffline_defersRefreshUntilOnStart() = runTest {
+        coEvery {
+            mediaRepository.getHomeSections(any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        viewModel = buildViewModel()
+        userFlow.value = userInfo("u1")
+        runCurrent()
+        every { offlineModeManager.isOffline } returns true
+
+        // Past the 60s user-data throttle window; the change lands during a
+        // disconnect, so it must arm the pending flag instead of vanishing.
+        fakeTimeSource.nowMs = 61_000L
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
+        advanceTimeBy(1_000)
+        runCurrent()
+        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), force = true) }
+
+        every { offlineModeManager.isOffline } returns false
+        viewModel.onStart(mockk(relaxed = true))
+        runCurrent()
+        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), force = true) }
+        stopPeriodicRefresh()
+    }
+
+    @Test
     fun dismissNewsletterBanner_updatesUiState() = runTest {
         viewModel = buildViewModel()
 
@@ -863,11 +981,12 @@ class HomeViewModelTest {
     private fun item(id: String) = MediaItem(id = id, name = id, mediaType = MediaType.MOVIE)
 
     /**
-     * Controllable [TimeSource] returning a fixed epoch so the periodic-refresh
-     * and TTL gates behave deterministically without crossing their thresholds.
+     * Controllable [TimeSource] whose clock defaults to a fixed epoch so the
+     * periodic-refresh and TTL gates stay on one side of their thresholds;
+     * tests move [nowMs] to deliberately cross one.
      */
-    private class FakeTimeSource : TimeSource {
-        override fun nowEpochMillis(): Long = 1_000L
+    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
+        override fun nowEpochMillis(): Long = nowMs
         override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 

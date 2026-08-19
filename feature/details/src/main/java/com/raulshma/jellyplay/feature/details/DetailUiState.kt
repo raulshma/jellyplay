@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
+import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 
 /**
  * Single-source-of-truth CONTENT state for the media-detail screen.
@@ -106,10 +107,11 @@ data class DetailUiState(
     // Stream selection (audio/subtitle indices persisted across sessions)
     val selectedSubtitleIndex: Int? = null,
     val selectedAudioIndex: Int? = null,
-    // Seerr discovery (recommendations / similar / videos)
+    // Seerr discovery (recommendations / similar / videos / TMDB reviews)
     val seerrRecommendations: List<SeerrSearchItem> = emptyList(),
     val seerrSimilar: List<SeerrSearchItem> = emptyList(),
     val relatedVideos: List<SeerrRelatedVideo> = emptyList(),
+    val tmdbReviews: List<TmdbReview> = emptyList(),
     val isSeerrConnected: Boolean = false,
     val isSeerrRecommendationsEnabled: Boolean = false,
     // Seerr request flow (radarr/sonarr picker + result banner)

@@ -121,6 +121,14 @@ interface PlaybackRepository {
 
     suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps>
 
+    /**
+     * Server-reported reasons the current session is transcoding [itemId]
+     * (live `TranscodingInfo.TranscodeReasons`, this device's session).
+     * Empty when not transcoding; failures collapse to empty — reasons are
+     * diagnostics and must never block playback.
+     */
+    suspend fun fetchActiveTranscodeReasons(itemId: String): List<String>
+
     suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>>
 
     /**

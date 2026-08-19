@@ -37,6 +37,7 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
@@ -59,6 +60,7 @@ import com.raulshma.jellyplay.core.ui.components.UndoableAction
 import com.raulshma.jellyplay.core.ui.components.undoActionChannel
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -70,6 +72,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -127,6 +130,15 @@ class HomeViewModel @Inject constructor(
         // interval costs nothing in freshness.
         private const val REFRESH_INTERVAL_BACKGROUND_MS = 15 * 60_000L
         private const val MIN_REFRESH_INTERVAL_MS = 30_000L
+        /**
+         * Minimum spacing for UserDataChanged-driven refreshes. The server
+         * echoes these to every session of the user — including this device's
+         * own ~10s playback-position saves — so the 30s [MIN_REFRESH_INTERVAL_MS]
+         * would force a cache-bypassing refetch (and a home-snapshot persist)
+         * behind the player for the whole playback session. Matching the
+         * foreground periodic cadence bounds that to one refresh per minute.
+         */
+        private const val USER_DATA_REFRESH_MIN_INTERVAL_MS = 60_000L
         /** TTL for Seerr discover sections (trending/popular change slowly). */
         private const val DISCOVER_TTL_MS = 10 * 60_000L
         /**
@@ -252,6 +264,8 @@ class HomeViewModel @Inject constructor(
     private var homeScrollPosition = HomeScrollPosition()
     private var lastRefreshTime = 0L
     private var isAppInForeground = true
+    // Set when a user-data change lands while backgrounded; consumed by onStart.
+    private var pendingUserDataRefresh = false
     // Discover-sections TTL gate (see DISCOVER_TTL_MS / fetchDiscoverSections).
     private val discoverCache = TtlCacheGate(DISCOVER_TTL_MS)
 
@@ -562,6 +576,8 @@ class HomeViewModel @Inject constructor(
                 }
             }
         }
+
+        observeUserDataChanges()
     }
 
     /** Intermediate holder for the four home-preference slices combined above. */
@@ -785,22 +801,18 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun refresh() {
-        launch {
+        startForcedRefresh {
             _uiState.update { it.copy(isLoading = true) }
             resetHomeScrollPosition()
             _uiState.update { it.copy(sections = emptyList(), favorites = emptyList(), discoverSections = emptyMap(), error = null) }
             invalidateDiscoverCache()
-            fetchAndUpdateSections(force = true)
-            startPeriodicRefresh()
         }
     }
 
     private fun pullToRefresh() {
-        launch {
+        startForcedRefresh {
             _uiState.update { it.copy(isRefreshing = true, error = null) }
             invalidateDiscoverCache()
-            fetchAndUpdateSections(force = true)
-            startPeriodicRefresh()
         }
     }
 
@@ -1240,27 +1252,104 @@ class HomeViewModel @Inject constructor(
         discoverCache.invalidate()
     }
 
-    private fun startPeriodicRefresh() {
+    /**
+     * Live home refresh on server `UserDataChanged` pushes (played / favorite
+     * flips from any client, including this one). Bursts are debounced into a
+     * single silent refresh; a change that lands while backgrounded is
+     * deferred to the next [onStart] instead of refreshing into the void.
+     */
+    @OptIn(FlowPreview::class)
+    private fun observeUserDataChanges() {
+        launch {
+            mediaRepository.userDataChanges
+                .debounce(USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS)
+                .collect {
+                    when {
+                        // Offline behaves like backgrounded: arm the pending
+                        // flag rather than swallowing the change — a push that
+                        // lands during a brief disconnect is then applied on
+                        // the next onStart instead of waiting for the periodic
+                        // loop to happen across it.
+                        isAppInForeground && !offlineModeManager.isOffline ->
+                            refreshAfterUserDataChange()
+                        else -> pendingUserDataRefresh = true
+                    }
+                }
+        }
+    }
+
+    /**
+     * Silent forced refresh after a user-data change. force = true because
+     * server-side changes must bypass the TtlCache'd home sections. Guarded by
+     * [USER_DATA_REFRESH_MIN_INTERVAL_MS] against [lastRefreshTime] (same clock
+     * the refresh path writes) so a push arriving right after a regular refresh
+     * doesn't re-fetch, and so the server's echo of this device's own playback
+     * saves cannot force-refresh more than once a minute. No spinner:
+     * isRefreshing/isLoading stay untouched.
+     */
+    private fun refreshAfterUserDataChange() {
+        if (timeSource.nowEpochMillis() - lastRefreshTime < USER_DATA_REFRESH_MIN_INTERVAL_MS) return
+        // Tracked in refreshJob so onStop cancels the forced fetch with it;
+        // the periodic loop continues in the same job once the fetch lands
+        // (a separate startPeriodicRefresh() call here would either be
+        // cancelled by its own refreshJob hand-off or restart the loop while
+        // backgrounded). The pending flag stays armed until the fetch lands:
+        // if onStop cancels mid-fetch the change isn't lost — the next
+        // onStart retries it (still subject to the throttle above).
+        pendingUserDataRefresh = true
         refreshJob?.cancel()
         refreshJob = launch {
-            while (true) {
-                val interval = if (isAppInForeground) REFRESH_INTERVAL_FOREGROUND_MS else REFRESH_INTERVAL_BACKGROUND_MS
-                // ±10% jitter avoids synchronized refresh storms when multiple
-                // devices hit the server on the same fixed mark.
-                val jitter = (interval * 0.1f * (kotlin.random.Random.nextFloat() * 2f - 1f)).toLong()
-                delay(interval + jitter)
+            fetchAndUpdateSections(force = true)
+            pendingUserDataRefresh = false
+            periodicRefreshLoop()
+        }
+    }
 
-                // Skip while device has no network: fetchAndUpdateSections
-                // would no-op after acquiring the refresh mutex anyway, so this
-                // avoids the mutex churn and the lastRefreshTime bookkeeping.
-                if (offlineModeManager.isOffline) continue
+    /**
+     * Replaces [refreshJob] with a forced fetch followed by the periodic
+     * loop — the shared shape of manual refresh, pull-to-refresh, and the
+     * user-data-change refresh. [preamble] runs first inside the new job
+     * (spinner/clear state, discover-cache invalidation); fetch and loop stay
+     * in ONE job so [onStop] cancels them together.
+     */
+    private fun startForcedRefresh(preamble: suspend () -> Unit = {}) {
+        refreshJob?.cancel()
+        refreshJob = launch {
+            preamble()
+            fetchAndUpdateSections(force = true)
+            periodicRefreshLoop()
+        }
+    }
 
-                val now = timeSource.nowEpochMillis()
-                if (now - lastRefreshTime < MIN_REFRESH_INTERVAL_MS) continue
+    private fun startPeriodicRefresh() {
+        refreshJob?.cancel()
+        refreshJob = launch { periodicRefreshLoop() }
+    }
 
-                fetchAndUpdateSections()
-                lastRefreshTime = timeSource.nowEpochMillis()
-            }
+    /**
+     * The periodic home-refresh loop: sleep one jittered interval, skip while
+     * offline or when a fetch landed recently, then fetch. Runs inside
+     * [refreshJob] so lifecycle ([onStop]) cancels it together with any
+     * forced fetch that preceded it in the same job.
+     */
+    private suspend fun periodicRefreshLoop() {
+        while (true) {
+            val interval = if (isAppInForeground) REFRESH_INTERVAL_FOREGROUND_MS else REFRESH_INTERVAL_BACKGROUND_MS
+            // ±10% jitter avoids synchronized refresh storms when multiple
+            // devices hit the server on the same fixed mark.
+            val jitter = (interval * 0.1f * (kotlin.random.Random.nextFloat() * 2f - 1f)).toLong()
+            delay(interval + jitter)
+
+            // Skip while device has no network: fetchAndUpdateSections
+            // would no-op after acquiring the refresh mutex anyway, so this
+            // avoids the mutex churn and the lastRefreshTime bookkeeping.
+            if (offlineModeManager.isOffline) continue
+
+            val now = timeSource.nowEpochMillis()
+            if (now - lastRefreshTime < MIN_REFRESH_INTERVAL_MS) continue
+
+            fetchAndUpdateSections()
+            lastRefreshTime = timeSource.nowEpochMillis()
         }
     }
 
@@ -1275,6 +1364,16 @@ class HomeViewModel @Inject constructor(
             }
         }
         startPeriodicRefresh()
+        // A user-data change that arrived while backgrounded refreshes now —
+        // bypassing the 60s stale check below, but still subject to the
+        // user-data throttle inside refreshAfterUserDataChange. Runs AFTER
+        // startPeriodicRefresh so the deferred refresh's job (forced fetch +
+        // loop) replaces the bare periodic loop instead of being cancelled
+        // by it.
+        if (pendingUserDataRefresh) {
+            pendingUserDataRefresh = false
+            refreshAfterUserDataChange()
+        }
     }
 
     override fun onStop(owner: LifecycleOwner) {

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import android.content.Context
 import android.net.Uri
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
+import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -34,6 +35,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/**
+ * Session state for the VOD player: resolved item metadata, stream info, and
+ * the play-method badge fields surfaced by the player chrome.
+ */
 data class PlayerSessionState(
     val currentItemId: String? = null,
     val mediaDetail: MediaDetail? = null,
@@ -43,6 +48,9 @@ data class PlayerSessionState(
     val subtitle: String = "",
     val playMethodString: String = "Direct Play",
     val playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
+    /** Server-reported transcode reasons for the current stream; empty when
+     *  direct playing (or when the client forced its own fallback URL). */
+    val transcodeReasons: List<String> = emptyList(),
     val isDirectPlayForced: Boolean = false,
     /**
      * The server-issued play session id returned by the `PlaybackInfo`
@@ -87,6 +95,29 @@ class PlayerSessionManager(
 
     private var lastPlaybackRequest: PlaybackRequest? = null
 
+    /** Owns the in-flight transcode-reason lookup; cancelled/replaced per resolution. */
+    private val transcodeReasonsRefresher =
+        TranscodeReasonsRefresher(scope, playbackRepository::fetchActiveTranscodeReasons)
+
+    /**
+     * Populates [PlayerSessionState.transcodeReasons] from the server's live
+     * session (`TranscodingInfo`) when the resolution chose [PlayMethod.TRANSCODE],
+     * and clears it otherwise. The server registers the transcoding session a
+     * beat after playback starts, so the fetch waits, then retries once —
+     * reasons are diagnostics and a miss simply leaves the list empty.
+     */
+    private fun scheduleTranscodeReasonsRefresh(itemId: String?, playMethod: PlayMethod) {
+        transcodeReasonsRefresher.refresh(
+            itemId,
+            isTranscode = playMethod == PlayMethod.TRANSCODE,
+            isCurrent = { _sessionState.value.currentItemId == itemId },
+            clear = { _sessionState.update { it.copy(transcodeReasons = emptyList()) } },
+            onReasons = { reasons ->
+                _sessionState.update { it.copy(transcodeReasons = reasons) }
+            },
+        )
+    }
+
     /**
      * The external (side-loaded) subtitle sources for the current session, or
      * null when no media is loaded. Exposed so features like the subtitle-sync
@@ -130,10 +161,13 @@ class PlayerSessionManager(
     }
 
     fun bindReclaimedEngine(engine: MediaEngine, itemId: String, detail: MediaDetail) {
+        // Same stale-fetch hazard as loadMedia: a reclaimed engine for the
+        // same item must not inherit the previous session's in-flight fetch.
+        transcodeReasonsRefresher.cancel()
         _engine.value = engine
         playerLifecycleManager.activeCallbacks = engine
         pipController.requestAutoEnterPip(engine.capabilities.supportsPip)
-        _sessionState.update { 
+        _sessionState.update {
             it.copy(
                 currentItemId = itemId,
                 mediaDetail = detail,
@@ -144,6 +178,7 @@ class PlayerSessionManager(
                     seasonNumber = detail.item.seasonNumber,
                     episodeNumber = detail.item.episodeNumber,
                 ),
+                transcodeReasons = emptyList(),
                 isReady = true
             )
         }
@@ -173,6 +208,11 @@ class PlayerSessionManager(
      */
     suspend fun loadMedia(source: PlaybackSource, startPositionTicks: Long) {
         val itemId = source.itemId
+        // Kill any in-flight reasons fetch up front: reloading the *same*
+        // item (watch-again, offline switch) would let the old fetch's
+        // isCurrent guard pass and land the previous session's reasons in
+        // the fresh session before the resolve path re-arms or clears them.
+        transcodeReasonsRefresher.cancel()
         _sessionState.update { it.copy(currentItemId = itemId, isReady = false) }
 
         // The download lookup is needed both for Auto resolution and for
@@ -267,6 +307,7 @@ class PlayerSessionManager(
                 subtitle = subtitle,
                 playMethodString = "Offline",
                 playMethod = PlayMethod.DIRECT_PLAY,
+                transcodeReasons = emptyList(),
                 streamUrl = url,
             )
         }
@@ -397,6 +438,7 @@ class PlayerSessionManager(
                 streamUrl = url,
             )
         }
+        scheduleTranscodeReasonsRefresh(itemId, playMethod)
 
         if (playerType == PlayerType.EXTERNAL) {
             _sessionState.update { it.copy(isReady = true) }
@@ -579,6 +621,7 @@ class PlayerSessionManager(
                 streamUrl = url,
             )
         }
+        scheduleTranscodeReasonsRefresh(itemId, playMethod)
 
         // Swap the engine onto the freshly resolved URL. The engine-level
         // bitrate cap is only meaningful for AUTO (server-side cap drives
@@ -650,6 +693,7 @@ class PlayerSessionManager(
                 streamUrl = url,
             )
         }
+        scheduleTranscodeReasonsRefresh(itemId, playMethod)
 
         val engineMaxBitrate = if (mode == PlaybackMode.AUTO) maxBitrate?.toInt() else null
         val state = _sessionState.value
@@ -813,6 +857,7 @@ class PlayerSessionManager(
     }
 
     fun release() {
+        transcodeReasonsRefresher.cancel()
         _engine.value?.release()
         _engine.value = null
         lastPlaybackRequest = null

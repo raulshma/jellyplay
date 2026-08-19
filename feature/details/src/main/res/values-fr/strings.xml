@@ -21,6 +21,7 @@
     <string name="detail_more_like_this_on_device">Sur l\'appareil</string>
     <string name="detail_section_videos">Vidéos</string>
     <string name="detail_section_seasons">Saisons</string>
+    <string name="detail_section_reviews">Critiques</string>
 
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">Lire</string>

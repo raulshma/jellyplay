@@ -704,4 +704,39 @@
     <item quantity="one">%1$d episodio</item>
     <item quantity="other">%1$d episodi</item>
     </plurals>
+
+    <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
+    <string name="transcode_reasons_title">Perché viene transcodificato?</string>
+    <string name="transcode_reason_unknown">Il server ha segnalato: %1$s</string>
+    <string name="transcode_reason_container_not_supported">Il contenitore del file non è supportato per la riproduzione diretta.</string>
+    <string name="transcode_reason_video_codec_not_supported">Il codec video non è supportato dai decoder di questo dispositivo.</string>
+    <string name="transcode_reason_audio_codec_not_supported">Il codec audio non è supportato dai decoder di questo dispositivo.</string>
+    <string name="transcode_reason_video_bitrate">Il bitrate video supera il limite di qualità dello streaming.</string>
+    <string name="transcode_reason_audio_bitrate">Il bitrate audio supera il limite di qualità dello streaming.</string>
+    <string name="transcode_reason_container_bitrate">Il bitrate complessivo supera il limite di qualità dello streaming.</string>
+    <string name="transcode_reason_video_bit_depth">La profondità bit del video (es. 10 bit) non è supportata per la riproduzione diretta.</string>
+    <string name="transcode_reason_audio_bit_depth">La profondità bit dell\'audio non è supportata per la riproduzione diretta.</string>
+    <string name="transcode_reason_audio_channels">L\'audio ha più canali di quanti ne consenta il profilo del dispositivo.</string>
+    <string name="transcode_reason_audio_profile">Il profilo audio (es. DTS-HD, Atmos) non è supportato per la riproduzione diretta.</string>
+    <string name="transcode_reason_audio_sample_rate">La frequenza di campionamento audio non è supportata per la riproduzione diretta.</string>
+    <string name="transcode_reason_audio_is_external">La traccia audio è esterna al contenitore e non può essere trasmessa direttamente.</string>
+    <string name="transcode_reason_secondary_audio">Una traccia audio secondaria (es. commenti) ha forzato la transcodifica.</string>
+    <string name="transcode_reason_interlaced">Il video interlacciato non è supportato per la riproduzione diretta.</string>
+    <string name="transcode_reason_anamorphic">La codifica video anamorfica non è supportata per la riproduzione diretta.</string>
+    <string name="transcode_reason_ref_frames">Il video ha troppi frame di riferimento per il decoder del dispositivo.</string>
+    <string name="transcode_reason_video_codec_tag">Il tag del codec video è insolito e non riconosciuto per la riproduzione diretta.</string>
+    <string name="transcode_reason_video_framerate">La frequenza fotogrammi del video non è supportata per la riproduzione diretta.</string>
+    <string name="transcode_reason_video_level">Il livello del codec video è troppo alto per il decoder del dispositivo.</string>
+    <string name="transcode_reason_video_profile">Il profilo del codec video non è supportato per la riproduzione diretta.</string>
+    <string name="transcode_reason_video_range">L\'intervallo video (es. HDR, Dolby Vision) non è supportato per la riproduzione diretta.</string>
+    <string name="transcode_reason_video_resolution">La risoluzione video supera il limite di riproduzione diretta.</string>
+    <string name="transcode_reason_subtitle_codec">Il formato dei sottotitoli deve essere incorporato dal server.</string>
+    <string name="transcode_reason_stream_count">Il file ha più flussi di quanti ne consenta il profilo del dispositivo.</string>
+    <string name="transcode_reason_direct_play_error">Il server non è riuscito a analizzare il flusso originale per la riproduzione diretta.</string>
+    <string name="transcode_reason_unknown_video_info">Il server non ha potuto determinare i dettagli del flusso video e ha transcodificato per sicurezza.</string>
+    <string name="transcode_reason_unknown_audio_info">Il server non ha potuto determinare i dettagli del flusso audio e ha transcodificato per sicurezza.</string>
+    <string name="transcode_reason_hint_engine">Prova un altro motore di riproduzione (mpv o VLC): potrebbe riprodurlo direttamente.</string>
+    <string name="transcode_reason_hint_decoder">Impostare il decoder su Software/FFmpeg potrebbe risolvere.</string>
+    <string name="transcode_reason_hint_quality">Aumenta il limite di qualità streaming nel selettore qualità.</string>
+    <string name="transcode_reason_hint_subtitle">Scegli un sottotitolo SRT/esterno per evitare l\'incorporamento.</string>
 </resources>

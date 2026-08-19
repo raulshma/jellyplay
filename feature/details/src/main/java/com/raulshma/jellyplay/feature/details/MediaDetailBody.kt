@@ -69,6 +69,8 @@ import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
+import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -1095,6 +1097,18 @@ internal fun DetailContentBody(
                 }
             }
         }
+
+        // ── TMDB Reviews ──
+        // Fetched straight from TMDB (see DetailViewModel.loadSeerrData), so the
+        // section renders regardless of Seerr connection state. Rendered as a
+        // vertical card list — review bodies are paragraphs, not glanceable tiles,
+        // so they join the screen scroll instead of a horizontal row.
+        StaggeredDetailSection(
+            visible = showContent && state.tmdbReviews.isNotEmpty(),
+            delayIndex = 14,
+        ) {
+            ReviewsSection(reviews = state.tmdbReviews)
+        }
     }
     }
     }
@@ -1338,6 +1352,108 @@ private fun VideosSection(
                             )
                         }
                     }
+        }
+    }
+}
+
+/** TMDB avatar URL for the 40dp review circle (w90 covers it at 2x density). */
+private fun tmdbAvatarUrl(avatarPath: String?): String? =
+    avatarPath?.takeIf { it.isNotBlank() }?.let { path ->
+        // Gravatar-linked accounts ship "/https://…" — the path is already an
+        // absolute URL, so it must not get the image.tmdb.org prefix.
+        if (path.startsWith("/http")) path.drop(1) else "${TmdbImageUrls.BASE}/w90$path"
+    }
+
+/**
+ * Vertical list of TMDB review cards. Part of the screen scroll (not a lazy
+ * row) — the VM caps the list at 5 entries, and review bodies are paragraphs
+ * that want the full content width. Cards are informational only: no click.
+ */
+@Composable
+private fun ReviewsSection(
+    reviews: List<TmdbReview>,
+) {
+    val bodyContentPad = LocalAdaptiveInfo.current.contentPadding(isTv = LocalTvMode.current)
+    Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
+        FadingItem {
+            Text(
+                text = stringResource(R.string.detail_section_reviews),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                modifier = Modifier.semantics { heading() },
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            reviews.forEach { review ->
+                FadingItem {
+                    // Display name falls back username-first: TMDB often ships an
+                    // empty author_details.name for casual reviewers.
+                    val authorName = review.authorDetails.name.takeIf { it.isNotBlank() }
+                        ?: review.authorDetails.username.takeIf { it.isNotBlank() }
+                        ?: review.author
+                    val avatarUrl = remember(review.id) { tmdbAvatarUrl(review.authorDetails.avatarPath) }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(ShapeCache.smooth16)
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (avatarUrl != null) {
+                                    MediaImage(
+                                        url = avatarUrl,
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop,
+                                    )
+                                } else {
+                                    Text(
+                                        text = authorName.take(1).uppercase().ifBlank { "?" },
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = authorName,
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                review.authorDetails.rating?.let { rating ->
+                                    Text(
+                                        text = stringResource(R.string.detail_review_rating, rating),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            text = review.content,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                            maxLines = 6,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
         }
     }
 }

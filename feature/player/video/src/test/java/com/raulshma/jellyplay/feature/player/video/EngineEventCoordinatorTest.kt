@@ -32,6 +32,10 @@ class EngineEventCoordinatorTest {
 
     private var playbackMode: PlaybackMode = PlaybackMode.AUTO
 
+    /** Mirrors the production wiring's shape; arbitrary localized stand-in. */
+    private val directPlayFallbackNotice: (String) -> String =
+        { errorText -> "Direct Play failed — switching to transcode ($errorText)" }
+
     private val decisions = mutableListOf<EngineDecision>()
 
     /**
@@ -46,6 +50,7 @@ class EngineEventCoordinatorTest {
             scope = backgroundScope,
             engineFlow = MutableStateFlow<com.raulshma.jellyplay.feature.player.video.engine.MediaEngine?>(fakeEngine),
             getPlaybackMode = { playbackMode },
+            directPlayFallbackNotice = directPlayFallbackNotice,
             passOutHours = passOutHours,
             clock = clock,
             config = config,
@@ -128,7 +133,10 @@ class EngineEventCoordinatorTest {
 
         assertEquals(
             listOf(
-                EngineDecision.InformUser("Direct Play failed — switching to transcode"),
+                EngineDecision.InformUser(
+                    "Direct Play failed — switching to transcode" +
+                        " (${EngineError.Decoder("h264", null).message})"
+                ),
                 EngineDecision.FallbackToTranscode(fromPositionMs = 12_345L),
             ),
             decisions,
@@ -260,6 +268,7 @@ class EngineEventCoordinatorTest {
             scope = backgroundScope,
             engineFlow = engineState,
             getPlaybackMode = { playbackMode },
+            directPlayFallbackNotice = directPlayFallbackNotice,
             passOutHours = passOutHours,
             clock = clock,
         )

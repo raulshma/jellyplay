@@ -327,6 +327,7 @@ fun MediaDetailScreen(
                     hasIntroSegment = uiState.hasIntroSegment,
                     hasCreditSegment = uiState.hasCreditSegment,
                     relatedVideos = uiState.relatedVideos,
+                    tmdbReviews = uiState.tmdbReviews,
                     seerrRecommendations = uiState.seerrRecommendations,
                     seerrSimilar = uiState.seerrSimilar,
                     isSeerrConnected = uiState.isSeerrConnected,

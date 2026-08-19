@@ -21,6 +21,7 @@
     <string name="detail_more_like_this_on_device">端末内</string>
     <string name="detail_section_videos">動画</string>
     <string name="detail_section_seasons">シーズン</string>
+    <string name="detail_section_reviews">レビュー</string>
 
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">再生</string>

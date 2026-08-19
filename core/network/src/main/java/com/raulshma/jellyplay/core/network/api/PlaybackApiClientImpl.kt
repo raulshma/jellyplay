@@ -215,6 +215,20 @@ class PlaybackApiClientImpl @Inject constructor(
         )
     }
 
+    override suspend fun fetchActiveTranscodeReasons(itemId: String): Result<List<String>> =
+        engine.apiResultWithRetry {
+            val api = engine.requireApi()
+            val uuid = itemId.toUUID()
+            val sessions = api.sessionApi.getSessions().content
+            // Match this device's session playing the item; the SDK client's
+            // deviceInfo.id is the DataStore UUID shared with the socket and
+            // the Play On device list (see NetworkModule.provideJellyfin).
+            sessions.firstOrNull { session ->
+                session.deviceId == api.deviceInfo.id &&
+                    session.nowPlayingItem?.id == uuid
+            }?.transcodingInfo?.transcodeReasons.orEmpty().map { it.name }
+        }
+
     override fun getSubtitleDeliveryUrl(deliveryUrl: String): String {
         val server = engine.currentServer.value ?: return ""
         val user = engine.currentUser.value ?: return ""

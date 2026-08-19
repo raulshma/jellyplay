@@ -703,4 +703,39 @@
 <plurals name="detail_episode_count">
     <item quantity="other">%1$d 件のエピソード</item>
     </plurals>
+
+    <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
+    <string name="transcode_reasons_title">なぜトランスコード中？</string>
+    <string name="transcode_reason_unknown">サーバー報告: %1$s</string>
+    <string name="transcode_reason_container_not_supported">ファイルのコンテナーはダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_video_codec_not_supported">このデバイスのデコーダーは映像コーデックに対応していません。</string>
+    <string name="transcode_reason_audio_codec_not_supported">このデバイスのデコーダーは音声コーデックに対応していません。</string>
+    <string name="transcode_reason_video_bitrate">映像ビットレートがストリーミング品質の上限を超えています。</string>
+    <string name="transcode_reason_audio_bitrate">音声ビットレートがストリーミング品質の上限を超えています。</string>
+    <string name="transcode_reason_container_bitrate">合計ビットレートがストリーミング品質の上限を超えています。</string>
+    <string name="transcode_reason_video_bit_depth">映像ビット深度（例: 10ビット）はダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_audio_bit_depth">音声ビット深度はダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_audio_channels">音声チャンネル数がデバイスプロファイルの許容を超えています。</string>
+    <string name="transcode_reason_audio_profile">音声プロファイル（例: DTS-HD、Atmos）はダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_audio_sample_rate">音声サンプリングレートはダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_audio_is_external">音声トラックがコンテナーの外にあり、直接ストリームできません。</string>
+    <string name="transcode_reason_secondary_audio">副音声トラック（例: コメンタリー）によりトランスコードされました。</string>
+    <string name="transcode_reason_interlaced">インターレース映像はダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_anamorphic">アナモルフィック映像はダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_ref_frames">リファレンスフレームが多すぎてデバイスのデコーダーで処理できません。</string>
+    <string name="transcode_reason_video_codec_tag">珍しい映像コーデックタグはダイレクト再生で認識されません。</string>
+    <string name="transcode_reason_video_framerate">映像フレームレートはダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_video_level">映像コーデックレベルがデバイスのデコーダーには高すぎます。</string>
+    <string name="transcode_reason_video_profile">映像コーデックプロファイルはダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_video_range">映像レンジ（例: HDR、Dolby Vision）はダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_video_resolution">映像解像度がダイレクト再生の上限を超えています。</string>
+    <string name="transcode_reason_subtitle_codec">字幕形式はサーバーによる焼き込みが必要です。</string>
+    <string name="transcode_reason_stream_count">ストリーム数がデバイスプロファイルの許容を超えています。</string>
+    <string name="transcode_reason_direct_play_error">サーバーが元ストリームのダイレクト再生判定に失敗しました。</string>
+    <string name="transcode_reason_unknown_video_info">サーバーが映像ストリーム詳細を判定できず、安全のためトランスコードしました。</string>
+    <string name="transcode_reason_unknown_audio_info">サーバーが音声ストリーム詳細を判定できず、安全のためトランスコードしました。</string>
+    <string name="transcode_reason_hint_engine">別の再生エンジン（mpv または VLC）を試すとダイレクト再生できる場合があります。</string>
+    <string name="transcode_reason_hint_decoder">デコーダーを Software/FFmpeg に切り替えると解決する場合があります。</string>
+    <string name="transcode_reason_hint_quality">品質選択でストリーミング品質の上限を上げてください。</string>
+    <string name="transcode_reason_hint_subtitle">焼き込みを避けるには SRT/外部字幕を選んでください。</string>
 </resources>

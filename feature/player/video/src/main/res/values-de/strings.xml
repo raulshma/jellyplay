@@ -329,4 +329,5 @@
     <string name="a11y_brightness_decrease">Helligkeit verringern</string>
     <string name="a11y_volume_increase">Lautstärke erhöhen</string>
     <string name="a11y_volume_decrease">Lautstärke verringern</string>
+    <string name="player_direct_play_fallback">Direkte Wiedergabe fehlgeschlagen – Wechsel zu Transcode (%1$s)</string>
 </resources>

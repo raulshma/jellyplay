@@ -35,6 +35,12 @@ interface SeerrRepository {
      */
     suspend fun getTmdbVideos(tmdbId: Int, mediaType: MediaType): Result<List<SeerrRelatedVideo>>
 
+    /**
+     * Reviews fetched straight from TMDB — shown on the details screen's
+     * reviews section independent of whether Seerr itself is connected.
+     */
+    suspend fun getTmdbReviews(tmdbId: Int, mediaType: MediaType): Result<List<TmdbReview>>
+
     suspend fun requestMedia(
         tmdbId: Int,
         mediaType: String,

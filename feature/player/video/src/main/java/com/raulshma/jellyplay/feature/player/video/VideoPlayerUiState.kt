@@ -98,6 +98,10 @@ data class VideoPlayerUiState(
     val aspectRatio: AspectRatio = AspectRatio.AUTO,
     val detectedAspectRatio: AspectRatio? = null,
     val playMethod: String = "",
+    /** Raw server transcode reasons for the current stream; empty when
+     *  direct playing. Formatted for display at the call site via
+     *  [com.raulshma.jellyplay.core.ui.player.TranscodeReasonsFormatter]. */
+    val transcodeReasons: List<String> = emptyList(),
     val isDirectPlayForced: Boolean = false,
     val subtitleStyle: SubtitleStyle = SubtitleStyle.DEFAULT,
     val dialogueBoostEnabled: Boolean = false,

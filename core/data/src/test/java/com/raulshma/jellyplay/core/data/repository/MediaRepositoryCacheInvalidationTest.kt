@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.LrcLibApi
+import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -56,6 +57,7 @@ class MediaRepositoryCacheInvalidationTest {
             networkMonitor,
             playedStateSync,
             episodeCatalogue,
+            mockk<UserDataRealtimeChannel>(relaxed = true),
         )
     }
 

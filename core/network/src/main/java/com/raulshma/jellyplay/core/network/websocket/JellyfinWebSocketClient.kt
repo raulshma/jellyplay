@@ -237,8 +237,8 @@ class JellyfinWebSocketClient @Inject constructor(
             }
 
             // Child `Data` construction only happens for emitted types — most
-            // inbound traffic (UserDataChanged, LibraryChanged, …) is dropped
-            // here and must not pay for object construction.
+            // inbound traffic (LibraryChanged, …) is dropped here and must not
+            // pay for object construction.
             when (messageType) {
                 "SyncPlayCommand",
                 "SyncPlayGroupUpdate",
@@ -247,7 +247,12 @@ class JellyfinWebSocketClient @Inject constructor(
                 "GeneralCommand",
                 "KeepAlive",
                 "GroupJoined",
-                "GroupLeft" -> {
+                "GroupLeft",
+                // User-data pushes (played / favorite flips, playback position —
+                // e.g. from another client) are object payloads too; the server
+                // sends them to the authenticated user's socket with no
+                // Start/Stop subscription.
+                "UserDataChanged" -> {
                     val data = json.optJSONObject("Data") ?: JSONObject()
                     _events.tryEmit(WebSocketEvent(type = messageType, data = data, rawText = text))
                 }

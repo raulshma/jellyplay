@@ -110,4 +110,16 @@ interface PlaybackApiClient {
      * item has no such image or the request fails.
      */
     suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray?
+
+    /**
+     * Reads the server's live-session `TranscodingInfo.TranscodeReasons` for
+     * [itemId] as played by THIS device. The SDK's `PlaybackInfo` response
+     * does not expose reason tokens (jellyfin-model 1.8.12 omits
+     * `MediaSourceInfo.TranscodeReasons`), so the running session is the
+     * authoritative source — call it a couple of seconds after a transcode
+     * resolution so the session has registered. Returns an empty list when
+     * the item is not being transcoded (or on any failure — reasons are
+     * diagnostics, never worth an error path).
+     */
+    suspend fun fetchActiveTranscodeReasons(itemId: String): Result<List<String>>
 }

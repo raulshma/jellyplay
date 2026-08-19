@@ -704,4 +704,39 @@
     <item quantity="one">%1$d épisode</item>
     <item quantity="other">%1$d épisodes</item>
     </plurals>
+
+    <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
+    <string name="transcode_reasons_title">Pourquoi une transcodification ?</string>
+    <string name="transcode_reason_unknown">Le serveur a signalé : %1$s</string>
+    <string name="transcode_reason_container_not_supported">Le conteneur du fichier n\'est pas pris en charge en lecture directe.</string>
+    <string name="transcode_reason_video_codec_not_supported">Le codec vidéo n\'est pas pris en charge par les décodeurs de cet appareil.</string>
+    <string name="transcode_reason_audio_codec_not_supported">Le codec audio n\'est pas pris en charge par les décodeurs de cet appareil.</string>
+    <string name="transcode_reason_video_bitrate">Le débit vidéo dépasse la limite de qualité de streaming.</string>
+    <string name="transcode_reason_audio_bitrate">Le débit audio dépasse la limite de qualité de streaming.</string>
+    <string name="transcode_reason_container_bitrate">Le débit global dépasse la limite de qualité de streaming.</string>
+    <string name="transcode_reason_video_bit_depth">La profondeur de bits vidéo (p. ex. 10 bits) n\'est pas prise en charge en lecture directe.</string>
+    <string name="transcode_reason_audio_bit_depth">La profondeur de bits audio n\'est pas prise en charge en lecture directe.</string>
+    <string name="transcode_reason_audio_channels">L\'audio a plus de canaux que le profil de l\'appareil n\'en autorise.</string>
+    <string name="transcode_reason_audio_profile">Le profil audio (p. ex. DTS-HD, Atmos) n\'est pas pris en charge en lecture directe.</string>
+    <string name="transcode_reason_audio_sample_rate">La fréquence d\'échantillonnage audio n\'est pas prise en charge en lecture directe.</string>
+    <string name="transcode_reason_audio_is_external">La piste audio est externe au conteneur et ne peut pas être diffusée directement.</string>
+    <string name="transcode_reason_secondary_audio">Une piste audio secondaire (p. ex. commentaires) a forcé la transcodification.</string>
+    <string name="transcode_reason_interlaced">La vidéo entrelacée n\'est pas prise en charge en lecture directe.</string>
+    <string name="transcode_reason_anamorphic">L\'encodage vidéo anamorphique n\'est pas pris en charge en lecture directe.</string>
+    <string name="transcode_reason_ref_frames">La vidéo contient trop d\'images de référence pour le décodeur de l\'appareil.</string>
+    <string name="transcode_reason_video_codec_tag">Le tag du codec vidéo est rare et non reconnu en lecture directe.</string>
+    <string name="transcode_reason_video_framerate">La fréquence d\'images de la vidéo n\'est pas prise en charge en lecture directe.</string>
+    <string name="transcode_reason_video_level">Le niveau du codec vidéo est trop élevé pour le décodeur de l\'appareil.</string>
+    <string name="transcode_reason_video_profile">Le profil du codec vidéo n\'est pas pris en charge en lecture directe.</string>
+    <string name="transcode_reason_video_range">La plage vidéo (p. ex. HDR, Dolby Vision) n\'est pas prise en charge en lecture directe.</string>
+    <string name="transcode_reason_video_resolution">La résolution vidéo dépasse la limite de lecture directe.</string>
+    <string name="transcode_reason_subtitle_codec">Le format des sous-titres doit être incrusté par le serveur.</string>
+    <string name="transcode_reason_stream_count">Le fichier contient plus de flux que le profil de l\'appareil n\'en autorise.</string>
+    <string name="transcode_reason_direct_play_error">Le serveur n\'a pas pu analyser le flux original en lecture directe.</string>
+    <string name="transcode_reason_unknown_video_info">Le serveur n\'a pas pu déterminer les détails du flux vidéo et a transcodifié par précaution.</string>
+    <string name="transcode_reason_unknown_audio_info">Le serveur n\'a pas pu déterminer les détails du flux audio et a transcodifié par précaution.</string>
+    <string name="transcode_reason_hint_engine">Essayez un autre moteur de lecture (mpv ou VLC) — il pourra peut-être le lire directement.</string>
+    <string name="transcode_reason_hint_decoder">Passer le décodeur en Software/FFmpeg peut résoudre le problème.</string>
+    <string name="transcode_reason_hint_quality">Augmentez la limite de qualité de streaming dans le sélecteur de qualité.</string>
+    <string name="transcode_reason_hint_subtitle">Choisissez un sous-titre SRT/externe pour éviter l\'incrustation.</string>
 </resources>

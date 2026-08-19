@@ -34,6 +34,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
+import com.raulshma.jellyplay.core.ui.player.FormattedTranscodeReason
+import com.raulshma.jellyplay.core.ui.player.TranscodeReasonsFormatter
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -1491,6 +1493,7 @@ fun VideoPlayerScreen(
                     streamingQuality = uiState.preferredPlayerType.name,
                     playerType = uiState.preferredPlayerType.name,
                     decoderMode = effectsState.decoderMode.displayName,
+                    transcodeReasons = rememberFormattedTranscodeReasons(uiState.transcodeReasons),
                     // Engines expose a real audio session id (ExoPlayer: live
                     // session; mpv: generated id; VLC: 0 — capabilities gate the
                     // row). Read the collected engine so a swap refreshes it.
@@ -1976,7 +1979,23 @@ fun VideoPlayerScreen(
             onRetry = { viewModel.retryPlayback() },
             onRetryWithEngine = { viewModel.retryWithEngine(it) },
             onDismiss = { viewModel.dismissPlaybackError() },
+            transcodeReasons = rememberFormattedTranscodeReasons(uiState.transcodeReasons),
         )
+    }
+}
+
+/**
+ * Localizes the session's raw transcode-reason tokens once per distinct list
+ * (and per context, so a locale change re-formats), shared by the stats
+ * overlay and the playback error dialog call sites.
+ */
+@Composable
+private fun rememberFormattedTranscodeReasons(
+    rawReasons: List<String>,
+): List<FormattedTranscodeReason> {
+    val context = LocalContext.current
+    return remember(context, rawReasons) {
+        TranscodeReasonsFormatter.format(context, rawReasons)
     }
 }
 

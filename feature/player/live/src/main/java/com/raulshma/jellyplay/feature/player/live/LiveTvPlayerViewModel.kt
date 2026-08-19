@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.playback.PlayerAudioLifecycle
+import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -21,6 +22,7 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.ui.feedback.UiText
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
+import com.raulshma.jellyplay.core.ui.player.TranscodeReasonsFormatter
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import com.raulshma.jellyplay.feature.player.live.R
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineConfig
@@ -411,6 +413,7 @@ class LiveTvPlayerViewModel @Inject constructor(
         // HTTP data-source factory), not per-request — see ensureEngine.
         val livePlayMethod = resolved.playMethod.toLivePlayMethod()
         _state.value = _state.value.copy(playMethod = livePlayMethod)
+        refreshTranscodeReasons(channel.id, livePlayMethod)
         ensureEngine()
             .load(
                 LivePlaybackRequest(
@@ -590,11 +593,28 @@ class LiveTvPlayerViewModel @Inject constructor(
 
     private fun observeEngine(eng: LivePlayerEngine) {
         eng.state.onEach { s ->
+            // On engine errors during a transcoded stream, append the
+            // plain-language transcode reasons to the expandable detail so
+            // the error overlay answers "why was this transcoding at all".
+            val engineDetail = if (s == LiveEngineState.ERROR) eng.errorDetail.value else null
+            val reasonsBlock = if (
+                s == LiveEngineState.ERROR &&
+                _state.value.playMethod == LivePlayMethod.TRANSCODE &&
+                _state.value.transcodeReasons.isNotEmpty()
+            ) {
+                TranscodeReasonsFormatter.format(context, _state.value.transcodeReasons)
+                    .joinToString("\n") { it.renderedText }
+            } else {
+                null
+            }
+            val combinedDetail = listOfNotNull(engineDetail, reasonsBlock)
+                .joinToString("\n\n")
+                .ifBlank { null }
             _state.value = _state.value.copy(
                 engineState = s,
                 isBuffering = s == LiveEngineState.BUFFERING || s == LiveEngineState.IDLE,
                 errorMessage = if (s == LiveEngineState.ERROR) eng.errorMessage.value else null,
-                errorDetail = if (s == LiveEngineState.ERROR) eng.errorDetail.value else null,
+                errorDetail = combinedDetail,
             )
             // Buffering watchdog: arm a timeout on entering BUFFERING, cancel it
             // on any other state. If the tuner stalls without a PlaybackException,
@@ -632,6 +652,29 @@ class LiveTvPlayerViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
+    /** Owns the in-flight transcode-reason lookup; cancelled/replaced per tune. */
+    private val transcodeReasonsRefresher =
+        TranscodeReasonsRefresher(viewModelScope, playbackRepository::fetchActiveTranscodeReasons)
+
+    /**
+     * Populates [LiveTvPlayerUiState.transcodeReasons] from the server's
+     * live session (`TranscodingInfo`) when tuning landed on a transcode,
+     * and clears it otherwise. Mirrors PlayerSessionManager's VOD refresh
+     * via the shared [TranscodeReasonsRefresher]: wait for the session
+     * to register, retry once, drop silently on a miss.
+     */
+    private fun refreshTranscodeReasons(channelId: String, method: LivePlayMethod) {
+        transcodeReasonsRefresher.refresh(
+            channelId,
+            isTranscode = method == LivePlayMethod.TRANSCODE,
+            isCurrent = { _state.value.currentChannel?.id == channelId },
+            clear = { _state.value = _state.value.copy(transcodeReasons = emptyList()) },
+            onReasons = { reasons ->
+                _state.value = _state.value.copy(transcodeReasons = reasons)
+            },
+        )
+    }
+
     /**
      * Invoked by the engine on a direct/direct stream failure. Re-resolves
      * via `resolveLiveStream` with [LiveStreamOption.TRANSCODE] so the server
@@ -648,16 +691,22 @@ class LiveTvPlayerViewModel @Inject constructor(
                 option = LiveStreamOption.TRANSCODE,
                 playerType = playback.preferredPlayer,
             ) ?: run {
+                // The failed tune was direct/direct-stream, so there are no
+                // server transcode reasons yet. The engine stayed in BUFFERING
+                // to avoid flashing the error overlay mid-fallback, which also
+                // kept observeEngine from mirroring its captured error —
+                // surface that originating error here so the banner answers
+                // "why did this tune fail" (the client forced the fallback).
                 _state.value = _state.value.copy(
                     isBuffering = false,
-                    errorMessage = context.getString(
-                        R.string.live_error_transcode_fallback, channel.name
-                    ),
+                    errorMessage = context.getString(R.string.live_error_transcode_fallback, channel.name),
+                    errorDetail = engine?.errorDetail?.value,
                 )
                 return@launch
             }
             // Reflect the method change in the chrome badge before reloading.
             _state.value = _state.value.copy(playMethod = LivePlayMethod.TRANSCODE)
+            refreshTranscodeReasons(channel.id, LivePlayMethod.TRANSCODE)
             engine?.load(
                 LivePlaybackRequest(
                     url = resolved.streamUrl,

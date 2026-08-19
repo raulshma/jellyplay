@@ -22,6 +22,10 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true
+            // Robolectric tests resolve the module's merged string resources
+            // (e.g. TranscodeReasonsTest); without this the lookups throw
+            // Resources$NotFoundException under the stripped android.jar.
+            isIncludeAndroidResources = true
         }
     }
 }

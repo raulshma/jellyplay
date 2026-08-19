@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
+import com.raulshma.jellyplay.core.model.UserDataChange
 import kotlinx.coroutines.flow.Flow
 
 interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepository, PlaylistRepository, LyricsRepository {
@@ -197,6 +198,14 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         mediaTypes: List<MediaType>? = null,
     ): Flow<PagingData<MediaItem>>
 
+    /**
+     * Hot stream of server-side user-data changes (played / favorite flips from
+     * any client, including this one). Collecting subscribes to the realtime
+     * channel; cancelling the collector unsubscribes after a grace window — the
+     * underlying socket survives (owned app-lifetime).
+     */
+    val userDataChanges: Flow<UserDataChange>
+
     suspend fun toggleFavorite(itemId: String): Result<Boolean>
 
     suspend fun markPlayed(itemId: String): Result<Unit>
@@ -219,3 +228,10 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
 
     suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int = 4): List<String>
 }
+
+/**
+ * Debounce screens apply when coalescing bursts of `UserDataChanged` pushes
+ * into one refresh (the server emits one change per item). Shared so every
+ * [MediaRepository.userDataChanges] collector settles on the same cadence.
+ */
+const val USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS: Long = 1_000L

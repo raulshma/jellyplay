@@ -703,4 +703,39 @@
 <plurals name="detail_episode_count">
     <item quantity="other">%1$d 集</item>
     </plurals>
+
+    <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
+    <string name="transcode_reasons_title">为什么正在转码？</string>
+    <string name="transcode_reason_unknown">服务器报告：%1$s</string>
+    <string name="transcode_reason_container_not_supported">文件容器不支持直接播放。</string>
+    <string name="transcode_reason_video_codec_not_supported">此设备的解码器不支持该视频编码。</string>
+    <string name="transcode_reason_audio_codec_not_supported">此设备的解码器不支持该音频编码。</string>
+    <string name="transcode_reason_video_bitrate">视频码率超出流媒体画质上限。</string>
+    <string name="transcode_reason_audio_bitrate">音频码率超出流媒体画质上限。</string>
+    <string name="transcode_reason_container_bitrate">整体码率超出流媒体画质上限。</string>
+    <string name="transcode_reason_video_bit_depth">视频位深（如 10 位）不支持直接播放。</string>
+    <string name="transcode_reason_audio_bit_depth">音频位深不支持直接播放。</string>
+    <string name="transcode_reason_audio_channels">音频声道数超出设备配置文件允许范围。</string>
+    <string name="transcode_reason_audio_profile">音频规格（如 DTS-HD、Atmos）不支持直接播放。</string>
+    <string name="transcode_reason_audio_sample_rate">音频采样率不支持直接播放。</string>
+    <string name="transcode_reason_audio_is_external">音轨位于容器外部，无法直接串流。</string>
+    <string name="transcode_reason_secondary_audio">次要音轨（如解说）导致转码。</string>
+    <string name="transcode_reason_interlaced">隔行扫描视频不支持直接播放。</string>
+    <string name="transcode_reason_anamorphic">变形宽银幕视频编码不支持直接播放。</string>
+    <string name="transcode_reason_ref_frames">视频参考帧过多，设备解码器无法处理。</string>
+    <string name="transcode_reason_video_codec_tag">视频编码标记罕见，无法识别为直接播放。</string>
+    <string name="transcode_reason_video_framerate">视频帧率不支持直接播放。</string>
+    <string name="transcode_reason_video_level">视频编码级别对设备解码器来说过高。</string>
+    <string name="transcode_reason_video_profile">视频编码配置文件不支持直接播放。</string>
+    <string name="transcode_reason_video_range">视频范围（如 HDR、Dolby Vision）不支持直接播放。</string>
+    <string name="transcode_reason_video_resolution">视频分辨率超出直接播放上限。</string>
+    <string name="transcode_reason_subtitle_codec">字幕格式需要服务器烧录。</string>
+    <string name="transcode_reason_stream_count">文件流数量超出设备配置文件允许范围。</string>
+    <string name="transcode_reason_direct_play_error">服务器检测原始流以直接播放时失败。</string>
+    <string name="transcode_reason_unknown_video_info">服务器无法确定视频流详情，为安全起见进行了转码。</string>
+    <string name="transcode_reason_unknown_audio_info">服务器无法确定音频流详情，为安全起见进行了转码。</string>
+    <string name="transcode_reason_hint_engine">尝试其他播放引擎（mpv 或 VLC）——或许可以直接播放。</string>
+    <string name="transcode_reason_hint_decoder">将解码器切换为 Software/FFmpeg 可能解决此问题。</string>
+    <string name="transcode_reason_hint_quality">在画质选择器中提高流媒体画质上限。</string>
+    <string name="transcode_reason_hint_subtitle">选择 SRT/外部字幕以避免烧录。</string>
 </resources>

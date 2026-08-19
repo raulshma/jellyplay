@@ -21,6 +21,7 @@
     <string name="detail_more_like_this_on_device">本机</string>
     <string name="detail_section_videos">视频</string>
     <string name="detail_section_seasons">季</string>
+    <string name="detail_section_reviews">评论</string>
 
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">播放</string>

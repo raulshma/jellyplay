@@ -388,12 +388,17 @@ class VideoPlayerViewModel @Inject constructor(
     // and this Activity-scoped VM is reused across media: the next
     // initializeInternal re-arms it via ensureEngineEventCoordinatorActive().
     private var engineEventCoordinator: EngineEventCoordinator =
-        EngineEventCoordinator(
-            scope = scope,
-            engineFlow = playerSessionManager.engineFlow,
-            getPlaybackMode = { _uiState.value.playbackMode },
-            passOutHours = _uiState.flow.map { it.passOutProtectionHours }.distinctUntilChanged(),
-        )
+        createEngineEventCoordinator()
+
+    private fun createEngineEventCoordinator() = EngineEventCoordinator(
+        scope = scope,
+        engineFlow = playerSessionManager.engineFlow,
+        getPlaybackMode = { _uiState.value.playbackMode },
+        directPlayFallbackNotice = { errorText ->
+            context.getString(R.string.player_direct_play_fallback, errorText)
+        },
+        passOutHours = _uiState.flow.map { it.passOutProtectionHours }.distinctUntilChanged(),
+    )
 
     /** Fan-out collectors for the coordinator's mirrors + decisions. */
     private var engineEventOutputsJob: Job? = null
@@ -1112,6 +1117,7 @@ class VideoPlayerViewModel @Inject constructor(
                             currentMediaSource = session.currentMediaSource,
                             mediaStreams = session.mediaStreams,
                             playMethod = session.playMethodString,
+                            transcodeReasons = session.transcodeReasons,
                             isDirectPlayForced = session.isDirectPlayForced,
                             // Mirror the session's series id so the per-series
                             // "remember subtitle/audio" toggle row renders for
@@ -1335,12 +1341,7 @@ class VideoPlayerViewModel @Inject constructor(
      */
     private fun ensureEngineEventCoordinatorActive() {
         if (!engineEventCoordinator.disposed) return
-        engineEventCoordinator = EngineEventCoordinator(
-            scope = scope,
-            engineFlow = playerSessionManager.engineFlow,
-            getPlaybackMode = { _uiState.value.playbackMode },
-            passOutHours = _uiState.flow.map { it.passOutProtectionHours }.distinctUntilChanged(),
-        )
+        engineEventCoordinator = createEngineEventCoordinator()
         startEngineEventCoordinatorOutputs()
     }
 

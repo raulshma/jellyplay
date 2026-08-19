@@ -2,12 +2,14 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrStatusResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestCount
 import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
+import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import io.mockk.coEvery
@@ -128,5 +130,18 @@ class SeerrRepositoryImplTest {
         assertTrue(first.isSuccess)
         assertTrue(second.isSuccess)
         coVerify(exactly = 1) { seerrApiClient.getTvDetails(any(), any(), 456) }
+    }
+
+    @Test
+    fun `getTmdbReviews caches result`() = runTest {
+        val review = TmdbReview(id = "r1", author = "Reviewer")
+        coEvery { tmdbApiClient.getReviews(123, MediaType.MOVIE) } returns Result.success(listOf(review))
+
+        val first = repository.getTmdbReviews(123, MediaType.MOVIE)
+        val second = repository.getTmdbReviews(123, MediaType.MOVIE)
+
+        assertTrue(first.isSuccess)
+        assertEquals(listOf(review), second.getOrNull())
+        coVerify(exactly = 1) { tmdbApiClient.getReviews(123, MediaType.MOVIE) }
     }
 }

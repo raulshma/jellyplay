@@ -703,4 +703,39 @@
 <plurals name="detail_episode_count">
     <item quantity="other">에피소드 %1$d개</item>
     </plurals>
+
+    <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
+    <string name="transcode_reasons_title">왜 트랜스코딩하나요?</string>
+    <string name="transcode_reason_unknown">서버 보고: %1$s</string>
+    <string name="transcode_reason_container_not_supported">파일 컨테이너는 다이렉트 재생을 지원하지 않습니다.</string>
+    <string name="transcode_reason_video_codec_not_supported">이 기기의 디코더가 해당 비디오 코덱을 지원하지 않습니다.</string>
+    <string name="transcode_reason_audio_codec_not_supported">이 기기의 디코더가 해당 오디오 코덱을 지원하지 않습니다.</string>
+    <string name="transcode_reason_video_bitrate">비디오 비트레이트가 스트리밍 품질 한도를 초과합니다.</string>
+    <string name="transcode_reason_audio_bitrate">오디오 비트레이트가 스트리밍 품질 한도를 초과합니다.</string>
+    <string name="transcode_reason_container_bitrate">전체 비트레이트가 스트리밍 품질 한도를 초과합니다.</string>
+    <string name="transcode_reason_video_bit_depth">비디오 비트 심도(예: 10비트)는 다이렉트 재생을 지원하지 않습니다.</string>
+    <string name="transcode_reason_audio_bit_depth">오디오 비트 심도는 다이렉트 재생을 지원하지 않습니다.</string>
+    <string name="transcode_reason_audio_channels">오디오 채널 수가 기기 프로필 허용 범위를 초과합니다.</string>
+    <string name="transcode_reason_audio_profile">오디오 프로필(예: DTS-HD, Atmos)은 다이렉트 재생을 지원하지 않습니다.</string>
+    <string name="transcode_reason_audio_sample_rate">오디오 샘플레이트는 다이렉트 재생을 지원하지 않습니다.</string>
+    <string name="transcode_reason_audio_is_external">오디오 트랙이 컨테이너 외부에 있어 직접 스트리밍할 수 없습니다.</string>
+    <string name="transcode_reason_secondary_audio">보조 오디오 트랙(예: 해설)으로 인해 트랜스코딩되었습니다.</string>
+    <string name="transcode_reason_interlaced">인터레이스 비디오는 다이렉트 재생을 지원하지 않습니다.</string>
+    <string name="transcode_reason_anamorphic">아나모픽 비디오 인코딩은 다이렉트 재생을 지원하지 않습니다.</string>
+    <string name="transcode_reason_ref_frames">레퍼런스 프레임이 너무 많아 기기 디코더가 처리할 수 없습니다.</string>
+    <string name="transcode_reason_video_codec_tag">흔하지 않은 비디오 코덱 태그는 다이렉트 재생으로 인식되지 않습니다.</string>
+    <string name="transcode_reason_video_framerate">비디오 프레임레이트는 다이렉트 재생을 지원하지 않습니다.</string>
+    <string name="transcode_reason_video_level">비디오 코덱 레벨이 기기 디코더에 비해 너무 높습니다.</string>
+    <string name="transcode_reason_video_profile">비디오 코덱 프로필은 다이렉트 재생을 지원하지 않습니다.</string>
+    <string name="transcode_reason_video_range">비디오 레인지(예: HDR, Dolby Vision)는 다이렉트 재생을 지원하지 않습니다.</string>
+    <string name="transcode_reason_video_resolution">비디오 해상도가 다이렉트 재생 한도를 초과합니다.</string>
+    <string name="transcode_reason_subtitle_codec">자막 형식은 서버에서 굽기(burn-in)해야 합니다.</string>
+    <string name="transcode_reason_stream_count">스트림 수가 기기 프로필 허용 범위를 초과합니다.</string>
+    <string name="transcode_reason_direct_play_error">서버가 원본 스트림의 다이렉트 재생 검사에 실패했습니다.</string>
+    <string name="transcode_reason_unknown_video_info">서버가 비디오 스트림 정보를 확인하지 못해 안전하게 트랜스코딩했습니다.</string>
+    <string name="transcode_reason_unknown_audio_info">서버가 오디오 스트림 정보를 확인하지 못해 안전하게 트랜스코딩했습니다.</string>
+    <string name="transcode_reason_hint_engine">다른 재생 엔진(mpv 또는 VLC)을 시도해 보세요. 다이렉트 재생이 가능할 수 있습니다.</string>
+    <string name="transcode_reason_hint_decoder">디코더를 Software/FFmpeg로 전환하면 해결될 수 있습니다.</string>
+    <string name="transcode_reason_hint_quality">품질 선택에서 스트리밍 품질 한도를 높이세요.</string>
+    <string name="transcode_reason_hint_subtitle">번인을 피하려면 SRT/외부 자막을 선택하세요.</string>
 </resources>
