@@ -130,7 +130,7 @@ class HomeSession constructor(
     init {
         collectorScope.launch {
             apiClient.session
-                .map { pair -> pair?.let { SessionIdentity(it.first.id, it.second.id) } }
+                .map { session -> session?.let { SessionIdentity(it.server.id, it.user.id) } }
                 .distinctUntilChanged()
                 .collect { identity ->
                     val previous = lastStableIdentity.getAndSet(identity)
@@ -155,7 +155,7 @@ class HomeSession constructor(
      * written the mirror. Returns `null` when no identity is established.
      */
     suspend fun currentIdentity(): SessionIdentity? =
-        apiClient.session.first()?.let { SessionIdentity(it.first.id, it.second.id) }
+        apiClient.session.first()?.let { SessionIdentity(it.server.id, it.user.id) }
 
     /**
      * Synchronous read of the [lastStableIdentity] mirror. Use for cache

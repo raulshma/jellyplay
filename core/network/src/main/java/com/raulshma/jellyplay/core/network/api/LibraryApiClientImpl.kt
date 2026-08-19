@@ -105,15 +105,12 @@ class LibraryApiClientImpl @Inject constructor(
         force: Boolean,
     ): Result<HomeSectionsResult> = engine.apiResultWithRetry {
         coroutineScope {
-            // Destructure once so the per-section logic below keeps reading the
-            // same local names it did when these were positional parameters.
+            // Only enabledSections earns a local (read throughout the
+            // per-section logic below); everything else the query bundles is
+            // read at its single use site as query.<field>, so the value
+            // object stays intact instead of being re-flattened into
+            // positional locals at the seam.
             val enabledSections = query.enabledSections
-            val libraryHomeSectionOverrides = query.libraryHomeSectionOverrides
-            val nextUpRewatching = query.nextUpRewatching
-            val nextUpMaxDays = query.nextUpMaxDays
-            val nextUpExcludedSeriesIds = query.nextUpExcludedSeriesIds
-            val hiddenCwItemIds = query.hiddenCwItemIds
-            val pinnedSections = query.pinnedSections
             val sections = mutableListOf<HomeSection>()
             val failedTypes = mutableSetOf<HomeSectionType>()
             var firstError: Throwable? = null
@@ -124,8 +121,8 @@ class LibraryApiClientImpl @Inject constructor(
             }
             val nextUpDeferred = async {
                 if (HomeSectionType.NEXT_UP in enabledSections) getNextUp(
-                    enableRewatching = nextUpRewatching,
-                    maxDays = nextUpMaxDays,
+                    enableRewatching = query.nextUpRewatching,
+                    maxDays = query.nextUpMaxDays,
                 )
                 else Result.success(emptyList())
             }
@@ -138,7 +135,7 @@ class LibraryApiClientImpl @Inject constructor(
             }
             // Kick off pinned-section fetches concurrently with the standard
             // sections so they add no extra wall-clock latency to home loading.
-            val pinnedDeferred = async { fetchPinnedSections(pinnedSections) }
+            val pinnedDeferred = async { fetchPinnedSections(query.pinnedSections) }
 
             val continueWatchingResult = continueWatchingDeferred.await()
             val nextUpResult = nextUpDeferred.await()
@@ -166,7 +163,7 @@ class LibraryApiClientImpl @Inject constructor(
             if (HomeSectionType.CONTINUE_WATCHING in enabledSections) {
                 continueWatchingResult
                     .onSuccess { list ->
-                        val filtered = list.filter { it.id !in hiddenCwItemIds }
+                        val filtered = list.filter { it.id !in query.hiddenCwItemIds }
                         if (filtered.isNotEmpty()) {
                             continueWatchingIds = filtered.map { it.id }.toSet()
                             sections.add(HomeSectionType.CONTINUE_WATCHING.descriptor.section(filtered))
@@ -183,7 +180,7 @@ class LibraryApiClientImpl @Inject constructor(
                     .onSuccess { list ->
                         // Drop items whose series is in the user's "remove from Next Up" blocklist.
                         val filtered = list.filter { it.id !in continueWatchingIds }
-                            .filter { it.seriesId == null || it.seriesId !in nextUpExcludedSeriesIds }
+                            .filter { it.seriesId == null || it.seriesId !in query.nextUpExcludedSeriesIds }
                         if (filtered.isNotEmpty()) {
                             // Title comes from the descriptor ("Next Up") — the
                             // pre-descriptor literal here had drifted to "NextUp".
@@ -214,7 +211,7 @@ class LibraryApiClientImpl @Inject constructor(
                             }
                         latestDeferred.forEach { deferred ->
                             val (folder, result) = deferred.await()
-                            val disabledForFolder = libraryHomeSectionOverrides[folder.id].orEmpty()
+                            val disabledForFolder = query.libraryHomeSectionOverrides[folder.id].orEmpty()
                             result.onSuccess { latest ->
                                 // Only feed the aggregated Recently Added row from
                                 // libraries the user hasn't disabled it for.

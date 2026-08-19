@@ -237,44 +237,48 @@ class HomeDiscoveryStore @Inject constructor(
                 // matter (both are idempotent). The hidden-library key itself
                 // is a migration source only, never a copy destination.
                 migrateHiddenLibrarySectionIds(prefs)
-                booleanLegacyKeys.forEach { copyBooleanIntoNamespace(prefs, it, userId) }
-                intLegacyKeys.forEach { copyIntIntoNamespace(prefs, it, userId) }
-                stringLegacyKeys.forEach { copyStringIntoNamespace(prefs, it, userId) }
+                booleanLegacyKeys.forEach {
+                    copyIntoNamespace(prefs, it, userId, ::booleanPreferencesKey) { raw -> raw.toBoolean() }
+                }
+                intLegacyKeys.forEach {
+                    copyIntoNamespace(prefs, it, userId, ::intPreferencesKey) { raw -> raw.toIntOrNull() }
+                }
+                stringLegacyKeys.forEach {
+                    copyIntoNamespace(prefs, it, userId, ::stringPreferencesKey) { raw -> raw }
+                }
                 prefs[Keys.HOME_NS_MIGRATED] = true
             }
         }
     }
 
     /**
-     * Copies one legacy flat Boolean key into `u_<userId>::` — only if the
+     * Copies one legacy flat key into `u_<userId>::` — only if the
      * namespaced slot is absent. Mirrors [PreferenceCodec.readBool]'s
-     * dual-read: typed slot first, then the legacy STRING form (`"true"` /
-     * `"false"`) parsed, so an install whose typed-key migration had not run
-     * yet still keeps its value instead of silently resetting to the default.
+     * dual-read: typed slot first, then the legacy STRING form parsed via
+     * [fromString], so an install whose typed-key migration had not run yet
+     * still keeps its value instead of silently resetting to the default.
+     * A null parse (or absent value) leaves the namespaced slot absent.
+     * String (JSON blob) keys were always strings — [fromString] is the
+     * identity there, so a plain copy suffices.
+     *
+     * `reified` + the `as T?` cast are load-bearing: [T] erases, so
+     * `prefs[canonical]` alone inserts no runtime check and a legacy STRING
+     * value stored under the same name would flow through as "typed" and be
+     * written into the typed namespaced slot. The reified cast restores the
+     * ClassCastException the per-type reads relied on.
      */
-    private fun copyBooleanIntoNamespace(prefs: MutablePreferences, canonical: Preferences.Key<Boolean>, userId: String) {
+    private inline fun <reified T : Any> copyIntoNamespace(
+        prefs: MutablePreferences,
+        canonical: Preferences.Key<T>,
+        userId: String,
+        keyFactory: (String) -> Preferences.Key<T>,
+        fromString: (String) -> T?,
+    ) {
         val target = namespaced(userId, canonical.name)
         if (prefs.asMap().keys.any { it.name == target }) return
-        val typed = try { prefs[canonical] } catch (_: ClassCastException) { null }
-        val value = typed ?: prefs[stringPreferencesKey(canonical.name)]?.toBoolean() ?: return
-        prefs[booleanPreferencesKey(target)] = value
-    }
-
-    /** Int-key counterpart of [copyBooleanIntoNamespace] — see its KDoc. */
-    private fun copyIntIntoNamespace(prefs: MutablePreferences, canonical: Preferences.Key<Int>, userId: String) {
-        val target = namespaced(userId, canonical.name)
-        if (prefs.asMap().keys.any { it.name == target }) return
-        val typed = try { prefs[canonical] } catch (_: ClassCastException) { null }
-        val value = typed ?: prefs[stringPreferencesKey(canonical.name)]?.toIntOrNull() ?: return
-        prefs[intPreferencesKey(target)] = value
-    }
-
-    /** String (JSON blob) keys were always strings — a plain copy suffices. */
-    private fun copyStringIntoNamespace(prefs: MutablePreferences, canonical: Preferences.Key<String>, userId: String) {
-        val target = namespaced(userId, canonical.name)
-        if (prefs.asMap().keys.any { it.name == target }) return
-        val value = try { prefs[canonical] } catch (_: ClassCastException) { null } ?: return
-        prefs[stringPreferencesKey(target)] = value
+        val typed = try { prefs[canonical] as T? } catch (_: ClassCastException) { null }
+        val value = typed ?: prefs[stringPreferencesKey(canonical.name)]?.let(fromString) ?: return
+        prefs[keyFactory(target)] = value
     }
 
     // ------------------------------------------------------------------

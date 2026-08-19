@@ -432,8 +432,10 @@ class HomeViewModel @Inject constructor(
                         // isGoingOnline MUST clear in finally — previously the
                         // clear ran after the fetch with no guard, so any
                         // throw/cancellation left it stuck on forever and the
-                        // user had to restart the app to recover.
-                        _uiState.update { it.copy(isLoading = true) }
+                        // user had to restart the app to recover. The loader
+                        // itself is refresh-owned state: raised/cleared via
+                        // the refresher so every isLoading write stays there.
+                        refresher.showFullScreenLoader()
                         try {
                             // Let the playback outbox drain before fetching so
                             // Continue Watching / Next Up reflect the server's
@@ -445,17 +447,18 @@ class HomeViewModel @Inject constructor(
                             // periodic refresh / pull-to-refresh re-syncs.
                             syncStatus.awaitOutboxDrained()
                             // Cap the post-toggle fetch so a hung network call
-                            // cannot leave isGoingOnline (and isLoading) stuck
+                            // cannot leave isGoingOnline (and the loader) stuck
                             // on — the symptom was the Go Online button + app
                             // bar spinners never clearing. On timeout we drop the
                             // result; a normal refresh/pull-to-refresh can
                             // still repopulate sections once the network
-                            // recovers. isLoading is force-cleared below.
+                            // recovers. The loader is force-cleared below.
                             withTimeoutOrNull(GOING_ONLINE_TIMEOUT_MS) {
                                 refresher.fetchOnce()
                             }
                         } finally {
-                            _uiState.update { it.copy(isGoingOnline = false, isLoading = false) }
+                            refresher.clearFullScreenLoader()
+                            _uiState.update { it.copy(isGoingOnline = false) }
                         }
                     }
                 }
@@ -544,11 +547,10 @@ class HomeViewModel @Inject constructor(
 
         // Fold the refresher's state slice into HomeUiState (same fold
         // pattern as the SeerrRequestStateHolder collector above) so the UI
-        // observes a single state object. The refresher is the only writer of
-        // these seven fields; the VM's offline→online branch is the one
-        // deliberate exception, raising isLoading directly for the
-        // going-online loader and force-clearing it in its finally — exactly
-        // the pre-extraction behavior.
+        // observes a single state object. The refresher is the only writer
+        // of these seven fields — including the going-online loader, which
+        // the VM's offline→online branch raises/clears through the
+        // refresher instead of writing uiState directly.
         launch {
             refresher.state.collect { refresh ->
                 _uiState.update {

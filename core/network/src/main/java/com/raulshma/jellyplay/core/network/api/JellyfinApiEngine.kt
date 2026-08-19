@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.api
 
 import android.content.Context
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -52,20 +53,20 @@ class JellyfinApiEngine @Inject constructor(
     val currentUser: StateFlow<UserInfo?> = _currentUser.asStateFlow()
 
     /**
-     * The server+user pair published as ONE atomic value. `currentServer` and
-     * `currentUser` are separate StateFlows, so any caller that updates them
-     * as two assignments (login / switchUser / disconnect) lets a
-     * `combine(currentServer, currentUser)` downstream observe a synthetic
-     * mixed `(newServer, oldUser)` intermediate — an identity that never
-     * existed. This flow is updated inside the same critical sections (see
-     * [updateSession]) so a session transition is always observed as a single
-     * step from one stable pair to the next, or to/from `null`. `null` means
-     * "no fully-established identity" (either side missing), matching the
-     * `if (server != null && user != null)` projection consumers used to
-     * derive from the separate flows.
+     * The [ActiveSession] server+user pair published as ONE atomic value.
+     * `currentServer` and `currentUser` are separate StateFlows, so any
+     * caller that updates them as two assignments (login / switchUser /
+     * disconnect) lets a `combine(currentServer, currentUser)` downstream
+     * observe a synthetic mixed `(newServer, oldUser)` intermediate — an
+     * identity that never existed. This flow is updated inside the same
+     * critical sections (see [updateSession]) so a session transition is
+     * always observed as a single step from one stable session to the next,
+     * or to/from `null`. `null` means "no fully-established identity"
+     * (either side missing), matching the `if (server != null && user != null)`
+     * projection consumers used to derive from the separate flows.
      */
-    private val _session = MutableStateFlow<Pair<ServerInfo, UserInfo>?>(null)
-    val session: StateFlow<Pair<ServerInfo, UserInfo>?> = _session.asStateFlow()
+    private val _session = MutableStateFlow<ActiveSession?>(null)
+    val session: StateFlow<ActiveSession?> = _session.asStateFlow()
 
     val authMutex = Mutex()
 
@@ -125,9 +126,9 @@ class JellyfinApiEngine @Inject constructor(
         if (server == null) addressRouter.clear() else addressRouter.configure(server)
     }
 
-    /** Publishes the combined pair; a missing side collapses the session to null. */
+    /** Publishes the combined session; a missing side collapses it to null. */
     private fun publishSession(server: ServerInfo?, user: UserInfo?) {
-        _session.value = if (server != null && user != null) server to user else null
+        _session.value = if (server != null && user != null) ActiveSession(server, user) else null
     }
 
     fun updateApi(api: ApiClient?) {

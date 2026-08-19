@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
@@ -65,21 +66,21 @@ class JellyfinApiEngineSessionTest {
     @Test
     fun `updateSession publishes both sides and the pair atomically`() = runBlocking {
         val engine = newEngine()
-        val emissions = mutableListOf<Pair<ServerInfo, UserInfo>?>()
+        val emissions = mutableListOf<ActiveSession?>()
         val collector = launch(Dispatchers.Unconfined) { engine.session.collect { emissions.add(it) } }
         try {
             engine.updateServer(server("s1"))
             engine.updateUser(user("u1"))
-            assertEquals(server("s1") to user("u1"), engine.session.first())
+            assertEquals(ActiveSession(server("s1"), user("u1")), engine.session.first())
 
             // The login/switch shape: adopt the new server AND its user in
             // ONE critical-section step.
             engine.updateSession(server("s2"), user("u2"))
 
-            assertEquals(server("s2") to user("u2"), engine.session.first())
+            assertEquals(ActiveSession(server("s2"), user("u2")), engine.session.first())
             assertEquals(
                 "no mixed (newServer, oldUser) intermediate may surface",
-                listOf(null, server("s1") to user("u1"), server("s2") to user("u2")),
+                listOf(null, ActiveSession(server("s1"), user("u1")), ActiveSession(server("s2"), user("u2"))),
                 emissions,
             )
             assertEquals(server("s2"), engine.currentServer.first())
@@ -97,7 +98,7 @@ class JellyfinApiEngineSessionTest {
         // (newServer, oldUser) — legitimate for same-identity refreshes
         // (address failover, token refresh) but wrong for session switches.
         val engine = newEngine()
-        val emissions = mutableListOf<Pair<ServerInfo, UserInfo>?>()
+        val emissions = mutableListOf<ActiveSession?>()
         val collector = launch(Dispatchers.Unconfined) { engine.session.collect { emissions.add(it) } }
         try {
             engine.updateServer(server("s1"))
@@ -106,7 +107,7 @@ class JellyfinApiEngineSessionTest {
             engine.updateUser(user("u2"))
 
             assertEquals(
-                listOf(null, server("s1") to user("u1"), server("s2") to user("u1"), server("s2") to user("u2")),
+                listOf(null, ActiveSession(server("s1"), user("u1")), ActiveSession(server("s2"), user("u1")), ActiveSession(server("s2"), user("u2"))),
                 emissions,
             )
         } finally {
@@ -118,7 +119,7 @@ class JellyfinApiEngineSessionTest {
     @Test
     fun `updateSession to null clears the pair in one step`() = runBlocking {
         val engine = newEngine()
-        val emissions = mutableListOf<Pair<ServerInfo, UserInfo>?>()
+        val emissions = mutableListOf<ActiveSession?>()
         val collector = launch(Dispatchers.Unconfined) { engine.session.collect { emissions.add(it) } }
         try {
             engine.updateSession(server("s1"), user("u1"))
@@ -128,7 +129,7 @@ class JellyfinApiEngineSessionTest {
             assertNull(engine.currentServer.first())
             assertNull(engine.currentUser.first())
             assertEquals(
-                listOf(null, server("s1") to user("u1"), null),
+                listOf(null, ActiveSession(server("s1"), user("u1")), null),
                 emissions,
             )
         } finally {

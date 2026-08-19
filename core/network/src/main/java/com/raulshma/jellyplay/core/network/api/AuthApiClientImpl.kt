@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.api
 
 import android.util.Log
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -28,7 +29,7 @@ class AuthApiClientImpl @Inject constructor(
 
     override val currentServer: Flow<ServerInfo?> = engine.currentServer
     override val currentUser: Flow<UserInfo?> = engine.currentUser
-    override val session: Flow<Pair<ServerInfo, UserInfo>?> = engine.session
+    override val session: Flow<ActiveSession?> = engine.session
 
     /**
      * Probes exactly [address] via the router's dedicated probe client. This

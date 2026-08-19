@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.session.SessionIdentity
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
@@ -49,7 +50,7 @@ class EpisodeCatalogueImplTest {
     // Default null (logged-out) so identity is [CacheIdentity.UNKNOWN] — same
     // default surface the repo tests rely on. Replaces the separate
     // server/user flows the catalogue's own observer used to watch.
-    private val sessionFlow = MutableStateFlow<Pair<ServerInfo, UserInfo>?>(null)
+    private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
 
     private lateinit var homeSession: HomeSession
     private lateinit var catalogue: EpisodeCatalogueImpl
@@ -385,11 +386,15 @@ class EpisodeCatalogueImplTest {
         // Log in as one user, then switch — the transition must self-invalidate.
         // One atomic session value per step (the engine's publish contract).
         val serverA = ServerInfo(id = "server-A", name = "A", address = "https://a")
-        sessionFlow.value = serverA to
-            UserInfo(id = "user-1", name = "U1", serverAddress = "https://a", accessToken = "tok")
+        sessionFlow.value = ActiveSession(
+            serverA,
+            UserInfo(id = "user-1", name = "U1", serverAddress = "https://a", accessToken = "tok"),
+        )
         waitForIdentity(SessionIdentity("server-A", "user-1"))
-        sessionFlow.value = serverA to
-            UserInfo(id = "user-2", name = "U2", serverAddress = "https://a", accessToken = "tok")
+        sessionFlow.value = ActiveSession(
+            serverA,
+            UserInfo(id = "user-2", name = "U2", serverAddress = "https://a", accessToken = "tok"),
+        )
         waitForIdentity(SessionIdentity("server-A", "user-2"))
         catalogue.loadSeriesEpisodes("series-1")
 

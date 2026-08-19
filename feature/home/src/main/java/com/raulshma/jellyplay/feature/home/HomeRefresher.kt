@@ -314,9 +314,9 @@ internal class HomeRefresher(
                 _state.update { it.copy(isRefreshing = true, error = null) }
                 invalidateDiscoverCache()
             }
-            RefreshTrigger.PrefsChanged -> {
-                refreshJob?.cancel()
-                refreshJob = scope.launch { fetchOnce(); periodicRefreshLoop() }
+            RefreshTrigger.PrefsChanged -> replaceRefreshJob {
+                fetchOnce()
+                periodicRefreshLoop()
             }
             RefreshTrigger.UserDataChanged -> refreshAfterUserDataChange()
         }
@@ -374,6 +374,27 @@ internal class HomeRefresher(
      */
     fun dropOnlineContent() {
         _state.update { it.copy(sections = emptyList(), discoverSections = emptyMap()) }
+    }
+
+    /**
+     * Raises the full-screen loader for the VM's offline→online wrapper (the
+     * post-toggle fetch renders behind it). Paired with
+     * [clearFullScreenLoader], these are the only isLoading writes from
+     * outside the fetch machinery itself — routing them through here keeps
+     * every [HomeRefreshState.isLoading] transition inside this class, so
+     * the VM never writes refresh-owned state directly.
+     */
+    fun showFullScreenLoader() {
+        _state.update { it.copy(isLoading = true) }
+    }
+
+    /**
+     * Force-clears the full-screen loader raised by [showFullScreenLoader]
+     * — the VM's offline→online wrapper clears it in its `finally` so a
+     * hung or cancelled post-toggle fetch cannot leave it stuck on.
+     */
+    fun clearFullScreenLoader() {
+        _state.update { it.copy(isLoading = false) }
     }
 
     /**
@@ -476,8 +497,7 @@ internal class HomeRefresher(
         // if onStop cancels mid-fetch the change isn't lost — the next
         // onStart retries it (still subject to the throttle above).
         pendingUserDataRefresh = true
-        refreshJob?.cancel()
-        refreshJob = scope.launch {
+        replaceRefreshJob {
             fetchOnce(force = true)
             pendingUserDataRefresh = false
             periodicRefreshLoop()
@@ -492,8 +512,7 @@ internal class HomeRefresher(
      * stay in ONE job so [stop] cancels them together.
      */
     private fun startForcedRefresh(preamble: suspend () -> Unit = {}) {
-        refreshJob?.cancel()
-        refreshJob = scope.launch {
+        replaceRefreshJob {
             preamble()
             fetchOnce(force = true)
             periodicRefreshLoop()
@@ -501,8 +520,17 @@ internal class HomeRefresher(
     }
 
     private fun startPeriodicRefresh() {
+        replaceRefreshJob { periodicRefreshLoop() }
+    }
+
+    /**
+     * Cancels any in-flight [refreshJob] and replaces it with [block] in
+     * [scope] — the one job-replacement choreography every trigger shares,
+     * so each entry point below states only its own fetch/loop sequence.
+     */
+    private fun replaceRefreshJob(block: suspend () -> Unit) {
         refreshJob?.cancel()
-        refreshJob = scope.launch { periodicRefreshLoop() }
+        refreshJob = scope.launch { block() }
     }
 
     /**

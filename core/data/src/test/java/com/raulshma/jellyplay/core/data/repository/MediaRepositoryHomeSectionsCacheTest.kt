@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
@@ -54,7 +55,7 @@ class MediaRepositoryHomeSectionsCacheTest {
     // detector consumes (see JellyfinApiEngine.session). One value per
     // identity step, replacing the separate server/user flows the repo's own
     // observer used to combine.
-    private val sessionFlow = MutableStateFlow<Pair<ServerInfo, UserInfo>?>(null)
+    private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
     private val networkMonitor: NetworkMonitor = mockk(relaxed = true)
     private val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true) {
@@ -103,12 +104,12 @@ class MediaRepositoryHomeSectionsCacheTest {
     }
 
     private suspend fun signIn(serverId: String, userId: String) {
-        sessionFlow.value = serverInfo(serverId) to userInfo(userId)
+        sessionFlow.value = ActiveSession(serverInfo(serverId), userInfo(userId))
         waitForCacheObserver()
     }
 
     private suspend fun switchUser(userId: String) {
-        sessionFlow.value = serverInfo("server-1") to userInfo(userId)
+        sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo(userId))
         waitForCacheObserver()
     }
 

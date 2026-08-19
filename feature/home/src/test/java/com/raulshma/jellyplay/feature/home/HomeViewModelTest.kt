@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.UserDataChange
@@ -162,7 +163,7 @@ class HomeViewModelTest {
      * routing deterministically. [userFlow] above still feeds the separate
      * uiState.currentUser mirror collector.
      */
-    private val sessionFlow = MutableStateFlow<Pair<ServerInfo, UserInfo>?>(null)
+    private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val sessionApiClient: JellyfinApiClient = mockk(relaxed = true)
     private val homeSession: HomeSession by lazy {
         HomeSession(sessionApiClient, CoroutineScope(SupervisorJob() + mainDispatcherRule.testDispatcher))
@@ -683,7 +684,7 @@ class HomeViewModelTest {
      */
     private fun signIn(userId: String) {
         userFlow.value = userInfo(userId)
-        sessionFlow.value = serverInfo() to userInfo(userId)
+        sessionFlow.value = ActiveSession(serverInfo(), userInfo(userId))
     }
 
     /** Signs out on both surfaces — see [signIn]. */

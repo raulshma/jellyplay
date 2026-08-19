@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.session
 
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
@@ -33,7 +34,7 @@ import org.junit.Test
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class HomeSessionTest {
 
-    private val sessionFlow = MutableStateFlow<Pair<ServerInfo, UserInfo>?>(null)
+    private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
 
     @Before
@@ -69,7 +70,7 @@ class HomeSessionTest {
         val transitions = subscribe(session)
         runCurrent()
 
-        sessionFlow.value = server("s1") to user("u1")
+        sessionFlow.value = ActiveSession(server("s1"), user("u1"))
         runCurrent()
 
         assertEquals(listOf<HomeSessionTransition>(HomeSessionTransition.SignedIn), transitions)
@@ -81,9 +82,9 @@ class HomeSessionTest {
         val transitions = subscribe(session)
         runCurrent()
 
-        sessionFlow.value = server("s1") to user("u1")
+        sessionFlow.value = ActiveSession(server("s1"), user("u1"))
         runCurrent()
-        sessionFlow.value = server("s1") to user("u2")
+        sessionFlow.value = ActiveSession(server("s1"), user("u2"))
         runCurrent()
 
         assertEquals(
@@ -101,9 +102,9 @@ class HomeSessionTest {
         val transitions = subscribe(session)
         runCurrent()
 
-        sessionFlow.value = server("s1") to user("u1")
+        sessionFlow.value = ActiveSession(server("s1"), user("u1"))
         runCurrent()
-        sessionFlow.value = server("s2") to user("u2")
+        sessionFlow.value = ActiveSession(server("s2"), user("u2"))
         runCurrent()
 
         assertEquals(
@@ -121,7 +122,7 @@ class HomeSessionTest {
         val transitions = subscribe(session)
         runCurrent()
 
-        sessionFlow.value = server("s1") to user("u1")
+        sessionFlow.value = ActiveSession(server("s1"), user("u1"))
         runCurrent()
         sessionFlow.value = null
         runCurrent()
@@ -143,9 +144,12 @@ class HomeSessionTest {
 
         // Token refresh / address failover shape: a NEW pair object with the
         // same (serverId, userId) must not reclassify.
-        sessionFlow.value = server("s1") to user("u1")
+        sessionFlow.value = ActiveSession(server("s1"), user("u1"))
         runCurrent()
-        sessionFlow.value = server("s1").copy(name = "renamed") to user("u1").copy(accessToken = "refreshed")
+        sessionFlow.value = ActiveSession(
+            server("s1").copy(name = "renamed"),
+            user("u1").copy(accessToken = "refreshed"),
+        )
         runCurrent()
 
         assertEquals(listOf<HomeSessionTransition>(HomeSessionTransition.SignedIn), transitions)
@@ -157,9 +161,9 @@ class HomeSessionTest {
         val transitions = subscribe(session)
         runCurrent()
 
-        sessionFlow.value = server("s1") to user("u1")
+        sessionFlow.value = ActiveSession(server("s1"), user("u1"))
         runCurrent()
-        sessionFlow.value = server("s2") to user("u2")
+        sessionFlow.value = ActiveSession(server("s2"), user("u2"))
         runCurrent()
 
         // The mixed (s2, u1) intermediate the old two-step publish produced
@@ -183,7 +187,7 @@ class HomeSessionTest {
         assertNull(session.currentIdentity())
         assertNull(session.currentIdentitySnapshot())
 
-        sessionFlow.value = server("s1") to user("u1")
+        sessionFlow.value = ActiveSession(server("s1"), user("u1"))
         runCurrent()
 
         assertEquals(SessionIdentity("s1", "u1"), session.currentIdentity())
