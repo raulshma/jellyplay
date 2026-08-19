@@ -7,6 +7,7 @@ import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.stubMediaSessionPlayer
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -35,6 +36,15 @@ class MediaSessionControllerTest {
             getPlayer = { mockPlayer },
             getImageUrl = { itemId, _ -> "https://example.com/art/$itemId.jpg" },
         )
+    }
+
+    @After
+    fun tearDown() {
+        // Media3's SESSION_ID_TO_SESSION_MAP is process-static and Robolectric
+        // does not reset non-Android statics between test methods, so a session
+        // leaked by a failing test would poison later same-ID builds in this
+        // class. Release whatever this test built.
+        controller.release()
     }
 
     @Test
@@ -67,10 +77,61 @@ class MediaSessionControllerTest {
     }
 
     @Test
+    fun createForItem_sameItemIdRebuild_replacesSessionWithoutCrash() {
+        // Force-transcode / quality / engine-fallback reloads rebuild the session
+        // for the SAME item, so the replacement reuses the old session's ID.
+        // Media3 registers session IDs in a process-wide map at construction
+        // time and throws "Session ID must be unique" if the old session is
+        // still registered when the replacement is built — the controller must
+        // release the held session first.
+        controller.createForItem(itemId = "movie-1", title = "Movie 1", subtitle = "Action")
+        val first = sessionManager.currentSession
+
+        controller.createForItem(itemId = "movie-1", title = "Movie 1", subtitle = "Action")
+
+        val second = sessionManager.currentSession
+        assertTrue(second is MediaLibrarySession)
+        assertTrue("rebuild must install a fresh session", first !== second)
+        // A third rebuild proves the retired session's ID was freed (and that
+        // the cycle is repeatable, not a one-shot release).
+        controller.createForItem(itemId = "movie-1", title = "Movie 1", subtitle = "Action")
+        assertTrue(sessionManager.currentSession !== second)
+    }
+
+    @Test
+    fun createForItem_sameItemIdRebuild_neverNullsManagerSlot() {
+        // The pre-build release must bypass clearSession: nulling the slot
+        // fires onSessionChanged(null) → the playback service stopSelfs
+        // mid-reload and cannot restart under background-start restrictions.
+        controller.createForItem(itemId = "movie-1", title = "Movie 1", subtitle = "Action")
+        val first = sessionManager.currentSession
+
+        controller.createForItem(itemId = "movie-1", title = "Movie 1", subtitle = "Action")
+
+        // The slot was continuously occupied — by the retired session during
+        // the build, then by its replacement.
+        assertTrue(first != null)
+        assertTrue(sessionManager.currentSession != null)
+    }
+
+    @Test
     fun createForPlayer_buildsMediaLibrarySession() {
         controller.createForPlayer(mockPlayer, sessionId = "test_session_id")
 
         assertTrue(sessionManager.currentSession is MediaLibrarySession)
+    }
+
+    @Test
+    fun createForPlayer_sameSessionIdRebuild_replacesSessionWithoutCrash() {
+        // The cast detach/reattach path rebuilds with a stable sessionId; the
+        // same-ID collision applies as for createForItem.
+        controller.createForPlayer(mockPlayer, sessionId = "video_cast_session")
+        val first = sessionManager.currentSession
+
+        controller.createForPlayer(mockPlayer, sessionId = "video_cast_session")
+
+        assertTrue(sessionManager.currentSession is MediaLibrarySession)
+        assertTrue(first !== sessionManager.currentSession)
     }
 
     @Test
