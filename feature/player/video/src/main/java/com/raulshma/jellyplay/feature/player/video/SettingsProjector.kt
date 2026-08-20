@@ -91,8 +91,13 @@ internal class SettingsProjector(
         diff(agg.videoPlayer.videoPassOutProtectionHours, VideoPlayerUiState::passOutProtectionHours) {
             it.copy(passOutProtectionHours = agg.videoPlayer.videoPassOutProtectionHours)
         }
-        diff(agg.playback.autoPlayCountdownSec, VideoPlayerUiState::autoPlayCountdownSec) {
-            it.copy(autoPlayCountdownSec = agg.playback.autoPlayCountdownSec)
+        // Countdown lives inside the stored autoplay slice, so the generic
+        // `diff` property-select helper can't reach it — same distinct-until-
+        // changed guard, hand-written against the slice leaf.
+        if (getUiState().autoplay.autoPlayCountdownSec != agg.playback.autoPlayCountdownSec) {
+            updateUiState {
+                it.copy(autoplay = it.autoplay.copy(autoPlayCountdownSec = agg.playback.autoPlayCountdownSec))
+            }
         }
 
         // PIN lock: two uiState fields driven by one pref + one derived flag.

@@ -228,8 +228,10 @@ class SessionLoadPipeline(
                 streamingQuality = agg.playback.streamingQuality,
                 adaptiveBitrateEnabled = networkOfflineStore.networkOffline.value.adaptiveBitrateEnabled,
                 playbackMode = agg.playback.playbackMode,
-                videoAutoplayNext = agg.videoPlayer.videoAutoplayNext,
-                autoPlayCountdownSec = agg.playback.autoPlayCountdownSec,
+                autoplay = autoplay.copy(
+                    videoAutoplayNext = agg.videoPlayer.videoAutoplayNext,
+                    autoPlayCountdownSec = agg.playback.autoPlayCountdownSec,
+                ),
             )
         }
         hooks.onSessionPrefsApplied(agg)

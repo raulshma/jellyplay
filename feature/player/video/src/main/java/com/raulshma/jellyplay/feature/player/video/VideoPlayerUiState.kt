@@ -195,9 +195,12 @@ data class VideoPlayerUiState(
     val keepScreenOnDuringVideo: Boolean = true,
     val cinemaIntroState: CinemaIntroUiState? = null,
     val isMuted: Boolean = false,
-    val videoAutoplayNext: Boolean = false,
-    val autoPlayCountdownSec: Int = 10,
-    val autoplayCancelled: Boolean = false,
+    /**
+     * Auto-play-next-episode settings + the user's cancellation of the current
+     * countdown. Formerly flat fields (`videoAutoplayNext` /
+     * `autoPlayCountdownSec` / `autoplayCancelled`); now a stored slice.
+     */
+    val autoplay: AutoplayState = AutoplayState(),
     /**
      * Whether the active network is metered (cellular or metered Wi-Fi).
      * Surfaced so the playback metadata can show why a quality cap is being
@@ -256,13 +259,6 @@ data class VideoPlayerUiState(
             seasonEpisodes = seasonEpisodes, currentSeasonId = currentSeasonId,
             isLoadingEpisodes = isLoadingEpisodes,
             videoEpisodeBrowserEnabled = videoEpisodeBrowserEnabled,
-        )
-
-    val autoplay: AutoplayState
-        get() = AutoplayState(
-            videoAutoplayNext = videoAutoplayNext,
-            autoPlayCountdownSec = autoPlayCountdownSec,
-            autoplayCancelled = autoplayCancelled,
         )
 
     val gestures: GesturePrefsState
@@ -329,7 +325,7 @@ data class VideoPlayerUiState(
         chapters = chapters,
         segmentBehaviors = segmentBehaviors,
         durationMs = duration,
-        autoplayCancelled = autoplayCancelled,
+        autoplayCancelled = autoplay.autoplayCancelled,
         isInSyncPlaySession = isInSyncPlaySession,
         hasNextEpisode = nextEpisode != null,
         seriesId = seriesId,

@@ -195,7 +195,7 @@ private data class SegmentProjection(
         segments = state.segments,
         chapters = state.chapters,
         segmentBehaviors = state.segmentBehaviors,
-        autoplayCancelled = state.autoplayCancelled,
+        autoplayCancelled = state.autoplay.autoplayCancelled,
         isInSyncPlaySession = state.isInSyncPlaySession,
         nextEpisode = state.nextEpisode,
         seriesId = state.seriesId,
@@ -1047,8 +1047,10 @@ class VideoPlayerViewModel @Inject constructor(
                     playerSessionManager.engine?.let { updateConfigWithUiState() }
                 }
                 // Autoplay-next flip also toggles the autoplay controller.
-                if (_uiState.value.videoAutoplayNext != agg.videoPlayer.videoAutoplayNext) {
-                    _uiState.update { it.copy(videoAutoplayNext = agg.videoPlayer.videoAutoplayNext) }
+                if (_uiState.value.autoplay.videoAutoplayNext != agg.videoPlayer.videoAutoplayNext) {
+                    _uiState.update {
+                        it.copy(autoplay = it.autoplay.copy(videoAutoplayNext = agg.videoPlayer.videoAutoplayNext))
+                    }
                     autoplayController.setEnabled(agg.videoPlayer.videoAutoplayNext)
                 }
                 if (oldAggregate.audioEffects.volumeBoostEnabled != agg.audioEffects.volumeBoostEnabled ||
@@ -1585,7 +1587,7 @@ class VideoPlayerViewModel @Inject constructor(
         // disposed it; a fresh load re-arms it and its fan-out collectors.
         ensureEngineEventCoordinatorActive()
         autoplayController.resetForNewItem()
-        _uiState.update { it.copy(autoplayCancelled = false) }
+        _uiState.update { it.copy(autoplay = it.autoplay.copy(autoplayCancelled = false)) }
         lastSeekPositionMs = null
         lastSeekTimestamp = 0L
         engineEventCoordinator.onNewItem()
@@ -2552,7 +2554,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun cancelAutoplay() {
         autoplayController.cancel()
-        _uiState.update { it.copy(autoplayCancelled = true) }
+        _uiState.update { it.copy(autoplay = it.autoplay.copy(autoplayCancelled = true)) }
     }
 
     private fun handlePlaybackEnded() {
@@ -2866,7 +2868,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     /** Toggle the autoplay-next-episode preference from the in-player Up Next card. */
     fun setVideoAutoplayNext(enabled: Boolean) {
-        _uiState.update { it.copy(videoAutoplayNext = enabled) }
+        _uiState.update { it.copy(autoplay = it.autoplay.copy(videoAutoplayNext = enabled)) }
         autoplayController.setEnabled(enabled)
         launch { videoPlayerStore.setVideoAutoplayNext(enabled) }
     }
