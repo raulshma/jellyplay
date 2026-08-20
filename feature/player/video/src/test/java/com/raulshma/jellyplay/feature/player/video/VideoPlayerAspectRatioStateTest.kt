@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.state.MediaContentState
 import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -71,7 +72,7 @@ class VideoPlayerAspectRatioStateTest {
 
         // Simulating AUTO behaviour: use detected if non-null
         val state = VideoPlayerUiState(
-            mediaStreams = streams,
+            media = MediaContentState(mediaStreams = streams),
         ).copy(videoFx = VideoFxState(detectedAspectRatio = detected))
         assertEquals(AspectRatio.RATIO_16_9, state.videoFx.detectedAspectRatio)
     }

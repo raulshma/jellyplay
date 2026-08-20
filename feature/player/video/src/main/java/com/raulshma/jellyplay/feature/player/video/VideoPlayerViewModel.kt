@@ -198,7 +198,7 @@ private data class SegmentProjection(
         autoplayCancelled = state.autoplay.autoplayCancelled,
         isInSyncPlaySession = state.isInSyncPlaySession,
         nextEpisode = state.episodes.nextEpisode,
-        seriesId = state.seriesId,
+        seriesId = state.media.seriesId,
     )
 
     /**
@@ -473,7 +473,7 @@ class VideoPlayerViewModel @Inject constructor(
         userMessageBus = userMessageBus,
         scope = scope,
         addExternalSubtitle = { playerSessionManager.addExternalSubtitle(it) },
-        getMediaStreams = { _uiState.value.mediaStreams },
+        getMediaStreams = { _uiState.value.media.mediaStreams },
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
         onMediaDetailRefreshed = { detail -> applyMediaDetailAndSourceState(detail) },
         getCurrentMediaDetail = { mediaDetail },
@@ -503,7 +503,7 @@ class VideoPlayerViewModel @Inject constructor(
         getUiState = { _uiState.value },
         updateUiState = { transform -> _uiState.update(transform) },
         getItemId = { playerSessionManager.sessionState.value.currentItemId },
-        getMediaStreams = { _uiState.value.mediaStreams },
+        getMediaStreams = { _uiState.value.media.mediaStreams },
     )
     private val mediaSessionController = MediaSessionController(
         context = context,
@@ -738,7 +738,7 @@ class VideoPlayerViewModel @Inject constructor(
         }
 
         override fun onStreamUrlResolved(url: String) {
-            _uiState.update { it.copy(streamUrl = url) }
+            _uiState.update { it.copy(media = it.media.copy(streamUrl = url)) }
         }
     }
 
@@ -940,7 +940,7 @@ class VideoPlayerViewModel @Inject constructor(
         engineStore = engineStore,
         subtitleStore = subtitleStore,
         getEngine = { playerSessionManager.engine },
-        getMediaStreams = { _uiState.value.mediaStreams },
+        getMediaStreams = { _uiState.value.media.mediaStreams },
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
         getCurrentSeriesId = { playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId },
         getPlayMethod = { playerSessionManager.sessionState.value.playMethod },
@@ -1116,20 +1116,22 @@ class VideoPlayerViewModel @Inject constructor(
                         state.copy(
                             title = session.title,
                             subtitle = session.subtitle,
-                            currentMediaSource = session.currentMediaSource,
-                            mediaStreams = session.mediaStreams,
-                            playMethod = session.playMethodString,
-                            transcodeReasons = session.transcodeReasons,
-                            isDirectPlayForced = session.isDirectPlayForced,
-                            // Mirror the session's series id so the per-series
-                            // "remember subtitle/audio" toggle row renders for
-                            // episode playback (footer is gated on seriesId !=
-                            // null). applyMediaDetail also sets this on the
-                            // initial load, but the session collector fires on
-                            // every transition (e.g. next-episode autoplay) and
-                            // must keep it in sync even when the detail refresh
-                            // lags or is skipped.
-                            seriesId = seriesId,
+                            media = state.media.copy(
+                                currentMediaSource = session.currentMediaSource,
+                                mediaStreams = session.mediaStreams,
+                                playMethod = session.playMethodString,
+                                transcodeReasons = session.transcodeReasons,
+                                isDirectPlayForced = session.isDirectPlayForced,
+                                // Mirror the session's series id so the per-series
+                                // "remember subtitle/audio" toggle row renders for
+                                // episode playback (footer is gated on seriesId !=
+                                // null). applyMediaDetail also sets this on the
+                                // initial load, but the session collector fires on
+                                // every transition (e.g. next-episode autoplay) and
+                                // must keep it in sync even when the detail refresh
+                                // lags or is skipped.
+                                seriesId = seriesId,
+                            ),
                         )
                     }
                 // The per-item override flags now live in the track slice.
@@ -1804,7 +1806,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun loadSeasonEpisodes(seasonId: String) {
-        val seriesId = mediaDetail?.item?.seriesId ?: uiState.value.seriesId ?: return
+        val seriesId = mediaDetail?.item?.seriesId ?: uiState.value.media.seriesId ?: return
         launch {
             _uiState.update { it.copy(episodes = it.episodes.copy(isLoadingEpisodes = true)) }
             val episodeList = resolveEpisodes(seriesId, seasonId)
@@ -2000,7 +2002,7 @@ class VideoPlayerViewModel @Inject constructor(
     fun setAspectRatio(ratio: AspectRatio) {
         _uiState.update { it.copy(videoFx = it.videoFx.copy(aspectRatio = ratio)) }
         if (ratio == AspectRatio.AUTO) {
-            val detected = detectAspectRatio(_uiState.value.mediaStreams)
+            val detected = detectAspectRatio(_uiState.value.media.mediaStreams)
             _uiState.update { it.copy(videoFx = it.videoFx.copy(detectedAspectRatio = detected)) }
         }
         // The PiP aspect ratio always tracks the underlying media, independent
@@ -2756,13 +2758,15 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { state ->
             state.copy(
                 chapters = detail.chapters,
-                seriesId = detail.item.seriesId,
                 episodes = state.episodes.copy(
                     currentSeasonId = detail.item.seasonId ?: state.episodes.currentSeasonId,
                 ),
-                overview = detail.item.overview ?: "",
-                people = detail.people,
-                artworkUrl = getImageUrl(detail.item.id, 400),
+                media = state.media.copy(
+                    overview = detail.item.overview ?: "",
+                    people = detail.people,
+                    artworkUrl = getImageUrl(detail.item.id, 400),
+                    seriesId = detail.item.seriesId,
+                ),
             )
         }
         fetchCompanionLyrics(detail)
@@ -2780,10 +2784,12 @@ class VideoPlayerViewModel @Inject constructor(
                     trackName = item.name,
                     duration = durationSec.toDouble()
                 ).getOrNull()
-                _uiState.update { it.copy(lyricsLines = lyricsResult?.lines ?: emptyList()) }
+                _uiState.update {
+                    it.copy(media = it.media.copy(lyricsLines = lyricsResult?.lines ?: emptyList()))
+                }
             }
         } else {
-            _uiState.update { it.copy(lyricsLines = emptyList()) }
+            _uiState.update { it.copy(media = it.media.copy(lyricsLines = emptyList())) }
         }
     }
 
@@ -2803,8 +2809,10 @@ class VideoPlayerViewModel @Inject constructor(
         val source = detail.mediaSources.firstOrNull()
         val streams = source?.mediaStreams ?: emptyList()
         _uiState.update { it.copy(
-            currentMediaSource = source,
-            mediaStreams = streams,
+            media = it.media.copy(
+                currentMediaSource = source,
+                mediaStreams = streams,
+            ),
             videoFx = it.videoFx.copy(detectedAspectRatio = detectAspectRatio(streams)),
         ) }
         updatePipAspectRatio(streams)

@@ -129,7 +129,7 @@ class VideoPlayerResetEquivalenceTest {
      * "reset to default" does not hold for them at snapshot time.
      * Same leaf-path convention as [residualWhitelist].
      */
-    private val loadRepopulated = setOf("isInitializing", "playMethod", "autoplay.videoAutoplayNext")
+    private val loadRepopulated = setOf("isInitializing", "media.playMethod", "autoplay.videoAutoplayNext")
 
     /**
      * Leaves the reset re-sets to explicit (non-default) values: the per-item

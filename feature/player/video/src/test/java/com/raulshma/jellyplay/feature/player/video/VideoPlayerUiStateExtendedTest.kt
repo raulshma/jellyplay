@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
+import com.raulshma.jellyplay.feature.player.video.state.MediaContentState
 import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -274,14 +275,14 @@ class VideoPlayerUiStateExtendedTest {
 
     @Test
     fun hdrType_noStreams_returnsNull() {
-        val state = VideoPlayerUiState(mediaStreams = emptyList())
+        val state = VideoPlayerUiState(media = MediaContentState(mediaStreams = emptyList()))
         assertNull(state.hdrType)
     }
 
     @Test
     fun hdrType_sdrVideoStream_returnsNull() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "SDR"))
+            media = MediaContentState(mediaStreams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "SDR")))
         )
         assertNull(state.hdrType)
     }
@@ -289,7 +290,7 @@ class VideoPlayerUiStateExtendedTest {
     @Test
     fun hdrType_hdrVideoStream_returnsRange() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "HDR10"))
+            media = MediaContentState(mediaStreams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "HDR10")))
         )
         assertEquals("HDR10", state.hdrType)
     }
@@ -297,7 +298,7 @@ class VideoPlayerUiStateExtendedTest {
     @Test
     fun hdrType_noVideoStream_returnsNull() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(MediaStream(index = 0, type = StreamType.AUDIO))
+            media = MediaContentState(mediaStreams = listOf(MediaStream(index = 0, type = StreamType.AUDIO)))
         )
         assertNull(state.hdrType)
     }
@@ -306,14 +307,14 @@ class VideoPlayerUiStateExtendedTest {
 
     @Test
     fun videoFrameRate_noVideoStream_returnsNull() {
-        val state = VideoPlayerUiState(mediaStreams = emptyList())
+        val state = VideoPlayerUiState(media = MediaContentState(mediaStreams = emptyList()))
         assertNull(state.videoFrameRate)
     }
 
     @Test
     fun videoFrameRate_videoStreamWithRate_returnsRate() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, realFrameRate = 23.976f))
+            media = MediaContentState(mediaStreams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, realFrameRate = 23.976f)))
         )
         assertEquals(23.976f, state.videoFrameRate!!, 0.001f)
     }
@@ -401,7 +402,7 @@ class VideoPlayerUiStateSyncPlayTest {
                     mediaType = com.raulshma.jellyplay.core.model.MediaType.EPISODE
                 ),
             ),
-            seriesId = "series1",
+            media = MediaContentState(seriesId = "series1"),
             duration = 3_600_000L,
             currentPosition = 3_570_000L, // would normally show up-next
         )
@@ -413,7 +414,7 @@ class VideoPlayerUiStateSyncPlayTest {
         val state = VideoPlayerUiState(
             isInSyncPlaySession = false,
             episodes = EpisodeBrowserState(nextEpisode = null),
-            seriesId = "series1",
+            media = MediaContentState(seriesId = "series1"),
             duration = 3_600_000L,
             currentPosition = 3_570_000L,
         )
@@ -430,7 +431,7 @@ class VideoPlayerUiStateSyncPlayTest {
                     mediaType = com.raulshma.jellyplay.core.model.MediaType.EPISODE
                 ),
             ),
-            seriesId = null,
+            media = MediaContentState(seriesId = null),
             duration = 3_600_000L,
             currentPosition = 3_570_000L,
         )

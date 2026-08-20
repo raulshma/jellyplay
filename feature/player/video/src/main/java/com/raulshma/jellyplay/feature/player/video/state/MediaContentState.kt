@@ -21,9 +21,14 @@ data class MediaContentState(
     val streamUrl: String? = null,
     val currentMediaSource: MediaSource? = null,
     val mediaStreams: List<MediaStream> = emptyList(),
-    val playMethod: String = "Direct Play",
+    /** Display name of the active play method; empty until the load resolves it. */
+    val playMethod: String = "",
     val isDirectPlayForced: Boolean = false,
     val seriesId: String? = null,
+    /** Raw server transcode reasons for the current stream; empty when
+     *  direct playing. Formatted for display at the call site via
+     *  [com.raulshma.jellyplay.core.ui.player.TranscodeReasonsFormatter]. */
+    val transcodeReasons: List<String> = emptyList(),
 ) {
     /** HDR type from the first video stream, or null for SDR/unknown. */
     val hdrType: String?

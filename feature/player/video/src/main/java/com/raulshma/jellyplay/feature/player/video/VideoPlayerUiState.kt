@@ -4,8 +4,6 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
-import com.raulshma.jellyplay.core.model.MediaSource
-import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -13,7 +11,6 @@ import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
-import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
@@ -28,8 +25,6 @@ import com.raulshma.jellyplay.feature.player.video.state.MediaContentState
 import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
 import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
-import com.raulshma.jellyplay.core.model.PersonInfo
-import com.raulshma.jellyplay.core.model.LyricsLine
 
 /**
  * Lightweight description of an in-progress pre-roll intro for Cinema Mode.
@@ -88,24 +83,11 @@ data class VideoPlayerUiState(
     val currentPosition: Long = 0L,
     val duration: Long = 0L,
     val playbackSpeed: Float = 1.0f,
-    val overview: String = "",
-    val people: List<PersonInfo> = emptyList(),
-    val artworkUrl: String? = null,
-    val lyricsLines: List<LyricsLine> = emptyList(),
     val chapters: List<ChapterInfo> = emptyList(),
-    val playMethod: String = "",
-    /** Raw server transcode reasons for the current stream; empty when
-     *  direct playing. Formatted for display at the call site via
-     *  [com.raulshma.jellyplay.core.ui.player.TranscodeReasonsFormatter]. */
-    val transcodeReasons: List<String> = emptyList(),
-    val isDirectPlayForced: Boolean = false,
     val subtitleStyle: SubtitleStyle = SubtitleStyle.DEFAULT,
     val dialogueBoostEnabled: Boolean = false,
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
-    val streamUrl: String? = null,
     val preferredPlayerType: PlayerType = PlayerType.EXO_PLAYER,
-    val currentMediaSource: MediaSource? = null,
-    val mediaStreams: List<MediaStream> = emptyList(),
     val seekDurationMs: Long = 10_000L,
     val defaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val controlsTimeoutMs: Long = 5_000L,
@@ -126,7 +108,6 @@ data class VideoPlayerUiState(
      * (`segments` / `segmentBehaviors`); now a stored slice.
      */
     val segmentState: SegmentState = SegmentState(),
-    val seriesId: String? = null,
     val isInSyncPlaySession: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
     /**
@@ -186,6 +167,17 @@ data class VideoPlayerUiState(
     val cinemaIntroState: CinemaIntroUiState? = null,
     val isMuted: Boolean = false,
     /**
+     * Media-content metadata: what's playing (overview, cast, artwork,
+     * lyrics), how (play method, direct-play flag, transcode reasons), the
+     * raw source/stream model, and the series pointer. Formerly flat fields
+     * (`overview` / `people` / `artworkUrl` / `lyricsLines` / `streamUrl` /
+     * `currentMediaSource` / `mediaStreams` / `playMethod` /
+     * `isDirectPlayForced` / `seriesId` / `transcodeReasons`); now a stored
+     * slice. [chapters] deliberately stays flat — it feeds both the media
+     * display and the segment calculation.
+     */
+    val media: MediaContentState = MediaContentState(),
+    /**
      * Auto-play-next-episode settings + the user's cancellation of the current
      * countdown. Formerly flat fields (`videoAutoplayNext` /
      * `autoPlayCountdownSec` / `autoplayCancelled`); now a stored slice.
@@ -224,28 +216,21 @@ data class VideoPlayerUiState(
 
     // ── Cohesive sub-state projections ────────────────────────────────────
     // Each groups the flat constructor fields by concern.
-    // New code should read these (e.g. `state.media.isLive`); the flat fields
-    // remain on the root for incremental call-site migration and will be
-    // deprecated once all consumers move over.
+    // New code should read these (e.g. `state.gestures.brightnessLevel`); the
+    // flat fields remain on the root for incremental call-site migration and
+    // will be deprecated once all consumers move over.
     //
     // These are derived `val`s (computed per access) rather than stored
     // properties, so the data class's equality/hashCode still reflect the flat
     // fields — the source of truth during the transition.
     //
-    // The sleep-timer, track, subtitle-workflow, audio-effects and SyncPlay
-    // group-display slices used to have projections here too; they now live in
-    // their owning controllers (`SleepTimerController.state`,
-    // `TrackSelectionHelper.state`, `SubtitleManager.state`,
-    // `VideoEffectsController.state`, `SyncPlayBridge.state`).
-
-    val media: MediaContentState
-        get() = MediaContentState(
-            overview = overview, people = people, artworkUrl = artworkUrl,
-            lyricsLines = lyricsLines, streamUrl = streamUrl,
-            currentMediaSource = currentMediaSource, mediaStreams = mediaStreams,
-            playMethod = playMethod, isDirectPlayForced = isDirectPlayForced,
-            seriesId = seriesId,
-        )
+    // The media slice (`state.media.…`) used to be a projection here too; it
+    // is now a STORED constructor field. The sleep-timer, track,
+    // subtitle-workflow, audio-effects and SyncPlay group-display slices used
+    // to have projections here as well; they now live in their owning
+    // controllers (`SleepTimerController.state`, `TrackSelectionHelper.state`,
+    // `SubtitleManager.state`, `VideoEffectsController.state`,
+    // `SyncPlayBridge.state`).
 
     val gestures: GesturePrefsState
         get() = GesturePrefsState(
@@ -314,7 +299,7 @@ data class VideoPlayerUiState(
         autoplayCancelled = autoplay.autoplayCancelled,
         isInSyncPlaySession = isInSyncPlaySession,
         hasNextEpisode = episodes.nextEpisode != null,
-        seriesId = seriesId,
+        seriesId = media.seriesId,
     )
 
     val activeSegment: MediaSegment?
@@ -347,15 +332,13 @@ data class VideoPlayerUiState(
     val isOutroNearEnd: Boolean
         get() = SegmentCalculator.isOutroNearEnd(toSegmentInput(), currentPosition)
 
+    // Derived media display values: delegated to the stored slice (the single
+    // derivation home — see MediaContentState.hdrType / videoFrameRate).
     val hdrType: String?
-        get() {
-            val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO } ?: return null
-            val range = videoStream.videoRange ?: return null
-            return if (range.equals("SDR", ignoreCase = true)) null else range
-        }
+        get() = media.hdrType
 
     val videoFrameRate: Float?
-        get() = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }?.realFrameRate
+        get() = media.videoFrameRate
 }
 
 /**

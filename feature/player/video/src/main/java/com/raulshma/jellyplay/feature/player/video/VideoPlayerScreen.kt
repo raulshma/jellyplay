@@ -527,7 +527,7 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(uiState.frameRateMatching, uiState.refreshRateMode, uiState.videoFrameRate) {
         if (uiState.frameRateMatching && uiState.refreshRateMode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF && uiState.videoFrameRate != null) {
-            val videoStream = uiState.mediaStreams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
+            val videoStream = uiState.media.mediaStreams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
             activity?.let {
                 if (!it.isDestroyed && !it.isFinishing) {
                     FrameRateMatcher.matchFrameRate(
@@ -617,8 +617,8 @@ fun VideoPlayerScreen(
     val engineDuration by viewModel.durationMs.collectAsStateWithLifecycle()
     val duration = if (isCastConnected) castDuration else engineDuration
     val playbackSpeed = uiState.playbackSpeed
-    val currentMediaSource = uiState.currentMediaSource
-    val mediaStreams = uiState.mediaStreams
+    val currentMediaSource = uiState.media.currentMediaSource
+    val mediaStreams = uiState.media.mediaStreams
     val aspectRatio = uiState.videoFx.aspectRatio
     val detectedAspectRatio = uiState.videoFx.detectedAspectRatio
 
@@ -688,7 +688,7 @@ fun VideoPlayerScreen(
         engine?.setAspectRatio(effectiveRatio)
     }
 
-    val playMethod = uiState.playMethod
+    val playMethod = uiState.media.playMethod
     val subtitleStyle = uiState.subtitleStyle
     val nextEpisode = uiState.episodes.nextEpisode
     val nextEpisodeImageUrl = remember(nextEpisode) {
@@ -864,10 +864,10 @@ fun VideoPlayerScreen(
         CompanionDashboard(
             title = title,
             subtitle = subtitle,
-            overview = uiState.overview,
-            people = uiState.people,
-            lyricsLines = uiState.lyricsLines,
-            artworkUrl = uiState.artworkUrl,
+            overview = uiState.media.overview,
+            people = uiState.media.people,
+            lyricsLines = uiState.media.lyricsLines,
+            artworkUrl = uiState.media.artworkUrl,
             isPlaying = isPlaying,
             castPositionFlow = viewModel.cast.castPositionMs,
             durationMs = duration,
@@ -1489,11 +1489,11 @@ fun VideoPlayerScreen(
                         !isPlaying -> "Paused"
                         else -> "Playing"
                     },
-                    playMethod = uiState.playMethod,
+                    playMethod = uiState.media.playMethod,
                     streamingQuality = uiState.preferredPlayerType.name,
                     playerType = uiState.preferredPlayerType.name,
                     decoderMode = effectsState.decoderMode.displayName,
-                    transcodeReasons = rememberFormattedTranscodeReasons(uiState.transcodeReasons),
+                    transcodeReasons = rememberFormattedTranscodeReasons(uiState.media.transcodeReasons),
                     // Engines expose a real audio session id (ExoPlayer: live
                     // session; mpv: generated id; VLC: 0 — capabilities gate the
                     // row). Read the collected engine so a swap refreshes it.
@@ -1688,9 +1688,9 @@ fun VideoPlayerScreen(
                 audioPassthrough = effectsState.audioPassthrough,
                 segments = uiState.segmentState.segments,
                 resumePositionMs = resumePositionMs,
-                playMethod = uiState.playMethod,
+                playMethod = uiState.media.playMethod,
                 hdrType = uiState.hdrType,
-                mediaStreams = uiState.mediaStreams,
+                mediaStreams = uiState.media.mediaStreams,
                 audioTracks = trackState.audioTracks,
                 isConnectionMetered = uiState.isConnectionMetered,
                 subtitleDelayMs = uiState.subtitleStyle.offsetMs,
@@ -1979,7 +1979,7 @@ fun VideoPlayerScreen(
             onRetry = { viewModel.retryPlayback() },
             onRetryWithEngine = { viewModel.retryWithEngine(it) },
             onDismiss = { viewModel.dismissPlaybackError() },
-            transcodeReasons = rememberFormattedTranscodeReasons(uiState.transcodeReasons),
+            transcodeReasons = rememberFormattedTranscodeReasons(uiState.media.transcodeReasons),
         )
     }
 }
@@ -2181,7 +2181,7 @@ private fun PlayerSheetRouter(
                 onSelect = { viewModel.selectAudioTrack(it) },
                 onReset = if (trackState.hasAudioOverride) { { viewModel.resetAudioTrack() } } else null,
                 onDismiss = dismissSheet,
-                footer = if (uiState.seriesId != null) {
+                footer = if (uiState.media.seriesId != null) {
                     {
                         // Per-series audio-language preference toggle. Saving
                         // remembers the currently-selected track's language for
@@ -2221,7 +2221,7 @@ private fun PlayerSheetRouter(
                 onResetSubtitleTrack = if (trackState.hasSubtitleOverride) {
                     { viewModel.resetSubtitleTrack() }
                 } else null,
-                tracksFooter = if (uiState.seriesId != null) {
+                tracksFooter = if (uiState.media.seriesId != null) {
                     {
                         // Per-series subtitle preference toggle. With a real track
                         // selected it saves that track's language + role so every
@@ -2318,9 +2318,9 @@ private fun PlayerSheetRouter(
                 sheetState = rememberModalBottomSheetState(),
             ) {
                 PlaybackInfoOverlay(
-                    mediaSource = uiState.currentMediaSource,
-                    mediaStreams = uiState.mediaStreams,
-                    playMethod = uiState.playMethod,
+                    mediaSource = uiState.media.currentMediaSource,
+                    mediaStreams = uiState.media.mediaStreams,
+                    playMethod = uiState.media.playMethod,
                     isConnectionMetered = uiState.isConnectionMetered,
                     hdrType = uiState.hdrType,
                     playerType = uiState.preferredPlayerType.name,

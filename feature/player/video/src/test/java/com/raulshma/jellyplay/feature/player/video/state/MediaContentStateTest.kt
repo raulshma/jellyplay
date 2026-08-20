@@ -9,9 +9,10 @@ import org.junit.Test
 /**
  * Pins the HDR / frame-rate derivation on [MediaContentState].
  *
- * `hdrType`/`videoFrameRate` are duplicated verbatim on the legacy
- * `VideoPlayerUiState` (where they ARE tested); this pins the extracted
- * `MediaContentState` contract directly so the two copies cannot silently drift.
+ * The `VideoPlayerUiState.hdrType` / `videoFrameRate` accessors delegate to
+ * this slice (`get() = media.hdrType`), so this is the single derivation
+ * home; the pin keeps the stream-scanning contract (first VIDEO stream,
+ * SDR-vs-HDR folding) from silently changing under the delegated readers.
  */
 class MediaContentStateTest {
 

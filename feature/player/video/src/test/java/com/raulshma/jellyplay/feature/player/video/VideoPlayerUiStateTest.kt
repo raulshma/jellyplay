@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
+import com.raulshma.jellyplay.feature.player.video.state.MediaContentState
 import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -31,7 +32,7 @@ class VideoPlayerUiStateTest {
         assertFalse(state.dialogueBoostEnabled)
         assertEquals(EffectStrength.MODERATE, state.dialogueBoostStrength)
         assertNull(state.videoFx.detectedAspectRatio)
-        assertNull(state.streamUrl)
+        assertNull(state.media.streamUrl)
     }
 
     @Test
@@ -217,7 +218,7 @@ class VideoPlayerUiStateTest {
             episodes = EpisodeBrowserState(
                 nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
             ),
-            seriesId = null,
+            media = MediaContentState(seriesId = null),
         )
         assertFalse(state.shouldShowUpNext)
     }
@@ -228,7 +229,7 @@ class VideoPlayerUiStateTest {
             episodes = EpisodeBrowserState(
                 nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
             ),
-            seriesId = "series1",
+            media = MediaContentState(seriesId = "series1"),
             segmentState = SegmentState(
                 segments = listOf(
                     MediaSegment(
@@ -249,7 +250,7 @@ class VideoPlayerUiStateTest {
             episodes = EpisodeBrowserState(
                 nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
             ),
-            seriesId = "series1",
+            media = MediaContentState(seriesId = "series1"),
             duration = 3_600_000L,
             currentPosition = 3_575_000L,
         )
@@ -262,7 +263,7 @@ class VideoPlayerUiStateTest {
             episodes = EpisodeBrowserState(
                 nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
             ),
-            seriesId = "series1",
+            media = MediaContentState(seriesId = "series1"),
             duration = 3_600_000L,
             currentPosition = 1_800_000L,
         )
@@ -275,7 +276,7 @@ class VideoPlayerUiStateTest {
             episodes = EpisodeBrowserState(
                 nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
             ),
-            seriesId = "series1",
+            media = MediaContentState(seriesId = "series1"),
             duration = 3_600_000L,
             currentPosition = 3_570_000L,
         )
@@ -288,7 +289,7 @@ class VideoPlayerUiStateTest {
             episodes = EpisodeBrowserState(
                 nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
             ),
-            seriesId = "series1",
+            media = MediaContentState(seriesId = "series1"),
             duration = 3_600_000L,
             currentPosition = 3_569_000L,
         )
@@ -298,8 +299,10 @@ class VideoPlayerUiStateTest {
     @Test
     fun hdrType_noVideoStream_returnsNull() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(
-                MediaStream(index = 0, type = StreamType.AUDIO),
+            media = MediaContentState(
+                mediaStreams = listOf(
+                    MediaStream(index = 0, type = StreamType.AUDIO),
+                ),
             ),
         )
         assertNull(state.hdrType)
@@ -308,8 +311,10 @@ class VideoPlayerUiStateTest {
     @Test
     fun hdrType_videoStreamNoRange_returnsNull() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(
-                MediaStream(index = 0, type = StreamType.VIDEO),
+            media = MediaContentState(
+                mediaStreams = listOf(
+                    MediaStream(index = 0, type = StreamType.VIDEO),
+                ),
             ),
         )
         assertNull(state.hdrType)
@@ -318,8 +323,10 @@ class VideoPlayerUiStateTest {
     @Test
     fun hdrType_sdrVideo_returnsNull() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(
-                MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "SDR"),
+            media = MediaContentState(
+                mediaStreams = listOf(
+                    MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "SDR"),
+                ),
             ),
         )
         assertNull(state.hdrType)
@@ -328,8 +335,10 @@ class VideoPlayerUiStateTest {
     @Test
     fun hdrType_sdrCaseInsensitive_returnsNull() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(
-                MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "sdr"),
+            media = MediaContentState(
+                mediaStreams = listOf(
+                    MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "sdr"),
+                ),
             ),
         )
         assertNull(state.hdrType)
@@ -338,8 +347,10 @@ class VideoPlayerUiStateTest {
     @Test
     fun hdrType_hdr10Video_returnsHDR10() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(
-                MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "HDR10"),
+            media = MediaContentState(
+                mediaStreams = listOf(
+                    MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "HDR10"),
+                ),
             ),
         )
         assertEquals("HDR10", state.hdrType)
@@ -348,8 +359,10 @@ class VideoPlayerUiStateTest {
     @Test
     fun hdrType_dolbyVisionVideo_returnsDolbyVision() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(
-                MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "DOVI"),
+            media = MediaContentState(
+                mediaStreams = listOf(
+                    MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "DOVI"),
+                ),
             ),
         )
         assertEquals("DOVI", state.hdrType)
@@ -364,8 +377,10 @@ class VideoPlayerUiStateTest {
     @Test
     fun videoFrameRate_withVideoStream_returnsFrameRate() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(
-                MediaStream(index = 0, type = StreamType.VIDEO, realFrameRate = 23.976f),
+            media = MediaContentState(
+                mediaStreams = listOf(
+                    MediaStream(index = 0, type = StreamType.VIDEO, realFrameRate = 23.976f),
+                ),
             ),
         )
         assertEquals(23.976f, state.videoFrameRate!!, 0.001f)
@@ -374,8 +389,10 @@ class VideoPlayerUiStateTest {
     @Test
     fun videoFrameRate_noFrameRate_returnsNull() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(
-                MediaStream(index = 0, type = StreamType.VIDEO),
+            media = MediaContentState(
+                mediaStreams = listOf(
+                    MediaStream(index = 0, type = StreamType.VIDEO),
+                ),
             ),
         )
         assertNull(state.videoFrameRate)
