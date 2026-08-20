@@ -197,7 +197,7 @@ private data class SegmentProjection(
         segmentBehaviors = state.segmentState.segmentBehaviors,
         autoplayCancelled = state.autoplay.autoplayCancelled,
         isInSyncPlaySession = state.isInSyncPlaySession,
-        nextEpisode = state.nextEpisode,
+        nextEpisode = state.episodes.nextEpisode,
         seriesId = state.seriesId,
     )
 
@@ -1794,9 +1794,11 @@ class VideoPlayerViewModel @Inject constructor(
         val seriesId = detail.item.seriesId ?: return
         val currentSeasonId = detail.item.seasonId ?: return
         launch {
-            _uiState.update { it.copy(isLoadingEpisodes = true) }
+            _uiState.update { it.copy(episodes = it.episodes.copy(isLoadingEpisodes = true)) }
             val seasonList = resolveSeasons(seriesId)
-            _uiState.update { it.copy(seriesSeasons = seasonList, currentSeasonId = currentSeasonId) }
+            _uiState.update {
+                it.copy(episodes = it.episodes.copy(seriesSeasons = seasonList, currentSeasonId = currentSeasonId))
+            }
             loadSeasonEpisodes(currentSeasonId)
         }
     }
@@ -1804,12 +1806,14 @@ class VideoPlayerViewModel @Inject constructor(
     fun loadSeasonEpisodes(seasonId: String) {
         val seriesId = mediaDetail?.item?.seriesId ?: uiState.value.seriesId ?: return
         launch {
-            _uiState.update { it.copy(isLoadingEpisodes = true) }
+            _uiState.update { it.copy(episodes = it.episodes.copy(isLoadingEpisodes = true)) }
             val episodeList = resolveEpisodes(seriesId, seasonId)
             _uiState.update { it.copy(
-                seasonEpisodes = episodeList,
-                currentSeasonId = seasonId,
-                isLoadingEpisodes = false,
+                episodes = it.episodes.copy(
+                    seasonEpisodes = episodeList,
+                    currentSeasonId = seasonId,
+                    isLoadingEpisodes = false,
+                ),
             ) }
         }
     }
@@ -2558,7 +2562,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     private fun handlePlaybackEnded() {
-        val next = _uiState.value.nextEpisode
+        val next = _uiState.value.episodes.nextEpisode
         if (autoplayController.shouldAutoPlayNext(next)) {
             playNextEpisode()
         } else {
@@ -2715,14 +2719,16 @@ class VideoPlayerViewModel @Inject constructor(
                 episodes[currentIndex + 1]
             } else null
             val previous = if (currentIndex > 0) episodes[currentIndex - 1] else null
-            _uiState.update { it.copy(nextEpisode = next, previousEpisode = previous) }
+            _uiState.update {
+                it.copy(episodes = it.episodes.copy(nextEpisode = next, previousEpisode = previous))
+            }
         }
     }
 
     fun skipCredits() {
         val state = positionAwareState()
 
-        if (state.isOutroNearEnd && autoplayController.canSkipToNext(state.nextEpisode)) {
+        if (state.isOutroNearEnd && autoplayController.canSkipToNext(state.episodes.nextEpisode)) {
             playNextEpisode()
             return
         }
@@ -2751,7 +2757,9 @@ class VideoPlayerViewModel @Inject constructor(
             state.copy(
                 chapters = detail.chapters,
                 seriesId = detail.item.seriesId,
-                currentSeasonId = detail.item.seasonId ?: state.currentSeasonId,
+                episodes = state.episodes.copy(
+                    currentSeasonId = detail.item.seasonId ?: state.episodes.currentSeasonId,
+                ),
                 overview = detail.item.overview ?: "",
                 people = detail.people,
                 artworkUrl = getImageUrl(detail.item.id, 400),
@@ -2958,7 +2966,12 @@ class VideoPlayerViewModel @Inject constructor(
                 segmentState = currentState.segmentState.copy(
                     segmentBehaviors = currentState.segmentState.segmentBehaviors,
                 ),
-                videoEpisodeBrowserEnabled = currentState.videoEpisodeBrowserEnabled,
+                // episodes: only the browser feature toggle carries across an
+                // item switch — adjacency, season/episode lists, season id and
+                // the loading flag are per-item and reset to defaults.
+                episodes = currentState.episodes.copy(
+                    videoEpisodeBrowserEnabled = currentState.episodes.videoEpisodeBrowserEnabled,
+                ),
                 showPlaybackMetadata = currentState.showPlaybackMetadata,
                 showClock = currentState.showClock,
                 showTimeRemaining = currentState.showTimeRemaining,

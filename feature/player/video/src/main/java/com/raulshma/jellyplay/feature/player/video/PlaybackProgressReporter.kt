@@ -91,7 +91,7 @@ internal class PlaybackProgressReporter(
         if (durationMs <= 0L) return
         if (currentPositionMs < durationMs - 500L) return
         val state = uiState.value
-        if (state.nextEpisode != null) return
+        if (state.episodes.nextEpisode != null) return
         endedNoNextTriggered = true
         onPlaybackEndedNoNext()
     }

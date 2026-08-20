@@ -690,7 +690,7 @@ fun VideoPlayerScreen(
 
     val playMethod = uiState.playMethod
     val subtitleStyle = uiState.subtitleStyle
-    val nextEpisode = uiState.nextEpisode
+    val nextEpisode = uiState.episodes.nextEpisode
     val nextEpisodeImageUrl = remember(nextEpisode) {
         nextEpisode?.let { viewModel.getImageUrl(it.id, 300) }
     }
@@ -875,7 +875,7 @@ fun VideoPlayerScreen(
             isConnecting = isCastConnecting,
             audioTracks = trackState.audioTracks,
             subtitleTracks = trackState.subtitleTracks,
-            episodes = uiState.seasonEpisodes,
+            episodes = uiState.episodes.seasonEpisodes,
             onPlayPause = doTogglePlayPause,
             onSeekBack = doSeekBack,
             onSeekForward = doSeekForward,
@@ -1540,13 +1540,13 @@ fun VideoPlayerScreen(
                     .padding(top = RESUME_CHIP_TOP_CLEARANCE_DP.dp),
             )
 
-            val hasEpisodes = uiState.seriesSeasons.isNotEmpty() && uiState.seasonEpisodes.isNotEmpty()
-            val episodeBrowserEnabled = uiState.videoEpisodeBrowserEnabled
+            val hasEpisodes = uiState.episodes.seriesSeasons.isNotEmpty() && uiState.episodes.seasonEpisodes.isNotEmpty()
+            val episodeBrowserEnabled = uiState.episodes.videoEpisodeBrowserEnabled
             // Previous/Next center-button availability. Derived from the
             // adjacency snapshot fetchAdjacentEpisodes writes alongside
             // nextEpisode, so these stay consistent with the up-next overlay.
-            val hasPreviousEpisode = uiState.previousEpisode != null
-            val hasNextEpisode = uiState.nextEpisode != null
+            val hasPreviousEpisode = uiState.episodes.previousEpisode != null
+            val hasNextEpisode = uiState.episodes.nextEpisode != null
 
             // Hoist PlayerControls callbacks into remembered lambdas.
             // Each fresh `{ ... }` passed inline below allocated a new lambda
@@ -2373,11 +2373,11 @@ private fun PlayerSheetRouter(
         }
         is PlayerSheet.Episodes -> {
             EpisodePickerSheet(
-                seasons = uiState.seriesSeasons,
-                episodes = uiState.seasonEpisodes,
-                currentSeasonId = uiState.currentSeasonId,
+                seasons = uiState.episodes.seriesSeasons,
+                episodes = uiState.episodes.seasonEpisodes,
+                currentSeasonId = uiState.episodes.currentSeasonId,
                 currentEpisodeId = itemId,
-                isLoading = uiState.isLoadingEpisodes,
+                isLoading = uiState.episodes.isLoadingEpisodes,
                 onSeasonSelect = { viewModel.loadSeasonEpisodes(it) },
                 onEpisodeSelect = { episode ->
                     viewModel.playEpisode(episode.id, episode.playbackPositionTicks ?: 0L)

@@ -224,7 +224,9 @@ class SessionLoadPipeline(
                         base.toMap()
                     },
                 ),
-                videoEpisodeBrowserEnabled = agg.videoPlayer.videoEpisodeBrowserEnabled,
+                episodes = episodes.copy(
+                    videoEpisodeBrowserEnabled = agg.videoPlayer.videoEpisodeBrowserEnabled,
+                ),
                 showPlaybackMetadata = agg.videoPlayer.videoShowPlaybackMetadata,
                 showClock = agg.videoPlayer.showClockInPlayer,
                 showTimeRemaining = agg.videoPlayer.showTimeRemaining,

@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
+import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
 import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -394,9 +395,11 @@ class VideoPlayerUiStateSyncPlayTest {
     fun shouldShowUpNext_falseWhenInSyncPlaySession() {
         val state = VideoPlayerUiState(
             isInSyncPlaySession = true,
-            nextEpisode = com.raulshma.jellyplay.core.model.MediaItem(
-                id = "ep2", name = "Episode 2",
-                mediaType = com.raulshma.jellyplay.core.model.MediaType.EPISODE
+            episodes = EpisodeBrowserState(
+                nextEpisode = com.raulshma.jellyplay.core.model.MediaItem(
+                    id = "ep2", name = "Episode 2",
+                    mediaType = com.raulshma.jellyplay.core.model.MediaType.EPISODE
+                ),
             ),
             seriesId = "series1",
             duration = 3_600_000L,
@@ -409,7 +412,7 @@ class VideoPlayerUiStateSyncPlayTest {
     fun shouldShowUpNext_falseWhenNoNextEpisode() {
         val state = VideoPlayerUiState(
             isInSyncPlaySession = false,
-            nextEpisode = null,
+            episodes = EpisodeBrowserState(nextEpisode = null),
             seriesId = "series1",
             duration = 3_600_000L,
             currentPosition = 3_570_000L,
@@ -421,9 +424,11 @@ class VideoPlayerUiStateSyncPlayTest {
     fun shouldShowUpNext_falseWhenNoSeriesId() {
         val state = VideoPlayerUiState(
             isInSyncPlaySession = false,
-            nextEpisode = com.raulshma.jellyplay.core.model.MediaItem(
-                id = "ep2", name = "Episode 2",
-                mediaType = com.raulshma.jellyplay.core.model.MediaType.EPISODE
+            episodes = EpisodeBrowserState(
+                nextEpisode = com.raulshma.jellyplay.core.model.MediaItem(
+                    id = "ep2", name = "Episode 2",
+                    mediaType = com.raulshma.jellyplay.core.model.MediaType.EPISODE
+                ),
             ),
             seriesId = null,
             duration = 3_600_000L,

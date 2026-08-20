@@ -16,7 +16,6 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrickplayInfo
-import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
@@ -103,8 +102,6 @@ data class VideoPlayerUiState(
     val subtitleStyle: SubtitleStyle = SubtitleStyle.DEFAULT,
     val dialogueBoostEnabled: Boolean = false,
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
-    val nextEpisode: JellyfinMediaItem? = null,
-    val previousEpisode: JellyfinMediaItem? = null,
     val streamUrl: String? = null,
     val preferredPlayerType: PlayerType = PlayerType.EXO_PLAYER,
     val currentMediaSource: MediaSource? = null,
@@ -166,11 +163,6 @@ data class VideoPlayerUiState(
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,
     val trickplayInfo: TrickplayInfo? = null,
-    val seriesSeasons: List<JellyfinMediaItem> = emptyList(),
-    val seasonEpisodes: List<JellyfinMediaItem> = emptyList(),
-    val currentSeasonId: String? = null,
-    val isLoadingEpisodes: Boolean = false,
-    val videoEpisodeBrowserEnabled: Boolean = true,
     val bufferedPosition: Long = 0L,
     val showVideoStats: Boolean = false,
     val videoStats: EngineVideoStats = EngineVideoStats(),
@@ -205,6 +197,14 @@ data class VideoPlayerUiState(
      * `tvZoomModePercent`); now a stored slice.
      */
     val videoFx: VideoFxState = VideoFxState(),
+    /**
+     * Series/season/episode browser state: adjacent-episode pointers, the
+     * season/episode lists backing the episode-picker sheet, and the browser
+     * feature toggle. Formerly flat fields (`nextEpisode` / `previousEpisode` /
+     * `seriesSeasons` / `seasonEpisodes` / `currentSeasonId` /
+     * `isLoadingEpisodes` / `videoEpisodeBrowserEnabled`); now a stored slice.
+     */
+    val episodes: EpisodeBrowserState = EpisodeBrowserState(),
     /**
      * Whether the active network is metered (cellular or metered Wi-Fi).
      * Surfaced so the playback metadata can show why a quality cap is being
@@ -245,14 +245,6 @@ data class VideoPlayerUiState(
             currentMediaSource = currentMediaSource, mediaStreams = mediaStreams,
             playMethod = playMethod, isDirectPlayForced = isDirectPlayForced,
             seriesId = seriesId,
-        )
-
-    val episodes: EpisodeBrowserState
-        get() = EpisodeBrowserState(
-            nextEpisode = nextEpisode, seriesSeasons = seriesSeasons,
-            seasonEpisodes = seasonEpisodes, currentSeasonId = currentSeasonId,
-            isLoadingEpisodes = isLoadingEpisodes,
-            videoEpisodeBrowserEnabled = videoEpisodeBrowserEnabled,
         )
 
     val gestures: GesturePrefsState
@@ -321,7 +313,7 @@ data class VideoPlayerUiState(
         durationMs = duration,
         autoplayCancelled = autoplay.autoplayCancelled,
         isInSyncPlaySession = isInSyncPlaySession,
-        hasNextEpisode = nextEpisode != null,
+        hasNextEpisode = episodes.nextEpisode != null,
         seriesId = seriesId,
     )
 

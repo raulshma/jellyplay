@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
 import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -213,7 +214,9 @@ class VideoPlayerUiStateTest {
     @Test
     fun shouldShowUpNext_noSeriesId_returnsFalse() {
         val state = VideoPlayerUiState(
-            nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
+            episodes = EpisodeBrowserState(
+                nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
+            ),
             seriesId = null,
         )
         assertFalse(state.shouldShowUpNext)
@@ -222,7 +225,9 @@ class VideoPlayerUiStateTest {
     @Test
     fun shouldShowUpNext_inCreditsNearEnd_returnsTrue() {
         val state = VideoPlayerUiState(
-            nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
+            episodes = EpisodeBrowserState(
+                nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
+            ),
             seriesId = "series1",
             segmentState = SegmentState(
                 segments = listOf(
@@ -241,7 +246,9 @@ class VideoPlayerUiStateTest {
     @Test
     fun shouldShowUpNext_nearEndWithoutCredits_returnsTrue() {
         val state = VideoPlayerUiState(
-            nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
+            episodes = EpisodeBrowserState(
+                nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
+            ),
             seriesId = "series1",
             duration = 3_600_000L,
             currentPosition = 3_575_000L,
@@ -252,7 +259,9 @@ class VideoPlayerUiStateTest {
     @Test
     fun shouldShowUpNext_farFromEnd_returnsFalse() {
         val state = VideoPlayerUiState(
-            nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
+            episodes = EpisodeBrowserState(
+                nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
+            ),
             seriesId = "series1",
             duration = 3_600_000L,
             currentPosition = 1_800_000L,
@@ -263,7 +272,9 @@ class VideoPlayerUiStateTest {
     @Test
     fun shouldShowUpNext_exactly30sBeforeEnd_returnsTrue() {
         val state = VideoPlayerUiState(
-            nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
+            episodes = EpisodeBrowserState(
+                nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
+            ),
             seriesId = "series1",
             duration = 3_600_000L,
             currentPosition = 3_570_000L,
@@ -274,7 +285,9 @@ class VideoPlayerUiStateTest {
     @Test
     fun shouldShowUpNext_moreThan30sBeforeEnd_returnsFalse() {
         val state = VideoPlayerUiState(
-            nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
+            episodes = EpisodeBrowserState(
+                nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
+            ),
             seriesId = "series1",
             duration = 3_600_000L,
             currentPosition = 3_569_000L,
