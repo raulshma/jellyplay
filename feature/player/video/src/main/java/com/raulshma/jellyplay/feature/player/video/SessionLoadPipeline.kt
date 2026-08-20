@@ -210,18 +210,20 @@ class SessionLoadPipeline(
                 ),
                 trickplayEnabled = agg.videoPlayer.trickplayEnabled,
                 trickplayOnSeekGesture = agg.videoPlayer.trickplayOnSeekGesture,
-                segmentBehaviors = run {
-                    val base = agg.videoPlayer.segmentBehaviors.toMutableMap()
-                    if (agg.videoPlayer.videoAutoSkipIntro) {
-                        base[com.raulshma.jellyplay.core.model.MediaSegmentType.INTRO] =
-                            com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP
-                    }
-                    if (agg.videoPlayer.videoAutoSkipOutro) {
-                        base[com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO] =
-                            com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP
-                    }
-                    base.toMap()
-                },
+                segmentState = segmentState.copy(
+                    segmentBehaviors = run {
+                        val base = agg.videoPlayer.segmentBehaviors.toMutableMap()
+                        if (agg.videoPlayer.videoAutoSkipIntro) {
+                            base[com.raulshma.jellyplay.core.model.MediaSegmentType.INTRO] =
+                                com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP
+                        }
+                        if (agg.videoPlayer.videoAutoSkipOutro) {
+                            base[com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO] =
+                                com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP
+                        }
+                        base.toMap()
+                    },
+                ),
                 videoEpisodeBrowserEnabled = agg.videoPlayer.videoEpisodeBrowserEnabled,
                 showPlaybackMetadata = agg.videoPlayer.videoShowPlaybackMetadata,
                 showClock = agg.videoPlayer.showClockInPlayer,

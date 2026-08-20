@@ -1686,7 +1686,7 @@ fun VideoPlayerScreen(
                 nightModeEnabled = effectsState.nightModeEnabled,
                 nightModeStrength = effectsState.nightModeStrength,
                 audioPassthrough = effectsState.audioPassthrough,
-                segments = uiState.segments,
+                segments = uiState.segmentState.segments,
                 resumePositionMs = resumePositionMs,
                 playMethod = uiState.playMethod,
                 hdrType = uiState.hdrType,

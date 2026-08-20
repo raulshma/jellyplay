@@ -116,7 +116,7 @@ class VideoPlayerResetEquivalenceTest {
     private val residualWhitelist = setOf(
         "preferredPlayerType", "seekDurationMs", "defaultOrientation", "controlsTimeoutMs",
         "gesturesEnabled", "defaultSpeed", "swipeSeekMaxMs", "rememberBrightness",
-        "brightnessLevel", "segmentBehaviors", "videoEpisodeBrowserEnabled",
+        "brightnessLevel", "segmentState.segmentBehaviors", "videoEpisodeBrowserEnabled",
         "showPlaybackMetadata", "showClock", "showTimeRemaining", "videoFx.tvZoomModePercent",
         "keepScreenOnDuringVideo", "subtitleStyle",
     )

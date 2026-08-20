@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
+import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -111,7 +112,9 @@ class VideoPlayerUiStateExtendedTest {
                 ChapterInfo(name = "Intro", startPositionTicks = 0L),
                 ChapterInfo(name = "Main", startPositionTicks = 300_000_000L),
             ),
-            segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            segmentState = SegmentState(
+                segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            ),
         )
         assertTrue(state.isInSegmentType(MediaSegmentType.INTRO))
     }
@@ -125,7 +128,9 @@ class VideoPlayerUiStateExtendedTest {
                 ChapterInfo(name = "Intro", startPositionTicks = 0L),
                 ChapterInfo(name = "Main", startPositionTicks = 300_000_000L),
             ),
-            segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.IGNORE),
+            segmentState = SegmentState(
+                segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.IGNORE),
+            ),
         )
         assertFalse(state.isInSegmentType(MediaSegmentType.INTRO))
     }
@@ -139,7 +144,9 @@ class VideoPlayerUiStateExtendedTest {
                 ChapterInfo(name = "Intro", startPositionTicks = 0L),
                 ChapterInfo(name = "Main", startPositionTicks = 300_000_000L),
             ),
-            segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            segmentState = SegmentState(
+                segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            ),
         )
         assertFalse(state.isInSegmentType(MediaSegmentType.OUTRO))
     }
@@ -155,8 +162,10 @@ class VideoPlayerUiStateExtendedTest {
         )
         val state = VideoPlayerUiState(
             currentPosition = 5_000L,
-            segments = listOf(segment),
-            segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            segmentState = SegmentState(
+                segments = listOf(segment),
+                segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            ),
         )
         assertEquals(300_000_000L, state.segmentEndTicksForType(MediaSegmentType.INTRO))
     }
@@ -170,15 +179,17 @@ class VideoPlayerUiStateExtendedTest {
         )
         val state = VideoPlayerUiState(
             currentPosition = 5_000L,
-            segments = listOf(segment),
-            segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            segmentState = SegmentState(
+                segments = listOf(segment),
+                segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            ),
         )
         assertNull(state.segmentEndTicksForType(MediaSegmentType.OUTRO))
     }
 
     @Test
     fun segmentEndTicksForType_noActiveSegment_returnsNull() {
-        val state = VideoPlayerUiState(currentPosition = 30_000L, segments = emptyList())
+        val state = VideoPlayerUiState(currentPosition = 30_000L, segmentState = SegmentState(segments = emptyList()))
         assertNull(state.segmentEndTicksForType(MediaSegmentType.INTRO))
     }
 
@@ -191,7 +202,7 @@ class VideoPlayerUiStateExtendedTest {
             type = MediaSegmentType.INTRO,
             startTicks = 0L, endTicks = 600_000_000L,
         )
-        val state = VideoPlayerUiState(segments = listOf(seg))
+        val state = VideoPlayerUiState(segmentState = SegmentState(segments = listOf(seg)))
         assertEquals(600_000_000L, state.segmentEndTicks(seg))
     }
 
@@ -222,8 +233,10 @@ class VideoPlayerUiStateExtendedTest {
         val state = VideoPlayerUiState(
             currentPosition = duration - 30_000L,
             duration = duration,
-            segments = listOf(segment),
-            segmentBehaviors = mapOf(MediaSegmentType.OUTRO to SegmentBehavior.SHOW_BUTTON),
+            segmentState = SegmentState(
+                segments = listOf(segment),
+                segmentBehaviors = mapOf(MediaSegmentType.OUTRO to SegmentBehavior.SHOW_BUTTON),
+            ),
         )
         assertTrue(state.isOutroNearEnd)
     }
@@ -242,8 +255,10 @@ class VideoPlayerUiStateExtendedTest {
         val state = VideoPlayerUiState(
             currentPosition = duration - 350_000L,
             duration = duration,
-            segments = listOf(segment),
-            segmentBehaviors = mapOf(MediaSegmentType.OUTRO to SegmentBehavior.SHOW_BUTTON),
+            segmentState = SegmentState(
+                segments = listOf(segment),
+                segmentBehaviors = mapOf(MediaSegmentType.OUTRO to SegmentBehavior.SHOW_BUTTON),
+            ),
         )
         assertFalse(state.isOutroNearEnd)
     }
@@ -306,14 +321,16 @@ class VideoPlayerUiStateExtendedTest {
 
     @Test
     fun behaviorForType_defaultsToIgnore_forUnspecifiedType() {
-        val state = VideoPlayerUiState(segmentBehaviors = emptyMap())
+        val state = VideoPlayerUiState(segmentState = SegmentState(segmentBehaviors = emptyMap()))
         assertEquals(SegmentBehavior.IGNORE, state.behaviorForType(MediaSegmentType.COMMERCIAL))
     }
 
     @Test
     fun behaviorForType_customBehavior_returnsCustom() {
         val state = VideoPlayerUiState(
-            segmentBehaviors = mapOf(MediaSegmentType.COMMERCIAL to SegmentBehavior.AUTO_SKIP)
+            segmentState = SegmentState(
+                segmentBehaviors = mapOf(MediaSegmentType.COMMERCIAL to SegmentBehavior.AUTO_SKIP)
+            )
         )
         assertEquals(SegmentBehavior.AUTO_SKIP, state.behaviorForType(MediaSegmentType.COMMERCIAL))
     }
@@ -321,7 +338,9 @@ class VideoPlayerUiStateExtendedTest {
     @Test
     fun behaviorForType_showSkipButton_returnsShowSkipButton() {
         val state = VideoPlayerUiState(
-            segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON)
+            segmentState = SegmentState(
+                segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON)
+            )
         )
         assertEquals(SegmentBehavior.SHOW_BUTTON, state.behaviorForType(MediaSegmentType.INTRO))
     }

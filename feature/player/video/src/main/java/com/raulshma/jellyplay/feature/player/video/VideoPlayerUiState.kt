@@ -124,8 +124,11 @@ data class VideoPlayerUiState(
     val gestureIndicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
     val frameRateMatching: Boolean = false,
     val refreshRateMode: com.raulshma.jellyplay.core.model.RefreshRateMode = com.raulshma.jellyplay.core.model.RefreshRateMode.OFF,
-    val segments: List<MediaSegment> = emptyList(),
-    val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
+    /**
+     * Raw segment data + per-type behaviors. Formerly flat fields
+     * (`segments` / `segmentBehaviors`); now a stored slice.
+     */
+    val segmentState: SegmentState = SegmentState(),
     val seriesId: String? = null,
     val isInSyncPlaySession: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
@@ -244,9 +247,6 @@ data class VideoPlayerUiState(
             seriesId = seriesId,
         )
 
-    val segmentState: SegmentState
-        get() = SegmentState(segments = segments, segmentBehaviors = segmentBehaviors)
-
     val episodes: EpisodeBrowserState
         get() = EpisodeBrowserState(
             nextEpisode = nextEpisode, seriesSeasons = seriesSeasons,
@@ -315,9 +315,9 @@ data class VideoPlayerUiState(
         SegmentCalculator.computeActiveSegment(toSegmentInput(), positionMs)
 
     private fun toSegmentInput() = SegmentCalculatorInput(
-        segments = segments,
+        segments = segmentState.segments,
         chapters = chapters,
-        segmentBehaviors = segmentBehaviors,
+        segmentBehaviors = segmentState.segmentBehaviors,
         durationMs = duration,
         autoplayCancelled = autoplay.autoplayCancelled,
         isInSyncPlaySession = isInSyncPlaySession,

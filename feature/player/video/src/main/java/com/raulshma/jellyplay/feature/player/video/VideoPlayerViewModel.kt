@@ -192,9 +192,9 @@ private data class SegmentProjection(
     val seriesId: String?,
 ) {
     constructor(state: VideoPlayerUiState) : this(
-        segments = state.segments,
+        segments = state.segmentState.segments,
         chapters = state.chapters,
-        segmentBehaviors = state.segmentBehaviors,
+        segmentBehaviors = state.segmentState.segmentBehaviors,
         autoplayCancelled = state.autoplay.autoplayCancelled,
         isInSyncPlaySession = state.isInSyncPlaySession,
         nextEpisode = state.nextEpisode,
@@ -2696,11 +2696,11 @@ class VideoPlayerViewModel @Inject constructor(
             // controls (intro/outro/recap) work without a server round-trip.
             val local = offlinePlaybackFacade.loadSegments(itemId)
             if (local != null) {
-                _uiState.update { it.copy(segments = local) }
+                _uiState.update { it.copy(segmentState = it.segmentState.copy(segments = local)) }
                 return@launch
             }
             val segments = playbackRepository.getMediaSegments(itemId).getOrDefault(emptyList())
-            _uiState.update { it.copy(segments = segments) }
+            _uiState.update { it.copy(segmentState = it.segmentState.copy(segments = segments)) }
         }
     }
 
@@ -2953,7 +2953,11 @@ class VideoPlayerViewModel @Inject constructor(
                 swipeSeekMaxMs = currentState.swipeSeekMaxMs,
                 rememberBrightness = currentState.rememberBrightness,
                 brightnessLevel = currentState.brightnessLevel,
-                segmentBehaviors = currentState.segmentBehaviors,
+                // segmentState: only the behaviors carry across an item switch —
+                // the per-item segment list resets to default (empty).
+                segmentState = currentState.segmentState.copy(
+                    segmentBehaviors = currentState.segmentState.segmentBehaviors,
+                ),
                 videoEpisodeBrowserEnabled = currentState.videoEpisodeBrowserEnabled,
                 showPlaybackMetadata = currentState.showPlaybackMetadata,
                 showClock = currentState.showClock,
