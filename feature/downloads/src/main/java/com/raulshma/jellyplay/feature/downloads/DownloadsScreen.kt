@@ -73,6 +73,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -916,7 +917,7 @@ private fun DownloadsResyncSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    androidx.compose.material3.ModalBottomSheet(
+    TvSafeSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
@@ -1139,7 +1140,7 @@ private fun ForceResyncSheet(
     val showRunning = progress.active
     val showDone = started && !progress.active
 
-    androidx.compose.material3.ModalBottomSheet(
+    TvSafeSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
@@ -1227,9 +1228,12 @@ private fun ForceResyncSheet(
                             selectedIds.size == candidates.size -> ToggleableState.On
                             else -> ToggleableState.Indeterminate
                         }
+                        val selectAllFocusState = rememberTvFocusState(focusedScale = 1.01f)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .then(selectAllFocusState.focusModifier)
+                                .tvFocusIndicator(selectAllFocusState, ShapeCache.smooth12)
                                 .clickable {
                                     selectedIds = if (triState == ToggleableState.On) emptySet()
                                     else candidates.map { it.id }.toSet()
@@ -1362,9 +1366,12 @@ private fun ForceResyncItemRow(
     checked: Boolean,
     onToggle: () -> Unit,
 ) {
+    val focusState = rememberTvFocusState(focusedScale = 1.01f)
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth12)
             .clickable { onToggle() }
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1406,9 +1413,12 @@ private fun ForceResyncDataRow(
     checked: Boolean,
     onToggle: () -> Unit,
 ) {
+    val focusState = rememberTvFocusState(focusedScale = 1.01f)
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth12)
             .clickable { onToggle() }
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,

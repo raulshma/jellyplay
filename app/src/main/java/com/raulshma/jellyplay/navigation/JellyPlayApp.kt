@@ -151,19 +151,6 @@ import com.raulshma.jellyplay.core.ui.tv.TvScaffold
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
 import com.raulshma.jellyplay.core.ui.tv.isTv
-import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
-import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.key
-
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.KeyEventType
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.admin.navigation.adminSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection

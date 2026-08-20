@@ -41,6 +41,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +59,9 @@ import com.raulshma.jellyplay.core.model.arr.ArrDiscoveryError
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 /**
  * Settings surface for the Direct *arr Integration experimental feature.
@@ -69,7 +74,7 @@ import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
  * The screen assumes the caller has already gated on the
  * `DIRECT_ARR_INTEGRATION` experimental flag; it does not re-check.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun ArrSettingsScreen(
     onBack: () -> Unit,
@@ -84,6 +89,13 @@ fun ArrSettingsScreen(
 
     var showAddDialog by remember { mutableStateOf(false) }
 
+    val focusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = 1,
+        tag = "arr_init",
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -92,18 +104,31 @@ fun ArrSettingsScreen(
                     CircleBgBackButton(onClick = onBack)
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.refreshServers() }, enabled = !isRefreshing) {
+                    IconButton(
+                        onClick = { viewModel.refreshServers() },
+                        enabled = !isRefreshing,
+                        modifier = Modifier.focusIndicator(CircleShape),
+                    ) {
                         Icon(Tabler.Outline.Refresh, contentDescription = stringResource(R.string.settings_refresh_cd))
                     }
                 },
             )
         },
     ) { padding ->
+        // Center the focused item in the viewport when scrolling reaches the list
+        // edges, instead of parking it at the bottom, which is the default
+        // BringIntoViewSpec behaviour.
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
+                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
+        ) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(padding)
-                .imePadding(),
+                .imePadding()
+                .tvFocusRestorer()
+                .focusRequester(focusRequester),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -142,6 +167,7 @@ fun ArrSettingsScreen(
                         Switch(
                             checked = preferences.useSeerrDiscovery,
                             onCheckedChange = { viewModel.setUseSeerrDiscovery(it) },
+                            modifier = Modifier.focusIndicator(),
                         )
                     }
                 }
@@ -161,7 +187,10 @@ fun ArrSettingsScreen(
                             .weight(1f),
                     )
                     if (allServers.isNotEmpty()) {
-                        TextButton(onClick = { viewModel.testAllServers() }) {
+                        TextButton(
+                            onClick = { viewModel.testAllServers() },
+                            modifier = Modifier.focusIndicator(),
+                        ) {
                             Text(stringResource(R.string.settings_arr_test_all))
                         }
                     }
@@ -215,13 +244,16 @@ fun ArrSettingsScreen(
             item {
                 OutlinedButton(
                     onClick = { showAddDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusIndicator(),
                 ) {
                     Icon(Tabler.Outline.Plus, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.settings_arr_add_manual_server))
                 }
             }
+        }
         }
     }
 
@@ -292,12 +324,19 @@ private fun ServerRow(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedButton(onClick = onTest, enabled = !isTesting) {
+                OutlinedButton(
+                    onClick = onTest,
+                    enabled = !isTesting,
+                    modifier = Modifier.focusIndicator(),
+                ) {
                     Text(stringResource(R.string.settings_arr_test))
                 }
                 Spacer(Modifier.width(8.dp))
                 if (server.isManual) {
-                    IconButton(onClick = { onRemove(server) }) {
+                    IconButton(
+                        onClick = { onRemove(server) },
+                        modifier = Modifier.focusIndicator(CircleShape),
+                    ) {
                         Icon(Tabler.Outline.Trash, contentDescription = stringResource(R.string.settings_arr_remove_manual_server_cd))
                     }
                 }

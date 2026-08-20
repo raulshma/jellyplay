@@ -50,7 +50,10 @@ fun ExpandableText(
             text = if (expanded) "Show less" else "Read more",
             style = MaterialTheme.typography.labelMedium,
             color = toggleColor,
-            modifier = Modifier.clickable { expanded = !expanded }.padding(top = 4.dp),
+            modifier = Modifier
+                .focusIndicator()
+                .clickable { expanded = !expanded }
+                .padding(top = 4.dp),
         )
     }
 }

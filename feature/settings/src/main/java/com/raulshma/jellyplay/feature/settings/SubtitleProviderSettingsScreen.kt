@@ -27,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -39,6 +41,9 @@ import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderCredentials
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 /**
  * Settings surface for subtitle providers (Wyzie Subs + OpenSubtitles). Wyzie
@@ -55,7 +60,7 @@ import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
  * purely a configuration surface; the player + editor consume the configured
  * providers via [com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository].
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SubtitleProviderSettingsScreen(
     onBack: () -> Unit,
@@ -81,6 +86,13 @@ fun SubtitleProviderSettingsScreen(
             as? SubtitleProviderCredentials.OpenSubtitles
     }
 
+    val focusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = 1,
+        tag = "subtitle_provider_init",
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -89,10 +101,19 @@ fun SubtitleProviderSettingsScreen(
             )
         },
     ) { innerPadding ->
+        // Center the focused item in the viewport when scrolling reaches the list
+        // edges, instead of parking it at the bottom, which is the default
+        // BringIntoViewSpec behaviour.
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
+                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
+        ) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .tvFocusRestorer()
+                .focusRequester(focusRequester),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 start = 8.dp, end = 8.dp, bottom = 32.dp,
             ),
@@ -145,6 +166,7 @@ fun SubtitleProviderSettingsScreen(
                 }
             }
         }
+        }
     }
 }
 
@@ -177,7 +199,11 @@ private fun ProviderSection(
             Text(helperText, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f))
-            Switch(checked = enabled, onCheckedChange = onEnabledChange)
+            Switch(
+                checked = enabled,
+                onCheckedChange = onEnabledChange,
+                modifier = Modifier.focusIndicator(),
+            )
         }
         Spacer(Modifier.height(8.dp))
 
@@ -224,6 +250,7 @@ private fun ProviderSection(
         ) {
             FilledTonalButton(
                 onClick = { onSave(apiKey, usernameLabel?.let { username }, passwordLabel?.let { password }) },
+                modifier = Modifier.focusIndicator(),
             ) {
                 Text(stringResource(R.string.settings_subtitles_save))
             }
@@ -231,6 +258,7 @@ private fun ProviderSection(
             // verify a freshly pasted key/password before tapping Save.
             OutlinedButton(
                 onClick = { onTest(apiKey, usernameLabel?.let { username }, passwordLabel?.let { password }) },
+                modifier = Modifier.focusIndicator(),
             ) {
                 Text(stringResource(R.string.settings_subtitles_test))
             }

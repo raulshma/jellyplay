@@ -40,6 +40,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
 import com.raulshma.jellyplay.core.model.AuditLogEntry
 import com.raulshma.jellyplay.core.model.CleanupActionType
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.feature.admin.R
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -86,6 +87,7 @@ private fun AuditEntryCard(entry: AuditLogEntry) {
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .focusIndicator(ShapeCache.smooth16)
             .clickable { expanded = !expanded },
     ) {
         Column(

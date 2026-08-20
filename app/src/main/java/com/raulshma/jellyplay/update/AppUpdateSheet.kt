@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.MarkdownText
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -169,7 +170,10 @@ private fun ColumnScope.NoUpdateContent(
     if (info.releaseNotes.isNotBlank()) {
         Spacer(Modifier.height(8.dp))
         val labelRes = if (showNotes) R.string.update_hide_notes else R.string.update_view_notes
-        TextButton(onClick = onToggleNotes) {
+        TextButton(
+            onClick = onToggleNotes,
+            modifier = Modifier.focusIndicator(),
+        ) {
             Text(stringResource(labelRes))
         }
         if (showNotes) {
@@ -187,7 +191,10 @@ private fun ColumnScope.NoUpdateContent(
     }
     Spacer(Modifier.height(16.dp))
     ButtonsRow {
-        TextButton(onClick = onDismiss) { Text(stringResource(R.string.update_close)) }
+        TextButton(
+            onClick = onDismiss,
+            modifier = Modifier.focusIndicator(),
+        ) { Text(stringResource(R.string.update_close)) }
     }
 }
 
@@ -236,9 +243,16 @@ private fun UpdateAvailableContent(
     )
     Spacer(Modifier.height(16.dp))
     ButtonsRow {
-        OutlinedButton(onClick = onDismiss) { Text(stringResource(R.string.update_later)) }
+        OutlinedButton(
+            onClick = onDismiss,
+            modifier = Modifier.focusIndicator(),
+        ) { Text(stringResource(R.string.update_later)) }
         Spacer(Modifier.width(8.dp))
-        Button(onClick = onDownload, enabled = !noApk) {
+        Button(
+            onClick = onDownload,
+            enabled = !noApk,
+            modifier = Modifier.focusIndicator(),
+        ) {
             Text(stringResource(if (noApk) R.string.update_no_matching_apk else R.string.update_download))
         }
     }
@@ -336,7 +350,10 @@ private fun DownloadingContent(
     )
     Spacer(Modifier.height(16.dp))
     ButtonsRow {
-        TextButton(onClick = onCancel) { Text(stringResource(R.string.update_cancel)) }
+        TextButton(
+            onClick = onCancel,
+            modifier = Modifier.focusIndicator(),
+        ) { Text(stringResource(R.string.update_cancel)) }
     }
 }
 
@@ -360,16 +377,25 @@ private fun DownloadedContent(
     )
     Spacer(Modifier.height(16.dp))
     ButtonsRow {
-        OutlinedButton(onClick = onDismiss) { Text(stringResource(R.string.update_later)) }
+        OutlinedButton(
+            onClick = onDismiss,
+            modifier = Modifier.focusIndicator(),
+        ) { Text(stringResource(R.string.update_later)) }
         Spacer(Modifier.width(8.dp))
         // Re-fetch the APK even though one is already on disk (e.g. the user
         // suspects it's corrupt, or wants the latest patch for the same
         // version). Overwrites the existing file + sidecar.
-        OutlinedButton(onClick = onRedownload) {
+        OutlinedButton(
+            onClick = onRedownload,
+            modifier = Modifier.focusIndicator(),
+        ) {
             Text(stringResource(R.string.update_download_again))
         }
         Spacer(Modifier.width(8.dp))
-        Button(onClick = onInstall) { Text(stringResource(R.string.update_install)) }
+        Button(
+            onClick = onInstall,
+            modifier = Modifier.focusIndicator(),
+        ) { Text(stringResource(R.string.update_install)) }
     }
 }
 
@@ -394,7 +420,10 @@ private fun ErrorContent(
     )
     Spacer(Modifier.height(16.dp))
     ButtonsRow {
-        TextButton(onClick = onDismiss) { Text(stringResource(R.string.update_close)) }
+        TextButton(
+            onClick = onDismiss,
+            modifier = Modifier.focusIndicator(),
+        ) { Text(stringResource(R.string.update_close)) }
     }
 }
 

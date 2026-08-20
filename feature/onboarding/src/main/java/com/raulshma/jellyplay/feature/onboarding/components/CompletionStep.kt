@@ -43,8 +43,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayExpressiveTitles
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.onboarding.R
@@ -126,6 +130,16 @@ fun CompletionStep(
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val progress = checkProgress.value
+
+    // Last page has no Next button for OnboardingBottomBar's focus grab to land on —
+    // take over on TV once the start button is placed (it fades in after the check
+    // animation, so the grab has to wait for buttonVisible).
+    val isTv = LocalTvMode.current
+    val startFocusRequester = remember { FocusRequester() }
+    RequestOrRestoreFocus(
+        focusRequester = if (isTv && buttonVisible) startFocusRequester else null,
+        debugKey = "completion_start",
+    )
 
     Column(
         modifier = modifier
@@ -216,6 +230,7 @@ fun CompletionStep(
             onClick = onStartWatching,
             modifier = Modifier
                 .fillMaxWidth()
+                .focusRequester(startFocusRequester)
                 .then(focusState.focusModifier)
                 .tvFocusIndicator(focusState, ShapeCache.smooth12)
                 .height(56.dp)

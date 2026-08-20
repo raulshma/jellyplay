@@ -37,6 +37,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -58,8 +61,11 @@ import com.composables.icons.tabler.outline.Settings
 import com.composables.icons.tabler.outline.Trash
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
@@ -79,6 +85,16 @@ fun ArrQueueScreen(
 ) {
     val state by viewModel.state
     val featureEnabled by viewModel.featureEnabled.collectAsStateWithLifecycle()
+    val isTv = LocalTvMode.current
+
+    // TV focus-on-launch: focus the first queue card once data arrives so D-pad
+    // input lands on content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (!featureEnabled || state.isLoading || state.error != null) 0 else state.queue.size,
+        tag = "arrqueue_init",
+    )
 
     JellyPlayScreenScaffold(
         title = stringResource(R.string.arrqueue_title),
@@ -123,10 +139,14 @@ fun ArrQueueScreen(
                 else -> PullToRefreshBox(
                     isRefreshing = state.isLoading && state.queue.isNotEmpty(),
                     onRefresh = { viewModel.refresh() },
+                    enabled = !isTv,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .tvFocusRestorer()
+                            .focusRequester(listFocusRequester),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(
                             start = 16.dp,
                             top = 8.dp,
@@ -233,6 +253,7 @@ private fun QueueRow(
     onImport: () -> Unit,
 ) {
     val focusState = rememberTvFocusState()
+    val isTv = LocalTvMode.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -251,9 +272,13 @@ private fun QueueRow(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (selectionMode) {
+                    // TV: the card row is the single focus target; the nested
+                    // checkbox mirrors selection state instead of competing for
+                    // D-pad focus (the row handles the interaction).
                     Checkbox(
                         checked = selected,
                         onCheckedChange = { onClick() },
+                        modifier = if (isTv) Modifier.focusProperties { canFocus = false } else Modifier,
                     )
                     Spacer(Modifier.width(8.dp))
                 }

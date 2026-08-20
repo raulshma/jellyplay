@@ -36,12 +36,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -70,11 +72,17 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.feature.livetv.R
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+
+/** Timeline nudge for D-pad left/right presses that find no focusable program while the guide can still scroll (60 min). */
+private const val TIMELINE_SHIFT_DP = 240
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -225,6 +233,21 @@ private fun EpgGrid(
         else now.offsetDp(gridData.windowStart)
     }
     val channelColumnWidth = EpgGridLayout.CHANNEL_COLUMN_WIDTH
+    val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+
+    // D-pad right/left first runs the normal focus search; when there is no
+    // focusable program in that direction but the shared timeline window can
+    // still scroll, nudge it so the revealed programs become the next focus
+    // targets (all cells stay composed, so focus search picks them up once
+    // they're scrolled into view).
+    fun shiftTimeline(forward: Boolean): Boolean {
+        val delta = with(density) { TIMELINE_SHIFT_DP.dp.roundToPx() } * if (forward) 1 else -1
+        val target = (horizontalScrollState.value + delta).coerceIn(0, horizontalScrollState.maxValue)
+        if (target == horizontalScrollState.value) return false
+        scope.launch { horizontalScrollState.animateScrollTo(target) }
+        return true
+    }
 
     TvGrabInitialFocus(
         focusRequester = focusRequester,
@@ -232,7 +255,14 @@ private fun EpgGrid(
         tag = "epg_init",
     )
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onDpadKey(
+                onRight = { focusManager.moveFocus(FocusDirection.Right) || shiftTimeline(forward = true) },
+                onLeft = { focusManager.moveFocus(FocusDirection.Left) || shiftTimeline(forward = false) },
+            ),
+    ) {
         LazyColumn(
             state = lazyListState,
             modifier = Modifier.fillMaxSize(),

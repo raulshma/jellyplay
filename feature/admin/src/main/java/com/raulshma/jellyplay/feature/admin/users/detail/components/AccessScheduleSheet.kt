@@ -16,14 +16,19 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TimePickerDefaults
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.UserAccessSchedule
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.admin.R
 import java.util.Locale
 
@@ -129,6 +134,13 @@ private fun ScheduleAdderDialog(
     var startHour by remember { mutableStateOf(8.0) }
     var endHour by remember { mutableStateOf(22.0) }
 
+    // TV: land initial focus on the primary action (Add).
+    val isTv = LocalTvMode.current
+    val confirmFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        if (isTv) confirmFocusRequester.tryRequestFocus("schedule_add_confirm")
+    }
+
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text(stringResource(R.string.admin_add_schedule)) },
@@ -158,9 +170,12 @@ private fun ScheduleAdderDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                onSave(UserAccessSchedule(dayOfWeek = day, startHour = startHour, endHour = endHour))
-            }) { Text(stringResource(R.string.admin_add)) }
+            TextButton(
+                onClick = {
+                    onSave(UserAccessSchedule(dayOfWeek = day, startHour = startHour, endHour = endHour))
+                },
+                modifier = Modifier.focusRequester(confirmFocusRequester),
+            ) { Text(stringResource(R.string.admin_add)) }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.admin_cancel)) } },
     )
@@ -201,10 +216,21 @@ private fun TimePickerDialog(
         initialMinute = initialMinute,
         is24Hour = true,
     )
+
+    // TV: land initial focus on the primary action (OK).
+    val isTv = LocalTvMode.current
+    val confirmFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        if (isTv) confirmFocusRequester.tryRequestFocus("schedule_time_confirm")
+    }
+
     AlertDialog(
         onDismissRequest = onCancel,
         confirmButton = {
-            TextButton(onClick = { onConfirm(state.hour, state.minute) }) { Text(stringResource(R.string.admin_ok)) }
+            TextButton(
+                onClick = { onConfirm(state.hour, state.minute) },
+                modifier = Modifier.focusRequester(confirmFocusRequester),
+            ) { Text(stringResource(R.string.admin_ok)) }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.admin_cancel)) } },
         text = {
