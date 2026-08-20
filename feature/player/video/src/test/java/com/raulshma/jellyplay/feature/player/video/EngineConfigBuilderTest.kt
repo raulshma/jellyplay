@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
+import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -136,7 +137,7 @@ class EngineConfigBuilderTest {
     @Test
     fun build_videoEffectsPropagatedFromState() {
         val effects = VideoEffectsConfig(brightness = 0.2f, saturation = 1.5f)
-        val state = baselineState().copy(videoEffects = effects)
+        val state = baselineState().copy(videoFx = VideoFxState(videoEffects = effects))
         val config = EngineConfigBuilder.build(state, baselineEffects(), equalizerEnabled = false, agg = VideoPlayerAggregate())
         assertEquals(effects, config.videoEffects)
     }

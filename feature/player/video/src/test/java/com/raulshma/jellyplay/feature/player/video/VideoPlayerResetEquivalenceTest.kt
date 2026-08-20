@@ -117,7 +117,7 @@ class VideoPlayerResetEquivalenceTest {
         "preferredPlayerType", "seekDurationMs", "defaultOrientation", "controlsTimeoutMs",
         "gesturesEnabled", "defaultSpeed", "swipeSeekMaxMs", "rememberBrightness",
         "brightnessLevel", "segmentBehaviors", "videoEpisodeBrowserEnabled",
-        "showPlaybackMetadata", "showClock", "showTimeRemaining", "tvZoomModePercent",
+        "showPlaybackMetadata", "showClock", "showTimeRemaining", "videoFx.tvZoomModePercent",
         "keepScreenOnDuringVideo", "subtitleStyle",
     )
 

@@ -619,8 +619,8 @@ fun VideoPlayerScreen(
     val playbackSpeed = uiState.playbackSpeed
     val currentMediaSource = uiState.currentMediaSource
     val mediaStreams = uiState.mediaStreams
-    val aspectRatio = uiState.aspectRatio
-    val detectedAspectRatio = uiState.detectedAspectRatio
+    val aspectRatio = uiState.videoFx.aspectRatio
+    val detectedAspectRatio = uiState.videoFx.detectedAspectRatio
 
     val toggleOrientation: () -> Unit = remember(activity, uiState.defaultOrientation) {
         {
@@ -1136,8 +1136,8 @@ fun VideoPlayerScreen(
                 // so the video graphicsLayer and the zoom-gated subtitle logic
                 // share the exact same value (no drift). > 1 means the video is
                 // scaled/cropped, which is when subtitles would move off-screen.
-                val tvBaselineZoom = if (isTv && uiState.tvZoomModePercent != 0f) {
-                    1f + (uiState.tvZoomModePercent / 100f)
+                val tvBaselineZoom = if (isTv && uiState.videoFx.tvZoomModePercent != 0f) {
+                    1f + (uiState.videoFx.tvZoomModePercent / 100f)
                 } else 1f
                 // Suppress zoom while in PiP: the pinch-zoomed crop has no meaning in
                 // the floating window, and restoring on exit is automatic since the
@@ -1774,7 +1774,7 @@ fun VideoPlayerScreen(
                 sleepTimerRemainingFlow = viewModel.sleepTimer.remainingMs,
                 onSleepTimerClick = onSleepTimerClick,
                 supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
-                videoFiltersActive = !uiState.videoEffects.isNeutral,
+                videoFiltersActive = !uiState.videoFx.videoEffects.isNeutral,
                 onVideoFilterClick = onVideoFilterClick,
                 supportsScreenshot = uiState.engineCapabilities.supportsScreenshot,
                 onScreenshotClick = onScreenshotClick,
@@ -2325,7 +2325,7 @@ private fun PlayerSheetRouter(
                     hdrType = uiState.hdrType,
                     playerType = uiState.preferredPlayerType.name,
                     decoderMode = effectsState.decoderMode.name,
-                    aspectRatio = uiState.aspectRatio.name,
+                    aspectRatio = uiState.videoFx.aspectRatio.name,
                     nightModeEnabled = effectsState.nightModeEnabled,
                     nightModeStrength = effectsState.nightModeStrength,
                     dialogueBoostEnabled = uiState.dialogueBoostEnabled,
@@ -2346,8 +2346,8 @@ private fun PlayerSheetRouter(
         }
         is PlayerSheet.AspectRatio -> {
             AspectRatioSheet(
-                currentRatio = uiState.aspectRatio,
-                detectedRatio = uiState.detectedAspectRatio,
+                currentRatio = uiState.videoFx.aspectRatio,
+                detectedRatio = uiState.videoFx.detectedAspectRatio,
                 onSelect = { viewModel.setAspectRatio(it) },
                 onDismiss = dismissSheet,
             )
@@ -2442,7 +2442,7 @@ private fun PlayerSheetRouter(
         }
         is PlayerSheet.VideoFilter -> {
             VideoFilterSheet(
-                currentEffects = uiState.videoEffects,
+                currentEffects = uiState.videoFx.videoEffects,
                 onEffectsChange = { viewModel.setVideoEffects(it) },
                 onDismiss = dismissSheet,
             )

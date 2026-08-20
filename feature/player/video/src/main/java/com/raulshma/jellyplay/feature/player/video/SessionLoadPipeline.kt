@@ -204,7 +204,10 @@ class SessionLoadPipeline(
                 gestureIndicatorSide = agg.videoPlayer.videoGestureIndicatorSide,
                 frameRateMatching = agg.playback.frameRateMatching,
                 refreshRateMode = agg.playback.refreshRateMode,
-                aspectRatio = defaultAspectRatio,
+                videoFx = videoFx.copy(
+                    aspectRatio = defaultAspectRatio,
+                    tvZoomModePercent = agg.videoPlayer.tvZoomModePercent,
+                ),
                 trickplayEnabled = agg.videoPlayer.trickplayEnabled,
                 trickplayOnSeekGesture = agg.videoPlayer.trickplayOnSeekGesture,
                 segmentBehaviors = run {
@@ -223,7 +226,6 @@ class SessionLoadPipeline(
                 showPlaybackMetadata = agg.videoPlayer.videoShowPlaybackMetadata,
                 showClock = agg.videoPlayer.showClockInPlayer,
                 showTimeRemaining = agg.videoPlayer.showTimeRemaining,
-                tvZoomModePercent = agg.videoPlayer.tvZoomModePercent,
                 keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo,
                 streamingQuality = agg.playback.streamingQuality,
                 adaptiveBitrateEnabled = networkOfflineStore.networkOffline.value.adaptiveBitrateEnabled,

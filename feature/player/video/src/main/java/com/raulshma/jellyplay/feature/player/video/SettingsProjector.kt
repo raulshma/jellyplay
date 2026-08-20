@@ -82,8 +82,13 @@ internal class SettingsProjector(
         diff(agg.videoPlayer.showTimeRemaining, VideoPlayerUiState::showTimeRemaining) {
             it.copy(showTimeRemaining = agg.videoPlayer.showTimeRemaining)
         }
-        diff(agg.videoPlayer.tvZoomModePercent, VideoPlayerUiState::tvZoomModePercent) {
-            it.copy(tvZoomModePercent = agg.videoPlayer.tvZoomModePercent)
+        // TV zoom lives inside the stored videoFx slice, so the generic
+        // `diff` property-select helper can't reach it — same distinct-until-
+        // changed guard, hand-written against the slice leaf.
+        if (getUiState().videoFx.tvZoomModePercent != agg.videoPlayer.tvZoomModePercent) {
+            updateUiState {
+                it.copy(videoFx = it.videoFx.copy(tvZoomModePercent = agg.videoPlayer.tvZoomModePercent))
+            }
         }
         diff(agg.playback.keepScreenOnDuringVideo, VideoPlayerUiState::keepScreenOnDuringVideo) {
             it.copy(keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo)

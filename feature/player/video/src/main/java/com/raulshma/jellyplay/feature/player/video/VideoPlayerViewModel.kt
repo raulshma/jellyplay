@@ -783,8 +783,8 @@ class VideoPlayerViewModel @Inject constructor(
                 // Restore per-item persisted video filters (if any) before
                 // playback kicks off.
                 val hydratedEffects = hydratedAgg.engine.videoEffectsByItem[itemId] ?: VideoEffectsConfig()
-                if (_uiState.value.videoEffects != hydratedEffects) {
-                    _uiState.update { it.copy(videoEffects = hydratedEffects) }
+                if (_uiState.value.videoFx.videoEffects != hydratedEffects) {
+                    _uiState.update { it.copy(videoFx = it.videoFx.copy(videoEffects = hydratedEffects)) }
                     updateConfigWithUiStateDebounced()
                 }
                 // Resolve the effective subtitle-sync delay for this item: a
@@ -1994,10 +1994,10 @@ class VideoPlayerViewModel @Inject constructor(
     // -----------------------------------------------------------------------
 
     fun setAspectRatio(ratio: AspectRatio) {
-        _uiState.update { it.copy(aspectRatio = ratio) }
+        _uiState.update { it.copy(videoFx = it.videoFx.copy(aspectRatio = ratio)) }
         if (ratio == AspectRatio.AUTO) {
             val detected = detectAspectRatio(_uiState.value.mediaStreams)
-            _uiState.update { it.copy(detectedAspectRatio = detected) }
+            _uiState.update { it.copy(videoFx = it.videoFx.copy(detectedAspectRatio = detected)) }
         }
         // The PiP aspect ratio always tracks the underlying media, independent
         // of the in-app resize mode, so it does not need re-deriving here.
@@ -2446,7 +2446,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun setVideoEffects(effects: VideoEffectsConfig) {
-        _uiState.update { it.copy(videoEffects = effects) }
+        _uiState.update { it.copy(videoFx = it.videoFx.copy(videoEffects = effects)) }
         updateConfigWithUiStateDebounced()
         // Persist per item so the same filter preset is restored next time.
         // Skip when in Cinema Mode pre-roll — the intro is transient.
@@ -2797,7 +2797,7 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(
             currentMediaSource = source,
             mediaStreams = streams,
-            detectedAspectRatio = detectAspectRatio(streams),
+            videoFx = it.videoFx.copy(detectedAspectRatio = detectAspectRatio(streams)),
         ) }
         updatePipAspectRatio(streams)
         // Rebuild the audio/subtitle track options from the refreshed server
@@ -2958,7 +2958,9 @@ class VideoPlayerViewModel @Inject constructor(
                 showPlaybackMetadata = currentState.showPlaybackMetadata,
                 showClock = currentState.showClock,
                 showTimeRemaining = currentState.showTimeRemaining,
-                tvZoomModePercent = currentState.tvZoomModePercent,
+                // videoFx: only the TV zoom carries across an item switch —
+                // the per-item effects and both aspect fields reset to defaults.
+                videoFx = currentState.videoFx.copy(tvZoomModePercent = currentState.videoFx.tvZoomModePercent),
                 keepScreenOnDuringVideo = currentState.keepScreenOnDuringVideo,
                 subtitleStyle = currentState.subtitleStyle,
                 // Reset per-item dialogue boost so it doesn't bleed into the next

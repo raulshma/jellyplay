@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -17,33 +18,33 @@ class VideoPlayerAspectRatioStateTest {
     @Test
     fun defaults_aspectRatioIsAuto() {
         val state = VideoPlayerUiState()
-        assertEquals(AspectRatio.AUTO, state.aspectRatio)
+        assertEquals(AspectRatio.AUTO, state.videoFx.aspectRatio)
     }
 
     @Test
     fun defaults_detectedAspectRatioIsNull() {
         val state = VideoPlayerUiState()
-        assertNull(state.detectedAspectRatio)
+        assertNull(state.videoFx.detectedAspectRatio)
     }
 
     // ─── setAspectRatio ────────────────────────────────────────────────────────
 
     @Test
     fun setAspectRatio_fill_stateUpdated() {
-        val state = VideoPlayerUiState().copy(aspectRatio = AspectRatio.FILL)
-        assertEquals(AspectRatio.FILL, state.aspectRatio)
+        val state = VideoPlayerUiState().copy(videoFx = VideoFxState(aspectRatio = AspectRatio.FILL))
+        assertEquals(AspectRatio.FILL, state.videoFx.aspectRatio)
     }
 
     @Test
     fun setAspectRatio_crop_stateUpdated() {
-        val state = VideoPlayerUiState().copy(aspectRatio = AspectRatio.CROP)
-        assertEquals(AspectRatio.CROP, state.aspectRatio)
+        val state = VideoPlayerUiState().copy(videoFx = VideoFxState(aspectRatio = AspectRatio.CROP))
+        assertEquals(AspectRatio.CROP, state.videoFx.aspectRatio)
     }
 
     @Test
     fun setAspectRatio_ratio16_9_stateUpdated() {
-        val state = VideoPlayerUiState().copy(aspectRatio = AspectRatio.RATIO_16_9)
-        assertEquals(AspectRatio.RATIO_16_9, state.aspectRatio)
+        val state = VideoPlayerUiState().copy(videoFx = VideoFxState(aspectRatio = AspectRatio.RATIO_16_9))
+        assertEquals(AspectRatio.RATIO_16_9, state.videoFx.aspectRatio)
     }
 
     // ─── detectAspectRatio (replicated logic) ─────────────────────────────────
@@ -70,10 +71,9 @@ class VideoPlayerAspectRatioStateTest {
 
         // Simulating AUTO behaviour: use detected if non-null
         val state = VideoPlayerUiState(
-            aspectRatio = AspectRatio.AUTO,
             mediaStreams = streams,
-        ).copy(detectedAspectRatio = detected)
-        assertEquals(AspectRatio.RATIO_16_9, state.detectedAspectRatio)
+        ).copy(videoFx = VideoFxState(detectedAspectRatio = detected))
+        assertEquals(AspectRatio.RATIO_16_9, state.videoFx.detectedAspectRatio)
     }
 
     @Test

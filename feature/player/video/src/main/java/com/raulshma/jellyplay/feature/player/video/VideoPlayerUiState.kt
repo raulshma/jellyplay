@@ -29,7 +29,6 @@ import com.raulshma.jellyplay.feature.player.video.state.MediaContentState
 import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
 import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
-import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.LyricsLine
 
@@ -95,8 +94,6 @@ data class VideoPlayerUiState(
     val artworkUrl: String? = null,
     val lyricsLines: List<LyricsLine> = emptyList(),
     val chapters: List<ChapterInfo> = emptyList(),
-    val aspectRatio: AspectRatio = AspectRatio.AUTO,
-    val detectedAspectRatio: AspectRatio? = null,
     val playMethod: String = "",
     /** Raw server transcode reasons for the current stream; empty when
      *  direct playing. Formatted for display at the call site via
@@ -178,7 +175,6 @@ data class VideoPlayerUiState(
     val adaptiveBitrateEnabled: Boolean = true,
     val playbackMode: PlaybackMode = PlaybackMode.AUTO,
     val showPlaybackErrorDialog: Boolean = false,
-    val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val isScreenLocked: Boolean = false,
     val usePinForPlayerLock: Boolean = false,
     /**
@@ -191,7 +187,6 @@ data class VideoPlayerUiState(
     val showPlaybackMetadata: Boolean = true,
     val showClock: Boolean = false,
     val showTimeRemaining: Boolean = false,
-    val tvZoomModePercent: Float = 0f,
     val keepScreenOnDuringVideo: Boolean = true,
     val cinemaIntroState: CinemaIntroUiState? = null,
     val isMuted: Boolean = false,
@@ -201,6 +196,12 @@ data class VideoPlayerUiState(
      * `autoPlayCountdownSec` / `autoplayCancelled`); now a stored slice.
      */
     val autoplay: AutoplayState = AutoplayState(),
+    /**
+     * Video filter / aspect / zoom settings. Formerly flat fields
+     * (`videoEffects` / `aspectRatio` / `detectedAspectRatio` /
+     * `tvZoomModePercent`); now a stored slice.
+     */
+    val videoFx: VideoFxState = VideoFxState(),
     /**
      * Whether the active network is metered (cellular or metered Wi-Fi).
      * Surfaced so the playback metadata can show why a quality cap is being
@@ -241,13 +242,6 @@ data class VideoPlayerUiState(
             currentMediaSource = currentMediaSource, mediaStreams = mediaStreams,
             playMethod = playMethod, isDirectPlayForced = isDirectPlayForced,
             seriesId = seriesId,
-        )
-
-    val videoFx: VideoFxState
-        get() = VideoFxState(
-            videoEffects = videoEffects, aspectRatio = aspectRatio,
-            detectedAspectRatio = detectedAspectRatio,
-            tvZoomModePercent = tvZoomModePercent,
         )
 
     val segmentState: SegmentState

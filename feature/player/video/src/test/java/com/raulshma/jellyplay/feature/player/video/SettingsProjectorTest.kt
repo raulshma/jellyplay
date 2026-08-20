@@ -53,7 +53,7 @@ class SettingsProjectorTest {
         assertTrue(uiState.showPlaybackMetadata)
         assertTrue(uiState.showClock)
         assertTrue(uiState.showTimeRemaining)
-        assertEquals(100f, uiState.tvZoomModePercent, 0.001f)
+        assertEquals(100f, uiState.videoFx.tvZoomModePercent, 0.001f)
         assertTrue(uiState.keepScreenOnDuringVideo)
         assertEquals(4, uiState.passOutProtectionHours)
         assertEquals(10, uiState.autoplay.autoPlayCountdownSec)

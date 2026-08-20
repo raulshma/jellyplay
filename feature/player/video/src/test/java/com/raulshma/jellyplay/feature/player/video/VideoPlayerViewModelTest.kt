@@ -371,13 +371,13 @@ class VideoPlayerViewModelTest {
     @Test
     fun setAspectRatio_updatesStateExplicitRatio() {
         viewModel.setAspectRatio(AspectRatio.RATIO_21_9)
-        assertEquals(AspectRatio.RATIO_21_9, viewModel.uiState.value.aspectRatio)
+        assertEquals(AspectRatio.RATIO_21_9, viewModel.uiState.value.videoFx.aspectRatio)
     }
 
     @Test
     fun setAspectRatio_off_doesNotMutateDetected() {
         viewModel.setAspectRatio(AspectRatio.FIT)
-        assertEquals(AspectRatio.FIT, viewModel.uiState.value.aspectRatio)
+        assertEquals(AspectRatio.FIT, viewModel.uiState.value.videoFx.aspectRatio)
     }
 
     @Test

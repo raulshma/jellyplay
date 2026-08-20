@@ -28,7 +28,7 @@ class VideoPlayerUiStateTest {
         assertTrue(state.chapters.isEmpty())
         assertFalse(state.dialogueBoostEnabled)
         assertEquals(EffectStrength.MODERATE, state.dialogueBoostStrength)
-        assertNull(state.detectedAspectRatio)
+        assertNull(state.videoFx.detectedAspectRatio)
         assertNull(state.streamUrl)
     }
 
