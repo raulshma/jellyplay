@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -16,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -68,6 +68,8 @@ fun <T> TvFocusableColumn(
     verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(0.dp),
     initialIndex: Int = 0,
     requestInitialFocus: Boolean = true,
+    /** Bump to reset the cursor and re-grab focus after the backing data is replaced (filter change). */
+    refreshGeneration: Int = 0,
     onFocusedIndexChange: (Int) -> Unit = {},
     focusRequester: FocusRequester? = null,
     contentType: (index: Int, item: T) -> Any? = { _, _ -> null },
@@ -78,6 +80,51 @@ fun <T> TvFocusableColumn(
         modifier: Modifier,
     ) -> Unit,
 ) {
+    TvFocusablePagingColumn(
+        itemCount = items.size,
+        key = { index -> key(items[index]) },
+        modifier = modifier,
+        state = state,
+        contentPadding = contentPadding,
+        verticalArrangement = verticalArrangement,
+        initialIndex = initialIndex,
+        requestInitialFocus = requestInitialFocus,
+        refreshGeneration = refreshGeneration,
+        onFocusedIndexChange = onFocusedIndexChange,
+        focusRequester = focusRequester,
+        contentType = { index -> contentType(index, items[index]) },
+        extraContent = extraContent,
+    ) { index, itemModifier ->
+        itemContent(index, items[index], itemModifier)
+    }
+}
+
+/**
+ * Count-based paging analogue of [TvFocusableColumn] for `LazyPagingItems`-style APIs where items
+ * are addressed by index and may be null while placeholders load — the same relationship
+ * [TvFocusableGrid]'s count overload has to its list overload. Identical focus contract: canonical
+ * modifier order, saveable cursor memory, one-shot initial grab, and a [refreshGeneration] re-grab
+ * after the data is replaced.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun TvFocusablePagingColumn(
+    itemCount: Int,
+    key: (index: Int) -> Any,
+    modifier: Modifier = Modifier,
+    state: LazyListState = rememberLazyListState(cacheWindow = TvColumnCacheWindow),
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(0.dp),
+    initialIndex: Int = 0,
+    requestInitialFocus: Boolean = true,
+    /** Bump to reset the cursor and re-grab focus after the backing data is replaced (filter change). */
+    refreshGeneration: Int = 0,
+    onFocusedIndexChange: (Int) -> Unit = {},
+    focusRequester: FocusRequester? = null,
+    contentType: (index: Int) -> Any? = { null },
+    extraContent: LazyListScope.() -> Unit = {},
+    itemContent: @Composable (index: Int, itemModifier: Modifier) -> Unit,
+) {
     val isTv = LocalTvMode.current
     val columnFocusRequester = remember { FocusRequester() }
     val fallbackFocusRequester = remember { FocusRequester() }
@@ -85,9 +132,9 @@ fun <T> TvFocusableColumn(
     var focusedIndex by rememberInt(initialIndex)
     var initialFocusRequested by remember { mutableStateOf(false) }
 
-    LaunchedEffect(items.size) {
-        if (items.isNotEmpty()) {
-            focusedIndex = focusedIndex.coerceIn(0, items.lastIndex)
+    LaunchedEffect(itemCount) {
+        if (itemCount > 0) {
+            focusedIndex = focusedIndex.coerceIn(0, itemCount - 1)
         }
     }
 
@@ -96,15 +143,30 @@ fun <T> TvFocusableColumn(
     // first composition, grab focus on the focused row once. The scroll-to-item before the grab
     // ensures the saved row is composed before requesting focus (returning from a full-screen
     // route can otherwise leave the saved index off-screen and the grab silently no-ops).
-    LaunchedEffect(items.isNotEmpty()) {
-        if (isTv && requestInitialFocus && items.isNotEmpty() && !initialFocusRequested) {
+    LaunchedEffect(itemCount > 0) {
+        if (isTv && requestInitialFocus && itemCount > 0 && !initialFocusRequested) {
             initialFocusRequested = true
-            state.scrollToItem(focusedIndex.coerceIn(0, items.lastIndex))
+            state.scrollToItem(focusedIndex.coerceIn(0, itemCount - 1))
             fallbackFocusRequester.tryRequestFocus("tv_column_init")
         }
     }
 
-    val currentFocusedIndex = if (items.isEmpty()) 0 else focusedIndex.coerceIn(0, items.lastIndex)
+    // A completed refresh (filter/folder change) replaces the data under the old cursor: the caller
+    // scrolls to 0, so the saved index no longer matches what's composed. Reset the cursor and
+    // re-grab — without this, focus falls out of the column during the reload and the drawer rail
+    // captures it. Mirrors the same handling in [TvFocusableGrid].
+    LaunchedEffect(refreshGeneration) {
+        if (isTv && refreshGeneration > 0 && itemCount > 0) {
+            focusedIndex = 0
+            state.scrollToItem(0)
+            for (attempt in 1..3) {
+                withFrameNanos { }
+                if (fallbackFocusRequester.tryRequestFocus("tv_column_refresh")) break
+            }
+        }
+    }
+
+    val currentFocusedIndex = if (itemCount == 0) 0 else focusedIndex.coerceIn(0, itemCount - 1)
 
     LazyColumn(
         state = state,
@@ -125,15 +187,15 @@ fun <T> TvFocusableColumn(
             modifier
         },
     ) {
-        itemsIndexed(
-            items = items,
-            key = { _, item -> key(item) },
-            contentType = { index, item -> contentType(index, item) },
-        ) { index, item ->
+        items(
+            count = itemCount,
+            key = key,
+            contentType = contentType,
+        ) { index ->
             // animateItem (LazyItemScope) animates placement so reorders/removals glide instead of
             // snapping. Placement spec routes through lazyItemPlacementSpec() so it snaps under
             // reduce-motion. Keys are required for placement tracking; the `key` param above is
-            // mandatory in TvFocusableColumn's contract.
+            // mandatory in this contract.
             val placementSpec = lazyItemPlacementSpec()
             val itemModifier = (if (isTv) {
                 Modifier
@@ -147,7 +209,7 @@ fun <T> TvFocusableColumn(
             } else {
                 Modifier
             }).animateItem(placementSpec = placementSpec)
-            itemContent(index, item, itemModifier)
+            itemContent(index, itemModifier)
         }
         extraContent()
     }

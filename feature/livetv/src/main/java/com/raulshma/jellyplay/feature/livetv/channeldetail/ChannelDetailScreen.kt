@@ -16,8 +16,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -28,6 +31,7 @@ import com.composables.icons.tabler.outline.ArrowLeft
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.feature.livetv.R
 
 @Composable
@@ -48,6 +52,16 @@ fun ChannelDetailScreen(
     // does not depend solely on the nav-host system pop.
     BackHandler(enabled = true, onBack = onBack)
 
+    // While loading, the raw spinner leaves nothing focusable — hold focus on the back
+    // button so it doesn't fall to the drawer rail. Once content composes,
+    // ChannelDetailContent's own grab takes over.
+    val isLoading = state.isLoading && state.programs.isEmpty() && state.currentProgram == null
+    val backFocusRequester = remember { FocusRequester() }
+    RequestOrRestoreFocus(
+        focusRequester = if (isLoading) backFocusRequester else null,
+        debugKey = "channel_detail_back",
+    )
+
     Box(Modifier.fillMaxSize()) {
         // Backdrop follows the currently-airing program.
         val backdropProgram = state.currentProgram
@@ -67,6 +81,7 @@ fun ChannelDetailScreen(
             modifier = Modifier
                 .statusBarsPadding()
                 .padding(start = 8.dp, top = 8.dp)
+                .focusRequester(backFocusRequester)
                 .focusIndicator(),
         ) {
             Icon(

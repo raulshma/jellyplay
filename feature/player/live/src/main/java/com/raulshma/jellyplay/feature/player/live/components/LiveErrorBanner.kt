@@ -32,6 +32,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -66,6 +68,7 @@ fun LiveErrorBanner(
     onRetryWithOption: (LiveStreamOption) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    retryFocusRequester: FocusRequester? = null,
 ) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {
@@ -133,7 +136,15 @@ fun LiveErrorBanner(
                     }
                 }
 
-                Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onRetry,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (retryFocusRequester != null) Modifier.focusRequester(retryFocusRequester)
+                            else Modifier,
+                        ),
+                ) {
                     Text(stringResource(R.string.live_retry))
                 }
 

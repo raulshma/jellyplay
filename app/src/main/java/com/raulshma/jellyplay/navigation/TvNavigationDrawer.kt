@@ -76,6 +76,14 @@ private val DrawerIconSize = 24.dp
 private val DrawerItemSpacing = 4.dp
 private const val ExitConfirmationTimeoutMs = 2000L
 
+/**
+ * Frame budget for the content-focus guard. The content requester often isn't attached to a
+ * placed focusable until the incoming screen's NavDisplay entry transition (~300ms) settles,
+ * so a short retry loop gives up while focus is still orphaned — and orphaned focus falls to
+ * the drawer rail, which snaps the drawer open.
+ */
+private const val ContentGuardRetryFrames = 24
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Data + icon mapping
 // ──────────────────────────────────────────────────────────────────────────────
@@ -221,9 +229,10 @@ fun TvNavigationDrawer(
 
     LaunchedEffect(currentRoute, drawerState.currentValue, contentHasFocus) {
         if (drawerState.currentValue == DrawerValue.Closed && !contentHasFocus) {
-            for (attempt in 1..3) {
+            repeat(ContentGuardRetryFrames) {
                 androidx.compose.runtime.withFrameNanos { }
-                if (contentFocusRequester.tryRequestFocus("tv_content_guard")) break
+                if (contentHasFocus || drawerState.currentValue != DrawerValue.Closed) return@LaunchedEffect
+                if (contentFocusRequester.tryRequestFocus("tv_content_guard")) return@LaunchedEffect
             }
         }
     }

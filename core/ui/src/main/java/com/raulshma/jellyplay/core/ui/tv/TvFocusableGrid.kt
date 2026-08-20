@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -50,6 +51,8 @@ fun TvFocusableGrid(
     modifier: Modifier = Modifier,
     initialIndex: Int = 0,
     requestInitialFocus: Boolean = true,
+    /** Bump to reset the cursor and re-grab focus after the backing data is replaced (filter/folder change). */
+    refreshGeneration: Int = 0,
     state: LazyGridState = rememberLazyGridState(
         initialFirstVisibleItemIndex = initialIndex,
         cacheWindow = TvGridCacheWindow,
@@ -87,6 +90,22 @@ fun TvFocusableGrid(
             val targetIndex = focusedIndex.coerceIn(0, itemCount - 1)
             state.scrollToItem(targetIndex)
             fallbackFocusRequester.tryRequestFocus("tv_grid_init")
+        }
+    }
+
+    // A completed refresh (filter/folder change) replaces the data under the old cursor: the caller
+    // scrolls to 0, so the saved index no longer matches what's composed. Reset the cursor and
+    // re-grab — without this, focus falls out of the grid during the reload and the drawer rail
+    // captures it. The retry loop covers the frame where the recycled cell hasn't re-attached the
+    // fallback requester yet.
+    LaunchedEffect(refreshGeneration) {
+        if (isTv && refreshGeneration > 0 && itemCount > 0) {
+            focusedIndex = 0
+            state.scrollToItem(0)
+            for (attempt in 1..3) {
+                withFrameNanos { }
+                if (fallbackFocusRequester.tryRequestFocus("tv_grid_refresh")) break
+            }
         }
     }
 
@@ -154,6 +173,8 @@ fun <T> TvFocusableGrid(
     modifier: Modifier = Modifier,
     initialIndex: Int = 0,
     requestInitialFocus: Boolean = true,
+    /** Bump to reset the cursor and re-grab focus after the backing data is replaced (filter/folder change). */
+    refreshGeneration: Int = 0,
     state: LazyGridState = rememberLazyGridState(
         initialFirstVisibleItemIndex = initialIndex,
         cacheWindow = TvGridCacheWindow,
@@ -177,6 +198,7 @@ fun <T> TvFocusableGrid(
         modifier = modifier,
         initialIndex = initialIndex,
         requestInitialFocus = requestInitialFocus,
+        refreshGeneration = refreshGeneration,
         state = state,
         contentPadding = contentPadding,
         horizontalArrangement = horizontalArrangement,

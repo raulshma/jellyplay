@@ -39,6 +39,8 @@ import com.raulshma.jellyplay.core.ui.components.rememberStableCallback
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -69,6 +71,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -190,11 +193,21 @@ private fun ManageSeriesContent(
     val listState = rememberLazyListState()
     val seriesInFlight = (state.actionTarget as? ActionTarget.Series)?.action
 
+    // Grab focus once the series content composes so the first D-pad press lands on the
+    // action row, not the drawer rail.
+    val focusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = focusRequester,
+        itemCount = if (state.series != null) 1 else 0,
+        tag = "manage_series_init",
+    )
+
     LazyColumn(
         state = listState,
         modifier = Modifier
             .fillMaxSize()
-            .tvFocusRestorer(),
+            .tvFocusRestorer()
+            .focusRequester(focusRequester),
         contentPadding = PaddingValues(
             start = contentPad,
             end = contentPad,

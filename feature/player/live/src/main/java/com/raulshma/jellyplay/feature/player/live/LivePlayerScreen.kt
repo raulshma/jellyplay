@@ -19,6 +19,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
@@ -39,6 +41,7 @@ import com.raulshma.jellyplay.core.ui.player.playerTopControlsEnter
 import com.raulshma.jellyplay.core.ui.player.playerTopControlsExit
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.live.components.ChannelZapToast
 import com.raulshma.jellyplay.feature.player.live.components.LiveChannelListSheet
 import com.raulshma.jellyplay.feature.player.live.components.LiveErrorBanner
@@ -165,11 +168,27 @@ fun LivePlayerScreen(
         if (zapToastChannelId == state.currentChannel?.id) zapToastChannelId = null
     }
 
+    // TV: own focus from entry. The player root's D-pad handlers only fire while the
+    // root holds focus; when the error banner shows, its retry button takes over
+    // (mirrors the VOD player's overlay-priority focus chain).
+    val playerFocusRequester = remember { FocusRequester() }
+    val errorRetryFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(isTv, state.errorMessage) {
+        if (isTv) {
+            if (state.errorMessage != null) {
+                errorRetryFocusRequester.tryRequestFocus("tv_live_error")
+            } else {
+                playerFocusRequester.tryRequestFocus("tv_live_player")
+            }
+        }
+    }
+
     PlayerDarkTheme {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
+                .focusRequester(playerFocusRequester)
                 .focusable(true)
                 .then(
                     if (!isTv) Modifier.pointerInput(Unit) {
@@ -367,6 +386,7 @@ fun LivePlayerScreen(
                     onRetry = { viewModel.retry(audioStreamIndex, subtitleStreamIndex) },
                     onRetryWithOption = { viewModel.setLiveStreamOption(it) },
                     onBack = onBack,
+                    retryFocusRequester = errorRetryFocusRequester,
                 )
             }
         }

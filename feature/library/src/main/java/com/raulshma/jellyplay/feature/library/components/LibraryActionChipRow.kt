@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.library.components
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,6 +27,7 @@ import com.composables.icons.tabler.outline.Stack2
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.library.R
 
 /**
@@ -64,7 +66,11 @@ fun LibraryActionChipRow(
     LazyRow(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp),
+            .padding(vertical = 2.dp)
+            // Same focus contract as the folder-pill/filter rows: group + restorer so D-pad
+            // traversal into the row restores the last-focused chip instead of restarting.
+            .focusGroup()
+            .tvFocusRestorer(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(horizontal = 24.dp),
     ) {

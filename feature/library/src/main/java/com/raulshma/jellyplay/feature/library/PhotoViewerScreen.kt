@@ -9,6 +9,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -849,6 +850,10 @@ private fun PhotoFilmstrip(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier
                 .fillMaxWidth()
+                // focusGroup gives the focusRequester a target to redirect into (the row itself
+                // has no focus node) — without it the filmstrip grab silently no-ops and the
+                // strip is unreachable on TV.
+                .focusGroup()
                 .focusRequester(focusRequester)
                 .onDpadKeyEvent(
                     onBack = { e ->

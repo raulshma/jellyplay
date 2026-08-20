@@ -104,16 +104,20 @@ fun ErrorScreen(
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
-    val retryFocusRequester = remember { FocusRequester() }
+    val focusRequester = remember { FocusRequester() }
     // On TV, deterministically focus the Retry button when present so an error screen is never
-    // left without an actionable focus target.
-    if (isTv && onRetry != null) {
-        LaunchedEffect(Unit) { retryFocusRequester.tryRequestFocus("error_retry") }
+    // left without an actionable focus target. Without a retry action the box itself becomes a
+    // focus sink so focus can't fall through to the navigation drawer rail.
+    if (isTv) {
+        LaunchedEffect(Unit) {
+            focusRequester.tryRequestFocus(if (onRetry != null) "error_retry" else "error_sink")
+        }
     }
     AnimatedEntrance(visible = true) {
         Box(
             modifier = modifier
                 .fillMaxSize()
+                .then(if (isTv && onRetry == null) Modifier.focusRequester(focusRequester).focusable() else Modifier)
                 .padding(16.dp),
             contentAlignment = Alignment.Center,
         ) {
@@ -129,7 +133,7 @@ fun ErrorScreen(
                     androidx.compose.material3.TextButton(
                         onClick = onRetry,
                         shape = ShapeCache.smooth12,
-                        modifier = (if (isTv) Modifier.focusRequester(retryFocusRequester) else Modifier)
+                        modifier = (if (isTv) Modifier.focusRequester(focusRequester) else Modifier)
                             .then(retryFocusState.focusModifier)
                             .tvFocusIndicator(retryFocusState, ShapeCache.smooth12),
                     ) {

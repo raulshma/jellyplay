@@ -750,6 +750,17 @@ private fun MainContent(
             // DrawerState type distinct from any mobile-material3 names.
             val tvDrawerState = androidx.tv.material3.rememberDrawerState(androidx.tv.material3.DrawerValue.Closed)
             val tvDrawerListState = androidx.compose.foundation.lazy.rememberLazyListState()
+            // Returning from a full-screen route with a saved-Open drawer state would make the
+            // drawer rail re-grab focus on re-entry and land expanded; snap it closed so the
+            // restored screen owns focus. Keyed only on the route flag — reading currentValue
+            // here would re-run when the user opens the drawer intentionally and fight it.
+            LaunchedEffect(isTv, isFullScreenRoute) {
+                if (isTv && !isFullScreenRoute &&
+                    tvDrawerState.currentValue == androidx.tv.material3.DrawerValue.Open
+                ) {
+                    tvDrawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
+                }
+            }
             if (isTv && !isFullScreenRoute) {
                 TvContent(
                     navigationState = navigationState,

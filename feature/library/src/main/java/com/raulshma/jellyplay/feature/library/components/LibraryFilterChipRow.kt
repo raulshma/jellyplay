@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
@@ -25,6 +26,7 @@ import com.raulshma.jellyplay.core.ui.components.yearRangePresets
 import com.raulshma.jellyplay.core.ui.components.toggleYearPreset
 import com.raulshma.jellyplay.core.ui.components.YearPresetSelection
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.feature.library.R
@@ -57,7 +59,11 @@ fun LibraryFilterChipRow(
     LazyRow(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 4.dp)
+            // Same focus contract as the folder-pill row above: group + restorer so D-pad
+            // traversal into the row restores the last-focused chip instead of restarting.
+            .focusGroup()
+            .tvFocusRestorer(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
     ) {

@@ -23,6 +23,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.annotation.StringRes
@@ -43,6 +45,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
@@ -79,6 +82,14 @@ fun AuthChallengeScreen(
     var biometricPromptTrigger by remember { mutableStateOf(0) }
     var deviceCredentialTrigger by remember { mutableStateOf(0) }
     var deviceCredentialActive by remember { mutableStateOf(false) }
+
+    // TV: the biometric branch has no PIN pad to grab focus — land on the retry button.
+    // The PIN branch is covered by PinLockScreen's own first-key grab.
+    val biometricRetryFocusRequester = remember { FocusRequester() }
+    RequestOrRestoreFocus(
+        focusRequester = if (showBiometric && canUseBiometric) biometricRetryFocusRequester else null,
+        debugKey = "auth_biometric_retry",
+    )
 
     // Shared launch action for the device-credential prompt — identical across
     // the three call sites below, hoisted so each ScreenLockButton stays a
@@ -169,6 +180,7 @@ fun AuthChallengeScreen(
                         },
                         shape = ShapeCache.smooth12,
                         modifier = Modifier
+                            .focusRequester(biometricRetryFocusRequester)
                             .then(retryFocusState.focusModifier)
                             .tvFocusIndicator(retryFocusState, ShapeCache.smooth12),
                     ) {

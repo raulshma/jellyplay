@@ -26,7 +26,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
@@ -53,17 +52,12 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.SortOption
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.res.stringResource
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.library.R
 
 @OptIn(
@@ -94,12 +88,6 @@ fun LibraryFilterSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val isLight = LocalIsLightTheme.current
-    // Sheet container matches the app/screen background tier: colorScheme.surface
-    // (pure #000 in OLED — identical to the Library screen — instead of the old
-    // light=Low / dark=High split that drifted from the other sheets).
-    val sheetContainerColor = MaterialTheme.colorScheme.surface
-
-    val isTv = LocalTvMode.current
 
     val filterContent = @Composable {
         val contentColor = MaterialTheme.colorScheme.onSurface
@@ -430,39 +418,16 @@ fun LibraryFilterSheet(
         }
     }
 
-    if (isTv) {
-        Dialog(
-            onDismissRequest = onDismiss,
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = true
-            )
-        ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxHeight(0.85f)
-                    .fillMaxWidth(0.7f)
-                    .clip(ShapeCache.smooth24),
-                color = sheetContainerColor,
-                tonalElevation = 6.dp,
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    filterContent()
-                }
-            }
-        }
-    } else {
-        ModalBottomSheet(
-            onDismissRequest = onDismiss,
-            sheetState = sheetState,
-            containerColor = sheetContainerColor,
-            tonalElevation = 0.dp,
-            shape = ShapeCache.smoothTop28,
-            dragHandle = { com.raulshma.jellyplay.core.ui.components.SheetDragHandle() },
-        ) {
-            filterContent()
-        }
+    // TvSafeSheet owns both variants: the TV dialog grabs initial focus on a focusGroup content
+    // node (the hand-rolled Dialog split opened with orphaned focus, so the first D-pad presses
+    // did nothing or escaped the dialog), and the mobile bottom sheet keeps the drag handle +
+    // inset handling this sheet used to replicate by hand.
+    TvSafeSheet(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.library_filters),
+        sheetState = sheetState,
+    ) {
+        filterContent()
     }
 }
 
@@ -490,11 +455,14 @@ private fun CollapsibleSection(
     content: @Composable () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(startExpanded) }
+    val headerFocusState = rememberTvFocusState()
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(MaterialTheme.shapes.small)
+                .then(headerFocusState.focusModifier)
+                .tvFocusIndicator(headerFocusState, MaterialTheme.shapes.small)
                 .clickable { expanded = !expanded }
                 .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,

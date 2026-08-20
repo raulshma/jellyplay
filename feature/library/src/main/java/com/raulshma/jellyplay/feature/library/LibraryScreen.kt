@@ -116,6 +116,8 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
@@ -126,6 +128,10 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
+import com.raulshma.jellyplay.core.ui.tv.TvFocusablePagingColumn
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.rememberInt
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -605,9 +611,14 @@ fun LibraryScreen(
                 }
 
                 var wasRefreshing by remember { mutableStateOf(false) }
+                // Bumped on every completed refresh so the focus-managed list/grid containers reset
+                // their saved cursor and re-grab focus — a filter/folder change replaces the data
+                // under the old index, which otherwise orphans focus to the drawer rail.
+                var refreshGeneration by remember { mutableIntStateOf(0) }
                 LaunchedEffect(pagedItems.loadState.refresh) {
                     val isNowRefreshing = pagedItems.loadState.refresh is LoadState.Loading
                     if (wasRefreshing && !isNowRefreshing) {
+                        refreshGeneration++
                         gridState.scrollToItem(0)
                         listState.scrollToItem(0)
                     }
@@ -643,41 +654,24 @@ fun LibraryScreen(
 
                         else -> {
                             if (pagedItems.itemCount == 0) {
-                                Box(
+                                // ScreenEmptyState owns the TV focus sink/action grab — a
+                                // hand-rolled empty state left the screen with zero focusables and
+                                // the drawer rail captured focus.
+                                ScreenEmptyState(
+                                    icon = Tabler.Outline.Search,
+                                    title = stringResource(R.string.library_no_items_found),
+                                    actionLabel = if (hasActiveFilters) {
+                                        stringResource(com.raulshma.jellyplay.core.ui.R.string.core_clear_filters)
+                                    } else {
+                                        null
+                                    },
+                                    onAction = if (hasActiveFilters) {
+                                        { viewModel.clearFilters() }
+                                    } else {
+                                        null
+                                    },
                                     modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        Icon(
-                                            Tabler.Outline.Search,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(48.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                        Text(
-                                            text = stringResource(R.string.library_no_items_found),
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                        if (hasActiveFilters) {
-                                            // the "adjust your filters" hint was plain
-                                            // text with no affordance. Promote it to a tonal button
-                                            // that clears the active filters so empty results become
-                                            // recoverable in one tap.
-                                            androidx.compose.material3.FilledTonalButton(
-                                                onClick = { viewModel.clearFilters() },
-                                            ) {
-                                                Text(
-                                                    text = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_clear_filters),
-                                                    style = MaterialTheme.typography.labelLarge,
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
+                                )
                             } else {
                                 // Drive the view-mode swap through AnimatedContent so each
                                 // branch receives its own AnimatedVisibilityScope. That scope
@@ -719,50 +713,55 @@ fun LibraryScreen(
                                                 gridCellSize = gridCellSize,
                                                 spacing = spacing,
                                                 gridPadding = gridPadding,
+                                                refreshGeneration = refreshGeneration,
                                                 onItemClick = onItemClick,
                                                 getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
                                                 onFocusedItemChange = { item -> tvFocusedItem = item },
                                             )
                                         } else when (activeMode) {
                                     LibraryViewMode.LIST -> {
-                                        LazyColumn(
+                                        // TvFocusablePagingColumn supplies the TV focus contract
+                                        // (initial grab, cursor memory, refresh re-grab) the plain
+                                        // LazyColumn never had — LIST mode used to open with focus
+                                        // orphaned straight to the drawer rail.
+                                        TvFocusablePagingColumn(
+                                            itemCount = pagedItems.itemCount,
+                                            key = pagedItems.safeItemKey { it.id },
                                             state = listState,
                                             contentPadding = gridPadding,
                                             verticalArrangement = Arrangement.spacedBy(4.dp),
                                             modifier = Modifier.fillMaxSize(),
-                                        ) {
-                                            items(
-                                                count = pagedItems.itemCount,
-                                                key = pagedItems.safeItemKey { it.id },
-                                                contentType = { "mediaItem" },
-                                            ) { index ->
-                                                val item = pagedItems[index]
-                                                if (item != null) {
-                                                    val placementSpec = lazyItemPlacementSpec()
-                                                    val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
-                                                        { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
-                                                    }
-                                                    val subtitle = remember(item.mediaType, item.seriesName, item.seasonNumber, item.episodeNumber, item.year) {
-                                                        // Episodes show an SxxExx + series context line (bold tag);
-                                                        // other types keep the year/type label. Shared with the
-                                                        // grouped list path via libraryListSubtitle.
-                                                        item.libraryListSubtitle()
-                                                    }
-                                                    // Seasons fall back to the parent series poster when the
-                                                    // season's own artwork 404s (shared with the grouped list).
-                                                    val fallbackUrls = item.rememberSeriesImageFallback(viewModel::getImageUrl)
-                                                    Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
-                                                        LibraryListItem(
-                                                            title = item.displayTitle(),
-                                                            subtitle = subtitle,
-                                                            imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
-                                                            fallbackUrls = fallbackUrls,
-                                                            blurHash = item.blurHashes.primary,
-                                                            onClick = memoizedClick,
-                                                            modifier = Modifier,
-                                                            sharedElementKey = "poster_${item.id}",
-                                                        )
-                                                    }
+                                            refreshGeneration = refreshGeneration,
+                                            contentType = { "mediaItem" },
+                                            onFocusedIndexChange = { index ->
+                                                pagedItems[index]?.let { tvFocusedItem = it }
+                                            },
+                                        ) { index, itemModifier ->
+                                            val item = pagedItems[index]
+                                            if (item != null) {
+                                                val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
+                                                    { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
+                                                }
+                                                val subtitle = remember(item.mediaType, item.seriesName, item.seasonNumber, item.episodeNumber, item.year) {
+                                                    // Episodes show an SxxExx + series context line (bold tag);
+                                                    // other types keep the year/type label. Shared with the
+                                                    // grouped list path via libraryListSubtitle.
+                                                    item.libraryListSubtitle()
+                                                }
+                                                // Seasons fall back to the parent series poster when the
+                                                // season's own artwork 404s (shared with the grouped list).
+                                                val fallbackUrls = item.rememberSeriesImageFallback(viewModel::getImageUrl)
+                                                Box(modifier = itemModifier) {
+                                                    LibraryListItem(
+                                                        title = item.displayTitle(),
+                                                        subtitle = subtitle,
+                                                        imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                                                        fallbackUrls = fallbackUrls,
+                                                        blurHash = item.blurHashes.primary,
+                                                        onClick = memoizedClick,
+                                                        modifier = Modifier,
+                                                        sharedElementKey = "poster_${item.id}",
+                                                    )
                                                 }
                                             }
                                         }
@@ -780,6 +779,7 @@ fun LibraryScreen(
                                             horizontalArrangement = Arrangement.spacedBy(spacing),
                                             verticalArrangement = Arrangement.spacedBy(spacing),
                                             modifier = Modifier.fillMaxSize(),
+                                            refreshGeneration = refreshGeneration,
                                             contentType = { "mediaItem" },
                                             onFocusedIndexChange = { index -> pagedItems[index]?.let { tvFocusedItem = it } },
                                         ) { index, itemModifier ->
@@ -824,6 +824,7 @@ fun LibraryScreen(
                                             horizontalArrangement = Arrangement.spacedBy(spacing),
                                             verticalArrangement = Arrangement.spacedBy(spacing),
                                             modifier = Modifier.fillMaxSize(),
+                                            refreshGeneration = refreshGeneration,
                                             contentType = { "mediaItem" },
                                             onFocusedIndexChange = { index -> pagedItems[index]?.let { tvFocusedItem = it } },
                                         ) { index, itemModifier ->
@@ -872,18 +873,38 @@ fun LibraryScreen(
                                         // Staggered grid — posters keep their own aspect ratio and
                                         // pack like a masonry wall. Most useful in mixed-type
                                         // libraries; in a pure poster library it reads like the
-                                        // regular grid (posters are uniform 2:3). Not TV-focus
-                                        // managed (no TvFocusableGrid staggered analogue) so it's a
-                                        // touch-first mode. State is hoisted to the screen root so
-                                        // the alphabet rail can drive it.
+                                        // regular grid (posters are uniform 2:3). No staggered
+                                        // TvFocusable* analogue exists, so the TV focus contract
+                                        // (group + restorer + fallback + initial/refresh grab) is
+                                        // wired manually here, matching TvFocusableGrid's order.
+                                        // State is hoisted to the screen root so the alphabet rail
+                                        // can drive it.
                                         val staggeredState = staggeredState
+                                        val masonryGroupRequester = remember { FocusRequester() }
+                                        val masonryFallbackRequester = remember { FocusRequester() }
+                                        var masonryFocusedIndex by rememberInt()
+                                        TvGrabInitialFocus(
+                                            focusRequester = masonryFallbackRequester,
+                                            itemCount = pagedItems.itemCount,
+                                            tag = "library_masonry_init",
+                                            refreshGeneration = refreshGeneration,
+                                        )
+                                        LaunchedEffect(refreshGeneration) {
+                                            if (refreshGeneration > 0) masonryFocusedIndex = 0
+                                        }
+                                        val masonryCurrentIndex =
+                                            masonryFocusedIndex.coerceIn(0, (pagedItems.itemCount - 1).coerceAtLeast(0))
                                         LazyVerticalStaggeredGrid(
                                             columns = StaggeredGridCells.Adaptive(gridCellSize),
                                             state = staggeredState,
                                             contentPadding = gridPadding,
                                             verticalItemSpacing = spacing,
                                             horizontalArrangement = Arrangement.spacedBy(spacing),
-                                            modifier = Modifier.fillMaxSize(),
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .focusGroup()
+                                                .tvFocusRestorer(masonryFallbackRequester)
+                                                .focusRequester(masonryGroupRequester),
                                         ) {
                                             items(
                                                 count = pagedItems.itemCount,
@@ -901,7 +922,19 @@ fun LibraryScreen(
                                                         itemImageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                                                         seriesPosterResolver = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
                                                     )
-                                                    Box(modifier = Modifier) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .ifElse(
+                                                                index == masonryCurrentIndex,
+                                                                Modifier.focusRequester(masonryFallbackRequester),
+                                                            )
+                                                            .onFocusChanged {
+                                                                if (it.isFocused || it.hasFocus) {
+                                                                    masonryFocusedIndex = index
+                                                                    tvFocusedItem = item
+                                                                }
+                                                            },
+                                                    ) {
                                                         PosterCard(
                                                             item = item,
                                                             imageUrl = cardImage.imageUrl,
@@ -991,16 +1024,18 @@ fun LibraryScreen(
                         )
                     }
 
-                    // Floating toolbar — Smart / Mood / Playlists / Shuffle.
+                    // Floating toolbar — Filters / Smart / Mood / Playlists / Shuffle.
                     // These are infrequent navigation actions (not view/layout
                     // controls, which live in the labeled action chip row). Kept
                     // in the floating toolbar so the app bar stays clean.
                     // Music-library-only on phones: these actions target music
                     // playlists, so showing them for a video library reads as
                     // clutter ("seems more for the music side", #113). TV keeps
-                    // the toolbar regardless of collectionType.
+                    // the toolbar regardless of collectionType — without it the
+                    // filter sheet and the playlist destinations are unreachable
+                    // on a D-pad-only device.
                     val isMusicLibrary = selectedFolder?.collectionType == "music"
-                    if (!isTv && isMusicLibrary && pagedItems.itemCount > 0) {
+                    if ((isTv || isMusicLibrary) && pagedItems.itemCount > 0) {
                         androidx.compose.animation.AnimatedVisibility(
                             visible = true,
                             modifier = Modifier
@@ -1030,6 +1065,7 @@ fun LibraryScreen(
                                 floatingActionButton = {
                                     FloatingToolbarDefaults.VibrantFloatingActionButton(
                                         onClick = { viewModel.toggleShowFilters() },
+                                        modifier = Modifier.focusIndicator(),
                                     ) {
                                         Icon(
                                             Tabler.Outline.Filter,
@@ -1041,6 +1077,7 @@ fun LibraryScreen(
                                 IconButton(
                                     onClick = onSmartPlaylistsClick,
                                     shapes = IconButtonDefaults.shapes(),
+                                    modifier = Modifier.focusIndicator(),
                                 ) {
                                     Icon(
                                         Tabler.Outline.Wand,
@@ -1051,6 +1088,7 @@ fun LibraryScreen(
                                 IconButton(
                                     onClick = onMoodPlaylistsClick,
                                     shapes = IconButtonDefaults.shapes(),
+                                    modifier = Modifier.focusIndicator(),
                                 ) {
                                     Icon(
                                         Tabler.Outline.MoodSmile,
@@ -1061,6 +1099,7 @@ fun LibraryScreen(
                                 IconButton(
                                     onClick = onPlaylistsClick,
                                     shapes = IconButtonDefaults.shapes(),
+                                    modifier = Modifier.focusIndicator(),
                                 ) {
                                     Icon(
                                         Tabler.Outline.Playlist,
@@ -1071,6 +1110,7 @@ fun LibraryScreen(
                                 IconButton(
                                     onClick = { viewModel.shuffleLibrary() },
                                     shapes = IconButtonDefaults.shapes(),
+                                    modifier = Modifier.focusIndicator(),
                                 ) {
                                     Icon(
                                         Tabler.Outline.ArrowsShuffle,
@@ -1206,10 +1246,13 @@ fun LibraryScreen(
             onDismiss = { showPosterSizeSheet = false },
         ) {
             androidx.compose.foundation.layout.Column {
-                androidx.compose.material3.Slider(
+                // TvOrTouchSlider gives the slider D-pad stepping on TV (same control the
+                // year-range sheet uses); the raw M3 Slider wasn't TV-operable.
+                com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider(
                     value = posterSize,
                     onValueChange = { viewModel.setPosterSize(it) },
                     valueRange = 0.7f..1.4f,
+                    isTv = isTv,
                 )
             }
         }
