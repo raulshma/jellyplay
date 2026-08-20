@@ -44,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -380,6 +381,10 @@ private fun AddManualServerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        // decorFitsSystemWindows=false dispatches IME insets into the dialog so
+        // imePadding can lift fields + buttons above the soft keyboard.
+        properties = DialogProperties(decorFitsSystemWindows = false),
+        modifier = Modifier.imePadding(),
         title = { Text(stringResource(R.string.settings_arr_add_manual_server)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

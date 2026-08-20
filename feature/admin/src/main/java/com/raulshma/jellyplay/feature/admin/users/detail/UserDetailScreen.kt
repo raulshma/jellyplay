@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
@@ -44,6 +45,7 @@ import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -118,6 +120,10 @@ fun UserDetailScreen(
                 viewModel.dismissPasswordDialog()
                 newPassword = ""
             },
+            // decorFitsSystemWindows=false dispatches IME insets into the dialog so
+            // imePadding can lift fields + buttons above the soft keyboard.
+            properties = DialogProperties(decorFitsSystemWindows = false),
+            modifier = Modifier.imePadding(),
             title = { Text(if (newPassword.isBlank()) stringResource(R.string.admin_reset_password) else stringResource(R.string.admin_set_password)) },
             text = {
                 Column {
@@ -239,10 +245,13 @@ fun UserDetailScreen(
                         }
                     }
 
-                    // Sticky Save/Discard bar (unchanged logic).
+                    // Sticky Save/Discard bar (unchanged logic). imePadding keeps it
+                    // above the soft keyboard while editing tab fields.
                     AnimatedVisibility(
                         visible = state.isDirty && !state.isSaving,
-                        modifier = Modifier.align(Alignment.BottomCenter),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .imePadding(),
                         enter = slideInVertically { it },
                         exit = slideOutVertically { it },
                     ) {

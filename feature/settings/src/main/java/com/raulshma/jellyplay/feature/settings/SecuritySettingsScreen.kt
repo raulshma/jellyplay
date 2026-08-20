@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -316,6 +318,10 @@ fun SecuritySettingsScreen(
                 pinConfirm = ""
                 pinError = null
             },
+            // decorFitsSystemWindows=false dispatches IME insets into the dialog so
+            // imePadding can lift fields + buttons above the soft keyboard.
+            properties = DialogProperties(decorFitsSystemWindows = false),
+            modifier = Modifier.imePadding(),
             title = { Text(stringResource(R.string.settings_set_pin_lock)) },
             text = {
                 Column {
@@ -398,6 +404,10 @@ fun SecuritySettingsScreen(
                 activeDialog = SecuritySettingsDialog.None
                 pinDisableAuthError = null
             },
+            // decorFitsSystemWindows=false dispatches IME insets into the dialog so
+            // imePadding can lift fields + buttons above the soft keyboard.
+            properties = DialogProperties(decorFitsSystemWindows = false),
+            modifier = Modifier.imePadding(),
             title = { Text(stringResource(R.string.settings_disable_pin_lock)) },
             text = {
                 Column {
@@ -486,6 +496,10 @@ fun SecuritySettingsScreen(
                     qcError = null
                 }
             },
+            // decorFitsSystemWindows=false dispatches IME insets into the dialog so
+            // imePadding can lift fields + buttons above the soft keyboard.
+            properties = DialogProperties(decorFitsSystemWindows = false),
+            modifier = Modifier.imePadding(),
             title = { Text(stringResource(R.string.settings_authorize_quick_connect)) },
             text = {
                 Column {

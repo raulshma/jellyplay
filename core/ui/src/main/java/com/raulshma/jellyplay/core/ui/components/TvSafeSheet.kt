@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -171,7 +173,17 @@ private fun MobileBottomSheet(
             colorScheme = colorScheme,
             typography = typography,
         ) {
-            content()
+            // Edge-to-edge: the sheet's own window does not inset its content, so
+            // callers must not add navigationBars/IME padding themselves — it is
+            // applied once here (sheet background still draws behind the bars).
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding(),
+            ) {
+                content()
+            }
         }
     }
 }

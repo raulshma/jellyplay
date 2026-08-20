@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.admin.users.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -13,6 +14,7 @@ import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.window.DialogProperties
 import com.raulshma.jellyplay.core.ui.components.PasswordTextField
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -37,6 +39,10 @@ fun CreateUserDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        // decorFitsSystemWindows=false dispatches IME insets into the dialog so
+        // imePadding can lift fields + buttons above the soft keyboard.
+        properties = DialogProperties(decorFitsSystemWindows = false),
+        modifier = Modifier.imePadding(),
         title = { Text(stringResource(R.string.admin_new_user_title)) },
         text = {
             androidx.compose.foundation.layout.Column {

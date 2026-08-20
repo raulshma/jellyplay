@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -241,6 +243,7 @@ private fun SubtitleUploadSheet(
             onDismissRequest = onDismiss,
         ) {
             Column(
+                // inset clearance handled by TvSafeSheet's mobile sheet branch
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -310,7 +313,7 @@ private fun SubtitleUploadSheet(
             sheetState = sheetState,
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).navigationBarsPadding().imePadding().padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(stringResource(R.string.editor_subtitles_upload_title), style = MaterialTheme.typography.headlineSmall)
@@ -401,6 +404,7 @@ private fun RemoteSubtitleSearchSheet(
             onDismissRequest = onDismiss,
         ) {
             Column(
+                // inset clearance handled by TvSafeSheet's mobile sheet branch
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -494,7 +498,7 @@ private fun RemoteSubtitleSearchSheet(
             sheetState = sheetState,
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).navigationBarsPadding().imePadding().padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(stringResource(R.string.editor_subtitles_search_title), style = MaterialTheme.typography.headlineSmall)

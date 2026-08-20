@@ -704,6 +704,10 @@ private fun PersonEditorDialog(
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
+        // decorFitsSystemWindows=false dispatches IME insets into the dialog so
+        // imePadding can lift fields + buttons above the soft keyboard.
+        properties = androidx.compose.ui.window.DialogProperties(decorFitsSystemWindows = false),
+        modifier = Modifier.imePadding(),
         title = { Text(if (isNew) stringResource(R.string.editor_add_person) else stringResource(R.string.editor_edit_person)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

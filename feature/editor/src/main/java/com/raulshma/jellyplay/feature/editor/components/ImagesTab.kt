@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -303,6 +305,7 @@ private fun ImageUploadSheet(
             onDismissRequest = onDismiss,
         ) {
             Column(
+                // inset clearance handled by TvSafeSheet's mobile sheet branch
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -388,7 +391,9 @@ private fun ImageUploadSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .padding(bottom = 32.dp),
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(stringResource(R.string.editor_images_upload_title), style = MaterialTheme.typography.headlineSmall)
@@ -485,6 +490,7 @@ private fun ImageBrowseSheet(
             onDismissRequest = onDismiss,
         ) {
             Column(
+                // inset clearance handled by TvSafeSheet's mobile sheet branch
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -618,7 +624,9 @@ private fun ImageBrowseSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .padding(bottom = 32.dp),
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(stringResource(R.string.editor_images_browse_title), style = MaterialTheme.typography.headlineSmall)

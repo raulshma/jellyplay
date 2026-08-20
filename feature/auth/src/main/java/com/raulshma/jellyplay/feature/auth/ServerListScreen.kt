@@ -63,6 +63,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.AddListRow
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
@@ -158,6 +159,16 @@ fun ServerListScreen(
                                 firstFocusModifier = if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier,
                                 onClick = { onServerSelected(server) },
                                 onDelete = { viewModel.removeServer(server.id) },
+                            )
+                        }
+                    }
+
+                    // TV has no FAB, so the add action lives in the list.
+                    if (isTv) {
+                        item(key = "add_server", contentType = "add_server") {
+                            AddListRow(
+                                label = stringResource(R.string.auth_add_server),
+                                onClick = onAddServer,
                             )
                         }
                     }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -43,6 +44,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -109,6 +111,10 @@ fun DevicesScreen(
     if (state.showEditNameDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissEditNameDialog() },
+            // decorFitsSystemWindows=false dispatches IME insets into the dialog so
+            // imePadding can lift fields + buttons above the soft keyboard.
+            properties = DialogProperties(decorFitsSystemWindows = false),
+            modifier = Modifier.imePadding(),
             title = { Text(stringResource(R.string.admin_edit_device_name_title)) },
             text = {
                 OutlinedTextField(
@@ -181,7 +187,11 @@ fun DevicesScreen(
                     filteredDevices.groupBy { it.lastUserName.ifBlank { unknownUserLabel } }
                         .toList()
                 }
-                Column(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .imePadding(),
+                ) {
                     SearchField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },

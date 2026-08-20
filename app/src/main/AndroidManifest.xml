@@ -94,13 +94,15 @@
 
         <!-- Fullscreen video host. Shares the default taskAffinity with
              MainActivity so entering PiP here reveals the browse UI behind the
-             floating window (back-stack choreography). -->
+             floating window (back-stack choreography). adjustResize so IME insets
+             reach PlayerModalBottomSheet inputs (subtitle language, lyrics search). -->
         <activity
             android:name=".PlayerActivity"
             android:exported="false"
             android:launchMode="singleTask"
             android:supportsPictureInPicture="true"
             android:resizeableActivity="true"
+            android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|keyboard|keyboardHidden|navigation" />
 
         <meta-data
