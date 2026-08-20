@@ -46,7 +46,10 @@ android {
             reset()
             include("arm64-v8a")
             if (gradle.startParameter.taskNames.any { it.contains("debug", ignoreCase = true) }) {
+                // x86_64 for modern emulators; x86 for the 32-bit-only Android TV
+                // system images (API 30 and older).
                 include("x86_64")
+                include("x86")
             }
             // Universal (all 4 ABIs of the native player stacks) ships for
             // sideload only; local debug builds skip packaging it.
