@@ -45,6 +45,8 @@ import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import java.lang.reflect.Field
+import java.lang.reflect.Modifier
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,7 +70,9 @@ import org.junit.Test
  * group join) plus residual probes (subtitle style persists; playback speed /
  * stats reset), triggers the item-switch path (`initialize` with a new item id,
  * which routes through `releaseInternals()`), and snapshots the outcome
- * field-by-field against the golden below.
+ * leaf-by-leaf against the golden below (a leaf is a flat UiState field
+ * today, or a `slice.sub` path once a slice data class migrates into the
+ * constructor — see [assertResidualPartition]).
  *
  * **Intended divergence — exactly one:** the A/B
  * repeat window now RESETS on item switch. Before, the reset ritual
@@ -96,7 +100,19 @@ class VideoPlayerResetEquivalenceTest {
     private lateinit var syncPlayManager: SyncPlayManager
     private lateinit var playbackRepository: PlaybackRepository
 
-    /** The residual reset whitelist — the only UiState fields carried across an item switch. */
+    /**
+     * The residual reset whitelist — the only UiState leaves carried across an
+     * item switch.
+     *
+     * Entries are LEAF PATHS, not flat field names: a flat constructor
+     * property is named plainly (`"brightnessLevel"`); once a slice data
+     * class (state/ package) is stored in the UiState constructor, its
+     * sub-fields are named `"<sliceField>.<subField>"` (e.g.
+     * `"gestures.brightnessLevel"`). When a slice migration moves flat fields
+     * into a stored slice, rewrite the affected entries here IN THE SAME
+     * COMMIT — the stale-path guard in [assertResidualPartition] fails with
+     * the exact missing names otherwise.
+     */
     private val residualWhitelist = setOf(
         "preferredPlayerType", "seekDurationMs", "defaultOrientation", "controlsTimeoutMs",
         "gesturesEnabled", "defaultSpeed", "swipeSeekMaxMs", "rememberBrightness",
@@ -106,19 +122,21 @@ class VideoPlayerResetEquivalenceTest {
     )
 
     /**
-     * Fields the *load* coroutine legitimately re-populates after the reset
+     * Leaves the *load* coroutine legitimately re-populates after the reset
      * (the loading screen lifts in the `finally` even when the detail fetch
      * fails; the session's play-method string is re-resolved during load and
      * the autoplay-next pref default differs from the constructor default), so
      * "reset to default" does not hold for them at snapshot time.
+     * Same leaf-path convention as [residualWhitelist].
      */
     private val loadRepopulated = setOf("isInitializing", "playMethod", "videoAutoplayNext")
 
     /**
-     * Fields the reset re-sets to explicit (non-default) values: the per-item
+     * Leaves the reset re-sets to explicit (non-default) values: the per-item
      * dialogue boost zeroes so it can't bleed into the next item before the
      * resolver re-applies the per-item rule (strength NONE, not the MODERATE
      * constructor default).
+     * Same leaf-path convention as [residualWhitelist].
      */
     private val explicitlyReset = mapOf(
         "dialogueBoostEnabled" to false,
@@ -426,43 +444,140 @@ class VideoPlayerResetEquivalenceTest {
         assertEquals(1.0f, viewModel.uiState.value.playbackSpeed, 0.001f) // not whitelisted → resets
         assertFalse(viewModel.uiState.value.showVideoStats)              // not whitelisted → resets
 
-        // ── Golden: residual UiState partition (field-by-field) ──
+        // ── Golden: residual UiState partition (leaf-by-leaf) ──
         assertResidualPartition(before)
     }
 
     /**
-     * The whitelist-equivalence proof: every declared UiState field either
-     * carries its pre-switch value ([residualWhitelist]) or resets to the
-     * default (modulo [loadRepopulated]). Adding a field to UiState or moving
-     * one between homes without updating this partition fails here — the diff
-     * IS the review artifact.
+     * The whitelist-equivalence proof: every UiState leaf either carries its
+     * pre-switch value ([residualWhitelist]) or resets to the default (modulo
+     * [loadRepopulated]). Adding a leaf to UiState or moving one between homes
+     * without updating this partition fails here — the diff IS the review
+     * artifact.
      *
      * Java reflection (not kotlin-reflect, which is not a test dependency):
      * a data class's constructor parameters are its declared backing fields.
+     * The enumeration is slice-aware and DUAL-MODE, so it passes against the
+     * flat UiState of today AND against the sliced UiState after each
+     * migration PR:
+     *
+     *  - Today (flat UiState): every declared constructor field is a leaf
+     *    named by the field name.
+     *  - After a slice lands (fields moved into a stored slice data class in
+     *    the state/ package): a declared field whose type lives in that
+     *    package expands into one leaf per slice constructor property, named
+     *    `"<sliceField>.<subField>"` (recursed ONE level — slices have no
+     *    nested slices). Comparison stays per-leaf (sub-field value
+     *    equality), never whole-slice equality, so a single moved sub-field
+     *    still red-breaks.
+     *
+     * The derived projection `get()` vals (`media`, `gestures`, ...) have no
+     * backing fields, so they never appear here — neither today (computed
+     * projections) nor after a slice lands (a STORED slice field is a
+     * constructor property and does appear, expanded). Migration steps
+     * therefore only rewrite partition paths, never this mechanism.
      */
     private fun assertResidualPartition(before: VideoPlayerUiState) {
         val after = viewModel.uiState.value
         val defaults = VideoPlayerUiState()
-        val fields = VideoPlayerUiState::class.java.declaredFields
-            .filter { !it.name.startsWith("$") && !java.lang.reflect.Modifier.isStatic(it.modifiers) }
-            .onEach { it.isAccessible = true }
-        assertTrue("expected a substantial field set", fields.size > 50)
+        val leaves = uiStateLeaves()
+        // Sanity guard (replaces the old flat-only `fields.size > 50`): today
+        // the flat UiState yields 83 leaves; after every slice migrates the
+        // count is unchanged (~30 residual flat + ~53 slice-expanded) because
+        // each migrated flat field reappears as a `slice.sub` leaf. A floor
+        // (not an exact count) keeps the guard tolerant of unrelated field
+        // additions while still catching a broken enumeration.
+        assertTrue(
+            "expected a substantial leaf set (flat + slice-expanded), got ${leaves.size}",
+            leaves.size >= 30,
+        )
 
-        for (field in fields) {
-            val name = field.name
-            val afterVal = field.get(after)
-            val beforeVal = field.get(before)
-            val defaultVal = field.get(defaults)
+        // Partition hygiene: every partition entry must name a real leaf, so
+        // a slice migration that forgets to rewrite its paths fails HERE
+        // first, with the stale names spelled out.
+        val leafPaths = leaves.mapTo(mutableSetOf()) { it.path }
+        val stalePartitionEntries =
+            (residualWhitelist + loadRepopulated + explicitlyReset.keys) - leafPaths
+        assertTrue(
+            "partition entries match no leaf (stale flat names after a slice migration?): $stalePartitionEntries",
+            stalePartitionEntries.isEmpty(),
+        )
+
+        for (leaf in leaves) {
+            val path = leaf.path
+            val afterVal = leaf.read(after)
+            val beforeVal = leaf.read(before)
+            val defaultVal = leaf.read(defaults)
             when {
-                name in residualWhitelist ->
-                    assertEquals("whitelisted field $name must persist", beforeVal, afterVal)
-                name in loadRepopulated -> Unit // re-populated by the load, not the reset
-                name in explicitlyReset ->
-                    assertEquals("explicitly re-set field $name", explicitlyReset[name], afterVal)
+                path in residualWhitelist ->
+                    assertEquals("whitelisted field $path must persist", beforeVal, afterVal)
+                path in loadRepopulated -> Unit // re-populated by the load, not the reset
+                path in explicitlyReset ->
+                    assertEquals("explicitly re-set field $path", explicitlyReset[path], afterVal)
                 else ->
-                    assertEquals("non-whitelisted field $name must reset to default", defaultVal, afterVal)
+                    assertEquals("non-whitelisted field $path must reset to default", defaultVal, afterVal)
             }
         }
+    }
+
+    /**
+     * Package of the slice data classes (state/). A declared UiState
+     * constructor field whose type lives here expands into `slice.sub`
+     * leaves instead of being treated as one opaque leaf.
+     */
+    private val stateSlicePackage = "com.raulshma.jellyplay.feature.player.video.state"
+
+    /**
+     * Enumerates the addressable leaves of [VideoPlayerUiState], sorted by
+     * path for deterministic failure messages. A declared field whose type
+     * lives in [stateSlicePackage] expands into one leaf per slice
+     * constructor property (`"<sliceField>.<subField>"`); every other
+     * declared field is a flat leaf named by the field.
+     */
+    private fun uiStateLeaves(): List<UiStateLeaf> =
+        constructorPropertyFields(VideoPlayerUiState::class.java).flatMap { field ->
+            if (field.type.name.startsWith("$stateSlicePackage.")) {
+                constructorPropertyFields(field.type).map { subField ->
+                    UiStateLeaf(
+                        path = "${field.name}.${subField.name}",
+                        sliceField = field,
+                        leafField = subField,
+                    )
+                }
+            } else {
+                listOf(UiStateLeaf(path = field.name, sliceField = null, leafField = field))
+            }
+        }.sortedBy { it.path }
+
+    /**
+     * The declared backing fields of a Kotlin data class = its constructor
+     * properties: computed `get()` vals have no backing field (so the derived
+     * projections never leak in), and synthetic/static members are filtered.
+     */
+    private fun constructorPropertyFields(type: Class<*>): List<Field> =
+        type.declaredFields
+            .filter { !it.name.startsWith("$") && !Modifier.isStatic(it.modifiers) }
+            .onEach { it.isAccessible = true }
+
+    /**
+     * One addressable UiState value: a flat constructor property
+     * ([sliceField] == null), or a sub-field reached through a stored slice
+     * field (one level deep). [read] extracts the value via reflective gets;
+     * equality is sub-field value equality, never whole-slice equality.
+     */
+    private class UiStateLeaf(
+        val path: String,
+        private val sliceField: Field?,
+        private val leafField: Field,
+    ) {
+        fun read(state: VideoPlayerUiState): Any? =
+            if (sliceField == null) {
+                leafField.get(state)
+            } else {
+                // Slices are non-null data classes; a null read (if that ever
+                // changes) yields a null leaf value rather than crashing.
+                sliceField.get(state)?.let(leafField::get)
+            }
     }
 
     /**
