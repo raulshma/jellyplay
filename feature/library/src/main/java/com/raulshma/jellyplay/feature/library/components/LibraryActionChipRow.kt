@@ -13,6 +13,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -47,6 +50,7 @@ import com.raulshma.jellyplay.feature.library.R
  * glow, via [ExpressiveChipContainer]) but adds a leading icon since these are
  * actions, not filter overflows.
  */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun LibraryActionChipRow(
     viewMode: LibraryViewMode,
@@ -55,6 +59,9 @@ fun LibraryActionChipRow(
     onSizeClick: () -> Unit,
     onGroupClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** TV: leaf anchor on the first chip — target of the screen-level vertical
+     *  navigation that hops between the header rows. */
+    firstChipFocus: FocusRequester? = null,
 ) {
     val (viewIcon, viewLabel) = when (viewMode) {
         LibraryViewMode.GRID -> Tabler.Outline.LayoutGrid to stringResource(R.string.library_grid_view)
@@ -79,6 +86,7 @@ fun LibraryActionChipRow(
                 icon = viewIcon,
                 label = viewLabel,
                 onClick = onViewCycle,
+                modifier = firstChipFocus?.let { Modifier.focusRequester(it) } ?: Modifier,
             )
         }
         item(key = "size") {
@@ -111,8 +119,7 @@ private fun LibraryActionChip(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-) {
-    val isLight = LocalIsLightTheme.current
+) {    val isLight = LocalIsLightTheme.current
     val bgColor = if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
     val contentColor = MaterialTheme.colorScheme.onSurface
 
