@@ -48,6 +48,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
@@ -702,12 +703,8 @@ private fun PersonEditorDialog(
     var role by remember { mutableStateOf(person.role ?: "") }
     var type by remember { mutableStateOf(person.type) }
 
-    androidx.compose.material3.AlertDialog(
+    ImeAlertDialog(
         onDismissRequest = onDismiss,
-        // decorFitsSystemWindows=false dispatches IME insets into the dialog so
-        // imePadding can lift fields + buttons above the soft keyboard.
-        properties = androidx.compose.ui.window.DialogProperties(decorFitsSystemWindows = false),
-        modifier = Modifier.imePadding(),
         title = { Text(if (isNew) stringResource(R.string.editor_add_person) else stringResource(R.string.editor_edit_person)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

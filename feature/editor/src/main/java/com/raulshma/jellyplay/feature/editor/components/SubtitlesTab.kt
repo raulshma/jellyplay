@@ -243,7 +243,7 @@ private fun SubtitleUploadSheet(
             onDismissRequest = onDismiss,
         ) {
             Column(
-                // inset clearance handled by TvSafeSheet's mobile sheet branch
+                // TV sheet hides system bars, so no inset clearance is needed here
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -404,7 +404,7 @@ private fun RemoteSubtitleSearchSheet(
             onDismissRequest = onDismiss,
         ) {
             Column(
-                // inset clearance handled by TvSafeSheet's mobile sheet branch
+                // TV sheet hides system bars, so no inset clearance is needed here
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {

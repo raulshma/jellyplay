@@ -10,13 +10,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,7 +39,6 @@ import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,6 +48,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
+import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
@@ -229,12 +227,8 @@ private fun PlaylistNameDialog(
     val nameFocusRequester = remember { FocusRequester() }
     com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus(nameFocusRequester, "playlist_name")
 
-    AlertDialog(
+    ImeAlertDialog(
         onDismissRequest = onDismiss,
-        // decorFitsSystemWindows=false dispatches IME insets into the dialog so
-        // imePadding can lift fields + buttons above the soft keyboard.
-        properties = DialogProperties(decorFitsSystemWindows = false),
-        modifier = Modifier.imePadding(),
         title = { Text(title) },
         text = {
             Column {

@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -20,7 +18,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogProperties
+import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 
@@ -44,12 +42,8 @@ internal fun CreateCollectionDialog(
     val nameFocusRequester = remember { FocusRequester() }
     RequestOrRestoreFocus(nameFocusRequester, "create_collection_name")
 
-    AlertDialog(
+    ImeAlertDialog(
         onDismissRequest = { if (!isLoading) onDismiss() },
-        // decorFitsSystemWindows=false dispatches IME insets into the dialog so
-        // imePadding can lift fields + buttons above the soft keyboard.
-        properties = DialogProperties(decorFitsSystemWindows = false),
-        modifier = Modifier.imePadding(),
         title = { Text(stringResource(R.string.detail_collection_new_title)) },
         text = {
             Column {

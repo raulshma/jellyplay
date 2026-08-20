@@ -305,7 +305,7 @@ private fun ImageUploadSheet(
             onDismissRequest = onDismiss,
         ) {
             Column(
-                // inset clearance handled by TvSafeSheet's mobile sheet branch
+                // TV sheet hides system bars, so no inset clearance is needed here
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -490,7 +490,7 @@ private fun ImageBrowseSheet(
             onDismissRequest = onDismiss,
         ) {
             Column(
-                // inset clearance handled by TvSafeSheet's mobile sheet branch
+                // TV sheet hides system bars, so no inset clearance is needed here
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)

@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.BottomAppBar
@@ -45,7 +44,6 @@ import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -54,6 +52,7 @@ import com.composables.icons.tabler.outline.AlertTriangle
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.PasswordTextField
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
@@ -115,15 +114,11 @@ fun UserDetailScreen(
         LaunchedEffect(isTv) {
             if (isTv) confirmFocusRequester.tryRequestFocus("user_password_confirm")
         }
-        AlertDialog(
+        ImeAlertDialog(
             onDismissRequest = {
                 viewModel.dismissPasswordDialog()
                 newPassword = ""
             },
-            // decorFitsSystemWindows=false dispatches IME insets into the dialog so
-            // imePadding can lift fields + buttons above the soft keyboard.
-            properties = DialogProperties(decorFitsSystemWindows = false),
-            modifier = Modifier.imePadding(),
             title = { Text(if (newPassword.isBlank()) stringResource(R.string.admin_reset_password) else stringResource(R.string.admin_set_password)) },
             text = {
                 Column {

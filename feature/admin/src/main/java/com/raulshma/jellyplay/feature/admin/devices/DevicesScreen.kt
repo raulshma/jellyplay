@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -63,6 +62,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
+import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
@@ -109,12 +109,8 @@ fun DevicesScreen(
     }
 
     if (state.showEditNameDialog) {
-        AlertDialog(
+        ImeAlertDialog(
             onDismissRequest = { viewModel.dismissEditNameDialog() },
-            // decorFitsSystemWindows=false dispatches IME insets into the dialog so
-            // imePadding can lift fields + buttons above the soft keyboard.
-            properties = DialogProperties(decorFitsSystemWindows = false),
-            modifier = Modifier.imePadding(),
             title = { Text(stringResource(R.string.admin_edit_device_name_title)) },
             text = {
                 OutlinedTextField(
