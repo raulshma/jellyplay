@@ -26,17 +26,23 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -185,6 +191,65 @@ class HomeRefresherTest {
 
         verify { continueWatchingBroadcaster.refreshContinueWatching() }
         coVerify(exactly = 0) { tvWatchNextScheduler.scheduleRefresh() }
+    }
+
+    @Test
+    fun `user switch cancelling cold-start fetch never exposes empty loaded state`() = runTest {
+        // The cold-launch "No Content Available" flash: lifecycle start()
+        // begins the stale-check fetch, then the session SignedIn transition
+        // cancels it mid-flight via refreshForUserSwitch. The cancelled
+        // fetch's finally must not clear the spinner flags — that write
+        // lands between the switch's paint and its replacement fetch,
+        // exposing sections=empty + isLoading=false + error=null, which
+        // renders as the empty state until the replacement fetch lands.
+        val coldStartGate = CompletableDeferred<Unit>()
+        var fetchCalls = 0
+        coEvery { mediaRepository.getHomeSections(any(), any()) } coAnswers {
+            fetchCalls++
+            if (fetchCalls == 1) {
+                coldStartGate.await() // parked network call — cancelled before completing
+                Result.success(HomeSectionsResult(sections = emptyList()))
+            } else {
+                Result.success(
+                    HomeSectionsResult(sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1"))))),
+                )
+            }
+        }
+        coEvery { mediaRepository.getCachedHomeSections(any()) } returns null
+        fakeTimeSource.nowMs = 120_000 // past the 60s foreground interval: start()'s stale check fetches
+        val refresher = buildRefresher()
+
+        val states = mutableListOf<HomeRefreshState>()
+        refresherScope!!.launch { refresher.state.toList(states) }
+        runCurrent()
+
+        refresher.start()
+        runCurrent() // the cold-start fetch acquires the mutex and parks on the gate
+        refresher.refreshForUserSwitch() // SignedIn: cancels the parked fetch, re-fetches
+        runCurrent()
+        refresher.stop()
+
+        assertEquals(2, fetchCalls)
+        val exposedEmptyLoaded = states.any { it.sections.isEmpty() && !it.isLoading && it.error == null }
+        assertTrue("empty+loaded+no-error state exposed during the switch: $states", !exposedEmptyLoaded)
+    }
+
+    @Test
+    fun `stop clears the spinner flags when cancelling an in-flight fetch`() = runTest {
+        coEvery { mediaRepository.getHomeSections(any(), any()) } coAnswers {
+            CompletableDeferred<Unit>().await() // parked forever — cancelled by stop()
+            Result.success(HomeSectionsResult(sections = emptyList()))
+        }
+        fakeTimeSource.nowMs = 120_000 // past the 60s foreground interval: start()'s stale check fetches
+        val refresher = buildRefresher()
+        refresher.start()
+        runCurrent() // fetch parks with isLoading=true (initial state)
+
+        refresher.stop()
+        runCurrent()
+
+        assertFalse(refresher.state.value.isLoading)
+        assertTrue(refresher.state.value.sections.isEmpty())
     }
 
     @Test

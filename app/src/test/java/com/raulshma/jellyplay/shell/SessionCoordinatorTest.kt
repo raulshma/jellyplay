@@ -25,7 +25,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -34,6 +38,8 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -149,6 +155,56 @@ class SessionCoordinatorTest {
 
         assertEquals(1, callbacks)
         assertFalse(coordinator.isRestoring.value)
+    }
+
+    @Test
+    fun `isRestoring release never precedes the authenticated mirror on successful restore`() = runTest(dispatcher) {
+        // The launch "add server" flash, as measured on device: the
+        // repository's isAuthenticated flip resumed the restore coroutine a
+        // few ms BEFORE the coordinator's mirror collector ran, so the splash
+        // gate released while the shell still composed AuthContent — one
+        // (isRestoring=false, isAuthenticated=false) frame flashes the
+        // server list over Home. This reproduces the shape: the flip lands
+        // while restoreSession() is still running, before the mirror
+        // collector has ever been dispatched, so a confirmation read on the
+        // REPOSITORY flow returns without suspending. The release must wait
+        // on the coordinator's own mirror — the flag the shell renders from.
+        coEvery { authRepository.restoreSession() } answers {
+            currentServer.value = ServerInfo(id = "server-1", name = "Server", address = "http://jellyfin.local")
+            currentUser.value = UserInfo(
+                id = "user-1",
+                name = "user",
+                serverAddress = "http://jellyfin.local",
+                accessToken = "token",
+            )
+            isAuthenticated.value = true
+            Result.success(Unit)
+        }
+
+        // A channel of write events (NOT combine — it conflates the
+        // intermediate (false, false) pair away) so the test can assert the
+        // ORDER the two exposed flows actually flipped in.
+        val events = Channel<String>(Channel.UNLIMITED)
+        val recorders = listOf(
+            launch { coordinator.isRestoring.collect { events.send("restoring=$it") } },
+            launch { coordinator.isAuthenticated.collect { events.send("auth=$it") } },
+        )
+
+        coordinator.start(lifecycleScope) { }
+        advanceUntilIdle()
+        recorders.forEach { it.cancel() }
+        events.close()
+
+        val order = mutableListOf<String>()
+        for (event in events) order += event
+        val releaseIndex = order.indexOf("restoring=false")
+        val mirrorIndex = order.indexOf("auth=true")
+        assertNotEquals("isRestoring never released (order=$order)", -1, releaseIndex)
+        assertNotEquals("authenticated mirror never flipped (order=$order)", -1, mirrorIndex)
+        assertTrue(
+            "splash gate released before the authenticated mirror flipped: $order",
+            mirrorIndex < releaseIndex,
+        )
     }
 
     @Test

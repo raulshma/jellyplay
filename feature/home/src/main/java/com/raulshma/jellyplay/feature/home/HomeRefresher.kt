@@ -26,6 +26,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import java.time.ZoneOffset
@@ -275,12 +277,23 @@ internal class HomeRefresher(
                 arrDeferred?.await()
             }
         } finally {
-            // Defensive spinner clear. (isGoingOnline — the third flag this
-            // clear used to drop — is offline-transition-owned and stays
-            // cleared by the VM's offline collector, including its finally.)
+            // Defensive spinner clear — but only if this fetch was NOT
+            // cancelled: whoever cancelled it (refreshForUserSwitch's paint,
+            // a replaced refresh job, [stop], the VM's going-online timeout)
+            // owns the flags now. A cancelled fetch clearing them here used
+            // to land between the user-switch paint and its replacement
+            // fetch, exposing sections=empty + isLoading=false + error=null
+            // — the cold-launch "No Content Available" flash. A fetch that
+            // merely raced a CONCURRENT fetch on the mutex still completes
+            // under its own power and keeps clearing.
+            // (isGoingOnline — the third flag this clear used to drop — is
+            // offline-transition-owned and stays cleared by the VM's offline
+            // collector, including its finally.)
             // On cancellation the CW side-effect below is intentionally
             // skipped: a fetch cancelled mid-flight may have stale CW data.
-            _state.update { it.copy(isLoading = false, isRefreshing = false) }
+            if (currentCoroutineContext().isActive) {
+                _state.update { it.copy(isLoading = false, isRefreshing = false) }
+            }
             refreshMutex.unlock()
         }
         pendingCwSideEffect?.invoke()
@@ -446,6 +459,10 @@ internal class HomeRefresher(
         refreshJob = null
         discoverJob?.cancel()
         discoverJob = null
+        // stop() cancels with NO replacement fetch, so the cancelled fetch's
+        // guarded finally will not clear the flags — clear them here so a
+        // backgrounded cold start doesn't sit on a stuck loader.
+        _state.update { it.copy(isLoading = false, isRefreshing = false) }
     }
 
     /**

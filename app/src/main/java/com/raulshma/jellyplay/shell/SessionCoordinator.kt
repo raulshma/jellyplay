@@ -207,13 +207,19 @@ class SessionCoordinator @Inject constructor(
                 val user = authRepository.currentUser.first()
                 if (server != null && user != null) {
                     // Restore succeeded with a persisted server + user, so the
-                    // authenticated flag should already be true. Cap the wait
-                    // anyway: if it never flips (a corrupted combine/stateIn
-                    // edge), the splash gate must still release and
-                    // onSessionRestored must still fire instead of hanging
-                    // forever.
+                    // authenticated flag should already be true. Wait on the
+                    // COORDINATOR'S OWN mirror — the flag the shell renders
+                    // from — not the repository flow: resuming off the mirror
+                    // write itself guarantees the release below cannot land
+                    // while the shell still composes AuthContent. (Measured
+                    // on device: the repository flow's flip resumed this
+                    // coroutine up to ~10ms ahead of the mirror collector —
+                    // a (isRestoring=false, isAuthenticated=false) frame that
+                    // flashed the server list over Home.) The timeout caps
+                    // the wait so a corrupted flow can't hang the splash
+                    // gate and onSessionRestored forever.
                     withTimeoutOrNull(AUTH_CONFIRMATION_TIMEOUT_MS) {
-                        authRepository.isAuthenticated.first { it }
+                        _isAuthenticated.first { it }
                     }
                 }
             }
