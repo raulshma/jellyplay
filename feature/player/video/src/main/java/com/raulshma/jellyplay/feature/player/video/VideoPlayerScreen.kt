@@ -1689,6 +1689,7 @@ fun VideoPlayerScreen(
                 segments = uiState.segmentState.segments,
                 resumePositionMs = resumePositionMs,
                 playMethod = uiState.media.playMethod,
+                isDirectPlayForced = uiState.media.isDirectPlayForced,
                 hdrType = uiState.hdrType,
                 mediaStreams = uiState.media.mediaStreams,
                 audioTracks = trackState.audioTracks,
