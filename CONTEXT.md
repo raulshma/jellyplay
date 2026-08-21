@@ -33,6 +33,30 @@ collaborators). Paths below are relative to the repo root.
   `FakeMediaEngine` plus an injected clock. Since Stage B of the refactor it is
   constructed, re-armed and executed by `PlaybackSession`; the ViewModel only
   collects its mirror `StateFlow`s.
+- **`BasePlayerEngine`** (`feature/player/core/src/main/java/com/raulshma/jellyplay/feature/player/video/engine/BasePlayerEngine.kt`)
+  is the shared boilerplate base for the three reloadable adapters. It hoists
+  the byte-identical 8 `StateFlow`/`SharedFlow` backing fields, the
+  main-thread `engineScope`/`mainHandler` pair, the `updateConfig` dedup guard,
+  and the polling/stats-toggle setters. Each adapter still owns its native
+  player handle, track/subtitle logic, stats projection, volume/mute contract
+  and `positionFlow` wiring — `NoOpEngine` does NOT extend this class.
+- **`ReloadablePlayerEngine`** (`feature/player/video/src/main/java/com/raulshma/jellyplay/feature/player/video/engine/ReloadablePlayerEngine.kt`)
+  is the second layer for the three reloadable engines (extends `BasePlayerEngine`).
+  It hoists `PlaybackSnapshot` / `withPreservedPlayback` (position+speed+isPlaying
+  preservation across a rebuild), the `0–1` volume clamp + `0.05f` unmute floor
+  + `MediaStreamVolume` sync, the `callbackFlow + EnginePositionTicker` shell for
+  `positionFlow`, and the `EngineVideoStats` change-guard. The single
+  `snapshotIsPlaying()` hook covers both snapshot and current checks (ExoPlayer
+  overrides it to read `player.isPlaying` synchronously; `currentIsPlaying()`
+  delegates to it).
+- **`EnginePositionTicker`** (`feature/player/core/src/main/java/com/raulshma/jellyplay/feature/player/video/engine/EnginePositionTicker.kt`)
+  is the shared polling-ticker loop used by every `positionFlow`. It lives in
+  `:feature:player:core` so both the production adapters (`:feature:player:video`
+  via `ReloadablePlayerEngine.positionFlowWithTicker`) and the test-double
+  `FakeMediaEngine` (`:feature:player:core:testFixtures`) share one
+  implementation — the bounded paused-wait (`POSITION_PAUSED_RECHECK_MS = 2_500L`),
+  play↔pause edge detection and `delay(pollingIntervalMs)` live in exactly one
+  place.
 - **`PlayerLifecycleManager`** (`core/data/src/main/java/com/raulshma/jellyplay/core/data/playback/PlayerLifecycleManager.kt`)
   is the Activity↔engine lifecycle bridge: the host Activity calls
   `onActivityPause()` / `onActivityResume()`, which delegate straight to the

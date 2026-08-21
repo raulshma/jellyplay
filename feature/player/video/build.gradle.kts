@@ -105,6 +105,7 @@ dependencies {
     testImplementation(testFixtures(project(":feature:player:core")))
     // Shared stubMediaSessionPlayer() helper for the MediaSession tests here.
     testImplementation(testFixtures(project(":core:data")))
+
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.compose.bom))

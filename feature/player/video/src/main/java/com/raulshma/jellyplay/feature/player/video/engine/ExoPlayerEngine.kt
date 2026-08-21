@@ -113,13 +113,10 @@ class ExoPlayerEngine(
     // Nullable + defaulted so non-Hilt constructions (contract tests) compile
     // unchanged; a null cache simply disables byte caching (passthrough).
     private val videoStreamCache: VideoStreamCache? = null,
-) : BasePlayerEngine() {
+) : ReloadablePlayerEngine(context) {
 
     @Volatile
     private var cachedVolume: Float = 1f
-
-    @Volatile
-    private var lastUnmuteVolume: Float = 1f
 
     @Volatile
     private var lastAppliedAudioSessionId: Int = -1
@@ -258,8 +255,6 @@ class ExoPlayerEngine(
         dynamicsProcessor = dynamicsProcessor,
         replayGainProcessor = replayGainProcessor,
     )
-
-    private var lastVideoStats: EngineVideoStats? = null
 
     /**
      * Live decoder counters captured from the video renderer's
@@ -659,7 +654,7 @@ class ExoPlayerEngine(
         _availableTracks.value = emptyList()
         lastSelectedTextTrackId = null
         subtitleTrackAutoDisabled = false
-        lastVideoStats = null
+        resetStatsGuard()
         videoDecoderCounters = null
         wasPlayingBeforeActivityPause = false
         _bufferedPositionMs.value = 0L
@@ -987,8 +982,8 @@ class ExoPlayerEngine(
 
     override fun setVolume(value: Float) = runOnPlayerThread {
         val p = player ?: return@runOnPlayerThread
-        val clamped = value.coerceIn(0f, 1f)
-        if (clamped > 0f) lastUnmuteVolume = clamped
+        val clamped = clamp01(value)
+        rememberUnmuteVolumeIfAudible(clamped)
         p.volume = clamped
         MediaStreamVolume.setNormalized(context, clamped)
     }
@@ -996,7 +991,7 @@ class ExoPlayerEngine(
     override fun increaseVolume(delta: Float) = runOnPlayerThread {
         val p = player ?: return@runOnPlayerThread
         val next = (p.volume + delta).coerceAtMost(1f)
-        if (next > 0f) lastUnmuteVolume = next
+        rememberUnmuteVolumeIfAudible(next)
         p.volume = next
         MediaStreamVolume.setNormalized(context, next)
     }
@@ -1004,7 +999,7 @@ class ExoPlayerEngine(
     override fun decreaseVolume(delta: Float) = runOnPlayerThread {
         val p = player ?: return@runOnPlayerThread
         val next = (p.volume - delta).coerceAtLeast(0f)
-        if (next > 0f) lastUnmuteVolume = next
+        rememberUnmuteVolumeIfAudible(next)
         p.volume = next
         MediaStreamVolume.setNormalized(context, next)
     }
@@ -1012,24 +1007,17 @@ class ExoPlayerEngine(
     override fun setMuted(muted: Boolean) = runOnPlayerThread {
         val p = player ?: return@runOnPlayerThread
         if (muted) {
-            // Snapshot the system STREAM_MUSIC level the user actually hears
-            // (set via gesture path / hardware keys, which bypass the engine
-            // API). Snapshotting p.volume instead is wrong — it stays at its
-            // 1f default when volume was adjusted outside the engine, so unmute
-            // would restore full volume.
-            val sysVol = MediaStreamVolume.getNormalized(context)
-            if (sysVol > 0f) lastUnmuteVolume = sysVol
+            snapshotSystemVolumeForMute()
             p.volume = 0f
             MediaStreamVolume.setNormalized(context, 0f)
         } else {
-            // Restore the system stream to its pre-mute level and set the
-            // engine software gain back to unity (1f). Do NOT also scale
-            // p.volume by the system level — that would double-attenuate.
-            val target = lastUnmuteVolume.coerceIn(0.05f, 1f)
+            val target = unmuteTarget()
             p.volume = 1f
             MediaStreamVolume.setNormalized(context, target)
         }
     }
+
+    override fun snapshotIsPlaying(): Boolean = player?.isPlaying ?: super.snapshotIsPlaying()
 
     override fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
         // decoderMode change: decoding changes require a reload, which is
@@ -1095,11 +1083,10 @@ class ExoPlayerEngine(
         val exo = player ?: return
         val mediaItem = currentMediaItem ?: return
         runOnPlayerThread {
-            val positionMs = exo.currentPosition
-            val wasPlaying = exo.isPlaying
-            exo.setMediaItem(mediaItem, positionMs)
-            exo.prepare()
-            if (wasPlaying) exo.play()
+            withPreservedPlayback { snap ->
+                exo.setMediaItem(mediaItem, snap.positionMs)
+                exo.prepare()
+            }
         }
     }
 
@@ -1445,19 +1432,10 @@ class ExoPlayerEngine(
             override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
                 runCatching { trySend(p.currentPosition) }
             }
-            // Note: onPlaybackStateChanged intentionally NOT overridden here.
-            // The engine's primary listener and EnginePositionTicker already
-            // translate state into _playbackState and emit on the play↔pause
-            // edge; the previous redundant override only added trySend traffic
-            // (Runnable/continuation allocations) on every state change for no
-            // net benefit. onPositionDiscontinuity is retained for seeks.
         }
         p.addListener(posListener)
         trySend(p.currentPosition)
 
-        // The polling loop (bounded paused-wait, play↔pause edge detection) is
-        // shared via [EnginePositionTicker]; this engine keeps its own
-        // `Player.Listener` above for immediate discontinuity notifications.
         val ticker = EnginePositionTicker(
             scope = engineScope,
             pollingIntervalMs = _pollingIntervalMs,
@@ -1479,7 +1457,7 @@ class ExoPlayerEngine(
             ticker.cancel()
             try { p.removeListener(posListener) } catch (_: Exception) {}
         }
-    }.conflate() // only the most-recent position is meaningful; drop stale ticks
+    }.conflate()
 
     private fun updateVideoStats() {
         val p = player ?: return
@@ -1557,11 +1535,7 @@ class ExoPlayerEngine(
             bufferSizeBytes = bufferSizeBytes,
         )
 
-        val currentStats = lastVideoStats
-        if (newStats != currentStats) {
-            lastVideoStats = newStats
-            _videoStats.value = newStats
-        }
+        publishStatsIfChanged(newStats)
     }
 
     private fun codecFromMime(mime: String): String = when {
@@ -1588,12 +1562,10 @@ class ExoPlayerEngine(
     private fun reconfigureAudioPipeline() {
         val exo = player ?: return
         val mediaItem = currentMediaItem ?: return
-        val positionMs = exo.currentPosition
-        val wasPlaying = exo.isPlaying
-
-        exo.setMediaItem(mediaItem, positionMs)
-        exo.prepare()
-        if (wasPlaying) exo.play()
+        withPreservedPlayback { snap ->
+            exo.setMediaItem(mediaItem, snap.positionMs)
+            exo.prepare()
+        }
     }
 
     /**
@@ -1734,17 +1706,15 @@ class ExoPlayerEngine(
 
         currentSubtitleConfigs.add(newSubConfig)
 
-        val currentPos = exo.currentPosition
-        val wasPlaying = exo.isPlaying
-
         val newItem = item.buildUpon()
             .setSubtitleConfigurations(currentSubtitleConfigs.toList())
             .build()
         currentMediaItem = newItem
 
-        exo.setMediaItem(newItem, currentPos)
-        exo.prepare()
-        if (wasPlaying) exo.play()
+        withPreservedPlayback { snap ->
+            exo.setMediaItem(newItem, snap.positionMs)
+            exo.prepare()
+        }
     }
 
 }

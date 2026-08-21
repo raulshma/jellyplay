@@ -2,10 +2,10 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -19,7 +19,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  * fix lives in exactly one place rather than being copy-pasted across three
  * engine implementations.
  */
-internal const val POSITION_PAUSED_RECHECK_MS = 2_500L
+const val POSITION_PAUSED_RECHECK_MS = 2_500L
 
 /**
  * Shared polling-ticker loop used by every [MediaEngine] implementation's
@@ -27,7 +27,7 @@ internal const val POSITION_PAUSED_RECHECK_MS = 2_500L
  *
  * The three backends (ExoPlayer / libmpv / LibVLC) previously each carried a
  * near-identical copy of this loop: a `while(isActive)` ticker, the bounded
-  * paused-wait, a `delay(pollingIntervalMs)`, and a
+ * paused-wait, a `delay(pollingIntervalMs)`, and a
  * play-state edge-detection that suppresses redundant work while paused. The
  * subtle concurrency reasoning was triplicated; this helper centralises it.
  *
@@ -45,8 +45,14 @@ internal const val POSITION_PAUSED_RECHECK_MS = 2_500L
  * The caller still owns the surrounding `callbackFlow` (its initial
  * `trySend`, any engine-specific listener wiring such as ExoPlayer's
  * `Player.Listener` for discontinuities, and the `awaitClose` cancellation).
+ *
+ * Lives in `:feature:player:core` so both production engines
+ * (`:feature:player:video` via `ReloadablePlayerEngine`) and the test-double
+ * `FakeMediaEngine` (`:feature:player:core:testFixtures`) share one
+ * implementation — see `CONTEXT.md` "feature/player/core (the engine-agnostic
+ * `MediaEngine` contract and engine-shared machinery)".
  */
-internal class EnginePositionTicker(
+class EnginePositionTicker(
     private val scope: CoroutineScope,
     private val pollingIntervalMs: StateFlow<Long>,
     private val isPlayingFlow: StateFlow<Boolean>,
