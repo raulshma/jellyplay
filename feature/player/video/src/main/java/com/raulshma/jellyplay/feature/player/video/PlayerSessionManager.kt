@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateSto
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.isSideLoadableEmbeddedSubtitle
 import com.raulshma.jellyplay.core.model.toMediaItem
@@ -583,13 +584,13 @@ class PlayerSessionManager(
      * mid-playback so a switch to/from transcode swaps the underlying stream
      * without restarting the item.
      *
-     * [audioStreamIndex]/[subtitleStreamIndex] carry the currently-selected
-     * server streams into the re-POST: the server bakes a single audio track
-     * into the transcoded manifest and burns in image subs, so dropping the
-     * indices would silently reset those choices to the server defaults. Text
-     * subs are side-loaded regardless (see [buildExternalSubtitles]) — for
-     * them the indices are echoed for the server's DefaultSubtitleStreamIndex
-     * bookkeeping; the client-side selection is restored by the track ladder.
+     * [selection] carries the currently-selected server streams into the
+     * re-POST: the server bakes a single audio track into the transcoded
+     * manifest and burns in image subs, so dropping the indices would silently
+     * reset those choices to the server defaults. Text subs are side-loaded
+     * regardless (see [buildExternalSubtitles]) — for them the indices are
+     * echoed for the server's DefaultSubtitleStreamIndex bookkeeping; the
+     * client-side selection is restored by the track ladder.
      *
      * Returns the resolved [ResolvedPlayback] (or `null` on failure) so the
      * caller can react — e.g. fall back to transcode when a forced direct
@@ -599,8 +600,7 @@ class PlayerSessionManager(
         mode: PlaybackMode,
         quality: com.raulshma.jellyplay.core.model.StreamingQuality,
         currentPositionMs: Long,
-        audioStreamIndex: Int? = null,
-        subtitleStreamIndex: Int? = null,
+        selection: MediaStreamSelection? = null,
     ): ResolvedPlayback? {
         val itemId = _sessionState.value.currentItemId ?: return null
         val sourceId = _sessionState.value.currentMediaSource?.id ?: ""
@@ -612,8 +612,8 @@ class PlayerSessionManager(
             itemId = itemId,
             mediaSourceId = sourceId,
             startTimeTicks = currentPositionMs * 10_000,
-            audioStreamIndex = audioStreamIndex,
-            subtitleStreamIndex = subtitleStreamIndex,
+            audioStreamIndex = selection?.audioStreamIndex,
+            subtitleStreamIndex = selection?.subtitleStreamIndex,
             maxStreamingBitrateBits = maxBitrate,
             mode = mode,
             playerType = playerType,
@@ -836,7 +836,7 @@ class PlayerSessionManager(
                 codec = stream.codec,
                 isDefault = stream.isDefault,
                 isForced = stream.isForced,
-                id = "external:${stream.index}",
+                id = externalSubtitleTrackId(stream.index),
             )
         }
     }
@@ -860,7 +860,7 @@ class PlayerSessionManager(
                     codec = entry.codec,
                     isDefault = entry.isDefault,
                     isForced = entry.isForced,
-                    id = "offline:${entry.index}",
+                    id = offlineSubtitleTrackId(entry.index),
                 )
             )
         }

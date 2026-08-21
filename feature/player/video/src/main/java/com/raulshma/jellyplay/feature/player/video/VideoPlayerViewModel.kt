@@ -727,7 +727,7 @@ class VideoPlayerViewModel @Inject constructor(
             registerPipTransport()
         }
 
-        override fun resetForNewItem(subtitleStreamIndex: Int?, audioStreamIndex: Int?) {
+        override fun resetForNewItem(audioStreamIndex: Int?, subtitleStreamIndex: Int?) {
             autoplayController.resetForNewItem()
             _uiState.update { it.copy(autoplay = it.autoplay.copy(autoplayCancelled = false)) }
             // Coordinator fallback-latch reset — a pure latch flip that ran
@@ -735,7 +735,7 @@ class VideoPlayerViewModel @Inject constructor(
             // the old inlined body; bundled here with the other
             // synchronous-prefix writes.
             playbackSession.engineEventCoordinator.onNewItem()
-            trackSelectionHelper.setPendingStreams(subtitleStreamIndex, audioStreamIndex)
+            trackSelectionHelper.setPendingStreams(audioStreamIndex, subtitleStreamIndex)
         }
 
         override fun routeToRemotePlaySession(request: LoadRequest): Boolean =
@@ -843,8 +843,8 @@ class VideoPlayerViewModel @Inject constructor(
             _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(playbackMode = mode)) }
         },
         getIncognitoModeEnabled = { cachedAggregate.videoPlayer.incognitoModeEnabled },
-        setPendingStreams = { subtitleStreamIndex, audioStreamIndex ->
-            trackSelectionHelper.setPendingStreams(subtitleStreamIndex, audioStreamIndex)
+        setPendingStreams = { audioStreamIndex, subtitleStreamIndex ->
+            trackSelectionHelper.setPendingStreams(audioStreamIndex, subtitleStreamIndex)
         },
         getPlaybackMode = { _uiState.value.uiPrefs.playbackMode },
         directPlayFallbackNotice = { errorText ->
@@ -2055,12 +2055,11 @@ class VideoPlayerViewModel @Inject constructor(
         // client-side selection is re-armed separately (setPendingStreams inside
         // PlaybackSession.reloadForMode).
         val itemId = playerSessionManager.sessionState.value.currentItemId
-        val stored = itemId?.let { engineStore.playerEngine.value.mediaStreamSelections[it] }
+        val selection = itemId?.let { engineStore.playerEngine.value.mediaStreamSelections[it] }
         playbackSession.reloadForMode(
             mode = _uiState.value.uiPrefs.playbackMode,
             quality = _uiState.value.uiPrefs.streamingQuality,
-            audioStreamIndex = stored?.audioStreamIndex,
-            subtitleStreamIndex = stored?.subtitleStreamIndex,
+            selection = selection,
         )
     }
 

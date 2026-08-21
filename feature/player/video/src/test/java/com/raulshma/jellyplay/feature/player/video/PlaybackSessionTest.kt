@@ -123,7 +123,7 @@ class PlaybackSessionTest {
             stages += "rearmTransports"
         }
 
-        override fun resetForNewItem(subtitleStreamIndex: Int?, audioStreamIndex: Int?) {
+        override fun resetForNewItem(audioStreamIndex: Int?, subtitleStreamIndex: Int?) {
             stages += "resetForNewItem"
         }
 

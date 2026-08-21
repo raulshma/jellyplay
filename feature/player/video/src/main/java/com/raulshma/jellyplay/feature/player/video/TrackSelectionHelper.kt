@@ -97,9 +97,9 @@ internal class TrackSelectionHelper(
     private var pendingSubtitleStreamIndex: Int? = null
     private var pendingAudioStreamIndex: Int? = null
 
-    fun setPendingStreams(subtitleIndex: Int?, audioIndex: Int?) {
-        pendingSubtitleStreamIndex = subtitleIndex
+    fun setPendingStreams(audioIndex: Int?, subtitleIndex: Int?) {
         pendingAudioStreamIndex = audioIndex
+        pendingSubtitleStreamIndex = subtitleIndex
         // New item: a selection has not yet been applied for it.
         audioSelectionHeld = false
         subtitleSelectionHeld = false

@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.HomeFreshness
+import com.raulshma.jellyplay.core.data.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DetailCapabilities
@@ -25,11 +26,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
-import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
-import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.seriesIdForDetail
@@ -179,27 +176,11 @@ class DetailViewModel @Inject internal constructor(
         // Group 1 — core load state (detail/seasons/episodes/smart-play/...).
         val core = _uiState.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
         // Group 2 — Seerr request-flow ephemera (radarr/sonarr/result/dialog state).
-        val seerrRequest = combine(
-            combine(
-                seerrRequestState.requestResult,
-                seerrRequestState.radarrServers,
-                seerrRequestState.sonarrServers,
-            ) { requestResult, radarrServers, sonarrServers ->
-                Triple(requestResult, radarrServers, sonarrServers)
-            },
-            seerrRequestState.isLoadingServices,
-            seerrRequestState.tvSeasons,
-            seerrRequestState.tvIsAnime,
-        ) { (requestResult, radarrServers, sonarrServers), isLoadingServices, tvSeasons, tvIsAnime ->
-            SeerrRequestSnapshot(
-                requestResult = requestResult,
-                radarrServers = radarrServers,
-                sonarrServers = sonarrServers,
-                isLoadingServices = isLoadingServices,
-                tvSeasons = tvSeasons,
-                tvIsAnime = tvIsAnime,
-            )
-        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrRequestSnapshot())
+        // The holder's snapshot flow already combines + dedupes its six
+        // sub-flows; stateIn here gives the group its dedicated StateFlow so
+        // its ticks don't re-run the outer combine.
+        val seerrRequest = seerrRequestState.snapshot
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrRequestSnapshot())
         // Group 3 — Seerr connection flags that only gate recommendation visibility.
         val seerrFlags = combine(
             remoteDiscovery.seerrRepository.isConnected(),
@@ -1338,24 +1319,8 @@ class DetailViewModel @Inject internal constructor(
 }
 
 /**
- * Snapshot of the Seerr request-flow ephemera (dialog picker state + result
- * banner). Grouped so its upstream flows get a dedicated [StateFlow] in the
- * [DetailViewModel.uiState] combine chain — a tick here doesn't invalidate the
- * core detail or Seerr-connection groups.
- */
-@Immutable
-private data class SeerrRequestSnapshot(
-    val requestResult: SeerrRequestResult? = null,
-    val radarrServers: List<SeerrRadarrServiceDetail> = emptyList(),
-    val sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
-    val isLoadingServices: Boolean = false,
-    val tvSeasons: List<SeerrSeason> = emptyList(),
-    val tvIsAnime: Boolean = false,
-)
-
-/**
  * Snapshot of the Seerr connection flags that only gate recommendation
- * visibility. Grouped for the same reason as [SeerrRequestSnapshot].
+ * visibility. Grouped for the same reason as the request snapshot.
  */
 @Immutable
 private data class SeerrConnectionFlags(

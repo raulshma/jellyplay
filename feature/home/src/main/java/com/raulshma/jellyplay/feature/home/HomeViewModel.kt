@@ -59,7 +59,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onSubscription
@@ -499,34 +498,26 @@ class HomeViewModel @Inject constructor(
         }
 
         // Fold the shared SeerrRequestStateHolder into HomeUiState so the UI
-        // observes a single object. The holder's five StateFlows are combined
-        // into one SeerrRequestState so concurrent emissions (e.g. loading
-        // services + seasons firing together when the request dialog opens)
-        // coalesce into a single _uiState update instead of five back-to-back
-        // copies. `requestItem` is set separately (selectSeerrRequestItem) and
-        // is preserved by re-copying the existing value over the merged slice.
+        // observes a single object: the holder's snapshot flow already
+        // coalesces its six sub-flows into one emission, so a dialog-open
+        // burst (services + seasons firing together) lands as a single
+        // _uiState update. `requestItem` is set separately
+        // (selectSeerrRequestItem) and is preserved by re-copying the
+        // existing value over the merged slice.
         launch {
-            combine(
-                combine(
-                    seerrRequestStateHolder.requestResult,
-                    seerrRequestStateHolder.radarrServers,
-                    seerrRequestStateHolder.sonarrServers,
-                ) { result, radarr, sonarr -> Triple(result, radarr, sonarr) },
-                seerrRequestStateHolder.isLoadingServices,
-                seerrRequestStateHolder.tvSeasons,
-                seerrRequestStateHolder.tvIsAnime,
-            ) { (result, radarr, sonarr), loading, seasons, isAnime ->
-                SeerrRequestState(
-                    result = result,
-                    radarrServers = radarr,
-                    sonarrServers = sonarr,
-                    isLoadingServices = loading,
-                    tvSeasons = seasons,
-                    tvIsAnime = isAnime,
-                )
-            }.distinctUntilChanged().collect { merged ->
+            seerrRequestStateHolder.snapshot.collect { snap ->
                 _uiState.update {
-                    it.copy(seerrRequestState = merged.copy(requestItem = it.seerrRequestState.requestItem))
+                    it.copy(
+                        seerrRequestState = SeerrRequestState(
+                            requestItem = it.seerrRequestState.requestItem,
+                            result = snap.requestResult,
+                            radarrServers = snap.radarrServers,
+                            sonarrServers = snap.sonarrServers,
+                            isLoadingServices = snap.isLoadingServices,
+                            tvSeasons = snap.tvSeasons,
+                            tvIsAnime = snap.tvIsAnime,
+                        )
+                    )
                 }
             }
         }

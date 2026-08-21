@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -308,7 +309,7 @@ class ExoPlayerEngine(
                     // Diagnostics for the transcode side-load render chain: the
                     // flip plus overlay presence pinpoint where the pipeline
                     // stops when subtitles don't show.
-                    android.util.Log.i(
+                    Log.i(
                         TAG,
                         "ASS render toggle: activeTrackIsAss=$newlyAss, overlayView=${assOverlayView != null}",
                     )
@@ -1170,9 +1171,8 @@ class ExoPlayerEngine(
         // Track-type toggle for ASS vs non-ASS visibility. Only relevant on the
         // ASS-enabled session: detect whether the *selected* subtitle track is
         // an ASS/SSA track and flip the SubtitleView/AssSubtitleView visibility
-        // accordingly. Source-parsed tracks carry the original ASS mime in
-        // `codecs` (sampleMimeType becomes application/x-media3-cues), so both
-        // fields are checked — mirrors [selectedTextTrackIsAss].
+        // accordingly. Shares the mime predicate with [selectedTextTrackIsAss]
+        // via [isAssFormat] so both stay in lockstep.
         if (type == TrackType.SUBTITLE && assEnabledForSession) {
             val newlyAss = if (index < 0) {
                 false
@@ -1183,9 +1183,7 @@ class ExoPlayerEngine(
                     // The override targets every track in the group; ASS tracks
                     // are homogeneous within a group, so the first format's mime
                     // is representative.
-                    groups[groupIndex].getTrackFormat(0).let { format ->
-                        format.sampleMimeType == MimeTypes.TEXT_SSA || format.codecs == MimeTypes.TEXT_SSA
-                    }
+                    groups[groupIndex].getTrackFormat(0).let(::isAssFormat)
                 } else {
                     false
                 }
@@ -1431,7 +1429,7 @@ class ExoPlayerEngine(
             runCatching {
                 assHandler?.render?.setFontScale(style.fontSize / 24f)
             }.onFailure { e ->
-                android.util.Log.w(TAG, "setFontScale on AssRender failed", e)
+                Log.w(TAG, "setFontScale on AssRender failed", e)
             }
         }
         // The overlay renders ASS; its visibility is driven by [activeTrackIsAss]
@@ -1632,7 +1630,9 @@ class ExoPlayerEngine(
                 group.getTrackFormat(0).id?.takeIf { it.isNotBlank() }
                     ?: "SUBTITLE_${group.mediaTrackGroup.hashCode()}"
             }
-    }    /**
+    }
+
+    /**
      * Maps the cues in [cueGroup] to [TimedCue]s and folds them into the
      * accumulated list via [mergeAccumulatedCues]. ExoPlayer surfaces only the
      * *currently displayed* cue(s) per callback, so the preview is built
@@ -1671,7 +1671,7 @@ class ExoPlayerEngine(
      */
     private fun disableTextTrackForMalformedCues() {
         val selector = trackSelector ?: return
-        android.util.Log.w(TAG, "Disabling subtitle track: malformed cue batch detected (${">"}$MAX_INCOMING_CUES_PER_BATCH simultaneous cues)")
+        Log.w(TAG, "Disabling subtitle track: malformed cue batch detected (${">"}$MAX_INCOMING_CUES_PER_BATCH simultaneous cues)")
         subtitleTrackAutoDisabled = true
         _currentCues.value = emptyList()
         try {
@@ -1680,7 +1680,7 @@ class ExoPlayerEngine(
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
             selector.setParameters(params)
         } catch (e: Exception) {
-            android.util.Log.w(TAG, "Failed to disable malformed subtitle track", e)
+            Log.w(TAG, "Failed to disable malformed subtitle track", e)
         }
         _subtitleEvents.tryEmit(SubtitleEvent.MalformedTrackDisabled)
     }
@@ -1789,10 +1789,19 @@ internal fun selectedTextTrackIsAss(tracks: androidx.media3.common.Tracks): Bool
     tracks.groups.any { group ->
         group.type == C.TRACK_TYPE_TEXT &&
             (0 until group.length).any { group.isTrackSelected(it) } &&
-            group.getTrackFormat(0).let { format ->
-                format.sampleMimeType == MimeTypes.TEXT_SSA || format.codecs == MimeTypes.TEXT_SSA
-            }
+            isAssFormat(group.getTrackFormat(0))
     }
+
+/**
+ * ASS/SSA format predicate shared by the selectTrack visibility toggle and
+ * [selectedTextTrackIsAss]. Matches BOTH `sampleMimeType` and `codecs`:
+ * Media3 re-labels source-parsed text tracks to
+ * `application/x-media3-cues` in `sampleMimeType` and carries the original
+ * format mime in `codecs` — checking only one field misses one of the two
+ * delivery paths.
+ */
+internal fun isAssFormat(format: Format): Boolean =
+    format.sampleMimeType == MimeTypes.TEXT_SSA || format.codecs == MimeTypes.TEXT_SSA
 
 /**
  * Renderers factory for the libass overlay path: the base renderers plus a
@@ -1883,7 +1892,7 @@ private class AssClockPumpRenderer(
             // AssHandler.videoTime — if subtitles still don't render after
             // this line, the remaining suspect is glyph rasterization (fonts).
             loggedFirstTick = true
-            android.util.Log.i(TAG, "ASS clock pump started: mediaTimeUs=$mediaTimeUs")
+            Log.i(TAG, "ASS clock pump started: mediaTimeUs=$mediaTimeUs")
         }
     }
 }
