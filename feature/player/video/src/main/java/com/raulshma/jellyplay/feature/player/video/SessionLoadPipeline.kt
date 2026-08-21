@@ -16,10 +16,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * The arguments of one session load. Mirrors [VideoPlayerViewModel.initializeInternal]'s
+ * The arguments of one session load. Mirrors [PlaybackSession.initialize]'s
  * post-routing parameters — everything the ordered load stages need after the
  * synchronous prefix (latch resets, transport re-arm, routing early-returns)
- * has run in the ViewModel.
+ * has run.
  */
 class LoadRequest(
     val itemId: String,
