@@ -21,6 +21,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
+import com.raulshma.jellyplay.core.model.seerr.SeerrKeyword
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -569,14 +571,34 @@ class SearchViewModelTest {
 
     @Test
     fun `loadTvSeasons populates tvSeasons from delegate`() = runTest(mainDispatcherRule.testDispatcher) {
-        val seasons = listOf(SeerrSeason(seasonNumber = 1, name = "Season 1"))
-        coEvery { seerrRequestDelegate.fetchTvSeasons(123) } returns seasons
+        val tvDetails = SeerrTvDetails(
+            id = 123,
+            seasons = listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")),
+        )
+        coEvery { seerrRequestDelegate.fetchTvDetails(123) } returns tvDetails
         backgroundScope.launch { viewModel.tvSeasons.collect { } }
 
         viewModel.loadTvSeasons(123)
         advanceUntilIdle()
 
-        assertEquals(seasons, viewModel.tvSeasons.value)
+        assertEquals(listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")), viewModel.tvSeasons.value)
+        assertEquals(false, viewModel.tvIsAnime.value)
+    }
+
+    @Test
+    fun `loadTvSeasons flags anime shows via tmdb keyword`() = runTest(mainDispatcherRule.testDispatcher) {
+        val tvDetails = SeerrTvDetails(
+            id = 123,
+            seasons = listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")),
+            keywords = listOf(SeerrKeyword(id = 210024, name = "anime")),
+        )
+        coEvery { seerrRequestDelegate.fetchTvDetails(123) } returns tvDetails
+        backgroundScope.launch { viewModel.tvSeasons.collect { } }
+
+        viewModel.loadTvSeasons(123)
+        advanceUntilIdle()
+
+        assertEquals(true, viewModel.tvIsAnime.value)
     }
 
     @Test

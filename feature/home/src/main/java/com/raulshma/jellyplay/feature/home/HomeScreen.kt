@@ -721,6 +721,7 @@ private fun MainHomeContent(
             radarrServers = state.seerrRequestState.radarrServers,
             sonarrServers = state.seerrRequestState.sonarrServers,
             seasons = if (item.mediaType.equals("tv", ignoreCase = true)) state.seerrRequestState.tvSeasons else emptyList(),
+            isAnime = item.mediaType.equals("tv", ignoreCase = true) && state.seerrRequestState.tvIsAnime,
             isLoadingServices = state.seerrRequestState.isLoadingServices,
             isRequesting = state.seerrRequestState.result?.isLoading == true,
             requestSuccess = state.seerrRequestState.result?.success,

@@ -292,12 +292,14 @@ fun SeerrDetailScreen(
                     val tvSeasons = remember(tvDetail) {
                         tvDetail?.seasons?.filter { season -> season.seasonNumber > 0 } ?: emptyList()
                     }
+                    val tvIsAnime = remember(tvDetail) { tvDetail?.isAnime == true }
 
                     SeerrRequestDialog(
                         item = it,
                         radarrServers = radarrServers,
                         sonarrServers = sonarrServers,
                         seasons = if (it.mediaType.equals("tv", ignoreCase = true)) tvSeasons else emptyList(),
+                        isAnime = it.mediaType.equals("tv", ignoreCase = true) && tvIsAnime,
                         isLoadingServices = isLoadingServices,
                         isRequesting = requestResult?.isLoading == true,
                         requestSuccess = requestResult?.success,

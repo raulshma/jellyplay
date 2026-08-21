@@ -180,18 +180,24 @@ class DetailViewModel @Inject internal constructor(
         val core = _uiState.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
         // Group 2 — Seerr request-flow ephemera (radarr/sonarr/result/dialog state).
         val seerrRequest = combine(
-            seerrRequestState.requestResult,
-            seerrRequestState.radarrServers,
-            seerrRequestState.sonarrServers,
+            combine(
+                seerrRequestState.requestResult,
+                seerrRequestState.radarrServers,
+                seerrRequestState.sonarrServers,
+            ) { requestResult, radarrServers, sonarrServers ->
+                Triple(requestResult, radarrServers, sonarrServers)
+            },
             seerrRequestState.isLoadingServices,
             seerrRequestState.tvSeasons,
-        ) { requestResult, radarrServers, sonarrServers, isLoadingServices, tvSeasons ->
+            seerrRequestState.tvIsAnime,
+        ) { (requestResult, radarrServers, sonarrServers), isLoadingServices, tvSeasons, tvIsAnime ->
             SeerrRequestSnapshot(
                 requestResult = requestResult,
                 radarrServers = radarrServers,
                 sonarrServers = sonarrServers,
                 isLoadingServices = isLoadingServices,
                 tvSeasons = tvSeasons,
+                tvIsAnime = tvIsAnime,
             )
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrRequestSnapshot())
         // Group 3 — Seerr connection flags that only gate recommendation visibility.
@@ -209,6 +215,7 @@ class DetailViewModel @Inject internal constructor(
                 seerrSonarrServers = request.sonarrServers,
                 isLoadingSeerrServices = request.isLoadingServices,
                 seerrTvSeasons = request.tvSeasons,
+                seerrTvIsAnime = request.tvIsAnime,
                 isSeerrConnected = flags.isConnected,
                 isSeerrRecommendationsEnabled = flags.isRecommendationsEnabled,
             )
@@ -1343,6 +1350,7 @@ private data class SeerrRequestSnapshot(
     val sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
     val isLoadingServices: Boolean = false,
     val tvSeasons: List<SeerrSeason> = emptyList(),
+    val tvIsAnime: Boolean = false,
 )
 
 /**

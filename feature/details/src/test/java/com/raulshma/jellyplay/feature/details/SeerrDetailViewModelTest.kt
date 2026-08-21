@@ -520,11 +520,12 @@ class SeerrDetailViewModelTest {
     @Test
     fun `loadTvSeasons populates tvSeasons filtering specials`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.tvSeasons.collect { /* warm */ } }
-        val seasons = listOf(
-            com.raulshma.jellyplay.core.model.seerr.SeerrSeason(seasonNumber = 0, name = "Specials"),
-            com.raulshma.jellyplay.core.model.seerr.SeerrSeason(seasonNumber = 1, name = "Season 1"),
+        coEvery { seerrRequestDelegate.fetchTvDetails(123) } returns com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails(
+            seasons = listOf(
+                com.raulshma.jellyplay.core.model.seerr.SeerrSeason(seasonNumber = 0, name = "Specials"),
+                com.raulshma.jellyplay.core.model.seerr.SeerrSeason(seasonNumber = 1, name = "Season 1"),
+            ),
         )
-        coEvery { seerrRequestDelegate.fetchTvSeasons(123) } returns seasons.filter { it.seasonNumber > 0 }
 
         viewModel.loadTvSeasons(123)
         advanceUntilIdle()

@@ -507,18 +507,22 @@ class HomeViewModel @Inject constructor(
         // is preserved by re-copying the existing value over the merged slice.
         launch {
             combine(
-                seerrRequestStateHolder.requestResult,
-                seerrRequestStateHolder.radarrServers,
-                seerrRequestStateHolder.sonarrServers,
+                combine(
+                    seerrRequestStateHolder.requestResult,
+                    seerrRequestStateHolder.radarrServers,
+                    seerrRequestStateHolder.sonarrServers,
+                ) { result, radarr, sonarr -> Triple(result, radarr, sonarr) },
                 seerrRequestStateHolder.isLoadingServices,
                 seerrRequestStateHolder.tvSeasons,
-            ) { result, radarr, sonarr, loading, seasons ->
+                seerrRequestStateHolder.tvIsAnime,
+            ) { (result, radarr, sonarr), loading, seasons, isAnime ->
                 SeerrRequestState(
                     result = result,
                     radarrServers = radarr,
                     sonarrServers = sonarr,
                     isLoadingServices = loading,
                     tvSeasons = seasons,
+                    tvIsAnime = isAnime,
                 )
             }.distinctUntilChanged().collect { merged ->
                 _uiState.update {

@@ -142,6 +142,7 @@ data class SeerrRequestState(
     val sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
     val isLoadingServices: Boolean = false,
     val tvSeasons: List<SeerrSeason> = emptyList(),
+    val tvIsAnime: Boolean = false,
 )
 
 @Immutable

@@ -5,6 +5,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
+import com.raulshma.jellyplay.core.model.seerr.SeerrKeyword
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -173,25 +175,43 @@ class SeerrRequestStateHolderTest {
     // region loadTvSeasons
     @Test
     fun `loadTvSeasons populates tvSeasons`() = runTest {
-        val seasons = listOf(SeerrSeason(seasonNumber = 1, name = "S1"))
-        coEvery { delegate.fetchTvSeasons(5) } returns seasons
+        coEvery { delegate.fetchTvDetails(5) } returns SeerrTvDetails(
+            seasons = listOf(SeerrSeason(seasonNumber = 1, name = "S1")),
+        )
         val h = holder(this)
 
         h.loadTvSeasons(5)
         advanceUntilIdle()
 
-        assertEquals(seasons, h.tvSeasons.value)
+        assertEquals(listOf(SeerrSeason(seasonNumber = 1, name = "S1")), h.tvSeasons.value)
+        assertFalse(h.tvIsAnime.value)
+    }
+
+    @Test
+    fun `loadTvSeasons flags anime via tmdb keyword`() = runTest {
+        coEvery { delegate.fetchTvDetails(5) } returns SeerrTvDetails(
+            seasons = listOf(SeerrSeason(seasonNumber = 1, name = "S1")),
+            keywords = listOf(SeerrKeyword(id = 210024, name = "anime")),
+        )
+        val h = holder(this)
+
+        h.loadTvSeasons(5)
+        advanceUntilIdle()
+
+        assertTrue(h.tvIsAnime.value)
     }
 
     @Test
     fun `loadTvSeasons resets to empty before fetching`() = runTest {
         val h = holder(this)
-        coEvery { delegate.fetchTvSeasons(5) } returns listOf(SeerrSeason(seasonNumber = 1, name = "S1"))
+        coEvery { delegate.fetchTvDetails(5) } returns SeerrTvDetails(
+            seasons = listOf(SeerrSeason(seasonNumber = 1, name = "S1")),
+        )
         h.loadTvSeasons(5)
         advanceUntilIdle()
         assertTrue(h.tvSeasons.value.isNotEmpty())
 
-        coEvery { delegate.fetchTvSeasons(6) } returns emptyList()
+        coEvery { delegate.fetchTvDetails(6) } returns null
         h.loadTvSeasons(6)
         advanceUntilIdle()
 

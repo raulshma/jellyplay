@@ -258,6 +258,7 @@ fun MediaDetailScreen(
             val seerrSonarrServers = uiState.seerrSonarrServers
             val seerrIsLoadingServices = uiState.isLoadingSeerrServices
             val seerrTvSeasons = uiState.seerrTvSeasons
+            val seerrTvIsAnime = uiState.seerrTvIsAnime
             val seerrRequestResult = uiState.seerrRequestResult
             var seerrRequestItem by remember { mutableStateOf<SeerrSearchItem?>(null) }
 
@@ -549,6 +550,7 @@ fun MediaDetailScreen(
                         radarrServers = seerrRadarrServers,
                         sonarrServers = seerrSonarrServers,
                         seasons = if (item.mediaType.equals("tv", ignoreCase = true)) seerrTvSeasons else emptyList(),
+                        isAnime = item.mediaType.equals("tv", ignoreCase = true) && seerrTvIsAnime,
                         isLoadingServices = seerrIsLoadingServices,
                         isRequesting = seerrRequestResult?.isLoading == true,
                         requestSuccess = seerrRequestResult?.success,

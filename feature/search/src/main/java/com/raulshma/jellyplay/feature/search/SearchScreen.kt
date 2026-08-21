@@ -154,6 +154,7 @@ fun SearchScreen(
     val radarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
     val sonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
     val tvSeasons by viewModel.tvSeasons.collectAsStateWithLifecycle()
+    val tvIsAnime by viewModel.tvIsAnime.collectAsStateWithLifecycle()
     val isLoadingSeerrServices by viewModel.isLoadingSeerrServices.collectAsStateWithLifecycle()
     val seerrLoadingState = rememberSeerrCardLoadingState()
 
@@ -1122,6 +1123,7 @@ fun SearchScreen(
             radarrServers = radarrServers,
             sonarrServers = sonarrServers,
             seasons = if (item.mediaType.equals("tv", ignoreCase = true)) tvSeasons else emptyList(),
+            isAnime = item.mediaType.equals("tv", ignoreCase = true) && tvIsAnime,
             isLoadingServices = isLoadingSeerrServices,
             isRequesting = requestResult?.isLoading == true,
             requestSuccess = requestResult?.success,

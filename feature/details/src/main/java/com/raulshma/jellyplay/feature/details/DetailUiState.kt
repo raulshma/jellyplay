@@ -120,6 +120,7 @@ data class DetailUiState(
     val seerrSonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
     val isLoadingSeerrServices: Boolean = false,
     val seerrTvSeasons: List<SeerrSeason> = emptyList(),
+    val seerrTvIsAnime: Boolean = false,
     // "Manage Series" (DIRECT_ARR_INTEGRATION). Shown for a series with a tvdb
     // id when the experimental flag is on; server resolution is deferred to the
     // ManageSeriesScreen itself (cheap gate here — no network on the detail screen).

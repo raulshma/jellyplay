@@ -382,6 +382,7 @@ class SearchViewModel @Inject constructor(
     val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> get() = seerrRequestState.sonarrServers
     val isLoadingSeerrServices: StateFlow<Boolean> get() = seerrRequestState.isLoadingServices
     val tvSeasons: StateFlow<List<SeerrSeason>> get() = seerrRequestState.tvSeasons
+    val tvIsAnime: StateFlow<Boolean> get() = seerrRequestState.tvIsAnime
 
     fun requestSeerrMedia(
         item: SeerrSearchItem,

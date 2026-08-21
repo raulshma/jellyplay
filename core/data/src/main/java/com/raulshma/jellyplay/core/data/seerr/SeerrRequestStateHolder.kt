@@ -30,6 +30,10 @@ class SeerrRequestStateHolder(
     private val _tvSeasons = MutableStateFlow<List<SeerrSeason>>(emptyList())
     val tvSeasons: StateFlow<List<SeerrSeason>> = _tvSeasons.asStateFlow()
 
+    /** True when the current TV item is anime (TMDB keyword 210024), driving anime request defaults. */
+    private val _tvIsAnime = MutableStateFlow(false)
+    val tvIsAnime: StateFlow<Boolean> = _tvIsAnime.asStateFlow()
+
     fun requestMedia(
         item: SeerrSearchItem,
         seasons: List<Int>? = null,
@@ -87,8 +91,12 @@ class SeerrRequestStateHolder(
     fun loadTvSeasons(tmdbId: Int) {
         scope.launch {
             _tvSeasons.value = emptyList()
-            val seasons = delegate.fetchTvSeasons(tmdbId)
-            _tvSeasons.value = seasons
+            _tvIsAnime.value = false
+            val tvDetails = delegate.fetchTvDetails(tmdbId)
+            _tvSeasons.value = tvDetails
+                ?.seasons?.filter { it.seasonNumber > 0 }
+                ?: emptyList()
+            _tvIsAnime.value = tvDetails?.isAnime == true
         }
     }
 }
