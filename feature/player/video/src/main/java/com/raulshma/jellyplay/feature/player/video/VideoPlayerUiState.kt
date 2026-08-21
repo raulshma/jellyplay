@@ -52,14 +52,72 @@ data class SegmentOverlayState(
 )
 
 /**
- * Session + prefs-mirror state for the video player.
+ * Session + prefs-mirror state for the video player, organized as seven stored
+ * slices plus a small, deliberately flat remainder.
  *
- * The sleep-timer, track, subtitle-workflow, audio-effects and SyncPlay
- * group-display slices used to live here as flat fields; they are now owned by
- * their controllers and exposed as `StateFlow`s on the ViewModel. What remains is
- * session state (item identity, transport, engine, surface flags, the
- * subtitle-preview trio, per-item resolver-driven dialogue boost) plus the
- * preferences mirror written by [SettingsProjector].
+ * ## Slice map
+ *
+ *  - [gestures] — gesture / hold-speed / seek-window / brightness / frame-rate prefs.
+ *  - [segmentState] — raw segment data + per-type behaviors fed to `SegmentCalculator`.
+ *  - [media] — what's playing and how: overview/cast/artwork/lyrics, play method,
+ *    direct-play flag, transcode reasons, media-source/stream model, series pointer.
+ *  - [autoplay] — auto-play-next settings + the user's cancellation of the current countdown.
+ *  - [videoFx] — video filter / aspect / zoom settings.
+ *  - [episodes] — series/season/episode browser state: adjacent-episode pointers,
+ *    the lists backing the episode-picker sheet, and the browser feature toggle.
+ *  - [uiPrefs] — player UI/system preferences: control visibility, orientation,
+ *    pass-out, trickplay, streaming quality/mode, lock/PIN (written by [SettingsProjector]).
+ *
+ * ## Flat survivors — and why they stay flat
+ *
+ * *Identity / transport / engine plumbing* — heterogeneous one-off session
+ * fields; grouping them would buy no cohesion:
+ * [title] / [subtitle] (display identity of the loaded item — the item id
+ * itself lives in `PlayerSessionManager`'s session state, not here),
+ * [preferredPlayerType] + [engineCapabilities] (engine selection and its
+ * probed capability set), and the transport leaves [isPlaying], [isBuffering],
+ * [playbackSpeed] (pairs cross-slice with `gestures.isHoldSpeedActive` for
+ * hold-to-speed) and [isMuted].
+ *
+ * *Subtitle styling + dialogue boost — by design:* [subtitleStyle],
+ * [dialogueBoostEnabled] and [dialogueBoostStrength] are engine-config inputs
+ * that `EngineConfigBuilder` reads as one group; a slice hop would add nothing.
+ *
+ * *Error + session-lifecycle fields — kept flat deliberately ahead of the
+ * Stage B `PlaybackSession` extraction:* [playerError], [playerErrorRetryable]
+ * and [showPlaybackErrorDialog] (the session's error events will land here),
+ * [isInitializing] (load lifecycle), [isInSyncPlaySession] (session-membership
+ * mirror read by `SegmentProjection`) and [cinemaIntroState] (pre-roll intro
+ * context; its load/advance sequencing moves into the session).
+ *
+ * *High-frequency playback progress residuals:* [currentPosition], [duration],
+ * [bufferedPosition] and [videoStats] stay on the root. The live, up-to-4 Hz
+ * source of truth is the ViewModel's dedicated StateFlows
+ * (`currentPositionMs` / `durationMs` / `bufferedPositionMs` / `videoStats`);
+ * these root fields exist as seeds/snapshots for the on-state segment math
+ * ([computeActiveSegment] and friends read [currentPosition] / [duration]) and
+ * must not churn slice copies at tick rate.
+ *
+ * *Everything else still flat* is leaf state with no slice to join:
+ * [chapters] (feeds both the media display and [toSegmentInput], so it cannot
+ * live in the media slice alone), the subtitle-sync preview trio
+ * [subtitlePreviewCues] / [subtitlePreviewSource] / [previewSheetVisible]
+ * (sheet-scoped, gate-controlled state; the wider subtitle workflow lives in
+ * `SubtitleManager`'s own state), [isScreenLocked] and [audioOnly] (transient
+ * lock / surface-gate flags) and [isConnectionMetered] (network environment
+ * signal surfaced to explain quality caps).
+ *
+ * The sleep-timer, track-selection, subtitle-workflow, audio-effects and
+ * SyncPlay group-display concerns are not here at all: they are owned by their
+ * controllers (`SleepTimerController.state`, `TrackSelectionHelper.state`,
+ * `SubtitleManager.state`, `VideoEffectsController.state`, `SyncPlayBridge.state`)
+ * and exposed as `StateFlow`s on the ViewModel.
+ *
+ * ## Reading / writing
+ *
+ * New code reads slice fields as `uiState.<slice>.<field>` (e.g.
+ * `uiState.gestures.brightnessLevel`) and writes them with nested copies:
+ * `copy(slice = slice.copy(field = value))`.
  */
 @Immutable
 data class VideoPlayerUiState(
@@ -196,24 +254,11 @@ data class VideoPlayerUiState(
     val audioOnly: Boolean = false,
 ) {
 
-    // ── Cohesive sub-state projections ────────────────────────────────────
-    // Each groups the flat constructor fields by concern.
-    // New code should read these (e.g. `state.gestures.brightnessLevel`); the
-    // flat fields remain on the root for incremental call-site migration and
-    // will be deprecated once all consumers move over.
-    //
-    // These are derived `val`s (computed per access) rather than stored
-    // properties, so the data class's equality/hashCode still reflect the flat
-    // fields — the source of truth during the transition.
-    //
-    // The media slice (`state.media.…`) used to be a projection here too; it
-    // is now a STORED constructor field. The gestures and uiPrefs slices
-    // likewise migrated from projections to stored fields. The sleep-timer,
-    // track, subtitle-workflow, audio-effects and SyncPlay group-display
-    // slices used to have projections here as well; they now live in their
-    // owning controllers (`SleepTimerController.state`,
-    // `TrackSelectionHelper.state`, `SubtitleManager.state`,
-    // `VideoEffectsController.state`, `SyncPlayBridge.state`).
+    // ── Segment math ────────────────────────────────────────────────────────
+    // Thin delegates onto SegmentCalculator. The input (toSegmentInput) is
+    // assembled from the segmentState / autoplay / episodes / media slices
+    // plus the flat chapters / isInSyncPlaySession / duration and the position
+    // handed in by the caller (or the currentPosition snapshot).
 
     fun behaviorForType(type: MediaSegmentType): SegmentBehavior =
         SegmentCalculator.behaviorForType(toSegmentInput(), type)
