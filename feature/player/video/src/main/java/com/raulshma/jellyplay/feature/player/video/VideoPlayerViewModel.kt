@@ -1285,6 +1285,15 @@ class VideoPlayerViewModel @Inject constructor(
                     // window. Reads mediaDetail — a VM-owned slice — so it
                     // deliberately stays out of the coordinator's policies.
                     pipController.pipHasNext = mediaDetail?.item?.seriesId != null
+                    // A fresh engine instance (mode/quality/stream-index
+                    // reload, engine switch, error retry) renumbers tracks and
+                    // re-side-loads subtitles: drop the engine-positional
+                    // selection state so the ladder re-applies the stored
+                    // per-item selection on the new engine's emissions. Runs
+                    // before the tracks collector below so the immediate
+                    // initial (empty) availableTracks emission cannot act on
+                    // a stale held selection.
+                    trackSelectionHelper.onEngineRecreated()
                     engineCollectionJob = launch {
                         // The play/buffering mirrors, buffering watchdog,
                         // direct-play fallback latch, error surfacing, subtitle
@@ -2033,15 +2042,25 @@ class VideoPlayerViewModel @Inject constructor(
 
     /**
      * Thin delegate to [PlaybackSession.reloadForMode]: the VM supplies the
-     * current mode + quality from its ui-prefs mirror (the session never
-     * reads the ui state); the session owns the stop-report / reload /
+     * current mode + quality from its ui-prefs mirror and the stored per-item
+     * stream selection from the engine store (the session never reads either);
+     * the session owns the stop-report / reload / selection re-arm /
      * media-session-rebuild choreography and surfaces its transcode notices
      * as [SessionEvent.InformUser]s.
      */
     private suspend fun reloadPlaybackForMode() {
+        // Carry the stored per-item stream selection into the re-POST: the
+        // server bakes one audio track into a transcoded manifest and burns in
+        // image subs, so dropping the indices would reset those choices. The
+        // client-side selection is re-armed separately (setPendingStreams inside
+        // PlaybackSession.reloadForMode).
+        val itemId = playerSessionManager.sessionState.value.currentItemId
+        val stored = itemId?.let { engineStore.playerEngine.value.mediaStreamSelections[it] }
         playbackSession.reloadForMode(
             mode = _uiState.value.uiPrefs.playbackMode,
             quality = _uiState.value.uiPrefs.streamingQuality,
+            audioStreamIndex = stored?.audioStreamIndex,
+            subtitleStreamIndex = stored?.subtitleStreamIndex,
         )
     }
 

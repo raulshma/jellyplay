@@ -131,6 +131,12 @@ fun HomeTopDock(
         modifier = modifier
             .fillMaxWidth()
             .then(if (!isTv) Modifier.statusBarsPadding() else Modifier)
+            // Lift the whole dock (field + results) above the soft keyboard.
+            // Must sit OUTSIDE the results box's heightIn cap: applying
+            // imePadding below that cap lets the keyboard consume the results
+            // budget (400dp − ~368dp inset = a 32dp sliver that only fits the
+            // section header).
+            .imePadding()
             .padding(
                 start = 16.dp,
                 top = 4.dp,
@@ -197,8 +203,6 @@ fun HomeTopDock(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 400.dp)
-                            // keep results readable above the soft keyboard
-                            .imePadding()
                             .background(
                                 MaterialTheme.colorScheme.surfaceContainer.copy(alpha = AppBarScrimAlpha)
                             ),

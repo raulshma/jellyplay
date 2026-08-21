@@ -583,6 +583,14 @@ class PlayerSessionManager(
      * mid-playback so a switch to/from transcode swaps the underlying stream
      * without restarting the item.
      *
+     * [audioStreamIndex]/[subtitleStreamIndex] carry the currently-selected
+     * server streams into the re-POST: the server bakes a single audio track
+     * into the transcoded manifest and burns in image subs, so dropping the
+     * indices would silently reset those choices to the server defaults. Text
+     * subs are side-loaded regardless (see [buildExternalSubtitles]) — for
+     * them the indices are echoed for the server's DefaultSubtitleStreamIndex
+     * bookkeeping; the client-side selection is restored by the track ladder.
+     *
      * Returns the resolved [ResolvedPlayback] (or `null` on failure) so the
      * caller can react — e.g. fall back to transcode when a forced direct
      * play request yields no playable method.
@@ -591,6 +599,8 @@ class PlayerSessionManager(
         mode: PlaybackMode,
         quality: com.raulshma.jellyplay.core.model.StreamingQuality,
         currentPositionMs: Long,
+        audioStreamIndex: Int? = null,
+        subtitleStreamIndex: Int? = null,
     ): ResolvedPlayback? {
         val itemId = _sessionState.value.currentItemId ?: return null
         val sourceId = _sessionState.value.currentMediaSource?.id ?: ""
@@ -602,8 +612,8 @@ class PlayerSessionManager(
             itemId = itemId,
             mediaSourceId = sourceId,
             startTimeTicks = currentPositionMs * 10_000,
-            audioStreamIndex = null,
-            subtitleStreamIndex = null,
+            audioStreamIndex = audioStreamIndex,
+            subtitleStreamIndex = subtitleStreamIndex,
             maxStreamingBitrateBits = maxBitrate,
             mode = mode,
             playerType = playerType,

@@ -245,6 +245,53 @@ class TrackSelectionPolicyTest {
         assertEquals(0, match?.index)
     }
 
+    // ─── resolveByStreamIndex: streaming side-load "external:{index}" id tier ──
+    //
+    // On a transcode the server's text subs are side-loaded (HLS manifest
+    // carries none), and buildExternalSubtitles stamps
+    // id == "external:{server stream index}" onto each SubtitleSource — both
+    // engines propagate it into TrackOption.id. The id is the exact restore
+    // key; the label fallback is ambiguous for duplicate-language subs.
+
+    @Test
+    fun resolveByStreamIndex_externalIdMatch_beatsAmbiguousLabel() {
+        // Two same-language side-loads whose labels do NOT equal the server
+        // displayTitle (enrichment missed): only the external: id resolves.
+        val tracks = listOf(
+            opt(0, "English · text/x-ssa", "eng", id = "external:2"),
+            opt(1, "English · Signs", "eng", id = "external:3"),
+        )
+        val target = MediaStream(index = 3, type = StreamType.SUBTITLE, displayTitle = "English - Ass")
+        val match = policy.resolveByStreamIndex(tracks, streamIndex = 3, targetStream = target)
+        assertEquals(1, match?.index)
+    }
+
+    @Test
+    fun resolveByStreamIndex_externalIdMatch_beatsLabelCollision() {
+        // The exact external: id outranks the label fallback: when one track's
+        // label collides with the target's displayTitle but a different track
+        // carries the stored index as its id, the id wins. (A synthetic
+        // server track matching only by label stays possible — the helper's
+        // selectSubtitleTrack no-op guard neutralizes that pick.)
+        val tracks = listOf(
+            opt(0, "English - Ass", "eng"),
+            opt(1, "English · Signs", "eng", id = "external:3"),
+        )
+        val target = MediaStream(index = 3, type = StreamType.SUBTITLE, displayTitle = "English - Ass")
+        val match = policy.resolveByStreamIndex(tracks, streamIndex = 3, targetStream = target)
+        assertEquals(1, match?.index)
+    }
+
+    @Test
+    fun resolveByStreamIndex_containerIndexStillWinsOverExternalId() {
+        val tracks = listOf(
+            opt(0, "English", "eng", streamIndex = 5, id = "external:3"),
+        )
+        val target = MediaStream(index = 5, type = StreamType.SUBTITLE, displayTitle = "English")
+        val match = policy.resolveByStreamIndex(tracks, streamIndex = 5, targetStream = target)
+        assertEquals(0, match?.index)
+    }
+
     // ─── resolveMediaStreamIndex: offline persistence path ────────────────────
 
     @Test

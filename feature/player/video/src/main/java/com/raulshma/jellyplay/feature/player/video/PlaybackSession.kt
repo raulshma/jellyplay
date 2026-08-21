@@ -552,12 +552,21 @@ internal class PlaybackSession(
      * [PlaybackMode]/[StreamingQuality] and swaps the engine onto the new
      * stream at the current position. [mode] and [quality] are supplied by
      * the VM wrapper from its ui-prefs mirror (this class never reads the ui
-     * state). Surfaces a notice via [SessionEvent.InformUser] when switching
-     * to a transcode since the brief re-buffer is otherwise surprising, and
+     * state); [audioStreamIndex]/[subtitleStreamIndex] carry the currently
+     * selected server streams (VM-supplied from the stored per-item
+     * selection) so the re-POST keeps the server-side choices — the baked-in
+     * audio track and any burned-in image sub — instead of resetting them.
+     * Surfaces a notice via [SessionEvent.InformUser] when switching to a
+     * transcode since the brief re-buffer is otherwise surprising, and
      * auto-falls-back to transcode when a forced-direct-play request yields
      * no playable method.
      */
-    suspend fun reloadForMode(mode: PlaybackMode, quality: StreamingQuality) {
+    suspend fun reloadForMode(
+        mode: PlaybackMode,
+        quality: StreamingQuality,
+        audioStreamIndex: Int? = null,
+        subtitleStreamIndex: Int? = null,
+    ) {
         val pos = playerSessionManager.engine?.currentPositionMs ?: 0L
 
         // Stop-report the *current* server session before the swap: reloadPlayback
@@ -568,7 +577,19 @@ internal class PlaybackSession(
         reportCurrentPlaybackStopped()
         progressReporter.cancelJobs()
 
-        val resolved = playerSessionManager.reloadPlayback(mode, quality, pos) ?: return
+        // Re-arm the track-selection machinery for the engine swap, mirroring
+        // reloadForStreamChange: the replacement engine renumbers tracks and
+        // re-side-loads subtitles, so seeding the pending indices (which also
+        // clears the held-selection latches) lets the ladder restore the
+        // selection on the new engine's first track emissions.
+        setPendingStreams(subtitleStreamIndex, audioStreamIndex)
+        val resolved = playerSessionManager.reloadPlayback(
+            mode = mode,
+            quality = quality,
+            currentPositionMs = pos,
+            audioStreamIndex = audioStreamIndex,
+            subtitleStreamIndex = subtitleStreamIndex,
+        ) ?: return
         afterEngineReloadRebuildSessionAndTracking()
 
         if (resolved.playMethod == PlayMethod.TRANSCODE) {
@@ -583,6 +604,8 @@ internal class PlaybackSession(
             launchFallbackToTranscode(
                 fromPositionMs = playerSessionManager.engine?.currentPositionMs ?: pos,
                 quality = quality,
+                audioStreamIndex = audioStreamIndex,
+                subtitleStreamIndex = subtitleStreamIndex,
             )
         }
     }
@@ -608,16 +631,24 @@ internal class PlaybackSession(
         progressReporter.startProgressReporting()
     }
 
-    private fun launchFallbackToTranscode(fromPositionMs: Long, quality: StreamingQuality) {
+    private fun launchFallbackToTranscode(
+        fromPositionMs: Long,
+        quality: StreamingQuality,
+        audioStreamIndex: Int? = null,
+        subtitleStreamIndex: Int? = null,
+    ) {
         setUiPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
         scope.launch {
             playbackStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
             reportCurrentPlaybackStopped()
             progressReporter.cancelJobs()
+            setPendingStreams(subtitleStreamIndex, audioStreamIndex)
             playerSessionManager.reloadPlayback(
                 PlaybackMode.FORCE_TRANSCODE,
                 quality,
                 fromPositionMs,
+                audioStreamIndex,
+                subtitleStreamIndex,
             )
             afterEngineReloadRebuildSessionAndTracking()
         }

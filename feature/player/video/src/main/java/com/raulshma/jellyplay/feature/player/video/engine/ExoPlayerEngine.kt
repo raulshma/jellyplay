@@ -20,6 +20,13 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.exoplayer.audio.AudioRendererEventListener
+import androidx.media3.exoplayer.metadata.MetadataOutput
+import androidx.media3.exoplayer.text.TextOutput
+import androidx.media3.exoplayer.video.VideoRendererEventListener
+import androidx.media3.exoplayer.NoSampleRenderer
+import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.RenderersFactory
 import androidx.media3.common.text.Cue
 import androidx.media3.common.text.CueGroup
 import androidx.media3.datasource.DataSource
@@ -69,7 +76,6 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
 import io.github.peerless2012.ass.media.AssHandler
-import io.github.peerless2012.ass.media.factory.AssRenderersFactory
 import io.github.peerless2012.ass.media.kt.withAssMkvSupport
 import io.github.peerless2012.ass.media.parser.AssSubtitleParserFactory
 import io.github.peerless2012.ass.media.type.AssRenderType
@@ -287,6 +293,28 @@ class ExoPlayerEngine(
 
         override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
             _availableTracks.value = buildTracks()
+            // Keep the ASS-render toggle in lockstep with the OBSERVED
+            // selection, not just the selectTrack() command: the selector can
+            // activate a side-loaded ASS track on its own (preferredTextLanguage
+            // match or the stream's default flag) without engine.selectTrack
+            // ever running. A stale activeTrackIsAss would then keep the libass
+            // overlay hidden and the (blank — its text renderer was replaced)
+            // native SubtitleView shown for the whole session: the track plays,
+            // nothing renders.
+            if (assEnabledForSession) {
+                val newlyAss = selectedTextTrackIsAss(tracks)
+                if (newlyAss != activeTrackIsAss) {
+                    activeTrackIsAss = newlyAss
+                    // Diagnostics for the transcode side-load render chain: the
+                    // flip plus overlay presence pinpoint where the pipeline
+                    // stops when subtitles don't show.
+                    android.util.Log.i(
+                        TAG,
+                        "ASS render toggle: activeTrackIsAss=$newlyAss, overlayView=${assOverlayView != null}",
+                    )
+                    applySubtitleStyle(currentConfig.subtitleStyle)
+                }
+            }
             // Reset the accumulated cue list when the *selected* subtitle track
             // changes, so cues from a prior track don't bleed into the preview.
             // An audio-only track change leaves the text selection untouched.
@@ -536,7 +564,17 @@ class ExoPlayerEngine(
         // as-is rather than destabilizing the working ASS path.
         val (finalRenderersFactory, msf) = if (assEnabledForSession) {
             val assExtractors = extractorsFactory.withAssMkvSupport(assParserFactory!!, assHandler!!)
-            val renderers = AssRenderersFactory(assHandler!!, baseRenderersFactory)
+            // Own clock-pump factory instead of ass-media's AssRenderersFactory:
+            // the library's appended AssRenderer derives the render clock from
+            // the renderer position minus a hardcoded 10¹² µs base, and the
+            // player's own position cannot be queried from the playback thread —
+            // see [AssClockPumpRenderersFactory] for the delta-integration
+            // approach used instead.
+            val renderers = AssClockPumpRenderersFactory(
+                assHandler!!,
+                baseRenderersFactory,
+                startMediaTimeUs = request.startPositionMs * 1000L,
+            )
             val sourceFactory = DefaultMediaSourceFactory(dataSourceFactory, assExtractors)
                 .setSubtitleParserFactory(offsetFactory)
             renderers to sourceFactory
@@ -1131,9 +1169,10 @@ class ExoPlayerEngine(
 
         // Track-type toggle for ASS vs non-ASS visibility. Only relevant on the
         // ASS-enabled session: detect whether the *selected* subtitle track is
-        // an ASS/SSA track (Format.sampleMimeType == TEXT_SSA) and flip the
-        // SubtitleView/AssSubtitleView visibility accordingly. On non-ASS
-        // sessions activeTrackIsAss stays false and the native view is used.
+        // an ASS/SSA track and flip the SubtitleView/AssSubtitleView visibility
+        // accordingly. Source-parsed tracks carry the original ASS mime in
+        // `codecs` (sampleMimeType becomes application/x-media3-cues), so both
+        // fields are checked — mirrors [selectedTextTrackIsAss].
         if (type == TrackType.SUBTITLE && assEnabledForSession) {
             val newlyAss = if (index < 0) {
                 false
@@ -1144,7 +1183,9 @@ class ExoPlayerEngine(
                     // The override targets every track in the group; ASS tracks
                     // are homogeneous within a group, so the first format's mime
                     // is representative.
-                    groups[groupIndex].getTrackFormat(0).sampleMimeType == MimeTypes.TEXT_SSA
+                    groups[groupIndex].getTrackFormat(0).let { format ->
+                        format.sampleMimeType == MimeTypes.TEXT_SSA || format.codecs == MimeTypes.TEXT_SSA
+                    }
                 } else {
                     false
                 }
@@ -1234,10 +1275,11 @@ class ExoPlayerEngine(
                 visibility = if (activeTrackIsAss) View.VISIBLE else View.GONE
             }
             assOverlayView = assView
-            // Parent the ASS overlay via the unified reparent path so it tracks
-            // the active target (content frame, or the screen-pinned host when
-            // one is attached). Idempotent, so the initial reparent above plus
-            // this one collapse to a single add.
+            // Parent the ASS overlay via the unified reparent path — which
+            // pins it to the content frame (the letterboxed video rectangle)
+            // so libass's video-space coordinates map 1:1 onto the surface,
+            // regardless of any screen-pinned host. Idempotent, so the initial
+            // reparent above plus this one collapse to a single add.
             pv.post { reparentSubtitleViews(pv) }
         }
 
@@ -1246,35 +1288,38 @@ class ExoPlayerEngine(
     }
 
     /**
-     * Parents both the native [SubtitleView] and the libass [AssSubtitleView]
-     * (when present) into the active subtitle target.
+     * Parents the native [SubtitleView] and the libass [AssSubtitleView]
+     * (when present) into their respective subtitle targets — which are NOT
+     * necessarily the same view:
      *
-     * Default target is PlayerView's `exo_content_frame` (the letterboxed video
-     * rectangle): while the SubtitleView is a direct child of the PlayerView its
-     * layout fractions (bottom padding, fractional text size) compute against the
-     * whole screen height, so in portrait — where the video is letterboxed —
-     * captions land in the bottom black bar instead of on the video. Inside the
-     * content frame they are measured against the video dimensions, keeping them
-     * correct and consistent with mpv / VLC across rotation.
+     * - The native SubtitleView follows the *active* target: PlayerView's
+     *   `exo_content_frame` (the letterboxed video rectangle) by default —
+     *   while a direct child of the PlayerView its layout fractions (bottom
+     *   padding, fractional text size) compute against the whole screen
+     *   height, so in portrait the captions land in the bottom black bar
+     *   instead of on the video — or the screen-pinned [externalSubtitleHost]
+     *   when one is attached, so its relative-positioned cues stay on screen
+     *   under zoom/crop.
+     * - The libass AssSubtitleView ALWAYS stays in the content frame. ASS
+     *   coordinates are absolute in the video's frame space and
+     *   [AssHandler]'s frame size is the video surface size, so the overlay
+     *   must cover exactly the letterboxed video rectangle. The screen-pinned
+     *   host spans the full screen (e.g. 2280 px wide against a 1920-px
+     *   16:9 video): hosting the overlay there draws every glyph shifted left
+     *   by the letterbox amount. Under zoom the content frame scales inside
+     *   the video's graphicsLayer, which is geometrically correct for
+     *   video-space coordinates — the overlay stays glued to the video.
      *
-     * When an [externalSubtitleHost] is attached it replaces the content frame as
-     * the target. That host is a sibling of the zoomed video surface (outside the
-     * pinch/crop transform), so captions stay pinned to the screen under zoom and
-     * crop. Font sizes are SP (density-independent, unaffected); only
-     * `setBottomPaddingFraction` / fractional sizes then resolve against the
-     * screen height instead of the video height — the intended screen-pinned
-     * behavior. See [setExternalSubtitleHost].
-     *
-     * Idempotent: a view already parented to the active target is left alone, so
-     * repeated layout-pass calls are a cheap no-op (see `lastFrameW/H` guard in
-     * [createSurfaceView]).
+     * Idempotent: a view already parented to its target is left alone, so
+     * repeated layout-pass calls are a cheap no-op (see `lastFrameW/H` guard
+     * in [createSurfaceView]).
      */
     private fun reparentSubtitleViews(pv: PlayerView) {
-        val target: android.view.ViewGroup = externalSubtitleHost
-            ?: pv.findViewById(androidx.media3.ui.R.id.exo_content_frame)
-            ?: return
-        reparentInto(pv.subtitleView, target)
-        reparentInto(assOverlayView, target)
+        val contentFrame: android.view.ViewGroup =
+            pv.findViewById(androidx.media3.ui.R.id.exo_content_frame) ?: return
+        val nativeTarget: android.view.ViewGroup = externalSubtitleHost ?: contentFrame
+        reparentInto(pv.subtitleView, nativeTarget)
+        reparentInto(assOverlayView, contentFrame)
     }
 
     /** Moves [view] into [target] if it isn't already there; no-op otherwise. */
@@ -1390,8 +1435,9 @@ class ExoPlayerEngine(
             }
         }
         // The overlay renders ASS; its visibility is driven by [activeTrackIsAss]
-        // (set in selectTrack), mirrored by the native SubtitleView toggling above
-        // so exactly one of the two is shown.
+        // (set by selectTrack and by onTracksChanged's selection observation),
+        // mirrored by the native SubtitleView toggling above so exactly one of
+        // the two is shown.
         assOverlayView?.setVisibility(if (activeTrackIsAss) View.VISIBLE else View.GONE)
     }
 
@@ -1586,9 +1632,7 @@ class ExoPlayerEngine(
                 group.getTrackFormat(0).id?.takeIf { it.isNotBlank() }
                     ?: "SUBTITLE_${group.mediaTrackGroup.hashCode()}"
             }
-    }
-
-    /**
+    }    /**
      * Maps the cues in [cueGroup] to [TimedCue]s and folds them into the
      * accumulated list via [mergeAccumulatedCues]. ExoPlayer surfaces only the
      * *currently displayed* cue(s) per callback, so the preview is built
@@ -1722,6 +1766,126 @@ class ExoPlayerEngine(
         }
     }
 
+}
+
+/**
+ * True when the currently *selected* text track is an ASS/SSA one — the signal
+ * that libass owns rendering via [io.github.peerless2012.ass.media.AssSubtitleView]
+ * and the native SubtitleView must hide.
+ *
+ * Matches the format BOTH on `sampleMimeType` and `codecs`: Media3 re-labels
+ * source-parsed text tracks to `application/x-media3-cues` in `sampleMimeType`
+ * and carries the original format mime in `codecs` — for a side-loaded ASS that
+ * means `codecs == "text/x-ssa"` while `sampleMimeType` is the cues type
+ * (observed on a Jellyfin HLS transcode).
+ *
+ * Derived from the OBSERVED [androidx.media3.common.Tracks] state, not from the
+ * [ExoPlayerEngine.selectTrack] command: `DefaultTrackSelector` auto-selects
+ * side-loaded text tracks on its own (preferredTextLanguage match or the
+ * stream's default flag) without the command path ever running. Top-level so
+ * the decision is unit-testable without an engine instance.
+ */
+internal fun selectedTextTrackIsAss(tracks: androidx.media3.common.Tracks): Boolean =
+    tracks.groups.any { group ->
+        group.type == C.TRACK_TYPE_TEXT &&
+            (0 until group.length).any { group.isTrackSelected(it) } &&
+            group.getTrackFormat(0).let { format ->
+                format.sampleMimeType == MimeTypes.TEXT_SSA || format.codecs == MimeTypes.TEXT_SSA
+            }
+    }
+
+/**
+ * Renderers factory for the libass overlay path: the base renderers plus a
+ * no-sample "clock pump" that feeds the playback media time into
+ * [AssHandler.videoTime]. This reproduces ass-media's `AssRenderersFactory`
+ * with one decisive difference — how the clock is derived.
+ *
+ * The renderer-position `positionUs` passed to `render()` is NOT the media
+ * position: on a Jellyfin HLS/TS transcode it carries a constant +10¹² µs base
+ * (observed: `positionUs = 1_000_860_429_000` at an 860 s resume point).
+ * ass-media's own `AssRenderer` subtracts exactly 10¹² — correct for that
+ * stack, but an undocumented assumption. Querying the player's
+ * `currentPosition` instead is not an option either: render() runs on the
+ * playback thread and media3 throws "Player is accessed on the wrong thread".
+ *
+ * The pump therefore ANCHORS at the load's start position (media time, from
+ * the PlaybackRequest) and integrates the renderer-position DELTAS — deltas
+ * are base-independent by construction, so seeks (either direction), pauses
+ * and playback-rate changes all track the media timeline without any
+ * assumption about the stream's position base.
+ */
+@OptIn(androidx.media3.common.util.UnstableApi::class)
+internal class AssClockPumpRenderersFactory(
+    private val assHandler: AssHandler,
+    private val base: RenderersFactory,
+    private val startMediaTimeUs: Long,
+) : RenderersFactory {
+    override fun createRenderers(
+        eventHandler: Handler,
+        videoRendererEventListener: VideoRendererEventListener,
+        audioRendererEventListener: AudioRendererEventListener,
+        textRendererOutput: TextOutput,
+        metadataRendererOutput: MetadataOutput,
+    ): Array<Renderer> =
+        base.createRenderers(
+            eventHandler,
+            videoRendererEventListener,
+            audioRendererEventListener,
+            textRendererOutput,
+            metadataRendererOutput,
+        ).let { baseRenderers ->
+            baseRenderers.toMutableList().also { it.add(AssClockPumpRenderer(assHandler, startMediaTimeUs)) }.toTypedArray()
+        }
+
+    override fun createSecondaryRenderer(
+        renderer: Renderer,
+        eventHandler: Handler,
+        videoRendererEventListener: VideoRendererEventListener,
+        audioRendererEventListener: AudioRendererEventListener,
+        textRendererOutput: TextOutput,
+        metadataRendererOutput: MetadataOutput,
+    ): Renderer? =
+        base.createSecondaryRenderer(
+            renderer,
+            eventHandler,
+            videoRendererEventListener,
+            audioRendererEventListener,
+            textRendererOutput,
+            metadataRendererOutput,
+        )
+}
+
+/**
+ * Drives [AssHandler.videoTime] with the anchored + integrated media time each
+ * render loop; the handler's change-detection + every-3rd-tick throttle then
+ * paces the overlay views' renders.
+ */
+@OptIn(androidx.media3.common.util.UnstableApi::class)
+private class AssClockPumpRenderer(
+    private val assHandler: AssHandler,
+    startMediaTimeUs: Long,
+) : NoSampleRenderer() {
+    private var mediaTimeUs = startMediaTimeUs
+    private var lastRendererUs: Long? = null
+    private var loggedFirstTick = false
+
+    override fun getName(): String = "AssClockPumpRenderer"
+
+    override fun render(positionUs: Long, elapsedRealtimeUs: Long) {
+        // Deltas of the renderer position equal deltas of the media time for
+        // any constant position base — see the factory KDoc. Both directions
+        // are integrated so backward seeks track too.
+        lastRendererUs?.let { mediaTimeUs += positionUs - it }
+        lastRendererUs = positionUs
+        assHandler.videoTime = mediaTimeUs
+        if (!loggedFirstTick) {
+            // First tick proves the pump renderer was appended and is driving
+            // AssHandler.videoTime — if subtitles still don't render after
+            // this line, the remaining suspect is glyph rasterization (fonts).
+            loggedFirstTick = true
+            android.util.Log.i(TAG, "ASS clock pump started: mediaTimeUs=$mediaTimeUs")
+        }
+    }
 }
 
 /**
