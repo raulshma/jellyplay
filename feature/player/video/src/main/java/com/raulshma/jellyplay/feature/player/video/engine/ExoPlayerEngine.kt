@@ -424,6 +424,11 @@ class ExoPlayerEngine(
         }
 
         release()
+        // release() cancels engineScope, and positionFlow's EnginePositionTicker
+        // launches on that scope when the flow is first collected — a dead scope
+        // means the ticker loop never runs and the seek bar freezes at its seed
+        // position. Revive it here so load() always returns with a live scope.
+        recreateEngineScopeIfInactive()
         lastRebuildInputs = inputs
 
         val selector = DefaultTrackSelector(context)
