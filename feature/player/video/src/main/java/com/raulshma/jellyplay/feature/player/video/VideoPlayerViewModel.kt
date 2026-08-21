@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackPrefScope
 import com.raulshma.jellyplay.core.model.SegmentBehavior
@@ -727,7 +728,7 @@ class VideoPlayerViewModel @Inject constructor(
             registerPipTransport()
         }
 
-        override fun resetForNewItem(audioStreamIndex: Int?, subtitleStreamIndex: Int?) {
+        override fun resetForNewItem(selection: MediaStreamSelection) {
             autoplayController.resetForNewItem()
             _uiState.update { it.copy(autoplay = it.autoplay.copy(autoplayCancelled = false)) }
             // Coordinator fallback-latch reset — a pure latch flip that ran
@@ -735,7 +736,7 @@ class VideoPlayerViewModel @Inject constructor(
             // the old inlined body; bundled here with the other
             // synchronous-prefix writes.
             playbackSession.engineEventCoordinator.onNewItem()
-            trackSelectionHelper.setPendingStreams(audioStreamIndex, subtitleStreamIndex)
+            trackSelectionHelper.setPendingStreams(selection)
         }
 
         override fun routeToRemotePlaySession(request: LoadRequest): Boolean =
@@ -843,8 +844,8 @@ class VideoPlayerViewModel @Inject constructor(
             _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(playbackMode = mode)) }
         },
         getIncognitoModeEnabled = { cachedAggregate.videoPlayer.incognitoModeEnabled },
-        setPendingStreams = { audioStreamIndex, subtitleStreamIndex ->
-            trackSelectionHelper.setPendingStreams(audioStreamIndex, subtitleStreamIndex)
+        setPendingStreams = { selection ->
+            trackSelectionHelper.setPendingStreams(selection)
         },
         getPlaybackMode = { _uiState.value.uiPrefs.playbackMode },
         directPlayFallbackNotice = { errorText ->
@@ -962,12 +963,12 @@ class VideoPlayerViewModel @Inject constructor(
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
         getCurrentSeriesId = { playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId },
         getPlayMethod = { playerSessionManager.sessionState.value.playMethod },
-        onReloadForStreamChange = { audioStreamIndex, subtitleStreamIndex ->
+        onReloadForStreamChange = { selection ->
             // Method indirection (not a direct `playbackSession.` reference):
             // this helper's construction would otherwise mutually recurse with
             // the session's, whose own wiring reaches back into
             // trackSelectionHelper (setPendingStreams).
-            reloadForStreamChange(audioStreamIndex, subtitleStreamIndex)
+            reloadForStreamChange(selection)
         },
         playbackPreferenceResolver = playbackPreferenceResolver,
         persistRememberedTrack = { type, track ->
@@ -1652,11 +1653,11 @@ class VideoPlayerViewModel @Inject constructor(
     /**
      * Thin delegate to [PlaybackSession.reloadForStreamChange]: reloads the
      * current item at the current position with a new audio/subtitle stream
-     * index (server-origin track picks during transcoded playback — the
+     * selection (server-origin track picks during transcoded playback — the
      * server must re-issue the stream with the chosen index).
      */
-    private fun reloadForStreamChange(audioStreamIndex: Int?, subtitleStreamIndex: Int?) {
-        playbackSession.reloadForStreamChange(audioStreamIndex, subtitleStreamIndex)
+    private fun reloadForStreamChange(selection: MediaStreamSelection) {
+        playbackSession.reloadForStreamChange(selection)
     }
 
     fun resetAudioTrack() {

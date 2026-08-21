@@ -74,6 +74,14 @@ import com.composables.icons.tabler.outline.*
 private const val TAG = "SeerrRequestDialog"
 
 /**
+ * The server's anime-scoped default ([anime]) when requesting an anime series,
+ * else its regular default ([regular]) — Jellyseerr's requester falls back the
+ * same way for profiles, root folders and tags.
+ */
+private fun <T> animeDefault(isAnime: Boolean, anime: T?, regular: T?): T? =
+    if (isAnime) anime ?: regular else regular
+
+/**
  * Enhanced request dialog that mirrors the Seerr web UI request options.
  *
  * For movies: shows destination server, quality profile, root folder, tags.
@@ -86,7 +94,7 @@ fun SeerrRequestDialog(
     radarrServers: List<SeerrRadarrServiceDetail> = emptyList(),
     sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
     seasons: List<SeerrSeason> = emptyList(),
-    isAnime: Boolean = false,
+    tvIsAnime: Boolean = false,
     isLoadingServices: Boolean = false,
     isRequesting: Boolean = false,
     requestSuccess: Boolean? = null,
@@ -109,7 +117,7 @@ fun SeerrRequestDialog(
             radarrServers = radarrServers,
             sonarrServers = sonarrServers,
             seasons = seasons,
-            isAnime = isAnime,
+            tvIsAnime = tvIsAnime,
             isLoadingServices = isLoadingServices,
             isRequesting = isRequesting,
             requestSuccess = requestSuccess,
@@ -148,7 +156,7 @@ internal fun SeerrRequestPanel(
     radarrServers: List<SeerrRadarrServiceDetail> = emptyList(),
     sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
     seasons: List<SeerrSeason> = emptyList(),
-    isAnime: Boolean = false,
+    tvIsAnime: Boolean = false,
     isLoadingServices: Boolean = false,
     isRequesting: Boolean = false,
     requestSuccess: Boolean? = null,
@@ -162,7 +170,11 @@ internal fun SeerrRequestPanel(
     ) -> Unit = { _, _, _, _, _ -> },
     onDismiss: () -> Unit = {},
 ) {
+    // The media-type gates live HERE — the one place that owns item.mediaType —
+    // so callers pass the raw seasons list and tvIsAnime flag undecorated.
     val isTv = item.mediaType.equals("tv", ignoreCase = true)
+    val isAnime = isTv && tvIsAnime
+    val effectiveSeasons = if (isTv) seasons else emptyList()
 
     // State for selections
     var selectedServerIndex by remember(item.id) { mutableStateOf(0) }
@@ -178,11 +190,11 @@ internal fun SeerrRequestPanel(
     val currentProfiles = if (isTv) currentSonarrServer?.profiles else currentRadarrServer?.profiles
     val currentRootFolders = if (isTv) currentSonarrServer?.rootFolders else currentRadarrServer?.rootFolders
     val currentTags = if (isTv) currentSonarrServer?.tags else currentRadarrServer?.tags
-    val availableSeasonNumbers = remember(seasons) {
-        seasons.mapNotNull { season -> season.seasonNumber }
+    val availableSeasonNumbers = remember(effectiveSeasons) {
+        effectiveSeasons.mapNotNull { season -> season.seasonNumber }
     }
-    val sortedSeasons = remember(seasons) {
-        seasons.sortedBy { it.seasonNumber }
+    val sortedSeasons = remember(effectiveSeasons) {
+        effectiveSeasons.sortedBy { it.seasonNumber }
     }
 
     // Default server per Jellyseerr: isDefault && !is4k (the app never requests
@@ -204,8 +216,9 @@ internal fun SeerrRequestPanel(
     // Prefer nested server.defaults (from /service/ endpoint) over top-level fields;
     // anime series use the per-server anime defaults like Jellyseerr's requester
     LaunchedEffect(currentProfiles, isAnime) {
+        val sonarrDefaults = currentSonarrServer?.server
         val defaultProfileId = if (isTv) {
-            currentSonarrServer?.server.let { s -> if (isAnime) s?.activeAnimeProfileId ?: s?.activeProfileId else s?.activeProfileId }
+            animeDefault(isAnime, sonarrDefaults?.activeAnimeProfileId, sonarrDefaults?.activeProfileId)
                 ?: currentSonarrServer?.activeProfileId
         } else {
             currentRadarrServer?.server?.activeProfileId ?: currentRadarrServer?.activeProfileId
@@ -215,8 +228,9 @@ internal fun SeerrRequestPanel(
     }
 
     LaunchedEffect(currentRootFolders, isAnime) {
+        val sonarrDefaults = currentSonarrServer?.server
         val defaultDir = if (isTv) {
-            currentSonarrServer?.server.let { s -> if (isAnime) s?.activeAnimeDirectory ?: s?.activeDirectory else s?.activeDirectory }
+            animeDefault(isAnime, sonarrDefaults?.activeAnimeDirectory, sonarrDefaults?.activeDirectory)
                 ?: currentSonarrServer?.activeDirectory
         } else {
             currentRadarrServer?.server?.activeDirectory ?: currentRadarrServer?.activeDirectory
@@ -234,19 +248,23 @@ internal fun SeerrRequestPanel(
         val key = "$serverId:$isAnime"
         if (key == appliedTagsKey) return@LaunchedEffect
         appliedTagsKey = key
-        val defaultTags = when {
-            isTv && isAnime -> currentSonarrServer?.server?.activeAnimeTags?.takeIf { it.isNotEmpty() }
-                ?: currentSonarrServer?.server?.activeTags
-            isTv -> currentSonarrServer?.server?.activeTags
-            else -> currentRadarrServer?.server?.activeTags
+        val sonarrDefaults = currentSonarrServer?.server
+        val defaultTags = if (isTv) {
+            animeDefault(
+                isAnime,
+                sonarrDefaults?.activeAnimeTags?.takeIf { it.isNotEmpty() },
+                sonarrDefaults?.activeTags,
+            )
+        } else {
+            currentRadarrServer?.server?.activeTags
         }
         selectedTags.clear()
         if (!defaultTags.isNullOrEmpty()) selectedTags.addAll(defaultTags)
     }
 
     // Select all seasons by default when seasons become available
-    LaunchedEffect(seasons) {
-        if (seasons.isNotEmpty() && selectedSeasonNumbers.isEmpty()) {
+    LaunchedEffect(effectiveSeasons) {
+        if (effectiveSeasons.isNotEmpty() && selectedSeasonNumbers.isEmpty()) {
             selectAllSeasons = true
         }
     }
@@ -484,7 +502,7 @@ internal fun SeerrRequestPanel(
 
                     // Season Selection (TV only)
                     if (isTv) {
-                        if (seasons.isNotEmpty()) {
+                        if (effectiveSeasons.isNotEmpty()) {
                             item {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -632,7 +650,7 @@ internal fun SeerrRequestPanel(
 
                                     onConfirm(serverId, profileId, rootFolder, tags, resolvedSeasons)
                                 },
-                                enabled = !isRequesting && (!isTv || (seasons.isNotEmpty() && (selectAllSeasons || selectedSeasonNumbers.isNotEmpty()))),
+                                enabled = !isRequesting && (!isTv || (effectiveSeasons.isNotEmpty() && (selectAllSeasons || selectedSeasonNumbers.isNotEmpty()))),
                                 shape = ShapeCache.smooth12,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = colorScheme.primary,

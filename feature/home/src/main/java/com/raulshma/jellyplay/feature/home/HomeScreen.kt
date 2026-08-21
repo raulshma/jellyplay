@@ -718,14 +718,14 @@ private fun MainHomeContent(
 
         SeerrRequestDialog(
             item = item,
-            radarrServers = state.seerrRequestState.radarrServers,
-            sonarrServers = state.seerrRequestState.sonarrServers,
-            seasons = if (item.mediaType.equals("tv", ignoreCase = true)) state.seerrRequestState.tvSeasons else emptyList(),
-            isAnime = item.mediaType.equals("tv", ignoreCase = true) && state.seerrRequestState.tvIsAnime,
-            isLoadingServices = state.seerrRequestState.isLoadingServices,
-            isRequesting = state.seerrRequestState.result?.isLoading == true,
-            requestSuccess = state.seerrRequestState.result?.success,
-            requestError = state.seerrRequestState.result?.error,
+            radarrServers = state.seerrRequestState.snapshot.radarrServers,
+            sonarrServers = state.seerrRequestState.snapshot.sonarrServers,
+            seasons = state.seerrRequestState.snapshot.tvSeasons,
+            tvIsAnime = state.seerrRequestState.snapshot.tvIsAnime,
+            isLoadingServices = state.seerrRequestState.snapshot.isLoadingServices,
+            isRequesting = state.seerrRequestState.snapshot.requestResult?.isLoading == true,
+            requestSuccess = state.seerrRequestState.snapshot.requestResult?.success,
+            requestError = state.seerrRequestState.snapshot.requestResult?.error,
             onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
                 viewModel.onEvent(HomeUiEvent.RequestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags))
             },

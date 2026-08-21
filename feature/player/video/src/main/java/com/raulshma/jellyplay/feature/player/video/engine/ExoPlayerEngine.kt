@@ -309,7 +309,7 @@ class ExoPlayerEngine(
                     // Diagnostics for the transcode side-load render chain: the
                     // flip plus overlay presence pinpoint where the pipeline
                     // stops when subtitles don't show.
-                    Log.i(
+                    Log.d(
                         TAG,
                         "ASS render toggle: activeTrackIsAss=$newlyAss, overlayView=${assOverlayView != null}",
                     )
@@ -1892,7 +1892,7 @@ private class AssClockPumpRenderer(
             // AssHandler.videoTime — if subtitles still don't render after
             // this line, the remaining suspect is glyph rasterization (fonts).
             loggedFirstTick = true
-            Log.i(TAG, "ASS clock pump started: mediaTimeUs=$mediaTimeUs")
+            Log.d(TAG, "ASS clock pump started: mediaTimeUs=$mediaTimeUs")
         }
     }
 }

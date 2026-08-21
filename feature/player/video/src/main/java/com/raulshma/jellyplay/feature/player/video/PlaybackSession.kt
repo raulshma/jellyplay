@@ -189,8 +189,8 @@ internal class PlaybackSession(
     private val setUiPlaybackMode: (PlaybackMode) -> Unit,
     /** Incognito gate for the session-owned stop-report. */
     private val getIncognitoModeEnabled: () -> Boolean,
-    /** Feeds the track-selection helper's pending stream indices before a stream-change reload. */
-    private val setPendingStreams: (audioStreamIndex: Int?, subtitleStreamIndex: Int?) -> Unit,
+    /** Feeds the track-selection helper's pending stream selection before a stream-change reload. */
+    private val setPendingStreams: (selection: MediaStreamSelection?) -> Unit,
     /** Synchronous playback-mode read feeding the coordinator's fallback latch policy. */
     private val getPlaybackMode: () -> PlaybackMode,
     /** Localized FORCE_DIRECT_PLAY fallback notice for [SessionEvent.InformUser]. */
@@ -459,8 +459,10 @@ internal class PlaybackSession(
         hooks.rearmTransports()
         ensureEngineEventCoordinatorActive()
         hooks.resetForNewItem(
-            audioStreamIndex = request.audioStreamIndex,
-            subtitleStreamIndex = request.subtitleStreamIndex,
+            MediaStreamSelection(
+                audioStreamIndex = request.audioStreamIndex,
+                subtitleStreamIndex = request.subtitleStreamIndex,
+            ),
         )
         // New item = new session: drop the seek latch and clear the Stop
         // dedup latch so the upcoming session's Stop can be reported.
@@ -582,7 +584,7 @@ internal class PlaybackSession(
         // re-side-loads subtitles, so seeding the pending indices (which also
         // clears the held-selection latches) lets the ladder restore the
         // selection on the new engine's first track emissions.
-        setPendingStreams(selection?.audioStreamIndex, selection?.subtitleStreamIndex)
+        setPendingStreams(selection)
         val resolved = playerSessionManager.reloadPlayback(
             mode = mode,
             quality = quality,
@@ -639,7 +641,7 @@ internal class PlaybackSession(
             playbackStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
             reportCurrentPlaybackStopped()
             progressReporter.cancelJobs()
-            setPendingStreams(selection?.audioStreamIndex, selection?.subtitleStreamIndex)
+            setPendingStreams(selection)
             playerSessionManager.reloadPlayback(
                 PlaybackMode.FORCE_TRANSCODE,
                 quality,
@@ -701,17 +703,18 @@ internal class PlaybackSession(
 
     /**
      * Reload playback for the current item at the current position with a new
-     * audio/subtitle stream index. Used when the user picks a server-origin
-     * audio or subtitle track during transcoded playback — mpv cannot switch
-     * audio in-place on an HLS manifest, and embedded subs aren't in the
-     * transcode, so the server must re-issue the stream with the chosen index.
+     * audio/subtitle stream [selection]. Used when the user picks a
+     * server-origin audio or subtitle track during transcoded playback — mpv
+     * cannot switch audio in-place on an HLS manifest, and embedded subs aren't
+     * in the transcode, so the server must re-issue the stream with the chosen
+     * index.
      */
-    fun reloadForStreamChange(audioStreamIndex: Int?, subtitleStreamIndex: Int?) {
+    fun reloadForStreamChange(selection: MediaStreamSelection) {
         if (playerSessionManager.engine == null) return
         val positionMs = getReportPositionMs()
         scope.launch {
-            setPendingStreams(audioStreamIndex, subtitleStreamIndex)
-            playerSessionManager.reloadForStreamChange(audioStreamIndex, subtitleStreamIndex, positionMs)
+            setPendingStreams(selection)
+            playerSessionManager.reloadForStreamChange(selection, positionMs)
         }
     }
 
@@ -1170,9 +1173,9 @@ internal interface SessionLifecycleHooks {
      * Synchronous-prefix resets for the new item — all direct writes, none
      * pipelined: the autoplay controller reset, the autoplay-cancelled clear,
      * the coordinator's new-item fallback-latch reset, and the pending
-     * audio/subtitle stream indices for the track selection helper.
+     * audio/subtitle stream selection for the track selection helper.
      */
-    fun resetForNewItem(audioStreamIndex: Int?, subtitleStreamIndex: Int?)
+    fun resetForNewItem(selection: MediaStreamSelection)
 
     /**
      * "Play On" routing early-return: when a Jellyfin remote session is

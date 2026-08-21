@@ -68,7 +68,7 @@ class TrackSelectionHelperTest {
             getCurrentItemId = { "item1" },
             getCurrentSeriesId = { null },
             getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
-            onReloadForStreamChange = { _, _ -> },
+            onReloadForStreamChange = { },
             playbackPreferenceResolver = noOpResolver(),
             scope = scope,
         )
@@ -99,7 +99,7 @@ class TrackSelectionHelperTest {
         resolver: ItemPlaybackPreferenceResolver = noOpResolver(),
         getPlayMethod: () -> com.raulshma.jellyplay.core.model.PlayMethod =
             { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
-        onReloadForStreamChange: (Int?, Int?) -> Unit = { _, _ -> },
+        onReloadForStreamChange: (MediaStreamSelection) -> Unit = { },
     ) = TrackSelectionHelper(
         engineStore = engineStore,
         subtitleStore = subtitleStore,
@@ -264,7 +264,7 @@ class TrackSelectionHelperTest {
             mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
             mediaTrack(1, "Spanish", "spa", TrackType.AUDIO, isSelected = false),
         )
-        helper.setPendingStreams(subtitleIndex = null, audioIndex = 1)
+        helper.setPendingStreams(MediaStreamSelection(audioStreamIndex = 1))
         helper.updateTracksFromEngine()
 
         verify { engine.selectTrack(TrackType.AUDIO, 1) }
@@ -272,7 +272,7 @@ class TrackSelectionHelperTest {
 
     @Test
     fun updateTracksFromEngine_pendingAudioNegativeOne_selectsDefault() {
-        helper.setPendingStreams(subtitleIndex = null, audioIndex = -1)
+        helper.setPendingStreams(MediaStreamSelection(audioStreamIndex = -1))
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
         )
@@ -431,7 +431,7 @@ class TrackSelectionHelperTest {
             mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false, id = "offline:0"),
             mediaTrack(1, "Spanish", "spa", TrackType.SUBTITLE, isSelected = false, id = "offline:2"),
         )
-        helper.setPendingStreams(subtitleIndex = 2, audioIndex = null)
+        helper.setPendingStreams(MediaStreamSelection(subtitleStreamIndex = 2))
         helper.updateTracksFromEngine()
 
         verify { engine.selectTrack(TrackType.SUBTITLE, 1) }
@@ -496,7 +496,7 @@ class TrackSelectionHelperTest {
 
     @Test
     fun setPendingStreams_storesIndicesForLaterConsumption() {
-        helper.setPendingStreams(subtitleIndex = 2, audioIndex = 3)
+        helper.setPendingStreams(MediaStreamSelection(subtitleStreamIndex = 2, audioStreamIndex = 3))
         // Indices are consumed inside updateTracksFromEngine; verify no crash and state populated.
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
@@ -669,7 +669,7 @@ class TrackSelectionHelperTest {
         var reloadedSub: Int? = null
         helper = makeHelper(
             getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE },
-            onReloadForStreamChange = { _, sub -> reloadedSub = sub },
+            onReloadForStreamChange = { selection -> reloadedSub = selection.subtitleStreamIndex },
         )
         availableTracks.value = listOf(
             mediaTrack(0, "English - Ass", "eng", TrackType.SUBTITLE, isSelected = false),
@@ -693,7 +693,7 @@ class TrackSelectionHelperTest {
         )
         helper = makeHelper(
             getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE },
-            onReloadForStreamChange = { _, sub -> reloadedSub = sub },
+            onReloadForStreamChange = { selection -> reloadedSub = selection.subtitleStreamIndex },
         )
         availableTracks.value = listOf(
             // Label/language deliberately unlike the server stream so the
@@ -727,7 +727,7 @@ class TrackSelectionHelperTest {
         )
         helper = makeHelper(
             getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE },
-            onReloadForStreamChange = { audio, _ -> reloadedAudio = audio },
+            onReloadForStreamChange = { selection -> reloadedAudio = selection.audioStreamIndex },
         )
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),

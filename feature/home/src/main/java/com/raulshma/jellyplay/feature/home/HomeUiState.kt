@@ -7,12 +7,9 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.data.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
-import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
-import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 
 import com.raulshma.jellyplay.core.model.UserInfo
 
@@ -134,15 +131,16 @@ data class HomeSearchState(
     // Context needed to resolve the registry's @StringRes ids.
 }
 
+/**
+ * The request-sheet slice: the locally-chosen item plus the shared holder's
+ * [SeerrRequestSnapshot] (request result, services, seasons, anime flag).
+ * The snapshot is embedded rather than field-mirrored so the
+ * SeerrRequestStateHolder fold stays a one-line copy — no per-field hand-sync.
+ */
 @Immutable
 data class SeerrRequestState(
     val requestItem: SeerrSearchItem? = null,
-    val result: SeerrRequestResult? = null,
-    val radarrServers: List<SeerrRadarrServiceDetail> = emptyList(),
-    val sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
-    val isLoadingServices: Boolean = false,
-    val tvSeasons: List<SeerrSeason> = emptyList(),
-    val tvIsAnime: Boolean = false,
+    val snapshot: SeerrRequestSnapshot = SeerrRequestSnapshot(),
 )
 
 @Immutable

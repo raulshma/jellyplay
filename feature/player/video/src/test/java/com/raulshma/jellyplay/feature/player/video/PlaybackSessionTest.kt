@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackMode
@@ -123,7 +124,7 @@ class PlaybackSessionTest {
             stages += "rearmTransports"
         }
 
-        override fun resetForNewItem(audioStreamIndex: Int?, subtitleStreamIndex: Int?) {
+        override fun resetForNewItem(selection: MediaStreamSelection) {
             stages += "resetForNewItem"
         }
 
@@ -384,7 +385,7 @@ class PlaybackSessionTest {
             getStreamingQuality = { StreamingQuality.AUTO },
             setUiPlaybackMode = { uiPlaybackModes += it },
             getIncognitoModeEnabled = { false },
-            setPendingStreams = { _, _ -> },
+            setPendingStreams = { _ -> },
             getPlaybackMode = playbackMode,
             directPlayFallbackNotice = { error -> "Falling back to transcode: $error" },
             passOutHours = flowOf(0),

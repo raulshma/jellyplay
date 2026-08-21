@@ -659,7 +659,7 @@ class HomeViewModelTest {
         viewModel.onEvent(HomeUiEvent.ClearRequestResult)
         runCurrent()
 
-        org.junit.Assert.assertNull(viewModel.uiState.value.seerrRequestState.result)
+        org.junit.Assert.assertNull(viewModel.uiState.value.seerrRequestState.snapshot.requestResult)
         stopPeriodicRefresh()
     }
 

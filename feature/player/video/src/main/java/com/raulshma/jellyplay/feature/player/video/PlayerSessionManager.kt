@@ -657,8 +657,8 @@ class PlayerSessionManager(
 
     /**
      * Reload playback for the current item at [currentPositionMs] with a new
-     * [audioStreamIndex] and/or [subtitleStreamIndex]. Used when the user
-     * selects a server-origin audio/subtitle track during transcoded playback
+     * audio/subtitle stream [selection]. Used when the user selects a
+     * server-origin audio/subtitle track during transcoded playback
      * — mpv cannot switch audio in-place on an HLS manifest, and embedded subs
      * aren't delivered in the transcode, so the server must re-issue the
      * stream with the chosen index baked in (standard Jellyfin PlaybackInfo
@@ -670,8 +670,7 @@ class PlayerSessionManager(
      * play method.
      */
     suspend fun reloadForStreamChange(
-        audioStreamIndex: Int?,
-        subtitleStreamIndex: Int?,
+        selection: MediaStreamSelection,
         currentPositionMs: Long,
     ): ResolvedPlayback? {
         val itemId = _sessionState.value.currentItemId ?: return null
@@ -685,8 +684,8 @@ class PlayerSessionManager(
             itemId = itemId,
             mediaSourceId = sourceId,
             startTimeTicks = currentPositionMs * 10_000,
-            audioStreamIndex = audioStreamIndex,
-            subtitleStreamIndex = subtitleStreamIndex,
+            audioStreamIndex = selection.audioStreamIndex,
+            subtitleStreamIndex = selection.subtitleStreamIndex,
             maxStreamingBitrateBits = maxBitrate,
             mode = mode,
             playerType = playerType,

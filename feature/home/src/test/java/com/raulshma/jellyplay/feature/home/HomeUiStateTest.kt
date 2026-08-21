@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.home
 
+import com.raulshma.jellyplay.core.data.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OfflineMode
 import org.junit.Assert.assertEquals
@@ -131,25 +132,28 @@ class HomeUiStateTest {
     fun defaultSeerrRequestState_hasNoItem() {
         val state = SeerrRequestState()
         assertNull(state.requestItem)
-        assertNull(state.result)
-        assertTrue(state.radarrServers.isEmpty())
-        assertTrue(state.sonarrServers.isEmpty())
-        assertFalse(state.isLoadingServices)
-        assertTrue(state.tvSeasons.isEmpty())
+        assertNull(state.snapshot.requestResult)
+        assertTrue(state.snapshot.radarrServers.isEmpty())
+        assertTrue(state.snapshot.sonarrServers.isEmpty())
+        assertFalse(state.snapshot.isLoadingServices)
+        assertTrue(state.snapshot.tvSeasons.isEmpty())
     }
 
     @Test
     fun seerrRequestState_copy_updatesIsLoadingServices() {
-        val state = SeerrRequestState().copy(isLoadingServices = true)
-        assertTrue(state.isLoadingServices)
+        val state = SeerrRequestState().copy(snapshot = SeerrRequestSnapshot(isLoadingServices = true))
+        assertTrue(state.snapshot.isLoadingServices)
     }
 
     @Test
     fun seerrRequestState_copy_clearsResult() {
-        val state = SeerrRequestState(
-            result = com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult(success = true)
-        ).copy(result = null)
-        assertNull(state.result)
+        val withResult = SeerrRequestState(
+            snapshot = SeerrRequestSnapshot(
+                requestResult = com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult(success = true),
+            ),
+        )
+        val state = withResult.copy(snapshot = withResult.snapshot.copy(requestResult = null))
+        assertNull(state.snapshot.requestResult)
     }
 
     @Test

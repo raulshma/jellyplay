@@ -501,23 +501,13 @@ class HomeViewModel @Inject constructor(
         // observes a single object: the holder's snapshot flow already
         // coalesces its six sub-flows into one emission, so a dialog-open
         // burst (services + seasons firing together) lands as a single
-        // _uiState update. `requestItem` is set separately
-        // (selectSeerrRequestItem) and is preserved by re-copying the
-        // existing value over the merged slice.
+        // _uiState update. The snapshot is embedded as-is (no per-field
+        // mirror); `requestItem` is set separately (selectSeerrRequestItem)
+        // and survives the merge because only the snapshot slice changes.
         launch {
             seerrRequestStateHolder.snapshot.collect { snap ->
                 _uiState.update {
-                    it.copy(
-                        seerrRequestState = SeerrRequestState(
-                            requestItem = it.seerrRequestState.requestItem,
-                            result = snap.requestResult,
-                            radarrServers = snap.radarrServers,
-                            sonarrServers = snap.sonarrServers,
-                            isLoadingServices = snap.isLoadingServices,
-                            tvSeasons = snap.tvSeasons,
-                            tvIsAnime = snap.tvIsAnime,
-                        )
-                    )
+                    it.copy(seerrRequestState = it.seerrRequestState.copy(snapshot = snap))
                 }
             }
         }

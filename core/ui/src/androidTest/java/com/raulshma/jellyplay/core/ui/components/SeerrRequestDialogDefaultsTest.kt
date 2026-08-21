@@ -210,7 +210,7 @@ class SeerrRequestDialogDefaultsTest {
                     item = SeerrSearchItem(id = 46, mediaType = "tv", name = "Anime Show"),
                     sonarrServers = servers,
                     seasons = emptyList(),
-                    isAnime = true,
+                    tvIsAnime = true,
                     onDismiss = {},
                 )
             }
