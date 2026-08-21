@@ -64,7 +64,11 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
+import com.raulshma.jellyplay.feature.player.video.state.GesturePrefsState
 import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
+import com.raulshma.jellyplay.feature.player.video.state.SegmentState
+import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -2981,8 +2985,9 @@ class VideoPlayerViewModel @Inject constructor(
                 // (seek window, gesture toggle, default speed, swipe cap,
                 // brightness flag + level); the runtime leaves (hold-speed
                 // toggle/multiplier/active flag, indicator side, frame-rate
-                // matching, refresh-rate mode) reset to defaults.
-                gestures = currentState.gestures.copy(
+                // matching, refresh-rate mode) reset to defaults. Fresh slice —
+                // same tight semantics as uiPrefs above.
+                gestures = GesturePrefsState(
                     seekDurationMs = currentState.gestures.seekDurationMs,
                     gesturesEnabled = currentState.gestures.gesturesEnabled,
                     defaultSpeed = currentState.gestures.defaultSpeed,
@@ -2992,18 +2997,18 @@ class VideoPlayerViewModel @Inject constructor(
                 ),
                 // segmentState: only the behaviors carry across an item switch —
                 // the per-item segment list resets to default (empty).
-                segmentState = currentState.segmentState.copy(
+                segmentState = SegmentState(
                     segmentBehaviors = currentState.segmentState.segmentBehaviors,
                 ),
                 // episodes: only the browser feature toggle carries across an
                 // item switch — adjacency, season/episode lists, season id and
                 // the loading flag are per-item and reset to defaults.
-                episodes = currentState.episodes.copy(
+                episodes = EpisodeBrowserState(
                     videoEpisodeBrowserEnabled = currentState.episodes.videoEpisodeBrowserEnabled,
                 ),
                 // videoFx: only the TV zoom carries across an item switch —
                 // the per-item effects and both aspect fields reset to defaults.
-                videoFx = currentState.videoFx.copy(tvZoomModePercent = currentState.videoFx.tvZoomModePercent),
+                videoFx = VideoFxState(tvZoomModePercent = currentState.videoFx.tvZoomModePercent),
                 subtitleStyle = currentState.subtitleStyle,
                 // Reset per-item dialogue boost so it doesn't bleed into the next
                 // item before the resolver re-applies the per-item rule. (The one
