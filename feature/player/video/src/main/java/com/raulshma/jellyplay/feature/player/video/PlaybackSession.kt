@@ -2,9 +2,12 @@ package com.raulshma.jellyplay.feature.player.video
 
 import androidx.lifecycle.SavedStateHandle
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -114,10 +117,16 @@ internal fun resolveResumeTicks(
  * release split — the session-owned teardown half runs FIRST, then the
  * ViewModel-owned half back-to-back via the
  * [SessionLifecycleHooks.releaseInternalsVmPart] hook, and [release] owns the
- * final stop-report + pending-seek join on the release scope. Every
- * ViewModel-bound slice stays behind [SessionLifecycleHooks] or a constructor
- * lambda; only cinema sequencing and the mini-player reclaim body remain
- * VM-side until B4.
+ * final stop-report + pending-seek join on the release scope. Step B4 moved
+ * the cinema-intro sequencing ([beginCinemaMode] / [loadCinemaIntro] /
+ * [advanceCinemaIntro] + the [cinemaIntroContext] latch — the uiState write
+ * goes through the [setCinemaIntroState] seam and the post-intro recursion
+ * is a plain internal call to [initialize]), the mini-player reclaim BODY
+ * ([loadReclaimedEngine]; the gate stays a
+ * [SessionLifecycleHooks.tryReclaimMiniPlayer] hook) and
+ * [preSeedPlayhead] (display write via the [seedDisplayedPositionMs] seam).
+ * Every ViewModel-bound slice stays behind [SessionLifecycleHooks] or a
+ * constructor lambda; the session never touches the ui state.
  *
  * Construction contract:
  * - the ViewModel's [CoroutineScope] is INJECTED, never constructed here.
@@ -134,13 +143,15 @@ internal fun resolveResumeTicks(
  *   and hooks own every ui-state touch — and injected here as an object: the
  *   session owns when a load starts, never how the pipeline reaches the ui
  *   state;
- * - the same no-ui-state rule applies to the B2/B3 additions: the
+ * - the same no-ui-state rule applies to the B2–B4 additions: the
  *   media-session controller is injected as an already-constructed instance,
  *   the process-death position persistence is reached ONLY through the
  *   [SessionPositionStore] seam (the ViewModel keeps the handle solely to
  *   build the store), and every value the moved code used to read from (or
  *   write into) the ui state is supplied as a parameter or a getter/setter
- *   lambda owned by the VM.
+ *   lambda owned by the VM (B4: the cinema intro uiState write through
+ *   [setCinemaIntroState] and the playhead display write through
+ *   [seedDisplayedPositionMs]).
  */
 internal class PlaybackSession(
     val scope: CoroutineScope,
@@ -155,6 +166,20 @@ internal class PlaybackSession(
     private val playbackRepository: PlaybackRepository,
     /** Offline-mirror writes for the seek-coalesced + throttled position persists. */
     private val offlinePlaybackFacade: OfflinePlaybackFacade,
+    /** Media-detail fetch for the mini-player reclaim body (since B4). */
+    private val mediaRepository: MediaRepository,
+    /**
+     * The uiState `cinemaIntroState` write seam (since B4): every write the
+     * cinema sequencing needs flows through this VM-supplied setter — the
+     * session never touches the ui state. Nullable so the same seam both
+     * shows ([loadCinemaIntro]) and clears ([advanceCinemaIntro]) the intro.
+     */
+    private val setCinemaIntroState: (CinemaIntroUiState?) -> Unit,
+    /**
+     * Writes the VM-owned high-frequency position display flow — the write
+     * seam behind [preSeedPlayhead] (since B4).
+     */
+    private val seedDisplayedPositionMs: (Long) -> Unit,
     /** The process-death resume-position persistence (SavedStateHandle behind a seam). */
     private val positionStore: SessionPositionStore,
     /** Current in-memory streaming quality (the VM's ui-prefs mirror). */
@@ -412,8 +437,13 @@ internal class PlaybackSession(
      *    by the outgoing session's stop-report ([reportCurrentPlaybackStopped],
      *    session-side since B3, directly after the flag read);
      * 8. cancel any in-flight [loadJob];
-     * 9. mini-player reclaim early-return ([SessionLifecycleHooks.tryReclaimMiniPlayer]
-     *    + [SessionLifecycleHooks.loadReclaimedEngine]);
+     * 9. mini-player reclaim early-return: the GATE stays a VM hook
+     *    ([SessionLifecycleHooks.tryReclaimMiniPlayer] — mini-player state
+     *    knowledge), but the body ([loadReclaimedEngine]) is session-side
+     *    since B4: veil lift via [SessionLifecycleHooks.onMiniPlayerReclaimed]
+     *    at exactly its old position (synchronously before the body launch),
+     *    then detail fetch → engine bind → media session → tracking restart →
+     *    hydration via [SessionLifecycleHooks.hydrateReclaimedItem];
      * 10. [SessionLifecycleHooks.releaseMiniPlayerState];
      * 11. per-item teardown, split at B3 into two back-to-back halves (same
      *     synchronous call chain, no dispatch hop between them — an
@@ -471,7 +501,7 @@ internal class PlaybackSession(
         loadJob?.cancel()
 
         hooks.tryReclaimMiniPlayer(request.itemId)?.let { reclaimed ->
-            loadJob = hooks.loadReclaimedEngine(reclaimed, request.itemId)
+            loadJob = loadReclaimedEngine(reclaimed, request.itemId)
             return loadJob!!
         }
 
@@ -658,6 +688,145 @@ internal class PlaybackSession(
         }
     }
 
+    // ── Mini-player reclaim (body moved from the VM at B4) ──────────────────
+
+    /**
+     * Load coroutine behind the mini-player-reclaim routing early-return in
+     * [initialize]: binds the already-playing reclaimed engine to the session
+     * manager and rebuilds its session bookkeeping (media session, tracking,
+     * segments, episodes). Playback is continuous — no load screen, no
+     * [SessionLoadPipeline] run (the engine never reloads).
+     *
+     * The GATE ([SessionLifecycleHooks.tryReclaimMiniPlayer]) stays a VM hook;
+     * the two uiState/controller-bound slices of the old body stay VM-side at
+     * exactly their old positions: the loading-veil lift
+     * ([SessionLifecycleHooks.onMiniPlayerReclaimed], synchronously before the
+     * body launch) and the post-bind hydration
+     * ([SessionLifecycleHooks.hydrateReclaimedItem]).
+     */
+    internal fun loadReclaimedEngine(
+        reclaimed: MediaEngine,
+        itemId: String,
+    ): Job {
+        // Reclaim promotes an already-playing mini-player engine to
+        // fullscreen — playback is continuous, so no load screen.
+        hooks.onMiniPlayerReclaimed()
+        return scope.launch {
+            val detailResult = mediaRepository.getMediaDetail(itemId)
+            val detail = detailResult.getOrNull()
+            if (detail != null) {
+                playerSessionManager.bindReclaimedEngine(reclaimed, itemId, detail)
+                val sessionState = playerSessionManager.sessionState.value
+                mediaSessionController.createForItem(
+                    itemId,
+                    sessionState.title,
+                    sessionState.subtitle,
+                )
+                progressReporter.startPositionTracking()
+                progressReporter.startProgressReporting()
+                hooks.hydrateReclaimedItem(itemId, detail)
+            }
+        }
+    }
+
+    // ── Cinema Mode pre-roll sequencing (moved from the VM at B4) ────────────
+
+    /**
+     * Active Cinema Mode pre-roll context. Non-null only between the moment
+     * intros are queued ([beginCinemaMode]) and the moment the main feature
+     * begins loading. Captures the original [initialize] arguments so the main
+     * feature can be resumed once all intros have been consumed (or skipped).
+     */
+    internal data class CinemaIntroContext(
+        val mainItemId: String,
+        val mainMediaSourceId: String?,
+        val mainStartPositionTicks: Long,
+        val mainSubtitleStreamIndex: Int?,
+        val mainAudioStreamIndex: Int?,
+        val intros: List<MediaItem>,
+        val currentIndex: Int,
+    )
+
+    // @Volatile: written by the session load launch (beginCinemaMode, reached
+    // through the pipeline's beginCinemaMode hook) + advanceCinemaIntro, read
+    // from the VM (handlePlaybackEnded / skipIntro / the reporter's
+    // end-of-media callback / the setVideoEffects per-item persist gate), and
+    // cleared by the VM-part teardown at exactly its old slot — see
+    // [SessionLifecycleHooks.releaseInternalsVmPart].
+    @Volatile
+    internal var cinemaIntroContext: CinemaIntroContext? = null
+
+    /**
+     * Cinema Mode take-over: queues the pre-roll [intros] and loads the first
+     * one. Invoked by the ViewModel's `beginCinemaMode` pipeline hook — the
+     * session owns the whole sequencing (context + loads + advance) since B4.
+     */
+    internal fun beginCinemaMode(intros: List<MediaItem>, request: LoadRequest) {
+        cinemaIntroContext = CinemaIntroContext(
+            mainItemId = request.itemId,
+            mainMediaSourceId = request.mediaSourceId,
+            mainStartPositionTicks = request.startPositionTicks,
+            mainSubtitleStreamIndex = request.subtitleStreamIndex,
+            mainAudioStreamIndex = request.audioStreamIndex,
+            intros = intros,
+            currentIndex = 0,
+        )
+        loadCinemaIntro(intros.first())
+    }
+
+    private fun loadCinemaIntro(intro: MediaItem) {
+        val context = cinemaIntroContext ?: return
+        scope.launch {
+            setCinemaIntroState(
+                CinemaIntroUiState(
+                    title = intro.name.ifBlank { "Intro" },
+                    currentIndex = context.currentIndex + 1,
+                    totalCount = context.intros.size,
+                )
+            )
+            // Pre-roll intros are not part of the user's library history — skip
+            // server-side playback reporting and segment/next-episode/trickplay
+            // bookkeeping for them.
+            playerSessionManager.loadMedia(intro.id, null, 0L)
+            mediaSessionController.createForItem(
+                intro.id,
+                playerSessionManager.sessionState.value.title,
+                playerSessionManager.sessionState.value.subtitle,
+            )
+            progressReporter.startPositionTracking()
+        }
+    }
+
+    /**
+     * Advance to the next pre-roll intro, or — once all intros are exhausted —
+     * resume normal playback of the main feature. Idempotent: callers may invoke
+     * this on either an end-of-playback callback or an explicit "skip" tap.
+     */
+    internal fun advanceCinemaIntro() {
+        val context = cinemaIntroContext ?: return
+        val nextIndex = context.currentIndex + 1
+        if (nextIndex < context.intros.size) {
+            cinemaIntroContext = context.copy(currentIndex = nextIndex)
+            loadCinemaIntro(context.intros[nextIndex])
+            return
+        }
+        // Out of intros — restore the main feature. Clear cinema state first so
+        // the recursive initialize call cannot re-enter cinema mode.
+        cinemaIntroContext = null
+        setCinemaIntroState(null)
+        progressReporter.cancelJobs()
+        initialize(
+            LoadRequest(
+                itemId = context.mainItemId,
+                mediaSourceId = context.mainMediaSourceId,
+                startPositionTicks = context.mainStartPositionTicks,
+                allowCinemaMode = false,
+                subtitleStreamIndex = context.mainSubtitleStreamIndex,
+                audioStreamIndex = context.mainAudioStreamIndex,
+            )
+        )
+    }
+
     // ── Reporting + position persistence (moved from the VM at B3) ───────────
 
     /**
@@ -818,6 +987,25 @@ internal class PlaybackSession(
     }
 
     /**
+     * Pre-seeds the playhead with the resolved start position so the seek bar
+     * reflects where playback will resume the instant the new item opens —
+     * instead of staying at 0 until the engine emits its first position tick
+     * while playing (which for MPV + slow buffering can take 20-30s, and with
+     * duration == 0 the bar renders its empty branch anyway). Reached through
+     * the pipeline's `onPlayheadSeeded` output with the RESOLVED ticks
+     * (explicit request ticks or the offline-mirror resume they resolve to);
+     * mirrors `seekTo`'s synchronous display write. Display-only: written
+     * directly through the [seedDisplayedPositionMs] seam, not via the
+     * progress reporter, so it reports nothing to the server before playback
+     * actually begins. (Moved from the VM at B4.)
+     */
+    fun preSeedPlayhead(startPositionTicks: Long) {
+        if (startPositionTicks > 0) {
+            seedDisplayedPositionMs(startPositionTicks / 10_000)
+        }
+    }
+
+    /**
      * Restores the server play-session id after process death (when this is
      * the same item) so the eventual stop-report pairs with the start-report
      * instead of orphaning it; otherwise allocates a fresh session id.
@@ -934,9 +1122,12 @@ internal class PlaybackSession(
  * sequence). The session owns the sequence; the VM keeps owning everything
  * that touches its controllers, the ui state and the repositories (the
  * SavedStateHandle is reached only through the [SessionPositionStore] the VM
- * builds). This member set is deliberately durable across steps
- * B2–B4 — implementations shrink as behaviors move into the session, the
- * call sites do not change.
+ * builds). This member set stayed durable across steps B2–B3 —
+ * implementations shrank as behaviors moved into the session, the call sites
+ * did not change — until B4 collapsed the reclaim pair:
+ * `loadReclaimedEngine` died (the body is session-side now), its two
+ * VM-owned slices surviving as [onMiniPlayerReclaimed] and
+ * [hydrateReclaimedItem] at exactly their old positions.
  */
 internal interface SessionLifecycleHooks {
     /**
@@ -966,18 +1157,33 @@ internal interface SessionLifecycleHooks {
     /**
      * Reclaims the mini-player's live engine when it is playing exactly
      * [itemId], so the fullscreen load can bind it instead of reloading.
-     * Null when there is nothing to reclaim.
+     * Null when there is nothing to reclaim. The GATE only — since B4 the
+     * reclaim BODY (detail fetch, engine bind, media session, tracking
+     * restart) is session-side ([PlaybackSession.loadReclaimedEngine]); the
+     * gate stays here because the mini-player state it reads is VM-owned
+     * lifecycle knowledge.
      */
     fun tryReclaimMiniPlayer(itemId: String): MediaEngine?
 
     /**
-     * Load coroutine behind the mini-player-reclaim routing early-return:
-     * binds the already-playing reclaimed engine to the session manager and
-     * rebuilds its session bookkeeping (media session, tracking, segments,
-     * episodes). Also lowers the loading veil — playback is continuous, no
-     * load screen.
+     * Lowers the loading veil when the reclaim routing takes over — playback
+     * is continuous, no load screen. The uiState write stays VM-owned; the
+     * session's [PlaybackSession.loadReclaimedEngine] invokes this
+     * synchronously BEFORE launching the body, at exactly the old position
+     * of the veil write (it used to be the first statement of the old
+     * `loadReclaimedEngine` hook).
      */
-    fun loadReclaimedEngine(engine: MediaEngine, itemId: String): Job
+    fun onMiniPlayerReclaimed()
+
+    /**
+     * Post-bind hydration for a reclaimed mini-player engine: the segments,
+     * adjacent-episodes and series-episodes fetches whose uiState writes and
+     * VM collaborators keep them VM-owned. Called by the session's reclaim
+     * body at exactly the old position (after the engine bind, media session
+     * and tracking restart). Replaced the old `loadReclaimedEngine` hook's
+     * tail at B4.
+     */
+    fun hydrateReclaimedItem(itemId: String, detail: MediaDetail)
 
     /** Releases the mini-player state when its engine was not reclaimed. */
     fun releaseMiniPlayerState()

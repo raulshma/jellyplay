@@ -358,26 +358,13 @@ class VideoPlayerViewModel @Inject constructor(
     @Volatile
     private var cachedAggregate: VideoPlayerAggregate = VideoPlayerAggregate()
 
-    /**
-     * Active Cinema Mode pre-roll context. Non-null only between the moment
-     * intros are queued and the moment the main feature begins loading.
-     * Captures the original [initialize] arguments so the main feature can be
-     * resumed once all intros have been consumed (or skipped).
-     */
-    private data class CinemaIntroContext(
-        val mainItemId: String,
-        val mainMediaSourceId: String?,
-        val mainStartPositionTicks: Long,
-        val mainSubtitleStreamIndex: Int?,
-        val mainAudioStreamIndex: Int?,
-        val intros: List<com.raulshma.jellyplay.core.model.MediaItem>,
-        val currentIndex: Int,
-    )
-
-    // @Volatile: written by the session load launch + advanceCinemaIntro,
-    // read from handlePlaybackEnded / skipIntro / setVideoEffects.
-    @Volatile
-    private var cinemaIntroContext: CinemaIntroContext? = null
+    // Cinema Mode sequencing (cinemaIntroContext + loadCinemaIntro /
+    // advanceCinemaIntro + the beginCinemaMode entry point) moved into
+    // PlaybackSession at B4 — the uiState cinemaIntroState write flows through
+    // the session's setCinemaIntroState seam. This VM still reads
+    // playbackSession.cinemaIntroContext (end-of-media policy, skipIntro, the
+    // per-item video-effects persist gate) and clears it in
+    // releaseInternalsVmPart at exactly its old slot.
 
     private val trickplayManager = TrickplayManager(
         playbackRepository = playbackRepository,
@@ -535,8 +522,8 @@ class VideoPlayerViewModel @Inject constructor(
         getIncognitoModeEnabled = { cachedAggregate.videoPlayer.incognitoModeEnabled },
         onAutoSkip = { segment -> skipSegment(segment) },
         onPlaybackEndedNoNext = {
-            if (cinemaIntroContext != null) {
-                advanceCinemaIntro()
+            if (playbackSession.cinemaIntroContext != null) {
+                playbackSession.advanceCinemaIntro()
             } else {
                 _closePlayer.trySend(Unit)
             }
@@ -616,7 +603,9 @@ class VideoPlayerViewModel @Inject constructor(
         }
 
         override fun onPlayheadSeeded(startPositionTicks: Long) {
-            preSeedPlayhead(startPositionTicks)
+            // Playhead display pre-seed is session-owned since B4; the write
+            // itself flows through the session's seedDisplayedPositionMs seam.
+            playbackSession.preSeedPlayhead(startPositionTicks)
             // Surface a one-shot "Resumed — Restart" reminder when opening at a
             // saved position; emitted here (not in the synchronous prologue) so
             // offline-resolved resume positions — invisible in the raw request
@@ -631,7 +620,12 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    private val sessionLoadPipeline = SessionLoadPipeline(
+    // Explicit type: the beginCinemaMode hook below reaches into
+    // `playbackSession` (the session owns the cinema sequencing since B4),
+    // which itself takes this property as a constructor argument — an
+    // implicit type would make the inference mutually recursive (same shape
+    // as the progressReporter / sessionLifecycleHooks comments).
+    private val sessionLoadPipeline: SessionLoadPipeline = SessionLoadPipeline(
         sessionManager = playerSessionManager,
         mediaRepository = mediaRepository,
         aggregateStore = aggregateStore,
@@ -644,17 +638,10 @@ class VideoPlayerViewModel @Inject constructor(
             shouldAttemptCinemaMode = { agg, itemId, startPositionTicks ->
                 shouldAttemptCinemaMode(agg, itemId, startPositionTicks)
             },
+            // Cinema sequencing is session-owned since B4; this hook is now a
+            // thin delegate (the context latch + the intro loads live there).
             beginCinemaMode = { intros, request ->
-                cinemaIntroContext = CinemaIntroContext(
-                    mainItemId = request.itemId,
-                    mainMediaSourceId = request.mediaSourceId,
-                    mainStartPositionTicks = request.startPositionTicks,
-                    mainSubtitleStreamIndex = request.subtitleStreamIndex,
-                    mainAudioStreamIndex = request.audioStreamIndex,
-                    intros = intros,
-                    currentIndex = 0,
-                )
-                loadCinemaIntro(intros.first())
+                playbackSession.beginCinemaMode(intros, request)
             },
             resolveOfflineResumeTicks = { itemId, startPositionTicks ->
                 resolveOfflineResumeTicks(itemId, startPositionTicks)
@@ -763,14 +750,20 @@ class VideoPlayerViewModel @Inject constructor(
         override fun tryReclaimMiniPlayer(itemId: String): com.raulshma.jellyplay.feature.player.video.engine.MediaEngine? =
             videoMiniPlayerState.tryReclaimEngine(itemId) as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 
-        override fun loadReclaimedEngine(
-            engine: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
-            itemId: String,
-        ): Job {
+        override fun onMiniPlayerReclaimed() {
             // Reclaim promotes an already-playing mini-player engine to
-            // fullscreen — playback is continuous, so no load screen.
+            // fullscreen — playback is continuous, so no load screen. The
+            // reclaim BODY is session-side since B4; this is the veil write,
+            // at exactly its old position (before the body launch).
             _uiState.update { it.copy(isInitializing = false) }
-            return loadReclaimedMiniPlayerEngine(engine, itemId)
+        }
+
+        override fun hydrateReclaimedItem(itemId: String, detail: MediaDetail) {
+            // Old loadReclaimedEngine-hook tail: the uiState-writing
+            // hydration fetches, in their old order.
+            fetchMediaSegments(itemId)
+            fetchAdjacentEpisodes(detail)
+            loadSeriesEpisodes(detail)
         }
 
         override fun releaseMiniPlayerState() {
@@ -839,6 +832,11 @@ class VideoPlayerViewModel @Inject constructor(
         adaptiveBitrateManager = adaptiveBitrateManager,
         playbackRepository = playbackRepository,
         offlinePlaybackFacade = offlinePlaybackFacade,
+        mediaRepository = mediaRepository,
+        setCinemaIntroState = { state ->
+            _uiState.update { it.copy(cinemaIntroState = state) }
+        },
+        seedDisplayedPositionMs = { positionMs -> _currentPositionMs.value = positionMs },
         positionStore = sessionPositionStore,
         getStreamingQuality = { _uiState.value.uiPrefs.streamingQuality },
         setUiPlaybackMode = { mode ->
@@ -1526,58 +1524,17 @@ class VideoPlayerViewModel @Inject constructor(
         return true
     }
 
-    /**
-     * Pre-seeds the playhead with the resolved start position so the seek bar
-     * reflects where playback will resume the instant the new item opens —
-     * instead of staying at 0 until the engine emits its first position tick
-     * while playing (which for MPV + slow buffering can take 20-30s, and with
-     * duration == 0 the bar renders its empty branch anyway). Called by the
-     * session-load pipeline with the RESOLVED ticks (explicit request ticks or
-     * the offline-mirror resume they resolve to). Mirrors seekTo()'s
-     * synchronous display write. Display-only: written directly, not via the
-     * progress reporter, so it reports nothing to the server before playback
-     * actually begins.
-     */
-    private fun preSeedPlayhead(startPositionTicks: Long) {
-        if (startPositionTicks > 0) {
-            _currentPositionMs.value = startPositionTicks / 10_000
-        }
-    }
-
     // restoreOrAllocatePlaySessionId (the process-death play-session id
     // restore behind the session's position store) moved into
     // PlaybackSession at B3 — initialize assigns the restored id at exactly
     // its old position in the sequence.
 
-    /**
-     * Load coroutine behind the mini-player-reclaim routing early-return in
-     * the session's initialize path: binds the already-playing reclaimed
-     * engine to the session manager and rebuilds its session bookkeeping
-     * (media session, tracking, segments, episodes). Playback is continuous —
-     * no load screen, no [SessionLoadPipeline] run (the engine never
-     * reloads).
-     */
-    private fun loadReclaimedMiniPlayerEngine(
-        reclaimed: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
-        itemId: String,
-    ): Job = launch {
-        val detailResult = mediaRepository.getMediaDetail(itemId)
-        val detail = detailResult.getOrNull()
-        if (detail != null) {
-            playerSessionManager.bindReclaimedEngine(reclaimed, itemId, detail)
-            val sessionState = playerSessionManager.sessionState.value
-            createVideoMediaSession(
-                itemId,
-                sessionState.title,
-                sessionState.subtitle,
-            )
-            progressReporter.startPositionTracking()
-            progressReporter.startProgressReporting()
-            fetchMediaSegments(itemId)
-            fetchAdjacentEpisodes(detail)
-            loadSeriesEpisodes(detail)
-        }
-    }
+    // preSeedPlayhead (the resolved-ticks playhead display seed) and the
+    // mini-player reclaim body (detail fetch, engine bind, media session,
+    // tracking restart) moved into PlaybackSession at B4 — the display and
+    // veil writes flow through the session's seedDisplayedPositionMs /
+    // onMiniPlayerReclaimed seams, the hydration fetches through
+    // hydrateReclaimedItem.
 
     private fun loadSeriesEpisodes(detail: MediaDetail) {
         val seriesId = detail.item.seriesId ?: return
@@ -2177,7 +2134,7 @@ class VideoPlayerViewModel @Inject constructor(
         // Persist per item so the same filter preset is restored next time.
         // Skip when in Cinema Mode pre-roll — the intro is transient.
         val itemId = playerSessionManager.sessionState.value.currentItemId
-        if (itemId != null && cinemaIntroContext == null) {
+        if (itemId != null && playbackSession.cinemaIntroContext == null) {
             launch {
                 engineStore.setVideoEffectsForItem(itemId, effects)
             }
@@ -2288,8 +2245,8 @@ class VideoPlayerViewModel @Inject constructor(
         if (autoplayController.shouldAutoPlayNext(next)) {
             playNextEpisode()
         } else {
-            if (cinemaIntroContext != null) {
-                advanceCinemaIntro()
+            if (playbackSession.cinemaIntroContext != null) {
+                playbackSession.advanceCinemaIntro()
             } else {
                 _closePlayer.trySend(Unit)
             }
@@ -2320,7 +2277,7 @@ class VideoPlayerViewModel @Inject constructor(
     fun skipIntro() {
         val state = positionAwareState()
         if (state.cinemaIntroState != null) {
-            advanceCinemaIntro()
+            playbackSession.advanceCinemaIntro()
             return
         }
         val seg = state.activeSegment
@@ -2363,60 +2320,9 @@ class VideoPlayerViewModel @Inject constructor(
         return true
     }
 
-    private fun loadCinemaIntro(intro: com.raulshma.jellyplay.core.model.MediaItem) {
-        val context = cinemaIntroContext ?: return
-        launch {
-            _uiState.update {
-                it.copy(
-                    cinemaIntroState = CinemaIntroUiState(
-                        title = intro.name.ifBlank { "Intro" },
-                        currentIndex = context.currentIndex + 1,
-                        totalCount = context.intros.size,
-                    ),
-                )
-            }
-            // Pre-roll intros are not part of the user's library history — skip
-            // server-side playback reporting and segment/next-episode/trickplay
-            // bookkeeping for them.
-            playerSessionManager.loadMedia(intro.id, null, 0L)
-            createVideoMediaSession(
-                intro.id,
-                playerSessionManager.sessionState.value.title,
-                playerSessionManager.sessionState.value.subtitle,
-            )
-            progressReporter.startPositionTracking()
-        }
-    }
-
-    /**
-     * Advance to the next pre-roll intro, or — once all intros are exhausted —
-     * resume normal playback of the main feature. Idempotent: callers may invoke
-     * this on either an end-of-playback callback or an explicit "skip" tap.
-     */
-    private fun advanceCinemaIntro() {
-        val context = cinemaIntroContext ?: return
-        val nextIndex = context.currentIndex + 1
-        if (nextIndex < context.intros.size) {
-            cinemaIntroContext = context.copy(currentIndex = nextIndex)
-            loadCinemaIntro(context.intros[nextIndex])
-            return
-        }
-        // Out of intros — restore the main feature. Clear cinema state first so
-        // the recursive initialize call cannot re-enter cinema mode.
-        cinemaIntroContext = null
-        _uiState.update { it.copy(cinemaIntroState = null) }
-        progressReporter.cancelJobs()
-        playbackSession.initialize(
-            LoadRequest(
-                itemId = context.mainItemId,
-                mediaSourceId = context.mainMediaSourceId,
-                startPositionTicks = context.mainStartPositionTicks,
-                allowCinemaMode = false,
-                subtitleStreamIndex = context.mainSubtitleStreamIndex,
-                audioStreamIndex = context.mainAudioStreamIndex,
-            )
-        )
-    }
+    // loadCinemaIntro / advanceCinemaIntro (the Cinema Mode pre-roll loads and
+    // the post-intro recursion into the session's own initialize) moved into
+    // PlaybackSession at B4.
 
     private fun fetchMediaSegments(itemId: String) {
         launch {
@@ -2672,7 +2578,13 @@ class VideoPlayerViewModel @Inject constructor(
         mediaDetail = null
         autoplayController.setEnabled(false)
         equalizerEnabled = false
-        cinemaIntroContext = null
+        // Cinema latch clear — the FIELD is session-owned since B4; the clear
+        // itself stays here at exactly its old slot (between equalizer-off and
+        // the uiState rebuild): moving it into the session-owned teardown half
+        // would relocate it ahead of every VM-part neighbor instead. The
+        // uiState rebuild below already nulls cinemaIntroState implicitly
+        // (fresh constructor).
+        playbackSession.cinemaIntroContext = null
 
         // Residual reset: session + prefs-mirror fields only. Everything that
         // reset implicitly (track lists, subtitle search, sleep timer, audio
