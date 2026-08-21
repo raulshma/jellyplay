@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.feature.player.video.state.GesturePrefsState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -19,19 +20,19 @@ class VideoPlayerSpeedTest {
     @Test
     fun defaults_defaultSpeedIsOne() {
         val state = VideoPlayerUiState()
-        assertEquals(1.0f, state.defaultSpeed, 0f)
+        assertEquals(1.0f, state.gestures.defaultSpeed, 0f)
     }
 
     @Test
     fun defaults_holdSpeedNotActive() {
         val state = VideoPlayerUiState()
-        assertFalse(state.isHoldSpeedActive)
+        assertFalse(state.gestures.isHoldSpeedActive)
     }
 
     @Test
     fun defaults_holdSpeedMultiplierIsTwo() {
         val state = VideoPlayerUiState()
-        assertEquals(2.0f, state.holdSpeedMultiplier, 0f)
+        assertEquals(2.0f, state.gestures.holdSpeedMultiplier, 0f)
     }
 
     // ─── setPlaybackSpeed ─────────────────────────────────────────────────────
@@ -58,25 +59,31 @@ class VideoPlayerSpeedTest {
 
     @Test
     fun startHoldSpeed_setsIsHoldSpeedActive() {
-        val state = VideoPlayerUiState(playbackSpeed = 1.0f, holdSpeedMultiplier = 2.0f)
-        val holdSpeed = state.playbackSpeed * state.holdSpeedMultiplier
+        val state = VideoPlayerUiState(
+            playbackSpeed = 1.0f,
+            gestures = GesturePrefsState(holdSpeedMultiplier = 2.0f),
+        )
+        val holdSpeed = state.playbackSpeed * state.gestures.holdSpeedMultiplier
         val updated = state.copy(
-            isHoldSpeedActive = true,
+            gestures = state.gestures.copy(isHoldSpeedActive = true),
             playbackSpeed = holdSpeed,
         )
-        assertTrue(updated.isHoldSpeedActive)
+        assertTrue(updated.gestures.isHoldSpeedActive)
         assertEquals(2.0f, updated.playbackSpeed, 0f)
     }
 
     @Test
     fun startHoldSpeed_noOpWhenAlreadyActive() {
         val state = VideoPlayerUiState(
-            isHoldSpeedActive = true,
+            gestures = GesturePrefsState(isHoldSpeedActive = true),
             playbackSpeed = 2.0f,
         )
         // If already active, do not change anything
-        val updated = if (!state.isHoldSpeedActive) {
-            state.copy(isHoldSpeedActive = true, playbackSpeed = state.playbackSpeed * state.holdSpeedMultiplier)
+        val updated = if (!state.gestures.isHoldSpeedActive) {
+            state.copy(
+                gestures = state.gestures.copy(isHoldSpeedActive = true),
+                playbackSpeed = state.playbackSpeed * state.gestures.holdSpeedMultiplier,
+            )
         } else {
             state
         }
@@ -89,23 +96,25 @@ class VideoPlayerSpeedTest {
         // Simulating stopHoldSpeed: restore to defaultSpeed when speedBeforeHold is null,
         // or to the stored previous speed
         val state = VideoPlayerUiState(
-            isHoldSpeedActive = true,
+            gestures = GesturePrefsState(isHoldSpeedActive = true, defaultSpeed = previousSpeed),
             playbackSpeed = 2.5f,
-            defaultSpeed = previousSpeed,
         )
         val updated = state.copy(
-            isHoldSpeedActive = false,
-            playbackSpeed = state.defaultSpeed,
+            gestures = state.gestures.copy(isHoldSpeedActive = false),
+            playbackSpeed = state.gestures.defaultSpeed,
         )
-        assertFalse(updated.isHoldSpeedActive)
+        assertFalse(updated.gestures.isHoldSpeedActive)
         assertEquals(1.25f, updated.playbackSpeed, 0f)
     }
 
     @Test
     fun stopHoldSpeed_noOpWhenNotActive() {
-        val state = VideoPlayerUiState(isHoldSpeedActive = false, playbackSpeed = 1.5f)
-        val updated = if (state.isHoldSpeedActive) {
-            state.copy(isHoldSpeedActive = false, playbackSpeed = state.defaultSpeed)
+        val state = VideoPlayerUiState(playbackSpeed = 1.5f)
+        val updated = if (state.gestures.isHoldSpeedActive) {
+            state.copy(
+                gestures = state.gestures.copy(isHoldSpeedActive = false),
+                playbackSpeed = state.gestures.defaultSpeed,
+            )
         } else {
             state
         }
@@ -115,18 +124,17 @@ class VideoPlayerSpeedTest {
     @Test
     fun stopHoldSpeed_fallsBackToDefaultSpeed_whenSpeedBeforeHoldIsNull() {
         val state = VideoPlayerUiState(
-            isHoldSpeedActive = true,
+            gestures = GesturePrefsState(isHoldSpeedActive = true, defaultSpeed = 1.0f),
             playbackSpeed = 2.0f,
-            defaultSpeed = 1.0f,
         )
         val speedBeforeHold: Float? = null
-        val restoredSpeed = speedBeforeHold ?: state.defaultSpeed
+        val restoredSpeed = speedBeforeHold ?: state.gestures.defaultSpeed
         val updated = state.copy(
-            isHoldSpeedActive = false,
+            gestures = state.gestures.copy(isHoldSpeedActive = false),
             playbackSpeed = restoredSpeed,
         )
         assertEquals(1.0f, updated.playbackSpeed, 0f)
-        assertFalse(updated.isHoldSpeedActive)
+        assertFalse(updated.gestures.isHoldSpeedActive)
     }
 
     // ─── Available speed values ────────────────────────────────────────────────

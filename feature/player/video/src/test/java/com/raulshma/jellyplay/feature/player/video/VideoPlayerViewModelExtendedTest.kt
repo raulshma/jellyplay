@@ -265,7 +265,7 @@ class VideoPlayerViewModelExtendedTest {
     @Test
     fun setFrameRateMatching_updatesState() {
         viewModel.setFrameRateMatching(true)
-        assertTrue(viewModel.uiState.value.frameRateMatching)
+        assertTrue(viewModel.uiState.value.gestures.frameRateMatching)
     }
 
     @Test

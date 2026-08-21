@@ -1431,11 +1431,11 @@ class VideoPlayerViewModel @Inject constructor(
                 PipAction.PLAY -> engine.play()
                 PipAction.PAUSE -> engine.pause()
                 PipAction.SKIP_FORWARD -> {
-                    val skip = _uiState.value.seekDurationMs
+                    val skip = _uiState.value.gestures.seekDurationMs
                     seekTo((engine.currentPositionMs + skip).coerceAtLeast(0L))
                 }
                 PipAction.SKIP_BACKWARD -> {
-                    val skip = _uiState.value.seekDurationMs
+                    val skip = _uiState.value.gestures.seekDurationMs
                     seekTo((engine.currentPositionMs - skip).coerceAtLeast(0L))
                 }
                 PipAction.NEXT -> playNextEpisode()
@@ -1869,19 +1869,19 @@ class VideoPlayerViewModel @Inject constructor(
     private var speedBeforeHold: Float? = null
 
     fun startHoldSpeed() {
-        if (_uiState.value.isHoldSpeedActive) return
+        if (_uiState.value.gestures.isHoldSpeedActive) return
         speedBeforeHold = _uiState.value.playbackSpeed
-        val targetSpeed = _uiState.value.holdSpeedMultiplier
+        val targetSpeed = _uiState.value.gestures.holdSpeedMultiplier
         playerSessionManager.engine?.setPlaybackSpeed(targetSpeed)
-        _uiState.update { it.copy(playbackSpeed = targetSpeed, isHoldSpeedActive = true) }
+        _uiState.update { it.copy(playbackSpeed = targetSpeed, gestures = it.gestures.copy(isHoldSpeedActive = true)) }
     }
 
     fun stopHoldSpeed() {
-        if (!_uiState.value.isHoldSpeedActive) return
-        val restoreSpeed = speedBeforeHold ?: _uiState.value.defaultSpeed
+        if (!_uiState.value.gestures.isHoldSpeedActive) return
+        val restoreSpeed = speedBeforeHold ?: _uiState.value.gestures.defaultSpeed
         speedBeforeHold = null
         playerSessionManager.engine?.setPlaybackSpeed(restoreSpeed)
-        _uiState.update { it.copy(playbackSpeed = restoreSpeed, isHoldSpeedActive = false) }
+        _uiState.update { it.copy(playbackSpeed = restoreSpeed, gestures = it.gestures.copy(isHoldSpeedActive = false)) }
     }
 
     fun selectAudioTrack(option: TrackOption) {
@@ -2424,14 +2424,14 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun setFrameRateMatching(enabled: Boolean) {
-        _uiState.update { it.copy(frameRateMatching = enabled) }
+        _uiState.update { it.copy(gestures = it.gestures.copy(frameRateMatching = enabled)) }
         launch {
             playbackStore.setFrameRateMatching(enabled)
         }
     }
 
     fun setRefreshRateMode(mode: com.raulshma.jellyplay.core.model.RefreshRateMode) {
-        _uiState.update { it.copy(refreshRateMode = mode, frameRateMatching = mode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF) }
+        _uiState.update { it.copy(gestures = it.gestures.copy(refreshRateMode = mode, frameRateMatching = mode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF)) }
         launch {
             playbackStore.setRefreshRateMode(mode)
         }
@@ -2589,8 +2589,8 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun saveBrightness(level: Float) {
-        _uiState.update { it.copy(brightnessLevel = level) }
-        if (_uiState.value.rememberBrightness) {
+        _uiState.update { it.copy(gestures = it.gestures.copy(brightnessLevel = level)) }
+        if (_uiState.value.gestures.rememberBrightness) {
             launch {
                 videoPlayerStore.setVideoBrightnessLevel(level)
             }
@@ -2961,14 +2961,21 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { currentState ->
             VideoPlayerUiState(
                 preferredPlayerType = currentState.preferredPlayerType,
-                seekDurationMs = currentState.seekDurationMs,
                 defaultOrientation = currentState.defaultOrientation,
                 controlsTimeoutMs = currentState.controlsTimeoutMs,
-                gesturesEnabled = currentState.gesturesEnabled,
-                defaultSpeed = currentState.defaultSpeed,
-                swipeSeekMaxMs = currentState.swipeSeekMaxMs,
-                rememberBrightness = currentState.rememberBrightness,
-                brightnessLevel = currentState.brightnessLevel,
+                // gestures: the prefs-mirror leaves carry across an item switch
+                // (seek window, gesture toggle, default speed, swipe cap,
+                // brightness flag + level); the runtime leaves (hold-speed
+                // toggle/multiplier/active flag, indicator side, frame-rate
+                // matching, refresh-rate mode) reset to defaults.
+                gestures = currentState.gestures.copy(
+                    seekDurationMs = currentState.gestures.seekDurationMs,
+                    gesturesEnabled = currentState.gestures.gesturesEnabled,
+                    defaultSpeed = currentState.gestures.defaultSpeed,
+                    swipeSeekMaxMs = currentState.gestures.swipeSeekMaxMs,
+                    rememberBrightness = currentState.gestures.rememberBrightness,
+                    brightnessLevel = currentState.gestures.brightnessLevel,
+                ),
                 // segmentState: only the behaviors carry across an item switch —
                 // the per-item segment list resets to default (empty).
                 segmentState = currentState.segmentState.copy(

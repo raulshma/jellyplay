@@ -4,7 +4,6 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
-import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PlaybackMode
@@ -88,21 +87,18 @@ data class VideoPlayerUiState(
     val dialogueBoostEnabled: Boolean = false,
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
     val preferredPlayerType: PlayerType = PlayerType.EXO_PLAYER,
-    val seekDurationMs: Long = 10_000L,
     val defaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val controlsTimeoutMs: Long = 5_000L,
     val passOutProtectionHours: Int = 0,
-    val gesturesEnabled: Boolean = true,
-    val holdSpeedEnabled: Boolean = true,
-    val holdSpeedMultiplier: Float = 2.0f,
-    val isHoldSpeedActive: Boolean = false,
-    val defaultSpeed: Float = 1.0f,
-    val swipeSeekMaxMs: Long = 120_000L,
-    val rememberBrightness: Boolean = false,
-    val brightnessLevel: Float = 0.5f,
-    val gestureIndicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
-    val frameRateMatching: Boolean = false,
-    val refreshRateMode: com.raulshma.jellyplay.core.model.RefreshRateMode = com.raulshma.jellyplay.core.model.RefreshRateMode.OFF,
+    /**
+     * Gesture / hold-speed / seek-window / brightness / frame-rate prefs.
+     * Formerly flat fields (`gesturesEnabled` / `holdSpeedEnabled` /
+     * `holdSpeedMultiplier` / `isHoldSpeedActive` / `defaultSpeed` /
+     * `swipeSeekMaxMs` / `seekDurationMs` / `rememberBrightness` /
+     * `brightnessLevel` / `gestureIndicatorSide` / `frameRateMatching` /
+     * `refreshRateMode`); now a stored slice.
+     */
+    val gestures: GesturePrefsState = GesturePrefsState(),
     /**
      * Raw segment data + per-type behaviors. Formerly flat fields
      * (`segments` / `segmentBehaviors`); now a stored slice.
@@ -225,25 +221,13 @@ data class VideoPlayerUiState(
     // fields — the source of truth during the transition.
     //
     // The media slice (`state.media.…`) used to be a projection here too; it
-    // is now a STORED constructor field. The sleep-timer, track,
+    // is now a STORED constructor field. The gestures slice likewise migrated
+    // from a projection to a stored field. The sleep-timer, track,
     // subtitle-workflow, audio-effects and SyncPlay group-display slices used
     // to have projections here as well; they now live in their owning
     // controllers (`SleepTimerController.state`, `TrackSelectionHelper.state`,
     // `SubtitleManager.state`, `VideoEffectsController.state`,
     // `SyncPlayBridge.state`).
-
-    val gestures: GesturePrefsState
-        get() = GesturePrefsState(
-            gesturesEnabled = gesturesEnabled,
-            holdSpeedEnabled = holdSpeedEnabled,
-            holdSpeedMultiplier = holdSpeedMultiplier,
-            isHoldSpeedActive = isHoldSpeedActive,
-            defaultSpeed = defaultSpeed, swipeSeekMaxMs = swipeSeekMaxMs,
-            seekDurationMs = seekDurationMs, rememberBrightness = rememberBrightness,
-            brightnessLevel = brightnessLevel, gestureIndicatorSide = gestureIndicatorSide,
-            frameRateMatching = frameRateMatching,
-            refreshRateMode = refreshRateMode,
-        )
 
     val uiPrefs: PlayerUiPrefsState
         get() = PlayerUiPrefsState(

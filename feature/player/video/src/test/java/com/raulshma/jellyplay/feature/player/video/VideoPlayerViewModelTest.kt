@@ -338,8 +338,8 @@ class VideoPlayerViewModelTest {
     fun startHoldSpeed_activatesAndStoresHoldMultiplier() {
         viewModel.setPlaybackSpeed(1.0f)
         viewModel.startHoldSpeed()
-        assertTrue(viewModel.uiState.value.isHoldSpeedActive)
-        assertEquals(viewModel.uiState.value.holdSpeedMultiplier, viewModel.uiState.value.playbackSpeed, 0.001f)
+        assertTrue(viewModel.uiState.value.gestures.isHoldSpeedActive)
+        assertEquals(viewModel.uiState.value.gestures.holdSpeedMultiplier, viewModel.uiState.value.playbackSpeed, 0.001f)
     }
 
     @Test
@@ -347,7 +347,7 @@ class VideoPlayerViewModelTest {
         viewModel.startHoldSpeed()
         val first = viewModel.uiState.value.playbackSpeed
         viewModel.startHoldSpeed()
-        assertTrue(viewModel.uiState.value.isHoldSpeedActive)
+        assertTrue(viewModel.uiState.value.gestures.isHoldSpeedActive)
         assertEquals(first, viewModel.uiState.value.playbackSpeed, 0.001f)
     }
 
@@ -355,17 +355,17 @@ class VideoPlayerViewModelTest {
     fun stopHoldSpeed_restoresPreviousSpeed() {
         viewModel.setPlaybackSpeed(1.25f)
         viewModel.startHoldSpeed()
-        assertTrue(viewModel.uiState.value.isHoldSpeedActive)
+        assertTrue(viewModel.uiState.value.gestures.isHoldSpeedActive)
 
         viewModel.stopHoldSpeed()
-        assertFalse(viewModel.uiState.value.isHoldSpeedActive)
+        assertFalse(viewModel.uiState.value.gestures.isHoldSpeedActive)
         assertEquals(1.25f, viewModel.uiState.value.playbackSpeed, 0.001f)
     }
 
     @Test
     fun stopHoldSpeed_whenNotActive_isNoOp() {
         viewModel.stopHoldSpeed()
-        assertFalse(viewModel.uiState.value.isHoldSpeedActive)
+        assertFalse(viewModel.uiState.value.gestures.isHoldSpeedActive)
     }
 
     @Test

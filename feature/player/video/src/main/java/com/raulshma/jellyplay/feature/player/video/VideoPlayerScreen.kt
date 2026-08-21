@@ -525,8 +525,8 @@ fun VideoPlayerScreen(
 
 
 
-    LaunchedEffect(uiState.frameRateMatching, uiState.refreshRateMode, uiState.videoFrameRate) {
-        if (uiState.frameRateMatching && uiState.refreshRateMode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF && uiState.videoFrameRate != null) {
+    LaunchedEffect(uiState.gestures.frameRateMatching, uiState.gestures.refreshRateMode, uiState.videoFrameRate) {
+        if (uiState.gestures.frameRateMatching && uiState.gestures.refreshRateMode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF && uiState.videoFrameRate != null) {
             val videoStream = uiState.media.mediaStreams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
             activity?.let {
                 if (!it.isDestroyed && !it.isFinishing) {
@@ -535,22 +535,22 @@ fun VideoPlayerScreen(
                         frameRate = uiState.videoFrameRate,
                         targetWidth = videoStream?.width,
                         targetHeight = videoStream?.height,
-                        mode = uiState.refreshRateMode,
+                        mode = uiState.gestures.refreshRateMode,
                     )
                 }
             }
         }
     }
 
-    LaunchedEffect(uiState.rememberBrightness) {
+    LaunchedEffect(uiState.gestures.rememberBrightness) {
         // -1f (BRIGHTNESS_OVERRIDE_NONE) is the "user hasn't set a level" sentinel;
         // 0.5f is a legitimate brightness a user can pick, so it must not be used
         // as the guard. Re-applies the saved level on recreate/resume.
-        if (uiState.rememberBrightness && uiState.brightnessLevel >= 0f) {
+        if (uiState.gestures.rememberBrightness && uiState.gestures.brightnessLevel >= 0f) {
             activity?.let { act ->
                 if (!act.isDestroyed && !act.isFinishing) {
                     val layout = act.window.attributes
-                    layout.screenBrightness = uiState.brightnessLevel
+                    layout.screenBrightness = uiState.gestures.brightnessLevel
                     act.window.attributes = layout
                 }
             }
@@ -562,8 +562,8 @@ fun VideoPlayerScreen(
     // only re-fires when the rememberBrightness *flag* changes — not on plain
     // foregrounding. Re-apply the saved level on every ON_RESUME so the user's
     // chosen brightness survives navigation away and back.
-    val brightnessLevel = uiState.brightnessLevel
-    val rememberBrightness = uiState.rememberBrightness
+    val brightnessLevel = uiState.gestures.brightnessLevel
+    val rememberBrightness = uiState.gestures.rememberBrightness
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(activity, rememberBrightness, brightnessLevel, lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
@@ -740,14 +740,14 @@ fun VideoPlayerScreen(
             else viewModel.seekTo(ms)
         }
     }
-    val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo, isCastConnected) {
+    val doSeekBack: () -> Unit = remember(engine, uiState.gestures.seekDurationMs, doSeekTo, isCastConnected) {
         {
             val pos = viewModel.playerEngineRef?.currentPositionMs ?: 0L
-            val target = (pos - uiState.seekDurationMs).coerceAtLeast(0)
+            val target = (pos - uiState.gestures.seekDurationMs).coerceAtLeast(0)
             doSeekTo(target)
         }
     }
-    val doSeekForward: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo, isCastConnected) {
+    val doSeekForward: () -> Unit = remember(engine, uiState.gestures.seekDurationMs, doSeekTo, isCastConnected) {
         {
             val pos = viewModel.playerEngineRef?.currentPositionMs ?: 0L
             val dur = viewModel.playerEngineRef?.durationMs ?: 0L
@@ -755,9 +755,9 @@ fun VideoPlayerScreen(
             // forward seek to 0. Skip the upper clamp when there is no known duration;
             // the engine clamps on its own at seek time. Mirrors the gesture path.
             val target = if (dur <= 0L) {
-                (pos + uiState.seekDurationMs).coerceAtLeast(0L)
+                (pos + uiState.gestures.seekDurationMs).coerceAtLeast(0L)
             } else {
-                (pos + uiState.seekDurationMs).coerceAtMost(dur)
+                (pos + uiState.gestures.seekDurationMs).coerceAtMost(dur)
             }
             doSeekTo(target)
         }
@@ -768,7 +768,7 @@ fun VideoPlayerScreen(
     val currentDoSeekBack by rememberUpdatedState(doSeekBack)
     val currentDoSeekForward by rememberUpdatedState(doSeekForward)
     val currentDoTogglePlayPause by rememberUpdatedState(doTogglePlayPause)
-    val currentSeekDurationMs by rememberUpdatedState(uiState.seekDurationMs)
+    val currentSeekDurationMs by rememberUpdatedState(uiState.gestures.seekDurationMs)
     val seekState = rememberDpadSeekState(
         getBaseStepMs = { currentSeekDurationMs },
         getCurrentPositionMs = { viewModel.playerEngineRef?.currentPositionMs ?: 0L },
@@ -784,7 +784,7 @@ fun VideoPlayerScreen(
     val gestureController = remember(
         scope,
         engine,
-        uiState.swipeSeekMaxMs,
+        uiState.gestures.swipeSeekMaxMs,
         isCastConnected,
         castVolume,
         doSeekTo,
@@ -792,7 +792,7 @@ fun VideoPlayerScreen(
         GestureSeekController(
             scope = scope,
             getEngine = { engine },
-            getSwipeSeekMaxMs = { uiState.swipeSeekMaxMs },
+            getSwipeSeekMaxMs = { uiState.gestures.swipeSeekMaxMs },
             isCastConnected = { isCastConnected },
             getCastVolume = { castVolume },
             readWindowBrightness = { activity?.window?.attributes?.screenBrightness ?: -1f },
@@ -1058,13 +1058,13 @@ fun VideoPlayerScreen(
                             }
                     } else Modifier
                 )
-                .pointerInput(uiState.gesturesEnabled, isScreenLocked) {
+                .pointerInput(uiState.gestures.gesturesEnabled, isScreenLocked) {
                     if (isScreenLocked) return@pointerInput
-                    if (!uiState.gesturesEnabled) return@pointerInput
+                    if (!uiState.gestures.gesturesEnabled) return@pointerInput
                     detectTapGestures(
                         onTap = {
                             viewModel.onUserInteraction()
-                            if (uiState.isHoldSpeedActive) {
+                            if (uiState.gestures.isHoldSpeedActive) {
                                 viewModel.stopHoldSpeed()
                             } else {
                                 showControls = !showControls
@@ -1072,7 +1072,7 @@ fun VideoPlayerScreen(
                         },
                         onLongPress = {
                             viewModel.onUserInteraction()
-                            if (uiState.holdSpeedEnabled) viewModel.startHoldSpeed()
+                            if (uiState.gestures.holdSpeedEnabled) viewModel.startHoldSpeed()
                         },
                         onDoubleTap = { offset ->
                             viewModel.onUserInteraction()
@@ -1100,9 +1100,9 @@ fun VideoPlayerScreen(
                         },
                     )
                 }
-                .pointerInput(uiState.gesturesEnabled, isScreenLocked) {
+                .pointerInput(uiState.gestures.gesturesEnabled, isScreenLocked) {
                     if (isScreenLocked) return@pointerInput
-                    if (!uiState.gesturesEnabled) return@pointerInput
+                    if (!uiState.gestures.gesturesEnabled) return@pointerInput
                     awaitEachGesture {
                         var prevDistance = 0f
                         do {
@@ -1279,9 +1279,9 @@ fun VideoPlayerScreen(
                 seekOffsetMs = seekState.offsetMs,
                 brightnessValue = brightnessOverlay,
                 volumeValue = volumeOverlay,
-                indicatorSide = uiState.gestureIndicatorSide,
-                gesturesEnabled = uiState.gesturesEnabled && !isScreenLocked,
-                swipeSeekMaxMs = uiState.swipeSeekMaxMs,
+                indicatorSide = uiState.gestures.gestureIndicatorSide,
+                gesturesEnabled = uiState.gestures.gesturesEnabled && !isScreenLocked,
+                swipeSeekMaxMs = uiState.gestures.swipeSeekMaxMs,
                 onSeekGesture = remember(gestureController) { { totalDeltaMs -> gestureController.onSeekGesture(totalDeltaMs) } },
                 onBrightnessGesture = remember(gestureController) { { delta -> gestureController.onBrightnessGesture(delta) } },
                 onVolumeGesture = remember(gestureController) { { delta -> gestureController.onVolumeGesture(delta) } },
@@ -1326,7 +1326,7 @@ fun VideoPlayerScreen(
             )
 
             AnimatedVisibility(
-                visible = uiState.isHoldSpeedActive,
+                visible = uiState.gestures.isHoldSpeedActive,
                 enter = fadeIn(tween(100)),
                 exit = fadeOut(tween(150)),
             ) {
