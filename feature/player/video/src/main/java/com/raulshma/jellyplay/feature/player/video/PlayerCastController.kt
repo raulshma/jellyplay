@@ -48,8 +48,8 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * NOT owned here: [VideoPlayerViewModel.detachForBackgroundCast] /
  * [reattachFromBackgroundCast] — those rebuild the system [MediaSession] around
- * the cast / local player and call the VM-private `releaseVideoMediaSession`;
- * they stay in the VM until media-session ownership is itself extracted.
+ * the cast / local player through the media-session controller; they stay in
+ * the VM until media-session ownership is itself extracted.
  *
  * Engine + session + uiState access is via lambdas so this class reads the
  * *current* engine (the VM swaps engines on retry) without a hard ViewModel

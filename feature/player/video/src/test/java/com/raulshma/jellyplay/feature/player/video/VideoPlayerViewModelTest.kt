@@ -434,9 +434,15 @@ class VideoPlayerViewModelTest {
     }
 
     private fun callGetReportPositionMs(): Long {
-        val fn = VideoPlayerViewModel::class.java.getDeclaredMethod("getReportPositionMs")
+        // getReportPositionMs moved into PlaybackSession at B3 (seek latches
+        // + engine position are session-owned); reach it through the VM's
+        // private session field.
+        val sessionField = VideoPlayerViewModel::class.java.getDeclaredField("playbackSession")
+        sessionField.isAccessible = true
+        val session = sessionField.get(viewModel)
+        val fn = session.javaClass.getDeclaredMethod("getReportPositionMs")
         fn.isAccessible = true
-        return fn.invoke(viewModel) as Long
+        return fn.invoke(session) as Long
     }
 
     // ── Offline resume position resolution ────────────────────────────

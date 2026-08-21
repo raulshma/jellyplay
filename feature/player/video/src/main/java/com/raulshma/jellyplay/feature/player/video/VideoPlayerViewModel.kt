@@ -77,9 +77,7 @@ import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -98,67 +96,11 @@ import javax.inject.Inject
 /** Minimum resolved duration (ms) before smart-download auto-cleanup may fire. */
 private const val MIN_DURATION_FOR_SMART_DELETE_MS = 5 * 60 * 1000L
 
-// SavedStateHandle keys for surviving process death. The in-stream
-// playback position, the item it belongs to, the server session id, and the
-// epoch at which the position was last persisted are stored so playback
-// resumes from the user's last seek rather than the original entry point, and
-// so the eventual stop-report matches the start. The timestamp lets a restore
-// reject a position that is too old to be a trustworthy "continue from here"
-// (see STALE_POSITION_THRESHOLD_MS) — the primary defense is the nav-route
-// strip, but a stale SavedStateHandle position is the last-resort signal that
-// the player's in-memory state is gone and auto-resume would land mid-stream
-// on an episode the user moved past via auto-advance.
-private const val SAVED_KEY_ITEM_ID = "video_player.saved_item_id"
-private const val SAVED_KEY_POSITION_MS = "video_player.saved_position_ms"
-private const val SAVED_KEY_PLAY_SESSION_ID = "video_player.saved_play_session_id"
-private const val SAVED_KEY_POSITION_PERSISTED_AT = "video_player.saved_position_persisted_at"
-private const val POSITION_PERSIST_MIN_INTERVAL_MS = 5_000L
-/**
- * Quiet-period for coalescing the *offline-mirror* DB write during rapid
- * scrubbing: [seekTo] fires one per seek gesture, and the immediate
- * `recordProgress` launches would queue against Room's executor. Only the DB
- * mirror is coalesced — the SavedStateHandle writes stay immediate so explicit
- * seek positions still survive process death. The position tick's throttled
- * mirror write (`persistPlaybackPosition(force=false)`) catches up within
- * seconds, so a dropped coalesced write is never lost for long.
- */
-private const val SEEK_PROGRESS_COALESCE_MS = 500L
-/**
- * A persisted position older than this is treated as stale on a process-death
- * restore and ignored: the user backgrounded the app long enough that
- * auto-resuming mid-stream (potentially on an episode they auto-advanced past)
- * is worse than landing on Home and continuing via the "Continue Watching" row.
- * Matches the ~1h threshold users report as the trigger; well above any real
- * short backgrounding (notification reply, brief app switch).
- */
-private const val STALE_POSITION_THRESHOLD_MS = 60L * 60L * 1000L
+// The process-death resume-position persistence (SavedStateHandle keys,
+// throttle/coalesce windows, the staleness threshold and the pure
+// resolveResumeTicks resolver) moved into PlaybackSession.kt behind the
+// SessionPositionStore seam at B3.
 
-/**
- * Pure resume-position resolver extracted from
- * [VideoPlayerViewModel.resolveStartTicksAfterProcessDeath] so the staleness +
- * "only advance forward" rules are unit-testable without a ViewModel.
- *
- * Rules:
- * - No persisted position (`savedPosMs <= 0`): keep the entry point.
- * - Persisted position too old (`persistedAtMs > 0` and older than
- * [staleThresholdMs]): keep the entry point. A zero/missing timestamp is
- * treated as fresh so a normal resume-from-background keeps working.
- * - Otherwise resume at the persisted position, but never below the deliberate
- * entry point (auto-advance may have moved the user forward of the route's
- * original ticks; rewinding would jump back unexpectedly).
- */
-internal fun resolveResumeTicks(
-    savedPosMs: Long,
-    persistedAtMs: Long,
-    nowMs: Long,
-    entryPointTicks: Long,
-    staleThresholdMs: Long = STALE_POSITION_THRESHOLD_MS,
-): Long {
-    if (savedPosMs <= 0L) return entryPointTicks
-    if (persistedAtMs > 0L && nowMs - persistedAtMs > staleThresholdMs) return entryPointTicks
-    val savedTicks = savedPosMs * 10_000
-    return if (savedTicks > entryPointTicks) savedTicks else entryPointTicks
-}
 /** Debounce window for engine config syncs driven by slider drags. */
 private const val CONFIG_SYNC_DEBOUNCE_MS = 150L
 
@@ -403,14 +345,16 @@ class VideoPlayerViewModel @Inject constructor(
      * start/stop reports read the local UUID directly while progress reports
      * read `sessionState.playSessionId ?: playSessionId`, so the two could
      * desync (start reported id A, stop reported id B). Routing every report
-     * and the SavedStateHandle persist through this resolver guarantees a
-     * single value is used for the whole session lifecycle.
+     * and the position persist through this resolver guarantees a single
+     * value is used for the whole session lifecycle. (Since B3 the session
+     * owns the reports/persists and carries an identical resolver; this VM
+     * copy feeds the reporter's session-id getter and the start-report hook.)
      */
     private val currentPlaySessionId: String
         get() = playerSessionManager.sessionState.value.playSessionId ?: playbackSession.playSessionId
     private val autoplayController = AutoPlayController()
-    // @Volatile: written by the init collector, read off-Main (e.g. from
-    // reportCurrentPlaybackStopped launched on Default).
+    // @Volatile: written by the init collector, read off-Main (e.g. from the
+    // session's stop-report reading the incognito gate off-Main).
     @Volatile
     private var cachedAggregate: VideoPlayerAggregate = VideoPlayerAggregate()
 
@@ -543,28 +487,15 @@ class VideoPlayerViewModel @Inject constructor(
     )
 
     fun seekTo(positionMs: Long) {
-        playbackSession.lastSeekPositionMs = positionMs
-        playbackSession.lastSeekTimestamp = System.currentTimeMillis()
+        // Seek latches + the process-death position snapshot (via the
+        // session's position store) + the coalesced offline-mirror write are
+        // session-owned since B3; the display write and the engine command
+        // stay here.
+        playbackSession.seekPersisted(positionMs)
         // Update the dedicated position flow so the seek bar reflects the
         // new position immediately; uiState is no longer the source of truth.
         _currentPositionMs.value = positionMs
         playerSessionManager.engine?.seekTo(positionMs)
-        // Explicit seeks are the most important position to survive process
-        // death; persist the SavedStateHandle snapshot immediately rather than
-        // waiting for the throttle.
-        val itemId = playerSessionManager.sessionState.value.currentItemId
-        if (itemId != null) {
-            playbackSession.lastPersistedPositionMs = positionMs
-            savedStateHandle[SAVED_KEY_ITEM_ID] = itemId
-            savedStateHandle[SAVED_KEY_POSITION_MS] = positionMs
-            savedStateHandle[SAVED_KEY_PLAY_SESSION_ID] = currentPlaySessionId
-            savedStateHandle[SAVED_KEY_POSITION_PERSISTED_AT] = System.currentTimeMillis()
-            // The DB mirror is coalesced: rapid scrubbing no longer queues one
-            // recordProgress per seek. SavedStateHandle above is already
-            // immediate, and the throttled tick mirror catches up regardless.
-            val durationMs = playerSessionManager.engine?.durationMs ?: 0L
-            scheduleCoalescedSeekProgress(itemId, positionMs, durationMs)
-        }
     }
 
     /**
@@ -586,18 +517,8 @@ class VideoPlayerViewModel @Inject constructor(
         engine.play()
     }
 
-    private fun getReportPositionMs(): Long {
-        val enginePos = playerSessionManager.engine?.currentPositionMs ?: 0L
-        val seekPos = playbackSession.lastSeekPositionMs
-        val seekTime = playbackSession.lastSeekTimestamp
-        if (seekPos != null && seekTime > 0L) {
-            val timeSinceSeek = System.currentTimeMillis() - seekTime
-            if (timeSinceSeek < 3000L) {
-                return seekPos
-            }
-        }
-        return enginePos
-    }
+    // getReportPositionMs moved into PlaybackSession at B3 (seek latches +
+    // engine position are session-owned).
 
     // Explicit type: the getPlaySessionId lambda below reaches into
     // `playbackSession`, so leaving this type implicit would make the
@@ -647,7 +568,7 @@ class VideoPlayerViewModel @Inject constructor(
                 }
             }
         },
-        onPositionPersisted = { positionMs -> persistPlaybackPosition(positionMs, force = false) },
+        onPositionPersisted = { positionMs -> playbackSession.persistPlaybackPosition(positionMs, force = false) },
         onEnginePositionUpdate = { positionMs, durationMs, bufferedPositionMs, videoStats ->
             _currentPositionMs.value = positionMs
             _durationMs.value = durationMs
@@ -856,20 +777,8 @@ class VideoPlayerViewModel @Inject constructor(
             videoMiniPlayerState.release()
         }
 
-        override fun releaseInternalsVmPart(itemId: String): String {
-            // Raise the loading screen across the state reset + fresh load so
-            // the seek bar never paints a stale/zero fraction during the
-            // transition. It lifts once position & duration are seeded (in
-            // the load coroutine), so the bar's first paint is already at the
-            // resume fraction.
-            _uiState.update { it.copy(isInitializing = true) }
-            releaseInternals()
-            // Restore the server session id after process death (if this is
-            // the same item) so the eventual stop-report pairs with the
-            // start-report instead of orphaning it; otherwise allocate a
-            // fresh session id. Returned so the session assigns it at exactly
-            // this point in the sequence.
-            return restoreOrAllocatePlaySessionId(itemId)
+        override fun releaseInternalsVmPart() {
+            this@VideoPlayerViewModel.releaseInternalsVmPart()
         }
 
         override fun clearTrickplay() {
@@ -881,26 +790,36 @@ class VideoPlayerViewModel @Inject constructor(
         }
 
         override fun wasInSyncPlay(): Boolean {
-            val was = syncPlayManager.isInSyncPlaySession
-            // Stop-report the outgoing session before anything is cancelled
-            // or torn down — its old position, directly after the flag read.
-            // The report itself moves session-side at B3.
-            reportCurrentPlaybackStopped()
-            return was
+            // Pure flag read since B3 — the outgoing session's stop-report
+            // moved session-side and fires directly after this read inside
+            // PlaybackSession.initialize, at exactly its old position.
+            return syncPlayManager.isInSyncPlaySession
         }
     }
+
+    /**
+     * Process-death resume-position persistence behind the
+     * [SessionPositionStore] seam. The VM keeps the [SavedStateHandle]
+     * constructor parameter SOLELY to build this store — every read/write of
+     * the resume keys goes through the session from B3 on.
+     */
+    private val sessionPositionStore: SessionPositionStore =
+        SavedStateHandlePositionStore(savedStateHandle)
 
     /**
      * Playback-session deep module (Stage B): owns the session-scoped latches
      * and bookkeeping (release flag, Stop-report dedup, seek + persist
      * positions, play-session id, load/seek jobs, the release scope), as of
      * B1b the initialize sequence driving the hooks above and the
-     * pipeline-start ownership ([PlaybackSession.initialize]), and as of B2
-     * the engine reload/retry paths plus the [EngineEventCoordinator]
-     * (construction, re-arm, decision execution). Every ui-state value the
-     * moved code needs is supplied here as a parameter or getter/setter
-     * lambda — the session never touches the ui state; its outcomes come
-     * back as [SessionEvent]s collected in `init`.
+     * pipeline-start ownership ([PlaybackSession.initialize]), as of B2 the
+     * engine reload/retry paths plus the [EngineEventCoordinator]
+     * (construction, re-arm, decision execution), and as of B3 the reporting
+     * + release surface (stop-reports, seek/position persistence through
+     * [sessionPositionStore], the release split and the final stop-report on
+     * the release scope). Every ui-state value the moved code needs is
+     * supplied here as a parameter or getter/setter lambda — the session
+     * never touches the ui state; its outcomes come back as [SessionEvent]s
+     * collected in `init`.
      *
      * Declared above `init` per the construction-order convention (the
      * session-state mirror collector launched from init collects
@@ -918,12 +837,14 @@ class VideoPlayerViewModel @Inject constructor(
         mediaSessionController = mediaSessionController,
         playbackStore = playbackStore,
         adaptiveBitrateManager = adaptiveBitrateManager,
+        playbackRepository = playbackRepository,
+        offlinePlaybackFacade = offlinePlaybackFacade,
+        positionStore = sessionPositionStore,
         getStreamingQuality = { _uiState.value.uiPrefs.streamingQuality },
         setUiPlaybackMode = { mode ->
             _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(playbackMode = mode)) }
         },
-        reportCurrentPlaybackStopped = { reportCurrentPlaybackStopped() },
-        getReportPositionMs = { getReportPositionMs() },
+        getIncognitoModeEnabled = { cachedAggregate.videoPlayer.incognitoModeEnabled },
         setPendingStreams = { subtitleStreamIndex, audioStreamIndex ->
             trackSelectionHelper.setPendingStreams(subtitleStreamIndex, audioStreamIndex)
         },
@@ -1526,10 +1447,11 @@ class VideoPlayerViewModel @Inject constructor(
 
     /**
      * Thin delegate to [PlaybackSession.initialize]: the only VM-side pre-bit
-     * is the process-death start-ticks resolution (SavedStateHandle-backed;
-     * moves behind SessionPositionStore at B3). The session then owns the
-     * load sequence — synchronous prologue hooks, routing early-returns,
-     * single-flight load tracking, and the pipeline start.
+     * is the process-death start-ticks resolution, delegated to the session
+     * (which owns the position store since B3 — this VM no longer touches the
+     * handle). The session then owns the load sequence — synchronous prologue
+     * hooks, routing early-returns, single-flight load tracking, and the
+     * pipeline start.
      */
     fun initialize(
         itemId: String,
@@ -1542,45 +1464,11 @@ class VideoPlayerViewModel @Inject constructor(
             LoadRequest(
                 itemId = itemId,
                 mediaSourceId = mediaSourceId,
-                startPositionTicks = resolveStartTicksAfterProcessDeath(itemId, startPositionTicks),
+                startPositionTicks = playbackSession.resolveStartTicksAfterProcessDeath(itemId, startPositionTicks),
                 allowCinemaMode = true,
                 subtitleStreamIndex = subtitleStreamIndex,
                 audioStreamIndex = audioStreamIndex,
             )
-        )
-    }
-
-    /**
-     * After process death the Navigation 3 route still carries the *original*
-     * entry-point ticks, but the user's in-stream seeks were tracked only in
-     * `_uiState`. SavedStateHandle survives process death, so if we have a
-     * persisted position for [itemId] that is beyond the entry point we resume
-     * from there. A fresh navigation (new entry) has an empty SavedStateHandle,
-     * so this is a no-op outside the process-death-restore path.
-     *
-     * Staleness guard: a position persisted more than [STALE_POSITION_THRESHOLD_MS]
-     * ago is ignored. The primary defense against stale auto-resume is the nav-
-     * route strip in `rememberNavigationState` (a stripped route never mounts the
-     * player at all, so this method never runs). This guard covers any restore
-     * path that escapes the strip: if the player does mount from a stale route,
-     * a long-stale position is more likely to land the user on an episode they
-     * auto-advanced past than a genuine "continue here", so falling back to the
-     * entry-point ticks (or, if the strip fires, never mounting at all) is the
-     * safer choice. A missing/zero timestamp (positions persisted before this
-     * field existed, or a non-process-death re-entry) is treated as fresh so the
-     * normal resume-from-background path keeps working.
-     */
-    private fun resolveStartTicksAfterProcessDeath(itemId: String, startPositionTicks: Long): Long {
-        val savedItemId = savedStateHandle.get<String>(SAVED_KEY_ITEM_ID) ?: return startPositionTicks
-        if (savedItemId != itemId) return startPositionTicks
-        val savedPosMs = savedStateHandle.get<Long>(SAVED_KEY_POSITION_MS) ?: return startPositionTicks
-        val persistedAt = savedStateHandle.get<Long>(SAVED_KEY_POSITION_PERSISTED_AT) ?: 0L
-        return resolveResumeTicks(
-            savedPosMs = savedPosMs,
-            persistedAtMs = persistedAt,
-            nowMs = System.currentTimeMillis(),
-            entryPointTicks = startPositionTicks,
-            staleThresholdMs = STALE_POSITION_THRESHOLD_MS,
         )
     }
 
@@ -1600,52 +1488,12 @@ class VideoPlayerViewModel @Inject constructor(
     internal suspend fun resolveOfflineResumeTicks(itemId: String, startPositionTicks: Long): Long =
         playbackSourceResolver.resolveStartPositionTicks(itemId, startPositionTicks)
 
-    /**
-     * Persists the current playback position so it survives process death.
-     * Throttled to at most one write per [POSITION_PERSIST_MIN_INTERVAL_MS]
-     * unless [force] (e.g. an explicit seek). Also stashes the server session
-     * id so the post-restore stop-report pairs with the original start-report.
-     */
-    private fun persistPlaybackPosition(positionMs: Long, force: Boolean) {
-        if (!force && kotlin.math.abs(positionMs - playbackSession.lastPersistedPositionMs) < POSITION_PERSIST_MIN_INTERVAL_MS) return
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        playbackSession.lastPersistedPositionMs = positionMs
-        savedStateHandle[SAVED_KEY_ITEM_ID] = itemId
-        savedStateHandle[SAVED_KEY_POSITION_MS] = positionMs
-        savedStateHandle[SAVED_KEY_PLAY_SESSION_ID] = currentPlaySessionId
-        savedStateHandle[SAVED_KEY_POSITION_PERSISTED_AT] = System.currentTimeMillis()
-        // Mirror progress into the offline store so downloads render watched /
-        // resume state while offline. No-op for non-downloaded items.
-        val durationMs = playerSessionManager.engine?.durationMs ?: 0L
-        val positionTicks = positionMs * 10_000L // ms → ticks
-        val percentage = if (durationMs > 0L) {
-            (positionMs.toDouble() / durationMs.toDouble() * 100.0).coerceIn(0.0, 100.0)
-        } else 0.0
-        launch {
-            offlinePlaybackFacade.recordProgress(itemId, positionTicks, percentage, isPlayed = false)
-        }
-    }
-
-    /**
-     * Coalesces the offline-mirror DB write during seek scrubbing: cancels any
-     * in-flight pending write and schedules a fresh one [SEEK_PROGRESS_COALESCE_MS]
-     * later, so rapid seeks emit at most one `recordProgress` per quiet window.
-     * The SavedStateHandle snapshot is already written synchronously by [seekTo],
-     * and the throttled position tick (`persistPlaybackPosition(force=false)`)
-     * re-writes the mirror every [POSITION_PERSIST_MIN_INTERVAL_MS], so a dropped
-     * coalesced write is recovered within seconds.
-     */
-    private fun scheduleCoalescedSeekProgress(itemId: String, positionMs: Long, durationMs: Long) {
-        playbackSession.pendingSeekProgressJob?.cancel()
-        playbackSession.pendingSeekProgressJob = launch {
-            delay(SEEK_PROGRESS_COALESCE_MS)
-            val positionTicks = positionMs * 10_000L // ms → ticks
-            val percentage = if (durationMs > 0L) {
-                (positionMs.toDouble() / durationMs.toDouble() * 100.0).coerceIn(0.0, 100.0)
-            } else 0.0
-            offlinePlaybackFacade.recordProgress(itemId, positionTicks, percentage, isPlayed = false)
-        }
-    }
+    // persistPlaybackPosition (throttled process-death persist via the
+    // session's position store + offline-mirror write) and
+    // scheduleCoalescedSeekProgress (the seek-scrub DB-write coalescer, still
+    // launching on this VM's scope) moved into PlaybackSession at B3; the
+    // reporter reaches them through its onPositionPersisted callback and
+    // seekPersisted respectively.
 
     /**
      * "Play On" routing early-return for the session's initialize path: if a
@@ -1696,20 +1544,10 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Restores the server play-session id after process death (when this is
-     * the same item) so the eventual stop-report pairs with the start-report
-     * instead of orphaning it; otherwise allocates a fresh session id.
-     */
-    private fun restoreOrAllocatePlaySessionId(itemId: String): String {
-        val restoredSessionId = savedStateHandle.get<String>(SAVED_KEY_PLAY_SESSION_ID)
-        val savedItemId = savedStateHandle.get<String>(SAVED_KEY_ITEM_ID)
-        return if (savedItemId == itemId && !restoredSessionId.isNullOrEmpty()) {
-            restoredSessionId
-        } else {
-            java.util.UUID.randomUUID().toString()
-        }
-    }
+    // restoreOrAllocatePlaySessionId (the process-death play-session id
+    // restore behind the session's position store) moved into
+    // PlaybackSession at B3 — initialize assigns the restored id at exactly
+    // its old position in the sequence.
 
     /**
      * Load coroutine behind the mini-player-reclaim routing early-return in
@@ -2779,23 +2617,12 @@ class VideoPlayerViewModel @Inject constructor(
         return trickplayManager.getThumbnail(positionMs)
     }
 
-    private fun reportCurrentPlaybackStopped() {
-        if (cachedAggregate.videoPlayer.incognitoModeEnabled) return
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        val sessionId = currentPlaySessionId
-        if (sessionId == playbackSession.stopReportedForSession) return
-        val positionTicks = getReportPositionMs() * 10_000
-        if (positionTicks > 0) {
-            playbackSession.stopReportedForSession = sessionId
-            launch {
-                playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
-                // No manual cache invalidation (plan 08): the end-of-item
-                // auto-advance path marks the episode played, which evicts
-                // inside the repository; a same-item reload re-reads through
-                // the provider; detail-screen re-entry force re-resolves.
-            }
-        }
-    }
+    // reportCurrentPlaybackStopped (incognito gate, session-id resolution,
+    // dedup latch) moved into PlaybackSession at B3 — both write sites (the
+    // reload/decision paths and the final teardown) live session-side now,
+    // along with the media-session release (releaseVideoMediaSession died
+    // with the split; the session calls MediaSessionController.release in its
+    // own teardown half).
 
     @OptIn(UnstableApi::class)
     private fun createVideoMediaSession(
@@ -2804,16 +2631,27 @@ class VideoPlayerViewModel @Inject constructor(
         subtitle: String,
     ) = mediaSessionController.createForItem(itemId, title, subtitle)
 
-    private fun releaseVideoMediaSession() = mediaSessionController.release()
-
-    private fun releaseInternals() {
-        playbackSession.loadJob?.cancel()
-        playbackSession.loadJob = null
-        progressReporter.cancelJobs()
+    /**
+     * The ViewModel-owned half of the per-item/full teardown (B3 split of the
+     * old `releaseInternals`). The session-owned half — in-flight load cancel,
+     * reporter jobs, media-session release, PSM release, seek-latch clear —
+     * runs FIRST inside PlaybackSession; this half runs back-to-back right
+     * after it from the same synchronous call chain (no dispatch hop — an
+     * interleaved recomposition could flash the outgoing item's rebuilt stale
+     * title). Reached on the item-switch path through the
+     * [SessionLifecycleHooks.releaseInternalsVmPart] hook and on full release
+     * through [PlaybackSession.release].
+     */
+    private fun releaseInternalsVmPart() {
+        // Raise the loading screen across the state reset + fresh load so
+        // the seek bar never paints a stale/zero fraction during the
+        // transition. It lifts once position & duration are seeded (in the
+        // load coroutine), so the bar's first paint is already at the
+        // resume fraction. (On the full-release path this is a same-value
+        // write: the rebuild below constructs a fresh state whose
+        // isInitializing default is already true.)
+        _uiState.update { it.copy(isInitializing = true) }
         syncPlay.reset()
-        releaseVideoMediaSession()
-        playerSessionManager.release()
-        playerLifecycleManager.reset()
         // Clear per-item PiP mirrors but KEEP pipTransport: it is a VM-owned
         // bridge re-armed in init AND on every load via the rearmTransports
         // the screen's onDispose runs pipController.reset(), nulling it). Nulling
@@ -2834,8 +2672,6 @@ class VideoPlayerViewModel @Inject constructor(
         mediaDetail = null
         autoplayController.setEnabled(false)
         equalizerEnabled = false
-        playbackSession.lastSeekPositionMs = null
-        playbackSession.lastSeekTimestamp = 0L
         cinemaIntroContext = null
 
         // Residual reset: session + prefs-mirror fields only. Everything that
@@ -2909,6 +2745,14 @@ class VideoPlayerViewModel @Inject constructor(
         _durationMs.value = 0L
         _bufferedPositionMs.value = 0L
         _videoStats.value = EngineVideoStats()
+
+        // Closes this VM half: the player-lifecycle callbacks clear stays
+        // VM-side (a public VM constructor dependency, not a session dep).
+        // It used to run mid-body, directly after the PSM release — the B3
+        // split places the whole session-owned teardown (PSM release
+        // included) ahead of this half, so the relative order against the
+        // PSM release is preserved.
+        playerLifecycleManager.reset()
     }
 
     fun release() {
@@ -2920,13 +2764,14 @@ class VideoPlayerViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         release()
-        playbackSession.releaseScope.cancel()
+        // Same cancel-after-release ordering as before the release scope
+        // moved into the session: the final stop-report / pending-seek join
+        // (launched on the release scope by release()) run first, and the
+        // scope is only cancelled once the owner is going away for good.
+        playbackSession.onOwnerCleared()
     }
 
     private fun performRelease() {
-        val itemId = playerSessionManager.sessionState.value.currentItemId
-        val sessionId = currentPlaySessionId
-        val positionTicks = getReportPositionMs() * 10_000
         pipController.requestAutoEnterPip(false)
         // Tear down the engine-event collectors BEFORE the engine is released so
         // no policy observes a released engine mid-teardown (the decisions
@@ -2935,43 +2780,17 @@ class VideoPlayerViewModel @Inject constructor(
         // Tear down audio-focus + becoming-noisy (idempotent; safe if never registered).
         playerAudioLifecycle.release()
         sleepTimer.onRelease()
-        releaseInternals()
-        // Full teardown: clear the transport too (releaseInternals keeps it so
-        // PiP stays usable across per-item reloads while the VM is alive).
-        pipController.reset()
-        castManager.releaseConsumer()
-        activePlayerController.clearEngine()
-        // Belt-and-suspenders: flush a pending coalesced seek-mirror write so the
-        // offline store doesn't lag the final position on release. The write is
-        // moved onto the release scope (IO + NonCancellable) so it survives the
-        // viewModelScope being cancelled on clear().
-        val pendingSeek = playbackSession.pendingSeekProgressJob
-        if (pendingSeek != null && itemId != null) {
-            playbackSession.releaseScope.launch(NonCancellable) {
-                pendingSeek.join()
-            }
-        }
-        // Skip the second Stop if reportCurrentPlaybackStopped already
-        // sent one for this session — duplicate Stop reports confuse the
-        // server's resume/progress bookkeeping.
-        if (itemId != null && positionTicks > 0 && sessionId != playbackSession.stopReportedForSession) {
-            playbackSession.stopReportedForSession = sessionId
-            playbackSession.releaseScope.launch(NonCancellable) {
-                runCatching {
-                    kotlinx.coroutines.withTimeout(5_000) {
-                        playbackRepository.reportPlaybackStopped(
-                            itemId = itemId,
-                            sessionId = sessionId,
-                            positionTicks = positionTicks,
-                        )
-                    }
-                }
-                // No manual cache invalidation here (plan 08): the detail
-                // screen's re-entry freshness comes from the provider's forced
-                // re-resolve (requestRevalidate) and the auto-advance path
-                // already evicts via markPlayed inside the repository — the
-                // old invalidateUserDataCaches call duplicated both.
-            }
+        // Full teardown (B3): the session owns the tail — snapshot of the
+        // stop-report inputs, the releaseInternals split (session half, then
+        // this VM's [releaseInternalsVmPart] half, back-to-back), the VM's
+        // post-internals release steps passed as the callback, then the
+        // pending-seek join and the final stop-report on the release scope.
+        playbackSession.release {
+            // Full teardown: clear the transport too (releaseInternals keeps it so
+            // PiP stays usable across per-item reloads while the VM is alive).
+            pipController.reset()
+            castManager.releaseConsumer()
+            activePlayerController.clearEngine()
         }
     }
 
