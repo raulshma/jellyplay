@@ -96,7 +96,7 @@ class EngineEventCoordinator(
     scope: CoroutineScope,
     /** Hot engine handle stream — the same [PlayerSessionManager.engineFlow]. */
     engineFlow: StateFlow<MediaEngine?>,
-    /** Synchronous playback-mode read (the ViewModel's `_uiState.value.playbackMode`). */
+    /** Synchronous playback-mode read (the ViewModel's `_uiState.value.uiPrefs.playbackMode`). */
     private val getPlaybackMode: () -> PlaybackMode,
     /**
      * Localized FORCE_DIRECT_PLAY fallback notice for [EngineDecision.InformUser];

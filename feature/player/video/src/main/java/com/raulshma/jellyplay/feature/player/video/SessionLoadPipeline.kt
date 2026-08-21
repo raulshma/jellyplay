@@ -190,9 +190,20 @@ class SessionLoadPipeline(
         outputs.onPrefsProjected {
             copy(
                 preferredPlayerType = agg.playback.preferredPlayer,
-                defaultOrientation = agg.videoPlayer.videoDefaultOrientation,
-                controlsTimeoutMs = agg.videoPlayer.videoControlsTimeoutMs,
-                passOutProtectionHours = agg.videoPlayer.videoPassOutProtectionHours,
+                uiPrefs = uiPrefs.copy(
+                    defaultOrientation = agg.videoPlayer.videoDefaultOrientation,
+                    controlsTimeoutMs = agg.videoPlayer.videoControlsTimeoutMs,
+                    passOutProtectionHours = agg.videoPlayer.videoPassOutProtectionHours,
+                    trickplayEnabled = agg.videoPlayer.trickplayEnabled,
+                    trickplayOnSeekGesture = agg.videoPlayer.trickplayOnSeekGesture,
+                    showPlaybackMetadata = agg.videoPlayer.videoShowPlaybackMetadata,
+                    showClock = agg.videoPlayer.showClockInPlayer,
+                    showTimeRemaining = agg.videoPlayer.showTimeRemaining,
+                    keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo,
+                    streamingQuality = agg.playback.streamingQuality,
+                    adaptiveBitrateEnabled = networkOfflineStore.networkOffline.value.adaptiveBitrateEnabled,
+                    playbackMode = agg.playback.playbackMode,
+                ),
                 gestures = gestures.copy(
                     gesturesEnabled = agg.videoPlayer.videoGesturesEnabled,
                     holdSpeedEnabled = agg.videoPlayer.videoHoldSpeedEnabled,
@@ -210,8 +221,6 @@ class SessionLoadPipeline(
                     aspectRatio = defaultAspectRatio,
                     tvZoomModePercent = agg.videoPlayer.tvZoomModePercent,
                 ),
-                trickplayEnabled = agg.videoPlayer.trickplayEnabled,
-                trickplayOnSeekGesture = agg.videoPlayer.trickplayOnSeekGesture,
                 segmentState = segmentState.copy(
                     segmentBehaviors = run {
                         val base = agg.videoPlayer.segmentBehaviors.toMutableMap()
@@ -229,13 +238,6 @@ class SessionLoadPipeline(
                 episodes = episodes.copy(
                     videoEpisodeBrowserEnabled = agg.videoPlayer.videoEpisodeBrowserEnabled,
                 ),
-                showPlaybackMetadata = agg.videoPlayer.videoShowPlaybackMetadata,
-                showClock = agg.videoPlayer.showClockInPlayer,
-                showTimeRemaining = agg.videoPlayer.showTimeRemaining,
-                keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo,
-                streamingQuality = agg.playback.streamingQuality,
-                adaptiveBitrateEnabled = networkOfflineStore.networkOffline.value.adaptiveBitrateEnabled,
-                playbackMode = agg.playback.playbackMode,
                 autoplay = autoplay.copy(
                     videoAutoplayNext = agg.videoPlayer.videoAutoplayNext,
                     autoPlayCountdownSec = agg.playback.autoPlayCountdownSec,

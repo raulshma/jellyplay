@@ -251,15 +251,15 @@ class VideoPlayerViewModelExtendedTest {
     @Test
     fun setStreamingQuality_updatesState() {
         viewModel.setStreamingQuality(StreamingQuality.FHD_1080P)
-        assertEquals(StreamingQuality.FHD_1080P, viewModel.uiState.value.streamingQuality)
+        assertEquals(StreamingQuality.FHD_1080P, viewModel.uiState.value.uiPrefs.streamingQuality)
     }
 
     @Test
     fun setAdaptiveBitrateEnabled_updatesState() {
         viewModel.setAdaptiveBitrateEnabled(true)
-        assertTrue(viewModel.uiState.value.adaptiveBitrateEnabled)
+        assertTrue(viewModel.uiState.value.uiPrefs.adaptiveBitrateEnabled)
         viewModel.setAdaptiveBitrateEnabled(false)
-        assertFalse(viewModel.uiState.value.adaptiveBitrateEnabled)
+        assertFalse(viewModel.uiState.value.uiPrefs.adaptiveBitrateEnabled)
     }
 
     @Test

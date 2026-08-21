@@ -114,12 +114,14 @@ class VideoPlayerResetEquivalenceTest {
      * the exact missing names otherwise.
      */
     private val residualWhitelist = setOf(
-        "preferredPlayerType", "defaultOrientation", "controlsTimeoutMs",
+        "preferredPlayerType",
+        "uiPrefs.defaultOrientation", "uiPrefs.controlsTimeoutMs",
+        "uiPrefs.showPlaybackMetadata", "uiPrefs.showClock",
+        "uiPrefs.showTimeRemaining", "uiPrefs.keepScreenOnDuringVideo",
         "gestures.seekDurationMs", "gestures.gesturesEnabled", "gestures.defaultSpeed",
         "gestures.swipeSeekMaxMs", "gestures.rememberBrightness", "gestures.brightnessLevel",
         "segmentState.segmentBehaviors", "episodes.videoEpisodeBrowserEnabled",
-        "showPlaybackMetadata", "showClock", "showTimeRemaining", "videoFx.tvZoomModePercent",
-        "keepScreenOnDuringVideo", "subtitleStyle",
+        "videoFx.tvZoomModePercent", "subtitleStyle",
     )
 
     /**
@@ -364,7 +366,7 @@ class VideoPlayerResetEquivalenceTest {
         assertTrue(before.dialogueBoostEnabled)
         assertEquals(EffectStrength.HIGH, before.dialogueBoostStrength)
         assertEquals(2.0f, before.playbackSpeed, 0.001f)
-        assertTrue(before.showVideoStats)
+        assertTrue(before.uiPrefs.showVideoStats)
         assertEquals(40, before.subtitleStyle.fontSize)
         assertTrue(viewModel.sleepTimer.state.value.sleepTimerActive)
         assertTrue(viewModel.effects.state.value.nightModeEnabled)
@@ -443,7 +445,7 @@ class VideoPlayerResetEquivalenceTest {
         // Residual probes.
         assertEquals(40, viewModel.uiState.value.subtitleStyle.fontSize) // whitelisted → persists
         assertEquals(1.0f, viewModel.uiState.value.playbackSpeed, 0.001f) // not whitelisted → resets
-        assertFalse(viewModel.uiState.value.showVideoStats)              // not whitelisted → resets
+        assertFalse(viewModel.uiState.value.uiPrefs.showVideoStats)      // not whitelisted → resets
 
         // ── Golden: residual UiState partition (leaf-by-leaf) ──
         assertResidualPartition(before)

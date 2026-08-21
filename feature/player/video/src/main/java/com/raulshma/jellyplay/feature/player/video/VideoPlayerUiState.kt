@@ -4,14 +4,10 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
-import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
-import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SegmentBehavior
-import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
-import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
@@ -87,9 +83,18 @@ data class VideoPlayerUiState(
     val dialogueBoostEnabled: Boolean = false,
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
     val preferredPlayerType: PlayerType = PlayerType.EXO_PLAYER,
-    val defaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
-    val controlsTimeoutMs: Long = 5_000L,
-    val passOutProtectionHours: Int = 0,
+    /**
+     * Player UI / system preferences: control visibility, orientation,
+     * pass-out, trickplay, streaming quality/mode and lock/PIN. Formerly flat
+     * fields (`defaultOrientation` / `controlsTimeoutMs` /
+     * `passOutProtectionHours` / `showVideoStats` / `showPlaybackMetadata` /
+     * `showClock` / `showTimeRemaining` / `keepScreenOnDuringVideo` /
+     * `usePinForPlayerLock` / `hasPin` / `trickplayEnabled` /
+     * `trickplayOnSeekGesture` / `trickplayInfo` / `streamingQuality` /
+     * `adaptiveBitrateEnabled` / `playbackMode`); now a stored slice. The
+     * error fields and [preferredPlayerType] deliberately stay flat.
+     */
+    val uiPrefs: PlayerUiPrefsState = PlayerUiPrefsState(),
     /**
      * Gesture / hold-speed / seek-window / brightness / frame-rate prefs.
      * Formerly flat fields (`gesturesEnabled` / `holdSpeedEnabled` /
@@ -137,29 +142,10 @@ data class VideoPlayerUiState(
      * flag is the structured signal the legacy String channel dropped.
      */
     val playerErrorRetryable: Boolean = false,
-    val trickplayEnabled: Boolean = true,
-    val trickplayOnSeekGesture: Boolean = true,
-    val trickplayInfo: TrickplayInfo? = null,
     val bufferedPosition: Long = 0L,
-    val showVideoStats: Boolean = false,
     val videoStats: EngineVideoStats = EngineVideoStats(),
-    val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
-    val adaptiveBitrateEnabled: Boolean = true,
-    val playbackMode: PlaybackMode = PlaybackMode.AUTO,
     val showPlaybackErrorDialog: Boolean = false,
     val isScreenLocked: Boolean = false,
-    val usePinForPlayerLock: Boolean = false,
-    /**
-     * Presence flag for the player-lock PIN. The hash itself never
-     * leaves the VM/prefs — surfacing it through per-frame UiState churned
-     * state identity on PIN change and exposed the hash to equals/hashCode/
-     * toString (log risk). Callers only ever gate on presence.
-     */
-    val hasPin: Boolean = false,
-    val showPlaybackMetadata: Boolean = true,
-    val showClock: Boolean = false,
-    val showTimeRemaining: Boolean = false,
-    val keepScreenOnDuringVideo: Boolean = true,
     val cinemaIntroState: CinemaIntroUiState? = null,
     val isMuted: Boolean = false,
     /**
@@ -221,31 +207,13 @@ data class VideoPlayerUiState(
     // fields — the source of truth during the transition.
     //
     // The media slice (`state.media.…`) used to be a projection here too; it
-    // is now a STORED constructor field. The gestures slice likewise migrated
-    // from a projection to a stored field. The sleep-timer, track,
-    // subtitle-workflow, audio-effects and SyncPlay group-display slices used
-    // to have projections here as well; they now live in their owning
-    // controllers (`SleepTimerController.state`, `TrackSelectionHelper.state`,
-    // `SubtitleManager.state`, `VideoEffectsController.state`,
-    // `SyncPlayBridge.state`).
-
-    val uiPrefs: PlayerUiPrefsState
-        get() = PlayerUiPrefsState(
-            controlsTimeoutMs = controlsTimeoutMs,
-            defaultOrientation = defaultOrientation,
-            passOutProtectionHours = passOutProtectionHours,
-            showVideoStats = showVideoStats,
-            showPlaybackMetadata = showPlaybackMetadata,
-            showClock = showClock, showTimeRemaining = showTimeRemaining,
-            keepScreenOnDuringVideo = keepScreenOnDuringVideo,
-            usePinForPlayerLock = usePinForPlayerLock, hasPin = hasPin,
-            trickplayEnabled = trickplayEnabled,
-            trickplayOnSeekGesture = trickplayOnSeekGesture,
-            trickplayInfo = trickplayInfo,
-            streamingQuality = streamingQuality,
-            adaptiveBitrateEnabled = adaptiveBitrateEnabled,
-            playbackMode = playbackMode,
-        )
+    // is now a STORED constructor field. The gestures and uiPrefs slices
+    // likewise migrated from projections to stored fields. The sleep-timer,
+    // track, subtitle-workflow, audio-effects and SyncPlay group-display
+    // slices used to have projections here as well; they now live in their
+    // owning controllers (`SleepTimerController.state`,
+    // `TrackSelectionHelper.state`, `SubtitleManager.state`,
+    // `VideoEffectsController.state`, `SyncPlayBridge.state`).
 
     fun behaviorForType(type: MediaSegmentType): SegmentBehavior =
         SegmentCalculator.behaviorForType(toSegmentInput(), type)

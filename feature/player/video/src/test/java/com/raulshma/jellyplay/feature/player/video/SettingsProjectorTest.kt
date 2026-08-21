@@ -50,15 +50,15 @@ class SettingsProjectorTest {
 
         projector.project(agg)
 
-        assertTrue(uiState.showPlaybackMetadata)
-        assertTrue(uiState.showClock)
-        assertTrue(uiState.showTimeRemaining)
+        assertTrue(uiState.uiPrefs.showPlaybackMetadata)
+        assertTrue(uiState.uiPrefs.showClock)
+        assertTrue(uiState.uiPrefs.showTimeRemaining)
         assertEquals(100f, uiState.videoFx.tvZoomModePercent, 0.001f)
-        assertTrue(uiState.keepScreenOnDuringVideo)
-        assertEquals(4, uiState.passOutProtectionHours)
+        assertTrue(uiState.uiPrefs.keepScreenOnDuringVideo)
+        assertEquals(4, uiState.uiPrefs.passOutProtectionHours)
         assertEquals(10, uiState.autoplay.autoPlayCountdownSec)
-        assertTrue(uiState.usePinForPlayerLock)
-        assertTrue(uiState.hasPin)
+        assertTrue(uiState.uiPrefs.usePinForPlayerLock)
+        assertTrue(uiState.uiPrefs.hasPin)
     }
 
     // Note: the sleep-timer last-used duration and the Subtitle Manager's

@@ -511,10 +511,10 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(uiState.isPlaying, uiState.keepScreenOnDuringVideo) {
+    LaunchedEffect(uiState.isPlaying, uiState.uiPrefs.keepScreenOnDuringVideo) {
         activity?.let {
             if (!it.isDestroyed && !it.isFinishing) {
-                if (uiState.isPlaying && uiState.keepScreenOnDuringVideo) {
+                if (uiState.isPlaying && uiState.uiPrefs.keepScreenOnDuringVideo) {
                     it.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 } else {
                     it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -622,7 +622,7 @@ fun VideoPlayerScreen(
     val aspectRatio = uiState.videoFx.aspectRatio
     val detectedAspectRatio = uiState.videoFx.detectedAspectRatio
 
-    val toggleOrientation: () -> Unit = remember(activity, uiState.defaultOrientation) {
+    val toggleOrientation: () -> Unit = remember(activity, uiState.uiPrefs.defaultOrientation) {
         {
             activity?.let { act ->
                 val current = act.requestedOrientation
@@ -631,7 +631,7 @@ fun VideoPlayerScreen(
                 // Resolve the configured default landscape mode so the toggle is symmetric:
                 // portrait ↔ default-landscape, always returning to the user's preferred
                 // landscape rather than drifting between LANDSCAPE and SENSOR_LANDSCAPE.
-                val defaultLandscape = when (uiState.defaultOrientation) {
+                val defaultLandscape = when (uiState.uiPrefs.defaultOrientation) {
                     OrientationMode.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
                     else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 }
@@ -643,7 +643,7 @@ fun VideoPlayerScreen(
 
     val syncPlayIgnoreWait by viewModel.syncPlay.ignoreWait.collectAsStateWithLifecycle()
 
-    LaunchedEffect(isCastConnected, uiState.defaultOrientation) {
+    LaunchedEffect(isCastConnected, uiState.uiPrefs.defaultOrientation) {
         activity?.let {
             if (!it.isDestroyed && !it.isFinishing) {
                 if (isTv) {
@@ -653,7 +653,7 @@ fun VideoPlayerScreen(
                 } else {
                     delay(400)
                     if (!it.isDestroyed && !it.isFinishing) {
-                        it.requestedOrientation = when (uiState.defaultOrientation) {
+                        it.requestedOrientation = when (uiState.uiPrefs.defaultOrientation) {
                             OrientationMode.SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                             OrientationMode.SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
                             OrientationMode.SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
@@ -1357,7 +1357,7 @@ fun VideoPlayerScreen(
 
             // Trickplay overlay for seek gestures
             AnimatedVisibility(
-                visible = uiState.trickplayOnSeekGesture && gestureTrickplayVisible,
+                visible = uiState.uiPrefs.trickplayOnSeekGesture && gestureTrickplayVisible,
                 enter = fadeIn(tween(150, easing = AlphaEasing)),
                 exit = fadeOut(tween(200, easing = AlphaEasing)),
                 modifier = Modifier.align(Alignment.Center),
@@ -1442,7 +1442,7 @@ fun VideoPlayerScreen(
             }
 
             if (isScreenLocked && !isInPipMode) {
-                val usePin = uiState.usePinForPlayerLock && uiState.hasPin
+                val usePin = uiState.uiPrefs.usePinForPlayerLock && uiState.uiPrefs.hasPin
                 if (usePin) {
                     PinLockOverlay(
                         visible = true,
@@ -1477,7 +1477,7 @@ fun VideoPlayerScreen(
             val abRepeat by viewModel.abRepeat.state.collectAsStateWithLifecycle()
             val syncPlay by viewModel.syncPlay.state.collectAsStateWithLifecycle()
 
-            if (uiState.showVideoStats) {
+            if (uiState.uiPrefs.showVideoStats) {
                 VideoStatsOverlay(
                     statsFlow = viewModel.videoStats,
                     currentPositionFlow = viewModel.currentPositionMs,
@@ -1695,9 +1695,9 @@ fun VideoPlayerScreen(
                 isConnectionMetered = uiState.isConnectionMetered,
                 subtitleDelayMs = uiState.subtitleStyle.offsetMs,
                 onSubtitleDelayClick = { showDelayOverlay = true },
-                showPlaybackMetadata = uiState.showPlaybackMetadata,
-                showClock = uiState.showClock,
-                showTimeRemaining = uiState.showTimeRemaining,
+                showPlaybackMetadata = uiState.uiPrefs.showPlaybackMetadata,
+                showClock = uiState.uiPrefs.showClock,
+                showTimeRemaining = uiState.uiPrefs.showTimeRemaining,
                 currentAspectRatio = aspectRatio,
                 detectedAspectRatio = detectedAspectRatio,
                 isVisible = showControls && !isInPipMode && !isScreenLocked,
@@ -1752,10 +1752,10 @@ fun VideoPlayerScreen(
                 syncPlayParticipantCount = syncPlay.syncPlayParticipantCount,
                 isSyncPlaySynced = syncPlay.isSyncPlaySynced,
                 isSyncPlaySyncing = syncPlay.isSyncPlaySyncing,
-                showVideoStats = uiState.showVideoStats,
+                showVideoStats = uiState.uiPrefs.showVideoStats,
                 onVideoStatsClick = onVideoStatsClick,
-                streamingQuality = uiState.streamingQuality,
-                playbackMode = uiState.playbackMode,
+                streamingQuality = uiState.uiPrefs.streamingQuality,
+                playbackMode = uiState.uiPrefs.playbackMode,
                 onQualityClick = onQualityClick,
                 onPlaybackModeClick = onPlaybackModeClick,
                 audioNormalizationMode = effectsState.audioNormalizationMode,
@@ -1794,7 +1794,7 @@ fun VideoPlayerScreen(
             } // end PlayerDarkTheme (control bars)
 
             AnimatedVisibility(
-                visible = !isTv && uiState.trickplayEnabled && showControls && isSeeking,
+                visible = !isTv && uiState.uiPrefs.trickplayEnabled && showControls && isSeeking,
                 enter = fadeIn(tween(150, easing = AlphaEasing)),
                 exit = fadeOut(tween(200, easing = AlphaEasing)),
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP.dp),
@@ -1844,8 +1844,8 @@ fun VideoPlayerScreen(
         snapshotFlow {
             Triple(
                 seekPositionMs,
-                isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null,
-                uiState.trickplayInfo,
+                isSeeking && uiState.uiPrefs.trickplayEnabled && uiState.uiPrefs.trickplayInfo != null,
+                uiState.uiPrefs.trickplayInfo,
             )
         }
             .conflate()
@@ -1872,8 +1872,8 @@ fun VideoPlayerScreen(
         snapshotFlow {
             Triple(
                 gestureSeekPositionMs,
-                isGestureSeeking && uiState.trickplayOnSeekGesture,
-                uiState.trickplayInfo,
+                isGestureSeeking && uiState.uiPrefs.trickplayOnSeekGesture,
+                uiState.uiPrefs.trickplayInfo,
             )
         }
             .conflate()
@@ -1903,7 +1903,7 @@ fun VideoPlayerScreen(
             if (!isTv && controlsHasFocus) {
                 return@LaunchedEffect
             }
-            val timeout = if (isTv) uiState.controlsTimeoutMs * 2 else uiState.controlsTimeoutMs
+            val timeout = if (isTv) uiState.uiPrefs.controlsTimeoutMs * 2 else uiState.uiPrefs.controlsTimeoutMs
             delay(timeout)
             showControls = false
         }
@@ -2412,8 +2412,8 @@ private fun PlayerSheetRouter(
          }
         is PlayerSheet.Quality -> {
             QualityPickerSheet(
-                currentQuality = uiState.streamingQuality,
-                adaptiveBitrateEnabled = uiState.adaptiveBitrateEnabled,
+                currentQuality = uiState.uiPrefs.streamingQuality,
+                adaptiveBitrateEnabled = uiState.uiPrefs.adaptiveBitrateEnabled,
                 onToggleAdaptiveBitrate = { viewModel.setAdaptiveBitrateEnabled(it) },
                 onSelect = { viewModel.setStreamingQuality(it) },
                 onDismiss = dismissSheet,
@@ -2421,7 +2421,7 @@ private fun PlayerSheetRouter(
         }
         is PlayerSheet.PlaybackMode -> {
             PlaybackModeSheet(
-                currentMode = uiState.playbackMode,
+                currentMode = uiState.uiPrefs.playbackMode,
                 onSelect = { viewModel.setPlaybackMode(it) },
                 onDismiss = dismissSheet,
             )

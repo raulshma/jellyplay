@@ -410,17 +410,17 @@ class VideoPlayerViewModelTest {
 
     @Test
     fun setPlaybackMode_updatesState() {
-        val target = if (viewModel.uiState.value.playbackMode == PlaybackMode.FORCE_TRANSCODE)
+        val target = if (viewModel.uiState.value.uiPrefs.playbackMode == PlaybackMode.FORCE_TRANSCODE)
             PlaybackMode.FORCE_DIRECT_PLAY else PlaybackMode.FORCE_TRANSCODE
         viewModel.setPlaybackMode(target)
-        assertEquals(target, viewModel.uiState.value.playbackMode)
+        assertEquals(target, viewModel.uiState.value.uiPrefs.playbackMode)
     }
 
     @Test
     fun toggleVideoStats_flipsEnabled() {
-        val before = viewModel.uiState.value.showVideoStats
+        val before = viewModel.uiState.value.uiPrefs.showVideoStats
         viewModel.toggleVideoStats()
-        assertEquals(!before, viewModel.uiState.value.showVideoStats)
+        assertEquals(!before, viewModel.uiState.value.uiPrefs.showVideoStats)
     }
 
     @Test

@@ -73,60 +73,47 @@ internal class SettingsProjector(
             subtitleStyleChanged = true
         }
 
-        diff(agg.videoPlayer.videoShowPlaybackMetadata, VideoPlayerUiState::showPlaybackMetadata) {
-            it.copy(showPlaybackMetadata = agg.videoPlayer.videoShowPlaybackMetadata)
+        // The control-visibility / pass-out / keep-screen-on mirrors live
+        // inside the stored uiPrefs slice, so the former `diff` property-
+        // select helper (removed once its last flat fields moved into the
+        // slice) can't reach them — same distinct-until-changed guards,
+        // hand-written against the slice leaves.
+        if (getUiState().uiPrefs.showPlaybackMetadata != agg.videoPlayer.videoShowPlaybackMetadata) {
+            updateUiState { it.copy(uiPrefs = it.uiPrefs.copy(showPlaybackMetadata = agg.videoPlayer.videoShowPlaybackMetadata)) }
         }
-        diff(agg.videoPlayer.showClockInPlayer, VideoPlayerUiState::showClock) {
-            it.copy(showClock = agg.videoPlayer.showClockInPlayer)
+        if (getUiState().uiPrefs.showClock != agg.videoPlayer.showClockInPlayer) {
+            updateUiState { it.copy(uiPrefs = it.uiPrefs.copy(showClock = agg.videoPlayer.showClockInPlayer)) }
         }
-        diff(agg.videoPlayer.showTimeRemaining, VideoPlayerUiState::showTimeRemaining) {
-            it.copy(showTimeRemaining = agg.videoPlayer.showTimeRemaining)
+        if (getUiState().uiPrefs.showTimeRemaining != agg.videoPlayer.showTimeRemaining) {
+            updateUiState { it.copy(uiPrefs = it.uiPrefs.copy(showTimeRemaining = agg.videoPlayer.showTimeRemaining)) }
         }
-        // TV zoom lives inside the stored videoFx slice, so the generic
-        // `diff` property-select helper can't reach it — same distinct-until-
+        // TV zoom lives inside the stored videoFx slice — same distinct-until-
         // changed guard, hand-written against the slice leaf.
         if (getUiState().videoFx.tvZoomModePercent != agg.videoPlayer.tvZoomModePercent) {
             updateUiState {
                 it.copy(videoFx = it.videoFx.copy(tvZoomModePercent = agg.videoPlayer.tvZoomModePercent))
             }
         }
-        diff(agg.playback.keepScreenOnDuringVideo, VideoPlayerUiState::keepScreenOnDuringVideo) {
-            it.copy(keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo)
+        if (getUiState().uiPrefs.keepScreenOnDuringVideo != agg.playback.keepScreenOnDuringVideo) {
+            updateUiState { it.copy(uiPrefs = it.uiPrefs.copy(keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo)) }
         }
-        diff(agg.videoPlayer.videoPassOutProtectionHours, VideoPlayerUiState::passOutProtectionHours) {
-            it.copy(passOutProtectionHours = agg.videoPlayer.videoPassOutProtectionHours)
+        if (getUiState().uiPrefs.passOutProtectionHours != agg.videoPlayer.videoPassOutProtectionHours) {
+            updateUiState { it.copy(uiPrefs = it.uiPrefs.copy(passOutProtectionHours = agg.videoPlayer.videoPassOutProtectionHours)) }
         }
-        // Countdown lives inside the stored autoplay slice, so the generic
-        // `diff` property-select helper can't reach it — same distinct-until-
-        // changed guard, hand-written against the slice leaf.
+        // Countdown lives inside the stored autoplay slice — same distinct-
+        // until-changed guard, hand-written against the slice leaf.
         if (getUiState().autoplay.autoPlayCountdownSec != agg.playback.autoPlayCountdownSec) {
             updateUiState {
                 it.copy(autoplay = it.autoplay.copy(autoPlayCountdownSec = agg.playback.autoPlayCountdownSec))
             }
         }
 
-        // PIN lock: two uiState fields driven by one pref + one derived flag.
+        // PIN lock: two uiPrefs leaves driven by one pref + one derived flag.
         val hasPin = agg.security.pinHash != null
-        if (getUiState().usePinForPlayerLock != agg.security.usePinForPlayerLock || getUiState().hasPin != hasPin) {
-            updateUiState { it.copy(usePinForPlayerLock = agg.security.usePinForPlayerLock, hasPin = hasPin) }
+        if (getUiState().uiPrefs.usePinForPlayerLock != agg.security.usePinForPlayerLock || getUiState().uiPrefs.hasPin != hasPin) {
+            updateUiState { it.copy(uiPrefs = it.uiPrefs.copy(usePinForPlayerLock = agg.security.usePinForPlayerLock, hasPin = hasPin)) }
         }
 
         return subtitleStyleChanged
-    }
-
-    /**
-     * Single-field diff helper: apply [copy] only when the current value of
-     * [selector] differs from [newValue]. Collapses the repeated 3-line
-     * `if (_uiState.value.X != prefs.X) _uiState.update { it.copy(…) }` pattern
-     * while keeping the distinct-until-changed guard per field.
-     */
-    private fun <T> diff(
-        newValue: T,
-        selector: kotlin.reflect.KProperty1<VideoPlayerUiState, T>,
-        copy: (VideoPlayerUiState) -> VideoPlayerUiState,
-    ) {
-        if (selector.get(getUiState()) != newValue) {
-            updateUiState(copy)
-        }
     }
 }

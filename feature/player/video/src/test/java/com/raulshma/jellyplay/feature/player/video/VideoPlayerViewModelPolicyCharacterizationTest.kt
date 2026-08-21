@@ -291,14 +291,14 @@ class VideoPlayerViewModelPolicyCharacterizationTest {
         vm.initialize("item-1", null, 0L)
         testScheduler.runCurrent()
         // The prefs projection seeded the forced mode from the aggregate.
-        assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, vm.uiState.value.playbackMode)
+        assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, vm.uiState.value.uiPrefs.playbackMode)
 
         val error = EngineError.Decoder("h264", null)
         fakeEngine.errorEmissions.tryEmit(error)
         testScheduler.runCurrent()
 
         // One-shot: mode flipped to transcode + one reload was performed.
-        assertEquals(PlaybackMode.FORCE_TRANSCODE, vm.uiState.value.playbackMode)
+        assertEquals(PlaybackMode.FORCE_TRANSCODE, vm.uiState.value.uiPrefs.playbackMode)
         coVerify(exactly = 1) {
             playbackRepository.resolvePlayback(
                 any(), any(), any(), any(), any(), any(), PlaybackMode.FORCE_TRANSCODE, any(),
@@ -360,17 +360,17 @@ class VideoPlayerViewModelPolicyCharacterizationTest {
         // First failure: auto-fallback consumes the latch.
         fakeEngine.errorEmissions.tryEmit(EngineError.Decoder("h264", null))
         testScheduler.runCurrent()
-        assertEquals(PlaybackMode.FORCE_TRANSCODE, vm.uiState.value.playbackMode)
+        assertEquals(PlaybackMode.FORCE_TRANSCODE, vm.uiState.value.uiPrefs.playbackMode)
 
         // User explicitly goes back to FORCE_DIRECT_PLAY — re-arms the latch.
         vm.setPlaybackMode(PlaybackMode.FORCE_DIRECT_PLAY)
         testScheduler.runCurrent()
-        assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, vm.uiState.value.playbackMode)
+        assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, vm.uiState.value.uiPrefs.playbackMode)
 
         // A new failure may fall back again.
         fakeEngine.errorEmissions.tryEmit(EngineError.Decoder("h264", null))
         testScheduler.runCurrent()
-        assertEquals(PlaybackMode.FORCE_TRANSCODE, vm.uiState.value.playbackMode)
+        assertEquals(PlaybackMode.FORCE_TRANSCODE, vm.uiState.value.uiPrefs.playbackMode)
         assertFalse("fallback should consume the error, not surface a dialog", vm.uiState.value.showPlaybackErrorDialog)
     }
 
@@ -472,7 +472,7 @@ class VideoPlayerViewModelPolicyCharacterizationTest {
     ) { vm ->
         vm.initialize("item-1", null, 0L)
         testScheduler.runCurrent()
-        assertEquals(1, vm.uiState.value.passOutProtectionHours)
+        assertEquals(1, vm.uiState.value.uiPrefs.passOutProtectionHours)
 
         var event: String? = null
         val collector = launch { event = vm.passOutEvents.first() }

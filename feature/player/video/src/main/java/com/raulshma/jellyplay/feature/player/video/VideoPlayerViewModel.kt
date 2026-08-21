@@ -64,6 +64,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -393,11 +394,11 @@ class VideoPlayerViewModel @Inject constructor(
     private fun createEngineEventCoordinator() = EngineEventCoordinator(
         scope = scope,
         engineFlow = playerSessionManager.engineFlow,
-        getPlaybackMode = { _uiState.value.playbackMode },
+        getPlaybackMode = { _uiState.value.uiPrefs.playbackMode },
         directPlayFallbackNotice = { errorText ->
             context.getString(R.string.player_direct_play_fallback, errorText)
         },
-        passOutHours = _uiState.flow.map { it.passOutProtectionHours }.distinctUntilChanged(),
+        passOutHours = _uiState.flow.map { it.uiPrefs.passOutProtectionHours }.distinctUntilChanged(),
     )
 
     /** Fan-out collectors for the coordinator's mirrors + decisions. */
@@ -496,7 +497,7 @@ class VideoPlayerViewModel @Inject constructor(
         adaptiveBitrateManager = adaptiveBitrateManager,
         syncPlayCastStore = syncPlayCastStore,
         getEngine = { playerSessionManager.engine },
-        getCurrentPlaybackMode = { _uiState.value.playbackMode },
+        getCurrentPlaybackMode = { _uiState.value.uiPrefs.playbackMode },
         getSessionState = { playerSessionManager.sessionState.value },
     )
     private val settingsProjector = SettingsProjector(
@@ -845,7 +846,7 @@ class VideoPlayerViewModel @Inject constructor(
             } else {
                 trickplayManager.initialize(itemId, info)
             }
-            _uiState.update { it.copy(trickplayInfo = info) }
+            _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(trickplayInfo = info)) }
         }
 
         if (source?.trickplayInfo == null) {
@@ -858,7 +859,7 @@ class VideoPlayerViewModel @Inject constructor(
                         .getLocalTrickplayDir(downloadPath, itemId)
                     if (cacheDir != null) {
                         trickplayManager.initializeLocal(itemId, localInfo, cacheDir)
-                        _uiState.update { it.copy(trickplayInfo = localInfo) }
+                        _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(trickplayInfo = localInfo)) }
                     }
                 } else {
                     // No local trickplay bundled with the download (the
@@ -876,7 +877,7 @@ class VideoPlayerViewModel @Inject constructor(
                     if (serverInfo != null) {
                         cacheDir.mkdirs()
                         trickplayManager.initializeWithCache(itemId, serverInfo, cacheDir)
-                        _uiState.update { it.copy(trickplayInfo = serverInfo) }
+                        _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(trickplayInfo = serverInfo)) }
                     }
                 }
             }
@@ -1204,7 +1205,7 @@ class VideoPlayerViewModel @Inject constructor(
                         // global default, preventing cross-item bleed.
                         dialogueBoostEnabled = false,
                         dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.NONE,
-                        keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo,
+                        uiPrefs = it.uiPrefs.copy(keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo),
                     )}
                     // Seed the audio-effects slice from the cached preferences —
                     // the same fields this collector used to write into UiState.
@@ -1383,14 +1384,14 @@ class VideoPlayerViewModel @Inject constructor(
             }
             is EngineDecision.FallbackToTranscode -> {
                 if (released) return
-                _uiState.update { it.copy(playbackMode = PlaybackMode.FORCE_TRANSCODE) }
+                _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(playbackMode = PlaybackMode.FORCE_TRANSCODE)) }
                 launch {
                     playbackStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
                     reportCurrentPlaybackStopped()
                     progressReporter.cancelJobs()
                     playerSessionManager.reloadPlayback(
                         PlaybackMode.FORCE_TRANSCODE,
-                        _uiState.value.streamingQuality,
+                        _uiState.value.uiPrefs.streamingQuality,
                         decision.fromPositionMs,
                     )
                     afterEngineReloadRebuildSessionAndTracking()
@@ -2258,11 +2259,11 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun setPlaybackMode(mode: PlaybackMode) {
-        if (_uiState.value.playbackMode == mode) return
+        if (_uiState.value.uiPrefs.playbackMode == mode) return
         // User explicitly changed the mode — re-arm the direct-play fallback so
         // a future FORCE_DIRECT_PLAY attempt can fail-and-retry again.
         engineEventCoordinator.onPlaybackModeChanged()
-        _uiState.update { it.copy(playbackMode = mode) }
+        _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(playbackMode = mode)) }
         launch {
             playbackStore.setPlaybackMode(mode)
             reloadPlaybackForMode()
@@ -2270,8 +2271,8 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun setStreamingQuality(quality: StreamingQuality) {
-        if (_uiState.value.streamingQuality == quality) return
-        _uiState.update { it.copy(streamingQuality = quality) }
+        if (_uiState.value.uiPrefs.streamingQuality == quality) return
+        _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(streamingQuality = quality)) }
         launch {
             playbackStore.setStreamingQuality(quality)
             reloadPlaybackForMode()
@@ -2285,8 +2286,8 @@ class VideoPlayerViewModel @Inject constructor(
      * transcoding high-bitrate media.
      */
     fun setAdaptiveBitrateEnabled(enabled: Boolean) {
-        if (_uiState.value.adaptiveBitrateEnabled == enabled) return
-        _uiState.update { it.copy(adaptiveBitrateEnabled = enabled) }
+        if (_uiState.value.uiPrefs.adaptiveBitrateEnabled == enabled) return
+        _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(adaptiveBitrateEnabled = enabled)) }
         launch {
             networkOfflineStore.setAdaptiveBitrateEnabled(enabled)
             reloadPlaybackForMode()
@@ -2302,8 +2303,8 @@ class VideoPlayerViewModel @Inject constructor(
      * no playable method.
      */
     private suspend fun reloadPlaybackForMode() {
-        val mode = _uiState.value.playbackMode
-        val quality = _uiState.value.streamingQuality
+        val mode = _uiState.value.uiPrefs.playbackMode
+        val quality = _uiState.value.uiPrefs.streamingQuality
         val pos = playerSessionManager.engine?.currentPositionMs ?: 0L
 
         // Stop-report the *current* server session before the swap: reloadPlayback
@@ -2324,7 +2325,7 @@ class VideoPlayerViewModel @Inject constructor(
             resolved.playMethod != com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY
         ) {
             userMessageBus.info("Direct Play unavailable for this item — falling back to transcode")
-            _uiState.update { it.copy(playbackMode = PlaybackMode.FORCE_TRANSCODE) }
+            _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(playbackMode = PlaybackMode.FORCE_TRANSCODE)) }
             launch {
                 playbackStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
                 reportCurrentPlaybackStopped()
@@ -2362,7 +2363,7 @@ class VideoPlayerViewModel @Inject constructor(
     fun retryWithEngine(playerType: PlayerType) {
         val currentPos = playerSessionManager.engine?.currentPositionMs ?: 0L
         val currentSpeed = _uiState.value.playbackSpeed
-        val currentQuality = _uiState.value.streamingQuality
+        val currentQuality = _uiState.value.uiPrefs.streamingQuality
         val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(currentQuality)?.toInt()
         progressReporter.cancelJobs()
         releaseVideoMediaSession()
@@ -2391,7 +2392,7 @@ class VideoPlayerViewModel @Inject constructor(
     fun retryPlayback() {
         val currentPos = playerSessionManager.engine?.currentPositionMs ?: 0L
         val currentSpeed = _uiState.value.playbackSpeed
-        val currentQuality = _uiState.value.streamingQuality
+        val currentQuality = _uiState.value.uiPrefs.streamingQuality
         val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(currentQuality)?.toInt()
         progressReporter.cancelJobs()
         releaseVideoMediaSession()
@@ -2858,8 +2859,8 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     fun toggleVideoStats() {
-        val newValue = !_uiState.value.showVideoStats
-        _uiState.update { it.copy(showVideoStats = newValue) }
+        val newValue = !_uiState.value.uiPrefs.showVideoStats
+        _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(showVideoStats = newValue)) }
         playerSessionManager.engine?.setVideoStatsEnabled(newValue)
     }
 
@@ -2891,7 +2892,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     suspend fun getTrickplayThumbnail(positionMs: Long): Bitmap? {
         val state = _uiState.value
-        if (!state.trickplayEnabled && !state.trickplayOnSeekGesture) return null
+        if (!state.uiPrefs.trickplayEnabled && !state.uiPrefs.trickplayOnSeekGesture) return null
         return trickplayManager.getThumbnail(positionMs)
     }
 
@@ -2961,8 +2962,21 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { currentState ->
             VideoPlayerUiState(
                 preferredPlayerType = currentState.preferredPlayerType,
-                defaultOrientation = currentState.defaultOrientation,
-                controlsTimeoutMs = currentState.controlsTimeoutMs,
+                // uiPrefs: the prefs-mirror leaves carry across an item switch
+                // (orientation, controls timeout, metadata/clock/time-remaining
+                // visibility, keep-screen-on); the per-item / runtime leaves
+                // (stats overlay, pass-out hours, trickplay info + toggles,
+                // quality, ABR, playback mode, lock/PIN flags) reset to
+                // defaults. A FRESH slice (not a .copy) mirrors the old flat
+                // constructor: unlisted leaves take slice defaults.
+                uiPrefs = PlayerUiPrefsState(
+                    defaultOrientation = currentState.uiPrefs.defaultOrientation,
+                    controlsTimeoutMs = currentState.uiPrefs.controlsTimeoutMs,
+                    showPlaybackMetadata = currentState.uiPrefs.showPlaybackMetadata,
+                    showClock = currentState.uiPrefs.showClock,
+                    showTimeRemaining = currentState.uiPrefs.showTimeRemaining,
+                    keepScreenOnDuringVideo = currentState.uiPrefs.keepScreenOnDuringVideo,
+                ),
                 // gestures: the prefs-mirror leaves carry across an item switch
                 // (seek window, gesture toggle, default speed, swipe cap,
                 // brightness flag + level); the runtime leaves (hold-speed
@@ -2987,13 +3001,9 @@ class VideoPlayerViewModel @Inject constructor(
                 episodes = currentState.episodes.copy(
                     videoEpisodeBrowserEnabled = currentState.episodes.videoEpisodeBrowserEnabled,
                 ),
-                showPlaybackMetadata = currentState.showPlaybackMetadata,
-                showClock = currentState.showClock,
-                showTimeRemaining = currentState.showTimeRemaining,
                 // videoFx: only the TV zoom carries across an item switch —
                 // the per-item effects and both aspect fields reset to defaults.
                 videoFx = currentState.videoFx.copy(tvZoomModePercent = currentState.videoFx.tvZoomModePercent),
-                keepScreenOnDuringVideo = currentState.keepScreenOnDuringVideo,
                 subtitleStyle = currentState.subtitleStyle,
                 // Reset per-item dialogue boost so it doesn't bleed into the next
                 // item before the resolver re-applies the per-item rule. (The one
