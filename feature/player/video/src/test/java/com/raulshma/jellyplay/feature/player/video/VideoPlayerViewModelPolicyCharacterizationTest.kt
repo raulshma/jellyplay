@@ -57,7 +57,6 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
-import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -135,7 +134,6 @@ class VideoPlayerViewModelPolicyCharacterizationTest {
         val castManager = mockk<CastManager>(relaxed = true)
         val jellyfinRemotePlayCastStrategy = mockk<com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy>(relaxed = true)
         val syncPlayManager = mockk<SyncPlayManager>(relaxed = true)
-        val okHttpClient = mockk<OkHttpClient>(relaxed = true)
         val adaptiveBitrateManager = mockk<AdaptiveBitrateManager>(relaxed = true)
         val networkMonitor = mockk<NetworkMonitor>(relaxed = true).apply {
             every { isMetered } returns MutableStateFlow(false)
@@ -242,7 +240,6 @@ class VideoPlayerViewModelPolicyCharacterizationTest {
             castManager = castManager,
             jellyfinRemotePlayCastStrategy = jellyfinRemotePlayCastStrategy,
             syncPlayManager = syncPlayManager,
-            okHttpClient = okHttpClient,
             adaptiveBitrateManager = adaptiveBitrateManager,
             networkMonitor = networkMonitor,
             activePlayerController = activePlayerController,

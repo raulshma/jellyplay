@@ -9,8 +9,7 @@ import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -18,7 +17,7 @@ import kotlinx.coroutines.launch
 
 internal class PlaybackProgressReporter(
     private val playbackRepository: PlaybackRepository,
-    private val viewModel: ViewModel,
+    private val scope: CoroutineScope,
     private val uiState: StateFlowHandle<VideoPlayerUiState>,
     private val getCurrentItemId: () -> String?,
     private val getPlaySessionId: () -> String,
@@ -51,7 +50,7 @@ internal class PlaybackProgressReporter(
         watchedThresholdTriggered = false
         cachedDurationMs = 0L
         val engine = getMediaEngine() ?: return
-        positionJob = viewModel.viewModelScope.launch {
+        positionJob = scope.launch {
             var lastPos = Long.MIN_VALUE
             var lastDur = Long.MIN_VALUE
             engine.positionFlow.collect { pos ->
@@ -117,7 +116,7 @@ internal class PlaybackProgressReporter(
     fun startProgressReporting() {
         progressJob?.cancel()
         lastPausedPositionTicks = -1L
-        progressJob = viewModel.viewModelScope.launch {
+        progressJob = scope.launch {
             while (isActive) {
                 delay(10_000)
                 if (getIncognitoModeEnabled()) continue

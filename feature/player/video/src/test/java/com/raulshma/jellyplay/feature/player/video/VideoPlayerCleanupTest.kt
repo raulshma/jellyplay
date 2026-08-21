@@ -42,7 +42,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.After
 import org.junit.Before
-import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -113,12 +112,11 @@ class VideoPlayerCleanupTest {
     @Test
     fun playbackProgressReporter_cancelJobs_resetsTriggers() {
         val playbackRepo = mockk<PlaybackRepository>(relaxed = true)
-        val viewModel = mockk<ViewModel>(relaxed = true)
         val uiState = StateFlowHandle(MutableStateFlow(VideoPlayerUiState()))
 
         val reporter = PlaybackProgressReporter(
             playbackRepository = playbackRepo,
-            viewModel = viewModel,
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
             uiState = uiState,
             getCurrentItemId = { "item1" },
             getPlaySessionId = { "session1" },
@@ -267,7 +265,6 @@ class VideoPlayerCleanupTest {
             castManager = castManager,
             jellyfinRemotePlayCastStrategy = jellyfinRemotePlayCastStrategy,
             syncPlayManager = syncPlayManager,
-            okHttpClient = okHttpClient,
             adaptiveBitrateManager = adaptiveBitrateManager,
             networkMonitor = networkMonitor,
             activePlayerController = activePlayerController,
@@ -343,7 +340,6 @@ class VideoPlayerCleanupTest {
             castManager = mockk(relaxed = true),
             jellyfinRemotePlayCastStrategy = mockk(relaxed = true),
             syncPlayManager = syncPlayManager,
-            okHttpClient = mockk(relaxed = true),
             adaptiveBitrateManager = mockk(relaxed = true),
             networkMonitor = mockk(relaxed = true) { every { isMetered } returns MutableStateFlow(false) },
             activePlayerController = mockk(relaxed = true),

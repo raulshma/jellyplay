@@ -282,7 +282,6 @@ class VideoPlayerResetEquivalenceTest {
             castManager = castManager,
             jellyfinRemotePlayCastStrategy = jellyfinRemotePlayCastStrategy,
             syncPlayManager = syncPlayManager,
-            okHttpClient = okHttpClient,
             adaptiveBitrateManager = adaptiveBitrateManager,
             networkMonitor = networkMonitor,
             activePlayerController = activePlayerController,

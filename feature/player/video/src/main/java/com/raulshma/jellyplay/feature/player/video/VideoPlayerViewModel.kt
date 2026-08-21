@@ -6,6 +6,7 @@ import android.net.Uri
 import android.util.Log
 import android.util.Rational
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import androidx.media3.common.MediaItem
@@ -95,7 +96,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import javax.inject.Inject
 
 /** Minimum resolved duration (ms) before smart-download auto-cleanup may fire. */
@@ -283,7 +283,6 @@ class VideoPlayerViewModel @Inject constructor(
     val castManager: CastManager,
     private val jellyfinRemotePlayCastStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy,
     private val syncPlayManager: SyncPlayManager,
-    private val okHttpClient: OkHttpClient,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
     private val networkMonitor: NetworkMonitor,
     private val activePlayerController: ActivePlayerController,
@@ -642,7 +641,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     private val progressReporter = PlaybackProgressReporter(
         playbackRepository = playbackRepository,
-        viewModel = this,
+        scope = viewModelScope,
         uiState = _uiState,
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
         getPlaySessionId = { playerSessionManager.sessionState.value.playSessionId ?: playSessionId },
