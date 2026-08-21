@@ -73,40 +73,46 @@ internal class SettingsProjector(
             subtitleStyleChanged = true
         }
 
-        // The control-visibility / pass-out / keep-screen-on mirrors live
-        // inside the stored uiPrefs slice, so the former `diff` property-
-        // select helper (removed once its last flat fields moved into the
-        // slice) can't reach them — same distinct-until-changed guards,
-        // hand-written against the slice leaves.
-        if (getUiState().uiPrefs.showPlaybackMetadata != agg.videoPlayer.videoShowPlaybackMetadata) {
-            updateUiState { it.copy(uiPrefs = it.uiPrefs.copy(showPlaybackMetadata = agg.videoPlayer.videoShowPlaybackMetadata)) }
-        }
-        if (getUiState().uiPrefs.showClock != agg.videoPlayer.showClockInPlayer) {
-            updateUiState { it.copy(uiPrefs = it.uiPrefs.copy(showClock = agg.videoPlayer.showClockInPlayer)) }
-        }
-        if (getUiState().uiPrefs.showTimeRemaining != agg.videoPlayer.showTimeRemaining) {
-            updateUiState { it.copy(uiPrefs = it.uiPrefs.copy(showTimeRemaining = agg.videoPlayer.showTimeRemaining)) }
-        }
-        // TV zoom lives inside the stored videoFx slice — same distinct-until-
-        // changed guard, hand-written against the slice leaf.
-        if (getUiState().videoFx.tvZoomModePercent != agg.videoPlayer.tvZoomModePercent) {
-            updateUiState {
-                it.copy(videoFx = it.videoFx.copy(tvZoomModePercent = agg.videoPlayer.tvZoomModePercent))
-            }
-        }
-        if (getUiState().uiPrefs.keepScreenOnDuringVideo != agg.playback.keepScreenOnDuringVideo) {
-            updateUiState { it.copy(uiPrefs = it.uiPrefs.copy(keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo)) }
-        }
-        if (getUiState().uiPrefs.passOutProtectionHours != agg.videoPlayer.videoPassOutProtectionHours) {
-            updateUiState { it.copy(uiPrefs = it.uiPrefs.copy(passOutProtectionHours = agg.videoPlayer.videoPassOutProtectionHours)) }
-        }
-        // Countdown lives inside the stored autoplay slice — same distinct-
-        // until-changed guard, hand-written against the slice leaf.
-        if (getUiState().autoplay.autoPlayCountdownSec != agg.playback.autoPlayCountdownSec) {
-            updateUiState {
-                it.copy(autoplay = it.autoplay.copy(autoPlayCountdownSec = agg.playback.autoPlayCountdownSec))
-            }
-        }
+        // Slice-aware distinct-until-changed guards. The former generic
+        // `diff` property-select helper cannot reach stored slice leaves
+        // (KProperty1<VideoPlayerUiState,*> does not traverse the slice),
+        // so each leaf uses a slice-scoped helper that preserves the
+        // single-copy guard without duplicating the if/update shape.
+        syncUiPref(
+            selector = { it.showPlaybackMetadata },
+            newValue = agg.videoPlayer.videoShowPlaybackMetadata,
+            updater = { prefs, v -> prefs.copy(showPlaybackMetadata = v) },
+        )
+        syncUiPref(
+            selector = { it.showClock },
+            newValue = agg.videoPlayer.showClockInPlayer,
+            updater = { prefs, v -> prefs.copy(showClock = v) },
+        )
+        syncUiPref(
+            selector = { it.showTimeRemaining },
+            newValue = agg.videoPlayer.showTimeRemaining,
+            updater = { prefs, v -> prefs.copy(showTimeRemaining = v) },
+        )
+        syncVideoFxPref(
+            selector = { it.tvZoomModePercent },
+            newValue = agg.videoPlayer.tvZoomModePercent,
+            updater = { fx, v -> fx.copy(tvZoomModePercent = v) },
+        )
+        syncUiPref(
+            selector = { it.keepScreenOnDuringVideo },
+            newValue = agg.playback.keepScreenOnDuringVideo,
+            updater = { prefs, v -> prefs.copy(keepScreenOnDuringVideo = v) },
+        )
+        syncUiPref(
+            selector = { it.passOutProtectionHours },
+            newValue = agg.videoPlayer.videoPassOutProtectionHours,
+            updater = { prefs, v -> prefs.copy(passOutProtectionHours = v) },
+        )
+        syncAutoplayPref(
+            selector = { it.autoPlayCountdownSec },
+            newValue = agg.playback.autoPlayCountdownSec,
+            updater = { ap, v -> ap.copy(autoPlayCountdownSec = v) },
+        )
 
         // PIN lock: two uiPrefs leaves driven by one pref + one derived flag.
         val hasPin = agg.security.pinHash != null
@@ -115,5 +121,38 @@ internal class SettingsProjector(
         }
 
         return subtitleStyleChanged
+    }
+
+    private inline fun <T> syncUiPref(
+        selector: (com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState) -> T,
+        newValue: T,
+        crossinline updater: (com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState, T) -> com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState,
+    ) {
+        val current = selector(getUiState().uiPrefs)
+        if (current != newValue) {
+            updateUiState { it.copy(uiPrefs = updater(it.uiPrefs, newValue)) }
+        }
+    }
+
+    private inline fun <T> syncVideoFxPref(
+        selector: (com.raulshma.jellyplay.feature.player.video.state.VideoFxState) -> T,
+        newValue: T,
+        crossinline updater: (com.raulshma.jellyplay.feature.player.video.state.VideoFxState, T) -> com.raulshma.jellyplay.feature.player.video.state.VideoFxState,
+    ) {
+        val current = selector(getUiState().videoFx)
+        if (current != newValue) {
+            updateUiState { it.copy(videoFx = updater(it.videoFx, newValue)) }
+        }
+    }
+
+    private inline fun <T> syncAutoplayPref(
+        selector: (com.raulshma.jellyplay.feature.player.video.state.AutoplayState) -> T,
+        newValue: T,
+        crossinline updater: (com.raulshma.jellyplay.feature.player.video.state.AutoplayState, T) -> com.raulshma.jellyplay.feature.player.video.state.AutoplayState,
+    ) {
+        val current = selector(getUiState().autoplay)
+        if (current != newValue) {
+            updateUiState { it.copy(autoplay = updater(it.autoplay, newValue)) }
+        }
     }
 }

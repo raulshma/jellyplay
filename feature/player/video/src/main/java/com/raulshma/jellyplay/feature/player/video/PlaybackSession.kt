@@ -322,18 +322,10 @@ internal class PlaybackSession(
             }
             is EngineDecision.FallbackToTranscode -> {
                 if (released) return
-                setUiPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
-                scope.launch {
-                    playbackStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
-                    reportCurrentPlaybackStopped()
-                    progressReporter.cancelJobs()
-                    playerSessionManager.reloadPlayback(
-                        PlaybackMode.FORCE_TRANSCODE,
-                        getStreamingQuality(),
-                        decision.fromPositionMs,
-                    )
-                    afterEngineReloadRebuildSessionAndTracking()
-                }
+                launchFallbackToTranscode(
+                    fromPositionMs = decision.fromPositionMs,
+                    quality = getStreamingQuality(),
+                )
             }
             EngineDecision.PlaybackEnded -> {
                 if (!released) _events.tryEmit(SessionEvent.PlaybackEnded)
@@ -588,17 +580,10 @@ internal class PlaybackSession(
             _events.tryEmit(
                 SessionEvent.InformUser("Direct Play unavailable for this item — falling back to transcode")
             )
-            setUiPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
-            scope.launch {
-                playbackStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
-                reportCurrentPlaybackStopped()
-                progressReporter.cancelJobs()
-                playerSessionManager.reloadPlayback(
-                    PlaybackMode.FORCE_TRANSCODE, quality,
-                    playerSessionManager.engine?.currentPositionMs ?: pos,
-                )
-                afterEngineReloadRebuildSessionAndTracking()
-            }
+            launchFallbackToTranscode(
+                fromPositionMs = playerSessionManager.engine?.currentPositionMs ?: pos,
+                quality = quality,
+            )
         }
     }
 
@@ -621,6 +606,21 @@ internal class PlaybackSession(
         )
         progressReporter.startPositionTracking()
         progressReporter.startProgressReporting()
+    }
+
+    private fun launchFallbackToTranscode(fromPositionMs: Long, quality: StreamingQuality) {
+        setUiPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
+        scope.launch {
+            playbackStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
+            reportCurrentPlaybackStopped()
+            progressReporter.cancelJobs()
+            playerSessionManager.reloadPlayback(
+                PlaybackMode.FORCE_TRANSCODE,
+                quality,
+                fromPositionMs,
+            )
+            afterEngineReloadRebuildSessionAndTracking()
+        }
     }
 
     /**
