@@ -40,10 +40,10 @@ private class LoadedFlag {
  * across process death and cold start. Extracted from `UserPreferencesStore`
  * (where they accreted) so the god store no longer carries widget-I/O concerns.
  *
- * **Storage**: injects the shared `"user_prefs"` DataStore provided by
- * [com.raulshma.jellyplay.core.datastore.di.DataStoreModule] — same file as
- * `UserPreferencesStore` and the other extracted stores, never a second
- * DataStore instance (AndroidX forbids that).
+ * **Storage**: injects the shared `"user_prefs"` DataStore (Koin definition
+ * in `di.DatastoreKoinModules` / platform `di.AndroidDatastoreModule` since
+ * Phase C4) — same file as `UserPreferencesStore` and the other extracted
+ * stores, never a second DataStore instance (AndroidX forbids that).
  */
 class WidgetDataStore constructor(
     private val dataStore: DataStore<Preferences>,

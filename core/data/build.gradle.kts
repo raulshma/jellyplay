@@ -51,6 +51,10 @@ dependencies {
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
+
+    // Koin bridge accessor (di/KoinBridge.kt): the OkHttpConfigProvider
+    // Hilt binding delegates to the Koin-owned definition (Phase C4).
+    implementation(libs.koin.core)
     implementation(libs.hilt.work)
     ksp(libs.hilt.compiler)
     implementation(libs.kotlinx.serialization.json)

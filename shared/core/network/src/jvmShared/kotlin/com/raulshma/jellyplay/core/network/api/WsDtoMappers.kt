@@ -7,12 +7,9 @@ import com.raulshma.jellyplay.core.model.TaskExecutionInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.model.TaskTriggerInfo
 
-// C3 note: these org.json WebSocket-payload parsers used to live in
-// JellyfinDtoMappers.kt. They stayed in the legacy Android shim because their
-// consumers — the realtime channels — inject the Hilt-qualified
-// @ApplicationScope CoroutineScope whose annotation + provider live in the
-// legacy :core:datastore shim, so the channels (and thus this parsing) could
-// not move into :shared:core:network. org.json is an android.jar type here.
+// C4 note: these org.json WebSocket-payload parsers moved from the legacy
+// Android shim together with the realtime channels (jvmShared keeps org.json:
+// android resolves it from android.jar, jvm pulls the real artifact).
 
 /**
  * Parses a PascalCase [org.json.JSONObject] `TaskInfo` from the Jellyfin

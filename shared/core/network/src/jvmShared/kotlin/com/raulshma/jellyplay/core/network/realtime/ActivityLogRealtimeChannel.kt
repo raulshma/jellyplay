@@ -19,8 +19,6 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import java.util.concurrent.atomic.AtomicInteger
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Cold flow of live server activity-log entries over a dedicated WebSocket.
@@ -39,8 +37,7 @@ import javax.inject.Singleton
  * [knownIds] seeds dedupe for the polling fallback so the first poll does not
  * replay entries the caller already shows.
  */
-@Singleton
-class ActivityLogRealtimeChannel @Inject constructor(
+class ActivityLogRealtimeChannel(
     private val apiClient: JellyfinApiClient,
     private val engine: JellyfinApiEngine,
     private val serverIdentityStore: ServerIdentityStore,

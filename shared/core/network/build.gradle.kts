@@ -58,6 +58,9 @@ kotlin {
             // JellyfinApiEngine + the realtime channels inject
             // ServerIdentityStore / PlaybackStore / SubtitleProviderPreferencesStore.
             api(project(":shared:core:datastore"))
+            // Koin construction owner (C4): networkJvmModule + qualifiers;
+            // api so androidMain/jvmMain/jvmTest see the DSL without re-declaring.
+            api(libs.koin.core)
             implementation(libs.jellyfin.core)
             implementation(libs.okhttp)
             implementation(libs.okhttp.logging.interceptor)
@@ -85,6 +88,9 @@ kotlin {
             implementation(libs.okhttp)
             implementation(libs.okhttp.mockwebserver)
             implementation(libs.mockk)
+            // Koin module smoke tests (C4): load networkJvmModule +
+            // desktopNetworkModule against the datastore modules.
+            implementation(libs.koin.test)
         }
     }
 }

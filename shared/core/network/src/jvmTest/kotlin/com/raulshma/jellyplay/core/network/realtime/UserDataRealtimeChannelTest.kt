@@ -20,10 +20,10 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.json.JSONArray
 import org.json.JSONObject
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * Pure policy tests for [UserDataRealtimeChannel]: parse + current-user
@@ -38,7 +38,7 @@ class UserDataRealtimeChannelTest {
 
     private val socketEvents = MutableSharedFlow<WebSocketEvent>(extraBufferCapacity = 64)
 
-    @Before
+    @BeforeTest
     fun setUp() {
         webSocketClient = mockk()
         engine = mockk()

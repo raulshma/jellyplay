@@ -1,8 +1,7 @@
 package com.raulshma.jellyplay.core.network.realtime
 
-import android.util.Log
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
+import com.raulshma.jellyplay.core.network.NetworkLog
 import com.raulshma.jellyplay.core.network.api.toScheduledTaskInfo
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.network.websocket.WebSocketEvent
@@ -17,8 +16,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Realtime stream of Jellyfin scheduled tasks over the shared [JellyfinWebSocketClient].
@@ -40,10 +37,9 @@ import javax.inject.Singleton
  * the Start message is re-sent, because the server drops per-socket subscriptions
  * when the connection closes.
  */
-@Singleton
-class ScheduledTasksRealtimeChannel @Inject constructor(
+class ScheduledTasksRealtimeChannel(
     private val webSocketClient: JellyfinWebSocketClient,
-    @ApplicationScope private val scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) {
     /**
      * Wall time of the last successfully parsed ScheduledTasksInfo push
@@ -63,7 +59,7 @@ class ScheduledTasksRealtimeChannel @Inject constructor(
         val connectionJob: Job = scope.launch {
             webSocketClient.isConnected.collect { connected ->
                 if (connected && !lastConnected) {
-                    Log.d(TAG, "Socket reconnected, re-subscribing to ScheduledTasksInfo")
+                    NetworkLog.d(TAG, "Socket reconnected, re-subscribing to ScheduledTasksInfo")
                     sendStart()
                 }
                 lastConnected = connected
@@ -143,7 +139,7 @@ class ScheduledTasksRealtimeChannel @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse ScheduledTasksInfo payload", e)
+            NetworkLog.w(TAG, "Failed to parse ScheduledTasksInfo payload", e)
             null
         }
     }

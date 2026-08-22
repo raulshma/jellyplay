@@ -219,6 +219,10 @@ dependencies {
     implementation(libs.datastore.preferences)
 
     implementation(libs.hilt.android)
+
+    // Koin composition root (Phase C4): startKoin in JellyPlayApplication
+    // loads the shared-module definitions; Hilt shims bridge to them.
+    implementation(libs.koin.core)
     ksp(libs.hilt.android.compiler)
     implementation(libs.hilt.work)
     ksp(libs.hilt.compiler)

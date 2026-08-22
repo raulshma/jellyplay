@@ -30,6 +30,8 @@ android {
 dependencies {
     api(project(":shared:core:database"))
 
+    // Phase C4: the Hilt providers bridge to Koin (KoinBridge helper).
+    implementation(libs.koin.core)
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
 }

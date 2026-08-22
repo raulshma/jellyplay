@@ -35,10 +35,22 @@ kotlin {
         getByName("androidMain") { dependsOn(jvmShared) }
         getByName("jvmMain") { dependsOn(jvmShared) }
 
+        getByName("jvmShared").dependencies {
+            // Module/qualifier types appear in the public di signatures
+            // (Phase C4 Koin construction owner).
+            api(libs.koin.core)
+        }
+
         getByName("commonMain").dependencies {
             api(project(":shared:core:model"))
             api(libs.room.runtime)
             implementation(libs.kotlinx.serialization.json)
+        }
+        getByName("jvmMain").dependencies {
+            implementation(libs.okio)
+            // BundledSQLiteDriver for the desktop Room builder
+            // (DesktopDatabaseModule, Phase C4).
+            implementation(libs.androidx.sqlite.bundled)
         }
         getByName("jvmTest").dependencies {
             implementation(kotlin("test"))
@@ -46,6 +58,7 @@ kotlin {
             // BundledSQLiteDriver for in-memory DAO tests and the JVM-driver
             // migration chain verification (plan §S4).
             implementation(libs.androidx.sqlite.bundled)
+            implementation(libs.koin.test)
         }
 
     }

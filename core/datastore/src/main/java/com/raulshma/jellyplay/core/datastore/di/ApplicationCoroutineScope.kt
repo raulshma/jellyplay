@@ -5,8 +5,6 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import javax.inject.Qualifier
 import javax.inject.Singleton
 
@@ -18,9 +16,15 @@ annotation class ApplicationScope
 @InstallIn(SingletonComponent::class)
 object CoroutineScopeModule {
 
+    /**
+     * Phase C4: Koin owns the scope (datastoreCommonModule's
+     * DatastoreQualifiers.applicationScope single — SupervisorJob() +
+     * Dispatchers.Default); this bridge keeps both frameworks on ONE scope
+     * instance.
+     */
     @ApplicationScope
     @Singleton
     @Provides
     fun provideApplicationCoroutineScope(): CoroutineScope =
-        CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        koin().get(DatastoreQualifiers.applicationScope)
 }

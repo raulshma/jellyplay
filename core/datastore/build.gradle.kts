@@ -35,9 +35,11 @@ android {
 dependencies {
     api(project(":shared:core:datastore"))
 
-    // Context.preferencesDataStore delegate + PreferenceDataStoreFactory
+    // Context.preferenceDataStore delegate + PreferenceDataStoreFactory
     // (the Android artifact; the multiplatform core comes via the shared api).
     implementation(libs.datastore.preferences)
+    // Phase C4: the Hilt providers bridge to Koin (KoinBridge helper).
+    implementation(libs.koin.core)
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
 }

@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.network.realtime
 
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
@@ -11,8 +10,6 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.shareIn
 import org.json.JSONObject
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Realtime stream of `UserDataChanged` pushes over the shared
@@ -31,11 +28,10 @@ import javax.inject.Singleton
  * mismatched push must never trigger another user's refresh. Malformed
  * payloads (missing `UserId` / bad `UserDataList`) are silently dropped.
  */
-@Singleton
-class UserDataRealtimeChannel @Inject constructor(
+class UserDataRealtimeChannel(
     private val webSocketClient: JellyfinWebSocketClient,
     private val engine: JellyfinApiEngine,
-    @ApplicationScope private val scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) {
     /**
      * Parsed user-data changes for the current user. replay = 0: a late

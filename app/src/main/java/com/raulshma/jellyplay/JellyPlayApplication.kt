@@ -10,9 +10,18 @@ import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import coil3.size.Size
+import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
+import com.raulshma.jellyplay.core.datastore.di.androidDatastoreModule
+import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
+import com.raulshma.jellyplay.core.database.di.androidDatabaseModule
+import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.model.ImageCache
+import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
+import com.raulshma.jellyplay.core.network.di.androidNetworkModule
+import com.raulshma.jellyplay.core.network.di.networkJvmModule
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
@@ -23,10 +32,27 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.koin.core.context.startKoin
+import org.koin.dsl.module
 import javax.inject.Inject
 
 @HiltAndroidApp
 class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
+
+    private companion object {
+        // OkHttpConfigProvider's impl class lives in :core:data until that
+        // module migrates (Phase C4 part 2); the app composition root owns its
+        // Koin definition so the shared network module's base OkHttpClient
+        // can resolve it alongside the other shared-module definitions.
+        val appNetworkConfigModule = module {
+            single<OkHttpConfigProvider> {
+                OkHttpConfigProviderImpl(
+                    networkOfflineStore = get(),
+                    scope = get(DatastoreQualifiers.applicationScope),
+                )
+            }
+        }
+    }
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
 
@@ -96,6 +122,22 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     }
 
     override fun onCreate() {
+        // Koin owns construction for the shared modules (plan §Phase C4); the
+        // legacy Hilt shims bridge every binding to these definitions. MUST
+        // run before super.onCreate() — Hilt field-injects bridged types
+        // (e.g. networkOfflineStore) during super.onCreate(), and definitions
+        // are lazy, so this adds no cold-start construction cost.
+        startKoin {
+            modules(
+                appNetworkConfigModule,
+                datastoreCommonModule,
+                androidDatastoreModule(this@JellyPlayApplication),
+                databaseDaosModule,
+                androidDatabaseModule(this@JellyPlayApplication),
+                networkJvmModule,
+                androidNetworkModule(this@JellyPlayApplication),
+            )
+        }
         super.onCreate()
         // Critical path: audio + widget updaters (no dependency on the groups
         // below). Also pre-warms (a) the network-offline DataStore slice — the

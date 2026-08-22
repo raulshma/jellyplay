@@ -3,9 +3,6 @@ package com.raulshma.jellyplay.core.network.di
 import android.content.Context
 import android.net.wifi.WifiManager
 import com.raulshma.jellyplay.core.network.DiscoveryMulticastGuard
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Android [DiscoveryMulticastGuard]: holds a `WifiManager.MulticastLock` for
@@ -18,10 +15,11 @@ import javax.inject.Singleton
  * against double-release) on the matching release. Acquire/release pairs come
  * from the discovery flow's try/finally, so they are balanced; the guard is
  * synchronized anyway because it is a singleton shared across flows.
+ *
+ * C4: constructed by [androidNetworkModule] (application context).
  */
-@Singleton
-class AndroidMulticastLockGuard @Inject constructor(
-    @ApplicationContext private val context: Context,
+class AndroidMulticastLockGuard(
+    private val context: Context,
 ) : DiscoveryMulticastGuard {
 
     private val lock = Any()

@@ -40,6 +40,12 @@ kotlin {
         getByName("androidMain") { dependsOn(jvmShared) }
         getByName("jvmMain") { dependsOn(jvmShared) }
 
+        getByName("jvmShared").dependencies {
+            // Module/qualifier types appear in the public di signatures
+            // (Phase C4 Koin construction owner). Never visible to wasmJs.
+            api(libs.koin.core)
+        }
+
         getByName("commonMain").dependencies {
             api(project(":shared:core:model"))
             // Multiplatform core: Preferences/Key/edit + PreferenceDataStoreFactory
@@ -67,6 +73,7 @@ kotlin {
         getByName("jvmTest").dependencies {
             implementation(kotlin("test"))
             implementation(libs.coroutines.test)
+            implementation(libs.koin.test)
         }
     }
 }

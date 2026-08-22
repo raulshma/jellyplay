@@ -91,6 +91,14 @@ abstract class DataModule {
         @Singleton
         fun provideLyricsRepository(mediaRepository: MediaRepository): LyricsRepository =
             mediaRepository
+
+        // Koin-constructed since Phase C4 (the shared network module's base
+        // OkHttpClient resolves it from the Koin container): this bridge keeps
+        // the Hilt graph pointing at the same instance the Koin definitions
+        // build. The app composition root owns the definition.
+        @dagger.Provides
+        @Singleton
+        fun provideOkHttpConfigProvider(): OkHttpConfigProvider = koin().get()
     }
 
     @Binds
@@ -300,9 +308,6 @@ abstract class DataModule {
     @Singleton
     abstract fun bindDownloadTransferClient(impl: OkHttpDownloadTransferClient): DownloadTransferClient
 
-    @Binds
-    @Singleton
-    abstract fun bindOkHttpConfigProvider(impl: OkHttpConfigProviderImpl): OkHttpConfigProvider
 
     @Binds
     @Singleton

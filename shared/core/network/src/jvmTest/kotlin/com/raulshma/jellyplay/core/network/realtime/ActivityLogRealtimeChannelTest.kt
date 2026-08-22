@@ -19,11 +19,11 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -38,7 +38,7 @@ class ActivityLogRealtimeChannelTest {
     private var serverSocket: WebSocket? = null
     private val opened = CountDownLatch(1)
 
-    @Before
+    @BeforeTest
     fun setUp() {
         server = MockWebServer()
         server.start()
@@ -52,7 +52,7 @@ class ActivityLogRealtimeChannelTest {
         channel = ActivityLogRealtimeChannel(apiClient, engine, serverIdentityStore)
     }
 
-    @After
+    @AfterTest
     fun tearDown() {
         server.shutdown()
     }
@@ -70,7 +70,7 @@ class ActivityLogRealtimeChannelTest {
     }
 
     private fun awaitOpened() {
-        assertTrue("socket never opened", opened.await(5, TimeUnit.SECONDS))
+        assertTrue(opened.await(5, TimeUnit.SECONDS), "socket never opened")
     }
 
     // Real time: the socket handshake happens on OkHttp threads, outside any
