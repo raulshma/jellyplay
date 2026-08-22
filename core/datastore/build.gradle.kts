@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
@@ -18,8 +17,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
-        // Annotation-only Compose usage (@Immutable/@Stable on data classes):
-        // compose.runtime suffices, no compiler plugin needed.
         buildConfig = false
         resValues = false
     }
@@ -30,20 +27,17 @@ android {
     }
 }
 
+// KMP cutover shim (docs/kmp-migration-plan.md §Phase C2): store classes live
+// in :shared:core:datastore under the identical package; this module keeps
+// only the Android DI wiring (Hilt modules + the Context-based user_prefs
+// delegate) and re-exports the shared module so every consumer keeps
+// compiling unchanged. DI wiring moves to Koin at §Phase C4/X.
 dependencies {
-    implementation(project(":core:model"))
-    implementation(platform(libs.compose.bom))
+    api(project(":shared:core:datastore"))
 
+    // Context.preferencesDataStore delegate + PreferenceDataStoreFactory
+    // (the Android artifact; the multiplatform core comes via the shared api).
     implementation(libs.datastore.preferences)
-    implementation(libs.security.crypto)
-    implementation(libs.compose.runtime)
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
-    implementation(libs.kotlinx.serialization.json)
-
-    testImplementation(libs.junit)
-    testImplementation(libs.coroutines.test)
-    testImplementation(libs.robolectric)
-    testImplementation(libs.androidx.junit)
-    testImplementation(libs.androidx.test.core)
 }

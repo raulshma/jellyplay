@@ -32,6 +32,8 @@ coil = "3.5.0"
 multiplatformMarkdownRenderer = "0.43.0"
 room = "2.8.4"
 datastore = "1.2.1"
+okio = "3.9.0"
+javakeyring = "1.0.4"
 paging = "3.5.0"
 pagingCompose = "3.5.0"
 workManager = "2.11.2"
@@ -164,6 +166,9 @@ room-compiler = { group = "androidx.room", name = "room-compiler", version.ref =
 
 # DataStore
 datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+datastore-preferences-core = { group = "androidx.datastore", name = "datastore-preferences-core", version.ref = "datastore" }
+okio = { group = "com.squareup.okio", name = "okio", version.ref = "okio" }
+java-keyring = { group = "com.github.javakeyring", name = "java-keyring", version.ref = "javakeyring" }
 
 # Paging
 paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }

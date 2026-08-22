@@ -66,3 +66,4 @@ include(":baselineprofile-tv")
 // the existing app keeps building untouched until cutover.
 include(":shared:core:model")
 include(":shared:core:designsystem")
+include(":shared:core:datastore")
