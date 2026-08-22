@@ -1,0 +1,64 @@
+import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+
+plugins {
+    id("org.jetbrains.kotlin.jvm") // version inherited from the plugin classpath
+    alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.kotlin.compose)
+}
+
+kotlin {
+    jvmToolchain(17)
+}
+
+// Desktop shell (docs/kmp-migration-plan.md §Phase V1b): Compose Window + tray
+// + menubar + shortcuts over the shared core stack. Feature modules land here
+// one conveyor step at a time (§V1c/V3).
+dependencies {
+    implementation(compose.desktop.currentOs)
+
+    implementation(project(":shared:core:model"))
+    implementation(project(":shared:core:designsystem"))
+    implementation(project(":shared:core:ui"))
+    implementation(project(":shared:core:datastore"))
+    implementation(project(":shared:core:database"))
+    implementation(project(":shared:core:network"))
+    implementation(project(":shared:core:data"))
+
+    // Swing Main dispatcher (SyncPlayPlaybackCore constructs on
+    // Dispatchers.Main.immediate; plain JVM has none without this).
+    implementation(libs.kotlinx.coroutines.swing)
+    implementation(libs.koin.core)
+    // NavKey is public API surface of shared/core/ui's navigation helpers.
+    implementation(libs.navigation3.runtime)
+    implementation(libs.kotlinx.serialization.json)
+    // NavKey polymorphic registration enumerates Route's sealed leaves.
+    implementation(kotlin("reflect"))
+
+    // Image pipeline: coil3 desktop engine + OkHttp network fetcher.
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
+    implementation(libs.okhttp)
+}
+
+compose.desktop {
+    application {
+        mainClass = "com.raulshma.jellyplay.desktop.MainKt"
+
+        buildTypes.release.proguard {
+            // Ship unsigned minimal packaging for V1; hardening is §Phase X.
+            isEnabled = false
+        }
+
+        nativeDistributions {
+            targetFormats(TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Dmg)
+            packageName = "JellyPlay"
+            packageVersion = "1.0.0"
+            description = "JellyPlay — Jellyfin client for desktop"
+            vendor = "JellyPlay"
+            windows {
+                menuGroup = packageName
+                upgradeUuid = "6ce4b9a2-5f4e-4b0f-9dc3-2f4b8a9b1c7d"
+            }
+        }
+    }
+}

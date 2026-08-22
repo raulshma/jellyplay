@@ -23,6 +23,7 @@ fun rememberNavigationState(
     startRoute: NavKey,
     topLevelRoutes: Set<NavKey>,
     stripPlayerRoutesOnRestore: Boolean = false,
+    savedStateConfiguration: SavedStateConfiguration? = null,
 ): NavigationState {
     // Restore the selected top-level tab across process death. The saver
     // serializes the current tab's NavKey.toString() (data class/object
@@ -39,7 +40,7 @@ fun rememberNavigationState(
         },
     )) { mutableStateOf(startRoute) }
 
-    val backStacks = topLevelRoutes.associateWith { key -> rememberNavBackStack(SavedStateConfiguration.DEFAULT, key) }
+    val backStacks = topLevelRoutes.associateWith { key -> rememberNavBackStack(savedStateConfiguration ?: SavedStateConfiguration.DEFAULT, key) }
 
     // On a state-loss restore (OS-killed process, "Don't keep activities", or
     // low-memory eviction), the saveable Navigation 3 back stack round-trips a
