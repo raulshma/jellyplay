@@ -54,8 +54,7 @@ class AuthApiClientImplTest {
             deviceProfileProvider = DeviceProfileProvider(DeviceCodecCapabilities()),
             addressRouter = addressRouter,
         )
-        val libraryClient = LibraryApiClientImpl(engine, mockk(relaxed = true))
-        authClient = AuthApiClientImpl(engine, libraryClient, addressRouter)
+        authClient = AuthApiClientImpl(engine, addressRouter)
     }
 
     @Test
@@ -169,7 +168,6 @@ class AuthApiClientImplTest {
         )
         val client = AuthApiClientImpl(
             engine = localEngine,
-            libraryClient = LibraryApiClientImpl(localEngine, mockk(relaxed = true)),
             addressRouter = ServerAddressRouter(),
         )
         localEngine.updateSession(testServer, testUser)
@@ -222,7 +220,6 @@ class AuthApiClientImplTest {
         )
         val client = AuthApiClientImpl(
             engine = probeEngine,
-            libraryClient = LibraryApiClientImpl(probeEngine, mockk(relaxed = true)),
             addressRouter = probeRouter,
         )
         probeEngine.updateSession(testServer, testUser)

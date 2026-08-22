@@ -89,6 +89,19 @@ private val RowColumnSaver: Saver<RowColumn, *> = Saver(
 fun rememberRowColumn(initial: RowColumn = RowColumn(-1, -1)) =
     rememberSaveable(stateSaver = RowColumnSaver) { mutableStateOf(initial) }
 
+/**
+ * TV-gated [Modifier.focusRestorer].
+ *
+ * Ordering contract: apply BEFORE the focus target it should manage —
+ * `Modifier.tvFocusRestorer(fallback).focusGroup()` for a lazy container. Focus
+ * properties attach to the next INNER focus target, so a restorer placed after
+ * `focusGroup()` attaches to the container's items (a no-op) instead of the
+ * group; and because `onEnter`/`onExit` are single-slot properties where the
+ * outermost aggregator wins, any restorer wrapping a whole screen clobbers the
+ * enter/exit hooks of every focus group inside it. Never place one above
+ * disparate sibling groups (e.g. a screen's content slot) — give each group its
+ * own restorer instead.
+ */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun Modifier.tvFocusRestorer(fallback: FocusRequester? = null): Modifier {

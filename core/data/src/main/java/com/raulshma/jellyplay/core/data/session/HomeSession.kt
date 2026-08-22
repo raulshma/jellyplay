@@ -1,10 +1,9 @@
 package com.raulshma.jellyplay.core.data.session
 
 import com.raulshma.jellyplay.core.model.CacheIdentity
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -89,31 +88,19 @@ sealed interface HomeSessionTransition {
  *    because identity switches clear the caches wholesale); before login /
  *    after logout it is `null`, which callers map to [com.raulshma.jellyplay.core.model.CacheIdentity.UNKNOWN].
  *
- * Collector scope: this class builds its own long-lived
- * `SupervisorJob() + Dispatchers.Default` scope (the same local-scope idiom as
- * `MediaRepositoryImpl.cacheScope` / `EpisodeCatalogueImpl.cacheScope`) — it
- * is a `@Singleton` living for the process lifetime, and core:data provides
- * no application-scope binding to inject. The primary constructor's scope
- * parameter exists so JVM tests can drive the collector on the test
- * scheduler; production code uses the `@Inject` constructor.
+ * Collector scope: the shared `@ApplicationScope` application scope (same
+ * lifetime discipline as `ServerIdentityStore`) — this is a `@Singleton`
+ * living for the process lifetime, and core:data classes must not hand-roll
+ * their own long-lived scopes for singleton collectors. The constructor's
+ * scope parameter is also the cross-module TEST seam: a JVM test passes its
+ * own scope (e.g. runTest's `backgroundScope`) to drive the classifier on
+ * the test scheduler; production code lets Hilt inject the application one.
  */
 @Singleton
-class HomeSession constructor(
+class HomeSession @Inject constructor(
     private val apiClient: JellyfinApiClient,
-    collectorScope: CoroutineScope,
+    @ApplicationScope collectorScope: CoroutineScope,
 ) {
-
-    /**
-     * Production constructor: collector on Dispatchers.Default, never
-     * cancelled. The primary constructor above is the cross-module TEST seam
-     * (it lets a test run the classifier on the test scheduler) — production
-     * code must let Hilt inject this one.
-     */
-    @Inject
-    constructor(apiClient: JellyfinApiClient) : this(
-        apiClient,
-        CoroutineScope(SupervisorJob() + Dispatchers.Default),
-    )
 
     /**
      * The last classified identity — `null` before the first sign-in and
@@ -124,12 +111,13 @@ class HomeSession constructor(
     private val lastStableIdentity = AtomicReference<SessionIdentity?>(null)
 
     private val _transitions = MutableSharedFlow<HomeSessionTransition>(
-        // Replay 1: the singleton collectors in MediaRepositoryImpl's and
-        // EpisodeCatalogueImpl's init must not silently miss a transition
-        // emitted before their subscription — the miss payload includes the
-        // wholesale invalidation AND the previous identity's SWR privacy
-        // clear. Every handler is an idempotent invalidation, so re-delivering
-        // the latest transition to a late subscriber is always safe.
+        // Replay 1: the singleton collector in SessionCacheRegistry (and
+        // HomeViewModel's own subscription) must not silently miss a
+        // transition emitted before its subscription — the miss payload
+        // includes the wholesale invalidation AND the previous identity's
+        // SWR privacy clear. Every handler is an idempotent invalidation, so
+        // re-delivering the latest transition to a late subscriber is
+        // always safe.
         replay = 1,
         extraBufferCapacity = TRANSITIONS_BUFFER_CAPACITY,
     )

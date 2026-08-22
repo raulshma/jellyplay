@@ -53,17 +53,19 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchProvider
+import com.raulshma.jellyplay.core.ui.settingssearch.settingsSearchResults
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import javax.inject.Inject
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -105,20 +107,14 @@ class HomeViewModel @Inject constructor(
     private val continueWatchingBroadcaster: ContinueWatchingBroadcaster,
     private val librarySyncHook: LibrarySyncHook,
     private val timeSource: TimeSource,
+    /**
+     * The settings-search catalog, injected through the core/ui seam. The
+     * binding itself lives in feature/settings (see its `SettingsSearchModule`)
+     * and resolves at app level — this module keeps no dependency on
+     * feature/settings, only on the core/ui interface.
+     */
+    private val settingsSearchProvider: SettingsSearchProvider,
 ) : JellyPlayViewModel(), DefaultLifecycleObserver {
-
-    companion object {
-        /**
-         * Hard deadline on the offline→online fetch. There is no withTimeout
-         * anywhere down the getHomeSections / fetchDiscoverSections /
-         * fetchRecentlyGrabbed chain — only OkHttp's per-call read timeout
-         * (which a half-open socket or a hung Seerr await can defeat). Without
-         * this cap a stuck fetch parks on refreshMutex forever and
-         * isGoingOnline never clears, leaving the Go Online button + app bar
-         * spinners spinning until the app is restarted.
-         */
-        private const val GOING_ONLINE_TIMEOUT_MS = 30_000L
-    }
 
     private val _uiState = stateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.flow
@@ -129,7 +125,8 @@ class HomeViewModel @Inject constructor(
     /**
      * The home screen's pending-sync surface — outbox badge count, sync
      * details sheet entries and per-id metadata, the manual drain trigger and
-     * the offline→online drain gate. Core/data holder (see
+     * the offline→online drain gate (handed to [HomeRefresher] below as its
+     * `awaitOutboxDrained` seam). Core/data holder (see
      * [SyncStatusStateHolder]); re-exposed SearchViewModel-style so the
      * header/sheet call sites observe the same flows as before.
      */
@@ -151,7 +148,7 @@ class HomeViewModel @Inject constructor(
     val pendingItemDetails: StateFlow<Map<String, ResolvedMediaRef>> get() = syncStatus.pendingItemDetails
 
     /** See [SyncStatusStateHolder.ensurePendingItemDetails]. */
-    fun ensurePendingItemDetails(itemIds: Collection<String>) =
+    private fun ensurePendingItemDetails(itemIds: Collection<String>) =
         syncStatus.ensurePendingItemDetails(itemIds)
 
     /**
@@ -169,12 +166,12 @@ class HomeViewModel @Inject constructor(
 
     /**
      * The home screen's entire refresh policy — fetch cadence, throttles,
-     * mutex/job choreography, discover TTL, user-data-push deferral — behind
-     * one small interface (see [HomeRefresher]). This VM keeps only the
-     * UI-shaped orchestration: folding [HomeRefresher.state] into
-     * [HomeUiState] (the collector below, same fold pattern as
-     * [SeerrRequestStateHolder]), the scroll reset on manual refresh, and
-     * the offline→online timeout wrapper.
+     * mutex/job choreography, discover TTL, user-data-push deferral, the
+     * offline transitions and the going-online handshake — behind one small
+     * interface (see [HomeRefresher]). This VM keeps only the UI-shaped
+     * orchestration: folding [HomeRefresher.state] into [HomeUiState] (the
+     * collector below, same fold pattern as [SeerrRequestStateHolder]) and
+     * the scroll resets on manual refresh and identity changes.
      *
      * Constructed here rather than injected: its collaborators are exactly
      * this VM's own constructor collaborators, and its per-call inputs are
@@ -193,6 +190,7 @@ class HomeViewModel @Inject constructor(
         tvWatchNextScheduler = tvWatchNextScheduler,
         librarySyncHook = librarySyncHook,
         offlineModeManager = offlineModeManager,
+        awaitOutboxDrained = syncStatus::awaitOutboxDrained,
         planProvider = { sectionPrefs },
         seerrPreferencesProvider = { seerrPreferences },
         discoverEnabledProvider = { _uiState.value.discoverEnabled },
@@ -223,6 +221,20 @@ class HomeViewModel @Inject constructor(
     val undoActions get() = searchStateHolder.undoActions
 
     /**
+     * Local settings search for the header search bar, delegated to the core/ui
+     * pipeline with the injected [SettingsSearchProvider] (the feature/settings
+     * catalog). Kept as a VM-exposed function — not a direct call from the
+     * screen — so the provider seam is injected in exactly one place and JVM
+     * tests can swap in a fake catalog. The Appearance-level "settings in home
+     * search" gate stays with the caller: it simply doesn't collect when off.
+     */
+    fun settingsSearchResults(
+        queries: Flow<String>,
+        context: android.content.Context,
+    ): Flow<List<ResolvedSettingsItem>> =
+        settingsSearchResults(queries, context, settingsSearchProvider)
+
+    /**
      * The photo-folder child-URL cache (see [PhotoFolderChildUrlsStore]).
      * Re-exposed so the photo-row call sites observe the same flow as before.
      */
@@ -231,7 +243,7 @@ class HomeViewModel @Inject constructor(
     /** Cached folder-id → child-image-URLs map for the photo rows. */
     val photoFolderChildUrls: StateFlow<Map<String, List<String>>> get() = photoFolderChildUrlsStore.childUrls
 
-    fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) =
+    private fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) =
         photoFolderChildUrlsStore.prefetch(items)
 
     /**
@@ -292,13 +304,15 @@ class HomeViewModel @Inject constructor(
             // signals via [onSubscription] + a [CompletableDeferred] that it
             // is live, and only then does the fallback read run. A sign-in
             // racing the handshake may trigger both the transition handler
-            // and the fallback refresh — refreshForUserSwitch coalesces
-            // through the refresher's refreshJob, so that overlap is benign.
+            // and the fallback refresh — the refresher coalesces them through
+            // its transition-job replacement, so that overlap is benign.
             val subscribed = CompletableDeferred<Unit>()
             launch {
-                // collectLatest (like the previousUserId collector this
-                // replaced): a transition arriving mid-refresh cancels the
-                // stale handler instead of queueing behind it.
+                // collectLatest-shaped routing: the refresher's
+                // UserSwitched/SignedOut handlers replace (and cancel) the
+                // previous identity transition's in-flight work, so a
+                // transition arriving mid-refresh cancels the stale handler
+                // instead of queueing behind it.
                 homeSession.transitions
                     .onSubscription { subscribed.complete(Unit) }
                     .collectLatest { transition ->
@@ -309,13 +323,12 @@ class HomeViewModel @Inject constructor(
                                 resetHomeScrollPosition()
                                 // SWR snapshot paint, sign-in fetch outside
                                 // the refresh job, loop restart — all refresh
-                                // policy lives in the refresher (see
-                                // refreshForUserSwitch).
-                                refresher.refreshForUserSwitch()
+                                // policy lives in the refresher.
+                                refresher.request(RefreshTrigger.UserSwitched)
                             }
                             is HomeSessionTransition.SignedOut -> {
                                 resetHomeScrollPosition()
-                                refresher.onSignedOut()
+                                refresher.request(RefreshTrigger.SignedOut)
                             }
                         }
                     }
@@ -323,7 +336,7 @@ class HomeViewModel @Inject constructor(
             subscribed.await()
             if (homeSession.currentIdentity() != null) {
                 resetHomeScrollPosition()
-                refresher.refreshForUserSwitch()
+                refresher.request(RefreshTrigger.UserSwitched)
             }
             // No join() on the collector: it never completes (hot flow for the
             // VM's lifetime), and structured concurrency already keeps this
@@ -391,65 +404,7 @@ class HomeViewModel @Inject constructor(
                 val nowEnabled = prefs.enabled && prefs.discoverEnabled
                 _uiState.update { it.copy(discoverEnabled = nowEnabled) }
                 if (nowEnabled && !wasEnabled) {
-                    refresher.fetchDiscover()
-                }
-            }
-        }
-
-        launch {
-            offlineModeManager.offlineMode.collect { mode ->
-                // Capture the previous mode before overwriting so transition
-                // detection is stable across the rapid manual+auto+network
-                // re-emissions a single toggle can produce.
-                val previousMode = _uiState.value.offlineMode
-                _uiState.update { it.copy(offlineMode = mode) }
-                when {
-                    previousMode == OfflineMode.ONLINE && mode != OfflineMode.ONLINE -> {
-                        // Online → offline: drop cached online sections (refresh-
-                        // owned state, cleared through the refresher so its next
-                        // emission can't re-populate them). Also clear any
-                        // pending going-online spinner — e.g. the user (or an
-                        // auto-detect flip) took us back offline while the prior
-                        // online fetch was still parked on the refresh mutex.
-                        refresher.dropOnlineContent()
-                        _uiState.update { it.copy(isGoingOnline = false) }
-                    }
-                    previousMode != OfflineMode.ONLINE && mode == OfflineMode.ONLINE -> {
-                        // Offline → online: show the full-screen loader during the
-                        // post-toggle fetch so the online branch doesn't flash
-                        // blank between the mode flip and sections arriving.
-                        // isGoingOnline MUST clear in finally — previously the
-                        // clear ran after the fetch with no guard, so any
-                        // throw/cancellation left it stuck on forever and the
-                        // user had to restart the app to recover. The loader
-                        // itself is refresh-owned state: raised/cleared via
-                        // the refresher so every isLoading write stays there.
-                        refresher.showFullScreenLoader()
-                        try {
-                            // Let the playback outbox drain before fetching so
-                            // Continue Watching / Next Up reflect the server's
-                            // post-sync state. Without this the fetch can race
-                            // the drain: CW would still list an episode the user
-                            // marked unplayed offline, because the server hasn't
-                            // processed the mark yet. The drain is fast on
-                            // reconnect; on timeout we fetch anyway and the next
-                            // periodic refresh / pull-to-refresh re-syncs.
-                            syncStatus.awaitOutboxDrained()
-                            // Cap the post-toggle fetch so a hung network call
-                            // cannot leave isGoingOnline (and the loader) stuck
-                            // on — the symptom was the Go Online button + app
-                            // bar spinners never clearing. On timeout we drop the
-                            // result; a normal refresh/pull-to-refresh can
-                            // still repopulate sections once the network
-                            // recovers. The loader is force-cleared below.
-                            withTimeoutOrNull(GOING_ONLINE_TIMEOUT_MS) {
-                                refresher.fetchOnce()
-                            }
-                        } finally {
-                            refresher.clearFullScreenLoader()
-                            _uiState.update { it.copy(isGoingOnline = false) }
-                        }
-                    }
+                    refresher.request(RefreshTrigger.DiscoverEnabled)
                 }
             }
         }
@@ -522,10 +477,11 @@ class HomeViewModel @Inject constructor(
 
         // Fold the refresher's state slice into HomeUiState (same fold
         // pattern as the SeerrRequestStateHolder collector above) so the UI
-        // observes a single state object. The refresher is the only writer
-        // of these seven fields — including the going-online loader, which
-        // the VM's offline→online branch raises/clears through the
-        // refresher instead of writing uiState directly.
+        // observes a single state object. The refresher is the SOLE writer of
+        // these nine fields — including `sections` (in-place item patches go
+        // through HomeRefresher.patchItems, never a direct _uiState write),
+        // the going-online flag/loader, and the offline-mode mirror with its
+        // transition policy. The VM only folds emissions.
         launch {
             refresher.state.collect { refresh ->
                 _uiState.update {
@@ -537,6 +493,8 @@ class HomeViewModel @Inject constructor(
                         partialLoadError = refresh.partialLoadError,
                         discoverSections = refresh.discoverSections,
                         recentlyGrabbed = refresh.recentlyGrabbed,
+                        isGoingOnline = refresh.isGoingOnline,
+                        offlineMode = refresh.offlineMode,
                     )
                 }
             }
@@ -552,18 +510,11 @@ class HomeViewModel @Inject constructor(
     )
 
     /**
-     * Switches the active user. The atomic session publish this triggers is
-     * classified by [HomeSession] as a `UserSwitched` transition, and the
-     * `homeSession.transitions` collector in [init] re-runs the home refresh
-     * on it — no callback or explicit reload is needed here; the UI observes
-     * the flow.
+     * The VM's single command surface: every user intent arrives here as a
+     * [HomeUiEvent] and is routed to a private handler below. The VM's other
+     * public members are flows and sync getters only — there is no per-action
+     * command method to keep in sync with the screen.
      */
-    fun switchUser(userId: String) {
-        launch {
-            authRepository.switchUser(userId)
-        }
-    }
-
     fun onEvent(event: HomeUiEvent) {
         when (event) {
             is HomeUiEvent.Refresh -> refresh()
@@ -578,6 +529,24 @@ class HomeViewModel @Inject constructor(
             is HomeUiEvent.LoadSeerrServiceDetails -> loadSeerrServiceDetails(event.mediaType)
             is HomeUiEvent.LoadTvSeasons -> loadTvSeasons(event.tmdbId)
             is HomeUiEvent.DismissNewsletterBanner -> _uiState.update { it.copy(newsletterBannerVisible = false) }
+            is HomeUiEvent.SwitchUser -> switchUser(event.userId)
+            is HomeUiEvent.MarkItemPlayed -> setItemPlayed(event.item, played = true)
+            is HomeUiEvent.MarkItemUnplayed -> setItemPlayed(event.item, played = false)
+            is HomeUiEvent.DeleteOfflineMedia -> deleteOfflineMedia(event.item)
+            is HomeUiEvent.RequestSeriesDelete -> requestSeriesDelete(event.series)
+            is HomeUiEvent.DismissSeriesDelete -> dismissSeriesDelete()
+            is HomeUiEvent.DeleteOfflineEpisodes -> deleteOfflineEpisodes(event.episodeIds)
+            is HomeUiEvent.DeleteOfflineSeries -> deleteOfflineSeries(event.seriesId)
+            is HomeUiEvent.PrefetchSeerrDetails -> prefetchSeerrDetails(event.tmdbId, event.mediaType, event.onDone)
+            is HomeUiEvent.DeleteSearchHistoryItem -> deleteSearchHistoryItem(event.id)
+            is HomeUiEvent.ClearSearchHistory -> clearSearchHistory()
+            is HomeUiEvent.SettingsResultClicked -> onSettingsResultClicked(event.item)
+            is HomeUiEvent.ExcludeSeriesFromNextUp -> excludeSeriesFromNextUp(event.seriesId)
+            is HomeUiEvent.SetSectionVisible -> setSectionVisible(event.type, event.visible)
+            is HomeUiEvent.MoveSection -> moveSection(event.type, event.up)
+            is HomeUiEvent.SetLibrarySectionVisible -> setLibrarySectionVisible(event.libraryId, event.type, event.visible)
+            is HomeUiEvent.PrefetchPhotoFolderChildUrls -> prefetchPhotoFolderChildUrls(event.items)
+            is HomeUiEvent.EnsurePendingItemDetails -> ensurePendingItemDetails(event.itemIds)
         }
     }
 
@@ -591,15 +560,6 @@ class HomeViewModel @Inject constructor(
 
     fun saveHomeScrollPosition(firstVisibleItemIndex: Int, firstVisibleItemScrollOffset: Int) =
         scrollPositionStore.save(firstVisibleItemIndex, firstVisibleItemScrollOffset)
-
-    /**
-     * Marks a home-row item (quick actions) played/unplayed.
-     * Flips the item in-place in every section so the card badge updates
-     * immediately; the next home refresh reconciles the server truth.
-     */
-    fun markItemPlayed(item: MediaItem) = setItemPlayed(item, played = true)
-
-    fun markItemUnplayed(item: MediaItem) = setItemPlayed(item, played = false)
 
     /**
      * Shared offline-delete module (core/data) — the same collapse/defense
@@ -622,15 +582,15 @@ class HomeViewModel @Inject constructor(
      * [HomeUiState.offlineLibrary] flow refreshes on its own once the row is
      * gone, so no manual state update is needed here.
      */
-    fun deleteOfflineMedia(item: MediaItem) {
+    private fun deleteOfflineMedia(item: MediaItem) {
         offlineDeleteActions.deleteDownload(item)
     }
 
     /** Opens the delete-episodes sheet for [series] — see [SeriesDeleteStateHolder.requestSeriesDelete]. */
-    fun requestSeriesDelete(series: MediaItem) = seriesDeleteStateHolder.requestSeriesDelete(series)
+    private fun requestSeriesDelete(series: MediaItem) = seriesDeleteStateHolder.requestSeriesDelete(series)
 
     /** Closes the sheet — see [SeriesDeleteStateHolder.dismiss]. */
-    fun dismissSeriesDelete() = seriesDeleteStateHolder.dismiss()
+    private fun dismissSeriesDelete() = seriesDeleteStateHolder.dismiss()
 
     /**
      * Deletes the selected episodes for the open sheet — see
@@ -638,31 +598,29 @@ class HomeViewModel @Inject constructor(
      * read BEFORE dismissal there (passed per call into the shared module), so
      * the sheet can dismiss while the deletes run in background.
      */
-    fun deleteOfflineEpisodes(episodeIds: Set<String>) =
+    private fun deleteOfflineEpisodes(episodeIds: Set<String>) =
         seriesDeleteStateHolder.deleteOfflineEpisodes(episodeIds)
 
     /** Deletes the entire series and closes the sheet — see [SeriesDeleteStateHolder.deleteOfflineSeries]. */
-    fun deleteOfflineSeries(seriesId: String) = seriesDeleteStateHolder.deleteOfflineSeries(seriesId)
+    private fun deleteOfflineSeries(seriesId: String) = seriesDeleteStateHolder.deleteOfflineSeries(seriesId)
 
 
     /**
-     * The home screen's container adapter: maps the mutation over EVERY
-     * section, because the same item can appear in several (e.g. Continue
-     * Watching and Latest in X) and every visible card must flip together.
+     * The home screen's container adapter: forwards the optimistic mutation
+     * to [HomeRefresher.patchItems], the single sanctioned writer of the
+     * cached sections — see the fold contract comment in [init].
      * Everything else about the mutation is owned by [UserDataMutator].
      */
     private val sectionItemContainer = UserDataContainer { itemId, patch ->
-        _uiState.update { state ->
-            state.copy(
-                sections = state.sections.map { section ->
-                    section.copy(
-                        items = section.items.map { if (it.id == itemId) patch(it) else it }
-                    )
-                }
-            )
-        }
+        refresher.patchItems(itemId, patch)
     }
 
+    /**
+     * Marks a home-row item (quick actions) played/unplayed. Flips the item
+     * in-place in every section (via [HomeRefresher.patchItems]) so the card
+     * badge updates immediately; the next home refresh reconciles the server
+     * truth.
+     */
     private fun setItemPlayed(item: MediaItem, played: Boolean) {
         launch {
             userDataMutator.setPlayed(
@@ -674,7 +632,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun resetHomeScrollPosition() {
+    private fun resetHomeScrollPosition() {
         scrollPositionStore.reset()
     }
 
@@ -695,19 +653,35 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun toggleOfflineMode() {
-        // Going online is async (preference write → mode flip → network fetch)
-        // and previously gave zero feedback. Flip a busy flag the UI can show a
-        // spinner on; it is cleared once the offline→online transition resolves.
-        // Going offline is instantaneous and needs no indicator.
-        val goingOnline = _uiState.value.offlineMode != OfflineMode.ONLINE
-        if (goingOnline) {
-            _uiState.update { it.copy(isGoingOnline = true) }
+        // Going online is async (preference write → mode flip → drain +
+        // fetch) and gives no feedback without help. The whole choreography —
+        // busy flag, mode toggle, full-screen loader, outbox drain, capped
+        // fetch — lives behind [RefreshTrigger.GoingOnline] in the refresher
+        // now. Going offline is instantaneous and needs no indicator: toggle
+        // the manager directly and let the refresher's offline-mode observer
+        // drop the online content.
+        if (refresher.state.value.offlineMode != OfflineMode.ONLINE) {
+            refresher.request(RefreshTrigger.GoingOnline)
+        } else {
+            offlineModeManager.toggleManualOffline()
         }
-        offlineModeManager.toggleManualOffline()
     }
 
     /** Manually drain the playback outbox — see [SyncStatusStateHolder.syncNow]. */
     private fun syncNow() = syncStatus.syncNow()
+
+    /**
+     * Switches the active user. The atomic session publish this triggers is
+     * classified by [HomeSession] as a `UserSwitched` transition, and the
+     * `homeSession.transitions` collector in [init] re-runs the home refresh
+     * on it — no callback or explicit reload is needed here; the UI observes
+     * the flow.
+     */
+    private fun switchUser(userId: String) {
+        launch {
+            authRepository.switchUser(userId)
+        }
+    }
 
     private fun updateSearchQuery(query: String) = searchStateHolder.updateSearchQuery(query)
 
@@ -740,15 +714,15 @@ class HomeViewModel @Inject constructor(
         seerrRequestStateHolder.loadTvSeasons(tmdbId)
     }
 
-    fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
+    private fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) {
         seerrRequestStateHolder.prefetchDetails(tmdbId, mediaType, onDone)
     }
 
     /** Deletes one history row (undo re-records it) — see [HomeSearchStateHolder.deleteSearchHistoryItem]. */
-    fun deleteSearchHistoryItem(id: Long) = searchStateHolder.deleteSearchHistoryItem(id)
+    private fun deleteSearchHistoryItem(id: Long) = searchStateHolder.deleteSearchHistoryItem(id)
 
     /** Clears the history (undo re-records the snapshot) — see [HomeSearchStateHolder.clearSearchHistory]. */
-    fun clearSearchHistory() = searchStateHolder.clearSearchHistory()
+    private fun clearSearchHistory() = searchStateHolder.clearSearchHistory()
 
     /**
      * Called when a settings search result is tapped from the home search bar.
@@ -757,13 +731,13 @@ class HomeViewModel @Inject constructor(
      * parity with the Settings screen's own search (see SettingsScreen.kt).
      * Navigation to [ResolvedSettingsItem.route] is performed by the caller.
      */
-    fun onSettingsResultClicked(item: ResolvedSettingsItem) {
+    private fun onSettingsResultClicked(item: ResolvedSettingsItem) {
         if (item.isAdvanced) {
             launch { preferencesEditor.edit { appearance.setShowAdvancedSettings(true) } }
         }
     }
 
-    fun excludeSeriesFromNextUp(seriesId: String) {
+    private fun excludeSeriesFromNextUp(seriesId: String) {
         launch {
             homeDiscoveryStore.excludeSeriesFromNextUp(seriesId)
         }
@@ -775,7 +749,7 @@ class HomeViewModel @Inject constructor(
      * the prefs collector above then triggers a refresher request so the
      * row appears/disappears with no extra wiring.
      */
-    fun setSectionVisible(type: HomeSectionType, visible: Boolean) {
+    private fun setSectionVisible(type: HomeSectionType, visible: Boolean) {
         preferencesEditor.setEnabledHomeSectionTypes(
             sectionPrefs.withSectionVisible(type, visible).query.enabledSections,
         )
@@ -787,7 +761,7 @@ class HomeViewModel @Inject constructor(
      * persists via [preferencesEditor]; the prefs collector + ordering use case
      * re-apply it on the next emission.
      */
-    fun moveSection(type: HomeSectionType, up: Boolean) {
+    private fun moveSection(type: HomeSectionType, up: Boolean) {
         val updated = sectionPrefs.withSectionMoved(type, up) ?: return
         preferencesEditor.edit { homeDiscovery.setHomeSectionOrder(updated.homeSectionOrder) }
     }
@@ -796,7 +770,7 @@ class HomeViewModel @Inject constructor(
      * Toggles a per-library section (currently LATEST_MEDIA) from the inline
      * section-config sheet, mirroring Settings → Configure Libraries.
      */
-    fun setLibrarySectionVisible(libraryId: String, type: HomeSectionType, visible: Boolean) {
+    private fun setLibrarySectionVisible(libraryId: String, type: HomeSectionType, visible: Boolean) {
         preferencesEditor.setLibraryHomeSectionOverrides(
             sectionPrefs.withLibrarySectionVisible(libraryId, type, visible)
                 .query.libraryHomeSectionOverrides,

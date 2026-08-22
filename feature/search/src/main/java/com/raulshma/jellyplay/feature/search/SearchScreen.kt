@@ -150,12 +150,7 @@ fun SearchScreen(
         }
     }
     var requestItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem?>(null) }
-    val requestResult by viewModel.requestResult.collectAsStateWithLifecycle()
-    val radarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
-    val sonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
-    val tvSeasons by viewModel.tvSeasons.collectAsStateWithLifecycle()
-    val tvIsAnime by viewModel.tvIsAnime.collectAsStateWithLifecycle()
-    val isLoadingSeerrServices by viewModel.isLoadingSeerrServices.collectAsStateWithLifecycle()
+    val seerrSnapshot by viewModel.seerrSnapshot.collectAsStateWithLifecycle()
     val seerrLoadingState = rememberSeerrCardLoadingState()
 
     val query = viewModel.query
@@ -1120,14 +1115,7 @@ fun SearchScreen(
 
         SeerrRequestDialog(
             item = item,
-            radarrServers = radarrServers,
-            sonarrServers = sonarrServers,
-            seasons = tvSeasons,
-            tvIsAnime = tvIsAnime,
-            isLoadingServices = isLoadingSeerrServices,
-            isRequesting = requestResult?.isLoading == true,
-            requestSuccess = requestResult?.success,
-            requestError = requestResult?.error,
+            snapshot = seerrSnapshot,
             onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
                 viewModel.requestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags)
             },

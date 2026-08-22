@@ -37,6 +37,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
+import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -70,9 +71,7 @@ private val NEWSLETTER_GROUP_IDS = setOf("newsletter_enabled", "newsletter_deliv
 @Composable
 fun AppearanceSettingsScreen(
     onBack: () -> Unit,
-    onPinnedHomeSections: (String?) -> Unit = {},
-    onHomeLayoutPresets: (String?) -> Unit = {},
-    onConfigureLibraries: (String?) -> Unit = {},
+    navActions: SettingsNavActions = SettingsNavActions(),
     highlightSettingId: String? = null,
     viewModel: AppearanceSettingsViewModel = hiltViewModel(),
 ) {
@@ -873,7 +872,7 @@ fun AppearanceSettingsScreen(
                         trailingText = if (preferences.pinnedHomeSections.isEmpty()) "" else "${preferences.pinnedHomeSections.size}",
                         highlighted = highlightSettingId == "pinned_home_sections",
                         index = 0, count = 1,
-                        onClick = { onPinnedHomeSections(if (highlightSettingId == "pinned_home_sections") "pinned_add" else null) },
+                        onClick = { navActions.onNavigate(Route.PinnedHomeSections(if (highlightSettingId == "pinned_home_sections") "pinned_add" else null)) },
                     )
 
                     SettingListItem(
@@ -883,7 +882,7 @@ fun AppearanceSettingsScreen(
                         trailingText = if (preferences.homeLayoutPresets.isEmpty()) "" else "${preferences.homeLayoutPresets.size}",
                         highlighted = highlightSettingId == "home_layout_presets",
                         index = 0, count = 1,
-                        onClick = { onHomeLayoutPresets(if (highlightSettingId == "home_layout_presets") "preset_list" else null) },
+                        onClick = { navActions.onNavigate(Route.HomeLayoutPresets(if (highlightSettingId == "home_layout_presets") "preset_list" else null)) },
                     )
 
                     SettingListItem(
@@ -893,7 +892,7 @@ fun AppearanceSettingsScreen(
                         trailingText = "",
                         highlighted = highlightSettingId == "configure_libraries",
                         index = 0, count = 1,
-                        onClick = { onConfigureLibraries(if (highlightSettingId == "configure_libraries") "configure_libraries" else null) },
+                        onClick = { navActions.onNavigate(Route.LibraryHomeSections(if (highlightSettingId == "configure_libraries") "configure_libraries" else null)) },
                     )
 
                     val homeSectionOrder = remember { mutableStateListOf<HomeSectionType>().apply { addAll(preferences.homeSectionOrder) } }

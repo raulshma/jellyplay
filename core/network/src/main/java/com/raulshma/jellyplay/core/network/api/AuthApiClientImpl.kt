@@ -24,7 +24,6 @@ import javax.inject.Singleton
 @Singleton
 class AuthApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
-    private val libraryClient: LibraryApiClient,
     private val addressRouter: ServerAddressRouter,
 ) : AuthApiClient {
 
@@ -166,13 +165,10 @@ class AuthApiClientImpl @Inject constructor(
             engine.updateApi(null)
             engine.updateSession(null, null)
         }
-        // Defensive: clear any stale favorite flags cached against the previous
-        // server so a server switch can't surface them. No behavior change in
-        // normal use (the cache is eventually-consistent via API reads).
-        libraryClient.clearFavoriteCache()
-        // The home hot-path caches (per-folder latest + per-seed similar) are
-        // identity-keyed, so a previous user's recommendations can't leak
-        // through — no cross-boundary clear needed here.
+        // No manual cross-module cache clears here: every in-memory cache in
+        // this module (favorite flags, the home hot-path sub-caches) is keyed
+        // by the engine's atomic session identity, so a previous identity's
+        // entries miss by construction.
     }
 
     override suspend fun isQuickConnectEnabled(): Result<Boolean> = engine.apiResultWithRetry {

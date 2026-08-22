@@ -18,7 +18,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
@@ -36,8 +35,9 @@ val TvColumnCacheWindow = LazyLayoutCacheWindow(aheadFraction = 2f, behindFracti
 /**
  * TV focus contract for vertical card/row lists — the 1-D vertical analogue of [TvFocusableItemRow]
  * (horizontal) and [TvFocusableGrid] (2-D). Wraps a [LazyColumn] with the canonical modifier order
- * (`focusGroup → tvFocusRestorer(fallback) → focusRequester(column)`), a saveable focused-index
- * memory clamped to the live item count, and a one-shot initial-focus grab once data arrives.
+ * (`tvFocusRestorer(fallback) → focusGroup` — the restorer must wrap the group's focus target, not
+ * sit inside it), a saveable focused-index memory clamped to the live item count, and a one-shot
+ * initial-focus grab once data arrives.
  *
  * Use this for any full-screen vertical list of focusable cards/rows (LiveTV sub-screens, track
  * lists, ArrQueue, calendar). For a short, static, non-scrolling column prefer a plain `Column`
@@ -126,7 +126,6 @@ fun TvFocusablePagingColumn(
     itemContent: @Composable (index: Int, itemModifier: Modifier) -> Unit,
 ) {
     val isTv = LocalTvMode.current
-    val columnFocusRequester = remember { FocusRequester() }
     val fallbackFocusRequester = remember { FocusRequester() }
     val currentOnFocusedIndexChange by rememberUpdatedState(onFocusedIndexChange)
     var focusedIndex by rememberInt(initialIndex)
@@ -173,15 +172,14 @@ fun TvFocusablePagingColumn(
         contentPadding = contentPadding,
         verticalArrangement = verticalArrangement,
         modifier = if (isTv) {
+            // Order matters: tvFocusRestorer must wrap the column's focus GROUP
+            // (before focusGroup). Placed after, it attaches to the items instead
+            // of the group, and outer aggregated restorers clobber these
+            // single-slot onEnter/onExit hooks. Group entry restores the
+            // last-focused row, falling back to the tracked focusedIndex row.
             modifier
-                .focusProperties {
-                    onEnter = {
-                        columnFocusRequester.tryRequestFocus("tv_column")
-                    }
-                }
-                .focusGroup()
                 .tvFocusRestorer(fallbackFocusRequester)
-                .focusRequester(columnFocusRequester)
+                .focusGroup()
                 .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
         } else {
             modifier

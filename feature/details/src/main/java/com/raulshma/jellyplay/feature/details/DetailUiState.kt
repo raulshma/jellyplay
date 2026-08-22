@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.model.DetailAssets
 import com.raulshma.jellyplay.core.model.DetailCapabilities
 import com.raulshma.jellyplay.core.model.DetailContext
@@ -8,11 +9,7 @@ import com.raulshma.jellyplay.core.model.DetailOrigin
 import com.raulshma.jellyplay.core.model.LocalSubtitleOption
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
-import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 
@@ -114,13 +111,10 @@ data class DetailUiState(
     val tmdbReviews: List<TmdbReview> = emptyList(),
     val isSeerrConnected: Boolean = false,
     val isSeerrRecommendationsEnabled: Boolean = false,
-    // Seerr request flow (radarr/sonarr picker + result banner)
-    val seerrRequestResult: SeerrRequestResult? = null,
-    val seerrRadarrServers: List<SeerrRadarrServiceDetail> = emptyList(),
-    val seerrSonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
-    val isLoadingSeerrServices: Boolean = false,
-    val seerrTvSeasons: List<SeerrSeason> = emptyList(),
-    val seerrTvIsAnime: Boolean = false,
+    // Seerr request flow (radarr/sonarr picker + result banner) — the holder's
+    // single snapshot, folded in as-is so a new holder field never re-adds a
+    // mirror here.
+    val seerrRequest: SeerrRequestSnapshot = SeerrRequestSnapshot(),
     // "Manage Series" (DIRECT_ARR_INTEGRATION). Shown for a series with a tvdb
     // id when the experimental flag is on; server resolution is deferred to the
     // ManageSeriesScreen itself (cheap gate here — no network on the detail screen).

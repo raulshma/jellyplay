@@ -69,6 +69,17 @@ private val DETAIL_ITEM_FIELDS = listOf(
     ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
 )
 
+/** LRU bound of the favorite-flag cache (the old `LruCache(200)` size). */
+private const val FAVORITE_CACHE_MAX_ENTRIES = 200
+
+/**
+ * TTL of the favorite-flag cache — generous (the flags only seed a toggle's
+ * "current" value until the first real read refreshes them), and the
+ * identity-keyed composite key already guarantees a switched user never sees
+ * the previous user's flags within any window.
+ */
+private const val FAVORITE_CACHE_TTL_MS = 15 * 60_000L
+
 @Singleton
 class LibraryApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
@@ -1291,11 +1302,12 @@ class LibraryApiClientImpl @Inject constructor(
         val userId = engine.currentUser.value?.id
             ?: throw IllegalStateException("Not authenticated")
         val uuid = itemId.toUUID()
-        val cacheKey = "$userId:$uuid"
-        val cached = favoriteCache[cacheKey]
+        val identity = currentHomeCacheIdentity()
+        val cacheKey = uuid.toString()
+        val cached = favoriteCache.get(identity, cacheKey)
         val isFavorite = currentIsFavorite ?: cached ?: run {
             val fetched = engine.requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
-            favoriteCache.put(cacheKey, fetched)
+            favoriteCache.put(identity, cacheKey, fetched)
             fetched
         }
         if (isFavorite) {
@@ -1303,14 +1315,14 @@ class LibraryApiClientImpl @Inject constructor(
                 userId = userId.toUUID(),
                 itemId = uuid,
             )
-            favoriteCache.put(cacheKey, false)
+            favoriteCache.put(identity, cacheKey, false)
             false
         } else {
             engine.requireApi().userLibraryApi.markFavoriteItem(
                 userId = userId.toUUID(),
                 itemId = uuid,
             )
-            favoriteCache.put(cacheKey, true)
+            favoriteCache.put(identity, cacheKey, true)
             true
         }
     }
@@ -1330,21 +1342,22 @@ class LibraryApiClientImpl @Inject constructor(
                 itemId = uuid,
             )
         }
-        favoriteCache.put("$userId:$uuid", isFavorite)
+        favoriteCache.put(currentHomeCacheIdentity(), uuid.toString(), isFavorite)
         Unit
     }
 
-    private val favoriteCache = androidx.collection.LruCache<String, Boolean>(200)
-
     /**
-     * Clears the in-memory favorite cache. Called on disconnect / server switch
-     * so stale favorite flags from a previous server don't linger until evicted
-     * by access count. Defensive — entries are also scoped per-user so a stale
-     * entry can only ever resolve for the user that wrote it.
+     * Last-known favorite flags, keyed by the current [CacheIdentity] (see
+     * [currentHomeCacheIdentity]) so a user/server switch misses by
+     * construction — the previous identity's entries can never resolve, and
+     * they expire on their own instead of being evicted by a cross-module
+     * clear on disconnect (the old `clearFavoriteCache` hand-off from
+     * `AuthApiClientImpl`).
      */
-    override fun clearFavoriteCache() {
-        favoriteCache.evictAll()
-    }
+    private val favoriteCache = TtlCache<Boolean>(
+        maxSize = FAVORITE_CACHE_MAX_ENTRIES,
+        ttlMs = FAVORITE_CACHE_TTL_MS,
+    )
 
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?, imageIndex: Int?, tag: String?): String {
         val api = engine.api ?: return ""

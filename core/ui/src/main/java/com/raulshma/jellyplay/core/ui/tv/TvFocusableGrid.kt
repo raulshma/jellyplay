@@ -20,7 +20,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
@@ -38,7 +37,8 @@ val TvGridCacheWindow = LazyLayoutCacheWindow(aheadFraction = 2f, behindFraction
  * Paging-friendly TV focus grid. Drives an initial focus grab once data arrives (the contract that
  * `focusRestorer(fallback)` and `focusProperties { onEnter }` do not proactively satisfy), clamps
  * the saveable focused index to the live item count, and wires the container + per-item focus
- * modifiers in the correct order (`focusGroup → tvFocusRestorer(fallback) → focusRequester(grid)`).
+ * modifiers in the correct order (`tvFocusRestorer(fallback) → focusGroup` — the restorer must wrap
+ * the group's focus target, not sit inside it).
  *
  * Pass [extraContent] for paged-append footers (load-more indicators) or other extra grid items.
  */
@@ -66,7 +66,6 @@ fun TvFocusableGrid(
     itemContent: @Composable (index: Int, modifier: Modifier) -> Unit,
 ) {
     val isTv = LocalTvMode.current
-    val gridFocusRequester = remember { FocusRequester() }
     val fallbackFocusRequester = remember { FocusRequester() }
     val currentOnFocusedIndexChange by rememberUpdatedState(onFocusedIndexChange)
     var focusedIndex by rememberInt(initialIndex)
@@ -118,15 +117,15 @@ fun TvFocusableGrid(
         horizontalArrangement = horizontalArrangement,
         verticalArrangement = verticalArrangement,
         modifier = if (isTv) {
+            // Order matters: tvFocusRestorer must wrap the grid's focus GROUP
+            // (before focusGroup). Placed after, it attaches to the grid's items
+            // instead of the group, and any restorer/focusProperties aggregated
+            // from an outer level clobbers these single-slot onEnter/onExit
+            // hooks. With this order, group entry restores the last-focused
+            // card, falling back to the tracked focusedIndex card.
             modifier
-                .focusProperties {
-                    onEnter = {
-                        gridFocusRequester.tryRequestFocus("tv_grid")
-                    }
-                }
-                .focusGroup()
                 .tvFocusRestorer(fallbackFocusRequester)
-                .focusRequester(gridFocusRequester)
+                .focusGroup()
         } else {
             modifier
         },

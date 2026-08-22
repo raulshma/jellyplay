@@ -19,6 +19,7 @@ import io.mockk.coVerify
 import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -38,7 +39,21 @@ class PlaybackRepositoryImplTest {
     fun setup() {
         // Default to online; offline-specific tests override via every { offlineModeManager.isOffline }.
         every { offlineModeManager.isOffline } returns false
-        repository = PlaybackRepositoryImpl(apiClient, outbox, offlineModeManager)
+        // Real HomeSession over a permanently-null session flow (this suite
+        // never switches identity — CacheIdentity.UNKNOWN is the key surface)
+        // plus the registry that owns identity reactions.
+        every { apiClient.session } returns MutableStateFlow(null)
+        val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(
+            apiClient,
+            kotlinx.coroutines.CoroutineScope(
+                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+            ),
+        )
+        val sessionCacheRegistry = com.raulshma.jellyplay.core.data.session.SessionCacheRegistry(
+            homeSession,
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob()),
+        )
+        repository = PlaybackRepositoryImpl(apiClient, outbox, offlineModeManager, homeSession, sessionCacheRegistry)
     }
 
     @Test

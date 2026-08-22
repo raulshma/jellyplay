@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.ManagedUser
@@ -23,8 +24,15 @@ import io.mockk.mockkStatic
 import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -88,6 +96,9 @@ class AuthRepositoryImplTest {
         }
         every { apiClient.currentServer } returns flowOf(null)
         every { apiClient.currentUser } returns flowOf(null)
+        // isAuthenticated derives from the ATOMIC session flow (never a
+        // combine of the two separate flows above).
+        every { apiClient.session } returns flowOf(null)
         every { serverDao.getAllServers() } returns flowOf(emptyList())
         every { userDao.getUsersForServer(any()) } returns flowOf(emptyList())
         repository = AuthRepositoryImpl(
@@ -99,6 +110,7 @@ class AuthRepositoryImplTest {
             serverIdentityStore = serverIdentityStore,
             tokenCipher = tokenCipher,
             json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true },
+            externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
         )
     }
 
@@ -322,12 +334,50 @@ class AuthRepositoryImplTest {
     }
 
     @Test
-    fun `isAuthenticated is false when no server or user`() = runTest {
+    fun `isAuthenticated is false when no session is established`() = runTest {
         every { apiClient.currentServer } returns flowOf(null)
         every { apiClient.currentUser } returns flowOf(null)
 
         val flow = repository.isAuthenticated
         assertFalse(flow.first() ?: true)
+    }
+
+    @Test
+    fun `isAuthenticated derives from the atomic session, never a synthetic server-user pair`() = runTest {
+        // Drive the session flow directly: the stubbed currentServer/
+        // currentUser are BOTH non-null here — the synthetic mid-switch pair
+        // the old combine(currentServer, currentUser) shape could observe and
+        // report authenticated for. Only a fully established atomic session
+        // may read as authenticated. A fresh repository is built because the
+        // isAuthenticated chain captures apiClient.session at construction.
+        val sessionFlow = MutableStateFlow<ActiveSession?>(null)
+        every { apiClient.session } returns sessionFlow
+        every { apiClient.currentServer } returns MutableStateFlow(testServer)
+        every { apiClient.currentUser } returns MutableStateFlow(testUser)
+        val repo = AuthRepositoryImpl(
+            apiClient = apiClient,
+            webSocketClient = webSocketClient,
+            database = database,
+            serverDao = serverDao,
+            userDao = userDao,
+            serverIdentityStore = serverIdentityStore,
+            tokenCipher = tokenCipher,
+            json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true },
+            externalScope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+        )
+
+        val states = mutableListOf<Boolean>()
+        backgroundScope.launch { repo.isAuthenticated.collect { states.add(it) } }
+        runCurrent()
+        assertFalse("synthetic (server, user) pair must not authenticate", states.last())
+
+        sessionFlow.value = ActiveSession(testServer, testUser)
+        runCurrent()
+        assertTrue("an established atomic session authenticates", states.last())
+
+        sessionFlow.value = null
+        runCurrent()
+        assertFalse("logout clears authentication in one step", states.last())
     }
 
     // ------------------------------------------------------------------

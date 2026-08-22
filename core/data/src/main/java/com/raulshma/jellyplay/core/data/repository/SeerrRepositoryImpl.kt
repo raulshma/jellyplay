@@ -1,15 +1,16 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.seerr.*
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,14 +29,26 @@ class SeerrRepositoryImpl @Inject constructor(
     private val tmdbApiClient: TmdbApiClient,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val secureCredentialsStore: SeerrSecureCredentialsStore,
+    /**
+     * Identity source for the detail cache's composite keys (see
+     * [HomeSession.cacheIdentity]): a bare-String key previously let the
+     * previous Jellyfin user's Seerr view survive a switch for the full TTL.
+     */
+    private val homeSession: HomeSession,
+    /** Registers the detail cache for wholesale clears on identity change. */
+    private val sessionCacheRegistry: SessionCacheRegistry,
+    /**
+     * Shared application scope for the background poll loop (the
+     * `@ApplicationScope` binding — same lifetime discipline as
+     * `ServerIdentityStore`; never cancelled for this singleton).
+     */
+    @ApplicationScope private val cacheScope: CoroutineScope,
 ) : SeerrRepository {
 
     @Volatile
     private var cachedCredentials: SeerrCredentials? = null
     @Volatile
     private var lastCredsHash: Int = 0
-
-    private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val _currentUser = MutableStateFlow<SeerrCurrentUser?>(null)
     override val currentUser: StateFlow<SeerrCurrentUser?> = _currentUser
@@ -50,12 +63,16 @@ class SeerrRepositoryImpl @Inject constructor(
     private val CACHE_TTL_MS = 60_000L
     private val detailCache = TtlCache<Any>(ttlMs = CACHE_TTL_MS)
 
-    private fun <T> getCached(key: String): T? {
-        return detailCache.get(key) as? T
+    init {
+        sessionCacheRegistry.registerCaches("seerr", detailCache)
     }
 
-    private fun putCached(key: String, value: Any) {
-        detailCache.put(key, value)
+    private suspend fun <T> getCached(key: String): T? {
+        return detailCache.get(homeSession.cacheIdentity(), key) as? T
+    }
+
+    private suspend fun putCached(key: String, value: Any) {
+        detailCache.put(homeSession.cacheIdentity(), key, value)
     }
 
     private suspend fun getCredentials(): SeerrCredentials? {

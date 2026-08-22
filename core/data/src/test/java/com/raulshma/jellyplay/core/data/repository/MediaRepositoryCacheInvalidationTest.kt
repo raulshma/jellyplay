@@ -47,11 +47,26 @@ class MediaRepositoryCacheInvalidationTest {
         val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true)
         val playedStateSync: PlayedStateSync = mockk(relaxed = true)
         val offlineRepository: OfflineRepository = mockk(relaxed = true)
-        val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(apiClient)
+        val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(
+            apiClient,
+            kotlinx.coroutines.CoroutineScope(
+                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+            ),
+        )
+        // Real registry on a real dispatcher — the invalidation chain the
+        // suite pins (session emission → transition → cache drop) runs on
+        // Dispatchers.Default exactly like the per-repo observers it replaced.
+        val sessionCacheRegistry = com.raulshma.jellyplay.core.data.session.SessionCacheRegistry(
+            homeSession,
+            kotlinx.coroutines.CoroutineScope(
+                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+            ),
+        )
         val episodeCatalogue = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl(
             apiClient,
             offlineRepository,
             homeSession,
+            sessionCacheRegistry,
         )
         return MediaRepositoryImpl(
             apiClient,
@@ -64,6 +79,7 @@ class MediaRepositoryCacheInvalidationTest {
             mockk<UserDataRealtimeChannel>(relaxed = true),
             SystemTimeSource(),
             homeSession,
+            sessionCacheRegistry,
         )
     }
 

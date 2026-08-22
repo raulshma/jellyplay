@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.home
 
-import com.raulshma.jellyplay.core.data.seerr.SeerrRequestSnapshot
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OfflineMode
 import org.junit.Assert.assertEquals

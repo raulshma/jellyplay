@@ -15,6 +15,8 @@ import io.mockk.spyk
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -36,6 +38,7 @@ import org.junit.Test
 class LibraryApiClientImplTest {
 
     private lateinit var client: LibraryApiClientImpl
+    private lateinit var engine: JellyfinApiEngine
 
     private val testServer = ServerInfo(
         id = "server-1",
@@ -44,7 +47,7 @@ class LibraryApiClientImplTest {
     )
 
     private val testUser = UserInfo(
-        id = "user-1",
+        id = "11111111-1111-4111-8111-111111111111",
         name = "testuser",
         serverAddress = "https://test.example.com",
         accessToken = "token-123",
@@ -59,8 +62,7 @@ class LibraryApiClientImplTest {
     @Before
     fun setup() {
         val jellyfin = mockk<Jellyfin>(relaxed = true)
-        val engine = JellyfinApiEngine(
-            context = mockk(relaxed = true),
+        engine = JellyfinApiEngine(            context = mockk(relaxed = true),
             jellyfinLazy = dagger.Lazy { jellyfin },
             okHttpClientLazy = dagger.Lazy { OkHttpClient() },
             deviceProfileProvider = DeviceProfileProvider(DeviceCodecCapabilities()),
@@ -137,5 +139,75 @@ class LibraryApiClientImplTest {
         coVerify(exactly = 2) { client.getLatestMedia(any(), any()) }
         val sections = client.getHomeSections(latestOnlyQuery).getOrThrow().sections
         assertTrue(sections.any { it.items.any { item -> item.id == "pulled-row" } })
+    }
+
+    private val favoriteItemId = FAVORITE_ITEM_ID
+
+    /**
+     * Minimal recording [ApiClient]: the favorite paths run the REAL
+     * `UserLibraryApi` over it (mockk can't proxy the final operations
+     * classes), with every request answered by an empty-object 200 whose
+     * `{}` body decodes to an all-defaults DTO.
+     */
+    private class RecordingApiClient : org.jellyfin.sdk.api.client.ApiClient() {
+        val requests = mutableListOf<String>()
+        override val baseUrl = "https://test.example.com"
+        override val accessToken = "token-123"
+        override val clientInfo = org.jellyfin.sdk.model.ClientInfo(name = "test", version = "1.0.0")
+        override val deviceInfo = org.jellyfin.sdk.model.DeviceInfo(id = "test", name = "test")
+        override val httpClientOptions = org.jellyfin.sdk.api.client.HttpClientOptions()
+        override val webSocket: org.jellyfin.sdk.api.sockets.SocketApi = mockk(relaxed = true)
+        override fun update(
+            baseUrl: String?,
+            accessToken: String?,
+            clientInfo: org.jellyfin.sdk.model.ClientInfo,
+            deviceInfo: org.jellyfin.sdk.model.DeviceInfo,
+        ) = Unit
+        override suspend fun request(
+            method: org.jellyfin.sdk.api.client.HttpMethod,
+            pathTemplate: String,
+            pathParameters: Map<String, Any?>,
+            queryParameters: Map<String, Any?>,
+            requestBody: Any?,
+        ): org.jellyfin.sdk.api.client.RawResponse {
+            requests += "${method.name} $pathTemplate"
+            // UserItemDataDto has six REQUIRED fields, so the body must be
+            // complete (the favorite paths ignore the content anyway).
+            val body = """
+                {"PlaybackPositionTicks":0,"PlayCount":0,"IsFavorite":false,
+                "Played":false,"Key":"k","ItemId":"$FAVORITE_ITEM_ID"}
+            """.trimIndent()
+            return org.jellyfin.sdk.api.client.RawResponse(body.toByteArray(), 200, emptyMap())
+        }
+    }
+
+    @Test
+    fun `setFavorite seeds the favorite cache toggleFavorite reads`() = runTest {
+        // Both favorite paths must share one cache key: seeding via
+        // setFavorite(true) then toggling with currentIsFavorite = null has
+        // to read the seeded flag (unmark → false) instead of re-fetching —
+        // a cache miss would fetch userData.isFavorite = false and mark → true.
+        val api = RecordingApiClient()
+        engine.updateApi(api)
+
+        client.setFavorite(favoriteItemId, true).getOrThrow()
+        val toggled = client.toggleFavorite(favoriteItemId, null).getOrThrow()
+
+        assertFalse(toggled)
+        // Seed-POST then the toggle's unmark-DELETE — and crucially no GET:
+        // a cache miss would first re-fetch the item (GET) and then mark
+        // (POST) with toggled = true.
+        assertEquals(
+            listOf(
+                "POST /UserFavoriteItems/{itemId}",
+                "DELETE /UserFavoriteItems/{itemId}",
+            ),
+            api.requests,
+        )
+    }
+
+    private companion object {
+        /** Real UUID: the favorite paths pass it through String.toUUID(). */
+        const val FAVORITE_ITEM_ID = "2a2a2a2a-1111-4222-8222-333333333333"
     }
 }

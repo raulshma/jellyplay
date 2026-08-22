@@ -493,6 +493,7 @@ class SearchViewModelTest {
 
     @Test
     fun `requestSeerrMedia success sets requestResult success`() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
         coEvery {
             seerrRequestDelegate.requestMedia(
                 mediaType = any(), tmdbId = any(), seasons = any(),
@@ -503,7 +504,7 @@ class SearchViewModelTest {
         viewModel.requestSeerrMedia(SeerrSearchItem(id = 123, mediaType = "movie"))
         advanceUntilIdle()
 
-        assertEquals(true, viewModel.requestResult.value?.success)
+        assertEquals(true, viewModel.seerrSnapshot.value.requestResult?.success)
     }
 
     @Test
@@ -515,10 +516,11 @@ class SearchViewModelTest {
             )
         } returns Result.failure(RuntimeException("denied"))
 
+        backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
         viewModel.requestSeerrMedia(SeerrSearchItem(id = 123, mediaType = "movie"))
         advanceUntilIdle()
 
-        val result = viewModel.requestResult.value!!
+        val result = viewModel.seerrSnapshot.value.requestResult!!
         // Failure path sets the error message; success stays null (not false).
         assertEquals("denied", result.error)
     }
@@ -531,13 +533,15 @@ class SearchViewModelTest {
                 serverId = any(), profileId = any(), rootFolder = any(), tags = any(),
             )
         } returns Result.success(mockk(relaxed = true))
+        backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
         viewModel.requestSeerrMedia(SeerrSearchItem(id = 123, mediaType = "movie"))
         advanceUntilIdle()
-        org.junit.Assert.assertNotNull(viewModel.requestResult.value)
+        org.junit.Assert.assertNotNull(viewModel.seerrSnapshot.value.requestResult)
 
         viewModel.clearRequestResult()
+        advanceUntilIdle()
 
-        assertNull(viewModel.requestResult.value)
+        assertNull(viewModel.seerrSnapshot.value.requestResult)
     }
 
     @Test
@@ -546,13 +550,13 @@ class SearchViewModelTest {
         coEvery { seerrRequestDelegate.fetchServiceDetails("tv") } returns SeerrServiceDetailsResult(
             sonarrServers = listOf(sonarr),
         )
-        backgroundScope.launch { viewModel.sonarrServers.collect { } }
+        backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
         viewModel.loadSeerrServiceDetails("tv")
         advanceUntilIdle()
 
-        assertEquals(listOf(sonarr), viewModel.sonarrServers.value)
-        assertFalse(viewModel.isLoadingSeerrServices.value)
+        assertEquals(listOf(sonarr), viewModel.seerrSnapshot.value.sonarrServers)
+        assertFalse(viewModel.seerrSnapshot.value.isLoadingServices)
     }
 
     @Test
@@ -561,12 +565,12 @@ class SearchViewModelTest {
         coEvery { seerrRequestDelegate.fetchServiceDetails("movie") } returns SeerrServiceDetailsResult(
             radarrServers = listOf(radarr),
         )
-        backgroundScope.launch { viewModel.radarrServers.collect { } }
+        backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
         viewModel.loadSeerrServiceDetails("movie")
         advanceUntilIdle()
 
-        assertEquals(listOf(radarr), viewModel.radarrServers.value)
+        assertEquals(listOf(radarr), viewModel.seerrSnapshot.value.radarrServers)
     }
 
     @Test
@@ -576,13 +580,13 @@ class SearchViewModelTest {
             seasons = listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")),
         )
         coEvery { seerrRequestDelegate.fetchTvDetails(123) } returns tvDetails
-        backgroundScope.launch { viewModel.tvSeasons.collect { } }
+        backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
         viewModel.loadTvSeasons(123)
         advanceUntilIdle()
 
-        assertEquals(listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")), viewModel.tvSeasons.value)
-        assertEquals(false, viewModel.tvIsAnime.value)
+        assertEquals(listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")), viewModel.seerrSnapshot.value.tvSeasons)
+        assertEquals(false, viewModel.seerrSnapshot.value.tvIsAnime)
     }
 
     @Test
@@ -593,12 +597,12 @@ class SearchViewModelTest {
             keywords = listOf(SeerrKeyword(id = 210024, name = "anime")),
         )
         coEvery { seerrRequestDelegate.fetchTvDetails(123) } returns tvDetails
-        backgroundScope.launch { viewModel.tvSeasons.collect { } }
+        backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
         viewModel.loadTvSeasons(123)
         advanceUntilIdle()
 
-        assertEquals(true, viewModel.tvIsAnime.value)
+        assertEquals(true, viewModel.seerrSnapshot.value.tvIsAnime)
     }
 
     @Test

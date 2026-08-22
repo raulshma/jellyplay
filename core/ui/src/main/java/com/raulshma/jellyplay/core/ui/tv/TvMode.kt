@@ -28,6 +28,18 @@ val LocalTvMode = compositionLocalOf { false }
 
 val LocalTvTypography = compositionLocalOf<androidx.compose.material3.Typography?> { null }
 
+/**
+ * Expands the TV navigation drawer from within screen content. Provided by the
+ * TV app scaffold ([com.raulshma.jellyplay.navigation.TvNavigationDrawer]) around its
+ * content slot; a no-op default everywhere else (including phone).
+ *
+ * Screens attach this to leftward focus exits at their left edge so D-pad Left
+ * reliably expands the drawer even when the geometric focus search comes back
+ * without a target (e.g. the selected rail entry is recycled out of the lazy
+ * drawer column and can't take focus).
+ */
+val LocalTvDrawerOpener = compositionLocalOf<() -> Unit> { {} }
+
 @Composable
 fun TvScaffold(
     modifier: Modifier = Modifier,

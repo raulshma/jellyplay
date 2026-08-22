@@ -31,6 +31,26 @@ class SeerrRepositoryImplTest {
     private val seerrPreferencesStore: SeerrPreferencesStore = mockk(relaxed = true)
     private val secureCredentialsStore: SeerrSecureCredentialsStore = mockk(relaxed = true)
 
+    // Real HomeSession over a permanently-null session flow + the registry
+    // that owns identity reactions; this suite never switches identity, so
+    // CacheIdentity.UNKNOWN is the detail cache's key surface.
+    private val sessionApiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient = mockk {
+        every { session } returns MutableStateFlow(null)
+    }
+    private val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(
+        sessionApiClient,
+        kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+        ),
+    )
+    private val sessionCacheRegistry = com.raulshma.jellyplay.core.data.session.SessionCacheRegistry(
+        homeSession,
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob()),
+    )
+    private val repoScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
+    )
+
     private lateinit var repository: SeerrRepositoryImpl
 
     private val validPrefs = SeerrPreferences(
@@ -46,7 +66,7 @@ class SeerrRepositoryImplTest {
         every { secureCredentialsStore.getSessionCookie() } returns ""
         coEvery { seerrApiClient.getRequestCount(any(), any()) } returns Result.success(SeerrRequestCount())
         coEvery { seerrApiClient.getCurrentUser(any(), any()) } returns Result.success(SeerrCurrentUser(permissions = 2L))
-        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore)
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore, homeSession, sessionCacheRegistry, repoScope)
     }
 
     @Test
@@ -55,7 +75,7 @@ class SeerrRepositoryImplTest {
             SeerrPreferences(enabled = true, serverUrl = "")
         )
         every { secureCredentialsStore.getApiKey() } returns ""
-        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore)
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore, homeSession, sessionCacheRegistry, repoScope)
 
         val result = repository.testConnection()
 
@@ -82,7 +102,7 @@ class SeerrRepositoryImplTest {
             SeerrPreferences(enabled = true, serverUrl = "")
         )
         every { secureCredentialsStore.getApiKey() } returns ""
-        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore)
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore, homeSession, sessionCacheRegistry, repoScope)
 
         val result = repository.search("test query")
 

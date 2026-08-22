@@ -167,13 +167,10 @@ fun SeerrDetailScreen(
     val error = uiState.error
     val seerrRecommendations = uiState.recommendations
     val seerrSimilar = uiState.similar
-    val requestResult by viewModel.requestResult.collectAsStateWithLifecycle()
+    val seerrSnapshot by viewModel.seerrSnapshot.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val seerrPrefs by viewModel.seerrPreferences.collectAsStateWithLifecycle()
 
-    val radarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
-    val sonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
-    val isLoadingServices by viewModel.isLoadingServices.collectAsStateWithLifecycle()
     val selectedSeasonNumber = uiState.selectedSeasonNumber
     val episodesBySeason = uiState.episodesBySeason
     val isLoadingEpisodes = uiState.isLoadingEpisodes
@@ -284,26 +281,20 @@ fun SeerrDetailScreen(
                 }
 
                 item?.let {
-                    // Fetch service details when dialog opens
+                    // Fetch service details and TV seasons on-demand when the
+                    // dialog opens — the snapshot's seasons/anime fields are
+                    // populated by loadTvSeasons (same pattern as the search
+                    // and media-detail request dialogs).
                     LaunchedEffect(Unit) {
                         viewModel.loadServiceDetails(it.mediaType)
+                        if (it.mediaType.equals("tv", ignoreCase = true)) {
+                            viewModel.loadTvSeasons(it.id)
+                        }
                     }
-
-                    val tvSeasons = remember(tvDetail) {
-                        tvDetail?.seasons?.filter { season -> season.seasonNumber > 0 } ?: emptyList()
-                    }
-                    val tvIsAnime = remember(tvDetail) { tvDetail?.isAnime == true }
 
                     SeerrRequestDialog(
                         item = it,
-                        radarrServers = radarrServers,
-                        sonarrServers = sonarrServers,
-                        seasons = tvSeasons,
-                        tvIsAnime = tvIsAnime,
-                        isLoadingServices = isLoadingServices,
-                        isRequesting = requestResult?.isLoading == true,
-                        requestSuccess = requestResult?.success,
-                        requestError = requestResult?.error,
+                        snapshot = seerrSnapshot,
                         onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
                             viewModel.requestMedia(it, seasons, serverId, profileId, rootFolder, tags)
                         },

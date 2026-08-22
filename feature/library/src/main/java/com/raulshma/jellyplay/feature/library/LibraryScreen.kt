@@ -97,7 +97,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -128,6 +127,7 @@ import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
+import com.raulshma.jellyplay.core.ui.tv.LocalTvDrawerOpener
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.TvFocusablePagingColumn
@@ -289,20 +289,20 @@ fun LibraryScreen(
     // ── TV header focus chain ──────────────────────────────────────────────────
     // Geometric D-pad search between the stacked header rows is unreliable: the
     // chip rows' focus bounds overlap vertically and the alphabet rail interleaves
-    // with them on the right edge, so Down from the filter row landed on the
-    // folder pills or a rail letter (never the View/Size/Group row), and Up from
-    // the folder pills never reached the Reset pill. Vertical hops are therefore
-    // intercepted at the screen root (which reliably receives every key event)
-    // and redirected to a leaf FocusRequester on the adjacent row's first chip —
-    // leaf grants always land on a real focusable, unlike group-entry grants
-    // which can park focus invisibly on the group node itself.
+    // with them on the right edge, so vertical hops out of each header row are
+    // intercepted by that row itself and redirected to a leaf FocusRequester on
+    // the neighbouring row's first chip — leaf grants always land on a real
+    // focusable, unlike group-entry grants which can park focus invisibly on the
+    // group node. Scoping the interception per-row (rather than at the screen
+    // root with shared "which row holds focus" state) makes the routing static:
+    // a row's handler only ever sees keys pressed while focus is inside that
+    // row, so stale tracking can never send a hop to the wrong row.
     val showFolderRow = !inSectionMode && folders.size > 1
     val resetPillFocus = remember { FocusRequester() }
     val backFocus = remember { FocusRequester() }
     val firstFolderPillFocus = remember { FocusRequester() }
     val firstFilterChipFocus = remember { FocusRequester() }
     val firstActionChipFocus = remember { FocusRequester() }
-    val clearTagsFocus = remember { FocusRequester() }
     // The title row's focusable anchor: the back button in section mode, the
     // Reset pill otherwise (the title text itself is not focusable).
     val headerEntryLeaf = when {
@@ -310,40 +310,12 @@ fun LibraryScreen(
         !inSectionMode -> resetPillFocus
         else -> null
     }
-    // Header rows top→bottom with their entry leaves. Conditional rows (badges,
-    // tags) collapse out of the chain when hidden. -1 marks an absent row.
-    val titleRowIdx = if (headerEntryLeaf != null) 0 else -1
-    val badgesRowIdx = if (showFolderRow) titleRowIdx + 1 else -1
-    val filterRowIdx = maxOf(titleRowIdx, badgesRowIdx) + 1
-    val actionRowIdx = filterRowIdx + 1
-    val tagsRowIdx = if (hasActiveFilters) actionRowIdx + 1 else -1
-    val headerRowLeaves = listOfNotNull(
-        headerEntryLeaf?.let { titleRowIdx to it },
-        if (showFolderRow) badgesRowIdx to firstFolderPillFocus else null,
-        filterRowIdx to firstFilterChipFocus,
-        actionRowIdx to firstActionChipFocus,
-        if (hasActiveFilters) tagsRowIdx to clearTagsFocus else null,
-    ).toMap()
-    // Which header row (if any) currently holds focus — kept current via the
-    // onFocusChanged trackers below. Null while focus is in the grid/content.
-    var activeHeaderRow by remember { mutableStateOf<Int?>(null) }
-    fun Modifier.trackHeaderRow(index: Int): Modifier =
-        onFocusChanged { if (it.hasFocus) activeHeaderRow = index }
-    fun navigateHeaderRows(delta: Int): Boolean {
-        // Overlays own their own navigation; don't fight their focus handling.
-        if (resetDialogVisible || showFilters || isAnySheetOpen) return false
-        val current = activeHeaderRow ?: run {
-            android.util.Log.d("LibFocus", "nav $delta: no active row")
-            return false
-        }
-        val target = headerRowLeaves[current + delta] ?: run {
-            android.util.Log.d("LibFocus", "nav $delta: no leaf at ${current + delta} (current=$current)")
-            return false
-        }
-        val ok = target.tryRequestFocus("lib_header_nav")
-        android.util.Log.d("LibFocus", "nav $delta: current=$current target=${current + delta} ok=$ok")
-        return ok
-    }
+    // First row below the title row: the folder pills when shown, else the
+    // filter chip row. Null when neither exists.
+    val rowBelowTitleLeaf = if (showFolderRow) firstFolderPillFocus else headerEntryLeaf?.let { firstFilterChipFocus }
+    // First row above the filter chip row: the folder pills when shown, else
+    // the title row. Null when neither exists.
+    val rowAboveFilterLeaf = if (showFolderRow) firstFolderPillFocus else headerEntryLeaf
 
     val quickActionController = rememberMediaQuickActionController(
         resolveActions = remember { { item: MediaItem -> item.quickActions(MediaQuickActionScope.LIBRARY, includeDownload = true, includeAddToPlaylist = true) } },
@@ -398,6 +370,24 @@ fun LibraryScreen(
     // rendering tiny cards. Scaled from the same adaptive baseline.
     val thumbCellSize = adaptiveInfo.gridCellSize(isTv) / browser.posterSize * (16f / 9f) * (3f / 4f)
 
+    // D-pad Left at any content left edge expands the navigation drawer. The
+    // exit hook fires only when focus actually leaves this subtree leftward —
+    // i.e. from its leftmost focusable — so mid-row horizontal D-pad scrolling
+    // is unaffected. Belt-and-suspenders on top of the native rail focus entry:
+    // when that works the drawer opens either way; when the geometric search
+    // comes back empty, this still expands it.
+    val openTvDrawer = LocalTvDrawerOpener.current
+    fun Modifier.openDrawerOnLeftExit(): Modifier = ifElse(
+        isTv,
+        Modifier.focusProperties {
+            @Suppress("DEPRECATION")
+            exit = { direction ->
+                if (direction == FocusDirection.Left) openTvDrawer()
+                FocusRequester.Default
+            }
+        },
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -407,8 +397,6 @@ fun LibraryScreen(
                     tvFocusedItem?.let { quickActionController.show(it) }
                     true
                 },
-                onUp = { navigateHeaderRows(-1) },
-                onDown = { navigateHeaderRows(1) },
             ),
     ) {
         CompositionLocalProvider(LocalMediaQuickActionController provides quickActionController) {
@@ -442,7 +430,13 @@ fun LibraryScreen(
                                 // Key-intercepted Down from the title row's focusables
                                 // drops to the first header row below — the geometric
                                 // search can't be trusted between these rows.
-                                .ifElse(headerEntryLeaf != null, Modifier.trackHeaderRow(titleRowIdx)),
+                                .ifElse(
+                                    headerEntryLeaf != null,
+                                    Modifier.onDpadKey(
+                                        onDown = { rowBelowTitleLeaf?.tryRequestFocus("lib_header_nav") ?: false },
+                                    ),
+                                )
+                                .openDrawerOnLeftExit(),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             if (onBack != null) {
@@ -523,7 +517,11 @@ fun LibraryScreen(
                                 // alphabet rail interleaves on the right edge, so the
                                 // geometric search lands on the wrong row.
                                 modifier = Modifier
-                                    .trackHeaderRow(badgesRowIdx)
+                                    .onDpadKey(
+                                        onUp = { headerEntryLeaf?.tryRequestFocus("lib_header_nav") ?: false },
+                                        onDown = { firstFilterChipFocus.tryRequestFocus("lib_header_nav") },
+                                    )
+                                    .openDrawerOnLeftExit()
                                     .focusGroup()
                                     .tvFocusRestorer(),
                             ) {
@@ -561,7 +559,12 @@ fun LibraryScreen(
                         availableTags = tags,
                         onOpenSheet = { openFilterSheet = it },
                         firstChipFocus = firstFilterChipFocus,
-                        modifier = Modifier.trackHeaderRow(filterRowIdx),
+                        modifier = Modifier
+                            .onDpadKey(
+                                onUp = { rowAboveFilterLeaf?.tryRequestFocus("lib_header_nav") ?: false },
+                                onDown = { firstActionChipFocus.tryRequestFocus("lib_header_nav") },
+                            )
+                            .openDrawerOnLeftExit(),
                     )
 
                     // Labeled action row (View / Size / Group) — replaces the old
@@ -584,7 +587,11 @@ fun LibraryScreen(
                         onSizeClick = { showPosterSizeSheet = true },
                         onGroupClick = { showGroupBySheet = true },
                         firstChipFocus = firstActionChipFocus,
-                        modifier = Modifier.trackHeaderRow(actionRowIdx),
+                        modifier = Modifier
+                            // Up returns to the filter chip row; Down falls through
+                            // geometrically into the grid (or the active-filter tags).
+                            .onDpadKey(onUp = { firstFilterChipFocus.tryRequestFocus("lib_header_nav") })
+                            .openDrawerOnLeftExit(),
                     )
 
                     AnimatedVisibility(
@@ -597,13 +604,14 @@ fun LibraryScreen(
                         ) + shrinkVertically(),
                     ) {
                         FlowRow(
+                            // No vertical interception here: the tags can wrap to
+                            // several lines, so Up/Down must stay geometric to move
+                            // between wrapped lines. Exiting the row upward lands on
+                            // the action row geometrically; Down falls into the grid.
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 24.dp)
-                                .padding(top = 12.dp)
-                                // Key-intercepted Up returns to the action row; Down
-                                // falls through to the grid geometrically.
-                                .trackHeaderRow(tagsRowIdx),
+                                .padding(top = 12.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
@@ -655,7 +663,6 @@ fun LibraryScreen(
                             }
                             Box(
                                 modifier = Modifier
-                                    .focusRequester(clearTagsFocus)
                                     .graphicsLayer {
                                         scaleX = clearAllScale * clearAllFocusState.scale
                                         scaleY = clearAllScale * clearAllFocusState.scale
@@ -717,12 +724,9 @@ fun LibraryScreen(
                         viewModel.refresh()
                     },
                     enabled = !isTv,
-                    // Focus inside the grid/list content clears the header-row
-                    // tracking so vertical navigation falls back to the default
-                    // (in-grid) focus search.
                     modifier = Modifier
                         .fillMaxSize()
-                        .onFocusChanged { if (it.hasFocus) activeHeaderRow = null },
+                        .openDrawerOnLeftExit(),
                 ) {
                     // Initial load (no items yet) shows the center indicator only;
                     // a refresh with existing items shows the pull-to-refresh
@@ -993,8 +997,11 @@ fun LibraryScreen(
                                             horizontalArrangement = Arrangement.spacedBy(spacing),
                                             modifier = Modifier
                                                 .fillMaxSize()
-                                                .focusGroup()
+                                                // Restorer wraps the group (before
+                                                // focusGroup) — same ordering contract
+                                                // as TvFocusableGrid; see its docs.
                                                 .tvFocusRestorer(masonryFallbackRequester)
+                                                .focusGroup()
                                                 .focusRequester(masonryGroupRequester),
                                         ) {
                                             items(
@@ -1119,14 +1126,13 @@ fun LibraryScreen(
                     // These are infrequent navigation actions (not view/layout
                     // controls, which live in the labeled action chip row). Kept
                     // in the floating toolbar so the app bar stays clean.
-                    // Music-library-only on phones: these actions target music
-                    // playlists, so showing them for a video library reads as
-                    // clutter ("seems more for the music side", #113). TV keeps
-                    // the toolbar regardless of collectionType — without it the
-                    // filter sheet and the playlist destinations are unreachable
-                    // on a D-pad-only device.
+                    // Music-library-only on all form factors: these actions target
+                    // music playlists, so showing them for a video library reads as
+                    // clutter ("seems more for the music side", #113). TV now
+                    // matches phone — filters stay reachable via the pinned filter
+                    // chip row above.
                     val isMusicLibrary = selectedFolder?.collectionType == "music"
-                    if ((isTv || isMusicLibrary) && pagedItems.itemCount > 0) {
+                    if (isMusicLibrary && pagedItems.itemCount > 0) {
                         androidx.compose.animation.AnimatedVisibility(
                             visible = true,
                             modifier = Modifier

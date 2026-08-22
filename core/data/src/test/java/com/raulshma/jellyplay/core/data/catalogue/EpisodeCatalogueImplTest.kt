@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.catalogue
 
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.session.SessionIdentity
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -58,14 +59,28 @@ class EpisodeCatalogueImplTest {
     @Before
     fun setup() {
         every { apiClient.session } returns sessionFlow
-        // Real HomeSession (production scope — Dispatchers.Default, like
-        // the catalogue's own observer it replaces); see
-        // HomeSessionTest for the classifier's dedicated suite.
-        homeSession = HomeSession(apiClient)
+        // Real HomeSession (production scope — Dispatchers.Default); see
+        // HomeSessionTest for the classifier's dedicated suite. The registry
+        // that owns the identity reaction likewise runs on a real dispatcher
+        // (the production @ApplicationScope discipline), matching the
+        // chain the catalogue's own observer used to run.
+        homeSession = HomeSession(
+            apiClient,
+            kotlinx.coroutines.CoroutineScope(
+                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+            ),
+        )
+        val sessionCacheRegistry = SessionCacheRegistry(
+            homeSession,
+            kotlinx.coroutines.CoroutineScope(
+                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+            ),
+        )
         catalogue = EpisodeCatalogueImpl(
             apiClient,
             offlineRepository,
             homeSession,
+            sessionCacheRegistry,
         )
     }
 

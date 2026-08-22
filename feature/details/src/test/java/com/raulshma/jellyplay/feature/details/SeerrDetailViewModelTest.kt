@@ -386,6 +386,7 @@ class SeerrDetailViewModelTest {
     @Test
     fun `requestMedia failure sets requestResult with error`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
             SeerrMovieDetails(id = 123),
         )
@@ -402,15 +403,17 @@ class SeerrDetailViewModelTest {
         viewModel.requestMedia(SeerrSearchItem(id = 123, mediaType = "movie"))
         advanceUntilIdle()
 
-        val result = viewModel.requestResult.value!!
+        val result = viewModel.seerrSnapshot.value.requestResult!!
         assertEquals(false, result.isLoading)
-        assertEquals(false, result.success)
+        // Holder failure path sets only the error; success stays null (not false).
+        assertNull(result.success)
         assertEquals("denied", result.error)
     }
 
     @Test
     fun `requestMedia for loaded tv flips status to pending`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         coEvery { seerrRepository.getTvDetails(123) } returns Result.success(
             SeerrTvDetails(id = 123),
         )
@@ -431,7 +434,7 @@ class SeerrDetailViewModelTest {
             SeerrMediaStatus.PENDING.value,
             viewModel.uiState.value.tvDetails?.mediaInfo?.status,
         )
-        assertTrue(viewModel.requestResult.value?.success == true)
+        assertTrue(viewModel.seerrSnapshot.value.requestResult?.success == true)
     }
 
     @Test
@@ -463,6 +466,7 @@ class SeerrDetailViewModelTest {
     @Test
     fun `clearRequestResult nulls the result`() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
             SeerrMovieDetails(id = 123),
         )
@@ -477,18 +481,19 @@ class SeerrDetailViewModelTest {
         advanceUntilIdle()
         viewModel.requestMedia(SeerrSearchItem(id = 123, mediaType = "movie"))
         advanceUntilIdle()
-        assertNotNull(viewModel.requestResult.value)
+        assertNotNull(viewModel.seerrSnapshot.value.requestResult)
 
         viewModel.clearRequestResult()
+        advanceUntilIdle()
 
-        assertNull(viewModel.requestResult.value)
+        assertNull(viewModel.seerrSnapshot.value.requestResult)
     }
 
     // ── loadServiceDetails (delegates to holder) ───────────────────────
 
     @Test
     fun `loadServiceDetails folds sonarr servers into exposed state`() = runTest(mainDispatcherRule.testDispatcher) {
-        backgroundScope.launch { viewModel.sonarrServers.collect { /* warm */ } }
+        backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         val sonarr = com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail(id = 1, name = "Sonarr")
         coEvery { seerrRequestDelegate.fetchServiceDetails("tv") } returns com.raulshma.jellyplay.core.data.seerr.SeerrServiceDetailsResult(
             sonarrServers = listOf(sonarr),
@@ -497,13 +502,13 @@ class SeerrDetailViewModelTest {
         viewModel.loadServiceDetails("tv")
         advanceUntilIdle()
 
-        assertEquals(listOf(sonarr), viewModel.sonarrServers.value)
-        assertFalse(viewModel.isLoadingServices.value)
+        assertEquals(listOf(sonarr), viewModel.seerrSnapshot.value.sonarrServers)
+        assertFalse(viewModel.seerrSnapshot.value.isLoadingServices)
     }
 
     @Test
     fun `loadServiceDetails folds radarr servers into exposed state`() = runTest(mainDispatcherRule.testDispatcher) {
-        backgroundScope.launch { viewModel.radarrServers.collect { /* warm */ } }
+        backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         val radarr = com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail(id = 2, name = "Radarr")
         coEvery { seerrRequestDelegate.fetchServiceDetails("movie") } returns com.raulshma.jellyplay.core.data.seerr.SeerrServiceDetailsResult(
             radarrServers = listOf(radarr),
@@ -512,14 +517,14 @@ class SeerrDetailViewModelTest {
         viewModel.loadServiceDetails("movie")
         advanceUntilIdle()
 
-        assertEquals(listOf(radarr), viewModel.radarrServers.value)
+        assertEquals(listOf(radarr), viewModel.seerrSnapshot.value.radarrServers)
     }
 
     // ── loadTvSeasons (delegates to holder) ────────────────────────────
 
     @Test
     fun `loadTvSeasons populates tvSeasons filtering specials`() = runTest(mainDispatcherRule.testDispatcher) {
-        backgroundScope.launch { viewModel.tvSeasons.collect { /* warm */ } }
+        backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         coEvery { seerrRequestDelegate.fetchTvDetails(123) } returns com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails(
             seasons = listOf(
                 com.raulshma.jellyplay.core.model.seerr.SeerrSeason(seasonNumber = 0, name = "Specials"),
@@ -530,7 +535,7 @@ class SeerrDetailViewModelTest {
         viewModel.loadTvSeasons(123)
         advanceUntilIdle()
 
-        assertEquals(listOf(1), viewModel.tvSeasons.value.map { it.seasonNumber })
+        assertEquals(listOf(1), viewModel.seerrSnapshot.value.tvSeasons.map { it.seasonNumber })
     }
 
     // ── prefetchRelatedDetails (delegates to holder) ───────────────────

@@ -2,16 +2,13 @@ package com.raulshma.jellyplay.core.data.catalogue
 
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.session.HomeSession
-import com.raulshma.jellyplay.core.data.session.HomeSessionTransition
+import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -75,6 +72,14 @@ class EpisodeCatalogueImpl @Inject constructor(
      * [HomeSession.cacheIdentity] reads the session source flow.
      */
     private val homeSession: HomeSession,
+    /**
+     * The single home for identity reactions (see [SessionCacheRegistry]).
+     * The catalogue registers an ACTION (not just its TtlCache) because
+     * [invalidateAll] also bumps the in-flight epoch — a bare cache clear
+     * would let a fetch captured before the switch re-insert a snapshot
+     * after it.
+     */
+    private val sessionCacheRegistry: SessionCacheRegistry,
 ) : EpisodeCatalogue {
 
     private val cache = TtlCache<EpisodeCatalogueSnapshot>(
@@ -82,26 +87,14 @@ class EpisodeCatalogueImpl @Inject constructor(
         ttlMs = CACHE_TTL_MS,
     )
 
-    /**
-     * Long-lived scope for the identity-transition observer only. The loads
-     * themselves run on the caller's scope (via `coroutineScope { async { … } }`)
-     * so they inherit the caller's dispatcher and cancellation; this scope
-     * never hosts a load.
-     */
-    private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
     init {
         // Self-invalidate on identity change so a user/server switch can't
         // serve the previous identity's catalogue for up to the TTL. SignedIn
-        // (session restore / first login) does NOT invalidate — that was rule
-        // 4 of the observer this replaced, and anything cached under the
-        // pre-login (UNKNOWN) identity misses by construction anyway. User
-        // switch, server switch and sign-out each drop the whole catalogue.
-        cacheScope.launch {
-            homeSession.transitions.collect {
-                if (it !is HomeSessionTransition.SignedIn) invalidateAll()
-            }
-        }
+        // (session restore / first login) does NOT invalidate — the registry
+        // skips it wholesale, and anything cached under the pre-login
+        // (UNKNOWN) identity misses by construction anyway. User switch,
+        // server switch and sign-out each drop the whole catalogue.
+        sessionCacheRegistry.registerAction("episode-catalogue") { invalidateAll() }
     }
 
     // Single-flight coordination — the in-flight Deferred map + epoch, keyed by

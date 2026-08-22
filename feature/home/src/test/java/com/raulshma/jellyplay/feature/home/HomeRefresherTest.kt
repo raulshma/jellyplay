@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
@@ -42,6 +43,8 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -90,8 +93,25 @@ class HomeRefresherTest {
     private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 64)
     private val networkStatusFlow = MutableStateFlow(NetworkStatus.Online)
 
+    /**
+     * Real flow behind offlineModeManager.offlineMode — the refresher's
+     * offline-mode observer (mirror + transition policy) collects it from
+     * init, so it must be a real StateFlow, not a relaxed mock. Tests drive
+     * transitions by emitting here, with the mocked manager's
+     * `toggleManualOffline` flipping the flow like the real one.
+     */
+    private val offlineModeFlow = MutableStateFlow(OfflineMode.ONLINE)
+
     /** Backs the androidTvWatchNextEnabledProvider handed to the refresher. */
     private var androidTvWatchNextEnabled = true
+
+    /**
+     * Fake for the refresher's `awaitOutboxDrained` seam: counts invocations
+     * and (while [drainGate] is set) parks, so GoingOnline tests can observe
+     * the handshake mid-flight — flag up, loader up, fetch not yet started.
+     */
+    private var drainCalls = 0
+    private var drainGate: CompletableDeferred<Unit>? = null
 
     @Before
     fun setUp() {
@@ -107,6 +127,7 @@ class HomeRefresherTest {
 
         every { mediaRepository.userDataChanges } returns userDataEvents
         every { offlineModeManager.networkStatus } returns networkStatusFlow
+        every { offlineModeManager.offlineMode } returns offlineModeFlow
         every { offlineModeManager.isOffline } returns false
     }
 
@@ -137,6 +158,10 @@ class HomeRefresherTest {
             tvWatchNextScheduler = tvWatchNextScheduler,
             librarySyncHook = librarySyncHook,
             offlineModeManager = offlineModeManager,
+            awaitOutboxDrained = {
+                drainCalls++
+                drainGate?.await()
+            },
             planProvider = {
                 HomeSectionPrefs(
                     query = HomeSectionQuery(),
@@ -225,7 +250,7 @@ class HomeRefresherTest {
 
         refresher.start()
         runCurrent() // the cold-start fetch acquires the mutex and parks on the gate
-        refresher.refreshForUserSwitch() // SignedIn: cancels the parked fetch, re-fetches
+        refresher.request(RefreshTrigger.UserSwitched) // SignedIn: cancels the parked fetch, re-fetches
         runCurrent()
         refresher.stop()
 
@@ -387,6 +412,202 @@ class HomeRefresherTest {
         // Successfully starts and stops the periodic-refresh loop without
         // throwing, and no fetch fires inside the staleness window.
         coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+    }
+
+    @Test
+    fun goingOnline_drainsOutboxBeforeCappedFetch_thenClearsFlags() = runTest {
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1")))),
+            ),
+        )
+        val refresher = buildRefresher()
+        runCurrent() // offline-mode observer subscribes; initial ONLINE emission mirrors only
+
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent() // ONLINE→offline: content dropped
+        drainGate = CompletableDeferred()
+        every { offlineModeManager.toggleManualOffline() } answers { offlineModeFlow.value = OfflineMode.ONLINE }
+
+        refresher.request(RefreshTrigger.GoingOnline)
+        runCurrent() // flag raised → manager toggled → ONLINE emission starts the handshake
+
+        // Mid-handshake: busy flag + full-screen loader up, drain in flight,
+        // and the fetch strictly NOT started (it must wait for the drain so
+        // Continue Watching reflects the server's post-sync state).
+        assertTrue(refresher.state.value.isGoingOnline)
+        assertTrue(refresher.state.value.isLoading)
+        assertEquals(1, drainCalls)
+        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+
+        drainGate!!.complete(Unit)
+        runCurrent()
+
+        assertFalse(refresher.state.value.isGoingOnline)
+        assertFalse(refresher.state.value.isLoading)
+        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), any()) }
+        assertTrue(refresher.state.value.sections.isNotEmpty())
+        refresher.stop()
+    }
+
+    @Test
+    fun goingOnline_fetchTimeout_clearsFlagsInsteadOfHanging() = runTest {
+        // Regression pin: a hung getHomeSections call previously parked the
+        // handshake forever, leaving isGoingOnline (and the loader) stuck on.
+        coEvery { mediaRepository.getHomeSections(any(), any()) } coAnswers {
+            CompletableDeferred<Result<HomeSectionsResult>>().await() // never completes
+        }
+        val refresher = buildRefresher()
+        runCurrent()
+
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent()
+        every { offlineModeManager.toggleManualOffline() } answers { offlineModeFlow.value = OfflineMode.ONLINE }
+
+        refresher.request(RefreshTrigger.GoingOnline)
+        runCurrent()
+        assertTrue("isGoingOnline must be observable while the fetch hangs", refresher.state.value.isGoingOnline)
+
+        advanceTimeBy(31_000) // past GOING_ONLINE_TIMEOUT_MS
+        runCurrent()
+
+        assertFalse(refresher.state.value.isGoingOnline)
+        assertFalse(refresher.state.value.isLoading)
+        refresher.stop()
+    }
+
+    @Test
+    fun goingOnline_toggleNeverLands_fallbackClearsFlag() = runTest {
+        // Regression pin: toggleManualOffline() is a fire-and-forget
+        // preference write on the manager's own scope — if that write is
+        // lost, the mode flow never emits ONLINE and the observer's
+        // handshake (whose finally clears the flag) never runs. The
+        // request's own fallback must clear the busy flag instead of
+        // leaving the Go Online spinner on until restart. The relaxed mock
+        // leaves toggleManualOffline() as a no-op — exactly that scenario.
+        val refresher = buildRefresher()
+        runCurrent()
+
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent()
+
+        refresher.request(RefreshTrigger.GoingOnline)
+        runCurrent()
+        assertTrue(refresher.state.value.isGoingOnline)
+
+        advanceTimeBy(31_000) // past GOING_ONLINE_TIMEOUT_MS
+        runCurrent()
+
+        assertFalse(refresher.state.value.isGoingOnline)
+        refresher.stop()
+    }
+
+    @Test
+    fun wentOffline_dropsCachedOnlineContent() = runTest {
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(section(HomeSectionType.LATEST_MEDIA, items = listOf(item("m1")))),
+            ),
+        )
+        val refresher = buildRefresher()
+        runCurrent()
+        refresher.fetchOnce()
+        runCurrent()
+        assertTrue(refresher.state.value.sections.isNotEmpty())
+
+        // Production path: the manager flips the mode and the refresher's own
+        // observer reacts — cached online sections + discover rows dropped,
+        // going-online spinner (if any) cleared.
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent()
+        assertTrue(refresher.state.value.sections.isEmpty())
+        assertTrue(refresher.state.value.discoverSections.isEmpty())
+        assertFalse(refresher.state.value.isGoingOnline)
+
+        // Spontaneous offline→online mirror-only semantics: re-flipping
+        // online WITHOUT a GoingOnline request must not run the handshake
+        // (no extra fetch) — the content drop only ever comes from the
+        // offline-mode observer above.
+        offlineModeFlow.value = OfflineMode.ONLINE
+        runCurrent()
+        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), any()) }
+        assertTrue(refresher.state.value.sections.isEmpty())
+        refresher.stop()
+    }
+
+    @Test
+    fun userSwitched_paintsCachedSnapshotWhileReplacementFetchRuns() = runTest {
+        coEvery { mediaRepository.getCachedHomeSections(any()) } returns HomeSectionsResult(
+            sections = listOf(section(HomeSectionType.LATEST_MEDIA, items = listOf(item("cached1")))),
+        )
+        val fetchGate = CompletableDeferred<Unit>()
+        coEvery { mediaRepository.getHomeSections(any(), any()) } coAnswers {
+            fetchGate.await()
+            Result.success(HomeSectionsResult(sections = emptyList()))
+        }
+        val refresher = buildRefresher()
+        runCurrent()
+
+        refresher.request(RefreshTrigger.UserSwitched)
+        runCurrent()
+
+        // Stale-while-revalidate paint: the persisted snapshot is on screen
+        // with NO full-screen loader while the network fetch is still parked.
+        assertFalse(refresher.state.value.isLoading)
+        assertEquals(listOf("cached1"), refresher.state.value.sections.single().items.map { it.id })
+        assertNull(refresher.state.value.error)
+
+        fetchGate.complete(Unit)
+        runCurrent()
+        refresher.stop()
+    }
+
+    @Test
+    fun signedOut_resetsToEmptyLoadingState() = runTest {
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(sections = listOf(section(HomeSectionType.LATEST_MEDIA))),
+        )
+        coEvery { mediaRepository.getCachedHomeSections(any()) } returns null
+        val refresher = buildRefresher()
+        refresher.fetchOnce()
+        runCurrent()
+        assertTrue(refresher.state.value.sections.isNotEmpty())
+
+        refresher.request(RefreshTrigger.SignedOut)
+
+        val state = refresher.state.value
+        assertTrue(state.sections.isEmpty())
+        assertTrue(state.discoverSections.isEmpty())
+        assertNull(state.error)
+        assertTrue(state.isLoading)
+        refresher.stop()
+    }
+
+    @Test
+    fun patchItems_flipsMatchingItemInEverySectionAndTouchesNothingElse() = runTest {
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(
+                    section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1"), item("other"))),
+                    section(HomeSectionType.LATEST_MEDIA, items = listOf(item("cw1"))),
+                ),
+            ),
+        )
+        val refresher = buildRefresher()
+        refresher.fetchOnce()
+        runCurrent()
+        val otherBefore = refresher.state.value.sections[0].items.last()
+
+        refresher.patchItems("cw1") { it.copy(isPlayed = true) }
+
+        val sections = refresher.state.value.sections
+        assertTrue(sections[0].items.first { it.id == "cw1" }.isPlayed)
+        assertTrue(sections[1].items.single { it.id == "cw1" }.isPlayed)
+        // The sibling card keeps its exact instance — the patch maps ONLY
+        // matching ids, in every section.
+        assertSame(otherBefore, sections[0].items.last())
+        assertFalse(sections[0].items.last().isPlayed)
+        refresher.stop()
     }
 
     private fun section(

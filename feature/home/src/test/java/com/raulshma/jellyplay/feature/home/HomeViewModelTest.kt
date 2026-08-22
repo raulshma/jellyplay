@@ -51,6 +51,9 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
+import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchProvider
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -152,6 +155,27 @@ class HomeViewModelTest {
     private val playbackOutboxRepository: PlaybackOutboxRepository = mockk(relaxed = true)
     private val playbackSyncScheduler: PlaybackSyncScheduler = mockk(relaxed = true)
     private lateinit var fakeTimeSource: FakeTimeSource
+
+    /**
+     * The settings-search seam injected into the VM. In production the Hilt
+     * binding (feature/settings' SettingsSearchModule) supplies the real
+     * catalog; here a small fake with synthetic items keeps the VM's
+     * settingsSearchResults flow exercisable without depending on
+     * feature/settings from this suite.
+     */
+    private val fakeSettingsSearchProvider = object : SettingsSearchProvider {
+        override val items = listOf(
+            SettingsSearchItem(
+                id = "test_setting",
+                titleRes = 0,
+                subtitleRes = 0,
+                categoryRes = 0,
+                keywords = listOf("test"),
+                route = Route.Settings,
+                icon = mockk(relaxed = true),
+            ),
+        )
+    }
 
     private val userFlow = MutableStateFlow<UserInfo?>(null)
 
@@ -262,6 +286,7 @@ class HomeViewModelTest {
         continueWatchingBroadcaster = continueWatchingBroadcaster,
         librarySyncHook = librarySyncHook,
         timeSource = fakeTimeSource,
+        settingsSearchProvider = fakeSettingsSearchProvider,
     )
 
     @Test
@@ -315,7 +340,7 @@ class HomeViewModelTest {
         signIn("u1")
         runCurrent()
 
-        viewModel.markItemPlayed(item("cw1"))
+        viewModel.onEvent(HomeUiEvent.MarkItemPlayed(item("cw1")))
         runCurrent()
 
         assertEquals(listOf(Triple("cw1", true, null)), userDataMutator.playedCalls)
@@ -362,27 +387,52 @@ class HomeViewModelTest {
 
     @Test
     fun offlineToOnline_clearsIsGoingOnline_afterFetch() = runTest {
+        // The sign-in fetch resolves immediately; the handshake's fetch parks
+        // on the gate so the busy flag is observable mid-transition via the
+        // uiState fold (the refresher owns the flag, the VM only folds it).
+        val fetchGate = CompletableDeferred<Unit>()
+        var fetchCalls = 0
         coEvery {
             mediaRepository.getHomeSections(any())
-        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        } coAnswers {
+            fetchCalls++
+            if (fetchCalls == 1) Result.success(HomeSectionsResult(sections = emptyList()))
+            else {
+                fetchGate.await()
+                Result.success(HomeSectionsResult(sections = emptyList()))
+            }
+        }
         viewModel = buildViewModel()
         signIn("u1")
         runCurrent()
 
-        // Drive the offline→online transition path: the offlineMode collector's
-        // ONLINE branch sets isGoingOnline via toggleOfflineMode, then clears
-        // it in finally after the fetch resolves.
+        // Go offline first (the dock's offline toggle), like the real path.
         every { offlineModeManager.isOffline } returns true
         offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
         runCurrent()
+
+        // Go online through the real entry: the event forwards the
+        // GoingOnline trigger to the refresher, which raises the busy flag
+        // and toggles the manager; the mocked manager flips the mode flow
+        // like the real one, and the refresher's own observer runs the
+        // drain + capped fetch handshake.
         every { offlineModeManager.isOffline } returns false
-        offlineModeFlow.value = OfflineMode.ONLINE
+        every { offlineModeManager.toggleManualOffline() } answers { offlineModeFlow.value = OfflineMode.ONLINE }
+        viewModel.onEvent(HomeUiEvent.ToggleOfflineMode)
+        runCurrent()
+
+        assertTrue(
+            "isGoingOnline must be observable (via the uiState fold) while the fetch runs",
+            viewModel.uiState.value.isGoingOnline,
+        )
+        fetchGate.complete(Unit)
         runCurrent()
 
         assertFalse(
             "isGoingOnline must clear after the online fetch resolves",
             viewModel.uiState.value.isGoingOnline,
         )
+        assertFalse(viewModel.uiState.value.isLoading)
         stopPeriodicRefresh()
     }
 
@@ -407,7 +457,13 @@ class HomeViewModelTest {
         offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
         runCurrent()
         every { offlineModeManager.isOffline } returns false
-        offlineModeFlow.value = OfflineMode.ONLINE
+        every { offlineModeManager.toggleManualOffline() } answers { offlineModeFlow.value = OfflineMode.ONLINE }
+        viewModel.onEvent(HomeUiEvent.ToggleOfflineMode)
+        runCurrent()
+        assertTrue(
+            "isGoingOnline must be observable (via the uiState fold) while the fetch hangs",
+            viewModel.uiState.value.isGoingOnline,
+        )
         // Advance virtual time past the GOING_ONLINE_TIMEOUT_MS deadline.
         advanceTimeBy(31_000)
         runCurrent()
@@ -472,7 +528,7 @@ class HomeViewModelTest {
         viewModel = buildViewModel()
         runCurrent()
 
-        viewModel.setSectionVisible(HomeSectionType.NEXT_UP, visible = false)
+        viewModel.onEvent(HomeUiEvent.SetSectionVisible(HomeSectionType.NEXT_UP, visible = false))
 
         val expected = HomeSectionType.CONFIGURABLE.toSet() - HomeSectionType.NEXT_UP
         verify { preferencesEditor.setEnabledHomeSectionTypes(expected) }
@@ -487,7 +543,7 @@ class HomeViewModelTest {
         viewModel = buildViewModel()
         runCurrent()
 
-        viewModel.setSectionVisible(HomeSectionType.RECOMMENDATIONS, visible = true)
+        viewModel.onEvent(HomeUiEvent.SetSectionVisible(HomeSectionType.RECOMMENDATIONS, visible = true))
 
         verify { preferencesEditor.setEnabledHomeSectionTypes(setOf(HomeSectionType.RECOMMENDATIONS)) }
         stopPeriodicRefresh()
@@ -509,7 +565,7 @@ class HomeViewModelTest {
         viewModel = buildViewModel()
         runCurrent()
 
-        viewModel.moveSection(HomeSectionType.NEXT_UP, up = true)
+        viewModel.onEvent(HomeUiEvent.MoveSection(HomeSectionType.NEXT_UP, up = true))
 
         assertTrue(editorBlock.isCaptured)
         val recordingHome = mockk<HomeDiscoveryStore>(relaxed = true)
@@ -538,7 +594,7 @@ class HomeViewModelTest {
         viewModel = buildViewModel()
         runCurrent()
 
-        viewModel.moveSection(HomeSectionType.NEXT_UP, up = false)
+        viewModel.onEvent(HomeUiEvent.MoveSection(HomeSectionType.NEXT_UP, up = false))
 
         // NEXT_UP is already last → editor must not be touched.
         verify(exactly = 0) { preferencesEditor.edit(any()) }
@@ -555,7 +611,7 @@ class HomeViewModelTest {
 
         // Hiding LATEST_MEDIA for the "movies" library adds it to the disabled
         // set alongside the existing RECENTLY_ADDED entry.
-        viewModel.setLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = false)
+        viewModel.onEvent(HomeUiEvent.SetLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = false))
 
         verify {
             preferencesEditor.setLibraryHomeSectionOverrides(
@@ -575,7 +631,7 @@ class HomeViewModelTest {
 
         // Re-enabling the only disabled type empties the set, so the key must
         // be dropped entirely (restoring default-enabled state).
-        viewModel.setLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = true)
+        viewModel.onEvent(HomeUiEvent.SetLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = true))
 
         verify { preferencesEditor.setLibraryHomeSectionOverrides(emptyMap()) }
         stopPeriodicRefresh()

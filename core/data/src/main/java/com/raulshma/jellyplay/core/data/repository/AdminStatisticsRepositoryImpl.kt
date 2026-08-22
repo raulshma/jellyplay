@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.database.dao.AuditLogDao
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
 import com.raulshma.jellyplay.core.database.entity.MediaAuditLogEntity
 import com.raulshma.jellyplay.core.database.entity.ScanStateEntity
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.model.AuditItemDetail
 import com.raulshma.jellyplay.core.model.AuditLogEntry
 import com.raulshma.jellyplay.core.model.CleanupActionType
@@ -26,8 +27,6 @@ import com.raulshma.jellyplay.core.model.WatchedMediaItem
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -53,9 +52,13 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
     private val auditLogDao: AuditLogDao,
     private val scanStateDao: ScanStateDao,
     private val json: Json,
+    /**
+     * Shared application scope for the fire-and-forget background scans below
+     * (the `@ApplicationScope` binding — never cancelled for this singleton,
+     * matching the scan jobs' previous dedicated-scope lifetime).
+     */
+    @ApplicationScope private val scope: CoroutineScope,
 ) : AdminStatisticsRepository {
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * Bounds concurrency of the per-user statistics fan-out so a server with

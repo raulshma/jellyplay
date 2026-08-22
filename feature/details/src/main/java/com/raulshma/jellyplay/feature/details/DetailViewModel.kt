@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.HomeFreshness
-import com.raulshma.jellyplay.core.data.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DetailCapabilities
@@ -177,10 +176,9 @@ class DetailViewModel @Inject internal constructor(
         val core = _uiState.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
         // Group 2 — Seerr request-flow ephemera (radarr/sonarr/result/dialog state).
         // The holder's snapshot flow already combines + dedupes its six
-        // sub-flows; stateIn here gives the group its dedicated StateFlow so
-        // its ticks don't re-run the outer combine.
-        val seerrRequest = seerrRequestState.snapshot
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrRequestSnapshot())
+        // sub-flows; snapshotIn gives the group its dedicated StateFlow so its
+        // ticks don't re-run the outer combine.
+        val seerrRequest = seerrRequestState.snapshotIn(scope)
         // Group 3 — Seerr connection flags that only gate recommendation visibility.
         val seerrFlags = combine(
             remoteDiscovery.seerrRepository.isConnected(),
@@ -191,12 +189,7 @@ class DetailViewModel @Inject internal constructor(
 
         combine(core, seerrRequest, seerrFlags) { primary, request, flags ->
             primary.copy(
-                seerrRequestResult = request.requestResult,
-                seerrRadarrServers = request.radarrServers,
-                seerrSonarrServers = request.sonarrServers,
-                isLoadingSeerrServices = request.isLoadingServices,
-                seerrTvSeasons = request.tvSeasons,
-                seerrTvIsAnime = request.tvIsAnime,
+                seerrRequest = request,
                 isSeerrConnected = flags.isConnected,
                 isSeerrRecommendationsEnabled = flags.isRecommendationsEnabled,
             )

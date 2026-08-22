@@ -12,7 +12,7 @@ import com.raulshma.jellyplay.core.data.paging.FavoritesPagingSource
 import com.raulshma.jellyplay.core.data.paging.MediaPagingSource
 import com.raulshma.jellyplay.core.data.paging.SearchPagingSource
 import com.raulshma.jellyplay.core.data.session.HomeSession
-import com.raulshma.jellyplay.core.data.session.HomeSessionTransition
+import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
@@ -54,14 +54,11 @@ import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.LrcLibApi
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -105,13 +102,20 @@ class MediaRepositoryImpl @Inject constructor(
     /**
      * The single owner of identity transitions (see [HomeSession]). Replaces
      * this repo's own `lastStableIdentity` mirror + `init {}` observer: the
-     * cache-invalidation collector below now subscribes to
-     * [HomeSession.transitions], and identity reads for cache keying go
-     * through [HomeSession.cacheIdentity] (the suspend source-flow read —
-     * the mirror lags a switch by a dispatch, which would key fetches under
-     * the previous identity).
+     * cache-invalidation reaction is registered with [SessionCacheRegistry]
+     * (the single subscriber of [HomeSession.transitions]), and identity
+     * reads for cache keying go through [HomeSession.cacheIdentity] (the
+     * suspend source-flow read — the mirror lags a switch by a dispatch,
+     * which would key fetches under the previous identity).
      */
     private val homeSession: HomeSession,
+    /**
+     * The single home for identity reactions (see [SessionCacheRegistry]).
+     * This repo registers its TtlCaches for wholesale clears and one action
+     * for the previous identity's persisted home-section SWR clear — no
+     * bespoke collector or long-lived scope of its own.
+     */
+    private val sessionCacheRegistry: SessionCacheRegistry,
 ) : MediaRepository, MediaRepositoryCacheInvalidation {
 
     private val detailCache = TtlCache<MediaDetail>(
@@ -132,6 +136,14 @@ class MediaRepositoryImpl @Inject constructor(
     private val similarCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
     private val albumTracksCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
     private val collectionItemsCache = TtlCache<SearchResult>(ttlMs = DETAIL_CACHE_TTL_MS)
+
+    // Child-photo URLs for a photo folder (player backdrop fan-out); declared
+    // with the other caches so the identity registration in the init block
+    // below can enumerate every cache in one place.
+    private val photoFolderChildUrlCache = TtlCache<List<String>>(
+        maxSize = 200,
+        ttlMs = 5 * 60 * 1000L,
+    )
 
     // Plan 08: private — the detail cache is repo-internal machinery; reads
     // that need freshness use getMediaDetail(force = true) and mutations/
@@ -220,45 +232,54 @@ class MediaRepositoryImpl @Inject constructor(
     @Volatile
     private var lastLyricsEvictionMs = 0L
 
-    /**
-     * Long-lived scope for the cache-invalidation observer. Never cancelled —
-     * [MediaRepositoryImpl] is a `@Singleton` and lives for the process lifetime.
-     */
-    private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
     init {
-        // Observe identity transitions from [HomeSession] (the single owner —
-        // previously this repo, EpisodeCatalogueImpl and HomeViewModel each
-        // maintained their own last-identity mirror over the separate
-        // server/user flows) and self-invalidate caches. Closes a privacy +
-        // correctness gap where the previous user's home sections / detail
-        // data was served for up to 10 minutes (the longest TTL) after
-        // `switchUser` or `switchServerAddress`.
+        // Identity transitions are handled by [SessionCacheRegistry] (the
+        // single subscriber of HomeSession.transitions — previously this
+        // repo, EpisodeCatalogueImpl and HomeViewModel each maintained their
+        // own last-identity mirror over the separate server/user flows).
+        // This closes a privacy + correctness gap where the previous user's
+        // home sections / detail data was served for up to 10 minutes (the
+        // longest TTL) after `switchUser` or `switchServerAddress`.
         //
-        // Invalidation rules (identical to the observer this replaces):
+        // Reaction rules (identical to the observer this replaces):
         //  - SignedIn            : NOTHING — session restore / first login;
         //                          caches are identity-keyed and there is no
-        //                          previous identity to drop (rule 4 of the
-        //                          old observer).
+        //                          previous identity to drop (the registry
+        //                          skips SignedIn wholesale).
         //  - User/ServerSwitched : wholesale drop + clear the PREVIOUS
         //                          identity's persisted home-section SWR rows.
         //  - SignedOut           : wholesale drop + clear the logged-out
         //                          identity's rows (privacy).
-        cacheScope.launch {
-            homeSession.transitions.collect { transition ->
-                if (transition !is HomeSessionTransition.SignedIn) {
-                    invalidateCaches()
-                    // Clear the PREVIOUS identity's persisted home-section SWR
-                    // rows — scoped, not wholesale, so a multi-account server
-                    // keeps the other users' snapshots for their next cold
-                    // open. Runs here (where the transition carries the
-                    // previous identity) rather than in invalidateCaches()
-                    // (which has no identity context). Null only on SignedIn,
-                    // which is excluded above.
-                    transition.previousIdentity?.let { previous ->
-                        clearHomeSectionsForIdentity(previous.serverId, previous.userId)
-                    }
-                }
+        sessionCacheRegistry.registerCaches(
+            "media",
+            libraryFoldersCache,
+            genresCache,
+            studiosCache,
+            latestMediaCache,
+            albumTracksCache,
+            collectionItemsCache,
+            homeSectionsCache,
+            photoFolderChildUrlCache,
+        )
+        // The action carries only the reactions a plain registry drop
+        // cannot express: the detail cache's epoch bump (an in-flight
+        // previous-identity fetch must not write back into the cleared
+        // cache) together with its similarCache companion, and the
+        // previous identity's persisted SWR rows. The episode catalogue's
+        // snapshot drop + epoch bump lives in its own registration —
+        // routing through invalidateCaches() here would clear every cache
+        // twice and double-bump the catalogue's epoch on each transition.
+        sessionCacheRegistry.registerAction("media-identity-clear") { transition ->
+            invalidateDetailCache()
+            // Clear the PREVIOUS identity's persisted home-section SWR
+            // rows — scoped, not wholesale, so a multi-account server
+            // keeps the other users' snapshots for their next cold
+            // open. Runs here (where the transition carries the
+            // previous identity) rather than in invalidateCaches()
+            // (which has no identity context). Null only on SignedIn,
+            // which the registry excludes.
+            transition.previousIdentity?.let { previous ->
+                clearHomeSectionsForIdentity(previous.serverId, previous.userId)
             }
         }
     }
@@ -301,7 +322,7 @@ class MediaRepositoryImpl @Inject constructor(
                 // getCachedHomeSections() render instantly next launch while a
                 // network refresh runs. Identity-keyed (serverId, userId) so a
                 // user switch never serves another user's payload — cleared by
-                // clearHomeSectionsForIdentity() from the identity observer below.
+                // clearHomeSectionsForIdentity() from the registry's identity action above.
                 persistHomeSectionsSnapshot(cacheKey, homeResult)
             }
         }
@@ -1188,10 +1209,10 @@ class MediaRepositoryImpl @Inject constructor(
 
     /**
      * Wholesale in-memory cache drop (plan 08: demoted off the public
-     * interface). Only two legitimate callers remain, both in this module:
-     * the `init {}` identity observer (logout / server / user switch) and the
-     * background user-data sync worker. Reads that need freshness use the
-     * per-query force parameters instead.
+     * interface). The only production caller is the background user-data
+     * sync worker — the `SessionCacheRegistry` identity path reacts via its
+     * own cache registration + action instead (see the init block). Reads
+     * that need freshness use the per-query force parameters instead.
      */
     internal suspend fun invalidateCaches() {
         invalidateDetailCache()
@@ -1217,12 +1238,12 @@ class MediaRepositoryImpl @Inject constructor(
         // cross-boundary clear from here.
         // NOTE: the persistent home-section SWR snapshot is intentionally NOT
         // cleared here. invalidateCaches() doesn't know which (server, user)
-        // it's running for — it's called both from the identity observer (which
+        // it's running for — it's called both from the registry's identity action (which
         // has the previous identity in hand) and from background sync workers
         // (which have no identity context). Clearing wholesale here would wipe
         // every user's snapshot on any sync, defeating the multi-account SWR
-        // benefit. The identity observer clears the previous identity's rows
-        // directly via clearHomeSectionsForIdentity() — see init {}.
+        // benefit. The registry action clears the previous identity's rows
+        // directly via clearHomeSectionsForIdentity() — see the init block above.
     }
 
     override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> =
@@ -1305,11 +1326,6 @@ class MediaRepositoryImpl @Inject constructor(
             }.filter { it.text.isNotEmpty() }
         }
     }
-
-    private val photoFolderChildUrlCache = TtlCache<List<String>>(
-        maxSize = 200,
-        ttlMs = 5 * 60 * 1000L,
-    )
 
     override suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int): List<String> {
         val identity = homeSession.cacheIdentity()

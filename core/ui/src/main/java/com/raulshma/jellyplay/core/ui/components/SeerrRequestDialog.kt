@@ -62,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
@@ -80,6 +81,38 @@ private const val TAG = "SeerrRequestDialog"
  */
 private fun <T> animeDefault(isAnime: Boolean, anime: T?, regular: T?): T? =
     if (isAnime) anime ?: regular else regular
+
+/**
+ * Snapshot-fold overload — the single home for the
+ * [SeerrRequestSnapshot] → dialog-field mapping so every screen folds the
+ * holder's state the same way (a new snapshot field lands here once instead
+ * of once per screen).
+ */
+@Composable
+fun SeerrRequestDialog(
+    item: SeerrSearchItem,
+    snapshot: SeerrRequestSnapshot,
+    onConfirm: (
+        serverId: Int?,
+        profileId: Int?,
+        rootFolder: String?,
+        tags: List<Int>?,
+        seasons: List<Int>?,
+    ) -> Unit,
+    onDismiss: () -> Unit,
+) = SeerrRequestDialog(
+    item = item,
+    radarrServers = snapshot.radarrServers,
+    sonarrServers = snapshot.sonarrServers,
+    seasons = snapshot.tvSeasons,
+    tvIsAnime = snapshot.tvIsAnime,
+    isLoadingServices = snapshot.isLoadingServices,
+    isRequesting = snapshot.requestResult?.isLoading == true,
+    requestSuccess = snapshot.requestResult?.success,
+    requestError = snapshot.requestResult?.error,
+    onConfirm = onConfirm,
+    onDismiss = onDismiss,
+)
 
 /**
  * Enhanced request dialog that mirrors the Seerr web UI request options.

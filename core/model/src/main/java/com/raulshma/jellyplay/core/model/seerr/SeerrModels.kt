@@ -750,6 +750,30 @@ enum class SeerrMediaStatus(val value: Int) {
     }
 }
 
+/**
+ * Optimistic post-request flip: returns the movie with its [SeerrMediaInfo]
+ * status set to [SeerrMediaStatus.PENDING] when it is the detail for [item]
+ * — matched on the detail's own `id`, the same value used to build the
+ * [SeerrSearchItem] passed into `requestMedia`, rather than
+ * `mediaInfo.tmdbId`. Overseerr omits `mediaInfo` entirely from
+ * `/movie/{id}` and `/tv/{id}` for media that has never been requested, so
+ * `mediaInfo.tmdbId` is 0 there and an id-match on it would never fire,
+ * leaving the action button stuck on "Request" even after a successful
+ * request. When `mediaInfo` is absent a minimal one is synthesized (carrying
+ * the tmdb id) so the PENDING status can flip the button. A non-matching
+ * detail is returned untouched.
+ */
+fun SeerrMovieDetails.withPendingRequest(item: SeerrSearchItem): SeerrMovieDetails =
+    if (id == item.id) copy(mediaInfo = mediaInfo.withPendingStatus(item.id)) else this
+
+/** TV counterpart of [withPendingRequest] — same match/synthesize rule. */
+fun SeerrTvDetails.withPendingRequest(item: SeerrSearchItem): SeerrTvDetails =
+    if (id == item.id) copy(mediaInfo = mediaInfo.withPendingStatus(item.id)) else this
+
+private fun SeerrMediaInfo?.withPendingStatus(tmdbId: Int): SeerrMediaInfo =
+    (this ?: SeerrMediaInfo(tmdbId = tmdbId))
+        .copy(status = SeerrMediaStatus.PENDING.value)
+
 @Immutable
 @Serializable
 enum class SeerrRequestStatus(val value: Int) {

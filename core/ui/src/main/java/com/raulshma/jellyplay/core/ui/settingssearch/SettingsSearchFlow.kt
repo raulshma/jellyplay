@@ -20,21 +20,21 @@ private const val SETTINGS_SEARCH_DEBOUNCE_MS: Long = 120
 /**
  * Local settings-search pipeline for the home search bar:
  * debounces the caller's raw query flow, then fuzzy-matches it against the
- * locale-resolved [SettingsSearchRegistry]. Lives in the UI layer because it
- * needs an Android [Context] to resolve the registry's `@StringRes` ids —
- * which is exactly why it moved out of HomeViewModel (the VM no longer needs
- * an `appContext`).
+ * locale-resolved items supplied by [provider] (the settings-search catalog
+ * bound at app level). Lives in the UI layer because it needs an Android
+ * [Context] to resolve the catalog's `@StringRes` ids.
  *
- * A blank query emits the empty list without touching the registry. The
+ * A blank query emits the empty list without touching the catalog. The
  * Appearance-level "settings in home search" gate is the caller's concern:
  * callers not rendering settings results simply don't collect this flow.
- * Matching runs on [Dispatchers.Default] so a long registry scan never lands
+ * Matching runs on [Dispatchers.Default] so a long catalog scan never lands
  * on the main thread.
  */
 @OptIn(FlowPreview::class)
 fun settingsSearchResults(
     queries: Flow<String>,
     context: Context,
+    provider: SettingsSearchProvider,
 ): Flow<List<ResolvedSettingsItem>> =
     queries
         .debounce(SETTINGS_SEARCH_DEBOUNCE_MS)
@@ -43,10 +43,10 @@ fun settingsSearchResults(
             if (query.isBlank()) {
                 emptyList()
             } else {
-                // Resolve the registry's @StringRes ids to the current locale
+                // Resolve the catalog's @StringRes ids to the current locale
                 // once per query, then fuzzy-match against the translated text
                 // so a user typing in their own language still finds settings.
-                val resolved = SettingsSearchRegistry.items.resolve(context::getString)
+                val resolved = provider.items.resolve(context::getString)
                 SettingsSearchMatcher.search(query, resolved)
             }
         }

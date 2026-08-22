@@ -56,11 +56,21 @@ class MediaRepositoryImplTest {
         // to a real EpisodeCatalogueImpl, which in turn calls back into the
         // mocked apiClient — so the existing series/episodes stubs keep working
         // end-to-end through the catalogue transplant.
-        val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(apiClient)
+        val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(
+            apiClient,
+            kotlinx.coroutines.CoroutineScope(
+                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+            ),
+        )
+        val sessionCacheRegistry = com.raulshma.jellyplay.core.data.session.SessionCacheRegistry(
+            homeSession,
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob()),
+        )
         val episodeCatalogue = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl(
             apiClient,
             offlineRepository,
             homeSession,
+            sessionCacheRegistry,
         )
         repository = MediaRepositoryImpl(
             apiClient,
@@ -73,6 +83,7 @@ class MediaRepositoryImplTest {
             mockk<UserDataRealtimeChannel>(relaxed = true),
             SystemTimeSource(),
             homeSession,
+            sessionCacheRegistry,
         )
     }
 

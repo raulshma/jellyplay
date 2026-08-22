@@ -212,3 +212,267 @@ a `distinctUntilChanged` projection of uiState, so position ticks do not
 recompose the player chrome. Controller-owned concerns (sleep timer, track
 selection, subtitles, audio effects, SyncPlay display) are not in uiState at
 all — each controller exposes its own `StateFlow`.
+
+## Seerr request state
+
+**`SeerrRequestStateHolder`** (`core/data/src/main/java/.../seerr/SeerrRequestStateHolder.kt`)
+is the deep module for the Seerr request lifecycle. Its ONLY state interface is
+`snapshot: Flow<SeerrRequestSnapshot>` (a cold combine of its six internal
+`MutableStateFlow`s — request result, radarr/sonarr service lists, services
+loading, TV seasons, anime flag — plus `distinctUntilChanged`); the individual
+flows are deliberately private. Consumers hand-synced six mirror fields out of
+them once, which every new holder field forced them to re-write; the snapshot
+makes that a single fold. `snapshotIn(scope)` is the shape every ViewModel
+wants — `stateIn(scope, WhileSubscribed(5_000), SeerrRequestSnapshot())` —
+because `stateIn`-ing inside the holder would pin a never-ending child
+coroutine onto the constructing scope (breaks `runTest` scopes). Everything
+else on the holder is a command: `requestMedia` (owns the whole
+loading → success/error result choreography), `prefetchDetails`,
+`loadServiceDetails`, `loadTvSeasons`, `clearRequestResult`. There is no public
+per-field state accessor and no `setRequestResult` escape hatch.
+`SeerrRequestSnapshot` itself lives in `core/model/.../seerr/` with the other
+Seerr state models, so core/ui can see it: `SeerrRequestDialog`'s
+snapshot-taking overload is the ONE fold of snapshot → dialog fields (screens
+pass `snapshot =` instead of re-mapping eight fields per screen).
+
+`requestMedia` takes an optional `onSuccess: ((SeerrMediaRequest) -> Unit)?`
+hook that fires after the success result is set (never on failure) — the seam
+post-request side effects ride instead of a consumer re-implementing the
+choreography around a direct `SeerrRequestDelegate` call.
+
+The optimistic **PENDING flip** lives at the model level
+(`core/model/src/main/java/.../seerr/SeerrModels.kt`):
+`SeerrMovieDetails.withPendingRequest(item)` / `SeerrTvDetails` counterpart
+match the detail's own `id == item.id` (not `mediaInfo.tmdbId` — Overseerr
+omits `mediaInfo` entirely from `/movie/{id}` and `/tv/{id}` for never-requested
+media, so a tmdbId match would never fire and the button would stay on
+"Request"), synthesize a minimal `SeerrMediaInfo(tmdbId = item.id)` when absent,
+set `status = SeerrMediaStatus.PENDING`, and leave non-matching details
+untouched. Pure and unit-tested; no feature-code imports.
+
+Four ViewModels construct a per-VM instance (deliberately not Hilt — each
+passes its own `scope` to `SeerrRequestDelegate`): `DetailViewModel` and
+`SearchViewModel`/`SeerrDetailViewModel` expose `snapshotIn(scope)` as
+`seerrSnapshot` (Search/Seerr-detail) or fold it into uiState as a single
+`seerrRequest` field (`DetailUiState`); `HomeViewModel` embeds it into
+`HomeUiState.seerrRequestState` alongside its `requestItem`. Screens read only
+snapshot fields; commands go through the ViewModel wrappers (or the
+`viewModel.seerrRequests` seam on the media-detail screen).
+
+## Home feature
+
+**`HomeRefresher`** (`feature/home/src/main/java/com/raulshma/jellyplay/feature/home/HomeRefresher.kt`)
+is the Home feed's deep module. Its public interface is five members —
+`state`, `request(RefreshTrigger)`, `start`, `stop`, `patchItems` — plus the
+mutex-protected `fetchOnce(force)` suspend core that the internal identity
+transitions and going-online handshake call directly (their fetch must
+survive a mid-flight `stop`). It owns WHAT and WHEN of the home screen:
+exclusive mutex ownership, the job choreography (`refreshJob`,
+`transitionJob`, `discoverJob`, each with its own replacement/cancellation
+policy), the foreground/background-jittered cadence loop, the discover TTL
+gate, the user-data-push debounce/throttle/deferral chain, and every
+offline-shaped field of `HomeRefreshState` — the offline-mode mirror, the
+online→offline content drop, and the user-initiated going-online handshake
+(busy flag, full-screen loader, playback-outbox drain through the injected
+`awaitOutboxDrained` seam, 30 s-capped fetch; the timeout `finally`
+force-clears both flags so a hung fetch can never park the Go Online
+spinners — plus a same-cap watchdog in `request(GoingOnline)` that clears
+the busy flag if the preference write is lost and the mode flow never
+emits ONLINE). `RefreshTrigger` is the folded entry table: the former public
+members (`refreshForUserSwitch`, `onSignedOut`, `fetchDiscover`), the
+going-online kick and the fetch-flavour triggers (`Manual`, `PullToRefresh`,
+`PrefsChanged`, `UserDataChanged`) are enum values routed through `request`;
+the online→offline content drop (`dropOnlineContent`) stays a private method
+the offline-mode observer calls directly. The refresher reacts to ALL
+offline-mode emissions (app-start
+and external/auto flips included) but runs the drain+fetch handshake only
+when a `GoingOnline` request is in flight — a spontaneous offline→online
+flip mirrors the field only. It is the SOLE writer of `sections`: the VM's
+optimistic played/unplayed container forwards through `patchItems`, which
+maps the patch over every section (the same item can appear in several, and
+every visible card must flip together).
+
+**`HomeViewModel`** (`feature/home/src/main/java/com/raulshma/jellyplay/feature/home/HomeViewModel.kt`)
+is a flows + `onEvent` facade. Its public surface is StateFlows
+(`uiState`, `activeDownloadCount`, the `SyncStatusStateHolder`
+re-exposures, `searchQuery`, `searchHistory`, `undoActions`,
+`photoFolderChildUrls`, `currentServerUsers`), sync getters
+(`getImageUrl`/`getBackdropUrl`, the scroll-position pair), `onStart`/
+`onStop`/`onCleared`, and one command funnel:
+`onEvent(HomeUiEvent)`. Every user intent — including the quick actions
+(mark played/unplayed, delete download, the series delete-episodes sheet),
+search-history edits, settings-result clicks, section-config sheet writes,
+user switching and the offline toggle — arrives as a
+`HomeUiEvent` (`HomeUiEvent.kt`, 30 cases) and is routed once to a private
+handler; there is no per-action command method to keep in sync with the
+screen. The VM's remaining orchestration is folding `HomeRefresher.state`
+into `HomeUiState` (nine fields including `sections`, `isGoingOnline` and
+`offlineMode` — single writer, VM only folds), the preference mirrors the
+refresher re-reads through read-only providers, and the scroll reset on
+manual refresh and identity changes (pure VM state the refresher cannot
+see).
+
+Test surfaces: `HomeRefresherTest` (plain JUnit + `MainDispatcherRule`,
+constructs the refresher directly with a fake `awaitOutboxDrained`) pins
+cadence, throttles, the offline transitions, the going-online sequence and
+its timeout, and `patchItems`; `HomeViewModelTest` (Robolectric, all 30
+constructor collaborators) pins the UiState folds, the event funnel and the
+identity routing through a real `HomeSession`; `HomeUiStateTest` pins the
+state-class defaults.
+
+## Session identity
+
+**`HomeSession`** (`core/data/src/main/java/com/raulshma/jellyplay/core/data/session/HomeSession.kt`)
+is the identity module. The atomic session source is the network engine:
+`JellyfinApiEngine.session` publishes `ActiveSession?` — one server plus
+its authenticated user as ONE value, updated inside the engine's critical
+sections — so observers never see the synthetic `(newServer, oldUser)`
+intermediate that combining the separate `currentServer`/`currentUser`
+StateFlows produces during a two-step publish. That rule has one derived
+corollary: never re-derive "is there a session" by combining those two
+flows. `AuthRepositoryImpl.isAuthenticated` is
+`apiClient.session.map { it != null }` (`WhileSubscribed(5_000)`, initial
+`false`) for exactly this reason. HomeSession classifies consecutive
+identities from the session flow into `HomeSessionTransition`s — `SignedIn`,
+`UserSwitched`, `ServerSwitched`, `SignedOut`, each carrying
+`previousIdentity` (null only on `SignedIn`) — collapsed by
+`distinctUntilChanged`, and exposes the sanctioned identity reads for cache
+keying: `cacheIdentity()` (suspend, reads the SOURCE flow) and
+`cacheIdentitySnapshot()` (synchronous mirror read, for best-effort
+evictions where staleness is benign). `HomeViewModel` subscribes to
+`transitions` directly for its scroll-reset/refresh choreography — that
+stays.
+
+**`SessionCacheRegistry`** (`core/data/src/main/java/com/raulshma/jellyplay/core/data/session/SessionCacheRegistry.kt`)
+is the single home for identity reactions. It owns the ONE collector on
+`HomeSession.transitions`; anything that must react to an identity change
+registers instead of writing a bespoke collector:
+`registerCaches(owner, caches...)` for plain `TtlCache`s whose wholesale
+clear is the whole reaction, `registerAction(owner, action)` when the
+reaction is more (the action receives the transition, so it can read
+`previousIdentity` — Media's persisted home-section SWR clear needs it).
+`SignedIn` never triggers; every other transition clears the registered
+caches then runs the actions in registration order, each per-owner failure
+caught and logged so one bad owner cannot kill the stream, and registration
+is idempotent per owner (re-registering replaces). Registered owners today:
+`media` (all of `MediaRepositoryImpl`'s TtlCaches plus its
+`media-identity-clear` action: `invalidateDetailCache()` — the detail
+cache's epoch bump + similarCache companion, which a plain registry drop
+can't express; routing through `invalidateCaches()` would clear every
+cache twice and double-bump the catalogue's epoch — + the previous
+identity's SWR room rows), `episode-catalogue` (an action —
+`invalidateAll()` also bumps the in-flight epoch, which a bare cache clear
+wouldn't), `playback` (the media-segments cache) and `seerr` (the detail
+cache). Reactions run in registration order. Session- and identity-path
+collectors in core:data (`HomeSession`, `SessionCacheRegistry`, the
+repositories' registrations) inject the `@ApplicationScope CoroutineScope`
+bound in core:datastore's `CoroutineScopeModule` instead of hand-rolling
+`CoroutineScope(SupervisorJob() + …)` (HomeSession's `@Inject` constructor
+included; its two-arg primary constructor remains the cross-module test
+seam). The longer-lived playback/cast/syncplay/network managers still own
+private scopes; identity-path code must not.
+
+The identity-keyed-cache policy: an in-memory cache holding user-scoped
+data uses the `TtlCache` identity overloads (`get`/`put`/`remove(identity,
+key)` with a `CacheIdentity`) so a wrong identity is a guaranteed miss by
+construction — no parallel invalidation channel. core:data caches get the
+identity from `HomeSession.cacheIdentity()`/`cacheIdentitySnapshot()`.
+Below that layer, core:network cannot depend on core:data, so
+`LibraryApiClientImpl` keys off the engine's atomic session read directly
+(`currentHomeCacheIdentity()`); its favorite-flag cache is an
+identity-keyed `TtlCache`, which is why `clearFavoriteCache()` and the
+manual call to it from `AuthApiClientImpl.disconnect()` are gone —
+disconnect publishes one atomic null session and nothing needs a
+hand-rolled cross-module clear.
+
+`MediaSearchEngine` intentionally still keys search history on
+`ServerIdentityStore.activeUserId` (the persisted session), not on
+HomeSession: history reads run on cold start before `restoreSession()` has
+established the engine session (and from the widget worker), where the
+persisted store has the user but the runtime session does not yet — the
+persisted identity is the stable source there, and logout clears both.
+
+
+## Settings search
+
+The settings-search knowledge lives in `feature/settings`, next to the
+screens it deep-links into — not in core/ui. Each screen (or screen family)
+declares its items in a `*SearchItems.kt` file co-located with the screen
+(`PlaybackSettingsSearchItems.kt` beside `PlaybackSettingsScreen.kt` also
+hosts the MPV/VLC/ExoPlayer engine, SyncPlay, casting and Live TV & DVR
+groups). Every item is a
+`SettingsSearchItem(id, titleRes, subtitleRes, categoryRes, keywords, route,
+icon, isAdvanced)`; `SettingsSearchCatalog` aggregates the per-screen lists
+in one curated flat order (259 items — the matcher's stable sort uses that
+order as the tiebreaker, so keep additions deliberate). The `ss_<id>_title`
+/`ss_<id>_subtitle` strings live in feature/settings' `strings.xml`; the 14
+`ss_cat_*` category strings stay in core/ui because both feature modules
+render them.
+
+`SettingsSearchProvider` (`core/ui/.../settingssearch/SettingsSearchProvider.kt`)
+is the seam: a one-property interface defined in core/ui so feature/home
+depends only on core/ui (Gradle star topology intact), while the Hilt
+binding — `SettingsSearchModule` in feature/settings providing
+`SettingsSearchCatalog` as a `@Singleton` — resolves at app level.
+`HomeViewModel` injects the provider and re-exposes the core/ui
+`settingsSearchResults(queries, context, provider)` pipeline as a
+VM function; `HomeScreen`'s `HomeTopDockScrim` leaf collects it behind the
+"settings in home search" appearance gate. The in-settings search
+(`SettingsScreen`) skips DI and reads `SettingsSearchCatalog.items` directly
+(same module), sharing `SettingsSearchMatcher` and `resolve` from core/ui.
+
+`SettingsNavActions` (`SettingsScreen.kt`) is the settings navigation
+facade: four fields — `onNavigate: (Route) -> Unit` plus
+`onLogout`/`onSetupWizard`/`onCheckForUpdates` — replacing the former
+28-lambda `SettingsCallbacks`. Rows and search results navigate with the
+highlight id baked into the route
+(`onNavigate(Route.AppearanceSettings(lastClickedSettingId))`,
+`item.route.withHighlightSettingId(item.id)`); the only bespoke branches
+left are the sign-out dialogs (`ACTION_ONLY_IDS`), the on-screen screensaver
+group (`Route.Settings` targets) and the host-indirected setup wizard.
+`AppearanceSettingsScreen`'s drill-ins go through the same facade.
+
+Adding a settings screen now touches: the route (NavKey.kt — unchanged
+persistence contract), the screen itself, and its items in the co-located
+`*SearchItems.kt` (+ the new strings in feature/settings' `strings.xml`, +
+one line in `SettingsSearchCatalog`). No core/ui edit, no new callback
+field. `SettingsSearchCatalogTest` (feature/settings, JVM-only — parses
+both modules' `strings.xml` from disk like the old matcher test did) pins
+id uniqueness, string resolvability and the 259-item aggregation;
+`SettingsSearchMatcherTest` (core/ui) is synthetic and pins matching only.
+
+## TV drawer and focus wiring
+
+`TvNavigationDrawer` (app/.../navigation/TvNavigationDrawer.kt) filters its
+folder rows through `isExcludedTvDrawerFolder`: the `EXCLUDED_DRAWER_TYPES`
+collection types (now including `livetv`, whose UserView duplicates the
+drawer's primary Live TV item) plus the DVR recordings library Jellyfin
+injects with no collection type and the exact name "Recordings" (its
+content lives in the Live TV screen's Recordings tab). Screen content
+opens the drawer through `LocalTvDrawerOpener` (core/ui `tv/TvMode.kt`),
+provided by the scaffold around its content slot with a no-op default
+(including phone): D-pad Left at a content left edge calls it instead of
+relying on geometric focus search into the rail, which fails when the
+selected rail entry is recycled out of the lazy column.
+
+`LibraryScreen` (feature/library) applies the same philosophy to its stacked
+TV header rows: geometric D-pad search between them is unreliable (chip-row
+focus bounds overlap; the alphabet rail interleaves on the right edge), so
+each row intercepts its own vertical hops (`onDpadKey`) and redirects them to
+a leaf `FocusRequester` on the neighbouring row's first chip. Interception is
+per-row (not at the screen root with shared "which row holds focus" state),
+so the routing is static and stale tracking can never send a hop to the wrong
+row; the wrappable active-tags row keeps Up/Down geometric, and each header
+row plus the content area carries `openDrawerOnLeftExit` (the
+`LocalTvDrawerOpener` exit hook).
+
+Focus-restorer contract (`core/ui` `tv/FocusRestorer.kt`): focus
+properties attach to the next INNER focus target, so `tvFocusRestorer`
+must be placed BEFORE the focus group it manages
+(`tvFocusRestorer(fallback).focusGroup()`), and because `onEnter`/`onExit`
+are single-slot properties with outermost-wins aggregation, a restorer
+must never wrap a whole screen slot — it would clobber the enter/exit
+hooks of every focus group inside. `TvNavigationDrawer`'s content slot
+therefore carries no restorer; `TvFocusableGrid`/`TvFocusableColumn` own
+theirs. `TvDrawerFolderFilterTest` (app) pins the folder filter;
+`TvDrawerFocusWiringTest` (core/ui) pins the modifier order.

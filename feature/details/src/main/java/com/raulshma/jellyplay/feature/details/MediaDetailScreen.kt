@@ -253,13 +253,9 @@ fun MediaDetailScreen(
             val downloadFlow = remember(itemId) { viewModel.downloads.downloadFlow(itemId) }
             val activeDownload by downloadFlow.collectAsStateWithLifecycle(initialValue = null)
 
-            // Seerr integration state (derived from the uiState snapshot)
-            val seerrRadarrServers = uiState.seerrRadarrServers
-            val seerrSonarrServers = uiState.seerrSonarrServers
-            val seerrIsLoadingServices = uiState.isLoadingSeerrServices
-            val seerrTvSeasons = uiState.seerrTvSeasons
-            val seerrTvIsAnime = uiState.seerrTvIsAnime
-            val seerrRequestResult = uiState.seerrRequestResult
+            // Seerr integration state (the holder's single snapshot, folded
+            // into uiState as-is)
+            val seerrRequest = uiState.seerrRequest
             var seerrRequestItem by remember { mutableStateOf<SeerrSearchItem?>(null) }
 
             // Seerr card loading state for prefetch animation
@@ -547,14 +543,7 @@ fun MediaDetailScreen(
 
                     SeerrRequestDialog(
                         item = item,
-                        radarrServers = seerrRadarrServers,
-                        sonarrServers = seerrSonarrServers,
-                        seasons = seerrTvSeasons,
-                        tvIsAnime = seerrTvIsAnime,
-                        isLoadingServices = seerrIsLoadingServices,
-                        isRequesting = seerrRequestResult?.isLoading == true,
-                        requestSuccess = seerrRequestResult?.success,
-                        requestError = seerrRequestResult?.error,
+                        snapshot = seerrRequest,
                         onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
                             viewModel.seerrRequests.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
                         },
