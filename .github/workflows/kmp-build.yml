@@ -59,6 +59,8 @@ jobs:
           :shared:core:network:compileAndroidMain
           :shared:core:data:jvmJar
           :shared:core:data:compileAndroidMain
+          :shared:core:ui:jvmJar
+          :shared:core:ui:compileAndroidMain
           --stacktrace
 
       - name: Shared tests (JVM)
@@ -69,4 +71,5 @@ jobs:
           :shared:core:database:jvmTest
           :shared:core:network:jvmTest
           :shared:core:data:jvmTest
+          :shared:core:ui:jvmTest
           --stacktrace

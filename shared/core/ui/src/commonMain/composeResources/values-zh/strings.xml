@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared action / component literals (enhancements §2.2).
+         Prefixed `core_` so they never collide with module-local strings
+         once resources are merged at the app level. -->
+    <string name="core_retry">重试</string>
+    <string name="core_cancel">取消</string>
+    <string name="core_reset">重置</string>
+    <string name="core_close">关闭</string>
+    <string name="core_done">完成</string>
+    <!-- Additional shared action literals -->
+    <string name="core_confirm">确认</string>
+    <string name="core_ok">确定</string>
+    <string name="core_apply">应用</string>
+    <string name="core_delete">删除</string>
+    <string name="core_clear">清除</string>
+    <string name="core_undo">撤销</string>
+    <string name="core_clear_filters">清除筛选条件</string>
+    <string name="core_copy">复制</string>
+    <string name="core_copied_to_clipboard">已复制到剪贴板</string>
+    <string name="core_play_from_start">从头播放</string>
+    <string name="core_restart">重新开始</string>
+    <string name="core_send_now">立即发送</string>
+    <string name="core_search">搜索</string>
+    <string name="core_stop_playback">停止播放</string>
+    <string name="core_select_all">全选</string>
+    <string name="core_mark_all_seen">全部标记为已看</string>
+    <string name="core_loading">加载中…</string>
+    <!-- Media quick-action sheet labels -->
+    <string name="core_action_quick_actions">快捷操作</string>
+    <string name="core_action_play">播放</string>
+    <string name="core_action_mark_watched">标记为已看</string>
+    <string name="core_action_mark_unwatched">标记为未看</string>
+    <string name="core_action_download">下载</string>
+    <string name="core_action_add_to_playlist">添加到播放列表</string>
+    <string name="core_action_favorite">添加到收藏</string>
+    <string name="core_action_unfavorite">从收藏中移除</string>
+    <string name="core_action_delete">删除下载</string>
+    <string name="core_action_details">查看详情</string>
+
+    <!-- Truly cross-module feedback (posted from the app/navigation layer
+         and referenced by multiple feature modules). -->
+    <string name="msg_no_video_player_found">未找到视频播放器</string>
+    <string name="msg_smart_download_deleted">已删除看过的下载以释放空间</string>
+
+    <!-- Localizable labels for [com.raulshma.jellyplay.core.model.MediaType], shared
+         by every feature screen that renders a media-type badge or filter chip.
+         Kept here (not in core/model) because the model layer has no resource
+         access; resolve them via [mediaTypeDisplayName] / [mediaTypeDisplayNamePlural]. -->
+    <string name="core_media_movie">电影</string>
+    <string name="core_media_series">剧集</string>
+    <string name="core_media_season">季</string>
+    <string name="core_media_episode">集</string>
+    <string name="core_media_track">曲目</string>
+    <string name="core_media_album">专辑</string>
+    <string name="core_media_artist">艺术家</string>
+    <string name="core_media_music_video">音乐视频</string>
+    <string name="core_media_collection">合集</string>
+    <string name="core_media_photo">照片</string>
+    <string name="core_media_photo_album">相册</string>
+    <string name="core_media_live_tv">直播电视</string>
+    <string name="core_media_channel">频道</string>
+    <string name="core_media_unknown">项目</string>
+
+    <!-- Plural forms (e.g. filter chips, library headers). -->
+    <string name="core_media_movie_plural">电影</string>
+    <string name="core_media_series_plural">剧集</string>
+    <string name="core_media_season_plural">季</string>
+    <string name="core_media_episode_plural">集</string>
+    <string name="core_media_music_plural">音乐</string>
+    <string name="core_media_album_plural">专辑</string>
+    <string name="core_media_artist_plural">艺术家</string>
+    <string name="core_media_music_video_plural">音乐视频</string>
+    <string name="core_media_collection_plural">合集</string>
+    <string name="core_media_photo_plural">照片</string>
+    <string name="core_media_photo_album_plural">相册</string>
+    <string name="core_media_live_tv_plural">直播电视</string>
+    <string name="core_media_channel_plural">频道</string>
+    <string name="core_media_unknown_plural">未知</string>
+
+    <!-- core/ui shared -->
+    <string name="core_report">报告</string>
+    <string name="core_ui_back">返回</string>
+    <string name="core_ui_select">选择…</string>
+    <string name="core_ui_selected">已选择</string>
+
+    <!-- core/ui auth challenge -->
+    <string name="core_ui_auth_title">身份验证</string>
+    <string name="core_ui_auth_subtitle">确认您的身份</string>
+    <string name="core_ui_auth_use_pin">使用 PIN</string>
+    <string name="core_ui_auth_use_biometric">使用生物识别</string>
+    <string name="core_ui_auth_biometric_prompt">使用生物识别进行身份验证</string>
+
+    <!-- core/ui seerr request dialog -->
+    <string name="core_ui_seerr_request_success">请求提交成功！</string>
+    <string name="core_ui_seerr_loading_options">正在加载选项…</string>
+    <string name="core_ui_seerr_destination_server_sonarr">目标服务器 (Sonarr)</string>
+    <string name="core_ui_seerr_destination_server_radarr">目标服务器 (Radarr)</string>
+    <string name="core_ui_seerr_quality_profile">画质配置</string>
+    <string name="core_ui_seerr_root_folder">根目录</string>
+    <string name="core_ui_seerr_tags">标签</string>
+    <string name="core_ui_seerr_all_seasons">所有季</string>
+    <string name="core_ui_seerr_season">第 %1$d 季</string>
+    <string name="core_ui_seerr_episodes">%1$d 集</string>
+    <string name="core_ui_seerr_loading_seasons">正在加载季…</string>
+    <string name="core_ui_seerr_request">请求</string>
+
+    <!-- core/ui accent / color pickers -->
+    <string name="core_ui_accent_color_title">强调色</string>
+    <string name="core_ui_accent_color_subtitle">选择自定义强调色板或动态色</string>
+    <string name="core_ui_color_style_title">色彩样式</string>
+    <string name="core_ui_color_style_subtitle">定义生成调色板的视觉氛围</string>
+    <string name="core_ui_dynamic_colors">动态壁纸颜色</string>
+    <string name="core_ui_synthwave_accent_title">Synthwave 强调色</string>
+    <string name="core_ui_synthwave_accent_subtitle">选择自定义霓虹强调色板</string>
+    <string name="core_ui_soothing_accent_title">柔和强调色</string>
+    <string name="core_ui_soothing_accent_subtitle">选择舒缓的强调色</string>
+
+    <!-- core/ui connection-state & quick actions -->
+    <string name="core_ui_backspace">退格</string>
+    <string name="core_ui_cd_error">错误</string>
+    <string name="core_ui_cd_loading">加载中</string>
+    <string name="core_ui_cd_local_network">本地网络，无互联网</string>
+    <string name="core_ui_cd_offline">离线</string>
+    <string name="core_ui_cd_server_unreachable">无法连接服务器</string>
+    <string name="core_ui_downloaded">已下载</string>
+    <string name="core_ui_play">播放</string>
+    <string name="core_ui_remove">移除</string>
+    <string name="core_ui_request">请求</string>
+    <string name="core_ui_watched">已观看</string>
+
+    <!-- Accessibility / media -->
+    <string name="core_ui_image_placeholder">图片占位符</string>
+
+    <!-- Settings search registry: localized -->
+    <string name="ss_cat_about">关于</string>
+    <string name="ss_cat_account">账户</string>
+    <string name="ss_cat_activity_insights">活动与洞察</string>
+    <string name="ss_cat_appearance">外观</string>
+    <string name="ss_cat_audio_player">音频播放器</string>
+    <string name="ss_cat_backup_restore">备份与还原</string>
+    <string name="ss_cat_experimental">实验性</string>
+    <string name="ss_cat_integrations">集成</string>
+    <string name="ss_cat_language_subtitles">语言与字幕</string>
+    <string name="ss_cat_notifications">通知</string>
+    <string name="ss_cat_playback">播放</string>
+    <string name="ss_cat_security">安全</string>
+    <string name="ss_cat_storage">存储</string>
+    <string name="ss_cat_system">系统</string>
+
+    <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
+    <string name="core_segment_intro">片头</string>
+    <string name="core_segment_intro_desc">片头/开场片段</string>
+    <string name="core_segment_outro">片尾</string>
+    <string name="core_segment_outro_desc">片尾/结尾片段</string>
+    <string name="core_segment_preview">预告</string>
+    <string name="core_segment_preview_desc">下集预告/冷开场/预告</string>
+    <string name="core_segment_recap">回顾</string>
+    <string name="core_segment_recap_desc">前情提要...</string>
+    <string name="core_segment_commercial">广告</string>
+    <string name="core_segment_commercial_desc">广告中断</string>
+    <string name="core_segment_unknown">其他</string>
+    <string name="core_segment_unknown_desc">自定义片段</string>
+    <string name="core_segment_skip_intro">跳过片头</string>
+    <string name="core_segment_skip_outro">跳过片尾</string>
+    <string name="core_segment_skip_preview">跳过预告</string>
+    <string name="core_segment_skip_recap">跳过回顾</string>
+    <string name="core_segment_skip_commercial">跳过广告</string>
+    <string name="core_segment_skip_unknown">跳过片段</string>
+    <string name="core_segment_behavior_show_button">显示按钮</string>
+    <string name="core_segment_behavior_show_button_desc">在片段期间显示跳过按钮</string>
+    <string name="core_segment_behavior_auto_skip">自动跳过</string>
+    <string name="core_segment_behavior_auto_skip_desc">自动跳过该片段</string>
+    <string name="core_segment_behavior_ignore">忽略</string>
+    <string name="core_segment_behavior_ignore_desc">对此片段类型不执行任何操作</string>
+
+    <!-- Localized UI text extracted from MediaPreviewOverlay -->
+    <string name="core_preview_release_to_close">松开以关闭</string>
+    <string name="core_preview_series">剧集</string>
+    <string name="core_preview_new_format">%1$d 个新内容</string>
+
+    <!-- Shared player speed-picker custom-value labels (§2.3). -->
+    <string name="player_speed_custom">自定义速度</string>
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">调整播放速度</string>
+
+    <!-- 无障碍：视频/音乐模式切换 (P5 §3.2) -->
+    <string name="a11y_mode_video">视频模式</string>
+    <string name="a11y_mode_music">音乐模式</string>
+
+    <!-- DeleteDownloadedEpisodesSheet (shared by media detail + offline home). -->
+    <string name="detail_delete_downloads_title">删除下载</string>
+    <string name="detail_select_episodes_to_remove">选择要从设备移除的剧集。</string>
+    <string name="detail_select_all">全选</string>
+    <string name="detail_deselect_all">取消全选</string>
+    <string name="detail_episodes_selected">已选 %1$d / %2$d 集</string>
+    <string name="detail_episodes_selected_with_freed">已选 %1$d / %2$d 集 · %3$s</string>
+    <string name="detail_season_default">第 %1$d 季</string>
+    <string name="detail_cd_collapse">收起</string>
+    <string name="detail_cd_expand">展开</string>
+    <string name="detail_delete_entire_series">删除整部剧集</string>
+    <string name="detail_cancel">取消</string>
+    <string name="detail_delete_count">删除 %1$d</string>
+    <string name="detail_delete_count_with_freed">删除 %1$d · %2$s</string>
+<plurals name="detail_episode_count">
+    <item quantity="other">%1$d 集</item>
+    </plurals>
+
+    <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
+    <string name="transcode_reasons_title">为什么正在转码？</string>
+    <string name="transcode_reason_unknown">服务器报告：%1$s</string>
+    <string name="transcode_reason_container_not_supported">文件容器不支持直接播放。</string>
+    <string name="transcode_reason_video_codec_not_supported">此设备的解码器不支持该视频编码。</string>
+    <string name="transcode_reason_audio_codec_not_supported">此设备的解码器不支持该音频编码。</string>
+    <string name="transcode_reason_video_bitrate">视频码率超出流媒体画质上限。</string>
+    <string name="transcode_reason_audio_bitrate">音频码率超出流媒体画质上限。</string>
+    <string name="transcode_reason_container_bitrate">整体码率超出流媒体画质上限。</string>
+    <string name="transcode_reason_video_bit_depth">视频位深（如 10 位）不支持直接播放。</string>
+    <string name="transcode_reason_audio_bit_depth">音频位深不支持直接播放。</string>
+    <string name="transcode_reason_audio_channels">音频声道数超出设备配置文件允许范围。</string>
+    <string name="transcode_reason_audio_profile">音频规格（如 DTS-HD、Atmos）不支持直接播放。</string>
+    <string name="transcode_reason_audio_sample_rate">音频采样率不支持直接播放。</string>
+    <string name="transcode_reason_audio_is_external">音轨位于容器外部，无法直接串流。</string>
+    <string name="transcode_reason_secondary_audio">次要音轨（如解说）导致转码。</string>
+    <string name="transcode_reason_interlaced">隔行扫描视频不支持直接播放。</string>
+    <string name="transcode_reason_anamorphic">变形宽银幕视频编码不支持直接播放。</string>
+    <string name="transcode_reason_ref_frames">视频参考帧过多，设备解码器无法处理。</string>
+    <string name="transcode_reason_video_codec_tag">视频编码标记罕见，无法识别为直接播放。</string>
+    <string name="transcode_reason_video_framerate">视频帧率不支持直接播放。</string>
+    <string name="transcode_reason_video_level">视频编码级别对设备解码器来说过高。</string>
+    <string name="transcode_reason_video_profile">视频编码配置文件不支持直接播放。</string>
+    <string name="transcode_reason_video_range">视频范围（如 HDR、Dolby Vision）不支持直接播放。</string>
+    <string name="transcode_reason_video_resolution">视频分辨率超出直接播放上限。</string>
+    <string name="transcode_reason_subtitle_codec">字幕格式需要服务器烧录。</string>
+    <string name="transcode_reason_stream_count">文件流数量超出设备配置文件允许范围。</string>
+    <string name="transcode_reason_direct_play_error">服务器检测原始流以直接播放时失败。</string>
+    <string name="transcode_reason_unknown_video_info">服务器无法确定视频流详情，为安全起见进行了转码。</string>
+    <string name="transcode_reason_unknown_audio_info">服务器无法确定音频流详情，为安全起见进行了转码。</string>
+    <string name="transcode_reason_hint_engine">尝试其他播放引擎（mpv 或 VLC）——或许可以直接播放。</string>
+    <string name="transcode_reason_hint_decoder">将解码器切换为 Software/FFmpeg 可能解决此问题。</string>
+    <string name="transcode_reason_hint_quality">在画质选择器中提高流媒体画质上限。</string>
+    <string name="transcode_reason_hint_subtitle">选择 SRT/外部字幕以避免烧录。</string>
+</resources>

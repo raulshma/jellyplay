@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -36,7 +35,14 @@ kotlin {
     }
 }
 
+// KMP migration shim (docs/kmp-migration-plan.md §Phase V1): everything portable
+// lives in :shared:core:ui; this module keeps only the Android-coupled halves —
+// biometric/WebView/LocaleApplier, KeyEvent D-pad input, the @StringRes Int label
+// tables, UiText/UserMessageBus, ContextExt, LocalNetworkAccess, the Dpad slider
+// pair — plus this module's strings.xml (legacy consumers still resolve
+// com.raulshma.jellyplay.core.ui.R; dies at cutover §Phase X).
 dependencies {
+    api(project(":shared:core:ui"))
     implementation(project(":core:model"))
     implementation(project(":core:designsystem"))
 
@@ -44,30 +50,17 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
+    implementation(libs.compose.animation)
     implementation(libs.tabler.icons.outline)
     implementation(libs.tabler.icons.filled)
-    implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
-    implementation(libs.multiplatform.markdown.renderer)
-    implementation(libs.multiplatform.markdown.renderer.m3)
-    implementation(libs.palette.ktx)
-    implementation(libs.paging.compose)
-
-    // Android TV
-    implementation(libs.tv.material)
-
-    implementation(libs.navigation3.runtime)
-    implementation(libs.navigation3.ui)
-    implementation(libs.lifecycle.viewmodel.navigation3)
-    implementation(libs.kotlinx.serialization.json)
-    implementation(libs.compose.animation)
-    implementation(libs.media3.session)
-    implementation(libs.media3.exoplayer)
     implementation(libs.biometric.ktx)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    // RoutePredicatesTest round-trips NavKeys through nav3 serialization.
+    testImplementation(libs.navigation3.runtime)
+    testImplementation(libs.kotlinx.serialization.json)
     // Compose UI tests under Robolectric (focus-behavior regression tests).
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test)
