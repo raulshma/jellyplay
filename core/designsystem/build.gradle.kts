@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -16,42 +15,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
-        compose = true
-    }
-    testOptions {
-        unitTests {
-            isIncludeAndroidResources = true
-        }
+        buildConfig = false
+        resValues = false
     }
 }
 
-kotlin {
-    compilerOptions {
-        freeCompilerArgs.add("-opt-in=androidx.compose.foundation.style.ExperimentalFoundationStyleApi")
-    }
-}
-
+// KMP cutover shim (docs/kmp-migration-plan.md §Phase C1): the theme now lives
+// in :shared:core:designsystem under the identical package; this empty module
+// re-exports it so every consumer keeps compiling unchanged. Deleted at Phase X.
 dependencies {
-    implementation(platform(libs.compose.bom))
-    implementation(libs.compose.ui)
-    implementation(libs.compose.ui.graphics)
-    implementation(libs.compose.material3)
-    implementation(libs.tabler.icons.outline)
-    implementation(libs.tabler.icons.filled)
-    implementation(libs.palette.ktx)
-    implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
-    implementation(libs.compose.ui.google.fonts)
-    implementation(libs.androidx.core.ktx)
-    implementation(project(":core:model"))
-    // Smooth-corner-rect is implementation-scoped so the third-party type
-    // (AbsoluteSmoothCornerShape) stays off the design-system's API surface.
-    // Consumers outside :core:designsystem request shapes via the
-    // smoothCornerShape(...) wrappers in JellyPlayShape.kt.
-    implementation(libs.smooth.corner.rect)
-
-    testImplementation(libs.junit)
-    testImplementation(libs.robolectric)
-    testImplementation(libs.androidx.junit)
-    testImplementation(libs.androidx.test.core)
+    api(project(":shared:core:designsystem"))
 }
