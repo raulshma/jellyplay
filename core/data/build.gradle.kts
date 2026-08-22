@@ -44,6 +44,13 @@ android {
 }
 
 dependencies {
+    // KMP cutover shim (docs/kmp-migration-plan.md §Phase C4): portable data
+    // classes migrate into :shared:core:data under the identical package;
+    // this module keeps all of its code until each file moves and re-exports
+    // the shared module so every consumer keeps compiling unchanged. DI
+    // wiring moves to Koin at §Phase C4/X.
+    api(project(":shared:core:data"))
+
     implementation(project(":core:model"))
     implementation(project(":core:network"))
     implementation(project(":core:database"))

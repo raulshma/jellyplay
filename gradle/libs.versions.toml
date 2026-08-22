@@ -90,6 +90,7 @@ aboutLibraries = "15.0.4"
 # AndroidX Core
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashScreen" }
+androidx-collection = { group = "androidx.collection", name = "collection", version.ref = "collection" }
 androidx-collection-ktx = { group = "androidx.collection", name = "collection-ktx", version.ref = "collection" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 # Compose BOM
@@ -185,6 +186,7 @@ java-keyring = { group = "com.github.javakeyring", name = "java-keyring", versio
 androidx-sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "androidxSqlite" }
 
 # Paging
+paging-common = { group = "androidx.paging", name = "paging-common", version.ref = "paging" }
 paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }
 paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "pagingCompose" }
 

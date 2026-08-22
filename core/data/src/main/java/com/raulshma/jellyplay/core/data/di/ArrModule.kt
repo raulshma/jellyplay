@@ -1,25 +1,23 @@
 package com.raulshma.jellyplay.core.data.di
 
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
-import com.raulshma.jellyplay.core.data.repository.ArrRepositoryImpl
-import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 /**
- * Binds [ArrRepository] to its single implementation. Mirrors [SeerrModule] —
- * the *arr repository lives in its own module so the surface area stays
- * clearly separable from the core [DataModule] aggregators.
+ * Bridges [ArrRepository] to the Koin-owned single (C4 part 2, batch 3):
+ * `ArrRepositoryImpl` moved into `:shared:core:data` jvmShared and is
+ * constructed by `dataJvmModule` (its `SeerrRepository` ctor dep flipped to
+ * Koin first). The former `@Binds` became this `@Provides` bridge.
  */
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class ArrModule {
+object ArrModule {
 
-    @Binds
+    @Provides
     @Singleton
-    abstract fun bindArrRepository(
-        impl: ArrRepositoryImpl,
-    ): ArrRepository
+    fun provideArrRepository(): ArrRepository = koin().get()
 }

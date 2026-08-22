@@ -270,9 +270,12 @@ class DlnaCastStrategy @Inject constructor(
             val state = UpnpControlPoint.getTransportInfo(controlUrl, client = okHttpClient)
             _rendererIsPlaying.value = state == TransportState.PLAYING
 
-            if (device.renderingControlUrl != null) {
+            // UpnpDevice moved to :shared:core:data — cross-module public vals
+            // no longer smart-cast after a null check, so bind a local first.
+            val renderingControlUrl = device.renderingControlUrl
+            if (renderingControlUrl != null) {
                 val volume = UpnpControlPoint.getVolume(
-                    device.renderingControlUrl, client = okHttpClient
+                    renderingControlUrl, client = okHttpClient
                 )
                 _rendererVolume.value = volume
             }

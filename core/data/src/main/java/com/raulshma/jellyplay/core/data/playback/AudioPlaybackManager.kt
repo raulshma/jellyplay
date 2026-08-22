@@ -56,17 +56,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.pow
 
-@Immutable
-data class AudioQueueItem(
-    val id: String,
-    val name: String,
-    val artist: String,
-    val album: String?,
-    val imageUrl: String?,
-    val mediaSourceId: String?,
-    val durationMs: Long = 0L,
-    val normalizationGain: Float? = null,
-)
+// C4 part 2: AudioQueueItem moved verbatim to
+// :shared:core:data commonMain playback/AudioQueueItem.kt (same package).
 
 @Stable
 @Singleton

@@ -27,10 +27,8 @@ import javax.inject.Singleton
  *
  * Both use KEEP policies so reconnect + periodic never enqueue duplicate runs.
  */
-interface PlaybackSyncScheduler {
-    fun enqueuePeriodic()
-    fun enqueueNow()
-}
+// C4 part 2: the PlaybackSyncScheduler interface moved verbatim to
+// :shared:core:data commonMain worker/PlaybackSyncScheduler.kt (same package).
 
 @Singleton
 class PlaybackSyncSchedulerImpl @Inject constructor(

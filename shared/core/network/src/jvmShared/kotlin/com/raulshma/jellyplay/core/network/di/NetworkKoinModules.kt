@@ -49,6 +49,11 @@ import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.network.seerr.ResilientSeerrApiClient
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
+import com.raulshma.jellyplay.core.network.subtitle.OpenSubtitlesSubtitleProvider
+import com.raulshma.jellyplay.core.network.subtitle.ResilientSubtitleProvider
+import com.raulshma.jellyplay.core.network.subtitle.SubtitleProvider
+import com.raulshma.jellyplay.core.network.subtitle.WyzieSubtitleProvider
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -148,6 +153,22 @@ val networkJvmModule: Module = module {
     single { LyricsApi(get()) }
     single { JellyfinWebSocketClient(get()) }
     single { ServerDiscoveryService(get(), get()) }
+
+    // ── Subtitle provider fan-out (C4 part 2: the @IntoMap Hilt
+    // multibinding flipped to Koin). Each raw impl is wrapped in a
+    // ResilientSubtitleProvider so RetryPolicy applies to every call —
+    // byte-for-byte the map the legacy SubtitleProviderModule built. Adding
+    // a new provider = a new enum value, one impl, and one entry here.
+    single { WyzieSubtitleProvider(get()) }
+    single { OpenSubtitlesSubtitleProvider(get(), get()) }
+    single<Map<SubtitleProviderKind, SubtitleProvider>> {
+        mapOf(
+            SubtitleProviderKind.WYZIE to
+                ResilientSubtitleProvider(get<WyzieSubtitleProvider>()),
+            SubtitleProviderKind.OPENSUBTITLES to
+                ResilientSubtitleProvider(get<OpenSubtitlesSubtitleProvider>()),
+        )
+    }
 
     single { ActivityLogRealtimeChannel(get(), get(), get()) }
     single {
