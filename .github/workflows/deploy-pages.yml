@@ -38,7 +38,7 @@ jobs:
           find website/scripts -name '*.js' -exec terser {} -c -m -o {} \;
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: 'website'
 
