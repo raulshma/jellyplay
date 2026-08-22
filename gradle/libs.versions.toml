@@ -124,6 +124,10 @@ lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", 
 javax-inject = { group = "javax.inject", name = "javax.inject", version = "1" }
 
 # Hilt
+# Plain dagger artifact: dagger.Lazy ctor params on shared-module classes
+# (JellyfinApiEngine) need the type on the KMP compile classpath without
+# pulling the Android-only hilt-android AAR into the jvm target.
+dagger = { group = "com.google.dagger", name = "dagger", version.ref = "hilt" }
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-android-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
 hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
@@ -185,6 +189,7 @@ palette-ktx = { group = "androidx.palette", name = "palette-ktx", version.ref = 
 
 # Kotlinx Serialization
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 kotlinx-browser = { group = "org.jetbrains.kotlinx", name = "kotlinx-browser", version.ref = "kotlinxBrowser" }
 

@@ -39,12 +39,31 @@ jobs:
       - name: Build shared targets (JVM + wasm + Android)
         # The AGP KMP library plugin exposes no per-variant assembleDebug;
         # android target verifies via its single androidMain compilation.
+        # wasmJs target exists on model/datastore/designsystem/network only —
+        # database ships without it (no Room on wasm v1, plan §Phase W).
         run: >
           ./gradlew
           :shared:core:model:jvmJar
           :shared:core:model:compileKotlinWasmJs
           :shared:core:model:compileAndroidMain
+          :shared:core:designsystem:jvmJar
+          :shared:core:designsystem:compileKotlinWasmJs
+          :shared:core:designsystem:compileAndroidMain
+          :shared:core:datastore:jvmJar
+          :shared:core:datastore:compileKotlinWasmJs
+          :shared:core:datastore:compileAndroidMain
+          :shared:core:database:jvmJar
+          :shared:core:database:compileAndroidMain
+          :shared:core:network:jvmJar
+          :shared:core:network:compileKotlinWasmJs
+          :shared:core:network:compileAndroidMain
           --stacktrace
 
-      - name: Common tests (JVM)
-        run: ./gradlew :shared:core:model:jvmTest --stacktrace
+      - name: Shared tests (JVM)
+        run: >
+          ./gradlew
+          :shared:core:model:jvmTest
+          :shared:core:datastore:jvmTest
+          :shared:core:database:jvmTest
+          :shared:core:network:jvmTest
+          --stacktrace

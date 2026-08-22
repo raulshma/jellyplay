@@ -6,10 +6,13 @@ import kotlinx.coroutines.runBlocking
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
+import com.raulshma.jellyplay.core.network.DiscoveryMulticastGuard
 import com.raulshma.jellyplay.core.network.api.AdminApiClient
 import com.raulshma.jellyplay.core.network.api.AdminApiClientImpl
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.AuthApiClientImpl
+import com.raulshma.jellyplay.core.network.api.AndroidDeviceCodecCapabilities
+import com.raulshma.jellyplay.core.network.api.DeviceCodecCapabilities
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
@@ -137,6 +140,18 @@ abstract class NetworkModule {
     abstract fun bindSonarrApiClient(
         impl: ResilientSonarrApiClient,
     ): SonarrApiClient
+
+    @Binds
+    @Singleton
+    abstract fun bindDeviceCodecCapabilities(
+        impl: AndroidDeviceCodecCapabilities,
+    ): DeviceCodecCapabilities
+
+    @Binds
+    @Singleton
+    abstract fun bindDiscoveryMulticastGuard(
+        impl: AndroidMulticastLockGuard,
+    ): DiscoveryMulticastGuard
 
     companion object {
         // Hoisted so the pattern compiles once at class load rather than on each
