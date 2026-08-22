@@ -1,0 +1,50 @@
+name: KMP Build
+
+# Shared-tree (KMP) verification: docs/kmp-migration-plan.md Phase 0.
+# Compiles every configured target of the shared/ tree on all three desktop
+# OSes and runs its common tests. Android app lanes are unaffected.
+
+on:
+  push:
+    branches: ['main', 'master']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: kmp-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shared-targets:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+
+      - name: Build shared targets (JVM + wasm + Android)
+        # The AGP KMP library plugin exposes no per-variant assembleDebug;
+        # android target verifies via its single androidMain compilation.
+        run: >
+          ./gradlew
+          :shared:core:model:jvmJar
+          :shared:core:model:compileKotlinWasmJs
+          :shared:core:model:compileAndroidMain
+          --stacktrace
+
+      - name: Common tests (JVM)
+        run: ./gradlew :shared:core:model:jvmTest --stacktrace

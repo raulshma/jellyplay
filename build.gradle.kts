@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.android.test) apply false
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.kotlin.serialization) apply false
+    // Kotlin Multiplatform (shared/ tree, docs/kmp-migration-plan.md).
+    alias(libs.plugins.kotlin.multiplatform) apply false
+    alias(libs.plugins.android.kotlin.multiplatform.library) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.hilt) apply false
     // `apply false` (instead of the previous plain alias) so Kover is only put

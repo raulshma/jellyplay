@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -16,17 +15,15 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
-        // Annotation-only Compose usage (@Immutable/@Stable on data classes):
-        // compose.runtime suffices, no compiler plugin needed (pattern documented
-        // in feature/player/core/build.gradle.kts).
         buildConfig = false
         resValues = false
     }
 }
 
+// KMP cutover shim (docs/kmp-migration-plan.md §Phase C1): every type this
+// module used to declare now lives in :shared:core:model under the identical
+// package, so an api() re-export keeps all consumers compiling unchanged.
+// Deleted together with this module at Phase X cutover.
 dependencies {
-    implementation(platform(libs.compose.bom))
-    implementation(libs.compose.runtime)
-    implementation(libs.kotlinx.serialization.json)
-    testImplementation(libs.junit)
+    api(project(":shared:core:model"))
 }

@@ -60,3 +60,9 @@ include(":feature:arrqueue")
 include(":feature:calendar")
 include(":baselineprofile")
 include(":baselineprofile-tv")
+
+// KMP shell (docs/kmp-migration-plan.md): the parallel tree that legacy modules
+// migrate into, phase by phase. Lives beside (not inside) the Android tree so
+// the existing app keeps building untouched until cutover.
+include(":shared:core:model")
+include(":shared:core:designsystem")

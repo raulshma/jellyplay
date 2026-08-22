@@ -10,6 +10,15 @@ composeMaterial3Adaptive = "1.3.0-rc01"
 # group (NOT .adaptive) and tracks the material3 release line, not the adaptive
 # one. Previously keyed off composeMaterial3Adaptive — only worked by accident.
 composeMaterial3AdaptiveNavigationSuite = "1.5.0-alpha25"
+# JetBrains Compose Multiplatform distribution — the ONLY publisher of real
+# JVM/wasm compose binaries (androidx publishes Android AARs + IDE stubs only,
+# verified via .module metadata of ui 1.12.0 / material3 1.5.0-alpha25). On the
+# Android target these redirect to the androidx artifacts.
+composeMultiplatform = "1.11.1"
+# JB material3 rides its own train; the 1.11.x line never stabilised past
+# alpha (latest release overall is 1.9.0), so pin the newest of the matching
+# 1.11 line to keep expressive APIs available on desktop/wasm.
+composeMultiplatformMaterial3 = "1.11.0-alpha07"
 hilt = "2.60.1"
 hiltNavigationCompose = "1.4.0"
 hiltWork = "1.4.0"
@@ -28,6 +37,8 @@ pagingCompose = "3.5.0"
 workManager = "2.11.2"
 kotlinxSerialization = "1.11.0"
 kotlinxCoroutines = "1.11.0"
+# Browser DOM bindings for the wasmJs target (Kotlin/Wasm interop).
+kotlinxBrowser = "0.5.0"
 palette = "1.0.0"
 coreKtx = "1.19.0"
 collection = "1.6.0"
@@ -76,11 +87,16 @@ androidx-collection-ktx = { group = "androidx.collection", name = "collection-kt
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 # Compose BOM
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+jb-compose-runtime = { group = "org.jetbrains.compose.runtime", name = "runtime", version.ref = "composeMultiplatform" }
+jb-compose-ui = { group = "org.jetbrains.compose.ui", name = "ui", version.ref = "composeMultiplatform" }
+jb-compose-foundation = { group = "org.jetbrains.compose.foundation", name = "foundation", version.ref = "composeMultiplatform" }
+jb-compose-animation = { group = "org.jetbrains.compose.animation", name = "animation", version.ref = "composeMultiplatform" }
+jb-compose-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version.ref = "composeMultiplatformMaterial3" }
 compose-runtime = { group = "androidx.compose.runtime", name = "runtime" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }
 compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
 compose-ui-test = { group = "androidx.compose.ui", name = "ui-test-junit4" }
-compose-animation = { group = "androidx.compose.animation", name = "animation-android" }
+compose-animation = { group = "androidx.compose.animation", name = "animation" }
 compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "composeMaterial3" }
 compose-ui-google-fonts = { group = "androidx.compose.ui", name = "ui-text-google-fonts" }
@@ -163,6 +179,7 @@ palette-ktx = { group = "androidx.palette", name = "palette-ktx", version.ref = 
 # Kotlinx Serialization
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
+kotlinx-browser = { group = "org.jetbrains.kotlinx", name = "kotlinx-browser", version.ref = "kotlinxBrowser" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -233,6 +250,12 @@ androidx-baselineprofile = { id = "androidx.baselineprofile", version.ref = "bas
 androidx-baselineprofile-producer = { id = "androidx.baselineprofile.producer", version.ref = "baselineprofile" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+# Kotlin Multiplatform (docs/kmp-migration-plan.md §Phase 0): the shared/ tree.
+# AGP 9 forbids combining org.jetbrains.kotlin.multiplatform with
+# com.android.library, so every KMP module's Android target uses AGP's
+# dedicated KMP library plugin below instead.
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
