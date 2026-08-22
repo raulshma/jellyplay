@@ -34,6 +34,7 @@ room = "2.8.4"
 datastore = "1.2.1"
 okio = "3.9.0"
 javakeyring = "1.0.4"
+androidxSqlite = "2.6.2"
 paging = "3.5.0"
 pagingCompose = "3.5.0"
 workManager = "2.11.2"
@@ -169,6 +170,7 @@ datastore-preferences = { group = "androidx.datastore", name = "datastore-prefer
 datastore-preferences-core = { group = "androidx.datastore", name = "datastore-preferences-core", version.ref = "datastore" }
 okio = { group = "com.squareup.okio", name = "okio", version.ref = "okio" }
 java-keyring = { group = "com.github.javakeyring", name = "java-keyring", version.ref = "javakeyring" }
+androidx-sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "androidxSqlite" }
 
 # Paging
 paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }

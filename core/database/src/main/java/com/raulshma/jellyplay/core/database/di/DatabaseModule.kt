@@ -3,12 +3,9 @@ package com.raulshma.jellyplay.core.database.di
 import android.content.Context
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.raulshma.jellyplay.core.database.crypto.AndroidTokenCipher
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
-import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
-import com.raulshma.jellyplay.core.database.dao.PlaybackOutboxDao
-import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
-import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.migration.allMigrations
 import dagger.Module
 import dagger.Provides
@@ -20,6 +17,13 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
+
+    /** Android Keystore-backed cipher (pre-KMP TokenCipher wiring, unchanged). */
+    @Provides
+    @Singleton
+    fun provideTokenCipher(
+        @ApplicationContext context: Context,
+    ): TokenCipher = AndroidTokenCipher(context)
 
     @Provides
     @Singleton

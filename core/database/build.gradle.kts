@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
@@ -23,26 +22,14 @@ android {
     }
 }
 
-ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
-}
-
+// KMP cutover shim (docs/kmp-migration-plan.md §Phase C2): entities/DAOs/
+// migrations now live in :shared:core:database (Room KMP, android+jvm) under
+// the identical package; this module keeps only the Android Hilt wiring
+// (Room.databaseBuilder with Context + Keystore-backed TokenCipher binding)
+// and re-exports the shared module. Deleted at Phase X cutover.
 dependencies {
-    implementation(project(":core:model"))
-
-    implementation(libs.room.runtime)
-    ksp(libs.room.compiler)
+    api(project(":shared:core:database"))
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
-
-    implementation(libs.kotlinx.serialization.json)
-
-    testImplementation(libs.junit)
-    testImplementation(libs.mockk)
-    testImplementation(libs.coroutines.test)
-    testImplementation(libs.robolectric)
-    testImplementation(libs.room.testing)
-    testImplementation(libs.androidx.junit)
-    testImplementation(libs.androidx.test.core)
 }
