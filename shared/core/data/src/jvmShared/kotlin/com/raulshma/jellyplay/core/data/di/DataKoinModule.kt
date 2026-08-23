@@ -16,11 +16,20 @@ import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.ArrRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
+import com.raulshma.jellyplay.core.data.repository.DownloadProgressNotifier
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
+import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
@@ -42,12 +51,14 @@ import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepositoryImpl
+import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector
 import com.raulshma.jellyplay.core.data.streaming.BandwidthMonitor
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
+import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayController
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEventHandler
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
@@ -61,6 +72,8 @@ import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.worker.DownloadTransferClient
 import com.raulshma.jellyplay.core.data.worker.OkHttpDownloadTransferClient
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
+import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
+import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
@@ -82,21 +95,30 @@ import org.koin.dsl.module
  * `koin().get()` bridges; the impl classes' `@Inject`/`@Singleton` annotations
  * were stripped at the move, so Hilt cannot build a parallel instance.
  *
- * Deliberately still Hilt-owned (no Koin definition): the DownloadRepository
- * cluster — `DownloadRepositoryImpl` is WorkManager-coupled — plus its
- * dependents `PlayedStateSyncImpl` (the `dagger.Lazy<DownloadRepository>`
- * edge), `MediaRepositoryImpl`, `OfflineFirstItemResolverImpl`,
+ * Deliberately still Hilt-owned (no Koin definition): the MediaRepository
+ * cluster — `MediaRepositoryImpl` plus its Hilt-coupled dependents
+ * `PlayedStateSyncImpl` (the `dagger.Lazy<DownloadRepository>` edge, now
+ * bridged back to the Koin single), `OfflineFirstItemResolverImpl`,
  * `UserDataMutatorImpl`, `MediaSearchEngineImpl`,
  * `UnifiedMediaDetailProviderImpl` and `OfflinePlaybackFacade`. The legacy
- * DataModule constructs these directly until DownloadRepository flips at
- * Phase X.
+ * DataModule constructs these directly; they reach the Koin-owned
+ * DownloadRepository below through `koin().get()` bridges. The V3 downloads
+ * conveyor (C4-part-2 notes, fifth conveyor item) moved the download engine
+ * itself here — `DownloadRepositoryImpl`, `DownloadDelegate` and the transfer
+ * machinery — with its Android-only surfaces (WorkManager enqueue/cancel,
+ * notification summary, Coil preloading, storage layout) behind the
+ * `DownloadEnqueueCoordinator` / `DownloadProgressNotifier` /
+ * `OfflineImagePreloader` / `DownloadStorageLayoutContract` seams, whose
+ * Android actuals the app composition root registers
+ * (androidDownloadSeamsModule) and desktop actuals live in
+ * [desktopDataModule].
  *
  * Interim DataModule direct-construction providers (types moved here but
  * still Hilt-built pending the flips above): `AudioLyricsManager`
- * (LyricsRepository view of MediaRepository), `DefaultAudioQueueFacade`
- * (AudioQueueManager impl is the media3 AudioPlaybackManager) and
- * `OfflineSyncManager` (MediaRepository + DownloadRepository +
- * OfflineDownloadWriter).
+ * (LyricsRepository view of MediaRepository) and `DefaultAudioQueueFacade`
+ * (AudioQueueManager impl is the media3 AudioPlaybackManager). The
+ * `OfflineSyncManager` provider flipped to the standard `koin().get()`
+ * bridge with the V3 downloads conveyor — see its definition below.
  *
  * Platform-bound definitions (Context / dataDir-shaped picks) live in
  * [androidDataModule] / [desktopDataModule].
@@ -203,7 +225,8 @@ val dataJvmModule: Module = module {
     // OfflinePlaybackFacade) are deliberately NOT defined here — the legacy
     // DataModule constructs them via interim @Provides until those flip:
     // AudioLyricsManager, DefaultAudioQueueFacade, PlaybackSourceResolverImpl
-    // (platform), OfflineSyncManager.
+    // (platform). OfflineSyncManager moved off that list with the V3 downloads
+    // conveyor (see its definition below — the Hilt-interop edges resolve).
 
     single<TimeSource> { SystemTimeSource() }
 
@@ -250,6 +273,36 @@ val dataJvmModule: Module = module {
 
     single { OfflineSyncComparator() }
 
+    // V3 downloads conveyor: OfflineSyncManager flipped from the interim
+    // direct-construction DataModule provider to a Koin single (C4 flip
+    // pattern) — every ctor dep is now Koin-resolvable: the DAOs via
+    // databaseDaosModule, the comparator/PlaybackRepository via this module,
+    // OfflineModeManager via the platform data modules, the application scope
+    // via DatastoreQualifiers, MediaRepository through the app composition
+    // root's Hilt interop on Android, and — since the downloads conveyor
+    // moved the engine — DownloadRepository from this module's own single
+    // (the legacy DataModule provider bridges back to it via koin().get(),
+    // so Hilt injectors like feature:details' ResyncActions share the
+    // instance).
+    // `writer` reuses the DownloadRepository single: the interface extends
+    // OfflineDownloadWriter, so no separate definition is needed. Desktop:
+    // latent — MediaRepository has no desktop definition yet, but the
+    // single is lazy, so nothing resolves (or fails) until the downloads
+    // feature opens there.
+    single {
+        OfflineSyncManager(
+            mediaRepository = get(),
+            writer = get<DownloadRepository>(),
+            downloadRepository = get(),
+            offlineMediaDao = get(),
+            syncBaselineDao = get(),
+            comparator = get(),
+            offlineModeManager = get(),
+            playbackRepository = get(),
+            appScope = get(DatastoreQualifiers.applicationScope),
+        )
+    }
+
     single { TimeSyncManager(get()) }
     single { SyncPlayController(get()) }
     single { SyncPlayEventHandler() }
@@ -279,6 +332,61 @@ val dataJvmModule: Module = module {
         OkHttpDownloadTransferClient(get(NetworkQualifiers.downloadHttpClient))
     }
     single<DownloadTransferClient> { get<OkHttpDownloadTransferClient>() }
+
+    // ── V3 downloads conveyor: the portable download engine ────────────────
+    // DownloadRepositoryImpl moved from the legacy :core:data shim with its
+    // Android surfaces behind seams: enqueue/cancel → DownloadEnqueueCoordinator
+    // (Android: WorkManager DownloadEnqueuer via the app's
+    // androidDownloadSeamsModule; desktop: the in-process DesktopDownloadManager),
+    // storage layout → DownloadStorageLayoutContract (Android: Context/StatFs
+    // impl via the app module; desktop: appdata-based impl in desktopDataModule),
+    // notification summary + Coil preloading → platform no-op-able fun
+    // interfaces, and MediaRepository behind the deferred MediaRepositoryAccess
+    // (Android def: androidDataModule → Hilt interop; desktop def: throws until
+    // Phase X — every mediaRepository use sits on the series paths, which a
+    // single-item startDownload never reaches). `downloadDelegate` keeps the
+    // construction cycle broken via a memoizing kotlin Lazy (the daggerLazy
+    // pattern). Legacy Hilt injectors (PlayedStateSyncImpl,
+    // OfflinePlaybackFacade, AudioLibraryBrowser, workers, feature modules)
+    // reach this single through the DataModule koin().get() bridges.
+    single {
+        DownloadRepositoryImpl(
+            downloadDao = get(),
+            offlineMediaDao = get(),
+            playbackStateDao = get(),
+            syncBaselineDao = get(),
+            database = get(),
+            mediaRepository = get<MediaRepositoryAccess>(),
+            episodeCatalogue = get(),
+            playbackRepository = get(),
+            httpClient = get(),
+            downloadsStore = get(),
+            json = get(),
+            downloadDelegate = lazy { get<DownloadDelegate>() },
+            storagePolicy = get(),
+            downloadEnqueuer = get<DownloadEnqueueCoordinator>(),
+            storageLayout = get<DownloadStorageLayoutContract>(),
+            syncComparator = get(),
+            progressNotifier = get<DownloadProgressNotifier>(),
+            imagePreloader = get<OfflineImagePreloader>(),
+        )
+    }
+    single<DownloadRepository> { get<DownloadRepositoryImpl>() }
+
+    // The narrow write surface the DownloadDelegate depends on — the former
+    // bindOfflineDownloadWriter @Binds: same instance as the repository above
+    // (the interface extends OfflineDownloadWriter), not a second repository.
+    single<OfflineDownloadWriter> { get<DownloadRepository>() }
+
+    // Per-item download recipe (prepare + execute + artifact bundle). The
+    // writer edge resolves to the DownloadRepository single above; the Lazy in
+    // the repository ctor defers this resolution, breaking the cycle.
+    single {
+        DownloadDelegate(
+            writer = get<DownloadRepository>(),
+            playbackRepository = get(),
+        )
+    }
 
     single {
         SeerrRepositoryImpl(

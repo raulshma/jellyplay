@@ -1,12 +1,18 @@
 package com.raulshma.jellyplay.core.data.di
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
+import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
+import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
@@ -15,8 +21,11 @@ import com.raulshma.jellyplay.core.data.repository.StoragePolicy
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
+import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
+import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.database.di.desktopDatabaseModule
@@ -49,8 +58,10 @@ import org.koin.core.context.stopKoin
  * contracts, the session / syncplay cluster, and the subtitle-provider map
  * flipped from @IntoMap.
  *
- * DownloadRepository is deliberately NOT resolved: it has no Koin definition
- * (Hilt-owned until Phase X — WorkManager-coupled DownloadRepositoryImpl).
+ * DownloadRepository (and with the V3 downloads conveyor, the whole download
+ * engine — delegate, transfer machinery, in-process manager, auto-download
+ * loop) IS resolved since the conveyor moved it into this module; the
+ * MediaRepository edge stays a documented throwing-lazy on desktop (Phase X).
  */
 class DataKoinModulesTest {
 
@@ -122,6 +133,26 @@ class DataKoinModulesTest {
             assertResolves<OfflineModeManager>(koin)
             assertResolves<ImageUrlProvider>(koin)
             assertResolves<LocalStreamProbe>(koin)
+
+            // V3 downloads conveyor: the download engine resolves on desktop —
+            // the repository single (seams satisfied by desktopDataModule's
+            // actuals), its OfflineDownloadWriter view (same instance), the
+            // per-item delegate, and the in-process manager/scheduler behind
+            // the enqueue-coordinator seam. The MediaRepositoryAccess desktop
+            // def is the documented throwing-lazy — constructed eagerly here
+            // (cheap), only invoked on the series paths.
+            val repository = koin.get<DownloadRepository>()
+            assertTrue(
+                koin.get<OfflineDownloadWriter>() === repository,
+                "OfflineDownloadWriter must alias the DownloadRepository single (one instance, not two)",
+            )
+            assertResolves<DownloadDelegate>(koin)
+            assertResolves<DownloadEnqueueCoordinator>(koin)
+            assertResolves<DownloadIntake>(koin)
+            assertResolves<DownloadStorageLayoutContract>(koin)
+            assertResolves<MediaRepositoryAccess>(koin)
+            assertResolves<DesktopDownloadManager>(koin)
+            assertResolves<DesktopAutoDownloadScheduler>(koin)
         } finally {
             database.close()
             stopKoin()

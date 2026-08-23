@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import android.content.Context
+import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.Data
@@ -10,10 +11,17 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
+
+// V3 downloads conveyor: this Android actual stays in the legacy shim and now
+// implements the shared DownloadEnqueueCoordinator seam (same package, moved
+// to :shared:core:data jvmShared with the portable DownloadRepositoryImpl).
+// The @Inject/@Singleton annotations were stripped — Koin owns construction
+// (the app composition root's androidDownloadSeamsModule), and the legacy
+// DataModule bridges the remaining Hilt injector (DownloadRecoveryInitializer)
+// via koin().get(). The WorkManager bodies are verbatim; the cancelWork
+// override carries the body the repository's private cancelWorkForDownload
+// previously owned.
 
 /**
  * Single source of truth for the WorkManager enqueue recipe used to (re)start
@@ -31,12 +39,38 @@ import javax.inject.Singleton
  * The shared shape — unique-work name, backoff (30 s exponential, matching
  * [DownloadRepositoryImpl.DOWNLOAD_BACKOFF_DELAY_MS]), input-data, work tag,
  * `ExistingWorkPolicy.KEEP` — lives here so it cannot drift again.
+ *
+ * Implements the shared [DownloadEnqueueCoordinator] seam so the portable
+ * repository (and, on desktop, the in-process manager) can enqueue/cancel
+ * without knowing about WorkManager.
  */
-@Singleton
-class DownloadEnqueuer @Inject constructor(
-    @ApplicationContext private val context: Context,
+class DownloadEnqueuer(
+    private val context: Context,
     private val downloadsStore: DownloadsStore,
-) {
+) : DownloadEnqueueCoordinator {
+
+    /**
+     * Enqueue (or keep) the worker for [downloadId] — the runtime
+     * [DownloadEnqueueCoordinator.enqueue] path (schedule/network honoured).
+     */
+    override fun enqueue(downloadId: String) {
+        enqueue(downloadId, honorScheduleAndNetwork = true)
+    }
+
+    /**
+     * Cancels the unique WorkManager work associated with [downloadId], if
+     * any. Safe to call even when no work is registered — WorkManager no-ops
+     * in that case.
+     */
+    override fun cancelWork(downloadId: String) {
+        try {
+            WorkManager.getInstance(context).cancelUniqueWork(DownloadWorker.workName(downloadId))
+        } catch (e: Exception) {
+            // WorkManager may not be initialised in some instrumented-test or fresh-install
+            // edge cases. Log and continue — file cleanup is still valuable on its own.
+            Log.w(TAG, "Failed to cancel WorkManager work for download $downloadId", e)
+        }
+    }
 
     /**
      * Enqueue (or keep) the worker for [downloadId].
@@ -51,7 +85,7 @@ class DownloadEnqueuer @Inject constructor(
      */
     fun enqueue(
         downloadId: String,
-        honorScheduleAndNetwork: Boolean = true,
+        honorScheduleAndNetwork: Boolean,
     ) {
         val prefs = if (honorScheduleAndNetwork) downloadsStore.downloads.value else null
 
@@ -116,5 +150,9 @@ class DownloadEnqueuer @Inject constructor(
             ExistingWorkPolicy.KEEP,
             workRequestBuilder.build(),
         )
+    }
+
+    private companion object {
+        const val TAG = "DownloadRepository"
     }
 }

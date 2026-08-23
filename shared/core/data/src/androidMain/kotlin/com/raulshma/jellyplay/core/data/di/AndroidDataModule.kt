@@ -7,6 +7,8 @@ import com.raulshma.jellyplay.core.data.offline.AndroidOfflineModeManager
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
 import com.raulshma.jellyplay.core.data.repository.MediaExtractorLocalStreamProbe
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.ImageUrlProviderImpl
 import com.raulshma.jellyplay.core.data.util.DataBuildFlags
@@ -48,5 +50,14 @@ fun androidDataModule(context: Context): Module {
         }
 
         single<LocalStreamProbe> { MediaExtractorLocalStreamProbe() }
+
+        // V3 downloads conveyor: the deferred MediaRepository edge of the
+        // Koin-owned DownloadRepositoryImpl. Resolves through the app
+        // composition root's Hilt interop on first invocation (the desktop
+        // counterpart in desktopDataModule throws — no definition there until
+        // Phase X). Deferred because MediaRepository stays Hilt-constructed
+        // and eagerly pulling it here would re-enter the Hilt graph during
+        // Koin single construction.
+        single<MediaRepositoryAccess> { MediaRepositoryAccess { get<MediaRepository>() } }
     }
 }

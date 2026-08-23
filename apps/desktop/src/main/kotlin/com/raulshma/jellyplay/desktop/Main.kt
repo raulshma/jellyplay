@@ -14,6 +14,8 @@ import coil3.SingletonImageLoader
 import coil3.request.crossfade
 import com.raulshma.jellyplay.core.data.di.dataJvmModule
 import com.raulshma.jellyplay.core.data.di.desktopDataModule
+import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
+import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
 import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.database.di.desktopDatabaseModule
 import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
@@ -28,6 +30,7 @@ import com.raulshma.jellyplay.feature.library.di.libraryModule
 import com.raulshma.jellyplay.feature.music.di.musicModule
 import com.raulshma.jellyplay.feature.music.feedback.desktopMusicMessageBusModule
 import com.raulshma.jellyplay.feature.livetv.di.liveTvModule
+import com.raulshma.jellyplay.feature.downloads.di.downloadsModule
 import org.koin.core.context.startKoin
 
 fun main() {
@@ -35,7 +38,7 @@ fun main() {
     java.io.File(paths.dataDir.toString()).mkdirs()
     java.io.File(paths.configDir.toString()).mkdirs()
 
-    startKoin {
+    val koinApp = startKoin {
         modules(
             datastoreCommonModule,
             desktopDatastoreModule(paths.dataDir),
@@ -62,8 +65,25 @@ fun main() {
             // but resolution is lazy so boot stays safe (same inert-module
             // pattern; the desktop LiveTvMessenger actual returns null).
             liveTvModule,
+            // …downloads, fifth conveyor item — the engine half of the
+            // conveyor moved the download stack into :shared:core:data, so
+            // desktop single-item downloads now work end-to-end (storage
+            // layout under appdata, Range-resumable transfers, the in-process
+            // DesktopDownloadManager and the 6 h auto-download loop started
+            // below). Series downloads fail loudly until the Phase X
+            // MediaRepository flip; the VM's other deps (userDataMutator via
+            // Hilt interop) remain documented-latent, so the downloadsModule
+            // itself is only resolved once that screen opens.
+            downloadsModule,
         )
     }
+
+    // V3 downloads conveyor: the desktop download engine — in-process
+    // supervisor observing PENDING rows (resume + reconnect edge handled
+    // inside), plus the auto-download loop. Construction is side-effect free;
+    // start() launches the loops on the application scope and is idempotent.
+    koinApp.koin.get<DesktopDownloadManager>().start()
+    koinApp.koin.get<DesktopAutoDownloadScheduler>().start()
 
     // Desktop image engine: the OkHttp network fetcher self-registers via
     // ServiceLoader from the coil-network-okhttp dependency; crossfade is the

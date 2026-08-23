@@ -14,7 +14,7 @@ import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.data.repository.DownloadFailurePolicy
-import com.raulshma.jellyplay.core.data.repository.applyAndRoute
+import com.raulshma.jellyplay.core.data.repository.applyTo
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -122,7 +122,7 @@ class DownloadWorker @AssistedInject constructor(
             // or cancelled while the row was QUEUED.
             val statusAfterQueue = dao.getStatus(downloadId)
             if (DownloadStates.isInactive(statusAfterQueue)) {
-                return@withPermit Result.success()
+                return@withPermit TransferOutcome.Success
             }
             dao.updateProgress(downloadId, existingBytes, DownloadStatus.DOWNLOADING.name)
             try {
@@ -166,7 +166,6 @@ class DownloadWorker @AssistedInject constructor(
                     val totalSize = runner.probeContentSize(entity.downloadUrl, accessToken)
                     if (totalSize > DownloadTransferRunner.MIN_MULTI_SIZE && numConnections > 1) {
                         MultiConnectionDownloadStrategy.execute(
-                            context = applicationContext,
                             downloadClient = okHttpClient, // multi-conn path still on OkHttp (follow-up)
                             dao = dao,
                             downloadId = downloadId,
@@ -175,7 +174,47 @@ class DownloadWorker @AssistedInject constructor(
                             numConnections = numConnections,
                             notificationId = notificationId,
                             accessToken = accessToken,
-                            setForegroundInfo = { info -> setForeground(info) },
+                            notifications = object : DownloadTransferNotifications {
+                                override suspend fun showForeground(
+                                    downloadId: String,
+                                    notificationId: Int,
+                                    name: String,
+                                    progress: Int,
+                                    downloadedBytes: Long,
+                                    totalBytes: Long,
+                                    speedBytesPerSec: Long,
+                                ) {
+                                    setForeground(
+                                        DownloadNotificationHelper.createForegroundInfo(
+                                            applicationContext, downloadId, notificationId, name, progress,
+                                            downloadedBytes, totalBytes, speedBytesPerSec,
+                                        )
+                                    )
+                                }
+
+                                override fun updateNotification(
+                                    downloadId: String,
+                                    notificationId: Int,
+                                    name: String,
+                                    progress: Int,
+                                    downloadedBytes: Long,
+                                    totalBytes: Long,
+                                    speedBytesPerSec: Long,
+                                ) {
+                                    DownloadNotificationHelper.updateNotification(
+                                        applicationContext, downloadId, notificationId, name, progress,
+                                        downloadedBytes, totalBytes, speedBytesPerSec,
+                                    )
+                                }
+
+                                override fun dismissNotification(notificationId: Int) {
+                                    DownloadNotificationHelper.dismissNotification(applicationContext, notificationId)
+                                }
+
+                                override fun refreshSummary(inFlightCount: Int) {
+                                    DownloadNotificationHelper.refreshSummary(applicationContext, inFlightCount)
+                                }
+                            },
                         )
                     } else {
                         runner.transfer(
@@ -205,9 +244,21 @@ class DownloadWorker @AssistedInject constructor(
                     currentStatus = status,
                     isResumablePartial = true, // single-connection strategy for the outer path
                 )
-                outcome.applyAndRoute(dao, downloadId, File(entity.downloadPath), existingBytes)
+                outcome.applyTo(dao, downloadId, File(entity.downloadPath), existingBytes)
+                outcome.toTransferOutcome()
             }
-        }
+        }.toWorkResult()
+    }
+
+    /**
+     * Maps the portable [TransferOutcome] the moved transfer engine returns
+     * back onto the WorkManager result — the seam the desktop manager consumes
+     * directly and Android adapts here (V3 downloads conveyor).
+     */
+    private fun TransferOutcome.toWorkResult(): Result = when (this) {
+        TransferOutcome.Success -> Result.success()
+        TransferOutcome.Retry -> Result.retry()
+        TransferOutcome.Fail -> Result.failure()
     }
 
     companion object {

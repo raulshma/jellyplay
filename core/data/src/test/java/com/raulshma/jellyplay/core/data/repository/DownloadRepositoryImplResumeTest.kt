@@ -1,10 +1,5 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
-import androidx.work.Configuration
-import androidx.work.WorkManager
-import androidx.work.testing.WorkManagerTestInitHelper
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.InterruptedResumeRow
@@ -13,7 +8,6 @@ import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
-import dagger.Lazy
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -21,7 +15,6 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -36,14 +29,16 @@ import org.robolectric.annotation.Config
  * - a NETWORK-paused row resumes from its persisted byte offset (contiguous
  *   prefix), while a FAILED row resumes from 0 (its partial is gone/gapped).
  *
- * WorkManager's official test helper provides a real in-memory scheduler so
- * the enqueue path runs without a device.
+ * V3 downloads conveyor: the impl moved to :shared:core:data jvmShared; this
+ * legacy-side suite now constructs it through the seam ctor (mock coordinator /
+ * layout contract / notifier / preloader, a simple MediaRepositoryAccess fake,
+ * and a kotlin.Lazy delegate). Robolectric stays because the shared Log
+ * facade's Android actual delegates to android.util.Log.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
 class DownloadRepositoryImplResumeTest {
 
-    private val context: Context = ApplicationProvider.getApplicationContext()
     private val downloadDao: DownloadDao = mockk(relaxed = true)
     private val offlineMediaDao: OfflineMediaDao = mockk(relaxed = true)
     private val playbackStateDao: PlaybackStateDao = mockk(relaxed = true)
@@ -55,31 +50,34 @@ class DownloadRepositoryImplResumeTest {
     private val preferencesStore: DownloadsStore = mockk(relaxed = true)
     private val json: Json = Json
     // downloadSeries delegates the per-episode bundle here; the resume tests
-    // never exercise it, so a relaxed mock behind a dagger.Lazy is sufficient.
-    private val downloadDelegate: Lazy<DownloadDelegate> = mockk(relaxed = true)
+    // never exercise it, so a relaxed mock behind a kotlin Lazy is sufficient.
+    private val downloadDelegate: kotlin.Lazy<DownloadDelegate> = lazy { mockk<DownloadDelegate>(relaxed = true) }
     // Storage cap + WorkManager enqueue were extracted out of the repo into
     // their own modules. The resume path exercises neither, so relaxed mocks
-    // suffice.
+    // (the enqueue seam's interface) suffice.
     private val storagePolicy: StoragePolicy = mockk(relaxed = true)
-    private val downloadEnqueuer: DownloadEnqueuer = mockk(relaxed = true)
+    private val downloadEnqueuer: DownloadEnqueueCoordinator = mockk(relaxed = true)
     // Path-layout policy was extracted out of the repo; the resume path never
-    // starts a new download, so a relaxed mock suffices.
-    private val storageLayout: DownloadStorageLayout = mockk(relaxed = true)
+    // starts a new download, so a relaxed mock of the shared contract suffices.
+    private val storageLayout: DownloadStorageLayoutContract = mockk(relaxed = true)
     // The resume path never consults the offline-sync comparator; a relaxed mock
     // satisfies the constructor param added alongside the sync wiring.
     private val syncComparator: com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator = mockk(relaxed = true)
     // The resume path never loads series episodes; a relaxed mock satisfies the
     // catalogue constructor param added alongside the seasons/episodes migration.
     private val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue = mockk(relaxed = true)
+    // Notification summary + image preload seams: relaxed mocks — the resume
+    // path refreshes the summary but never renders notifications here.
+    private val progressNotifier: DownloadProgressNotifier = mockk(relaxed = true)
+    private val imagePreloader: OfflineImagePreloader = mockk(relaxed = true)
 
     private fun repository() = DownloadRepositoryImpl(
-        context = context,
         downloadDao = downloadDao,
         offlineMediaDao = offlineMediaDao,
         playbackStateDao = playbackStateDao,
         syncBaselineDao = syncBaselineDao,
         database = database,
-        mediaRepository = mediaRepository,
+        mediaRepository = MediaRepositoryAccess { mediaRepository },
         episodeCatalogue = episodeCatalogue,
         playbackRepository = playbackRepository,
         httpClient = httpClient,
@@ -90,15 +88,9 @@ class DownloadRepositoryImplResumeTest {
         downloadEnqueuer = downloadEnqueuer,
         storageLayout = storageLayout,
         syncComparator = syncComparator,
+        progressNotifier = progressNotifier,
+        imagePreloader = imagePreloader,
     )
-
-    @Before
-    fun setUp() {
-        WorkManagerTestInitHelper.initializeTestWorkManager(
-            context,
-            Configuration.Builder().setMinimumLoggingLevel(android.util.Log.DEBUG).build(),
-        )
-    }
 
     @Test
     fun `user-paused download is skipped on auto-resume`() = runTest {

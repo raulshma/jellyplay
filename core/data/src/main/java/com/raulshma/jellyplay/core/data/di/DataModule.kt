@@ -7,8 +7,6 @@ import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepositoryImpl
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadIntakeImpl
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
@@ -50,13 +48,51 @@ import javax.inject.Singleton
 abstract class DataModule {
 
     companion object {
+        // V3 downloads conveyor: DownloadDelegate moved to :shared:core:data
+        // jvmShared (Koin-owned, ctor sans Context); this provider bridges the
+        // remaining Hilt injectors (DownloadIntakeImpl) to the Koin single.
         @dagger.Provides
         @Singleton
-        fun provideDownloadDelegate(
-            @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
-            writer: com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter,
-            playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository,
-        ): DownloadDelegate = DownloadDelegate(context, writer, playbackRepository)
+        fun provideDownloadDelegate(): DownloadDelegate = koin().get()
+
+        // V3 downloads conveyor: DownloadRepositoryImpl moved to
+        // :shared:core:data jvmShared (Koin-owned, platform surfaces behind
+        // seams); the former bindDownloadRepository @Binds became this bridge.
+        // Every Hilt injector of the download repository (PlayedStateSyncImpl's
+        // dagger.Lazy edge, OfflinePlaybackFacade, AudioLibraryBrowser,
+        // workers, feature modules) shares the Koin single.
+        @dagger.Provides
+        @Singleton
+        fun provideDownloadRepository(): com.raulshma.jellyplay.core.data.repository.DownloadRepository = koin().get()
+
+        // The narrow write surface shared by DownloadDelegate — the former
+        // bindOfflineDownloadWriter @Binds, now bridged to the same Koin-owned
+        // DownloadRepository single (a real seam in the type graph, not a
+        // second instance).
+        @dagger.Provides
+        @Singleton
+        fun provideOfflineDownloadWriter(): com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter =
+            koin().get()
+
+        // V3 downloads conveyor: DownloadEnqueuer stays in this legacy module
+        // (Android WorkManager actual of the shared DownloadEnqueueCoordinator
+        // seam) but is Koin-constructed via the app composition root's
+        // androidDownloadSeamsModule; this bridge keeps the Hilt injector
+        // (startup DownloadRecoveryInitializer) on the same instance.
+        @dagger.Provides
+        @Singleton
+        fun provideDownloadEnqueuer(): com.raulshma.jellyplay.core.data.repository.DownloadEnqueuer = koin().get()
+
+        // V3 downloads conveyor: DownloadStorageLayout stays in this legacy
+        // module (Android Context/StatFs actual of the shared
+        // DownloadStorageLayoutContract) but is Koin-constructed via the app
+        // composition root's androidDownloadSeamsModule; this bridge keeps the
+        // Hilt injector (feature:settings StorageSettingsViewModel) on the
+        // same instance.
+        @dagger.Provides
+        @Singleton
+        fun provideDownloadStorageLayout(): com.raulshma.jellyplay.core.data.repository.DownloadStorageLayout =
+            koin().get()
 
         // StoragePolicy takes the download-byte aggregate as a suspend lambda so
         // it stays pure logic (testable without a DAO). Bound here so the cap
@@ -285,11 +321,13 @@ abstract class DataModule {
         // ── C4 part 2, batch 3: interim direct constructions ────────────────
         // These impls MOVED to :shared:core:data but Koin cannot own them
         // yet — a ctor dep is still Hilt-owned legacy (MediaRepository /
-        // DownloadRepository / AudioPlaybackManager / LyricsRepository /
-        // OfflinePlaybackFacade). Until those flip, Hilt constructs the moved
-        // classes here directly. @Inject was stripped at the move, so Hilt
-        // resolves them through these providers (no parallel instances); the
-        // Koin definitions + koin().get() bridges land with the remaining
+        // AudioPlaybackManager / LyricsRepository / OfflinePlaybackFacade).
+        // (DownloadRepository left this list with the V3 downloads conveyor —
+        // it is Koin-owned; the bridges above point Hilt at the single.)
+        // Until the remaining deps flip, Hilt constructs the moved classes
+        // here directly. @Inject was stripped at the move, so Hilt resolves
+        // them through these providers (no parallel instances); the Koin
+        // definitions + koin().get() bridges land with the remaining
         // repository flips.
 
         @dagger.Provides
@@ -311,30 +349,15 @@ abstract class DataModule {
         // (C4 part 2 bounce: its ctor takes OfflinePlaybackFacade, itself
         // Hilt-coupled to DownloadRepository). See bindPlaybackSourceResolver.
 
+        // V3 downloads conveyor: OfflineSyncManager flipped to a Koin single in
+        // dataJvmModule (every ctor dep now resolves — MediaRepository /
+        // DownloadRepository through the app's Hilt interop). This bridge keeps
+        // the legacy Hilt injectors (feature:details ResyncActions) pointing at
+        // the same instance the Koin graph builds; the direct-construction
+        // provider above was the interim shape until this flip.
         @dagger.Provides
         @Singleton
-        fun provideOfflineSyncManager(
-            mediaRepository: MediaRepository,
-            writer: com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter,
-            downloadRepository: DownloadRepository,
-            offlineMediaDao: com.raulshma.jellyplay.core.database.dao.OfflineMediaDao,
-            syncBaselineDao: com.raulshma.jellyplay.core.database.dao.SyncBaselineDao,
-            comparator: OfflineSyncComparator,
-            offlineModeManager: OfflineModeManager,
-            playbackRepository: PlaybackRepository,
-            @com.raulshma.jellyplay.core.datastore.di.ApplicationScope appScope: kotlinx.coroutines.CoroutineScope,
-        ): com.raulshma.jellyplay.core.data.sync.OfflineSyncManager =
-            com.raulshma.jellyplay.core.data.sync.OfflineSyncManager(
-                mediaRepository,
-                writer,
-                downloadRepository,
-                offlineMediaDao,
-                syncBaselineDao,
-                comparator,
-                offlineModeManager,
-                playbackRepository,
-                appScope,
-            )
+        fun provideOfflineSyncManager(): com.raulshma.jellyplay.core.data.sync.OfflineSyncManager = koin().get()
     }
 
     @Binds
@@ -366,17 +389,6 @@ abstract class DataModule {
     abstract fun bindUserDataMutator(
         impl: com.raulshma.jellyplay.core.data.repository.UserDataMutatorImpl,
     ): com.raulshma.jellyplay.core.data.repository.UserDataMutator
-
-    @Binds
-    @Singleton
-    abstract fun bindDownloadRepository(impl: DownloadRepositoryImpl): DownloadRepository
-
-    // The narrow write surface shared by DownloadDelegate. Bound to the same
-    // DownloadRepositoryImpl singleton — a real seam in the type graph, not a
-    // second instance. Keeps DownloadDelegate off the 25-method god-interface.
-    @Binds
-    @Singleton
-    abstract fun bindOfflineDownloadWriter(impl: DownloadRepositoryImpl): com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 
     @Binds
     @Singleton

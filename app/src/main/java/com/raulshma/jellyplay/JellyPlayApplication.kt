@@ -23,11 +23,13 @@ import com.raulshma.jellyplay.core.network.di.androidNetworkModule
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import com.raulshma.jellyplay.di.hiltInteropModule
+import com.raulshma.jellyplay.di.androidDownloadSeamsModule
 import com.raulshma.jellyplay.feature.search.di.searchModule
 import com.raulshma.jellyplay.feature.library.di.androidPhotoExportModule
 import com.raulshma.jellyplay.feature.library.di.libraryModule
 import com.raulshma.jellyplay.feature.music.di.musicModule
 import com.raulshma.jellyplay.feature.livetv.di.liveTvModule
+import com.raulshma.jellyplay.feature.downloads.di.downloadsModule
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
@@ -126,14 +128,23 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 androidNetworkModule(this@JellyPlayApplication),
                 dataJvmModule,
                 androidDataModule(this@JellyPlayApplication),
+                // V3 downloads conveyor: Android actuals of the portable
+                // download engine's seams (WorkManager enqueue/coordinator,
+                // Context/StatFs storage layout, notification summary, Coil
+                // preload). Koin owns these legacy-side impls so the
+                // DownloadRepository single in dataJvmModule resolves; the
+                // legacy DataModule bridges its remaining Hilt injectors to
+                // them via koin().get().
+                androidDownloadSeamsModule(this@JellyPlayApplication),
                 // V3 feature conveyor: shared feature ViewModels. The interop
                 // bridge exposes the still-Hilt-owned data-layer types to the
-                // Koin graph until the Phase X DownloadRepository flip.
+                // Koin graph until the Phase X MediaRepository flip.
                 hiltInteropModule(this@JellyPlayApplication),
                 searchModule,
                 libraryModule,
                 musicModule,
                 liveTvModule,
+                downloadsModule,
                 // MediaStore/FileProvider photo-export actual for the library
                 // feature's PhotoExport seam (androidDataModule pattern).
                 androidPhotoExportModule(this@JellyPlayApplication),

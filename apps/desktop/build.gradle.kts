@@ -43,6 +43,12 @@ dependencies {
     // lazy so boot stays safe).
     implementation(project(":shared:feature:livetv"))
 
+    // …downloads, fifth conveyor item (DI registration only — documented-latent:
+    // downloadRepository/userDataMutator and the OfflineSyncManager single's
+    // repository edges have no desktop defs yet, resolution is lazy so boot
+    // stays safe).
+    implementation(project(":shared:feature:downloads"))
+
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
     implementation(libs.jna)
