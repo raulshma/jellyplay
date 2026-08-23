@@ -32,6 +32,8 @@ import com.raulshma.jellyplay.feature.music.feedback.desktopMusicMessageBusModul
 import com.raulshma.jellyplay.feature.livetv.di.liveTvModule
 import com.raulshma.jellyplay.feature.downloads.di.downloadsModule
 import com.raulshma.jellyplay.feature.syncplay.di.syncPlayModule
+import com.raulshma.jellyplay.feature.settings.di.settingsModule
+import com.raulshma.jellyplay.feature.settings.di.desktopSettingsPlatformModule
 import org.koin.core.context.startKoin
 
 fun main() {
@@ -83,6 +85,15 @@ fun main() {
             // shell has no SyncPlay nav entry, so the module is registered
             // but never instantiated (same inert-module pattern as livetv).
             syncPlayModule,
+            // …settings, seventh conveyor item — documented-latent, syncplay
+            // pattern: several VM deps (MediaRepository, AdminRepository —
+            // Hilt interop) have no desktop definitions, but resolution is
+            // lazy so boot stays safe, and the desktop shell has no settings
+            // nav entry (grep confirms no route/screen reference), so the
+            // module is registered but never instantiated. Only the (no-op
+            // /zero-degradation) desktop platform actuals resolve eagerly.
+            settingsModule,
+            desktopSettingsPlatformModule(),
         )
     }
 

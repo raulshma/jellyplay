@@ -109,9 +109,10 @@ class HomeViewModel @Inject constructor(
     private val timeSource: TimeSource,
     /**
      * The settings-search catalog, injected through the core/ui seam. The
-     * binding itself lives in feature/settings (see its `SettingsSearchModule`)
-     * and resolves at app level — this module keeps no dependency on
-     * feature/settings, only on the core/ui interface.
+     * binding is Koin-owned (`settingsModule` in shared/feature/settings);
+     * the Hilt bridge lives app-side (`SettingsSearchInteropModule`) and
+     * resolves at app level — this module keeps no dependency on the
+     * settings feature, only on the core/ui interface.
      */
     private val settingsSearchProvider: SettingsSearchProvider,
 ) : JellyPlayViewModel(), DefaultLifecycleObserver {
@@ -230,9 +231,8 @@ class HomeViewModel @Inject constructor(
      */
     fun settingsSearchResults(
         queries: Flow<String>,
-        context: android.content.Context,
     ): Flow<List<ResolvedSettingsItem>> =
-        settingsSearchResults(queries, context, settingsSearchProvider)
+        settingsSearchResults(queries, settingsSearchProvider)
 
     /**
      * The photo-folder child-URL cache (see [PhotoFolderChildUrlsStore]).

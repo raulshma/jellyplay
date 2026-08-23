@@ -51,6 +51,10 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
+import com.raulshma.jellyplay.core.ui.generated.resources.Res
+import com.raulshma.jellyplay.core.ui.generated.resources.core_loading
+import com.raulshma.jellyplay.core.ui.generated.resources.core_search
+import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_playback
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchProvider
@@ -167,9 +171,11 @@ class HomeViewModelTest {
         override val items = listOf(
             SettingsSearchItem(
                 id = "test_setting",
-                titleRes = 0,
-                subtitleRes = 0,
-                categoryRes = 0,
+                // Public core:ui Res strings — placeholders; the VM-level tests
+                // never resolve or match them (that's SettingsSearchMatcherTest).
+                titleRes = Res.string.core_search,
+                subtitleRes = Res.string.core_loading,
+                categoryRes = Res.string.ss_cat_playback,
                 keywords = listOf("test"),
                 route = Route.Settings,
                 icon = mockk(relaxed = true),

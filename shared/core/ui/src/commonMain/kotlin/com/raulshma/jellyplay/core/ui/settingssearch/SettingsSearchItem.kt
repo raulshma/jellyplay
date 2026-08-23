@@ -2,12 +2,14 @@ package com.raulshma.jellyplay.core.ui.settingssearch
 
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.getString
 
 data class SettingsSearchItem(
     val id: String,
-    val titleRes: Int,
-    val subtitleRes: Int,
-    val categoryRes: Int,
+    val titleRes: StringResource,
+    val subtitleRes: StringResource,
+    val categoryRes: StringResource,
     val keywords: List<String>,
     val route: Route,
     val icon: ImageVector,
@@ -17,7 +19,8 @@ data class SettingsSearchItem(
 /**
  * Plain-[String] projection of a [SettingsSearchItem] used for fuzzy matching and rendering.
  *
- * The catalog stores resource ids so the UI resolves them lazily through the current locale;
+ * The catalog stores [org.jetbrains.compose.resources.StringResource]s so the UI resolves them
+ * lazily through the current locale;
  * matching and display both operate on these already-resolved [title]/[subtitle]/[category]
  * strings. The original [item] is carried along so callers can navigate by `route`, read
  * `isAdvanced`, etc.
@@ -35,17 +38,17 @@ data class ResolvedSettingsItem(
 }
 
 /**
- * Resolve a list of [SettingsSearchItem]s into [ResolvedSettingsItem]s using [resolve]
- * (typically `context::getString` or a Compose-backed resolver). Resolution is the single place
- * that turns resource ids into locale-aware text, so both search matching and rendering share one
- * localized snapshot.
+ * Resolve a list of [SettingsSearchItem]s into [ResolvedSettingsItem]s via the suspend
+ * [getString] (Compose Resources — works outside composition, e.g. in ViewModel flow
+ * collectors). Resolution is the single place that turns resource references into
+ * locale-aware text, so both search matching and rendering share one localized snapshot.
  */
-fun List<SettingsSearchItem>.resolve(resolve: (Int) -> String): List<ResolvedSettingsItem> =
+suspend fun List<SettingsSearchItem>.resolve(): List<ResolvedSettingsItem> =
     map { item ->
         ResolvedSettingsItem(
             item = item,
-            title = resolve(item.titleRes),
-            subtitle = resolve(item.subtitleRes),
-            category = resolve(item.categoryRes),
+            title = getString(item.titleRes),
+            subtitle = getString(item.subtitleRes),
+            category = getString(item.categoryRes),
         )
     }

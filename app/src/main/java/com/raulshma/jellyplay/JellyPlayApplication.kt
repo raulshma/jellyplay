@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.network.di.networkJvmModule
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import com.raulshma.jellyplay.di.hiltInteropModule
 import com.raulshma.jellyplay.di.androidDownloadSeamsModule
+import com.raulshma.jellyplay.di.androidSettingsSeamsModule
 import com.raulshma.jellyplay.feature.search.di.searchModule
 import com.raulshma.jellyplay.feature.library.di.androidPhotoExportModule
 import com.raulshma.jellyplay.feature.library.di.libraryModule
@@ -31,6 +32,8 @@ import com.raulshma.jellyplay.feature.music.di.musicModule
 import com.raulshma.jellyplay.feature.livetv.di.liveTvModule
 import com.raulshma.jellyplay.feature.downloads.di.downloadsModule
 import com.raulshma.jellyplay.feature.syncplay.di.syncPlayModule
+import com.raulshma.jellyplay.feature.settings.di.settingsModule
+import com.raulshma.jellyplay.feature.settings.di.androidSettingsPlatformModule
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
@@ -147,6 +150,15 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 liveTvModule,
                 downloadsModule,
                 syncPlayModule,
+                // V3 settings conveyor: the shared settings ViewModels plus the
+                // Android platform pick of their seams (SAF backup IO,
+                // LocaleManager, storage walkers, About/Licenses sources). The
+                // four Hilt-backed seams (auto-download sync, notification
+                // reschedule, TV watch-next, audio cache clear) wrap the legacy
+                // schedulers through the SettingsSeamsEntryPoint below.
+                settingsModule,
+                androidSettingsPlatformModule(this@JellyPlayApplication),
+                androidSettingsSeamsModule(this@JellyPlayApplication),
                 // MediaStore/FileProvider photo-export actual for the library
                 // feature's PhotoExport seam (androidDataModule pattern).
                 androidPhotoExportModule(this@JellyPlayApplication),

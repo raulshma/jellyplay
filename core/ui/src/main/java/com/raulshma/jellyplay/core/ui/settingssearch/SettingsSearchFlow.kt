@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.ui.settingssearch
 
-import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
@@ -21,8 +20,9 @@ private const val SETTINGS_SEARCH_DEBOUNCE_MS: Long = 120
  * Local settings-search pipeline for the home search bar:
  * debounces the caller's raw query flow, then fuzzy-matches it against the
  * locale-resolved items supplied by [provider] (the settings-search catalog
- * bound at app level). Lives in the UI layer because it needs an Android
- * [Context] to resolve the catalog's `@StringRes` ids.
+ * bound at app level). Resolves the catalog's `StringResource`s through the
+ * suspend Compose-Resources [resolve][com.raulshma.jellyplay.core.ui.settingssearch.resolve]
+ * — no Android [Context] needed.
  *
  * A blank query emits the empty list without touching the catalog. The
  * Appearance-level "settings in home search" gate is the caller's concern:
@@ -33,7 +33,6 @@ private const val SETTINGS_SEARCH_DEBOUNCE_MS: Long = 120
 @OptIn(FlowPreview::class)
 fun settingsSearchResults(
     queries: Flow<String>,
-    context: Context,
     provider: SettingsSearchProvider,
 ): Flow<List<ResolvedSettingsItem>> =
     queries
@@ -43,10 +42,10 @@ fun settingsSearchResults(
             if (query.isBlank()) {
                 emptyList()
             } else {
-                // Resolve the catalog's @StringRes ids to the current locale
+                // Resolve the catalog's StringResources to the current locale
                 // once per query, then fuzzy-match against the translated text
                 // so a user typing in their own language still finds settings.
-                val resolved = provider.items.resolve(context::getString)
+                val resolved = provider.items.resolve()
                 SettingsSearchMatcher.search(query, resolved)
             }
         }

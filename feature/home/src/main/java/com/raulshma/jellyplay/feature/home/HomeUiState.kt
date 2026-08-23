@@ -127,8 +127,8 @@ data class HomeSearchState(
     //
     // NOTE: settings results also no longer live here — the local
     // settings-search pipeline is computed in the UI layer
-    // (HomeTopDockScrim via `settingsSearchResults`), which owns the Android
-    // Context needed to resolve the registry's @StringRes ids.
+    // (HomeTopDockScrim via `settingsSearchResults`), which resolves the
+    // registry's Compose-Resources strings through the suspend resolver.
 }
 
 /**

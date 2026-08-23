@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.di
 
 import android.app.Application
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -30,6 +31,9 @@ import org.koin.dsl.module
  * UserMessageBus behind the shared module's [MusicMessageBus] seam
  * (HiltMusicMessageBus below).
  *
+ * The settings conveyor (Wave 2) reaches the same way for the still
+ * Hilt-bound AdminRepository (SettingsViewModel + AboutViewModel ctor dep).
+ *
  * DownloadRepository left this module with the V3 downloads conveyor: the
  * download engine moved to :shared:core:data and Koin (dataJvmModule) owns
  * the DownloadRepository single directly — a Koin def bridging back to Hilt
@@ -46,6 +50,7 @@ interface HiltInteropEntryPoint {
     fun downloadIntake(): DownloadIntake
     fun audioQueueFacade(): AudioQueueFacade
     fun userMessageBus(): UserMessageBus
+    fun adminRepository(): AdminRepository
 }
 
 private fun interopEntryPoint(application: Application): HiltInteropEntryPoint =
@@ -65,4 +70,5 @@ fun hiltInteropModule(application: Application): Module = module {
     single<DownloadIntake> { interopEntryPoint(application).downloadIntake() }
     single<AudioQueueFacade> { interopEntryPoint(application).audioQueueFacade() }
     single<MusicMessageBus> { HiltMusicMessageBus(interopEntryPoint(application).userMessageBus()) }
+    single<AdminRepository> { interopEntryPoint(application).adminRepository() }
 }

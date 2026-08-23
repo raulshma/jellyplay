@@ -1,5 +1,9 @@
 package com.raulshma.jellyplay.core.ui.settingssearch
 
+import com.raulshma.jellyplay.core.ui.generated.resources.Res
+import com.raulshma.jellyplay.core.ui.generated.resources.core_loading
+import com.raulshma.jellyplay.core.ui.generated.resources.core_search
+import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_playback
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -25,9 +29,11 @@ class SettingsSearchMatcherTest {
     ): ResolvedSettingsItem = ResolvedSettingsItem(
         item = SettingsSearchItem(
             id = id,
-            titleRes = 0,
-            subtitleRes = 0,
-            categoryRes = 0,
+            // Real StringResource values from this module's own Res — never
+            // resolved here (matching runs on the plain strings below).
+            titleRes = Res.string.core_search,
+            subtitleRes = Res.string.core_loading,
+            categoryRes = Res.string.ss_cat_playback,
             keywords = keywords,
             route = com.raulshma.jellyplay.core.ui.navigation.Route.Settings,
             icon = mockIcon,

@@ -118,7 +118,7 @@ android {
 
 // AboutLibraries — collect the full runtime dependency graph (this is the only
 // module that aggregates every :core:* and :feature:* project) and export the
-// SPDX license metadata into assets. Parsed at runtime by :feature:settings.
+// SPDX license metadata into assets. Parsed at runtime by :shared:feature:settings.
 // phoneRelease is the canonical list; the TV flavor adds no new dependencies.
 aboutLibraries {
     collect { includePlatform = false }
@@ -178,7 +178,7 @@ dependencies {
     implementation(project(":feature:player:core"))
     implementation(project(":feature:player:audio"))
     implementation(project(":feature:player:live"))
-    implementation(project(":feature:settings"))
+    implementation(project(":shared:feature:settings"))
     implementation(project(":shared:feature:music"))
     implementation(project(":shared:feature:livetv"))
     implementation(project(":shared:feature:downloads"))

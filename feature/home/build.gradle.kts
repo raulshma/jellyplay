@@ -63,6 +63,11 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
     testImplementation(project(":core:testing"))
+    // Test-only: the fake SettingsSearchProvider fixture names core:ui's public
+    // Res StringResource accessors; shared/core:ui scopes compose-resources as
+    // `implementation`, so the type needs to be on this module's own test
+    // classpath to compile.
+    testImplementation(libs.jb.compose.resources)
     // Test-only: HomeViewModelTest builds a real HomeSession (the shared
     // identity detector), whose constructor consumes JellyfinApiClient — a
     // core:network type core:data exposes only as `implementation`, so this

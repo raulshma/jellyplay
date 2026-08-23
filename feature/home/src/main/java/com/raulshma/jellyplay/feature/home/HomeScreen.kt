@@ -44,7 +44,6 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -52,7 +51,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import android.content.Context
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import com.composables.icons.tabler.Tabler
@@ -885,7 +883,7 @@ private fun HomeTopDockScrim(
     hideTopHeaderOnScroll: Boolean,
     currentUser: com.raulshma.jellyplay.core.model.UserInfo?,
     currentServerUsers: List<com.raulshma.jellyplay.core.model.UserInfo>,
-    settingsSearch: (Flow<String>, Context) -> Flow<List<ResolvedSettingsItem>>,
+    settingsSearch: (Flow<String>) -> Flow<List<ResolvedSettingsItem>>,
     onUserSwitch: (String) -> Unit,
     onModeChange: (HomeMode) -> Unit,
     onSearchExpanded: (Boolean) -> Unit,
@@ -909,15 +907,14 @@ private fun HomeTopDockScrim(
     val query by searchQuery.collectAsStateWithLifecycle()
 
     // Local settings search also lives in this leaf: it is pure-local and
-    // needs an Android Context to resolve the catalog's @StringRes ids, so the
-    // flow is built from the VM-exposed seam (which injects the settings
-    // catalog through core/ui's SettingsSearchProvider). Gated by the
-    // Appearance toggle — when off, an empty flow keeps the slot idle while
-    // preserving the (empty) settings row.
-    val settingsContext = LocalContext.current
-    val settingsResults by remember(includeSettingsResults, settingsContext, settingsSearch) {
+    // resolves the catalog's Compose-Resources strings itself, so the flow is
+    // built from the VM-exposed seam (which injects the settings catalog
+    // through core/ui's SettingsSearchProvider). Gated by the Appearance
+    // toggle — when off, an empty flow keeps the slot idle while preserving
+    // the (empty) settings row.
+    val settingsResults by remember(includeSettingsResults, settingsSearch) {
         if (includeSettingsResults) {
-            settingsSearch(searchQuery, settingsContext)
+            settingsSearch(searchQuery)
         } else {
             kotlinx.coroutines.flow.flowOf(emptyList())
         }

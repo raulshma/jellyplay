@@ -103,6 +103,10 @@ jb-compose-foundation = { group = "org.jetbrains.compose.foundation", name = "fo
 jb-compose-animation = { group = "org.jetbrains.compose.animation", name = "animation", version.ref = "composeMultiplatform" }
 jb-compose-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version.ref = "composeMultiplatformMaterial3" }
 jb-compose-saveable = { group = "org.jetbrains.compose.runtime", name = "runtime-saveable", version.ref = "composeMultiplatform" }
+# Compose-Resources runtime (StringResource/getString). Shared KMP modules get
+# it via `compose.components.resources`; this alias is for legacy AGP modules
+# whose tests name the type against shared/core:ui's public Res accessors.
+jb-compose-resources = { group = "org.jetbrains.compose.components", name = "components-resources", version.ref = "composeMultiplatform" }
 compose-runtime = { group = "androidx.compose.runtime", name = "runtime" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }
 compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
