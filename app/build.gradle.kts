@@ -181,7 +181,7 @@ dependencies {
     implementation(project(":feature:downloads"))
     implementation(project(":feature:settings"))
     implementation(project(":shared:feature:music"))
-    implementation(project(":feature:livetv"))
+    implementation(project(":shared:feature:livetv"))
     implementation(project(":feature:syncplay"))
     implementation(project(":feature:subtitle-tester"))
     implementation(project(":feature:editor"))

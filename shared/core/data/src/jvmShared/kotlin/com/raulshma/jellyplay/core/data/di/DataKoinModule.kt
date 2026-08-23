@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioCachePolicyGuard
 import com.raulshma.jellyplay.core.data.playback.DownloadConcurrencyLimiter
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
+import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.data.remote.UiRemoteControlDispatcher
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
@@ -230,6 +231,14 @@ val dataJvmModule: Module = module {
     single { PlayerLifecycleManager(get()) }
 
     single { QueuePersistenceHelper(get()) }
+
+    // V3 livetv conveyor: the mini-player holder moved from the legacy
+    // :core:data shim (one framework per type — @Singleton/@Inject stripped at
+    // the move). Legacy Hilt injectors (app FloatingPlayerState,
+    // feature:player:video VideoPlayerViewModel) reach this single through the
+    // DataModule koin().get() bridge; livetv's ChannelsViewModel resolves it
+    // directly from here.
+    single { VideoMiniPlayerState() }
 
     single {
         AudioCachePolicyGuard(

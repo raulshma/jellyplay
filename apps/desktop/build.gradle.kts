@@ -38,6 +38,11 @@ dependencies {
     // AudioQueueFacade defs that arrive with the desktop player slice).
     implementation(project(":shared:feature:music"))
 
+    // …livetv, fourth conveyor item (DI registration only — documented-latent:
+    // VM deps like mediaRepository have no desktop defs yet, resolution is
+    // lazy so boot stays safe).
+    implementation(project(":shared:feature:livetv"))
+
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
     implementation(libs.jna)

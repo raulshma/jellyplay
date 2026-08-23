@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.feature.library.di.desktopPhotoExportModule
 import com.raulshma.jellyplay.feature.library.di.libraryModule
 import com.raulshma.jellyplay.feature.music.di.musicModule
 import com.raulshma.jellyplay.feature.music.feedback.desktopMusicMessageBusModule
+import com.raulshma.jellyplay.feature.livetv.di.liveTvModule
 import org.koin.core.context.startKoin
 
 fun main() {
@@ -56,6 +57,11 @@ fun main() {
             // resolve lazily, desktop only needs the (no-op) message-bus actual.
             musicModule,
             desktopMusicMessageBusModule(),
+            // …livetv, fourth conveyor item — documented-latent: VM deps like
+            // mediaRepository (Hilt interop) have no desktop definitions yet,
+            // but resolution is lazy so boot stays safe (same inert-module
+            // pattern; the desktop LiveTvMessenger actual returns null).
+            liveTvModule,
         )
     }
 

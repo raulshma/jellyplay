@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.feature.search.di.searchModule
 import com.raulshma.jellyplay.feature.library.di.androidPhotoExportModule
 import com.raulshma.jellyplay.feature.library.di.libraryModule
 import com.raulshma.jellyplay.feature.music.di.musicModule
+import com.raulshma.jellyplay.feature.livetv.di.liveTvModule
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
@@ -132,6 +133,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 searchModule,
                 libraryModule,
                 musicModule,
+                liveTvModule,
                 // MediaStore/FileProvider photo-export actual for the library
                 // feature's PhotoExport seam (androidDataModule pattern).
                 androidPhotoExportModule(this@JellyPlayApplication),
