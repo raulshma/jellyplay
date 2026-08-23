@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.network.di.desktopNetworkModule
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
 import com.raulshma.jellyplay.desktop.player.desktopPlayerModule
+import com.raulshma.jellyplay.feature.search.di.searchModule
 import org.koin.core.context.startKoin
 
 fun main() {
@@ -40,6 +41,9 @@ fun main() {
             dataJvmModule,
             desktopDataModule(paths.dataDirNio),
             desktopPlayerModule,
+            // V3 feature conveyor: search (DI registration; the desktop nav
+            // wiring lands later in the conveyor).
+            searchModule,
         )
     }
 

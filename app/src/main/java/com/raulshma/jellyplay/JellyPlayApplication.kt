@@ -22,6 +22,8 @@ import com.raulshma.jellyplay.core.model.ImageCache
 import com.raulshma.jellyplay.core.network.di.androidNetworkModule
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
+import com.raulshma.jellyplay.di.hiltInteropModule
+import com.raulshma.jellyplay.feature.search.di.searchModule
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
@@ -120,6 +122,11 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 androidNetworkModule(this@JellyPlayApplication),
                 dataJvmModule,
                 androidDataModule(this@JellyPlayApplication),
+                // V3 feature conveyor: shared feature ViewModels. The interop
+                // bridge exposes the still-Hilt-owned data-layer types to the
+                // Koin graph until the Phase X DownloadRepository flip.
+                hiltInteropModule(this@JellyPlayApplication),
+                searchModule,
             )
         }
         super.onCreate()

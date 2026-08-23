@@ -8,4 +8,4 @@ import androidx.compose.runtime.Composable
  * shell handles Escape at the window level (plan §V1b).
  */
 @Composable
-internal expect fun JellyPlayBackHandler(enabled: Boolean, onBack: () -> Unit)
+expect fun JellyPlayBackHandler(enabled: Boolean, onBack: () -> Unit)

@@ -37,9 +37,10 @@ kotlin {
 
 // KMP migration shim (docs/kmp-migration-plan.md §Phase V1): everything portable
 // lives in :shared:core:ui; this module keeps only the Android-coupled halves —
-// biometric/WebView/LocaleApplier, KeyEvent D-pad input, the @StringRes Int label
+// biometric/WebView/LocaleApplier, the @StringRes Int label
 // tables, UiText/UserMessageBus, ContextExt, LocalNetworkAccess, the Dpad slider
-// pair — plus this module's strings.xml (legacy consumers still resolve
+// pair (the KeyEvent D-pad input cluster moved to shared at V3-search) — plus
+// this module's strings.xml (legacy consumers still resolve
 // com.raulshma.jellyplay.core.ui.R; dies at cutover §Phase X).
 dependencies {
     api(project(":shared:core:ui"))

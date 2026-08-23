@@ -26,6 +26,10 @@ dependencies {
     // MediaEngine contract for the desktop player engine (Phase V2).
     implementation(project(":shared:core:player-contract"))
 
+    // V3 feature conveyor: search (DI registration only for now — the nav
+    // graph wiring lands with the desktop search slice).
+    implementation(project(":shared:feature:search"))
+
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
     implementation(libs.jna)
