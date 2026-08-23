@@ -64,6 +64,9 @@ dependencies {
     implementation(libs.media3.cast)
     implementation(libs.media3.datasource)
     implementation(libs.media3.datasource.okhttp)
+    // StandaloneDatabaseProvider backs the video SimpleCache's index
+    // (VideoStreamCache), mirroring the audio cache in :core:data.
+    implementation(libs.media3.database)
     // FFmpeg software audio decoder for codecs the platform can't decode
     // (DTS, MLP/TrueHD, EAC3, etc.). DefaultRenderersFactory loads it via
     // reflection when EXTENSION_RENDERER_MODE is ON (the default HW_PREFERRED
@@ -102,6 +105,7 @@ dependencies {
     testImplementation(testFixtures(project(":feature:player:core")))
     // Shared stubMediaSessionPlayer() helper for the MediaSession tests here.
     testImplementation(testFixtures(project(":core:data")))
+
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.compose.bom))

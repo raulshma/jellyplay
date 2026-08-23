@@ -187,7 +187,6 @@ class VideoPlayerViewModelTest {
             castManager = castManager,
             jellyfinRemotePlayCastStrategy = jellyfinRemotePlayCastStrategy,
             syncPlayManager = syncPlayManager,
-            okHttpClient = okHttpClient,
             adaptiveBitrateManager = adaptiveBitrateManager,
             networkMonitor = networkMonitor,
             activePlayerController = activePlayerController,
@@ -338,8 +337,8 @@ class VideoPlayerViewModelTest {
     fun startHoldSpeed_activatesAndStoresHoldMultiplier() {
         viewModel.setPlaybackSpeed(1.0f)
         viewModel.startHoldSpeed()
-        assertTrue(viewModel.uiState.value.isHoldSpeedActive)
-        assertEquals(viewModel.uiState.value.holdSpeedMultiplier, viewModel.uiState.value.playbackSpeed, 0.001f)
+        assertTrue(viewModel.uiState.value.gestures.isHoldSpeedActive)
+        assertEquals(viewModel.uiState.value.gestures.holdSpeedMultiplier, viewModel.uiState.value.playbackSpeed, 0.001f)
     }
 
     @Test
@@ -347,7 +346,7 @@ class VideoPlayerViewModelTest {
         viewModel.startHoldSpeed()
         val first = viewModel.uiState.value.playbackSpeed
         viewModel.startHoldSpeed()
-        assertTrue(viewModel.uiState.value.isHoldSpeedActive)
+        assertTrue(viewModel.uiState.value.gestures.isHoldSpeedActive)
         assertEquals(first, viewModel.uiState.value.playbackSpeed, 0.001f)
     }
 
@@ -355,29 +354,29 @@ class VideoPlayerViewModelTest {
     fun stopHoldSpeed_restoresPreviousSpeed() {
         viewModel.setPlaybackSpeed(1.25f)
         viewModel.startHoldSpeed()
-        assertTrue(viewModel.uiState.value.isHoldSpeedActive)
+        assertTrue(viewModel.uiState.value.gestures.isHoldSpeedActive)
 
         viewModel.stopHoldSpeed()
-        assertFalse(viewModel.uiState.value.isHoldSpeedActive)
+        assertFalse(viewModel.uiState.value.gestures.isHoldSpeedActive)
         assertEquals(1.25f, viewModel.uiState.value.playbackSpeed, 0.001f)
     }
 
     @Test
     fun stopHoldSpeed_whenNotActive_isNoOp() {
         viewModel.stopHoldSpeed()
-        assertFalse(viewModel.uiState.value.isHoldSpeedActive)
+        assertFalse(viewModel.uiState.value.gestures.isHoldSpeedActive)
     }
 
     @Test
     fun setAspectRatio_updatesStateExplicitRatio() {
         viewModel.setAspectRatio(AspectRatio.RATIO_21_9)
-        assertEquals(AspectRatio.RATIO_21_9, viewModel.uiState.value.aspectRatio)
+        assertEquals(AspectRatio.RATIO_21_9, viewModel.uiState.value.videoFx.aspectRatio)
     }
 
     @Test
     fun setAspectRatio_off_doesNotMutateDetected() {
         viewModel.setAspectRatio(AspectRatio.FIT)
-        assertEquals(AspectRatio.FIT, viewModel.uiState.value.aspectRatio)
+        assertEquals(AspectRatio.FIT, viewModel.uiState.value.videoFx.aspectRatio)
     }
 
     @Test
@@ -397,30 +396,30 @@ class VideoPlayerViewModelTest {
 
     @Test
     fun toggleNightMode_flipsEnabled() {
-        val before = viewModel.effectsState.value.nightModeEnabled
-        viewModel.toggleNightMode()
-        assertEquals(!before, viewModel.effectsState.value.nightModeEnabled)
+        val before = viewModel.effects.state.value.nightModeEnabled
+        viewModel.effects.toggleNightMode()
+        assertEquals(!before, viewModel.effects.state.value.nightModeEnabled)
     }
 
     @Test
     fun setNightModeStrength_updatesState() {
-        viewModel.setNightModeStrength(EffectStrength.HIGH)
-        assertEquals(EffectStrength.HIGH, viewModel.effectsState.value.nightModeStrength)
+        viewModel.effects.setNightModeStrength(EffectStrength.HIGH)
+        assertEquals(EffectStrength.HIGH, viewModel.effects.state.value.nightModeStrength)
     }
 
     @Test
     fun setPlaybackMode_updatesState() {
-        val target = if (viewModel.uiState.value.playbackMode == PlaybackMode.FORCE_TRANSCODE)
+        val target = if (viewModel.uiState.value.uiPrefs.playbackMode == PlaybackMode.FORCE_TRANSCODE)
             PlaybackMode.FORCE_DIRECT_PLAY else PlaybackMode.FORCE_TRANSCODE
         viewModel.setPlaybackMode(target)
-        assertEquals(target, viewModel.uiState.value.playbackMode)
+        assertEquals(target, viewModel.uiState.value.uiPrefs.playbackMode)
     }
 
     @Test
     fun toggleVideoStats_flipsEnabled() {
-        val before = viewModel.uiState.value.showVideoStats
+        val before = viewModel.uiState.value.uiPrefs.showVideoStats
         viewModel.toggleVideoStats()
-        assertEquals(!before, viewModel.uiState.value.showVideoStats)
+        assertEquals(!before, viewModel.uiState.value.uiPrefs.showVideoStats)
     }
 
     @Test
@@ -435,9 +434,15 @@ class VideoPlayerViewModelTest {
     }
 
     private fun callGetReportPositionMs(): Long {
-        val fn = VideoPlayerViewModel::class.java.getDeclaredMethod("getReportPositionMs")
+        // getReportPositionMs moved into PlaybackSession at B3 (seek latches
+        // + engine position are session-owned); reach it through the VM's
+        // private session field.
+        val sessionField = VideoPlayerViewModel::class.java.getDeclaredField("playbackSession")
+        sessionField.isAccessible = true
+        val session = sessionField.get(viewModel)
+        val fn = session.javaClass.getDeclaredMethod("getReportPositionMs")
         fn.isAccessible = true
-        return fn.invoke(viewModel) as Long
+        return fn.invoke(session) as Long
     }
 
     // ── Offline resume position resolution ────────────────────────────

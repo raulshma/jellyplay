@@ -1,38 +1,41 @@
 package com.raulshma.jellyplay.core.data.seerr
 
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaRequest
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
+import com.raulshma.jellyplay.core.model.seerr.SeerrKeyword
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
 
 class SeerrRequestStateHolderTest {
 
     private val delegate: SeerrRequestDelegate = mockk(relaxed = true)
 
-    @Before
-    fun setUpDispatcher() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
-    }
-
     private fun holder(scope: CoroutineScope): SeerrRequestStateHolder =
         SeerrRequestStateHolder(scope, delegate)
+
+    /** The holder's only state interface — read the current combined snapshot. */
+    private suspend fun SeerrRequestStateHolder.snap(): SeerrRequestSnapshot =
+        snapshot.first()
 
     // region requestMedia
     @Test
@@ -44,7 +47,7 @@ class SeerrRequestStateHolderTest {
         h.requestMedia(SeerrSearchItem(id = 1, mediaType = "movie"))
         advanceUntilIdle()
 
-        val result = h.requestResult.value
+        val result = h.snap().requestResult
         assertNotNull(result)
         assertEquals(true, result!!.success)
         assertFalse(result.isLoading)
@@ -60,7 +63,7 @@ class SeerrRequestStateHolderTest {
         h.requestMedia(SeerrSearchItem(id = 1, mediaType = "movie"))
         advanceUntilIdle()
 
-        val result = h.requestResult.value!!
+        val result = h.snap().requestResult!!
         assertNull(result.success)
         assertEquals("nope", result.error)
     }
@@ -74,7 +77,7 @@ class SeerrRequestStateHolderTest {
         h.requestMedia(SeerrSearchItem(id = 1, mediaType = "movie"))
         advanceUntilIdle()
 
-        assertEquals("Request failed", h.requestResult.value!!.error)
+        assertEquals("Request failed", h.snap().requestResult!!.error)
     }
 
     @Test
@@ -100,27 +103,83 @@ class SeerrRequestStateHolderTest {
             )
         }
     }
-    // endregion
 
-    // region clearRequestResult / setRequestResult
     @Test
-    fun `clearRequestResult nulls out requestResult`() = runTest {
+    fun `requestMedia invokes onSuccess with the resolved request on success`() = runTest {
+        val resolved = SeerrMediaRequest(id = 7)
+        coEvery { delegate.requestMedia(any(), any(), any(), any(), any(), any(), any()) } returns
+            Result.success(resolved)
         val h = holder(this)
-        h.setRequestResult(SeerrRequestResult(success = true))
-        assertEquals(true, h.requestResult.value?.success)
 
-        h.clearRequestResult()
-        assertNull(h.requestResult.value)
+        var received: SeerrMediaRequest? = null
+        h.requestMedia(SeerrSearchItem(id = 1, mediaType = "movie")) { request -> received = request }
+        advanceUntilIdle()
+
+        // The hook receives the delegate-resolved request verbatim, and the
+        // terminal success result accompanies it (the holder sets the result
+        // before invoking the hook).
+        assertSame(resolved, received)
+        assertEquals(true, h.snap().requestResult?.success)
     }
 
     @Test
-    fun `setRequestResult replaces current value`() = runTest {
+    fun `requestMedia does not invoke onSuccess on failure`() = runTest {
+        coEvery { delegate.requestMedia(any(), any(), any(), any(), any(), any(), any()) } returns
+            Result.failure(RuntimeException("nope"))
         val h = holder(this)
-        h.setRequestResult(SeerrRequestResult(success = false, error = "e"))
-        h.setRequestResult(SeerrRequestResult(success = true))
 
-        assertEquals(true, h.requestResult.value?.success)
-        assertNull(h.requestResult.value?.error)
+        var invoked = false
+        h.requestMedia(SeerrSearchItem(id = 1, mediaType = "movie"), onSuccess = { invoked = true })
+        advanceUntilIdle()
+
+        assertFalse(invoked)
+        assertEquals("nope", h.snap().requestResult?.error)
+    }
+    // endregion
+
+    // region snapshotIn
+    @Test
+    fun `snapshotIn seeds with the empty snapshot then reflects holder updates`() = runTest {
+        val h = holder(this)
+        val flow = h.snapshotIn(backgroundScope)
+        assertEquals(SeerrRequestSnapshot(), flow.value)
+
+        // Warm the WhileSubscribed sharing so upstream ticks propagate;
+        // UNDISPATCHED makes the subscription itself synchronous.
+        backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            flow.collect { /* keep subscribed */ }
+        }
+        coEvery { delegate.fetchServiceDetails("movie") } returns
+            SeerrServiceDetailsResult(radarrServers = listOf(SeerrRadarrServiceDetail(id = 1, name = "R")))
+
+        h.loadServiceDetails("movie")
+
+        // Await propagation through the stateIn hop instead of asserting
+        // `.value` straight after `advanceUntilIdle`: the sharing's emission
+        // can sit in the task queue and only run while the test body is
+        // suspended. `first {}` suspends (driving the scheduler) until the
+        // update lands, in both regimes.
+        val final = flow.first { it.radarrServers.isNotEmpty() }
+        advanceUntilIdle()
+
+        assertEquals(1, final.radarrServers.single().id)
+        assertFalse(final.isLoadingServices)
+        assertFalse(flow.value.isLoadingServices)
+    }
+    // endregion
+
+    // region clearRequestResult
+    @Test
+    fun `clearRequestResult nulls out requestResult`() = runTest {
+        coEvery { delegate.requestMedia(any(), any(), any(), any(), any(), any(), any()) } returns
+            Result.success(mockk(relaxed = true))
+        val h = holder(this)
+        h.requestMedia(SeerrSearchItem(id = 1, mediaType = "movie"))
+        advanceUntilIdle()
+        assertEquals(true, h.snap().requestResult?.success)
+
+        h.clearRequestResult()
+        assertNull(h.snap().requestResult)
     }
     // endregion
 
@@ -135,9 +194,10 @@ class SeerrRequestStateHolderTest {
         h.loadServiceDetails("movie")
         advanceUntilIdle()
 
-        assertEquals(radarr, h.radarrServers.value)
-        assertTrue(h.sonarrServers.value.isEmpty())
-        assertFalse(h.isLoadingServices.value)
+        val snap = h.snap()
+        assertEquals(radarr, snap.radarrServers)
+        assertTrue(snap.sonarrServers.isEmpty())
+        assertFalse(snap.isLoadingServices)
     }
 
     @Test
@@ -150,9 +210,10 @@ class SeerrRequestStateHolderTest {
         h.loadServiceDetails("tv")
         advanceUntilIdle()
 
-        assertEquals(sonarr, h.sonarrServers.value)
-        assertTrue(h.radarrServers.value.isEmpty())
-        assertFalse(h.isLoadingServices.value)
+        val snap = h.snap()
+        assertEquals(sonarr, snap.sonarrServers)
+        assertTrue(snap.radarrServers.isEmpty())
+        assertFalse(snap.isLoadingServices)
     }
 
     @Test
@@ -165,37 +226,56 @@ class SeerrRequestStateHolderTest {
         h.loadServiceDetails("movie")
         advanceUntilIdle()
 
-        assertEquals(radarr, h.radarrServers.value)
-        assertFalse(h.isLoadingServices.value)
+        assertEquals(radarr, h.snap().radarrServers)
+        assertFalse(h.snap().isLoadingServices)
     }
     // endregion
 
     // region loadTvSeasons
     @Test
     fun `loadTvSeasons populates tvSeasons`() = runTest {
-        val seasons = listOf(SeerrSeason(seasonNumber = 1, name = "S1"))
-        coEvery { delegate.fetchTvSeasons(5) } returns seasons
+        coEvery { delegate.fetchTvDetails(5) } returns SeerrTvDetails(
+            seasons = listOf(SeerrSeason(seasonNumber = 1, name = "S1")),
+        )
         val h = holder(this)
 
         h.loadTvSeasons(5)
         advanceUntilIdle()
 
-        assertEquals(seasons, h.tvSeasons.value)
+        val snap = h.snap()
+        assertEquals(listOf(SeerrSeason(seasonNumber = 1, name = "S1")), snap.tvSeasons)
+        assertFalse(snap.tvIsAnime)
+    }
+
+    @Test
+    fun `loadTvSeasons flags anime via tmdb keyword`() = runTest {
+        coEvery { delegate.fetchTvDetails(5) } returns SeerrTvDetails(
+            seasons = listOf(SeerrSeason(seasonNumber = 1, name = "S1")),
+            keywords = listOf(SeerrKeyword(id = 210024, name = "anime")),
+        )
+        val h = holder(this)
+
+        h.loadTvSeasons(5)
+        advanceUntilIdle()
+
+        assertTrue(h.snap().tvIsAnime)
     }
 
     @Test
     fun `loadTvSeasons resets to empty before fetching`() = runTest {
         val h = holder(this)
-        coEvery { delegate.fetchTvSeasons(5) } returns listOf(SeerrSeason(seasonNumber = 1, name = "S1"))
+        coEvery { delegate.fetchTvDetails(5) } returns SeerrTvDetails(
+            seasons = listOf(SeerrSeason(seasonNumber = 1, name = "S1")),
+        )
         h.loadTvSeasons(5)
         advanceUntilIdle()
-        assertTrue(h.tvSeasons.value.isNotEmpty())
+        assertTrue(h.snap().tvSeasons.isNotEmpty())
 
-        coEvery { delegate.fetchTvSeasons(6) } returns emptyList()
+        coEvery { delegate.fetchTvDetails(6) } returns null
         h.loadTvSeasons(6)
         advanceUntilIdle()
 
-        assertTrue(h.tvSeasons.value.isEmpty())
+        assertTrue(h.snap().tvSeasons.isEmpty())
     }
     // endregion
 

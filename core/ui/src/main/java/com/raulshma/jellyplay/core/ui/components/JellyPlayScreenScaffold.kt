@@ -68,6 +68,13 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+private val SynthwaveBackgroundBrush = Brush.verticalGradient(
+    colors = listOf(
+        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_BACKGROUND,
+        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_BACKGROUND_END,
+    )
+)
+
 @Composable
 fun rememberScreenBackgroundColor(
     artworkColor: Color? = null,
@@ -142,14 +149,7 @@ fun JellyPlayScreenScaffold(
 
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
     val backgroundModifier = if (themeVariant == com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE) {
-        Modifier.background(
-            Brush.verticalGradient(
-                colors = listOf(
-                    com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_BACKGROUND,
-                    com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_BACKGROUND_END,
-                )
-            )
-        )
+        Modifier.background(SynthwaveBackgroundBrush)
     } else {
         Modifier.background(backgroundColor)
     }
@@ -306,8 +306,20 @@ fun ScreenEmptyState(
     actionLoading: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val isTv = LocalTvMode.current
+    val focusRequester = remember { FocusRequester() }
+    val hasAction = actionLabel != null && onAction != null
+    // On TV the empty state must hold focus, otherwise focus is orphaned and falls to the
+    // always-composed navigation drawer rail, which snaps open when it gains focus.
+    if (isTv) {
+        LaunchedEffect(Unit) { focusRequester.tryRequestFocus("screen_empty") }
+    }
     Box(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            // With an action button the button is the focus target; without one the Box itself
+            // becomes a focus sink so the screen always owns focus on TV.
+            .then(if (isTv && !hasAction) Modifier.focusRequester(focusRequester).focusable() else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -339,6 +351,7 @@ fun ScreenEmptyState(
                     onClick = onAction,
                     enabled = !actionLoading,
                     modifier = Modifier
+                        .then(if (isTv) Modifier.focusRequester(focusRequester) else Modifier)
                         .then(actionFocusState.focusModifier)
                         .tvFocusIndicator(actionFocusState, ShapeCache.smooth12),
                 ) {

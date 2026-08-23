@@ -19,13 +19,10 @@ import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.parseLanguageFromLabel
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
@@ -43,7 +40,7 @@ import org.videolan.libvlc.util.VLCVideoLayout
 class LibVlcPlayerEngine(
     private val context: Context,
     private val fontProvider: FontProvider,
-) : BasePlayerEngine() {
+) : ReloadablePlayerEngine(context) {
 
     companion object {
         private const val TAG = "LibVlcPlayerEngine"
@@ -58,7 +55,6 @@ class LibVlcPlayerEngine(
     override val displayName: String = PlayerType.LIBVLC.displayName
 
     private var libVLC: LibVLC? = null
-    val libVlc: LibVLC? get() = libVLC
     private var mediaPlayer: MediaPlayer? = null
     private var videoLayout: VLCVideoLayout? = null
     private var currentPlaybackRequest: PlaybackRequest? = null
@@ -127,7 +123,7 @@ class LibVlcPlayerEngine(
             }
             MediaPlayer.Event.EncounteredError -> {
                 _playbackState.value = EnginePlaybackState.ERROR
-                _errorFlow.tryEmit(EngineError.Unknown("VLC encountered an error during playback"))
+                _errorFlow.tryEmit(VlcErrorMapper.fromMessage("VLC encountered an error during playback"))
             }
         }
     }
@@ -441,9 +437,6 @@ class LibVlcPlayerEngine(
         // The value is stored and applied when the next load() is called.
     }
 
-    @Volatile
-    private var lastUnmuteVolume: Float = 1f
-
     override val volume: Float
         get() = try {
             (mediaPlayer?.volume ?: 100).coerceIn(0, 200) / 100f
@@ -480,24 +473,14 @@ class LibVlcPlayerEngine(
     }
 
     override fun setMuted(muted: Boolean) {
-        // libVLC 3.7.x MediaPlayer has no native mute API — emulate it via volume.
         try {
             val mp = mediaPlayer ?: return
             if (muted) {
-                // Snapshot the system STREAM_MUSIC level the user actually hears
-                // (set via gesture path / hardware keys, which bypass the engine
-                // API). Snapshotting mp.volume is wrong — it stays near 100 when
-                // volume was adjusted outside the engine, so unmute would
-                // restore full volume.
-                val sysVol = MediaStreamVolume.getNormalized(context)
-                if (sysVol > 0f) lastUnmuteVolume = sysVol
+                snapshotSystemVolumeForMute()
                 mp.volume = 0
                 MediaStreamVolume.setNormalized(context, 0f)
             } else {
-                // Restore the system stream to its pre-mute level and set VLC's
-                // software gain back to unity (100). Do NOT also scale mp.volume
-                // by the system level — that would double-attenuate.
-                val restored = lastUnmuteVolume.coerceIn(0.05f, 1f)
+                val restored = unmuteTarget()
                 mp.volume = 100
                 MediaStreamVolume.setNormalized(context, restored)
             }
@@ -574,76 +557,77 @@ class LibVlcPlayerEngine(
         val mp = mediaPlayer ?: return
         val vlc = libVLC ?: return
         val request = currentPlaybackRequest ?: return
-
-        val currentPositionMs = try { mp.time.coerceAtLeast(0L) } catch (_: Exception) { 0L }
-        val wasPlaying = try { mp.isPlaying } catch (_: Exception) { false }
-
-        try {
-            val media = buildMedia(
-                vlc = vlc,
-                request = request,
-                subtitleStyle = currentConfig.subtitleStyle,
-                startPositionMs = currentPositionMs,
-            )
-            if (hasRenderer) {
-                try { media.parse() } catch (_: Exception) {}
-            }
-            mp.media = media
-            media.release()
+        withPreservedPlayback { snap ->
+            rebuildMediaForReload(mp, vlc, request, snap)
             // Re-assert the subtitle delay after rebuilding the Media: the spu
             // delay is a player-level setting that may not survive the media
             // reassignment, so a saved correction would otherwise reset to zero
             // on a genuine style/font change. Delay-only changes never reach
             // this path (onConfigChanged routes them through setSpuDelay live).
             applySpuDelay(mp)
-            if (currentPositionMs > 0) {
-                pendingStartPositionMs = currentPositionMs
-                try { mp.time = currentPositionMs } catch (_: Exception) {}
-            }
-            if (wasPlaying) {
-                try { mp.play() } catch (_: Exception) {}
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to reload media for subtitle style change", e)
         }
     }
 
-    fun reloadForRenderer(renderer: Any?) {
+    internal fun reloadForRenderer(renderer: Any?) {
+        val item = renderer as? RendererItem
+        reloadForRendererInternal(item)
+    }
+
+    private fun reloadForRendererInternal(renderer: RendererItem?) {
         val mp = mediaPlayer ?: return
         val vlc = libVLC ?: return
         val request = currentPlaybackRequest ?: return
         try {
-            val item = renderer as? RendererItem
-            mp.setRenderer(item)
-            hasRenderer = item != null
-            pendingRendererItem = item
+            mp.setRenderer(renderer)
+            hasRenderer = renderer != null
+            pendingRendererItem = renderer
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set renderer", e)
         }
         if (!hasRenderer) return
+        withPreservedPlayback { snap ->
+            rebuildMediaForReload(mp, vlc, request, snap)
+        }
+    }
 
-        val currentPositionMs = try { mp.time.coerceAtLeast(0L) } catch (_: Exception) { 0L }
-        val wasPlaying = try { mp.isPlaying } catch (_: Exception) { false }
-
+    /**
+     * Shared media-rebuild core for reload paths. Builds a new [Media] from
+     * [request] at [snap.positionMs], parses it when a renderer is attached
+     * (required so the Cast session picks up the new item), assigns it to
+     * [mp] and seeks to the snapshot position. Play-state and speed are
+     * restored by the caller's [withPreservedPlayback] — not here — so the
+     * 5× duplication claimed in [ReloadablePlayerEngine]'s KDoc stays hoisted.
+     *
+     * Unification note: before the hoist, subtitle-style reload already parsed
+     * when `hasRenderer` was true and renderer reload always parsed; this
+     * helper keeps the conditional `hasRenderer` gate for both. Renderer reload
+     * previously did not restore speed; now both paths preserve it via
+     * [withPreservedPlayback] — intentional fix, not a silent delta.
+     */
+    private fun rebuildMediaForReload(
+        mp: MediaPlayer,
+        vlc: LibVLC,
+        request: PlaybackRequest,
+        snap: PlaybackSnapshot,
+    ) {
         try {
             val media = buildMedia(
                 vlc = vlc,
                 request = request,
                 subtitleStyle = currentConfig.subtitleStyle,
-                startPositionMs = currentPositionMs,
+                startPositionMs = snap.positionMs,
             )
-            try { media.parse() } catch (_: Exception) {}
+            if (hasRenderer) {
+                try { media.parse() } catch (_: Exception) {}
+            }
             mp.media = media
             media.release()
-            if (currentPositionMs > 0) {
-                pendingStartPositionMs = currentPositionMs
-                try { mp.time = currentPositionMs } catch (_: Exception) {}
-            }
-            if (wasPlaying) {
-                try { mp.play() } catch (_: Exception) {}
+            if (snap.positionMs > 0) {
+                pendingStartPositionMs = snap.positionMs
+                try { mp.time = snap.positionMs } catch (_: Exception) {}
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to reload media for renderer", e)
+            Log.w(TAG, "Failed to reload media", e)
         }
     }
 
@@ -770,8 +754,6 @@ class LibVlcPlayerEngine(
         } catch (_: Exception) {}
     }
 
-    val vlcMediaPlayer: MediaPlayer? get() = mediaPlayer
-
     /**
      * Start position requested for the current load, held until libvlc reports
      * a real position. `MediaPlayer.time` reads 0 until playback output begins
@@ -818,32 +800,19 @@ class LibVlcPlayerEngine(
         // helpers' `if (sid == UNSET) return` guard short-circuits cleanly.
         get() = 0
 
-    override val positionFlow: Flow<Long> = callbackFlow {
-        trySend(currentPositionMs)
-        // The polling loop (bounded paused-wait, play↔pause edge detection) is
-        // shared via [EnginePositionTicker]. Per-tick readbacks are wrapped in
-        // runCatching because currentPositionMs/durationMs touch the native
-        // mediaPlayer, which can throw if it is torn down concurrently.
-        val ticker = EnginePositionTicker(
-            scope = engineScope,
-            pollingIntervalMs = _pollingIntervalMs,
-            isPlayingFlow = _isPlaying,
-            isCurrentlyPlaying = { _isPlaying.value },
-            onActive = {
-                runCatching {
-                    trySend(currentPositionMs)
-                    _bufferedPositionMs.value = durationMs.coerceAtLeast(0L).let { dur ->
-                        if (dur > 0 && _bufferedPositionMs.value <= currentPositionMs) dur
-                        else _bufferedPositionMs.value
-                    }
-                    if (_videoStatsEnabled.value) {
-                        updateVideoStats()
-                    }
-                }
-            },
-        ).launch()
-        awaitClose { ticker.cancel() }
-    }.conflate() // only the most-recent position is meaningful; drop stale ticks
+    override val positionFlow: Flow<Long> = positionFlowWithTicker {
+        // Per-tick readbacks are wrapped in runCatching because currentPositionMs/durationMs
+        // touch the native mediaPlayer, which can throw if it is torn down concurrently.
+        runCatching {
+            _bufferedPositionMs.value = durationMs.coerceAtLeast(0L).let { dur ->
+                if (dur > 0 && _bufferedPositionMs.value <= currentPositionMs) dur
+                else _bufferedPositionMs.value
+            }
+            if (_videoStatsEnabled.value) {
+                updateVideoStats()
+            }
+        }
+    }
 
     private fun updateVideoStats() {
         val mp = mediaPlayer ?: return
@@ -862,10 +831,7 @@ class LibVlcPlayerEngine(
                 } catch (_: Exception) { null },
                 bufferedPositionMs = _bufferedPositionMs.value,
             )
-            val currentStats = _videoStats.value
-            if (newStats != currentStats) {
-                _videoStats.value = newStats
-            }
+            publishStatsIfChanged(newStats)
         } catch (_: Exception) {}
     }
 

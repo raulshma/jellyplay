@@ -35,6 +35,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 fun GlassDismissTag(
     label: String,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val focusState = rememberTvFocusState(focusedScale = 1.05f)
     val interactionSource = remember { MutableInteractionSource() }
@@ -61,7 +62,7 @@ fun GlassDismissTag(
     val iconTint = MaterialTheme.colorScheme.onSurfaceVariant
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale

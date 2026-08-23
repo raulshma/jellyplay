@@ -88,6 +88,9 @@ dependencies {
     testImplementation(libs.androidx.junit)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.okhttp.mockwebserver)
+    // Shared coroutine test rule (MainDispatcherRule) for the JVM holder
+    // suites — same dependency every feature module's tests already declare.
+    testImplementation(project(":core:testing"))
 
     // testFixtures dependencies: the shared stubMediaSessionPlayer() helper
     // builds a mockk<Player> against media3-common. AGP's testFixtures source

@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -30,6 +31,15 @@ data class PlaybackRequest(
     val maxVideoBitrate: Int? = null,
     val serverUrl: String? = null,
     val authToken: String? = null,
+    /**
+     * Server-resolved play method for [uri], when known. Engines use it to
+     * scope byte-level stream caching to content-stable URLs: only Direct
+     * Play / Direct Stream may hit the cache, while Transcode sessions (and
+     * HLS remux playlists served off session-keyed transcode URLs) would
+     * churn it. `null` when the caller performed no server resolution
+     * (offline files, local preview hosts) — treated as non-cacheable.
+     */
+    val playMethod: PlayMethod? = null,
     val minBufferMs: Int = 15_000,
     val maxBufferMs: Int = 50_000,
     /**

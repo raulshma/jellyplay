@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.SheetSection
@@ -419,7 +420,7 @@ private fun CustomSleepDurationDialog(
     var minutesText by remember { mutableStateOf("") }
     val parsed = minutesText.toIntOrNull()
     val isValid = parsed != null && parsed in 1..600
-    androidx.compose.material3.AlertDialog(
+    ImeAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.player_video_custom_duration)) },
         text = {

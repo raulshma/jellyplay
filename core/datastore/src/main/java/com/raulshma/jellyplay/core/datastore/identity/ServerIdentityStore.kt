@@ -88,6 +88,16 @@ class ServerIdentityStore @Inject constructor(
         }
     }
 
+    /**
+     * Active user id read straight from a [Preferences] snapshot — for callers
+     * already holding one, e.g. inside a `DataStore.edit` transform where
+     * collecting [activeUserId] would re-enter the DataStore. A blank id (or
+     * absence, pre-login) reads as null. In-module keying helper for per-user
+     * stores (e.g. `HomeDiscoveryStore`'s `u_<userId>::` namespace).
+     */
+    fun activeUserIdIn(prefs: Preferences): String? =
+        prefs[Keys.ACTIVE_USER_ID]?.takeIf { it.isNotBlank() }
+
     /** Drops the active server + user but keeps the device id and all prefs. */
     suspend fun clearSession() {
         dataStore.edit { prefs ->

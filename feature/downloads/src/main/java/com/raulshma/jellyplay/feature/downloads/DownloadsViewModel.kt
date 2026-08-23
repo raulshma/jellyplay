@@ -25,7 +25,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -85,11 +84,9 @@ class DownloadsViewModel @Inject constructor(
 
     init {
         launch {
+            // Change-filtering already lives in the repository (id order +
+            // per-item bytes/status), so only list-affecting changes land here.
             downloadRepository.getAllDownloads()
-                .distinctUntilChanged { old, new ->
-                    if (old.size != new.size) return@distinctUntilChanged false
-                    old.zip(new).all { (o, n) -> o.downloadedBytes == n.downloadedBytes && o.id == n.id && o.status == n.status }
-                }
                 .catch { e ->
                     _uiState.update {
                         it.copy(error = e.localizedMessage ?: "Failed to load downloads", isLoading = false)

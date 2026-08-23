@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
+import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import com.raulshma.jellyplay.core.network.RetryPolicy
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -26,8 +28,11 @@ class ResilientTmdbApiClient @Inject constructor(
             block = block,
         )
 
-    override suspend fun getVideos(tmdbId: Int, isMovie: Boolean): Result<List<SeerrRelatedVideo>> =
-        req { delegate.getVideos(tmdbId, isMovie) }
+    override suspend fun getVideos(tmdbId: Int, mediaType: MediaType): Result<List<SeerrRelatedVideo>> =
+        req { delegate.getVideos(tmdbId, mediaType) }
+
+    override suspend fun getReviews(tmdbId: Int, mediaType: MediaType): Result<List<TmdbReview>> =
+        req { delegate.getReviews(tmdbId, mediaType) }
 
     companion object {
         internal const val MAX_RETRIES = 4

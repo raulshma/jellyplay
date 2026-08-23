@@ -1,9 +1,9 @@
 package com.raulshma.jellyplay.core.data.syncplay
 
-import android.os.Build
 import android.util.Log
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.model.ConnectionCredentials
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
@@ -232,15 +232,14 @@ class SyncPlayManager @Inject constructor(
         val user = authRepository.currentUser.first() ?: return
         if (server.address.isNotBlank() && user.accessToken.isNotBlank()) {
             val deviceId = serverIdentityStore.ensureDeviceId()
-            val model = Build.MODEL.orEmpty().ifBlank { "Android" }
-            val name = user.name.orEmpty().take(20)
-            val deviceName = if (name.isNotBlank()) "JellyPlay on $model ($name)" else "JellyPlay on $model"
             webSocketClient.connect(
-                serverAddress = server.address,
-                accessToken = user.accessToken,
-                device = deviceId,
-                deviceName = deviceName.take(60),
-                client = "JellyPlay",
+                ConnectionCredentials(
+                    serverAddress = server.address,
+                    accessToken = user.accessToken,
+                    deviceId = deviceId,
+                    deviceName = ConnectionCredentials.deviceNameFor(user.name),
+                    clientName = "JellyPlay",
+                )
             )
         }
     }

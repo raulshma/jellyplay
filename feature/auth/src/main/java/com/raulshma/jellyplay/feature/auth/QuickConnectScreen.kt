@@ -35,9 +35,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
@@ -189,9 +189,9 @@ private fun WaitingForApprovalContent(
                 repeatMode = RepeatMode.Reverse,
             ),
             label = "pulse_alpha",
-        ).value
+        )
     } else {
-        1f
+        remember { mutableStateOf(1f) }
     }
 
     Column(
@@ -227,7 +227,7 @@ private fun WaitingForApprovalContent(
             color = MaterialTheme.colorScheme.primary,
             textAlign = TextAlign.Center,
             modifier = Modifier
-                .alpha(pulseAlpha)
+                .graphicsLayer { alpha = pulseAlpha.value }
                 .padding(horizontal = 16.dp),
         )
 

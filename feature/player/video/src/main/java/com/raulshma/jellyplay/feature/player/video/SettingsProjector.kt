@@ -73,50 +73,86 @@ internal class SettingsProjector(
             subtitleStyleChanged = true
         }
 
-        diff(agg.videoPlayer.videoShowPlaybackMetadata, VideoPlayerUiState::showPlaybackMetadata) {
-            it.copy(showPlaybackMetadata = agg.videoPlayer.videoShowPlaybackMetadata)
-        }
-        diff(agg.videoPlayer.showClockInPlayer, VideoPlayerUiState::showClock) {
-            it.copy(showClock = agg.videoPlayer.showClockInPlayer)
-        }
-        diff(agg.videoPlayer.showTimeRemaining, VideoPlayerUiState::showTimeRemaining) {
-            it.copy(showTimeRemaining = agg.videoPlayer.showTimeRemaining)
-        }
-        diff(agg.videoPlayer.tvZoomModePercent, VideoPlayerUiState::tvZoomModePercent) {
-            it.copy(tvZoomModePercent = agg.videoPlayer.tvZoomModePercent)
-        }
-        diff(agg.playback.keepScreenOnDuringVideo, VideoPlayerUiState::keepScreenOnDuringVideo) {
-            it.copy(keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo)
-        }
-        diff(agg.videoPlayer.videoPassOutProtectionHours, VideoPlayerUiState::passOutProtectionHours) {
-            it.copy(passOutProtectionHours = agg.videoPlayer.videoPassOutProtectionHours)
-        }
-        diff(agg.playback.autoPlayCountdownSec, VideoPlayerUiState::autoPlayCountdownSec) {
-            it.copy(autoPlayCountdownSec = agg.playback.autoPlayCountdownSec)
-        }
+        // Slice-aware distinct-until-changed guards. The former generic
+        // `diff` property-select helper cannot reach stored slice leaves
+        // (KProperty1<VideoPlayerUiState,*> does not traverse the slice),
+        // so each leaf uses a slice-scoped helper that preserves the
+        // single-copy guard without duplicating the if/update shape.
+        syncUiPref(
+            selector = { it.showPlaybackMetadata },
+            newValue = agg.videoPlayer.videoShowPlaybackMetadata,
+            updater = { prefs, v -> prefs.copy(showPlaybackMetadata = v) },
+        )
+        syncUiPref(
+            selector = { it.showClock },
+            newValue = agg.videoPlayer.showClockInPlayer,
+            updater = { prefs, v -> prefs.copy(showClock = v) },
+        )
+        syncUiPref(
+            selector = { it.showTimeRemaining },
+            newValue = agg.videoPlayer.showTimeRemaining,
+            updater = { prefs, v -> prefs.copy(showTimeRemaining = v) },
+        )
+        syncVideoFxPref(
+            selector = { it.tvZoomModePercent },
+            newValue = agg.videoPlayer.tvZoomModePercent,
+            updater = { fx, v -> fx.copy(tvZoomModePercent = v) },
+        )
+        syncUiPref(
+            selector = { it.keepScreenOnDuringVideo },
+            newValue = agg.playback.keepScreenOnDuringVideo,
+            updater = { prefs, v -> prefs.copy(keepScreenOnDuringVideo = v) },
+        )
+        syncUiPref(
+            selector = { it.passOutProtectionHours },
+            newValue = agg.videoPlayer.videoPassOutProtectionHours,
+            updater = { prefs, v -> prefs.copy(passOutProtectionHours = v) },
+        )
+        syncAutoplayPref(
+            selector = { it.autoPlayCountdownSec },
+            newValue = agg.playback.autoPlayCountdownSec,
+            updater = { ap, v -> ap.copy(autoPlayCountdownSec = v) },
+        )
 
-        // PIN lock: two uiState fields driven by one pref + one derived flag.
+        // PIN lock: two uiPrefs leaves driven by one pref + one derived flag.
         val hasPin = agg.security.pinHash != null
-        if (getUiState().usePinForPlayerLock != agg.security.usePinForPlayerLock || getUiState().hasPin != hasPin) {
-            updateUiState { it.copy(usePinForPlayerLock = agg.security.usePinForPlayerLock, hasPin = hasPin) }
+        if (getUiState().uiPrefs.usePinForPlayerLock != agg.security.usePinForPlayerLock || getUiState().uiPrefs.hasPin != hasPin) {
+            updateUiState { it.copy(uiPrefs = it.uiPrefs.copy(usePinForPlayerLock = agg.security.usePinForPlayerLock, hasPin = hasPin)) }
         }
 
         return subtitleStyleChanged
     }
 
-    /**
-     * Single-field diff helper: apply [copy] only when the current value of
-     * [selector] differs from [newValue]. Collapses the repeated 3-line
-     * `if (_uiState.value.X != prefs.X) _uiState.update { it.copy(…) }` pattern
-     * while keeping the distinct-until-changed guard per field.
-     */
-    private fun <T> diff(
+    private inline fun <T> syncUiPref(
+        selector: (com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState) -> T,
         newValue: T,
-        selector: kotlin.reflect.KProperty1<VideoPlayerUiState, T>,
-        copy: (VideoPlayerUiState) -> VideoPlayerUiState,
+        crossinline updater: (com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState, T) -> com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState,
     ) {
-        if (selector.get(getUiState()) != newValue) {
-            updateUiState(copy)
+        val current = selector(getUiState().uiPrefs)
+        if (current != newValue) {
+            updateUiState { it.copy(uiPrefs = updater(it.uiPrefs, newValue)) }
+        }
+    }
+
+    private inline fun <T> syncVideoFxPref(
+        selector: (com.raulshma.jellyplay.feature.player.video.state.VideoFxState) -> T,
+        newValue: T,
+        crossinline updater: (com.raulshma.jellyplay.feature.player.video.state.VideoFxState, T) -> com.raulshma.jellyplay.feature.player.video.state.VideoFxState,
+    ) {
+        val current = selector(getUiState().videoFx)
+        if (current != newValue) {
+            updateUiState { it.copy(videoFx = updater(it.videoFx, newValue)) }
+        }
+    }
+
+    private inline fun <T> syncAutoplayPref(
+        selector: (com.raulshma.jellyplay.feature.player.video.state.AutoplayState) -> T,
+        newValue: T,
+        crossinline updater: (com.raulshma.jellyplay.feature.player.video.state.AutoplayState, T) -> com.raulshma.jellyplay.feature.player.video.state.AutoplayState,
+    ) {
+        val current = selector(getUiState().autoplay)
+        if (current != newValue) {
+            updateUiState { it.copy(autoplay = updater(it.autoplay, newValue)) }
         }
     }
 }

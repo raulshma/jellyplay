@@ -51,12 +51,9 @@ fun WideMediaCard(
 ) {
     val isTv = LocalTvMode.current
     val dominantColor = rememberDominantColor(backdropUrl.ifBlank { imageUrl }, itemId = item.id)
-    // Memoize the progress fraction so it is recomputed only when the item's
-    // identity or its playback position/runtime ticks change (was recomputed
-    // on every recomposition of the card).
-    val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
-        item.progressFraction() ?: 0f
-    }
+    // Memoized on the item's identity and its playback position/runtime ticks
+    // (was recomputed on every recomposition of the card).
+    val progressPercent = item.rememberProgressFraction() ?: 0f
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
     MediaCardScaffold(
@@ -99,12 +96,17 @@ fun WideMediaCard(
             val isSeries = item.mediaType == MediaType.SERIES
             val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
             val hasWatchProgress = item.hasWatchProgress
-            val remainingTime = if (hasWatchProgress && hasValidDuration) {
-                formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
-            } else null
-            val totalTime = if (hasValidDuration && !hasWatchProgress) {
-                formatDurationFromTicks(item.runTimeTicks!!)
-            } else null
+            val remainingTime =
+                remember(hasValidDuration, hasWatchProgress, item.runTimeTicks, item.playbackPositionTicks) {
+                    if (hasWatchProgress && hasValidDuration) {
+                        formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
+                    } else null
+                }
+            val totalTime = remember(hasValidDuration, hasWatchProgress, item.runTimeTicks) {
+                if (hasValidDuration && !hasWatchProgress) {
+                    formatDurationFromTicks(item.runTimeTicks!!)
+                } else null
+            }
 
             val timeText = remainingTime ?: totalTime
 

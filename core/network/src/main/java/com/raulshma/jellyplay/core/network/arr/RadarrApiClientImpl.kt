@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.api.JsonRequestClient
 import com.raulshma.jellyplay.core.network.api.parseJsonRequest
+import com.raulshma.jellyplay.core.network.api.parseUnitRequest
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -130,7 +131,7 @@ class RadarrApiClientImpl @Inject constructor(
             .withApiKey(apiKey)
             .delete()
             .build()
-        return executeRequest(request).map { }
+        return parseUnitRequest(jsonRequestClient, request)
     }
 
     private suspend inline fun postEmpty(
@@ -144,7 +145,7 @@ class RadarrApiClientImpl @Inject constructor(
             .withApiKey(apiKey)
             .post(body)
             .build()
-        return executeRequest(request).map { }
+        return parseUnitRequest(jsonRequestClient, request)
     }
 
     override suspend fun getQueue(baseUrl: String, apiKey: String): Result<List<ArrQueueItem>> {
@@ -168,7 +169,7 @@ class RadarrApiClientImpl @Inject constructor(
     ): Result<Unit> {
         val url = buildUrl(baseUrl, "/queue/$id").newBuilder().withDeleteOptions(options).build()
         val request = Request.Builder().url(url).withApiKey(apiKey).delete().build()
-        return executeRequest(request).map { }
+        return parseUnitRequest(jsonRequestClient, request)
     }
 
     override suspend fun deleteQueueItems(
@@ -185,7 +186,7 @@ class RadarrApiClientImpl @Inject constructor(
             .withApiKey(apiKey)
             .delete(body.toRequestBody("application/json".toMediaType()))
             .build()
-        return executeRequest(request).map { }
+        return parseUnitRequest(jsonRequestClient, request)
     }
 
     override suspend fun grabQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
@@ -214,7 +215,7 @@ class RadarrApiClientImpl @Inject constructor(
             .withApiKey(apiKey)
             .post(rowList.toString().toRequestBody("application/json".toMediaType()))
             .build()
-        return executeRequest(postRequest).map { }
+        return parseUnitRequest(jsonRequestClient, postRequest)
     }
 
     override suspend fun getCalendar(
@@ -276,7 +277,7 @@ class RadarrApiClientImpl @Inject constructor(
             .withApiKey(apiKey)
             .delete(body.toRequestBody("application/json".toMediaType()))
             .build()
-        return executeRequest(request).map { }
+        return parseUnitRequest(jsonRequestClient, request)
     }
 
     override suspend fun getWanted(
@@ -364,7 +365,7 @@ class RadarrApiClientImpl @Inject constructor(
             .withApiKey(apiKey)
             .put(body.toRequestBody("application/json".toMediaType()))
             .build()
-        return executeRequest(request).map { }
+        return parseUnitRequest(jsonRequestClient, request)
     }
 
     override suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit> {
@@ -373,7 +374,7 @@ class RadarrApiClientImpl @Inject constructor(
             .withApiKey(apiKey)
             .get()
             .build()
-        return executeRequest(request).map { }
+        return parseUnitRequest(jsonRequestClient, request)
     }
 
     // ── Radarr v3 DTOs (private; mapped to core/model types) ───────────────

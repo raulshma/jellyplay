@@ -109,7 +109,7 @@ class DownloadRepositoryImplResumeTest {
         repository().resumeInterruptedDownloads()
 
         // No progress reset, no enqueue — the user must resume it manually.
-        coVerify(exactly = 0) { downloadDao.updateProgress(any(), any(), any()) }
+        coVerify(exactly = 0) { downloadDao.updateProgressWithPausedReason(any(), any(), any(), any()) }
     }
 
     @Test
@@ -120,8 +120,7 @@ class DownloadRepositoryImplResumeTest {
 
         repository().resumeInterruptedDownloads()
 
-        coVerify { downloadDao.updateProgress("dl-2", 500L, DownloadStatus.PENDING.name) }
-        coVerify { downloadDao.updatePausedReason("dl-2", null) }
+        coVerify { downloadDao.updateProgressWithPausedReason("dl-2", 500L, DownloadStatus.PENDING.name, null) }
     }
 
     @Test
@@ -135,8 +134,8 @@ class DownloadRepositoryImplResumeTest {
 
         repository().resumeInterruptedDownloads()
 
-        coVerify { downloadDao.updateProgress("dl-3", 0L, DownloadStatus.PENDING.name) }
-        coVerify(exactly = 0) { downloadDao.updateProgress("dl-3", 800L, any()) }
+        coVerify { downloadDao.updateProgressWithPausedReason("dl-3", 0L, DownloadStatus.PENDING.name, null) }
+        coVerify(exactly = 0) { downloadDao.updateProgressWithPausedReason("dl-3", 800L, any(), any()) }
     }
 
     @Test
@@ -148,7 +147,7 @@ class DownloadRepositoryImplResumeTest {
         repository().resumeInterruptedDownloads()
 
         // Left FAILED for a manual retry — no auto-resume this pass.
-        coVerify(exactly = 0) { downloadDao.updateProgress(any(), any(), any()) }
+        coVerify(exactly = 0) { downloadDao.updateProgressWithPausedReason(any(), any(), any(), any()) }
     }
 
     @Test
@@ -160,11 +159,11 @@ class DownloadRepositoryImplResumeTest {
         // The bad row's reset throws (e.g. a DB transient); the good row must
         // still be processed so one failure can't strand every interrupted
         // download until the next reconnect.
-        coEvery { downloadDao.updateProgress("dl-bad", any(), any()) } throws RuntimeException("db transient")
+        coEvery { downloadDao.updateProgressWithPausedReason("dl-bad", any(), any(), any()) } throws RuntimeException("db transient")
 
         repository().resumeInterruptedDownloads()
 
-        coVerify { downloadDao.updateProgress("dl-good", 200L, DownloadStatus.PENDING.name) }
+        coVerify { downloadDao.updateProgressWithPausedReason("dl-good", 200L, DownloadStatus.PENDING.name, null) }
     }
 
     private fun row(

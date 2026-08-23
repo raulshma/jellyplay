@@ -151,19 +151,6 @@ import com.raulshma.jellyplay.core.ui.tv.TvScaffold
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
 import com.raulshma.jellyplay.core.ui.tv.isTv
-import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
-import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.key
-
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.KeyEventType
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.admin.navigation.adminSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection
@@ -188,6 +175,9 @@ import com.raulshma.jellyplay.feature.calendar.navigation.calendarSection
 import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
 import com.raulshma.jellyplay.feature.subtitle.tester.navigation.subtitleTesterSection
 import com.raulshma.jellyplay.update.AppUpdateSheet
+import com.raulshma.jellyplay.shell.ShellInfra
+import com.raulshma.jellyplay.shell.SyncPlayOpenRequest
+import com.raulshma.jellyplay.shell.UpdateCoordinator
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -197,9 +187,11 @@ private const val ExitConfirmationTimeoutMs = 2000L
 @Composable
 fun JellyPlayApp(
     viewModel: MainViewModel,
+    infra: ShellInfra,
 ) {
-    val isRestoring by viewModel.isRestoring.collectAsStateWithLifecycle()
-    val isAuthenticated by viewModel.isAuthenticated.collectAsStateWithLifecycle()
+    val session = viewModel.sessionCoordinator
+    val isRestoring by session.isRestoring.collectAsStateWithLifecycle()
+    val isAuthenticated by session.isAuthenticated.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
@@ -207,94 +199,99 @@ fun JellyPlayApp(
 
     LaunchedEffect(Unit) {
         if (isTv && isAuthenticated && !preferences.onboardingCompleted) {
-            viewModel.appRuntimeStateStore.setOnboardingCompleted(true)
+            viewModel.markOnboardingCompleted()
         }
     }
 
-    when {
-        isRestoring -> {}
-        isAuthenticated && !preferences.onboardingCompleted && !isTv -> {
-            OnboardingContent(
-                onComplete = {},
-                viewModel = viewModel,
-            )
-        }
-        isAuthenticated -> {
-            // "Surprise Me" launcher-shortcut controller. Built
-            // once so the StateFlow reference is stable across recompositions.
-            val surpriseController = remember(viewModel) {
-                com.raulshma.jellyplay.core.ui.components.SurpriseLaunchController(
-                    armed = viewModel.surpriseOnLaunch,
-                    consume = { viewModel.consumeSurpriseOnLaunch() },
-                )
-            }
-            CompositionLocalProvider(
-                com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides viewModel.networkMonitor.networkStatus,
-                com.raulshma.jellyplay.core.ui.components.LocalServerHealth provides viewModel.serverHealth,
-                com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch provides surpriseController,
-            ) {
-                MainContent(
-                    onLogout = { revoke ->
-                        if (revoke) {
-                            viewModel.revokeServerSession()
-                        } else {
-                            viewModel.logout()
-                        }
-                    },
+    CompositionLocalProvider(LocalUserMessageBus provides infra.userMessageBus) {
+        when {
+            isRestoring -> {}
+            isAuthenticated && !preferences.onboardingCompleted && !isTv -> {
+                OnboardingContent(
+                    onComplete = {},
                     viewModel = viewModel,
-                    preferences = preferences,
+                )
+            }
+            isAuthenticated -> {
+                // "Surprise Me" launcher-shortcut controller. Built
+                // once so the StateFlow reference is stable across recompositions.
+                val surpriseController = remember(viewModel) {
+                    com.raulshma.jellyplay.core.ui.components.SurpriseLaunchController(
+                        armed = viewModel.surpriseOnLaunch,
+                        consume = { viewModel.consumeSurpriseOnLaunch() },
+                    )
+                }
+                CompositionLocalProvider(
+                    com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides infra.networkStatus,
+                    com.raulshma.jellyplay.core.ui.components.LocalServerHealth provides session.serverHealth,
+                    com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch provides surpriseController,
+                ) {
+                    MainContent(
+                        onLogout = { revoke ->
+                            if (revoke) {
+                                session.revokeServerSession()
+                            } else {
+                                session.logout()
+                            }
+                        },
+                        viewModel = viewModel,
+                        preferences = preferences,
+                        infra = infra,
+                        // Resolved here — the authenticated branch only — so the
+                        // playback engine stays unbuilt for auth/onboarding
+                        // sessions; collecting it anywhere earlier would defeat
+                        // the dagger.Lazy.
+                        audioPlaybackManager = infra.audioPlaybackManagerLazy.get(),
+                    )
+                }
+            }
+            else -> {
+                AuthContent(
+                    onAuthenticated = {},
                 )
             }
         }
-        else -> {
-            AuthContent(
-                onAuthenticated = {},
-            )
-        }
-    }
 
-    // In-app self-update sheet. Rendered at the root so it overlays every
-    // screen (auth, onboarding, main). Stays hidden while Idle; the launch-time
-    // check in MainViewModel flips it to UpdateAvailable when a newer build
-    // exists. Keep this after the `when` so the sheet sits above all content.
-    UpdateSheetOverlay(viewModel)
+        // In-app self-update sheet. Rendered at the root so it overlays every
+        // screen (auth, onboarding, main). Stays hidden while Idle; the launch-time
+        // check in UpdateCoordinator flips it to UpdateAvailable when a newer
+        // build exists. Keep this after the `when` so the sheet sits above all
+        // content.
+        UpdateSheetOverlay(viewModel.updateCoordinator)
+    }
 }
 
 /**
- * Collects [MainViewModel.updateState] and shows the [AppUpdateSheet] when an
- * update flow is active. Centralized here so the launch-time auto-check and
- * any manual check (Settings) drive the same single sheet.
+ * Collects [UpdateCoordinator.updateState] and shows the [AppUpdateSheet]
+ * when an update flow is active. Centralized here so the launch-time
+ * auto-check and any manual check (Settings) drive the same single sheet.
  */
 @Composable
-private fun UpdateSheetOverlay(viewModel: MainViewModel) {
-    val state by viewModel.updateState.collectAsStateWithLifecycle()
-    val autoDownloadEnabled by viewModel.selfUpdateDownloadEnabled.collectAsStateWithLifecycle()
+private fun UpdateSheetOverlay(update: UpdateCoordinator) {
+    val state by update.updateState.collectAsStateWithLifecycle()
+    val autoDownloadEnabled by update.selfUpdateDownloadEnabled.collectAsStateWithLifecycle()
     if (state !is com.raulshma.jellyplay.update.UpdateState.Idle) {
         val context = LocalContext.current
         AppUpdateSheet(
             state = state,
             autoDownloadEnabled = autoDownloadEnabled,
             onAutoDownloadToggle = { enabled ->
-                viewModel.setSelfUpdateDownloadEnabled(enabled)
+                update.setSelfUpdateDownloadEnabled(enabled)
                 // Turning it ON while an update is already available should also
                 // start downloading the shown update immediately.
                 val available = state as? com.raulshma.jellyplay.update.UpdateState.UpdateAvailable
                 if (enabled && available != null) {
-                    viewModel.startUpdateDownload(available.info)
+                    update.startUpdateDownload(available.info)
                 }
             },
-            onDownload = { info -> viewModel.startUpdateDownload(info) },
+            onDownload = { info -> update.startUpdateDownload(info) },
             onInstall = { intent ->
                 runCatching { context.startActivity(intent) }
             },
-            onRedownload = { viewModel.redownloadUpdate() },
-            onCancel = { viewModel.dismissUpdate() },
-            onDismiss = { viewModel.dismissUpdate() },
-            buildInstallIntent = {
-                // Only valid in the Downloaded state, where the file is held.
-                val downloaded = state as? com.raulshma.jellyplay.update.UpdateState.Downloaded
-                viewModel.buildInstallIntent(downloaded?.file ?: java.io.File(""))
-            },
+            onRedownload = { update.redownloadUpdate() },
+            onCancel = { update.cancelDownload() },
+            onDismiss = { update.dismissUpdate() },
+            buildInstallIntent = { update.buildInstallIntent() },
         )
     }
 }
@@ -337,6 +334,8 @@ private fun MainContent(
     onLogout: (Boolean) -> Unit,
     viewModel: MainViewModel,
     preferences: MainPreferences,
+    infra: ShellInfra,
+    audioPlaybackManager: AudioPlaybackManager,
 ) {
     val homeMode = preferences.homeMode
     val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current
@@ -359,6 +358,7 @@ private fun MainContent(
     )
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val userMessageBus = LocalUserMessageBus.current
     var pendingExternalLaunch by remember { mutableStateOf<com.raulshma.jellyplay.ExternalPlayerLaunch?>(null) }
     val externalPlayerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -402,7 +402,7 @@ private fun MainContent(
                     runCatching { externalPlayerLauncher.launch(chooser) }
                         .onFailure {
                             pendingExternalLaunch = null
-                            viewModel.userMessageBus.error(
+                            userMessageBus.error(
                                 com.raulshma.jellyplay.core.ui.feedback.uiTextOf(
                                     com.raulshma.jellyplay.core.ui.R.string.msg_no_video_player_found,
                                 ),
@@ -497,16 +497,11 @@ private fun MainContent(
     }
 
     val onModeChange: (HomeMode) -> Unit = { mode ->
-        scope.launch { viewModel.homeDiscoveryStore.setHomeMode(mode) }
+        viewModel.setHomeMode(mode)
     }
 
-    val audioPlaybackManager: AudioPlaybackManager = viewModel.audioPlaybackManager
-    val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsStateWithLifecycle()
     val audioItemId by audioPlaybackManager.currentPlayingItemId.collectAsStateWithLifecycle()
-    val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
-    val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
-    val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
-    val libraryFolders by viewModel.libraryFolders.collectAsStateWithLifecycle()
+    val libraryFolders by viewModel.sessionCoordinator.libraryFolders.collectAsStateWithLifecycle()
     var isMiniPlayerDismissed by remember { mutableStateOf(false) }
     val showMiniPlayer by remember {
         derivedStateOf { audioItemId != null && !isFullScreenRoute && !isMiniPlayerDismissed }
@@ -532,8 +527,8 @@ private fun MainContent(
 
     // Consume remote "Play" / "Playstate" / "GeneralCommand" navigation requests
     // emitted by the WebSocket receiver.
-    LaunchedEffect(viewModel.remoteNavigationBridge) {
-        viewModel.remoteNavigationBridge.targets.collect { target ->
+    LaunchedEffect(infra.remoteNavigationBridge) {
+        infra.remoteNavigationBridge.targets.collect { target ->
             when (target) {
                 is com.raulshma.jellyplay.core.data.remote.NavigationTarget.ClosePlayer -> {
                     // Pop any active player entries from every back stack so the
@@ -571,31 +566,18 @@ private fun MainContent(
         }
     }
 
-    // SyncPlay auto-open: a joined group started playing (or switched items)
-    // while no player is on top of any back stack → open the video player.
-    // When a player IS already open, its SyncPlayBridge drives the item load
-    // in place — pushing another VideoPlayer route here would stack duplicate
-    // player screens.
-    LaunchedEffect(Unit) {
-        viewModel.syncPlayOpenRequests.collect { request ->
-            val playerOpen = navigationState.backStacks.values.any { stack ->
-                stack.lastOrNull() is Route.VideoPlayer
-            }
-            if (!playerOpen) {
-                navigator.navigate(
-                    Route.VideoPlayer(
-                        itemId = request.itemId,
-                        startPositionTicks = request.startPositionTicks,
-                    )
-                )
-            }
-        }
-    }
+    // SyncPlay auto-open collector — lives next to the
+    // SyncPlayOpenCoordinator seam that feeds it.
+    SyncPlayAutoOpen(
+        openRequests = viewModel.syncPlayOpenCoordinator.openRequests,
+        navigationState = navigationState,
+        navigator = navigator,
+    )
 
     val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
     val nowPlayingTemplate = stringResource(R.string.snackbar_now_playing)
-    androidx.compose.runtime.LaunchedEffect(viewModel.remoteControlReceiver) {
-        viewModel.remoteControlReceiver.playEvents.collect { event ->
+    androidx.compose.runtime.LaunchedEffect(infra.remoteControlReceiver) {
+        infra.remoteControlReceiver.playEvents.collect { event ->
             val title = event.title.ifBlank { event.itemId }
             snackbarHostState.showSnackbar(
                 message = nowPlayingTemplate.format(title),
@@ -639,7 +621,6 @@ private fun MainContent(
     // a system Toast since the TV layout has no root SnackbarHost. Either way,
     // emission is now centralized through UserMessageBus instead of scattered
     // Toast.makeText calls across modules.
-    val userMessageBus = viewModel.userMessageBus
     androidx.compose.runtime.LaunchedEffect(userMessageBus, isTv) {
         userMessageBus.messages.collect { message ->
             val resolvedText = message.text.resolve(context)
@@ -714,7 +695,6 @@ private fun MainContent(
         LocalPerformanceMode provides preferences.performanceMode,
         com.raulshma.jellyplay.core.ui.feedback.LocalHapticsEnabled provides preferences.hapticsEnabled,
         LocalFloatingNavVisibility provides isBottomNavVisibleState,
-        LocalUserMessageBus provides userMessageBus,
         com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController provides mediaPreviewController,
         com.raulshma.jellyplay.core.ui.preview.LocalMediaPeekEnabled provides
             preferences.isExperimentalEnabled(ExperimentalFeature.MEDIA_CARD_PEEK),
@@ -752,9 +732,9 @@ private fun MainContent(
             val onAmbientClick: () -> Unit = {
                 navigator.navigate(
                     Route.Ambient(
-                        imageUrl = audioArtworkUrl,
-                        title = audioTitle,
-                        artist = audioArtist,
+                        imageUrl = audioPlaybackManager.albumArtUrl.value,
+                        title = audioPlaybackManager.title.value,
+                        artist = audioPlaybackManager.artist.value,
                     )
                 )
             }
@@ -770,6 +750,17 @@ private fun MainContent(
             // DrawerState type distinct from any mobile-material3 names.
             val tvDrawerState = androidx.tv.material3.rememberDrawerState(androidx.tv.material3.DrawerValue.Closed)
             val tvDrawerListState = androidx.compose.foundation.lazy.rememberLazyListState()
+            // Returning from a full-screen route with a saved-Open drawer state would make the
+            // drawer rail re-grab focus on re-entry and land expanded; snap it closed so the
+            // restored screen owns focus. Keyed only on the route flag — reading currentValue
+            // here would re-run when the user opens the drawer intentionally and fight it.
+            LaunchedEffect(isTv, isFullScreenRoute) {
+                if (isTv && !isFullScreenRoute &&
+                    tvDrawerState.currentValue == androidx.tv.material3.DrawerValue.Open
+                ) {
+                    tvDrawerState.setValue(androidx.tv.material3.DrawerValue.Closed)
+                }
+            }
             if (isTv && !isFullScreenRoute) {
                 TvContent(
                     navigationState = navigationState,
@@ -787,14 +778,9 @@ private fun MainContent(
                     tvDrawerListState = tvDrawerListState,
                     libraryFolders = libraryFolders,
                     hiddenNavItems = preferences.hiddenNavItems,
-                    nowPlayingTitle = audioTitle.takeIf { audioItemId != null },
                     nowPlayingEnabled = audioItemId != null,
                     showMiniPlayer = showMiniPlayer,
                     audioPlaybackManager = audioPlaybackManager,
-                    isAudioPlaying = isAudioPlaying,
-                    audioTitle = audioTitle,
-                    audioArtist = audioArtist,
-                    audioArtworkUrl = audioArtworkUrl,
                     onDismissMiniPlayer = { isMiniPlayerDismissed = true },                )
             } else {
                 if (!isFullScreenRoute) {
@@ -842,11 +828,7 @@ private fun MainContent(
                         bottomNavOffsetHeightPx = bottomNavOffsetHeightPx,
                         showMiniPlayer = showMiniPlayer,
                         audioPlaybackManager = audioPlaybackManager,
-                        isAudioPlaying = isAudioPlaying,
                         audioItemId = audioItemId,
-                        audioTitle = audioTitle,
-                        audioArtist = audioArtist,
-                        audioArtworkUrl = audioArtworkUrl,
                         onDismissMiniPlayer = { isMiniPlayerDismissed = true },                        animatedNavBarColor = animatedNavBarColor,
                         showNavBarLabels = preferences.navBarShowLabels,
                         offlineMode = offlineMode,
@@ -896,6 +878,38 @@ private fun MainContent(
 }
 
 /**
+ * SyncPlay auto-open: a joined group started playing (or switched items)
+ * while no player is on top of any back stack → open the video player.
+ * When a player IS already open, its SyncPlayBridge drives the item load
+ * in place — pushing another VideoPlayer route here would stack duplicate
+ * player screens. Collector for [SyncPlayOpenCoordinator.openRequests],
+ * kept out of [MainContent]'s body so each collector sits next to its
+ * coordinator's seam.
+ */
+@Composable
+private fun SyncPlayAutoOpen(
+    openRequests: kotlinx.coroutines.flow.Flow<SyncPlayOpenRequest>,
+    navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
+    navigator: Navigator,
+) {
+    LaunchedEffect(Unit) {
+        openRequests.collect { request ->
+            val playerOpen = navigationState.backStacks.values.any { stack ->
+                stack.lastOrNull() is Route.VideoPlayer
+            }
+            if (!playerOpen) {
+                navigator.navigate(
+                    Route.VideoPlayer(
+                        itemId = request.itemId,
+                        startPositionTicks = request.startPositionTicks,
+                    )
+                )
+            }
+        }
+    }
+}
+
+/**
  * TV form-factor layout:_TV Material3 theme + [TvNavigationDrawer] host wrapping a single
  * [MainNavDisplay]. Extracted from [MainContent] so the per-form-factor scaffolding stays
  * isolated and the orchestrator stays a clean when-branch picker.
@@ -917,15 +931,12 @@ private fun TvContent(
     tvDrawerListState: androidx.compose.foundation.lazy.LazyListState,
     libraryFolders: List<com.raulshma.jellyplay.core.model.LibraryFolder>,
     hiddenNavItems: Set<String> = emptySet(),
-    nowPlayingTitle: String?,
     nowPlayingEnabled: Boolean,
     showMiniPlayer: Boolean,
     audioPlaybackManager: AudioPlaybackManager,
-    isAudioPlaying: Boolean,
-    audioTitle: String,
-    audioArtist: String,
-    audioArtworkUrl: String,
     onDismissMiniPlayer: () -> Unit,) {
+    val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
+    val nowPlayingTitle = audioTitle.takeIf { nowPlayingEnabled }
     TvMaterial3Theme(
         colorScheme = tvDarkColorScheme(
             background = MaterialTheme.colorScheme.background,
@@ -1003,6 +1014,9 @@ private fun TvContent(
                     // (MiniPlayer applies tvFocusIndicator); this is the host
                     // wiring gap for TV navigation.
                     if (showMiniPlayer) {
+                        val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsStateWithLifecycle()
+                        val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
+                        val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
@@ -1059,11 +1073,7 @@ private fun PhoneContent(
     bottomNavOffsetHeightPx: androidx.compose.runtime.MutableFloatState,
     showMiniPlayer: Boolean,
     audioPlaybackManager: AudioPlaybackManager,
-    isAudioPlaying: Boolean,
     audioItemId: String?,
-    audioTitle: String,
-    audioArtist: String,
-    audioArtworkUrl: String,
     onDismissMiniPlayer: () -> Unit,    animatedNavBarColor: Color,
     showNavBarLabels: Boolean,
     offlineMode: com.raulshma.jellyplay.core.model.OfflineMode = com.raulshma.jellyplay.core.model.OfflineMode.ONLINE,
@@ -1200,61 +1210,66 @@ private fun PhoneContent(
                         surpriseRequests = surpriseRequests,
                     )
                 }
-                if (showMiniPlayer && isExpanded) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = systemNavBarBottom + 2.dp)
-                    ) {
-                        MiniPlayer(
-                            isVisible = true,
-                            title = audioTitle,
-                            artist = audioArtist,
-                            artworkUri = audioArtworkUrl,
-                            isPlaying = isAudioPlaying,
-                            onClick = onNowPlayingClick,
-                            onClose = {
-                                audioPlaybackManager.stopAndRelease()
-                                onDismissMiniPlayer()
-                            },
-                            onPlayPause = {
-                                audioPlaybackManager.togglePlayPause()
-                            },
-                            onSkipNext = {
-                                audioPlaybackManager.skipToNext()
-                            },
-                        )
-                    }
-                }
-                if (!isExpanded && showMiniPlayer) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = systemNavBarBottom + 60.dp)
-                            .offset {
-                                val maxOffset = Dimensions.floatingNavHeight.toPx()
-                                val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
-                                IntOffset(x = 0, y = yOffset.roundToInt())
-                            }
-                    ) {
-                        MiniPlayer(
-                            isVisible = true,
-                            title = audioTitle,
-                            artist = audioArtist,
-                            artworkUri = audioArtworkUrl,
-                            isPlaying = isAudioPlaying,
-                            onClick = onNowPlayingClick,
-                            onClose = {
-                                audioPlaybackManager.stopAndRelease()
-                                onDismissMiniPlayer()
-                            },
-                            onPlayPause = {
-                                audioPlaybackManager.togglePlayPause()
-                            },
-                            onSkipNext = {
-                                audioPlaybackManager.skipToNext()
-                            },
-                        )
+                if (showMiniPlayer) {
+                    val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsStateWithLifecycle()
+                    val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
+                    val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
+                    val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
+                    if (isExpanded) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = systemNavBarBottom + 2.dp)
+                        ) {
+                            MiniPlayer(
+                                isVisible = true,
+                                title = audioTitle,
+                                artist = audioArtist,
+                                artworkUri = audioArtworkUrl,
+                                isPlaying = isAudioPlaying,
+                                onClick = onNowPlayingClick,
+                                onClose = {
+                                    audioPlaybackManager.stopAndRelease()
+                                    onDismissMiniPlayer()
+                                },
+                                onPlayPause = {
+                                    audioPlaybackManager.togglePlayPause()
+                                },
+                                onSkipNext = {
+                                    audioPlaybackManager.skipToNext()
+                                },
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = systemNavBarBottom + 60.dp)
+                                .offset {
+                                    val maxOffset = Dimensions.floatingNavHeight.toPx()
+                                    val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
+                                    IntOffset(x = 0, y = yOffset.roundToInt())
+                                }
+                        ) {
+                            MiniPlayer(
+                                isVisible = true,
+                                title = audioTitle,
+                                artist = audioArtist,
+                                artworkUri = audioArtworkUrl,
+                                isPlaying = isAudioPlaying,
+                                onClick = onNowPlayingClick,
+                                onClose = {
+                                    audioPlaybackManager.stopAndRelease()
+                                    onDismissMiniPlayer()
+                                },
+                                onPlayPause = {
+                                    audioPlaybackManager.togglePlayPause()
+                                },
+                                onSkipNext = {
+                                    audioPlaybackManager.skipToNext()
+                                },
+                            )
+                        }
                     }
                 }                // Play On persistent transport bar — visible while a Jellyfin
                 // remote session is active and the full-screen companion is not
@@ -1575,7 +1590,7 @@ private fun MainNavDisplay(
                 navigator = navigator,
                 onLogout = onLogout,
                 onSetupWizard = { navigator.navigate(Route.Onboarding) },
-                onCheckForUpdates = { mainViewModel.manualCheckForUpdate() },
+                onCheckForUpdates = { mainViewModel.updateCoordinator.manualCheckForUpdate() },
             )
             adminSection(
                 navigator = navigator,

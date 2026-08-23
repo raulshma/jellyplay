@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import androidx.lifecycle.ViewModel
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.PlayMethod
@@ -9,24 +8,29 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
-private class TestViewModel : ViewModel()
-
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class PlaybackProgressReporterTest {
 
+    private val testDispatcher = UnconfinedTestDispatcher()
+    private val scope = CoroutineScope(SupervisorJob() + testDispatcher)
+
     private lateinit var playbackRepository: PlaybackRepository
-    private lateinit var testViewModel: TestViewModel
     private lateinit var uiState: StateFlowHandle<VideoPlayerUiState>
     private lateinit var mediaEngine: MediaEngine
     private lateinit var reporter: PlaybackProgressReporter
@@ -35,10 +39,14 @@ class PlaybackProgressReporterTest {
     private var watchedThresholdItemIds: MutableList<String> = mutableListOf()
     private var autoSkippedSegments: MutableList<MediaSegment> = mutableListOf()
 
+    @After
+    fun tearDownScope() {
+        scope.cancel()
+    }
+
     @Before
     fun setUp() {
         playbackRepository = mockk(relaxed = true)
-        testViewModel = TestViewModel()
         uiState = StateFlowHandle(MutableStateFlow(VideoPlayerUiState()))
         mediaEngine = mockk(relaxed = true)
 
@@ -55,7 +63,7 @@ class PlaybackProgressReporterTest {
 
         reporter = PlaybackProgressReporter(
             playbackRepository = playbackRepository,
-            viewModel = testViewModel,
+            scope = scope,
             uiState = uiState,
             getCurrentItemId = { "movie-123" },
             getPlaySessionId = { "session-456" },

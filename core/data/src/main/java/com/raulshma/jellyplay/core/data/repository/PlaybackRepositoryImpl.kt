@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.IntroTimestamps
@@ -28,12 +30,24 @@ class PlaybackRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val outbox: PlaybackOutboxRepository,
     private val offlineModeManager: OfflineModeManager,
+    /**
+     * Identity source for the segments cache's composite keys (see
+     * [HomeSession.cacheIdentity]) — a user/server switch is a guaranteed
+     * cache miss by construction instead of a stale cross-user hit.
+     */
+    private val homeSession: HomeSession,
+    /** Registers the segments cache for wholesale clears on identity change. */
+    private val sessionCacheRegistry: SessionCacheRegistry,
 ) : PlaybackRepository {
 
     private val segmentsCache = TtlCache<List<MediaSegment>>(
         maxSize = MAX_CACHE_ENTRIES,
         ttlMs = SEGMENTS_CACHE_TTL_MS,
     )
+
+    init {
+        sessionCacheRegistry.registerCaches("playback", segmentsCache)
+    }
 
     override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> {
         // Offline (or a transient HTTP failure): stage the event so the
@@ -309,8 +323,12 @@ class PlaybackRepositoryImpl @Inject constructor(
     override suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps> =
         apiClient.getCreditTimestamps(itemId)
 
+    override suspend fun fetchActiveTranscodeReasons(itemId: String): List<String> =
+        apiClient.fetchActiveTranscodeReasons(itemId).getOrDefault(emptyList())
+
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> {
-        val cached = segmentsCache.get(itemId)
+        val identity = homeSession.cacheIdentity()
+        val cached = segmentsCache.get(identity, itemId)
         if (cached != null) {
             return Result.success(cached)
         }
@@ -318,7 +336,7 @@ class PlaybackRepositoryImpl @Inject constructor(
         val segmentsResult = apiClient.getMediaSegments(itemId)
         val segments = segmentsResult.getOrDefault(emptyList())
         if (segments.isNotEmpty()) {
-            segmentsCache.put(itemId, segments)
+            segmentsCache.put(identity, itemId, segments)
             return Result.success(segments)
         }
 
@@ -366,14 +384,18 @@ class PlaybackRepositoryImpl @Inject constructor(
             // segments API itself failed, leave the cache untouched so the
             // next call retries the API instead of serving a stale "empty".
             if (cacheFallback) {
-                segmentsCache.put(itemId, fallbackSegments)
+                segmentsCache.put(identity, itemId, fallbackSegments)
             }
             Result.success(fallbackSegments)
         }
     }
 
     override fun invalidateSegmentsCache(itemId: String) {
-        segmentsCache.remove(itemId)
+        // Snapshot read: this is a best-effort single-item eviction from a
+        // non-suspend context; identity switches clear the cache wholesale
+        // via SessionCacheRegistry regardless of which identity an entry was
+        // keyed under.
+        segmentsCache.remove(homeSession.cacheIdentitySnapshot(), itemId)
     }
 
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> =

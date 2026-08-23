@@ -29,6 +29,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -37,6 +39,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
+import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleControls
 import com.raulshma.jellyplay.feature.subtitle.tester.components.PreviewTile
 import com.raulshma.jellyplay.feature.subtitle.tester.preview.PreviewEngineHost
@@ -52,6 +56,11 @@ fun SubtitleTesterScreen(
     val context = LocalContext.current
     val host = remember { PreviewEngineHost(context, onSurfaceReady = {}) }
     var showDiscardDialog by remember { mutableStateOf(false) }
+
+    // TV: grab initial focus on the first control so the first D-pad press lands
+    // in the form instead of nowhere.
+    val initialFocusRequester = remember { FocusRequester() }
+    RequestOrRestoreFocus(initialFocusRequester, "subtitle_tester_init")
 
     // SAF font picker — mirrors the player's flow: the picked uri is copied into
     // the shared font cache by the ViewModel; only the local file survives.
@@ -110,6 +119,7 @@ fun SubtitleTesterScreen(
                             selected = state.mode == mode,
                             onClick = { viewModel.setMode(mode) },
                             shape = SegmentedButtonDefaults.itemShape(index, SubtitleStyleMode.entries.size),
+                            modifier = if (index == 0) Modifier.focusRequester(initialFocusRequester) else Modifier,
                         ) {
                             Text(stringResource(if (mode == SubtitleStyleMode.SDR) R.string.subtitle_tester_mode_sdr else R.string.subtitle_tester_mode_hdr))
                         }
@@ -132,6 +142,7 @@ fun SubtitleTesterScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .tvFocusRestorer()
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {

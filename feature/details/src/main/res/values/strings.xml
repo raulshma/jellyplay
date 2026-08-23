@@ -22,6 +22,9 @@
     <string name="detail_section_seasons">Seasons</string>
     <string name="detail_section_seerr_recommendations">Seerr Recommendations</string>
     <string name="detail_section_seerr_similar">Seerr Similar</string>
+    <string name="detail_section_reviews">Reviews</string>
+    <!-- Review author rating format: %1$.1f = 0-10 rating. Same in every locale. -->
+    <string name="detail_review_rating" translatable="false">%1$.1f / 10</string>
 
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">Play</string>

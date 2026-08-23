@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -555,6 +556,28 @@ class AudioPlaybackManager @Inject constructor(
         return libraryBrowser.buildPlayableMediaItem(queueItem.id, startPositionMs)
     }
 
+    /**
+     * Builds [MediaItem]s for a queue segment concurrently (bounded by
+     * [queuePreWarmPermits]) while preserving input order: deferreds are
+     * awaited in list order, so result order — and therefore the
+     * [mediaItemCache] insertion order — matches the sequential
+     * `mapNotNull { ... }` loops this replaces. Per-item failures resolve
+     * to null and are dropped, as before.
+     */
+    private suspend fun buildMediaItemsForQueueItems(queueItems: List<AudioQueueItem>): List<MediaItem> =
+        coroutineScope {
+            queueItems.map { qi ->
+                val cached = mediaItemCache.get(qi.id)
+                if (cached != null) {
+                    CompletableDeferred<MediaItem?>(cached)
+                } else {
+                    async { queuePreWarmPermits.withPermit { buildMediaItemForQueueItem(qi) } }
+                }
+            }.mapNotNull { deferred ->
+                deferred.await()?.also { mediaItemCache.put(it.mediaId, it) }
+            }
+        }
+
     fun play(itemId: String) {
         assertMainThread("play")
 
@@ -660,29 +683,17 @@ class AudioPlaybackManager @Inject constructor(
                     }
 
                     queueLoadingJob?.cancel()
+                    // The pre-warm below builds MediaItems for the ENTIRE
+                    // queue; the default 25-entry cache would evict the head
+                    // before the tail is built (75+ repeated repo lookups for
+                    // a 100-track playlist). Size the LRU to the queue.
+                    mediaItemCache.resize(queueItems.size.coerceAtLeast(25))
                     queueLoadingJob = scope.launch(Dispatchers.IO) {
                         coroutineScope {
-                            val afterJobs = (playIndex + 1 until queueItems.size).map { i ->
-                                val qi = queueItems[i]
-                                val cached = mediaItemCache.get(qi.id)
-                                if (cached != null) {
-                                    kotlinx.coroutines.CompletableDeferred<MediaItem?>(cached)
-                                } else {
-                                    async { queuePreWarmPermits.withPermit { buildMediaItemForQueueItem(qi) } }
-                                }
-                            }
-                            val beforeJobs = (0 until playIndex).map { i ->
-                                val qi = queueItems[i]
-                                val cached = mediaItemCache.get(qi.id)
-                                if (cached != null) {
-                                    kotlinx.coroutines.CompletableDeferred<MediaItem?>(cached)
-                                } else {
-                                    async { queuePreWarmPermits.withPermit { buildMediaItemForQueueItem(qi) } }
-                                }
-                            }
-
-                            val mediaItemsAfter = afterJobs.mapNotNull { it.await()?.also { mi -> mediaItemCache.put(mi.mediaId, mi) } }
-                            val mediaItemsBefore = beforeJobs.mapNotNull { it.await()?.also { mi -> mediaItemCache.put(mi.mediaId, mi) } }
+                            val afterJob = async { buildMediaItemsForQueueItems(queueItems.subList(playIndex + 1, queueItems.size)) }
+                            val beforeJob = async { buildMediaItemsForQueueItems(queueItems.subList(0, playIndex)) }
+                            val mediaItemsAfter = afterJob.await()
+                            val mediaItemsBefore = beforeJob.await()
 
                             launch(Dispatchers.Main) {
                                 if (exoPlayer == player) {
@@ -807,6 +818,22 @@ class AudioPlaybackManager @Inject constructor(
         scope.launch {
             buildMediaItemForQueueItem(item)?.let { mediaItem ->
                 player.addMediaItem(mediaItem)
+            }
+        }
+    }
+
+    override fun addToQueueAll(items: List<AudioQueueItem>) {
+        assertMainThread("addToQueueAll")
+        if (items.isEmpty()) return
+        // Single queue emission → single full-list persistence, and a single
+        // ordered player append. Iterating addToQueue would emit + persist the
+        // whole list per item (O(N²) row writes in N transactions).
+        _queue.value = _queue.value + items
+        val player = exoPlayer ?: return
+        scope.launch {
+            val mediaItems = items.mapNotNull { buildMediaItemForQueueItem(it) }
+            if (mediaItems.isNotEmpty()) {
+                player.addMediaItems(mediaItems)
             }
         }
     }
@@ -996,16 +1023,16 @@ class AudioPlaybackManager @Inject constructor(
         _currentIndex.value = snapshot.currentIndex
         val player = exoPlayer
         if (player == null || snapshot.queue.isEmpty()) return
-        scope.launch {
-            val mediaItems = snapshot.queue.mapNotNull { qi ->
-                mediaItemCache.get(qi.id) ?: buildMediaItemForQueueItem(qi)?.also { mediaItemCache.put(qi.id, it) }
+        scope.launch(Dispatchers.IO) {
+            val mediaItems = buildMediaItemsForQueueItems(snapshot.queue)
+            launch(Dispatchers.Main) {
+                if (mediaItems.isEmpty()) return@launch
+                // Bail if the player was swapped/released during the async build.
+                if (exoPlayer != player) return@launch
+                val index = snapshot.currentIndex.coerceIn(0, mediaItems.lastIndex)
+                player.setMediaItems(mediaItems, index, snapshot.positionMs)
+                player.prepare()
             }
-            if (mediaItems.isEmpty()) return@launch
-            // Bail if the player was swapped/released during the async build.
-            if (exoPlayer != player) return@launch
-            val index = snapshot.currentIndex.coerceIn(0, mediaItems.lastIndex)
-            player.setMediaItems(mediaItems, index, snapshot.positionMs)
-            player.prepare()
         }
     }
 
@@ -1050,16 +1077,14 @@ class AudioPlaybackManager @Inject constructor(
             val newQueue = if (current != null) listOf(current) + others else others
             _queue.value = newQueue
             _currentIndex.value = 0
-            scope.launch {
-                val mediaItems = newQueue.mapNotNull { qi ->
-                    mediaItemCache.get(qi.id) ?: buildMediaItemForQueueItem(qi)?.also {
-                        mediaItemCache.put(qi.id, it)
+            scope.launch(Dispatchers.IO) {
+                val mediaItems = buildMediaItemsForQueueItems(newQueue)
+                launch(Dispatchers.Main) {
+                    if (mediaItems.isNotEmpty() && exoPlayer == player) {
+                        val currentPos = player.currentPosition
+                        player.setMediaItems(mediaItems, 0, currentPos)
+                        player.prepare()
                     }
-                }
-                if (mediaItems.isNotEmpty() && exoPlayer == player) {
-                    val currentPos = player.currentPosition
-                    player.setMediaItems(mediaItems, 0, currentPos)
-                    player.prepare()
                 }
             }
         } else {
@@ -1071,16 +1096,14 @@ class AudioPlaybackManager @Inject constructor(
                 _currentIndex.value = restoreIndex
                 unshuffledQueue = emptyList()
                 unshuffledIndex = -1
-                scope.launch {
-                    val mediaItems = original.mapNotNull { qi ->
-                        mediaItemCache.get(qi.id) ?: buildMediaItemForQueueItem(qi)?.also {
-                            mediaItemCache.put(qi.id, it)
+                scope.launch(Dispatchers.IO) {
+                    val mediaItems = buildMediaItemsForQueueItems(original)
+                    launch(Dispatchers.Main) {
+                        if (mediaItems.isNotEmpty() && exoPlayer == player) {
+                            val currentPos = player.currentPosition
+                            player.setMediaItems(mediaItems, restoreIndex, currentPos)
+                            player.prepare()
                         }
-                    }
-                    if (mediaItems.isNotEmpty() && exoPlayer == player) {
-                        val currentPos = player.currentPosition
-                        player.setMediaItems(mediaItems, restoreIndex, currentPos)
-                        player.prepare()
                     }
                 }
             }
@@ -1368,29 +1391,36 @@ class AudioPlaybackManager @Inject constructor(
                     positionTicks = prevPosTicks,
                 )
 
-                val detail = mediaRepository.getMediaDetail(nextItem.id)
-                detail.onSuccess { d ->
-                    fetchLyrics(
-                        itemId = nextItem.id,
-                        artistName = d.item.albumArtist ?: d.item.artistItems.firstOrNull()?.name,
-                        trackName = d.item.name,
-                        durationSec = d.item.runTimeTicks?.let { it / 10_000_000.0 },
-                    )
-                    // Auto-EQ-by-genre: previously the pref toggle only
-                    // persisted the flag and applyAutoEqForGenre was never
-                    // invoked on transitions, leaving the feature dead beyond
-                    // the first manual preset pick. applyAutoEqForGenre no-ops
-                    // when autoEqByGenre is disabled or no genre matches.
-                    effectsProcessor.applyAutoEqForGenre(d.item.genres)
-                }
-
-                playbackRepository.reportPlaybackStart(
-                    PlaybackStartInfo(
-                        itemId = nextItem.id,
-                        sessionId = playSessionId,
-                        mediaSourceId = nextItem.mediaSourceId,
-                    )
+                // Lyrics need only fields the queue item already carries, so the
+                // fetch can start without waiting for the detail round-trip.
+                fetchLyrics(
+                    itemId = nextItem.id,
+                    artistName = nextItem.artist,
+                    trackName = nextItem.name,
+                    durationSec = nextItem.durationMs.takeIf { it > 0 }?.let { it / 1000.0 },
                 )
+
+                coroutineScope {
+                    val detailJob = async { mediaRepository.getMediaDetail(nextItem.id) }
+                    val startJob = async {
+                        playbackRepository.reportPlaybackStart(
+                            PlaybackStartInfo(
+                                itemId = nextItem.id,
+                                sessionId = playSessionId,
+                                mediaSourceId = nextItem.mediaSourceId,
+                            )
+                        )
+                    }
+                    detailJob.await().onSuccess { d ->
+                        // Auto-EQ-by-genre: previously the pref toggle only
+                        // persisted the flag and applyAutoEqForGenre was never
+                        // invoked on transitions, leaving the feature dead beyond
+                        // the first manual preset pick. applyAutoEqForGenre no-ops
+                        // when autoEqByGenre is disabled or no genre matches.
+                        effectsProcessor.applyAutoEqForGenre(d.item.genres)
+                    }
+                    startJob.await()
+                }
             }
         }
     }
@@ -1441,34 +1471,21 @@ class AudioPlaybackManager @Inject constructor(
 
         val queueItems = _queue.value
         if (queueItems.size > 1) {
-            val itemsAfter = mutableListOf<MediaItem>()
-            val itemsBefore = mutableListOf<MediaItem>()
             scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                for (i in (nextIndex + 1) until queueItems.size) {
-                    val qi = queueItems[i]
-                    val cached = mediaItemCache.get(qi.id)
-                    val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
-                    if (mediaItem != null) {
-                        itemsAfter.add(mediaItem)
-                        mediaItemCache.put(qi.id, mediaItem)
-                    }
-                }
-                for (i in 0 until nextIndex) {
-                    val qi = queueItems[i]
-                    val cached = mediaItemCache.get(qi.id)
-                    val mediaItem = cached ?: buildMediaItemForQueueItem(qi)
-                    if (mediaItem != null) {
-                        itemsBefore.add(mediaItem)
-                        mediaItemCache.put(qi.id, mediaItem)
-                    }
-                }
-                launch(kotlinx.coroutines.Dispatchers.Main) {
-                    if (exoPlayer == secondary) {
-                        if (itemsAfter.isNotEmpty()) {
-                            secondary.addMediaItems(itemsAfter)
-                        }
-                        if (itemsBefore.isNotEmpty()) {
-                            secondary.addMediaItems(0, itemsBefore)
+                coroutineScope {
+                    val afterJob = async { buildMediaItemsForQueueItems(queueItems.subList(nextIndex + 1, queueItems.size)) }
+                    val beforeJob = async { buildMediaItemsForQueueItems(queueItems.subList(0, nextIndex)) }
+                    val itemsAfter = afterJob.await()
+                    val itemsBefore = beforeJob.await()
+
+                    launch(kotlinx.coroutines.Dispatchers.Main) {
+                        if (exoPlayer == secondary) {
+                            if (itemsAfter.isNotEmpty()) {
+                                secondary.addMediaItems(itemsAfter)
+                            }
+                            if (itemsBefore.isNotEmpty()) {
+                                secondary.addMediaItems(0, itemsBefore)
+                            }
                         }
                     }
                 }

@@ -1,10 +1,13 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapshot
 import org.junit.Rule
 import org.junit.Test
@@ -114,6 +117,44 @@ class PlaybackMetadataRowTest {
         }
         composeTestRule.onNodeWithText("Transcode").assertIsDisplayed()
         composeTestRule.onNodeWithText("Metered").assertIsDisplayed()
+    }
+
+    @Test
+    fun playbackMetadataRow_playMethodClickProvided_chipIsClickable() {
+        var clicks = 0
+        composeTestRule.setContent {
+            MaterialTheme {
+                PlaybackMetadataRow(
+                    playMethod = "Direct Play",
+                    isDirectPlayForced = false,
+                    hdrType = null,
+                    mediaStreams = emptyList(),
+                    videoStats = PlaybackMetadataSnapshot(),
+                    audioTracks = emptyList(),
+                    onPlayMethodClick = { clicks++ },
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Direct Play").assertHasClickAction()
+        composeTestRule.onNodeWithText("Direct Play").performClick()
+        org.junit.Assert.assertEquals(1, clicks)
+    }
+
+    @Test
+    fun playbackMetadataRow_playMethodClickNull_chipIsNotClickable() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                PlaybackMetadataRow(
+                    playMethod = "Direct Play",
+                    isDirectPlayForced = false,
+                    hdrType = null,
+                    mediaStreams = emptyList(),
+                    videoStats = PlaybackMetadataSnapshot(),
+                    audioTracks = emptyList(),
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Direct Play").assertHasNoClickAction()
     }
 }
 

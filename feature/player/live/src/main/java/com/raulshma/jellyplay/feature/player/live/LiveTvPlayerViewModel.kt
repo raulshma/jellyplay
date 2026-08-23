@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.playback.PlayerAudioLifecycle
+import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -21,6 +22,7 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.ui.feedback.UiText
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
+import com.raulshma.jellyplay.core.ui.player.TranscodeReasonsFormatter
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import com.raulshma.jellyplay.feature.player.live.R
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineConfig
@@ -92,6 +94,16 @@ class LiveTvPlayerViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(LiveTvPlayerUiState())
     val state: StateFlow<LiveTvPlayerUiState> = _state.asStateFlow()
+
+    // High-frequency DVR-window streams kept OUT of [LiveTvPlayerUiState] so
+    // the 500 ms position tick invalidates only the leaf that renders it (the
+    // bottom-bar seek bar), not the whole screen — mirrors the VOD player's
+    // dedicated position/duration flows.
+    private val _positionMs = MutableStateFlow(0L)
+    val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
+
+    private val _durationMs = MutableStateFlow(-1L)
+    val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
     private var engine: LivePlayerEngine? = null
     private var initialized = false
@@ -401,6 +413,7 @@ class LiveTvPlayerViewModel @Inject constructor(
         // HTTP data-source factory), not per-request — see ensureEngine.
         val livePlayMethod = resolved.playMethod.toLivePlayMethod()
         _state.value = _state.value.copy(playMethod = livePlayMethod)
+        refreshTranscodeReasons(channel.id, livePlayMethod)
         ensureEngine()
             .load(
                 LivePlaybackRequest(
@@ -580,11 +593,28 @@ class LiveTvPlayerViewModel @Inject constructor(
 
     private fun observeEngine(eng: LivePlayerEngine) {
         eng.state.onEach { s ->
+            // On engine errors during a transcoded stream, append the
+            // plain-language transcode reasons to the expandable detail so
+            // the error overlay answers "why was this transcoding at all".
+            val engineDetail = if (s == LiveEngineState.ERROR) eng.errorDetail.value else null
+            val reasonsBlock = if (
+                s == LiveEngineState.ERROR &&
+                _state.value.playMethod == LivePlayMethod.TRANSCODE &&
+                _state.value.transcodeReasons.isNotEmpty()
+            ) {
+                TranscodeReasonsFormatter.format(context, _state.value.transcodeReasons)
+                    .joinToString("\n") { it.renderedText }
+            } else {
+                null
+            }
+            val combinedDetail = listOfNotNull(engineDetail, reasonsBlock)
+                .joinToString("\n\n")
+                .ifBlank { null }
             _state.value = _state.value.copy(
                 engineState = s,
                 isBuffering = s == LiveEngineState.BUFFERING || s == LiveEngineState.IDLE,
                 errorMessage = if (s == LiveEngineState.ERROR) eng.errorMessage.value else null,
-                errorDetail = if (s == LiveEngineState.ERROR) eng.errorDetail.value else null,
+                errorDetail = combinedDetail,
             )
             // Buffering watchdog: arm a timeout on entering BUFFERING, cancel it
             // on any other state. If the tuner stalls without a PlaybackException,
@@ -616,10 +646,33 @@ class LiveTvPlayerViewModel @Inject constructor(
             .launchIn(viewModelScope)
         eng.isAtLiveEdge.onEach { _state.value = _state.value.copy(isAtLiveEdge = it) }
             .launchIn(viewModelScope)
-        eng.positionMs.onEach { _state.value = _state.value.copy(positionMs = it) }
+        eng.positionMs.onEach { _positionMs.value = it }
             .launchIn(viewModelScope)
-        eng.durationMs.onEach { _state.value = _state.value.copy(durationMs = it) }
+        eng.durationMs.onEach { _durationMs.value = it }
             .launchIn(viewModelScope)
+    }
+
+    /** Owns the in-flight transcode-reason lookup; cancelled/replaced per tune. */
+    private val transcodeReasonsRefresher =
+        TranscodeReasonsRefresher(viewModelScope, playbackRepository::fetchActiveTranscodeReasons)
+
+    /**
+     * Populates [LiveTvPlayerUiState.transcodeReasons] from the server's
+     * live session (`TranscodingInfo`) when tuning landed on a transcode,
+     * and clears it otherwise. Mirrors PlayerSessionManager's VOD refresh
+     * via the shared [TranscodeReasonsRefresher]: wait for the session
+     * to register, retry once, drop silently on a miss.
+     */
+    private fun refreshTranscodeReasons(channelId: String, method: LivePlayMethod) {
+        transcodeReasonsRefresher.refresh(
+            channelId,
+            isTranscode = method == LivePlayMethod.TRANSCODE,
+            isCurrent = { _state.value.currentChannel?.id == channelId },
+            clear = { _state.value = _state.value.copy(transcodeReasons = emptyList()) },
+            onReasons = { reasons ->
+                _state.value = _state.value.copy(transcodeReasons = reasons)
+            },
+        )
     }
 
     /**
@@ -638,16 +691,22 @@ class LiveTvPlayerViewModel @Inject constructor(
                 option = LiveStreamOption.TRANSCODE,
                 playerType = playback.preferredPlayer,
             ) ?: run {
+                // The failed tune was direct/direct-stream, so there are no
+                // server transcode reasons yet. The engine stayed in BUFFERING
+                // to avoid flashing the error overlay mid-fallback, which also
+                // kept observeEngine from mirroring its captured error —
+                // surface that originating error here so the banner answers
+                // "why did this tune fail" (the client forced the fallback).
                 _state.value = _state.value.copy(
                     isBuffering = false,
-                    errorMessage = context.getString(
-                        R.string.live_error_transcode_fallback, channel.name
-                    ),
+                    errorMessage = context.getString(R.string.live_error_transcode_fallback, channel.name),
+                    errorDetail = engine?.errorDetail?.value,
                 )
                 return@launch
             }
             // Reflect the method change in the chrome badge before reloading.
             _state.value = _state.value.copy(playMethod = LivePlayMethod.TRANSCODE)
+            refreshTranscodeReasons(channel.id, LivePlayMethod.TRANSCODE)
             engine?.load(
                 LivePlaybackRequest(
                     url = resolved.streamUrl,
@@ -668,15 +727,19 @@ class LiveTvPlayerViewModel @Inject constructor(
             startDateUtc = fmt.format(now),
             endDateUtc = fmt.format(end),
         ).getOrNull().orEmpty()
-        val current = programs.firstOrNull { p ->
-            val start = p.startDate?.let { runCatching { Instant.parse(it) }.getOrNull() }
-            val finish = p.endDate?.let { runCatching { Instant.parse(it) }.getOrNull() }
+        val parsed = programs.map { p ->
+            Triple(
+                p,
+                p.startDate?.let { runCatching { Instant.parse(it) }.getOrNull() },
+                p.endDate?.let { runCatching { Instant.parse(it) }.getOrNull() },
+            )
+        }
+        val current = parsed.firstOrNull { (_, start, finish) ->
             start != null && finish != null && !now.isBefore(start) && now.isBefore(finish)
-        }
-        val next = programs.firstOrNull { p ->
-            val start = p.startDate?.let { runCatching { Instant.parse(it) }.getOrNull() }
+        }?.first
+        val next = parsed.firstOrNull { (p, start, _) ->
             start != null && start.isAfter(now) && p.id != current?.id
-        }
+        }?.first
         _state.value = _state.value.copy(currentProgram = current, nextProgram = next)
     }
 
@@ -702,7 +765,7 @@ class LiveTvPlayerViewModel @Inject constructor(
     fun playFromStart() {
         // Guard: only restart when a DVR window exists. Mirrors the seek-bar
         // gate (LiveSeekBar returns early when durationMs <= 0).
-        if (_state.value.durationMs <= 0L) return
+        if (_durationMs.value <= 0L) return
         engine?.seekTo(0L)
     }
 
@@ -801,6 +864,8 @@ class LiveTvPlayerViewModel @Inject constructor(
         // player is never restored on a later unmute (e.g. mute → leave screen →
         // return to a fresh engine). isMuted is reset via the fresh uiState below.
         preMuteVolume = null
+        _positionMs.value = 0L
+        _durationMs.value = -1L
         _state.value = LiveTvPlayerUiState()
     }
 

@@ -7,19 +7,15 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
-import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
-import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 
 import com.raulshma.jellyplay.core.model.UserInfo
 
 @Immutable
 data class HomeUiState(
     val sections: List<HomeSection> = emptyList(),
-    val favorites: List<MediaItem> = emptyList(),
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     /** True while a manual offline→online transition is in progress, so the
@@ -67,11 +63,6 @@ data class HomeUiState(
     /** Whether the DIRECT_ARR_INTEGRATION experimental flag is enabled. */
     val directArrEnabled: Boolean = false,
     val currentUser: UserInfo? = null,
-    /**
-     * All users persisted for the current server. Drives the home app-bar
-     * quick user switcher : the chip only renders when there are ≥2 users.
-     */
-    val currentServerUsers: List<UserInfo> = emptyList(),
     /**
      * Mirror of the user's enabled home section types (from prefs). Consumed
      * only by the inline section-config sheet so it can show the current
@@ -140,14 +131,16 @@ data class HomeSearchState(
     // Context needed to resolve the registry's @StringRes ids.
 }
 
+/**
+ * The request-sheet slice: the locally-chosen item plus the shared holder's
+ * [SeerrRequestSnapshot] (request result, services, seasons, anime flag).
+ * The snapshot is embedded rather than field-mirrored so the
+ * SeerrRequestStateHolder fold stays a one-line copy — no per-field hand-sync.
+ */
 @Immutable
 data class SeerrRequestState(
     val requestItem: SeerrSearchItem? = null,
-    val result: SeerrRequestResult? = null,
-    val radarrServers: List<SeerrRadarrServiceDetail> = emptyList(),
-    val sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
-    val isLoadingServices: Boolean = false,
-    val tvSeasons: List<SeerrSeason> = emptyList(),
+    val snapshot: SeerrRequestSnapshot = SeerrRequestSnapshot(),
 )
 
 @Immutable

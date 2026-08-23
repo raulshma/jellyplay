@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
@@ -14,6 +15,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.Genre
@@ -25,6 +29,7 @@ import com.raulshma.jellyplay.core.ui.components.yearRangePresets
 import com.raulshma.jellyplay.core.ui.components.toggleYearPreset
 import com.raulshma.jellyplay.core.ui.components.YearPresetSelection
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.feature.library.R
@@ -45,7 +50,11 @@ enum class FilterSheetKind { SORT, TYPE, STATUS, GENRES, YEARS, TAGS, ALL }
  * button) via [onOpenSheet]. Chips whose option list is empty are hidden so the
  * row never shows inert affordances (e.g. genres before they load).
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
+@OptIn(
+    ExperimentalMaterial3ExpressiveApi::class,
+    ExperimentalLayoutApi::class,
+    androidx.compose.ui.ExperimentalComposeUiApi::class,
+)
 @Composable
 fun LibraryFilterChipRow(
     filters: LibraryFilters,
@@ -53,11 +62,22 @@ fun LibraryFilterChipRow(
     availableTags: List<String>,
     onOpenSheet: (FilterSheetKind) -> Unit,
     modifier: Modifier = Modifier,
+    /** TV: leaf anchor on the first chip — target of the screen-level vertical
+     *  navigation that hops between the header rows. */
+    firstChipFocus: FocusRequester? = null,
 ) {
     LazyRow(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 4.dp)
+            // Same focus contract as the folder-pill row above: group + restorer so D-pad
+            // traversal into the row restores the last-focused chip instead of restarting.
+            // Vertical D-pad hops out of the row are key-intercepted and redirected to
+            // the adjacent header row — geometric focus search between the stacked rows
+            // is unreliable (chip focus bounds overlap vertically, and the alphabet rail
+            // interleaves on the right edge, so Down could even land on the row above).
+            .focusGroup()
+            .tvFocusRestorer(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
     ) {
@@ -66,6 +86,7 @@ fun LibraryFilterChipRow(
                 label = filters.sortBy.displayName,
                 onClick = { onOpenSheet(FilterSheetKind.SORT) },
                 highlight = filters.sortBy != SortOption.YEAR_DESC,
+                modifier = firstChipFocus?.let { Modifier.focusRequester(it) } ?: Modifier,
             )
         }
         item(key = "type") {

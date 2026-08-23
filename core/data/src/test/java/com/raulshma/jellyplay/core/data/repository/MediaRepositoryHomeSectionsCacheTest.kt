@@ -2,15 +2,23 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
+import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
+import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.LrcLibApi
+import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -19,7 +27,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Covers the in-memory home-sections cache in [MediaRepositoryImpl], which was
@@ -30,28 +43,55 @@ import org.junit.Test
  * identity must be a guaranteed cache miss by construction. The cache-invalidation
  * observer runs on `Dispatchers.Default`, so tests use [runBlocking] + a short
  * [delay] to let the collector process each flow emission before asserting.
+ *
+ * Also covers the two freshness policies that had zero expiry coverage before
+ * HomeFreshness: the 60s in-memory TTL and the 24h Room SWR staleness ceiling
+ * (both via [FakeTimeSource]; the ceiling additionally stubs
+ * `HomeSectionCacheEntity.fetchedAt`).
  */
 class MediaRepositoryHomeSectionsCacheTest {
 
-    private val serverFlow = MutableStateFlow<ServerInfo?>(null)
-    private val userFlow = MutableStateFlow<UserInfo?>(null)
+    // Atomic (server, user) session flow — what the shared HomeSession
+    // detector consumes (see JellyfinApiEngine.session). One value per
+    // identity step, replacing the separate server/user flows the repo's own
+    // observer used to combine.
+    private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
     private val networkMonitor: NetworkMonitor = mockk(relaxed = true)
+    private val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true) {
+        coEvery { get(any(), any(), any()) } returns null
+    }
+
+    /** Wall-clock fake behind the SWR staleness check; tests move [nowMs] across the 24h ceiling. */
+    private val fakeTimeSource = FakeTimeSource()
 
     private fun buildRepository(): MediaRepositoryImpl {
-        every { apiClient.currentServer } returns serverFlow
-        every { apiClient.currentUser } returns userFlow
+        every { apiClient.session } returns sessionFlow
         every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
         val lrcLibApi: LrcLibApi = mockk(relaxed = true)
         val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
-        val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true) {
-            coEvery { get(any(), any(), any()) } returns null
-        }
         val playedStateSync: PlayedStateSync = mockk(relaxed = true)
         val offlineRepository: OfflineRepository = mockk(relaxed = true)
+        val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(
+            apiClient,
+            kotlinx.coroutines.CoroutineScope(
+                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+            ),
+        )
+        // Real registry on a real dispatcher — the identity chain the suite
+        // pins (session emission → transition → cache drop) runs on
+        // Dispatchers.Default exactly like the per-repo observers it replaced.
+        val sessionCacheRegistry = com.raulshma.jellyplay.core.data.session.SessionCacheRegistry(
+            homeSession,
+            kotlinx.coroutines.CoroutineScope(
+                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+            ),
+        )
         val episodeCatalogue = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl(
             apiClient,
             offlineRepository,
+            homeSession,
+            sessionCacheRegistry,
         )
         return MediaRepositoryImpl(
             apiClient,
@@ -61,6 +101,10 @@ class MediaRepositoryHomeSectionsCacheTest {
             networkMonitor,
             playedStateSync,
             episodeCatalogue,
+            mockk<UserDataRealtimeChannel>(relaxed = true),
+            fakeTimeSource,
+            homeSession,
+            sessionCacheRegistry,
         )
     }
 
@@ -70,19 +114,18 @@ class MediaRepositoryHomeSectionsCacheTest {
 
     private fun homeSection(tag: String) = mockk<HomeSection>(relaxed = true)
 
-    /** Waits long enough for the `Dispatchers.Default` collector to observe the latest emission. */
+    /** Waits long enough for the `Dispatchers.Default` identity chain (HomeSession → repo) to observe the latest emission. */
     private suspend fun waitForCacheObserver() {
         delay(150)
     }
 
     private suspend fun signIn(serverId: String, userId: String) {
-        serverFlow.value = serverInfo(serverId)
-        userFlow.value = userInfo(userId)
+        sessionFlow.value = ActiveSession(serverInfo(serverId), userInfo(userId))
         waitForCacheObserver()
     }
 
     private suspend fun switchUser(userId: String) {
-        userFlow.value = userInfo(userId)
+        sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo(userId))
         waitForCacheObserver()
     }
 
@@ -90,12 +133,12 @@ class MediaRepositoryHomeSectionsCacheTest {
     fun `getHomeSections caches result on repeat calls`() = runBlocking {
         val repository = buildRepository()
         signIn("server-1", "user-A")
-        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
         repository.getHomeSections(HomeSectionQuery())
         repository.getHomeSections(HomeSectionQuery())
 
-        coVerify(exactly = 1) { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
@@ -106,25 +149,25 @@ class MediaRepositoryHomeSectionsCacheTest {
         // MediaRepositoryImplTest).
         val repository = buildRepository()
         signIn("server-1", "user-A")
-        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
         repository.getHomeSections(HomeSectionQuery())
         repository.getHomeSections(HomeSectionQuery(), force = true)
 
-        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
     fun `getHomeSections re-fetches after the internal wholesale invalidation`() = runBlocking {
         val repository = buildRepository()
         signIn("server-1", "user-A")
-        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
         repository.getHomeSections(HomeSectionQuery())
         repository.invalidateCaches()
         repository.getHomeSections(HomeSectionQuery())
 
-        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
@@ -134,45 +177,118 @@ class MediaRepositoryHomeSectionsCacheTest {
         // for the next user within the TTL window.
         val repository = buildRepository()
         signIn("server-1", "user-A")
-        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
         repository.getHomeSections(HomeSectionQuery()) // populates user-A entry
 
         // Switch to user B on the same server.
         switchUser("user-B")
-        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("B")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("B")
 
         repository.getHomeSections(HomeSectionQuery())
 
         // Two distinct network fetches — user A's cached entry did NOT serve user B.
-        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
     fun `toggleFavorite invalidates the home-sections cache`() = runBlocking {
         val repository = buildRepository()
         signIn("server-1", "user-A")
-        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
         coEvery { apiClient.toggleFavorite(any()) } returns Result.success(true)
 
         repository.getHomeSections(HomeSectionQuery())
         repository.toggleFavorite("item-1")
         repository.getHomeSections(HomeSectionQuery())
 
-        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
     fun `markPlayed invalidates the home-sections cache`() = runBlocking {
         val repository = buildRepository()
         signIn("server-1", "user-A")
-        coEvery { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) } returns homeResult("A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
         repository.getHomeSections(HomeSectionQuery())
         repository.markPlayed("item-1")
         repository.getHomeSections(HomeSectionQuery())
 
-        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
+    }
+
+    @Test
+    fun `getHomeSections re-fetches once the 60s memory TTL expires`() = runBlocking {
+        // The TTL expiry itself had zero coverage: walk the shared fake clock
+        // (the TtlCache reads the injected [TimeSource], same as the SWR
+        // ceiling) past HomeFreshness.REPO_MEMORY_TTL_MS between two calls.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
+
+        fakeTimeSource.nowMs = 1_000L
+
+        repository.getHomeSections(HomeSectionQuery()) // cached at t=1000
+        fakeTimeSource.nowMs += HomeFreshness.REPO_MEMORY_TTL_MS + 1_000L // 61s later
+        repository.getHomeSections(HomeSectionQuery())
+
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
+    }
+
+    @Test
+    fun `getCachedHomeSections returns null when the Room snapshot is stale`() = runBlocking {
+        // A 25h-old SWR row must not instant-paint on cold open — the 24h
+        // ceiling (HomeFreshness.ROOM_SWR_STALE_MS) turns it into a miss so
+        // the UI shows a spinner and the normal refresh re-persists.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        fakeTimeSource.nowMs = NOW_WALL_MS
+        coEvery { homeSectionCacheDao.get(any(), any(), any()) } returns
+            swrEntity(fetchedAt = NOW_WALL_MS - 25 * 60 * 60_000L)
+
+        assertNull(repository.getCachedHomeSections(HomeSectionQuery()))
+    }
+
+    @Test
+    fun `getCachedHomeSections returns payload when the Room snapshot is fresh`() = runBlocking {
+        // 1h old — inside the ceiling: the cold open instant-paints from Room.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        fakeTimeSource.nowMs = NOW_WALL_MS
+        coEvery { homeSectionCacheDao.get(any(), any(), any()) } returns
+            swrEntity(fetchedAt = NOW_WALL_MS - 1 * 60 * 60_000L)
+
+        val cached = repository.getCachedHomeSections(HomeSectionQuery())
+
+        assertNotNull(cached)
+        assertEquals(1, cached?.sections?.size)
+    }
+
+    /** Arbitrary fixed epoch the SWR tests measure fetchedAt against. */
+    private companion object {
+        const val NOW_WALL_MS = 1_800_000_000_000L
+    }
+
+    /** DAO-shaped SWR row with a real, encodable payload (the read path decodes it). */
+    private fun swrEntity(fetchedAt: Long): HomeSectionCacheEntity {
+        val payload = HomeSectionsResult(
+            sections = listOf(
+                HomeSection(
+                    id = "cw",
+                    title = "Continue Watching",
+                    type = HomeSectionType.CONTINUE_WATCHING,
+                    items = listOf(MediaItem(id = "item-1", name = "Item 1", mediaType = MediaType.MOVIE)),
+                ),
+            ),
+        )
+        return HomeSectionCacheEntity(
+            serverId = "server-1",
+            userId = "user-A",
+            cacheKey = "irrelevant-get-is-stubbed-with-any",
+            payloadJson = com.raulshma.jellyplay.core.database.Converters.encodeHomeSectionsResult(payload),
+            fetchedAt = fetchedAt,
+        )
     }
 
     private fun userInfo(id: String) = UserInfo(
@@ -194,4 +310,16 @@ class MediaRepositoryHomeSectionsCacheTest {
         userId = null,
         accessToken = null,
     )
+
+    /**
+     * Controllable [TimeSource] for the SWR wall-clock check and the
+     * in-memory TTL's monotonic clock — same shape as feature/home's
+     * FakeTimeSource; kept local because core:data deliberately hosts no test
+     * fakes (see TimeSource's KDoc).
+     */
+    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
+        override fun nowEpochMillis(): Long = nowMs
+        override fun nowElapsedRealtimeMillis(): Long = nowMs
+        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
+    }
 }

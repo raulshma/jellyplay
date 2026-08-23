@@ -64,6 +64,9 @@ class PreferenceProjectionsTest {
             dataStore = TestDataStoreProvider.get(context)
             dataStore.edit { it.clear() }
             graph = createPreferenceSliceGraph(scope, dataStore)
+            // Home-discovery keys are per-user; activate one so the
+            // home-write test below has a namespace to write into.
+            graph.identityStore.setActiveUser("projections-user")
             // Drain the WhileSubscribed/Eagerly-cached slice flows so the
             // cleared state is observed before each test writes + reads.
             drainInitialSlices()

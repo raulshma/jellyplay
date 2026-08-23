@@ -21,6 +21,7 @@
     <string name="detail_more_like_this_on_device">기기 내</string>
     <string name="detail_section_videos">동영상</string>
     <string name="detail_section_seasons">시즌</string>
+    <string name="detail_section_reviews">리뷰</string>
 
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">재생</string>

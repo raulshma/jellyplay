@@ -49,7 +49,7 @@ internal object EngineConfigBuilder {
         audioDelayMs = effects.audioDelayMs,
         subtitleDelayMs = state.subtitleStyle.offsetMs,
         subtitleStyle = state.subtitleStyle,
-        videoEffects = state.videoEffects,
+        videoEffects = state.videoFx.videoEffects,
         audioEffects = audioEffects(
             dialogueBoostEnabled = state.dialogueBoostEnabled,
             dialogueBoostStrength = state.dialogueBoostStrength,

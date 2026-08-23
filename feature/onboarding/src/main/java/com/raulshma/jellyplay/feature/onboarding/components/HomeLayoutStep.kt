@@ -87,9 +87,15 @@ fun HomeLayoutStep(
             )
             Spacer(Modifier.height(8.dp))
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                HomeSectionType.entries.forEach { section ->
+                // Only CONFIGURABLE types affect the home fetch — the network
+                // constructs no FAVORITES / LIVE_TV / DOWNLOADED / PINNED rows,
+                // so toggling them here was a no-op. Labels come from the
+                // section descriptor (displayName); the previous name-derived
+                // casing produced "Live tv"-style labels that never matched the
+                // settings/home surfaces.
+                HomeSectionType.CONFIGURABLE.forEach { section ->
                     OnboardingToggleRow(
-                        title = section.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() },
+                        title = section.displayName,
                         checked = section in enabledHomeSectionTypes,
                         onCheckedChange = { enabled ->
                             val newSet = if (enabled) enabledHomeSectionTypes + section

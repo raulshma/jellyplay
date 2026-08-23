@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrMediaRequest
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -59,9 +60,13 @@ class SeerrRequestDelegate @Inject constructor(
     }
 
     suspend fun fetchTvSeasons(tmdbId: Int): List<SeerrSeason> {
-        return seerrRepository.getTvDetails(tmdbId).getOrNull()
+        return fetchTvDetails(tmdbId)
             ?.seasons?.filter { it.seasonNumber > 0 }
             ?: emptyList()
+    }
+
+    suspend fun fetchTvDetails(tmdbId: Int): SeerrTvDetails? {
+        return seerrRepository.getTvDetails(tmdbId).getOrNull()
     }
 
     suspend fun prefetchDetails(tmdbId: Int, mediaType: String) {

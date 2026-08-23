@@ -82,6 +82,7 @@ class VideoPlayerStateTest {
     fun episodeBrowserState_defaultValuesAndCopy() {
         val state = EpisodeBrowserState()
         assertNull(state.nextEpisode)
+        assertNull(state.previousEpisode)
         assertTrue(state.seriesSeasons.isEmpty())
         assertTrue(state.seasonEpisodes.isEmpty())
         assertFalse(state.isLoadingEpisodes)

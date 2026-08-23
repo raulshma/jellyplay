@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
+import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.isImageSubtitleCodec
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -27,6 +28,15 @@ class PlaybackApiClientImpl @Inject constructor(
     private val deviceProfileProvider: DeviceProfileProvider,
     private val playbackStore: PlaybackStore,
 ) : PlaybackApiClient {
+
+    /**
+     * Base URL for hand-built requests: the router's active endpoint, falling
+     * back to the current server's primary address when routing is not
+     * configured. [server] must be the non-null current server the caller
+     * already checked.
+     */
+    private fun activeBaseUrl(server: ServerInfo): String =
+        engine.activeServerAddress ?: server.address
 
     override suspend fun reportPlaybackStart(
         itemId: String,
@@ -148,7 +158,7 @@ class PlaybackApiClientImpl @Inject constructor(
         // opened as a (growing) direct stream — `static=true` makes the server
         // try a byte-range seek on a non-seekable stream and fail.
         val paramPrefix = if (useAudioEndpoint || isLive) "?" else "?static=true&"
-        return "${server.address}$path$paramPrefix$baseParams&api_key=${user.accessToken}"
+        return "${activeBaseUrl(server)}$path$paramPrefix$baseParams&api_key=${user.accessToken}"
     }
 
     override suspend fun fetchPlaybackInfo(
@@ -205,10 +215,24 @@ class PlaybackApiClientImpl @Inject constructor(
         )
     }
 
+    override suspend fun fetchActiveTranscodeReasons(itemId: String): Result<List<String>> =
+        engine.apiResultWithRetry {
+            val api = engine.requireApi()
+            val uuid = itemId.toUUID()
+            val sessions = api.sessionApi.getSessions().content
+            // Match this device's session playing the item; the SDK client's
+            // deviceInfo.id is the DataStore UUID shared with the socket and
+            // the Play On device list (see NetworkModule.provideJellyfin).
+            sessions.firstOrNull { session ->
+                session.deviceId == api.deviceInfo.id &&
+                    session.nowPlayingItem?.id == uuid
+            }?.transcodingInfo?.transcodeReasons.orEmpty().map { it.name }
+        }
+
     override fun getSubtitleDeliveryUrl(deliveryUrl: String): String {
         val server = engine.currentServer.value ?: return ""
         val user = engine.currentUser.value ?: return ""
-        val baseUrl = if (deliveryUrl.startsWith("http")) deliveryUrl else "${server.address}$deliveryUrl"
+        val baseUrl = if (deliveryUrl.startsWith("http")) deliveryUrl else "${activeBaseUrl(server)}$deliveryUrl"
         val separator = if ("?" in baseUrl) "&" else "?"
         return "$baseUrl${separator}api_key=${user.accessToken}"
     }
@@ -231,13 +255,13 @@ class PlaybackApiClientImpl @Inject constructor(
             "ass", "ssa" -> codec!!.lowercase()
             else -> (codec ?: "srt").lowercase()
         }
-        return "${server.address}/Videos/$itemId/$mediaSourceId/Subtitles/$index/Stream.$format?api_key=${user.accessToken}"
+        return "${activeBaseUrl(server)}/Videos/$itemId/$mediaSourceId/Subtitles/$index/Stream.$format?api_key=${user.accessToken}"
     }
 
     override suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps> = engine.apiResultWithRetry {
         val server = engine.currentServer.value ?: throw IllegalStateException("No server")
         val user = engine.currentUser.value ?: throw IllegalStateException("No user")
-        val url = "${server.address}/Items/$itemId/IntroSkipTimestamps"
+        val url = "${activeBaseUrl(server)}/Items/$itemId/IntroSkipTimestamps"
         val request = Request.Builder()
             .url(url)
             .header("X-Emby-Token", user.accessToken)
@@ -255,7 +279,7 @@ class PlaybackApiClientImpl @Inject constructor(
     override suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps> = engine.apiResultWithRetry {
         val server = engine.currentServer.value ?: throw IllegalStateException("No server")
         val user = engine.currentUser.value ?: throw IllegalStateException("No user")
-        val url = "${server.address}/Items/$itemId/CreditTimestamps"
+        val url = "${activeBaseUrl(server)}/Items/$itemId/CreditTimestamps"
         val request = Request.Builder()
             .url(url)
             .header("X-Emby-Token", user.accessToken)
@@ -288,7 +312,7 @@ class PlaybackApiClientImpl @Inject constructor(
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> = engine.apiResultWithRetry {
         val server = engine.currentServer.value ?: throw IllegalStateException("No server")
         val user = engine.currentUser.value ?: throw IllegalStateException("No user")
-        val url = "${server.address}/Items/$itemId/RemoteSearch/Subtitles"
+        val url = "${activeBaseUrl(server)}/Items/$itemId/RemoteSearch/Subtitles"
         val request = Request.Builder()
             .url(url)
             .header("X-Emby-Token", user.accessToken)

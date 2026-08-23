@@ -10,6 +10,8 @@ import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -19,12 +21,8 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.SortOption
-import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
-import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
-import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -118,12 +116,18 @@ class SearchViewModel @Inject constructor(
 
     private var seerrSearchJob: Job? = null
 
+    // Tracked like seerrSearchJob: an untracked offline scan could complete
+    // after a newer query published its results and overwrite them with
+    // stale rows (plus a wasted duplicate DB scan per keystroke burst).
+    private var offlineSearchJob: Job? = null
+
     val pagedResults: Flow<PagingData<MediaItem>> = combine(
         queryFlow.flow.debounce(mediaSearchEngine.debounceMs).distinctUntilChanged(),
         _filters.flow,
     ) { q, f -> q to f }
         .flatMapLatest { (currentQuery, filters) ->
             seerrSearchJob?.cancel()
+            offlineSearchJob?.cancel()
             _seerrResults.set(emptyList())
             _seerrSearchError.set(false)
             if (currentQuery.isBlank()) {
@@ -131,7 +135,7 @@ class SearchViewModel @Inject constructor(
                 flowOf(PagingData.empty())
             } else {
                 seerrSearchJob = launch { searchSeerr(currentQuery) }
-                launch { searchOffline(currentQuery) }
+                offlineSearchJob = launch { searchOffline(currentQuery) }
                 mediaRepository.searchPaged(
                     query = currentQuery,
                     filters = filters,
@@ -370,12 +374,10 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    private val seerrRequestState = com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder(scope, seerrRequestDelegate)
-    val requestResult: StateFlow<SeerrRequestResult?> get() = seerrRequestState.requestResult
-    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> get() = seerrRequestState.radarrServers
-    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> get() = seerrRequestState.sonarrServers
-    val isLoadingSeerrServices: StateFlow<Boolean> get() = seerrRequestState.isLoadingServices
-    val tvSeasons: StateFlow<List<SeerrSeason>> get() = seerrRequestState.tvSeasons
+    private val seerrRequestState = SeerrRequestStateHolder(scope, seerrRequestDelegate)
+
+    /** Seerr request lifecycle state (the holder's single snapshot interface). */
+    val seerrSnapshot: StateFlow<SeerrRequestSnapshot> = seerrRequestState.snapshotIn(scope)
 
     fun requestSeerrMedia(
         item: SeerrSearchItem,

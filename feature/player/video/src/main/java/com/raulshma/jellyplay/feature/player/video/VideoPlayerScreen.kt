@@ -34,6 +34,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
+import com.raulshma.jellyplay.core.ui.player.FormattedTranscodeReason
+import com.raulshma.jellyplay.core.ui.player.TranscodeReasonsFormatter
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -334,7 +336,7 @@ fun VideoPlayerScreen(
     ) { uri: android.net.Uri? ->
         if (uri != null) {
             val fileName = uri.lastPathSegment?.substringAfterLast('/') ?: "subtitle.srt"
-            viewModel.addLocalSubtitle(uri, fileName)
+            viewModel.subtitles.addLocalSubtitle(uri, fileName)
             currentSheet = PlayerSheet.None
         }
     }
@@ -365,7 +367,7 @@ fun VideoPlayerScreen(
     var tvTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
     LaunchedEffect(itemId) {
-        if (viewModel.isBackgroundCasting) {
+        if (viewModel.cast.isBackgroundCasting) {
             viewModel.reattachFromBackgroundCast()
         } else {
             viewModel.initialize(
@@ -454,8 +456,8 @@ fun VideoPlayerScreen(
 
         onDispose {
             val currentlyInPip = viewModel.pipController.isInPipMode.value
-            val isBgCasting = viewModel.isCastConnected && viewModel.castIsPlaying.value &&
-                viewModel.backgroundCastingEnabled
+            val isBgCasting = viewModel.cast.isCastConnected && viewModel.cast.castIsPlaying.value &&
+                viewModel.cast.backgroundCastingEnabled
             val restoreOrientation = if (isTv)
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
@@ -509,10 +511,10 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(uiState.isPlaying, uiState.keepScreenOnDuringVideo) {
+    LaunchedEffect(uiState.isPlaying, uiState.uiPrefs.keepScreenOnDuringVideo) {
         activity?.let {
             if (!it.isDestroyed && !it.isFinishing) {
-                if (uiState.isPlaying && uiState.keepScreenOnDuringVideo) {
+                if (uiState.isPlaying && uiState.uiPrefs.keepScreenOnDuringVideo) {
                     it.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 } else {
                     it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -523,9 +525,9 @@ fun VideoPlayerScreen(
 
 
 
-    LaunchedEffect(uiState.frameRateMatching, uiState.refreshRateMode, uiState.videoFrameRate) {
-        if (uiState.frameRateMatching && uiState.refreshRateMode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF && uiState.videoFrameRate != null) {
-            val videoStream = uiState.mediaStreams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
+    LaunchedEffect(uiState.gestures.frameRateMatching, uiState.gestures.refreshRateMode, uiState.videoFrameRate) {
+        if (uiState.gestures.frameRateMatching && uiState.gestures.refreshRateMode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF && uiState.videoFrameRate != null) {
+            val videoStream = uiState.media.mediaStreams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
             activity?.let {
                 if (!it.isDestroyed && !it.isFinishing) {
                     FrameRateMatcher.matchFrameRate(
@@ -533,22 +535,22 @@ fun VideoPlayerScreen(
                         frameRate = uiState.videoFrameRate,
                         targetWidth = videoStream?.width,
                         targetHeight = videoStream?.height,
-                        mode = uiState.refreshRateMode,
+                        mode = uiState.gestures.refreshRateMode,
                     )
                 }
             }
         }
     }
 
-    LaunchedEffect(uiState.rememberBrightness) {
+    LaunchedEffect(uiState.gestures.rememberBrightness) {
         // -1f (BRIGHTNESS_OVERRIDE_NONE) is the "user hasn't set a level" sentinel;
         // 0.5f is a legitimate brightness a user can pick, so it must not be used
         // as the guard. Re-applies the saved level on recreate/resume.
-        if (uiState.rememberBrightness && uiState.brightnessLevel >= 0f) {
+        if (uiState.gestures.rememberBrightness && uiState.gestures.brightnessLevel >= 0f) {
             activity?.let { act ->
                 if (!act.isDestroyed && !act.isFinishing) {
                     val layout = act.window.attributes
-                    layout.screenBrightness = uiState.brightnessLevel
+                    layout.screenBrightness = uiState.gestures.brightnessLevel
                     act.window.attributes = layout
                 }
             }
@@ -560,8 +562,8 @@ fun VideoPlayerScreen(
     // only re-fires when the rememberBrightness *flag* changes — not on plain
     // foregrounding. Re-apply the saved level on every ON_RESUME so the user's
     // chosen brightness survives navigation away and back.
-    val brightnessLevel = uiState.brightnessLevel
-    val rememberBrightness = uiState.rememberBrightness
+    val brightnessLevel = uiState.gestures.brightnessLevel
+    val rememberBrightness = uiState.gestures.rememberBrightness
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(activity, rememberBrightness, brightnessLevel, lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
@@ -594,11 +596,11 @@ fun VideoPlayerScreen(
     val engine by viewModel.playerEngineFlow.collectAsStateWithLifecycle()
     val title = uiState.title
     val subtitle = uiState.subtitle
-    val isCastConnected by viewModel.isConnectedFlow.collectAsStateWithLifecycle(initialValue = false)
-    val isCastConnecting by viewModel.isConnectingFlow.collectAsStateWithLifecycle(initialValue = false)
-    val castIsPlaying by viewModel.castIsPlaying.collectAsStateWithLifecycle(initialValue = false)
-    val castDuration by viewModel.castDurationMs.collectAsStateWithLifecycle(initialValue = 0L)
-    val castVolume by viewModel.castVolumeFlow.collectAsStateWithLifecycle(initialValue = 1f)
+    val isCastConnected by viewModel.cast.isConnectedFlow.collectAsStateWithLifecycle(initialValue = false)
+    val isCastConnecting by viewModel.cast.isConnectingFlow.collectAsStateWithLifecycle(initialValue = false)
+    val castIsPlaying by viewModel.cast.castIsPlaying.collectAsStateWithLifecycle(initialValue = false)
+    val castDuration by viewModel.cast.castDurationMs.collectAsStateWithLifecycle(initialValue = 0L)
+    val castVolume by viewModel.cast.castVolumeFlow.collectAsStateWithLifecycle(initialValue = 1f)
 
     val isPlaying = if (isCastConnected) castIsPlaying else uiState.isPlaying
     // If playback is actually running, the user intended it — reconcile the
@@ -615,12 +617,12 @@ fun VideoPlayerScreen(
     val engineDuration by viewModel.durationMs.collectAsStateWithLifecycle()
     val duration = if (isCastConnected) castDuration else engineDuration
     val playbackSpeed = uiState.playbackSpeed
-    val currentMediaSource = uiState.currentMediaSource
-    val mediaStreams = uiState.mediaStreams
-    val aspectRatio = uiState.aspectRatio
-    val detectedAspectRatio = uiState.detectedAspectRatio
+    val currentMediaSource = uiState.media.currentMediaSource
+    val mediaStreams = uiState.media.mediaStreams
+    val aspectRatio = uiState.videoFx.aspectRatio
+    val detectedAspectRatio = uiState.videoFx.detectedAspectRatio
 
-    val toggleOrientation: () -> Unit = remember(activity, uiState.defaultOrientation) {
+    val toggleOrientation: () -> Unit = remember(activity, uiState.uiPrefs.defaultOrientation) {
         {
             activity?.let { act ->
                 val current = act.requestedOrientation
@@ -629,7 +631,7 @@ fun VideoPlayerScreen(
                 // Resolve the configured default landscape mode so the toggle is symmetric:
                 // portrait ↔ default-landscape, always returning to the user's preferred
                 // landscape rather than drifting between LANDSCAPE and SENSOR_LANDSCAPE.
-                val defaultLandscape = when (uiState.defaultOrientation) {
+                val defaultLandscape = when (uiState.uiPrefs.defaultOrientation) {
                     OrientationMode.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
                     else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 }
@@ -639,9 +641,9 @@ fun VideoPlayerScreen(
         }
     }
 
-    val syncPlayIgnoreWait by viewModel.syncPlayIgnoreWait.collectAsStateWithLifecycle()
+    val syncPlayIgnoreWait by viewModel.syncPlay.ignoreWait.collectAsStateWithLifecycle()
 
-    LaunchedEffect(isCastConnected, uiState.defaultOrientation) {
+    LaunchedEffect(isCastConnected, uiState.uiPrefs.defaultOrientation) {
         activity?.let {
             if (!it.isDestroyed && !it.isFinishing) {
                 if (isTv) {
@@ -651,7 +653,7 @@ fun VideoPlayerScreen(
                 } else {
                     delay(400)
                     if (!it.isDestroyed && !it.isFinishing) {
-                        it.requestedOrientation = when (uiState.defaultOrientation) {
+                        it.requestedOrientation = when (uiState.uiPrefs.defaultOrientation) {
                             OrientationMode.SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                             OrientationMode.SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
                             OrientationMode.SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
@@ -686,9 +688,9 @@ fun VideoPlayerScreen(
         engine?.setAspectRatio(effectiveRatio)
     }
 
-    val playMethod = uiState.playMethod
+    val playMethod = uiState.media.playMethod
     val subtitleStyle = uiState.subtitleStyle
-    val nextEpisode = uiState.nextEpisode
+    val nextEpisode = uiState.episodes.nextEpisode
     val nextEpisodeImageUrl = remember(nextEpisode) {
         nextEpisode?.let { viewModel.getImageUrl(it.id, 300) }
     }
@@ -718,34 +720,34 @@ fun VideoPlayerScreen(
     val doPlay: () -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
         {
             playbackIntended = true
-            if (isInSyncPlaySession) viewModel.syncPlayTogglePlayPause()
-            else if (isCastConnected) viewModel.castPlay()
+            if (isInSyncPlaySession) viewModel.syncPlay.togglePlayPause()
+            else if (isCastConnected) viewModel.cast.castPlay()
             else viewModel.resumePlayback()
         }
     }
     val doPause: () -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
         {
             playbackIntended = false
-            if (isInSyncPlaySession) viewModel.syncPlayTogglePlayPause()
-            else if (isCastConnected) viewModel.castPause()
+            if (isInSyncPlaySession) viewModel.syncPlay.togglePlayPause()
+            else if (isCastConnected) viewModel.cast.castPause()
             else engine?.pause()
         }
     }
     val doSeekTo: (Long) -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
         { ms ->
-            if (isInSyncPlaySession) viewModel.syncPlaySeekTo(ms)
-            else if (isCastConnected) viewModel.castSeekTo(ms)
+            if (isInSyncPlaySession) viewModel.syncPlay.seekTo(ms)
+            else if (isCastConnected) viewModel.cast.castSeekTo(ms)
             else viewModel.seekTo(ms)
         }
     }
-    val doSeekBack: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo, isCastConnected) {
+    val doSeekBack: () -> Unit = remember(engine, uiState.gestures.seekDurationMs, doSeekTo, isCastConnected) {
         {
             val pos = viewModel.playerEngineRef?.currentPositionMs ?: 0L
-            val target = (pos - uiState.seekDurationMs).coerceAtLeast(0)
+            val target = (pos - uiState.gestures.seekDurationMs).coerceAtLeast(0)
             doSeekTo(target)
         }
     }
-    val doSeekForward: () -> Unit = remember(engine, uiState.seekDurationMs, doSeekTo, isCastConnected) {
+    val doSeekForward: () -> Unit = remember(engine, uiState.gestures.seekDurationMs, doSeekTo, isCastConnected) {
         {
             val pos = viewModel.playerEngineRef?.currentPositionMs ?: 0L
             val dur = viewModel.playerEngineRef?.durationMs ?: 0L
@@ -753,9 +755,9 @@ fun VideoPlayerScreen(
             // forward seek to 0. Skip the upper clamp when there is no known duration;
             // the engine clamps on its own at seek time. Mirrors the gesture path.
             val target = if (dur <= 0L) {
-                (pos + uiState.seekDurationMs).coerceAtLeast(0L)
+                (pos + uiState.gestures.seekDurationMs).coerceAtLeast(0L)
             } else {
-                (pos + uiState.seekDurationMs).coerceAtMost(dur)
+                (pos + uiState.gestures.seekDurationMs).coerceAtMost(dur)
             }
             doSeekTo(target)
         }
@@ -766,7 +768,7 @@ fun VideoPlayerScreen(
     val currentDoSeekBack by rememberUpdatedState(doSeekBack)
     val currentDoSeekForward by rememberUpdatedState(doSeekForward)
     val currentDoTogglePlayPause by rememberUpdatedState(doTogglePlayPause)
-    val currentSeekDurationMs by rememberUpdatedState(uiState.seekDurationMs)
+    val currentSeekDurationMs by rememberUpdatedState(uiState.gestures.seekDurationMs)
     val seekState = rememberDpadSeekState(
         getBaseStepMs = { currentSeekDurationMs },
         getCurrentPositionMs = { viewModel.playerEngineRef?.currentPositionMs ?: 0L },
@@ -782,7 +784,7 @@ fun VideoPlayerScreen(
     val gestureController = remember(
         scope,
         engine,
-        uiState.swipeSeekMaxMs,
+        uiState.gestures.swipeSeekMaxMs,
         isCastConnected,
         castVolume,
         doSeekTo,
@@ -790,7 +792,7 @@ fun VideoPlayerScreen(
         GestureSeekController(
             scope = scope,
             getEngine = { engine },
-            getSwipeSeekMaxMs = { uiState.swipeSeekMaxMs },
+            getSwipeSeekMaxMs = { uiState.gestures.swipeSeekMaxMs },
             isCastConnected = { isCastConnected },
             getCastVolume = { castVolume },
             readWindowBrightness = { activity?.window?.attributes?.screenBrightness ?: -1f },
@@ -825,7 +827,7 @@ fun VideoPlayerScreen(
             },
             doSeekTo = doSeekTo,
             saveBrightness = viewModel::saveBrightness,
-            setCastVolume = viewModel::setCastVolume,
+            setCastVolume = viewModel.cast::setCastVolume,
         )
     }
     val brightnessOverlay by gestureController.brightnessOverlay.collectAsStateWithLifecycle()
@@ -862,24 +864,24 @@ fun VideoPlayerScreen(
         CompanionDashboard(
             title = title,
             subtitle = subtitle,
-            overview = uiState.overview,
-            people = uiState.people,
-            lyricsLines = uiState.lyricsLines,
-            artworkUrl = uiState.artworkUrl,
+            overview = uiState.media.overview,
+            people = uiState.media.people,
+            lyricsLines = uiState.media.lyricsLines,
+            artworkUrl = uiState.media.artworkUrl,
             isPlaying = isPlaying,
-            castPositionFlow = viewModel.castPositionMs,
+            castPositionFlow = viewModel.cast.castPositionMs,
             durationMs = duration,
             volume = castVolume,
             isConnecting = isCastConnecting,
             audioTracks = trackState.audioTracks,
             subtitleTracks = trackState.subtitleTracks,
-            episodes = uiState.seasonEpisodes,
+            episodes = uiState.episodes.seasonEpisodes,
             onPlayPause = doTogglePlayPause,
             onSeekBack = doSeekBack,
             onSeekForward = doSeekForward,
             onSeekTo = doSeekTo,
-            onVolumeChange = { vol -> viewModel.setCastVolume(vol) },
-            onDisconnect = { viewModel.onCastDisconnected(); viewModel.castManagerField.disconnect(context) },
+            onVolumeChange = { vol -> viewModel.cast.setCastVolume(vol) },
+            onDisconnect = { viewModel.cast.onCastDisconnected(); viewModel.cast.disconnect(context) },
             onSelectAudioTrack = { viewModel.selectAudioTrack(it) },
             onSelectSubtitleTrack = { viewModel.selectSubtitleTrack(it) },
             onPlayEpisode = { epId -> viewModel.initialize(epId, null, 0L) },
@@ -1056,13 +1058,13 @@ fun VideoPlayerScreen(
                             }
                     } else Modifier
                 )
-                .pointerInput(uiState.gesturesEnabled, isScreenLocked) {
+                .pointerInput(uiState.gestures.gesturesEnabled, isScreenLocked) {
                     if (isScreenLocked) return@pointerInput
-                    if (!uiState.gesturesEnabled) return@pointerInput
+                    if (!uiState.gestures.gesturesEnabled) return@pointerInput
                     detectTapGestures(
                         onTap = {
                             viewModel.onUserInteraction()
-                            if (uiState.isHoldSpeedActive) {
+                            if (uiState.gestures.isHoldSpeedActive) {
                                 viewModel.stopHoldSpeed()
                             } else {
                                 showControls = !showControls
@@ -1070,7 +1072,7 @@ fun VideoPlayerScreen(
                         },
                         onLongPress = {
                             viewModel.onUserInteraction()
-                            if (uiState.holdSpeedEnabled) viewModel.startHoldSpeed()
+                            if (uiState.gestures.holdSpeedEnabled) viewModel.startHoldSpeed()
                         },
                         onDoubleTap = { offset ->
                             viewModel.onUserInteraction()
@@ -1098,9 +1100,9 @@ fun VideoPlayerScreen(
                         },
                     )
                 }
-                .pointerInput(uiState.gesturesEnabled, isScreenLocked) {
+                .pointerInput(uiState.gestures.gesturesEnabled, isScreenLocked) {
                     if (isScreenLocked) return@pointerInput
-                    if (!uiState.gesturesEnabled) return@pointerInput
+                    if (!uiState.gestures.gesturesEnabled) return@pointerInput
                     awaitEachGesture {
                         var prevDistance = 0f
                         do {
@@ -1134,8 +1136,8 @@ fun VideoPlayerScreen(
                 // so the video graphicsLayer and the zoom-gated subtitle logic
                 // share the exact same value (no drift). > 1 means the video is
                 // scaled/cropped, which is when subtitles would move off-screen.
-                val tvBaselineZoom = if (isTv && uiState.tvZoomModePercent != 0f) {
-                    1f + (uiState.tvZoomModePercent / 100f)
+                val tvBaselineZoom = if (isTv && uiState.videoFx.tvZoomModePercent != 0f) {
+                    1f + (uiState.videoFx.tvZoomModePercent / 100f)
                 } else 1f
                 // Suppress zoom while in PiP: the pinch-zoomed crop has no meaning in
                 // the floating window, and restoring on exit is automatic since the
@@ -1262,6 +1264,7 @@ fun VideoPlayerScreen(
                                 MpvSubtitleOverlay(
                                     cue = liveCue,
                                     style = uiState.subtitleStyle,
+                                    fontProvider = viewModel.fontProvider,
                                 )
                             }
                         }
@@ -1276,9 +1279,9 @@ fun VideoPlayerScreen(
                 seekOffsetMs = seekState.offsetMs,
                 brightnessValue = brightnessOverlay,
                 volumeValue = volumeOverlay,
-                indicatorSide = uiState.gestureIndicatorSide,
-                gesturesEnabled = uiState.gesturesEnabled && !isScreenLocked,
-                swipeSeekMaxMs = uiState.swipeSeekMaxMs,
+                indicatorSide = uiState.gestures.gestureIndicatorSide,
+                gesturesEnabled = uiState.gestures.gesturesEnabled && !isScreenLocked,
+                swipeSeekMaxMs = uiState.gestures.swipeSeekMaxMs,
                 onSeekGesture = remember(gestureController) { { totalDeltaMs -> gestureController.onSeekGesture(totalDeltaMs) } },
                 onBrightnessGesture = remember(gestureController) { { delta -> gestureController.onBrightnessGesture(delta) } },
                 onVolumeGesture = remember(gestureController) { { delta -> gestureController.onVolumeGesture(delta) } },
@@ -1323,7 +1326,7 @@ fun VideoPlayerScreen(
             )
 
             AnimatedVisibility(
-                visible = uiState.isHoldSpeedActive,
+                visible = uiState.gestures.isHoldSpeedActive,
                 enter = fadeIn(tween(100)),
                 exit = fadeOut(tween(150)),
             ) {
@@ -1354,7 +1357,7 @@ fun VideoPlayerScreen(
 
             // Trickplay overlay for seek gestures
             AnimatedVisibility(
-                visible = uiState.trickplayOnSeekGesture && gestureTrickplayVisible,
+                visible = uiState.uiPrefs.trickplayOnSeekGesture && gestureTrickplayVisible,
                 enter = fadeIn(tween(150, easing = AlphaEasing)),
                 exit = fadeOut(tween(200, easing = AlphaEasing)),
                 modifier = Modifier.align(Alignment.Center),
@@ -1407,11 +1410,11 @@ fun VideoPlayerScreen(
                     seasonNumber = nextEpisode.seasonNumber,
                     episodeNumber = nextEpisode.episodeNumber,
                     thumbnailUrl = nextEpisodeImageUrl,
-                    countdownSeconds = uiState.autoPlayCountdownSec,
-                    autoplayEnabled = uiState.videoAutoplayNext,
+                    countdownSeconds = uiState.autoplay.autoPlayCountdownSec,
+                    autoplayEnabled = uiState.autoplay.videoAutoplayNext,
                     onPlayNext = { viewModel.playNextEpisode() },
                     onCancel = { viewModel.cancelAutoplay() },
-                    onToggleAutoplay = { viewModel.setVideoAutoplayNext(!uiState.videoAutoplayNext) },
+                    onToggleAutoplay = { viewModel.setVideoAutoplayNext(!uiState.autoplay.videoAutoplayNext) },
                     isPlaying = isPlaying,
                     pauseCountdown = currentSheet != PlayerSheet.None || isScreenLocked,
                     focusRequester = tvNextEpisodeFocusRequester,
@@ -1439,7 +1442,7 @@ fun VideoPlayerScreen(
             }
 
             if (isScreenLocked && !isInPipMode) {
-                val usePin = uiState.usePinForPlayerLock && uiState.hasPin
+                val usePin = uiState.uiPrefs.usePinForPlayerLock && uiState.uiPrefs.hasPin
                 if (usePin) {
                     PinLockOverlay(
                         visible = true,
@@ -1469,12 +1472,12 @@ fun VideoPlayerScreen(
             // uiState. Each is low-frequency; collecting per-leaf keeps the
             // root scope unaffected.
             val trackState by viewModel.trackState.collectAsStateWithLifecycle()
-            val effectsState by viewModel.effectsState.collectAsStateWithLifecycle()
-            val sleepTimer by viewModel.sleepTimerState.collectAsStateWithLifecycle()
-            val abRepeat by viewModel.abRepeatState.collectAsStateWithLifecycle()
-            val syncPlay by viewModel.syncPlayState.collectAsStateWithLifecycle()
+            val effectsState by viewModel.effects.state.collectAsStateWithLifecycle()
+            val sleepTimer by viewModel.sleepTimer.state.collectAsStateWithLifecycle()
+            val abRepeat by viewModel.abRepeat.state.collectAsStateWithLifecycle()
+            val syncPlay by viewModel.syncPlay.state.collectAsStateWithLifecycle()
 
-            if (uiState.showVideoStats) {
+            if (uiState.uiPrefs.showVideoStats) {
                 VideoStatsOverlay(
                     statsFlow = viewModel.videoStats,
                     currentPositionFlow = viewModel.currentPositionMs,
@@ -1486,10 +1489,11 @@ fun VideoPlayerScreen(
                         !isPlaying -> "Paused"
                         else -> "Playing"
                     },
-                    playMethod = uiState.playMethod,
+                    playMethod = uiState.media.playMethod,
                     streamingQuality = uiState.preferredPlayerType.name,
                     playerType = uiState.preferredPlayerType.name,
                     decoderMode = effectsState.decoderMode.displayName,
+                    transcodeReasons = rememberFormattedTranscodeReasons(uiState.media.transcodeReasons),
                     // Engines expose a real audio session id (ExoPlayer: live
                     // session; mpv: generated id; VLC: 0 — capabilities gate the
                     // row). Read the collected engine so a swap refreshes it.
@@ -1507,7 +1511,7 @@ fun VideoPlayerScreen(
                 detectedAspectRatio = detectedAspectRatio,
                 aspectRatio = aspectRatio,
             )
-            AbRepeatBadge(events = viewModel.abRepeatEvents)
+            AbRepeatBadge(events = viewModel.abRepeat.events)
 
             ZoomBadge(videoZoom = videoZoom)
 
@@ -1536,13 +1540,13 @@ fun VideoPlayerScreen(
                     .padding(top = RESUME_CHIP_TOP_CLEARANCE_DP.dp),
             )
 
-            val hasEpisodes = uiState.seriesSeasons.isNotEmpty() && uiState.seasonEpisodes.isNotEmpty()
-            val episodeBrowserEnabled = uiState.videoEpisodeBrowserEnabled
+            val hasEpisodes = uiState.episodes.seriesSeasons.isNotEmpty() && uiState.episodes.seasonEpisodes.isNotEmpty()
+            val episodeBrowserEnabled = uiState.episodes.videoEpisodeBrowserEnabled
             // Previous/Next center-button availability. Derived from the
             // adjacency snapshot fetchAdjacentEpisodes writes alongside
             // nextEpisode, so these stay consistent with the up-next overlay.
-            val hasPreviousEpisode = uiState.previousEpisode != null
-            val hasNextEpisode = uiState.nextEpisode != null
+            val hasPreviousEpisode = uiState.episodes.previousEpisode != null
+            val hasNextEpisode = uiState.episodes.nextEpisode != null
 
             // Hoist PlayerControls callbacks into remembered lambdas.
             // Each fresh `{ ... }` passed inline below allocated a new lambda
@@ -1571,9 +1575,9 @@ fun VideoPlayerScreen(
             val onAudioClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Audio }) }
             // Primary subtitle button opens the hub on the Tracks tab.
             val onSubtitleClick by remember { mutableStateOf({
-                viewModel.loadRemoteSubtitles()
-                viewModel.loadSubtitleCultures()
-                viewModel.loadConfiguredSubtitleProviders()
+                viewModel.subtitles.loadRemoteSubtitles()
+                viewModel.subtitles.loadSubtitleCultures()
+                viewModel.subtitles.loadConfiguredProviders()
                 currentSheet = PlayerSheet.SubtitleHub
             }) }
             // Overflow "Subtitles" entry opens the hub on the Get tab (the
@@ -1581,10 +1585,10 @@ fun VideoPlayerScreen(
             val onSubtitleHubClick by remember { mutableStateOf({
                 // Reset search/cultures state from any previous item before
                 // loading fresh data, so stale results don't leak across items.
-                viewModel.resetSubtitleManagerState()
-                viewModel.loadRemoteSubtitles()
-                viewModel.loadSubtitleCultures()
-                viewModel.loadConfiguredSubtitleProviders()
+                viewModel.subtitles.resetSubtitleManagerState()
+                viewModel.subtitles.loadRemoteSubtitles()
+                viewModel.subtitles.loadSubtitleCultures()
+                viewModel.subtitles.loadConfiguredProviders()
                 currentSheet = PlayerSheet.SubtitleHub
             }) }
             val onChapterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Chapter }) }
@@ -1592,14 +1596,14 @@ fun VideoPlayerScreen(
             val onAspectRatioClick by remember { mutableStateOf({ currentSheet = PlayerSheet.AspectRatio }) }
             val onDialogueBoostClick by remember { mutableStateOf({ viewModel.toggleDialogueBoost() }) }
             val onDialogueBoostStrengthChange by remember { mutableStateOf({ strength: EffectStrength -> viewModel.setDialogueBoostStrength(strength) }) }
-            val onNightModeClick by remember { mutableStateOf({ viewModel.toggleNightMode() }) }
-            val onNightModeStrengthChange by remember { mutableStateOf({ strength: EffectStrength -> viewModel.setNightModeStrength(strength) }) }
+            val onNightModeClick by remember { mutableStateOf({ viewModel.effects.toggleNightMode() }) }
+            val onNightModeStrengthChange by remember { mutableStateOf({ strength: EffectStrength -> viewModel.effects.setNightModeStrength(strength) }) }
             val onAVSyncClick by remember { mutableStateOf({ currentSheet = PlayerSheet.AVSync }) }
             val onDecoderClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Decoder }) }
             // effectsState is a `by collectAsStateWithLifecycle()` delegate, so
             // `effectsState.audioPassthrough` is read at invocation time — no key
             // needed and the lambda never goes stale.
-            val onPassthroughClick by remember { mutableStateOf({ viewModel.setAudioPassthrough(!effectsState.audioPassthrough) }) }
+            val onPassthroughClick by remember { mutableStateOf({ viewModel.effects.setAudioPassthrough(!effectsState.audioPassthrough) }) }
             val onEpisodesClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Episodes }) }
             val onSyncPlayClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SyncPlay }) }
             val onPipClick by remember(onEnterPip) { mutableStateOf({ onEnterPip() }) }
@@ -1607,10 +1611,10 @@ fun VideoPlayerScreen(
             val onVideoStatsClick by remember { mutableStateOf({ viewModel.toggleVideoStats() }) }
             val onQualityClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Quality }) }
             val onPlaybackModeClick by remember { mutableStateOf({ currentSheet = PlayerSheet.PlaybackMode }) }
-            val onAudioNormalizationClick by remember { mutableStateOf({ viewModel.toggleAudioNormalization() }) }
-            val onAudioNormalizationModeChange by remember { mutableStateOf({ mode: AudioNormalizationMode -> viewModel.setAudioNormalizationMode(mode) }) }
-            val onChannelMixClick by remember { mutableStateOf({ viewModel.toggleChannelMix() }) }
-            val onChannelMixModeChange by remember { mutableStateOf({ mode: ChannelMixMode -> viewModel.setChannelMixMode(mode) }) }
+            val onAudioNormalizationClick by remember { mutableStateOf({ viewModel.effects.toggleAudioNormalization() }) }
+            val onAudioNormalizationModeChange by remember { mutableStateOf({ mode: AudioNormalizationMode -> viewModel.effects.setAudioNormalizationMode(mode) }) }
+            val onChannelMixClick by remember { mutableStateOf({ viewModel.effects.toggleChannelMix() }) }
+            val onChannelMixModeChange by remember { mutableStateOf({ mode: ChannelMixMode -> viewModel.effects.setChannelMixMode(mode) }) }
             val onSleepTimerClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SleepTimer }) }
             val onVideoFilterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.VideoFilter }) }
             // Capture the current video frame via PixelCopy on the engine's
@@ -1682,18 +1686,19 @@ fun VideoPlayerScreen(
                 nightModeEnabled = effectsState.nightModeEnabled,
                 nightModeStrength = effectsState.nightModeStrength,
                 audioPassthrough = effectsState.audioPassthrough,
-                segments = uiState.segments,
+                segments = uiState.segmentState.segments,
                 resumePositionMs = resumePositionMs,
-                playMethod = uiState.playMethod,
+                playMethod = uiState.media.playMethod,
+                isDirectPlayForced = uiState.media.isDirectPlayForced,
                 hdrType = uiState.hdrType,
-                mediaStreams = uiState.mediaStreams,
+                mediaStreams = uiState.media.mediaStreams,
                 audioTracks = trackState.audioTracks,
                 isConnectionMetered = uiState.isConnectionMetered,
                 subtitleDelayMs = uiState.subtitleStyle.offsetMs,
                 onSubtitleDelayClick = { showDelayOverlay = true },
-                showPlaybackMetadata = uiState.showPlaybackMetadata,
-                showClock = uiState.showClock,
-                showTimeRemaining = uiState.showTimeRemaining,
+                showPlaybackMetadata = uiState.uiPrefs.showPlaybackMetadata,
+                showClock = uiState.uiPrefs.showClock,
+                showTimeRemaining = uiState.uiPrefs.showTimeRemaining,
                 currentAspectRatio = aspectRatio,
                 detectedAspectRatio = detectedAspectRatio,
                 isVisible = showControls && !isInPipMode && !isScreenLocked,
@@ -1748,10 +1753,10 @@ fun VideoPlayerScreen(
                 syncPlayParticipantCount = syncPlay.syncPlayParticipantCount,
                 isSyncPlaySynced = syncPlay.isSyncPlaySynced,
                 isSyncPlaySyncing = syncPlay.isSyncPlaySyncing,
-                showVideoStats = uiState.showVideoStats,
+                showVideoStats = uiState.uiPrefs.showVideoStats,
                 onVideoStatsClick = onVideoStatsClick,
-                streamingQuality = uiState.streamingQuality,
-                playbackMode = uiState.playbackMode,
+                streamingQuality = uiState.uiPrefs.streamingQuality,
+                playbackMode = uiState.uiPrefs.playbackMode,
                 onQualityClick = onQualityClick,
                 onPlaybackModeClick = onPlaybackModeClick,
                 audioNormalizationMode = effectsState.audioNormalizationMode,
@@ -1767,30 +1772,30 @@ fun VideoPlayerScreen(
                 onChannelMixModeChange = onChannelMixModeChange,
                 sleepTimerActive = sleepTimer.sleepTimerActive,
                 sleepTimerEndOfEpisode = sleepTimer.sleepTimerEndOfEpisode,
-                sleepTimerRemainingFlow = viewModel.sleepTimerRemainingMs,
+                sleepTimerRemainingFlow = viewModel.sleepTimer.remainingMs,
                 onSleepTimerClick = onSleepTimerClick,
                 supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
-                videoFiltersActive = uiState.videoEffects != com.raulshma.jellyplay.core.model.VideoEffectsConfig(),
+                videoFiltersActive = !uiState.videoFx.videoEffects.isNeutral,
                 onVideoFilterClick = onVideoFilterClick,
                 supportsScreenshot = uiState.engineCapabilities.supportsScreenshot,
                 onScreenshotClick = onScreenshotClick,
                 abRepeat = abRepeat,
-                onAbRepeatToggle = { viewModel.setAbRepeatEnabled(!abRepeat.enabled) },
-                onAbRepeatSetA = { viewModel.setAbRepeatPointA() },
-                onAbRepeatSetB = { viewModel.setAbRepeatPointB() },
-                onAbRepeatClear = { viewModel.clearAbRepeat() },
+                onAbRepeatToggle = { viewModel.abRepeat.setEnabled(!abRepeat.enabled) },
+                onAbRepeatSetA = { viewModel.abRepeat.setPointA() },
+                onAbRepeatSetB = { viewModel.abRepeat.setPointB() },
+                onAbRepeatClear = { viewModel.abRepeat.clear() },
                 audioOnly = uiState.audioOnly,
                 onToggleAudioOnly = { viewModel.toggleAudioOnly() },
                 onLockClick = onLockClick,
                 onControlsFocusChange = onControlsFocusChange,
                 onOverflowMenuChange = onOverflowMenuChange,
-                castManager = viewModel.castManagerField,
+                castManager = viewModel.castManager,
                 modifier = Modifier.fillMaxSize(),
             )
             } // end PlayerDarkTheme (control bars)
 
             AnimatedVisibility(
-                visible = !isTv && uiState.trickplayEnabled && showControls && isSeeking,
+                visible = !isTv && uiState.uiPrefs.trickplayEnabled && showControls && isSeeking,
                 enter = fadeIn(tween(150, easing = AlphaEasing)),
                 exit = fadeOut(tween(200, easing = AlphaEasing)),
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP.dp),
@@ -1840,8 +1845,8 @@ fun VideoPlayerScreen(
         snapshotFlow {
             Triple(
                 seekPositionMs,
-                isSeeking && uiState.trickplayEnabled && uiState.trickplayInfo != null,
-                uiState.trickplayInfo,
+                isSeeking && uiState.uiPrefs.trickplayEnabled && uiState.uiPrefs.trickplayInfo != null,
+                uiState.uiPrefs.trickplayInfo,
             )
         }
             .conflate()
@@ -1868,8 +1873,8 @@ fun VideoPlayerScreen(
         snapshotFlow {
             Triple(
                 gestureSeekPositionMs,
-                isGestureSeeking && uiState.trickplayOnSeekGesture,
-                uiState.trickplayInfo,
+                isGestureSeeking && uiState.uiPrefs.trickplayOnSeekGesture,
+                uiState.uiPrefs.trickplayInfo,
             )
         }
             .conflate()
@@ -1899,7 +1904,7 @@ fun VideoPlayerScreen(
             if (!isTv && controlsHasFocus) {
                 return@LaunchedEffect
             }
-            val timeout = if (isTv) uiState.controlsTimeoutMs * 2 else uiState.controlsTimeoutMs
+            val timeout = if (isTv) uiState.uiPrefs.controlsTimeoutMs * 2 else uiState.uiPrefs.controlsTimeoutMs
             delay(timeout)
             showControls = false
         }
@@ -1908,15 +1913,15 @@ fun VideoPlayerScreen(
     LaunchedEffect(Unit) {
         kotlinx.coroutines.coroutineScope {
             launch {
-                viewModel.castSessionEvents.collect { event ->
+                viewModel.cast.castSessionEvents.collect { event ->
                     when (event) {
-                        is CastSessionEvent.Connected -> viewModel.castToDevice()
-                        is CastSessionEvent.Disconnected -> viewModel.onCastDisconnected()
+                        is CastSessionEvent.Connected -> viewModel.cast.castToDevice()
+                        is CastSessionEvent.Disconnected -> viewModel.cast.onCastDisconnected()
                     }
                 }
             }
             launch {
-                viewModel.syncPlayNotifications.collect { message ->
+                viewModel.syncPlay.notifications.collect { message ->
                     snackbarHostState.showSnackbar(
                         message = message,
                         duration = androidx.compose.material3.SnackbarDuration.Short,
@@ -1940,7 +1945,7 @@ fun VideoPlayerScreen(
         dismissSheet = dismissSheet,
         uiState = uiState,
         currentPositionFlow = viewModel.currentPositionMs,
-        sleepTimerRemainingFlow = viewModel.sleepTimerRemainingMs,
+        sleepTimerRemainingFlow = viewModel.sleepTimer.remainingMs,
         doSeekTo = doSeekTo,
         viewModel = viewModel,
         itemId = itemId,
@@ -1975,7 +1980,23 @@ fun VideoPlayerScreen(
             onRetry = { viewModel.retryPlayback() },
             onRetryWithEngine = { viewModel.retryWithEngine(it) },
             onDismiss = { viewModel.dismissPlaybackError() },
+            transcodeReasons = rememberFormattedTranscodeReasons(uiState.media.transcodeReasons),
         )
+    }
+}
+
+/**
+ * Localizes the session's raw transcode-reason tokens once per distinct list
+ * (and per context, so a locale change re-formats), shared by the stats
+ * overlay and the playback error dialog call sites.
+ */
+@Composable
+private fun rememberFormattedTranscodeReasons(
+    rawReasons: List<String>,
+): List<FormattedTranscodeReason> {
+    val context = LocalContext.current
+    return remember(context, rawReasons) {
+        TranscodeReasonsFormatter.format(context, rawReasons)
     }
 }
 
@@ -2161,7 +2182,7 @@ private fun PlayerSheetRouter(
                 onSelect = { viewModel.selectAudioTrack(it) },
                 onReset = if (trackState.hasAudioOverride) { { viewModel.resetAudioTrack() } } else null,
                 onDismiss = dismissSheet,
-                footer = if (uiState.seriesId != null) {
+                footer = if (uiState.media.seriesId != null) {
                     {
                         // Per-series audio-language preference toggle. Saving
                         // remembers the currently-selected track's language for
@@ -2184,14 +2205,14 @@ private fun PlayerSheetRouter(
         }
         is PlayerSheet.SubtitleHub -> {
             LaunchedEffect(Unit) {
-                viewModel.loadRemoteSubtitles()
-                viewModel.loadSubtitleCultures()
-                viewModel.loadConfiguredSubtitleProviders()
+                viewModel.subtitles.loadRemoteSubtitles()
+                viewModel.subtitles.loadSubtitleCultures()
+                viewModel.subtitles.loadConfiguredProviders()
             }
             // Track + subtitle-workflow slices: collected inside the
             // branch — only this hub consumes them while the sheet is open.
             val trackState by viewModel.trackState.collectAsStateWithLifecycle()
-            val subtitleState by viewModel.subtitleState.collectAsStateWithLifecycle()
+            val subtitleState by viewModel.subtitles.state.collectAsStateWithLifecycle()
             SubtitleHubSheet(
                 initialTab = com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTab.TRACKS,
                 onDismiss = dismissSheet,
@@ -2201,7 +2222,7 @@ private fun PlayerSheetRouter(
                 onResetSubtitleTrack = if (trackState.hasSubtitleOverride) {
                     { viewModel.resetSubtitleTrack() }
                 } else null,
-                tracksFooter = if (uiState.seriesId != null) {
+                tracksFooter = if (uiState.media.seriesId != null) {
                     {
                         // Per-series subtitle preference toggle. With a real track
                         // selected it saves that track's language + role so every
@@ -2246,7 +2267,7 @@ private fun PlayerSheetRouter(
                 // Get tab
                 downloadSubtitles = subtitleState.remoteSubtitles,
                 isDownloading = subtitleState.isLoadingRemoteSubtitles,
-                onDownload = { viewModel.downloadSubtitle(it) },
+                onDownload = { viewModel.subtitles.downloadSubtitle(it) },
                 onLoadLocalFile = onLoadLocalSubtitle,
                 searchResults = subtitleState.searchedSubtitles,
                 isSearching = subtitleState.isSearchingSubtitles,
@@ -2254,20 +2275,20 @@ private fun PlayerSheetRouter(
                 searchError = subtitleState.subtitleSearchError,
                 cultures = subtitleState.subtitleCultures,
                 defaultLanguage = subtitleState.defaultSearchLanguage,
-                onSearch = { viewModel.searchRemoteSubtitles(it) },
-                onDownloadSearched = { viewModel.downloadSubtitle(it) },
+                onSearch = { viewModel.subtitles.searchRemoteSubtitles(it) },
+                onDownloadSearched = { viewModel.subtitles.downloadSubtitle(it) },
                 providerSearchResults = subtitleState.providerSearchResults,
                 providerSearchErrors = subtitleState.providerSearchErrors,
                 configuredProviders = subtitleState.configuredSubtitleProviders,
-                onSearchAllProviders = { viewModel.searchAllSubtitleProviders(it) },
-                onDownloadProviderSubtitle = { viewModel.downloadProviderSubtitle(it) },
+                onSearchAllProviders = { viewModel.subtitles.searchAllProviders(it) },
+                onDownloadProviderSubtitle = { viewModel.subtitles.downloadProviderSubtitle(it) },
                 downloadingSubtitles = subtitleState.downloadingSubtitles,
                 // "Use" affordance: the hub switches to its Tracks tab itself;
                 // this callback is a no-op placeholder for the host.
                 onUseSubtitle = {},
                 isUploading = subtitleState.isUploadingSubtitle,
                 onUpload = { uri, fileName, language, isForced, isHearingImpaired ->
-                    viewModel.uploadSubtitle(uri, fileName, language, isForced, isHearingImpaired)
+                    viewModel.subtitles.uploadSubtitle(uri, fileName, language, isForced, isHearingImpaired)
                     onSheetChange(PlayerSheet.None)
                 },
                 // Delay tab
@@ -2292,20 +2313,20 @@ private fun PlayerSheetRouter(
         is PlayerSheet.PlaybackInfo -> {
             // Track + effects slices: collected inside the branch.
             val trackState by viewModel.trackState.collectAsStateWithLifecycle()
-            val effectsState by viewModel.effectsState.collectAsStateWithLifecycle()
+            val effectsState by viewModel.effects.state.collectAsStateWithLifecycle()
             PlayerModalBottomSheet(
                 onDismissRequest = dismissSheet,
                 sheetState = rememberModalBottomSheetState(),
             ) {
                 PlaybackInfoOverlay(
-                    mediaSource = uiState.currentMediaSource,
-                    mediaStreams = uiState.mediaStreams,
-                    playMethod = uiState.playMethod,
+                    mediaSource = uiState.media.currentMediaSource,
+                    mediaStreams = uiState.media.mediaStreams,
+                    playMethod = uiState.media.playMethod,
                     isConnectionMetered = uiState.isConnectionMetered,
                     hdrType = uiState.hdrType,
                     playerType = uiState.preferredPlayerType.name,
                     decoderMode = effectsState.decoderMode.name,
-                    aspectRatio = uiState.aspectRatio.name,
+                    aspectRatio = uiState.videoFx.aspectRatio.name,
                     nightModeEnabled = effectsState.nightModeEnabled,
                     nightModeStrength = effectsState.nightModeStrength,
                     dialogueBoostEnabled = uiState.dialogueBoostEnabled,
@@ -2326,38 +2347,38 @@ private fun PlayerSheetRouter(
         }
         is PlayerSheet.AspectRatio -> {
             AspectRatioSheet(
-                currentRatio = uiState.aspectRatio,
-                detectedRatio = uiState.detectedAspectRatio,
+                currentRatio = uiState.videoFx.aspectRatio,
+                detectedRatio = uiState.videoFx.detectedAspectRatio,
                 onSelect = { viewModel.setAspectRatio(it) },
                 onDismiss = dismissSheet,
             )
         }
         is PlayerSheet.AVSync -> {
             // Effects slice: collected inside the branch.
-            val effectsState by viewModel.effectsState.collectAsStateWithLifecycle()
+            val effectsState by viewModel.effects.state.collectAsStateWithLifecycle()
             AVSyncSheet(
                 currentAudioDelayMs = effectsState.audioDelayMs,
-                onAudioDelayChange = { viewModel.setAudioDelay(it) },
+                onAudioDelayChange = { viewModel.effects.setAudioDelay(it) },
                 onDismiss = dismissSheet,
                 audioDelaySupported = uiState.engineCapabilities.supportsAudioDelay,
             )
         }
         is PlayerSheet.Decoder -> {
             // Effects slice: collected inside the branch.
-            val effectsState by viewModel.effectsState.collectAsStateWithLifecycle()
+            val effectsState by viewModel.effects.state.collectAsStateWithLifecycle()
             DecoderPickerSheet(
                 currentMode = effectsState.decoderMode,
-                onSelect = { viewModel.setDecoderMode(it) },
+                onSelect = { viewModel.effects.setDecoderMode(it) },
                 onDismiss = dismissSheet,
             )
         }
         is PlayerSheet.Episodes -> {
             EpisodePickerSheet(
-                seasons = uiState.seriesSeasons,
-                episodes = uiState.seasonEpisodes,
-                currentSeasonId = uiState.currentSeasonId,
+                seasons = uiState.episodes.seriesSeasons,
+                episodes = uiState.episodes.seasonEpisodes,
+                currentSeasonId = uiState.episodes.currentSeasonId,
                 currentEpisodeId = itemId,
-                isLoading = uiState.isLoadingEpisodes,
+                isLoading = uiState.episodes.isLoadingEpisodes,
                 onSeasonSelect = { viewModel.loadSeasonEpisodes(it) },
                 onEpisodeSelect = { episode ->
                     viewModel.playEpisode(episode.id, episode.playbackPositionTicks ?: 0L)
@@ -2369,7 +2390,7 @@ private fun PlayerSheetRouter(
         }
         is PlayerSheet.SyncPlay -> {
             // SyncPlay group-display slice: collected inside the branch.
-            val syncPlayState by viewModel.syncPlayState.collectAsStateWithLifecycle()
+            val syncPlayState by viewModel.syncPlay.state.collectAsStateWithLifecycle()
             SyncPlayPlayerSheet(
                 groupName = syncPlayState.syncPlayGroupName ?: "Group",
                 participantCount = syncPlayState.syncPlayParticipantCount,
@@ -2380,20 +2401,20 @@ private fun PlayerSheetRouter(
                 shuffleMode = syncPlayState.syncPlayShuffleMode,
                 onRepeatModeChange = { viewModel.setSyncPlayRepeatMode(it) },
                 onShuffleModeChange = { viewModel.setSyncPlayShuffleMode(it) },
-                onTogglePlayPause = { viewModel.syncPlayTogglePlayPause() },
-                onStop = { viewModel.syncPlayStop() },
+                onTogglePlayPause = { viewModel.syncPlay.togglePlayPause() },
+                onStop = { viewModel.syncPlay.sendStop() },
                 onLeave = {
-                    viewModel.leaveSyncPlay()
+                    viewModel.syncPlay.leaveGroup()
                     onSheetChange(PlayerSheet.None)
                 },
-                onIgnoreWaitChange = { viewModel.syncPlaySetIgnoreWait(it) },
+                onIgnoreWaitChange = { viewModel.syncPlay.setIgnoreWait(it) },
                  onDismiss = dismissSheet,
              )
          }
         is PlayerSheet.Quality -> {
             QualityPickerSheet(
-                currentQuality = uiState.streamingQuality,
-                adaptiveBitrateEnabled = uiState.adaptiveBitrateEnabled,
+                currentQuality = uiState.uiPrefs.streamingQuality,
+                adaptiveBitrateEnabled = uiState.uiPrefs.adaptiveBitrateEnabled,
                 onToggleAdaptiveBitrate = { viewModel.setAdaptiveBitrateEnabled(it) },
                 onSelect = { viewModel.setStreamingQuality(it) },
                 onDismiss = dismissSheet,
@@ -2401,28 +2422,28 @@ private fun PlayerSheetRouter(
         }
         is PlayerSheet.PlaybackMode -> {
             PlaybackModeSheet(
-                currentMode = uiState.playbackMode,
+                currentMode = uiState.uiPrefs.playbackMode,
                 onSelect = { viewModel.setPlaybackMode(it) },
                 onDismiss = dismissSheet,
             )
         }
         is PlayerSheet.SleepTimer -> {
             // Sleep-timer slice: collected inside the branch.
-            val sleepTimerState by viewModel.sleepTimerState.collectAsStateWithLifecycle()
+            val sleepTimerState by viewModel.sleepTimer.state.collectAsStateWithLifecycle()
             SleepTimerSheetBinder(
                 isActive = sleepTimerState.sleepTimerActive,
                 isEndOfEpisodeMode = sleepTimerState.sleepTimerEndOfEpisode,
                 lastUsedDurationMs = sleepTimerState.sleepTimerLastUsedDurationMs,
                 sleepTimerRemainingFlow = sleepTimerRemainingFlow,
-                onSelectDuration = { viewModel.startSleepTimer(it) },
-                onSelectEndOfEpisode = { viewModel.startSleepTimerEndOfEpisode() },
-                onCancel = { viewModel.cancelSleepTimer() },
+                onSelectDuration = { viewModel.sleepTimer.startSleepTimer(it) },
+                onSelectEndOfEpisode = { viewModel.sleepTimer.startSleepTimerEndOfEpisode() },
+                onCancel = { viewModel.sleepTimer.cancelSleepTimer() },
                 onDismiss = dismissSheet,
             )
         }
         is PlayerSheet.VideoFilter -> {
             VideoFilterSheet(
-                currentEffects = uiState.videoEffects,
+                currentEffects = uiState.videoFx.videoEffects,
                 onEffectsChange = { viewModel.setVideoEffects(it) },
                 onDismiss = dismissSheet,
             )

@@ -58,7 +58,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 // every section still settles at exactly alpha 1. If this max is bumped, the
 // driver target must cover it too, otherwise high-index sections are left dim.
 internal const val DETAIL_STAGGER_STEP = 0.045f
-internal const val DETAIL_MAX_STAGGER_INDEX = 13
+internal const val DETAIL_MAX_STAGGER_INDEX = 14
 
 /**
  * Compact quality pill label ("<bucket> <RANGE>") for a video stream — the 4K/HD/SD
@@ -407,8 +407,9 @@ internal fun MediaInfoSection(
  * Audio is NOT interactive here — an offline file's audio is switched in the
  * player (ExoPlayer runtime track selection), not from the detail screen — so
  * the audio pill has no picker. The subtitle pill opens the manifest-backed
- * local subtitle sheet (reusing [LocalSubtitleOptionRow]); when no local
- * subtitles are available it is omitted and only the two stream badges render.
+ * local subtitle sheet (reusing [LocalSubtitleOptionRow]). Like the remote
+ * section's pill it always renders; with no local subtitles it shows the OFF
+ * label without a chevron or click handling.
  * Gated by `capabilities.localStreamInfo` at the call site.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -476,16 +477,18 @@ internal fun LocalMediaInfoSection(
                     )
                 }
             }
-            if (subtitles.isNotEmpty()) {
-                FadingItem(modifier = Modifier.weight(1f)) {
-                    QuickInfoPill(
-                        icon = Tabler.Outline.Subtitles,
-                        text = subtitleLabel,
-                        showTrailingIndicator = true,
-                        onClick = { subtitleSheetOpen = true },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+            FadingItem(modifier = Modifier.weight(1f)) {
+                QuickInfoPill(
+                    icon = Tabler.Outline.Subtitles,
+                    text = subtitleLabel,
+                    showTrailingIndicator = subtitles.isNotEmpty(),
+                    onClick = if (subtitles.isNotEmpty()) {
+                        { subtitleSheetOpen = true }
+                    } else {
+                        null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
 

@@ -31,6 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
@@ -41,6 +43,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.R
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
@@ -70,6 +73,10 @@ fun PinLockScreen(
 ) {
     var pin by remember { mutableStateOf("") }
     val maxDigits = 4
+
+    // TV: land focus on the first keypad key so D-pad entry works immediately.
+    val firstKeyFocusRequester = remember { FocusRequester() }
+    RequestOrRestoreFocus(firstKeyFocusRequester, debugKey = "pin_first_key")
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -206,6 +213,7 @@ fun PinLockScreen(
                                 isPressed = false,
                                 keySize = keySize,
                                 enabled = enabled,
+                                focusRequester = if (key == "1") firstKeyFocusRequester else null,
                                 onClick = {
                                     if (pin.length < maxDigits) {
                                         pin += key
@@ -233,6 +241,7 @@ private fun PinKeyButton(
     isPressed: Boolean,
     keySize: Dp = 72.dp,
     enabled: Boolean = true,
+    focusRequester: FocusRequester? = null,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -242,6 +251,10 @@ private fun PinKeyButton(
     Box(
         modifier = Modifier
             .styleable(styleState, ComponentStyles.pinKeyStyle(keySize))
+            .then(
+                if (focusRequester != null) Modifier.focusRequester(focusRequester)
+                else Modifier,
+            )
             .then(tvFocusState.focusModifier)
             .tvFocusIndicator(tvFocusState, MaterialTheme.shapes.extraLarge)
             .graphicsLayer { alpha = if (enabled) 1f else 0.4f }

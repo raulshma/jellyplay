@@ -1,9 +1,5 @@
 package com.raulshma.jellyplay.core.ui.components
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,14 +9,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -30,7 +22,6 @@ import androidx.compose.ui.unit.sp
 import coil3.size.Size as CoilSize
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
-import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
@@ -44,8 +35,6 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import java.time.LocalDate
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 
 @Composable
 fun SeerrMediaCard(
@@ -58,43 +47,6 @@ fun SeerrMediaCard(
     clipToShape: Boolean = false,
 ) {
     val isTv = LocalTvMode.current
-
-    // --- Loading shimmer / glow state machine (Seerr-only affordance) --------
-    // The card glows while a request is in flight. Kept here (not in the
-    // scaffold) because no other card has a loading state. The scaffold owns
-    // the press/focus scale; the animated border below carries the load signal.
-    val shimmerOffset = remember { Animatable(-500f) }
-    val glowAlpha = remember { Animatable(0.3f) }
-    val reducedMotion = LocalReducedMotion.current
-
-    LaunchedEffect(isLoading) {
-        if (isLoading) {
-            // Skip the ambient shimmer/glow loops under reduce motion / performance mode;
-            // the card just rests at its initial values while loading.
-            if (reducedMotion) return@LaunchedEffect
-            launch {
-                while (isActive) {
-                    shimmerOffset.animateTo(
-                        1500f,
-                        animationSpec = tween(durationMillis = 1200, easing = LinearEasing),
-                    )
-                    shimmerOffset.snapTo(-500f)
-                }
-            }
-            launch {
-                while (isActive) {
-                    glowAlpha.animateTo(0.8f, animationSpec = tween(800, easing = FancyTransitionEasing))
-                    glowAlpha.animateTo(0.3f, animationSpec = tween(800, easing = FancyTransitionEasing))
-                }
-            }
-        } else {
-            shimmerOffset.snapTo(-500f)
-            glowAlpha.snapTo(0.3f)
-        }
-    }
-
-    val effectiveShimmerOffset = if (isLoading) shimmerOffset.value else 0f
-    val effectiveGlowAlpha = if (isLoading) glowAlpha.value else 0f
 
     // --- Derived display state ----------------------------------------------
     val isUpcoming = remember(item.releaseDate, item.firstAirDate) {
@@ -123,35 +75,6 @@ fun SeerrMediaCard(
             mediaStatus == SeerrMediaStatus.PROCESSING
     }
     val hasRequest = item.mediaInfo?.requests?.isNotEmpty() == true
-
-    // --- Border: animated glow when loading, themed default otherwise --------
-    val glowColor = MaterialTheme.colorScheme.primary
-    val glowBorderColors = remember(glowColor, effectiveGlowAlpha) {
-        listOf(
-            glowColor.copy(alpha = effectiveGlowAlpha * 0.6f),
-            glowColor.copy(alpha = effectiveGlowAlpha),
-            glowColor.copy(alpha = effectiveGlowAlpha * 0.6f),
-        )
-    }
-    val loadingBorder = remember(glowBorderColors) {
-        BorderStroke(
-            width = 1.5.dp,
-            brush = Brush.linearGradient(
-                colors = glowBorderColors,
-                start = Offset.Zero,
-                end = Offset(1000f, 1500f),
-            ),
-        )
-    }
-
-    val shimmerBaseColor = MaterialTheme.colorScheme.onSurface
-    val shimmerColors = remember(shimmerBaseColor) {
-        listOf(
-            shimmerBaseColor.copy(alpha = 0.0f),
-            shimmerBaseColor.copy(alpha = 0.18f),
-            shimmerBaseColor.copy(alpha = 0.0f),
-        )
-    }
 
     // --- Peek preview via the generalized factory overload ------------------
     val previewController = LocalMediaPreviewController.current
@@ -200,20 +123,21 @@ fun SeerrMediaCard(
         aspectRatio = 2f / 3f,
         enabled = !isLoading,
         clipToShape = clipToShape,
-        border = if (isLoading) loadingBorder else null,
         titleColor = if (isLoading) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
         previewFactory = previewFactory,
         overlays = {
             if (isLoading) {
-                val shimmerBrush = Brush.linearGradient(
-                    colors = shimmerColors,
-                    start = Offset(effectiveShimmerOffset, 0f),
-                    end = Offset(effectiveShimmerOffset + 400f, 400f),
-                )
+                // Spinner overlay: a dimming scrim plus the shared loading
+                // indicator, drawn on top of the poster while the detail
+                // prefetch is in flight.
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .background(shimmerBrush)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
+                )
+                JellyPlayLoadingIndicator(
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.align(Alignment.Center),
                 )
             }
 

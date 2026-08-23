@@ -78,8 +78,8 @@ sealed interface EngineDecision {
  * invokes engine *commands* — the only engine reads are state flows
  * (`isPlaying`, `playbackState`) and `currentPositionMs` captured while
  * emitting the fallback decision. That makes every policy assertable with a
- * plain [com.raulshma.jellyplay.feature.player.video.engine.FakeMediaEngine]
- * and an injected [clock] — zero mocks.
+ * plain `FakeMediaEngine` (in `:feature:player:core:testFixtures`) and an
+ * injected [clock] — zero mocks.
  *
  * Policy semantics are pinned verbatim from the pre-extraction ViewModel,
  * including the watchdog's per-engine-instance latch quirk (see
@@ -96,8 +96,13 @@ class EngineEventCoordinator(
     scope: CoroutineScope,
     /** Hot engine handle stream — the same [PlayerSessionManager.engineFlow]. */
     engineFlow: StateFlow<MediaEngine?>,
-    /** Synchronous playback-mode read (the ViewModel's `_uiState.value.playbackMode`). */
+    /** Synchronous playback-mode read (the ViewModel's `_uiState.value.uiPrefs.playbackMode`). */
     private val getPlaybackMode: () -> PlaybackMode,
+    /**
+     * Localized FORCE_DIRECT_PLAY fallback notice for [EngineDecision.InformUser];
+     * takes the originating engine error's [EngineError.message].
+     */
+    private val directPlayFallbackNotice: (String) -> String,
     /** Pass-out protection hours; values <= 0 disable the poller. */
     passOutHours: Flow<Int>,
     /** Monotonic clock, injectable for tests. Defaults to elapsed-realtime. */
@@ -293,13 +298,14 @@ class EngineEventCoordinator(
      * error here usually means the direct-played container/codec is
      * undecodable. Offer a one-shot automatic transcode fallback rather than
      * surfacing a dead-end error dialog; any later error surfaces the
-     * structured dialog.
+     * structured dialog. The client forced this fallback, so the toast carries
+     * the originating engine error rather than the server's generic reasons.
      */
     private fun onEngineError(engine: MediaEngine, error: EngineError) {
         if (getPlaybackMode() == PlaybackMode.FORCE_DIRECT_PLAY && !directPlayFallbackOffered) {
             directPlayFallbackOffered = true
             _decisions.tryEmit(
-                EngineDecision.InformUser("Direct Play failed — switching to transcode")
+                EngineDecision.InformUser(directPlayFallbackNotice(error.message))
             )
             _decisions.tryEmit(
                 EngineDecision.FallbackToTranscode(fromPositionMs = engine.currentPositionMs)

@@ -1,28 +1,31 @@
 package com.raulshma.jellyplay.feature.library.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -39,7 +42,13 @@ import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.displayTitle
 import com.raulshma.jellyplay.core.ui.components.libraryListSubtitle
 import com.raulshma.jellyplay.core.ui.components.rememberSeriesImageFallback
-import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.ui.components.rememberProgressFraction
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableColumn
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.TvGridCacheWindow
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.rememberInt
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 
@@ -105,6 +114,7 @@ private sealed interface GroupedRow {
  * GRID-style grouping (the toolbar's view-cycle still works, the grouping just
  * renders in poster form).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GroupedLibraryContent(
     pagedItems: LazyPagingItems<MediaItem>,
@@ -117,6 +127,8 @@ fun GroupedLibraryContent(
     getImageUrl: (String) -> String,
     onFocusedItemChange: ((MediaItem?) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    /** Bumped by the host on completed refreshes; resets the cursor and re-grabs focus on TV. */
+    refreshGeneration: Int = 0,
 ) {
     // NOTE: do not throw for GroupBy.NONE here. The persisted group-by flows in
     // asynchronously (loadLayoutPrefs) and can transiently be NONE while a grouped
@@ -160,54 +172,82 @@ fun GroupedLibraryContent(
     }
 
     if (viewMode == LibraryViewMode.LIST) {
-        LazyColumn(
+        // TvFocusableColumn supplies the TV focus contract (initial grab once rows exist, cursor
+        // memory, refresh re-grab) the plain LazyColumn never had.
+        TvFocusableColumn(
+            items = rows,
+            key = { it.key },
             contentPadding = gridPadding,
             verticalArrangement = Arrangement.spacedBy(2.dp),
             modifier = modifier.fillMaxSize(),
-        ) {
-            items(count = rows.size, key = { idx -> rows[idx].key }, contentType = { idx ->
-                if (rows[idx] is GroupedRow.Item) "mediaItem" else "header"
-            }) { idx ->
-                val row = rows[idx]
-                if (row is GroupedRow.Item) {
-                    val item = row.item
-                    val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
-                        { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
-                    }
-                    val subtitle = remember(item.mediaType, item.seriesName, item.seasonNumber, item.episodeNumber, item.year) {
-                        // Episodes show an SxxExx + series context line (bold tag); all
-                        // other types fall back to the year/type label. Shared with the
-                        // ungrouped list path via libraryListSubtitle.
-                        item.libraryListSubtitle()
-                    }
-                    // Seasons fall back to the parent series poster when the season's
-                    // own artwork 404s (shared with the ungrouped list path).
-                    val fallbackUrls = item.rememberSeriesImageFallback(getImageUrl)
-                    LibraryListItem(
-                        title = item.displayTitle(),
-                        subtitle = subtitle,
-                        imageUrl = remember(item.id) { getImageUrl(item.id) },
-                        fallbackUrls = fallbackUrls,
-                        blurHash = item.blurHashes.primary,
-                        onClick = memoizedClick,
-                        modifier = Modifier.onFocusChanged {
-                            if (it.isFocused || it.hasFocus) onFocusedItemChange?.invoke(item)
-                        },
-                    )
-                } else {
-                    GroupHeader(label = (row as GroupedRow.Header).label.orEmpty())
+            refreshGeneration = refreshGeneration,
+            contentType = { idx, row -> if (row is GroupedRow.Item) "mediaItem" else "header" },
+            onFocusedIndexChange = { idx ->
+                (rows.getOrNull(idx) as? GroupedRow.Item)?.let { onFocusedItemChange?.invoke(it.item) }
+            },
+        ) { idx, row, itemModifier ->
+            if (row is GroupedRow.Item) {
+                val item = row.item
+                val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
+                    { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                 }
+                val subtitle = remember(item.mediaType, item.seriesName, item.seasonNumber, item.episodeNumber, item.year) {
+                    // Episodes show an SxxExx + series context line (bold tag); all
+                    // other types fall back to the year/type label. Shared with the
+                    // ungrouped list path via libraryListSubtitle.
+                    item.libraryListSubtitle()
+                }
+                // Seasons fall back to the parent series poster when the season's
+                // own artwork 404s (shared with the ungrouped list path).
+                val fallbackUrls = item.rememberSeriesImageFallback(getImageUrl)
+                LibraryListItem(
+                    title = item.displayTitle(),
+                    subtitle = subtitle,
+                    imageUrl = remember(item.id) { getImageUrl(item.id) },
+                    fallbackUrls = fallbackUrls,
+                    blurHash = item.blurHashes.primary,
+                    onClick = memoizedClick,
+                    modifier = itemModifier,
+                )
+            } else {
+                GroupHeader(label = (row as GroupedRow.Header).label.orEmpty())
             }
         }
     } else {
-        val groupedGridState = rememberLazyGridState()
+        // No staggered/span-aware TvFocusable* primitive exists (headers span the full width), so
+        // the TV focus contract is wired manually — same modifier order as TvFocusableGrid.
+        val groupedGridState = rememberLazyGridState(cacheWindow = TvGridCacheWindow)
+        val groupRequester = remember { FocusRequester() }
+        val fallbackRequester = remember { FocusRequester() }
+        var focusedRowIdx by rememberInt()
+        TvGrabInitialFocus(
+            focusRequester = fallbackRequester,
+            itemCount = rows.size,
+            tag = "library_grouped_init",
+            refreshGeneration = refreshGeneration,
+        )
+        LaunchedEffect(refreshGeneration) {
+            if (refreshGeneration > 0) focusedRowIdx = 0
+        }
+        // The cursor may point at a header row (headers occupy row indexes too); the fallback
+        // anchor must always be an item row, falling back to the first one.
+        val firstItemIdx = rows.indexOfFirst { it is GroupedRow.Item }
+        val anchorIdx = if (focusedRowIdx in rows.indices && rows[focusedRowIdx] is GroupedRow.Item) {
+            focusedRowIdx
+        } else {
+            firstItemIdx.coerceAtLeast(0)
+        }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(gridCellSize),
             state = groupedGridState,
             contentPadding = gridPadding,
             horizontalArrangement = Arrangement.spacedBy(spacing),
             verticalArrangement = Arrangement.spacedBy(spacing),
-            modifier = modifier.fillMaxSize(),
+            modifier = modifier
+                .fillMaxSize()
+                .focusGroup()
+                .tvFocusRestorer(fallbackRequester)
+                .focusRequester(groupRequester),
         ) {
             items(count = rows.size, key = { idx -> rows[idx].key }, contentType = { idx ->
                 if (rows[idx] is GroupedRow.Item) "mediaItem" else "header"
@@ -220,7 +260,7 @@ fun GroupedLibraryContent(
                     val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                         { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                     }
-                    val itemProgress = item.progressFraction()
+                    val itemProgress = item.rememberProgressFraction()
                     val cardImage = com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage(
                         item = item,
                         itemImageUrl = remember(item.id) { getImageUrl(item.id) },
@@ -236,9 +276,14 @@ fun GroupedLibraryContent(
                         blurHash = cardImage.blurHash,
                         sharedElementKey = "poster_${item.id}",
                         showEpisodeSeriesBadge = cardImage.showSeriesBadge,
-                        modifier = Modifier.onFocusChanged {
-                            if (it.isFocused || it.hasFocus) onFocusedItemChange?.invoke(item)
-                        },
+                        modifier = Modifier
+                            .ifElse(idx == anchorIdx, Modifier.focusRequester(fallbackRequester))
+                            .onFocusChanged {
+                                if (it.isFocused || it.hasFocus) {
+                                    focusedRowIdx = idx
+                                    onFocusedItemChange?.invoke(item)
+                                }
+                            },
                     )
                 } else {
                     GroupHeader(label = (row as GroupedRow.Header).label.orEmpty())

@@ -2,6 +2,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -32,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,6 +52,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.content.Context
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Trash
@@ -86,7 +90,6 @@ import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
 import com.raulshma.jellyplay.core.ui.navigation.withHighlightSettingId
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
-import com.raulshma.jellyplay.core.ui.settingssearch.settingsSearchResults
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -198,6 +201,19 @@ private fun MainHomeContent(
         )
     }
 
+    val activity = LocalActivity.current
+    var homeFullyDrawn by remember { mutableStateOf(false) }
+    LaunchedEffect(state.currentUser != null, !state.isLoading) {
+        if (!homeFullyDrawn && state.currentUser != null && !state.isLoading) {
+            // Effect bodies run post-composition but before the frame is on
+            // screen — wait for the first drawn frame so TTFD measures
+            // content the user actually sees.
+            withFrameNanos { }
+            homeFullyDrawn = true
+            activity?.reportFullyDrawn()
+        }
+    }
+
     val activeDownloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
     val currentServerUsers by viewModel.currentServerUsers.collectAsStateWithLifecycle()
@@ -206,12 +222,12 @@ private fun MainHomeContent(
     // Stabilize the user-switch lambda so HomeTopDock stays skippable on
     // recompositions that reach it (scroll, search focus). Mirrors the
     // dock lambda memoization above.
-    val onUserSwitch = remember(viewModel) { { id: String -> viewModel.switchUser(id) } }
+    val onUserSwitch = remember(viewModel) { { id: String -> viewModel.onEvent(HomeUiEvent.SwitchUser(id)) } }
 
     val seerrCardLoadingState = rememberSeerrCardLoadingState()
     val seerrPrefetch: (Int, String, () -> Unit) -> Unit = remember(viewModel) {
         { tmdbId, mediaType, onDone ->
-            viewModel.prefetchSeerrDetails(tmdbId, mediaType, onDone)
+            viewModel.onEvent(HomeUiEvent.PrefetchSeerrDetails(tmdbId, mediaType, onDone))
         }
     }
 
@@ -291,14 +307,14 @@ private fun MainHomeContent(
             { item: com.raulshma.jellyplay.core.model.MediaItem, action: QuickAction ->
                 when (action) {
                     QuickAction.PLAY -> mediaOnPlayClick(item)
-                    QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item)
-                    QuickAction.MARK_UNWATCHED -> viewModel.markItemUnplayed(item)
+                    QuickAction.MARK_WATCHED -> viewModel.onEvent(HomeUiEvent.MarkItemPlayed(item))
+                    QuickAction.MARK_UNWATCHED -> viewModel.onEvent(HomeUiEvent.MarkItemUnplayed(item))
                     QuickAction.DETAILS -> mediaOnItemClick(item)
                     // Series opens the advanced delete-episodes sheet
                     // (select episodes / seasons / entire series); anything
                     // else (movie/music) opens the simple confirm dialog below.
                     QuickAction.DELETE -> {
-                        if (item.mediaType == MediaType.SERIES) viewModel.requestSeriesDelete(item)
+                        if (item.mediaType == MediaType.SERIES) viewModel.onEvent(HomeUiEvent.RequestSeriesDelete(item))
                         else pendingDelete = item
                     }
                     else -> Unit
@@ -324,7 +340,7 @@ private fun MainHomeContent(
     // (not per recomposition) so scrolling never allocates here.
     val photoFolderKey = remember(photoFolderItems) { photoFolderItems.map { it.id } }
     androidx.compose.runtime.LaunchedEffect(photoFolderKey) {
-        viewModel.prefetchPhotoFolderChildUrls(photoFolderItems)
+        viewModel.onEvent(HomeUiEvent.PrefetchPhotoFolderChildUrls(photoFolderItems))
     }
 
     val fallbackImageUrlBuilder = rememberFallbackUrls(viewModel)
@@ -525,7 +541,7 @@ private fun MainHomeContent(
                                 onConfigureHomeLayout = onConfigureHomeLayout,
                                 onConfigureLibraries = onConfigureLibraries,
                                 onSeeAllClick = remember(callbacks) { { type, libraryId, collectionType, title -> callbacks.onSeeAllClick(type, libraryId, collectionType, title) } },
-                                onFocusedMediaItem = { item -> tvFocusedItem = item },
+                                onFocusedMediaItem = remember { { item: MediaItem -> tvFocusedItem = item } },
                             ),
                             listState = listState,
                             density = density,
@@ -560,15 +576,15 @@ private fun MainHomeContent(
                     { query: String -> viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(query)) }
                 }
                 val searchOnDeleteHistoryItem = remember(viewModel) {
-                    { id: Long -> viewModel.deleteSearchHistoryItem(id) }
+                    { id: Long -> viewModel.onEvent(HomeUiEvent.DeleteSearchHistoryItem(id)) }
                 }
-                val searchOnClearHistory = remember(viewModel) { { viewModel.clearSearchHistory() } }
+                val searchOnClearHistory = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.ClearSearchHistory) } }
                 val searchOnSettingsClick = remember(viewModel, callbacks) {
                     { item: com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem ->
                         isSearchExpanded = false
                         viewModel.onEvent(HomeUiEvent.ClearSearch)
                         focusManager.clearFocus()
-                        viewModel.onSettingsResultClicked(item)
+                        viewModel.onEvent(HomeUiEvent.SettingsResultClicked(item))
                         // Inject the matched setting's id as the deep-link scroll/
                         // focus target so the destination screen scrolls to and
                         // highlights it — same behavior as the in-settings search.
@@ -600,6 +616,7 @@ private fun MainHomeContent(
                 }
 
                 HomeTopDockScrim(
+                    settingsSearch = viewModel::settingsSearchResults,
                     homeScrollState = homeScrollState,
                     isLightTheme = isLightTheme,
                     isSearchFocused = isSearchFocused,
@@ -674,7 +691,7 @@ private fun MainHomeContent(
             icon = Tabler.Outline.Trash,
             tone = ConfirmTone.DESTRUCTIVE,
             onConfirm = {
-                viewModel.deleteOfflineMedia(target)
+                viewModel.onEvent(HomeUiEvent.DeleteOfflineMedia(target))
                 pendingDelete = null
             },
             onDismiss = { pendingDelete = null },
@@ -687,9 +704,9 @@ private fun MainHomeContent(
     state.seriesDelete?.let { sd ->
         HomeSeriesDeleteSheet(
             state = sd,
-            onDelete = viewModel::deleteOfflineEpisodes,
-            onDeleteEntireSeries = { viewModel.deleteOfflineSeries(sd.seriesId) },
-            onDismiss = viewModel::dismissSeriesDelete,
+            onDelete = remember(viewModel) { { episodeIds: Set<String> -> viewModel.onEvent(HomeUiEvent.DeleteOfflineEpisodes(episodeIds)) } },
+            onDeleteEntireSeries = remember(viewModel, sd.seriesId) { { viewModel.onEvent(HomeUiEvent.DeleteOfflineSeries(sd.seriesId)) } },
+            onDismiss = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.DismissSeriesDelete) } },
         )
     }
 
@@ -703,13 +720,7 @@ private fun MainHomeContent(
 
         SeerrRequestDialog(
             item = item,
-            radarrServers = state.seerrRequestState.radarrServers,
-            sonarrServers = state.seerrRequestState.sonarrServers,
-            seasons = if (item.mediaType.equals("tv", ignoreCase = true)) state.seerrRequestState.tvSeasons else emptyList(),
-            isLoadingServices = state.seerrRequestState.isLoadingServices,
-            isRequesting = state.seerrRequestState.result?.isLoading == true,
-            requestSuccess = state.seerrRequestState.result?.success,
-            requestError = state.seerrRequestState.result?.error,
+            snapshot = state.seerrRequestState.snapshot,
             onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
                 viewModel.onEvent(HomeUiEvent.RequestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags))
             },
@@ -737,7 +748,7 @@ private fun MainHomeContent(
         // open — keeps the map pruned to the currently-queued ids and avoids any
         // lookup cost when the sheet is closed.
         LaunchedEffect(entries) {
-            viewModel.ensurePendingItemDetails(entries.map { it.itemId })
+            viewModel.onEvent(HomeUiEvent.EnsurePendingItemDetails(entries.map { it.itemId }))
         }
         SyncDetailsSheet(
             entries = entries,
@@ -777,14 +788,14 @@ private fun MainHomeContent(
             onToggleVisible = remember(viewModel, target) {
                 { visible ->
                     if (libraryId != null) {
-                        viewModel.setLibrarySectionVisible(libraryId, target.type, visible)
+                        viewModel.onEvent(HomeUiEvent.SetLibrarySectionVisible(libraryId, target.type, visible))
                     } else {
-                        viewModel.setSectionVisible(target.type, visible)
+                        viewModel.onEvent(HomeUiEvent.SetSectionVisible(target.type, visible))
                     }
                 }
             },
-            onMoveUp = remember(viewModel, target) { { viewModel.moveSection(target.type, up = true) } },
-            onMoveDown = remember(viewModel, target) { { viewModel.moveSection(target.type, up = false) } },
+            onMoveUp = remember(viewModel, target) { { viewModel.onEvent(HomeUiEvent.MoveSection(target.type, up = true)) } },
+            onMoveDown = remember(viewModel, target) { { viewModel.onEvent(HomeUiEvent.MoveSection(target.type, up = false)) } },
             onConfigureLayout = if (perLibrary) onConfigureLibraries else onConfigureHomeLayout,
             onDismiss = dismissSectionConfig,
         )
@@ -874,6 +885,7 @@ private fun HomeTopDockScrim(
     hideTopHeaderOnScroll: Boolean,
     currentUser: com.raulshma.jellyplay.core.model.UserInfo?,
     currentServerUsers: List<com.raulshma.jellyplay.core.model.UserInfo>,
+    settingsSearch: (Flow<String>, Context) -> Flow<List<ResolvedSettingsItem>>,
     onUserSwitch: (String) -> Unit,
     onModeChange: (HomeMode) -> Unit,
     onSearchExpanded: (Boolean) -> Unit,
@@ -897,14 +909,15 @@ private fun HomeTopDockScrim(
     val query by searchQuery.collectAsStateWithLifecycle()
 
     // Local settings search also lives in this leaf: it is pure-local and
-    // needs an Android Context to resolve the registry's @StringRes ids, so it
-    // moved out of HomeViewModel (which no longer carries an appContext).
-    // Gated by the Appearance toggle — when off, an empty flow keeps the slot
-    // idle while preserving the (empty) settings row.
+    // needs an Android Context to resolve the catalog's @StringRes ids, so the
+    // flow is built from the VM-exposed seam (which injects the settings
+    // catalog through core/ui's SettingsSearchProvider). Gated by the
+    // Appearance toggle — when off, an empty flow keeps the slot idle while
+    // preserving the (empty) settings row.
     val settingsContext = LocalContext.current
-    val settingsResults by remember(includeSettingsResults, settingsContext) {
+    val settingsResults by remember(includeSettingsResults, settingsContext, settingsSearch) {
         if (includeSettingsResults) {
-            settingsSearchResults(searchQuery, settingsContext)
+            settingsSearch(searchQuery, settingsContext)
         } else {
             kotlinx.coroutines.flow.flowOf(emptyList())
         }

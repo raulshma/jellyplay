@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -39,7 +40,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -59,6 +59,7 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.tv.LocalTvDrawerOpener
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -75,6 +76,14 @@ private val ExpandedDrawerWidth = 240.dp
 private val DrawerIconSize = 24.dp
 private val DrawerItemSpacing = 4.dp
 private const val ExitConfirmationTimeoutMs = 2000L
+
+/**
+ * Frame budget for the content-focus guard. The content requester often isn't attached to a
+ * placed focusable until the incoming screen's NavDisplay entry transition (~300ms) settles,
+ * so a short retry loop gives up while focus is still orphaned — and orphaned focus falls to
+ * the drawer rail, which snaps the drawer open.
+ */
+private const val ContentGuardRetryFrames = 24
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Data + icon mapping
@@ -93,7 +102,24 @@ data class TvNavItem(
 /** Library collection types excluded from the TV drawer — already accessible via the Library tab. */
 private val EXCLUDED_DRAWER_TYPES = setOf(
     "movies", "tvshows", "music", "boxsets", "playlists", "homevideos", "anime",
+    // Server Live TV view — the drawer already has a dedicated primary Live TV item.
+    "livetv",
 )
+
+/**
+ * True when a server user-view must not render as a TV-drawer folder row.
+ *
+ * Beyond [EXCLUDED_DRAWER_TYPES] this hides the two artifacts a Live-TV-enabled
+ * server injects into /Users/{userId}/Views: the "Live TV" UserView
+ * (collectionType "livetv", duplicate of the primary item) and Jellyfin's DVR
+ * recordings library, which the server creates named exactly "Recordings" with
+ * no collection type — its content lives in the Live TV screen's Recordings tab.
+ */
+internal fun isExcludedTvDrawerFolder(folder: LibraryFolder): Boolean {
+    if (folder.collectionType?.lowercase() in EXCLUDED_DRAWER_TYPES) return true
+    return folder.collectionType == null &&
+        folder.name.equals("Recordings", ignoreCase = true)
+}
 
 private fun libraryIcon(collectionType: String?): ImageVector = when (collectionType?.lowercase()) {
     "movies" -> Tabler.Outline.Movie
@@ -135,7 +161,7 @@ fun TvNavigationDrawer(
 
     // Filter out standard library types — those are already reachable via the Library tab.
     val drawerFolders = remember(libraryFolders) {
-        libraryFolders.filter { it.collectionType?.lowercase() !in EXCLUDED_DRAWER_TYPES }
+        libraryFolders.filterNot(::isExcludedTvDrawerFolder)
     }
 
     val selectedItemFocusRequester = remember { FocusRequester() }
@@ -188,6 +214,20 @@ fun TvNavigationDrawer(
         onNavigate(route)
     }
 
+    // Explicit open path for screen content (D-pad Left at a content left edge).
+    // Setting Open arms the existing LaunchedEffect below, which scrolls the
+    // rail to the selected entry and focuses it — so the selected row is always
+    // composed before anything tries to grant it focus, unlike a bare geometric
+    // focus search into the rail. Remembered so the provider value stays stable
+    // across recompositions (the closure captures the saveable drawerState).
+    val openDrawerFromContent = remember {
+        {
+            if (drawerState.currentValue == DrawerValue.Closed) {
+                drawerState.setValue(DrawerValue.Open)
+            }
+        }
+    }
+
     BackHandler(enabled = drawerState.currentValue == DrawerValue.Open) {
         lastBackPressTime = 0L
         closeDrawerAndMoveToContent()
@@ -221,9 +261,10 @@ fun TvNavigationDrawer(
 
     LaunchedEffect(currentRoute, drawerState.currentValue, contentHasFocus) {
         if (drawerState.currentValue == DrawerValue.Closed && !contentHasFocus) {
-            for (attempt in 1..3) {
+            repeat(ContentGuardRetryFrames) {
                 androidx.compose.runtime.withFrameNanos { }
-                if (contentFocusRequester.tryRequestFocus("tv_content_guard")) break
+                if (contentHasFocus || drawerState.currentValue != DrawerValue.Closed) return@LaunchedEffect
+                if (contentFocusRequester.tryRequestFocus("tv_content_guard")) return@LaunchedEffect
             }
         }
     }
@@ -255,11 +296,15 @@ fun TvNavigationDrawer(
                         bottom = 16.dp,
                     )
                     .focusRequester(drawerSheetFocusRequester)
-                    .focusGroup()
+                    // focusRestorer must wrap the rail's focus GROUP (placed before
+                    // focusGroup, never after): focus properties attach to the next
+                    // INNER focus target, so a restorer placed after focusGroup
+                    // attaches to the rows and any restorer aggregated from outside
+                    // clobbers inner onEnter/onExit hooks (they are single-slot).
+                    // With this order, entering the rail restores the last-focused
+                    // row, falling back to the selected row.
                     .tvFocusRestorer(selectedItemFocusRequester)
-                    .focusProperties {
-                        onEnter = { requestSelectedRailFocus() }
-                    }
+                    .focusGroup()
                     .selectableGroup(),
                 verticalArrangement = Arrangement.spacedBy(DrawerItemSpacing),
             ) {
@@ -345,10 +390,21 @@ fun TvNavigationDrawer(
                     .fillMaxSize()
                     .focusRequester(contentFocusRequester)
                     .onFocusChanged { contentHasFocus = it.hasFocus }
-                    .focusGroup()
-                    .tvFocusRestorer(),
+                    // No focusRestorer here: restorer properties aggregate onto every
+                    // descendant focus target with outermost-wins semantics (onEnter/
+                    // onExit are single slots), which clobbers the screens' exit hooks
+                    // (e.g. D-pad-Left drawer expansion) and redirects group-entry
+                    // focus to whichever sibling group was visited last — focus
+                    // "resets to the top row" when returning to a grid from a header.
+                    // Screens own their focus restoration (TvFocusableGrid/Column
+                    // wrap their own focus group with a restorer).
+                    .focusGroup(),
             ) {
-                content()
+                CompositionLocalProvider(
+                    LocalTvDrawerOpener provides openDrawerFromContent,
+                ) {
+                    content()
+                }
             }
         },
     )

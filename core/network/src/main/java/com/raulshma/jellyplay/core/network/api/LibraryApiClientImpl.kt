@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.core.network.api
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.Genre
+import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFilters
@@ -16,6 +18,7 @@ import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.lruMapOf
 import com.raulshma.jellyplay.core.model.isAudioType
+import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.model.PersonInfo
@@ -66,6 +69,17 @@ private val DETAIL_ITEM_FIELDS = listOf(
     ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
 )
 
+/** LRU bound of the favorite-flag cache (the old `LruCache(200)` size). */
+private const val FAVORITE_CACHE_MAX_ENTRIES = 200
+
+/**
+ * TTL of the favorite-flag cache — generous (the flags only seed a toggle's
+ * "current" value until the first real read refreshes them), and the
+ * identity-keyed composite key already guarantees a switched user never sees
+ * the previous user's flags within any window.
+ */
+private const val FAVORITE_CACHE_TTL_MS = 15 * 60_000L
+
 @Singleton
 class LibraryApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
@@ -92,20 +106,22 @@ class LibraryApiClientImpl @Inject constructor(
     // folder + up to 5 getSimilarItems calls. Latest/recommendations change far
     // less often than Continue Watching / Next Up, so a short TTL here skips
     // those round-trips on back-to-back refreshes while CW/NextUp stay live.
-    // Mirrors the 2-minute TTL the repo already uses for the same concepts.
-    private val homeLatestMediaCache = TtlCache<List<MediaItem>>(ttlMs = HOME_SUBCALL_CACHE_TTL_MS)
-    private val homeSimilarCache = TtlCache<List<MediaItem>>(ttlMs = HOME_SUBCALL_CACHE_TTL_MS)
+    // Mirrors the 2-minute TTL the repo uses for the same concepts — both
+    // values are [HomeFreshness.NETWORK_SUBCALL_TTL_MS], one policy constant.
+    private val homeLatestMediaCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
+    private val homeSimilarCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
 
     override suspend fun getHomeSections(
-        enabledSections: Set<HomeSectionType>,
-        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>>,
-        nextUpRewatching: Boolean,
-        nextUpMaxDays: Int,
-        nextUpExcludedSeriesIds: Set<String>,
-        hiddenCwItemIds: Set<String>,
-        pinnedSections: List<PinnedHomeSection>,
+        query: HomeSectionQuery,
+        force: Boolean,
     ): Result<HomeSectionsResult> = engine.apiResultWithRetry {
         coroutineScope {
+            // Only enabledSections earns a local (read throughout the
+            // per-section logic below); everything else the query bundles is
+            // read at its single use site as query.<field>, so the value
+            // object stays intact instead of being re-flattened into
+            // positional locals at the seam.
+            val enabledSections = query.enabledSections
             val sections = mutableListOf<HomeSection>()
             val failedTypes = mutableSetOf<HomeSectionType>()
             var firstError: Throwable? = null
@@ -116,8 +132,8 @@ class LibraryApiClientImpl @Inject constructor(
             }
             val nextUpDeferred = async {
                 if (HomeSectionType.NEXT_UP in enabledSections) getNextUp(
-                    enableRewatching = nextUpRewatching,
-                    maxDays = nextUpMaxDays,
+                    enableRewatching = query.nextUpRewatching,
+                    maxDays = query.nextUpMaxDays,
                 )
                 else Result.success(emptyList())
             }
@@ -130,21 +146,38 @@ class LibraryApiClientImpl @Inject constructor(
             }
             // Kick off pinned-section fetches concurrently with the standard
             // sections so they add no extra wall-clock latency to home loading.
-            val pinnedDeferred = async { fetchPinnedSections(pinnedSections) }
+            val pinnedDeferred = async { fetchPinnedSections(query.pinnedSections) }
 
             val continueWatchingResult = continueWatchingDeferred.await()
             val nextUpResult = nextUpDeferred.await()
             val foldersResult = foldersDeferred.await()
+
+            // Launch the recommendations chain now: it depends only on the
+            // Continue Watching / Next Up seeds above (already resolved), not
+            // on the per-folder latest-media fan-out below — overlapping the
+            // two chains turns home-load wall clock from
+            // latestChain + recommendationsChain into max(...) while keeping
+            // section emission order unchanged (awaited at its original spot).
+            val recommendationsDeferred: kotlinx.coroutines.Deferred<Result<RecommendationResult>>? =
+                if (HomeSectionType.RECOMMENDATIONS in enabledSections) {
+                    // Reuse the Continue Watching + Next Up lists already fetched
+                    // above as recommendation seeds instead of re-hitting the
+                    // /Items/Resume and /Shows/NextUp endpoints a second time.
+                    val recommendationSeeds =
+                        continueWatchingResult.getOrDefault(emptyList()) +
+                            nextUpResult.getOrDefault(emptyList())
+                    async { getRecommendations(limit = 20, seeds = recommendationSeeds, force = force) }
+                } else null
 
             var continueWatchingIds = emptySet<String>()
 
             if (HomeSectionType.CONTINUE_WATCHING in enabledSections) {
                 continueWatchingResult
                     .onSuccess { list ->
-                        val filtered = list.filter { it.id !in hiddenCwItemIds }
+                        val filtered = list.filter { it.id !in query.hiddenCwItemIds }
                         if (filtered.isNotEmpty()) {
                             continueWatchingIds = filtered.map { it.id }.toSet()
-                            sections.add(HomeSection("continue_watching", "Continue Watching", HomeSectionType.CONTINUE_WATCHING, filtered))
+                            sections.add(HomeSectionType.CONTINUE_WATCHING.descriptor.section(filtered))
                         }
                     }
                     .onFailure {
@@ -158,9 +191,11 @@ class LibraryApiClientImpl @Inject constructor(
                     .onSuccess { list ->
                         // Drop items whose series is in the user's "remove from Next Up" blocklist.
                         val filtered = list.filter { it.id !in continueWatchingIds }
-                            .filter { it.seriesId == null || it.seriesId !in nextUpExcludedSeriesIds }
+                            .filter { it.seriesId == null || it.seriesId !in query.nextUpExcludedSeriesIds }
                         if (filtered.isNotEmpty()) {
-                            sections.add(HomeSection("next_up", "NextUp", HomeSectionType.NEXT_UP, filtered))
+                            // Title comes from the descriptor ("Next Up") — the
+                            // pre-descriptor literal here had drifted to "NextUp".
+                            sections.add(HomeSectionType.NEXT_UP.descriptor.section(filtered))
                         }
                     }
                     .onFailure {
@@ -181,13 +216,13 @@ class LibraryApiClientImpl @Inject constructor(
                             .map { folder ->
                                 async {
                                     semaphore.acquire()
-                                    try { folder to getLatestMediaForHome(folder.id, limit = 16) }
+                                    try { folder to getLatestMediaForHome(folder.id, limit = 16, force = force) }
                                     finally { semaphore.release() }
                                 }
                             }
                         latestDeferred.forEach { deferred ->
                             val (folder, result) = deferred.await()
-                            val disabledForFolder = libraryHomeSectionOverrides[folder.id].orEmpty()
+                            val disabledForFolder = query.libraryHomeSectionOverrides[folder.id].orEmpty()
                             result.onSuccess { latest ->
                                 // Only feed the aggregated Recently Added row from
                                 // libraries the user hasn't disabled it for.
@@ -197,8 +232,15 @@ class LibraryApiClientImpl @Inject constructor(
                                 val latestEnabledForFolder = HomeSectionType.LATEST_MEDIA in enabledSections &&
                                     HomeSectionType.LATEST_MEDIA !in disabledForFolder
                                 if (latest.isNotEmpty() && latestEnabledForFolder) {
-                                    val sectionId = "latest_${folder.id}"
-                                    sections.add(HomeSection(sectionId, "Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest, libraryId = folder.id, collectionType = folder.collectionType))
+                                    val descriptor = HomeSectionType.LATEST_MEDIA.descriptor
+                                    sections.add(HomeSection(
+                                        id = descriptor.idFor(folder.id),
+                                        title = descriptor.titleFor(folder.name),
+                                        type = HomeSectionType.LATEST_MEDIA,
+                                        items = latest,
+                                        libraryId = folder.id,
+                                        collectionType = folder.collectionType,
+                                    ))
                                 }
                             }.onFailure {
                                 // A per-folder Latest Media 403 (e.g. a stale
@@ -230,58 +272,38 @@ class LibraryApiClientImpl @Inject constructor(
                     .distinctBy { it.id }
                     .filter { it.id !in continueWatchingIds }
                 if (recentlyAddedItems.isNotEmpty()) {
-                    val recentlyAddedSection = HomeSection(
-                        "recently_added",
-                        "Recently Added",
-                        HomeSectionType.RECENTLY_ADDED,
-                        recentlyAddedItems,
-                    )
+                    val recentlyAddedSection = HomeSectionType.RECENTLY_ADDED.descriptor.section(recentlyAddedItems)
                     val latestMediaLastIndex = sections.indexOfLast { it.type == HomeSectionType.LATEST_MEDIA }
                     val insertIndex = if (latestMediaLastIndex >= 0) latestMediaLastIndex + 1 else sections.size
                     sections.add(insertIndex, recentlyAddedSection)
                 }
             }
 
-            if (HomeSectionType.RECOMMENDATIONS in enabledSections) {
-                // Reuse the Continue Watching + Next Up lists already fetched
-                // above as recommendation seeds instead of re-hitting the
-                // /Items/Resume and /Shows/NextUp endpoints a second time.
-                val recommendationSeeds =
-                    continueWatchingResult.getOrDefault(emptyList()) +
-                        nextUpResult.getOrDefault(emptyList())
-                getRecommendations(limit = 20, seeds = recommendationSeeds)
-                    .onSuccess { result ->
-                        if (result.items.isNotEmpty()) {
-                            sections.add(HomeSection(
-                                "recommendations",
-                                "Recommended For You",
-                                HomeSectionType.RECOMMENDATIONS,
-                                result.items,
-                                seedItem = result.seedItem,
-                            ))
-                        } else {
-                            // Fallback "For You" source when there are no similarity
-                            // seeds yet (new user, no watch history): surface favorited
-                            // / liked items so the home page still has discovery content
-                            //. Mirrors the search "Suggestions" data source.
-                            getSearchSuggestions(limit = 20)
-                                .onSuccess { search ->
-                                    if (search.items.isNotEmpty()) {
-                                        sections.add(HomeSection(
-                                            "recommendations",
-                                            "Recommended For You",
-                                            HomeSectionType.RECOMMENDATIONS,
-                                            search.items,
-                                        ))
-                                    }
+            // The deferred is non-null exactly when RECOMMENDATIONS is enabled
+            // (same condition that launched it above) — null-safe chaining
+            // keeps that invariant local instead of resting on an `!!` tied
+            // to a distant guard.
+            recommendationsDeferred?.await()
+                ?.onSuccess { result ->
+                    if (result.items.isNotEmpty()) {
+                        sections.add(HomeSectionType.RECOMMENDATIONS.descriptor.section(result.items, seedItem = result.seedItem))
+                    } else {
+                        // Fallback "For You" source when there are no similarity
+                        // seeds yet (new user, no watch history): surface favorited
+                        // / liked items so the home page still has discovery content
+                        //. Mirrors the search "Suggestions" data source.
+                        getSearchSuggestions(limit = 20)
+                            .onSuccess { search ->
+                                if (search.items.isNotEmpty()) {
+                                    sections.add(HomeSectionType.RECOMMENDATIONS.descriptor.section(search.items))
                                 }
-                        }
+                            }
                     }
-                    .onFailure {
-                        if (firstError == null) firstError = it
-                        failedTypes.add(HomeSectionType.RECOMMENDATIONS)
-                    }
-            }
+                }
+                ?.onFailure {
+                    if (firstError == null) firstError = it
+                    failedTypes.add(HomeSectionType.RECOMMENDATIONS)
+                }
 
             // Append user-pinned sections (collections / playlists / favorites /
             // genres / studios). They are always fetched regardless of the
@@ -298,21 +320,42 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     /**
+     * Shared read/write shape of the home sub-call caches: consult [cache]
+     * first unless [force] (pull-to-refresh), and memoise every successful
+     * fetch — including a forced one, so the freshly pulled rows survive the
+     * next periodic refresh instead of the pre-pull rows reverting for up to
+     * the TTL. Keys are scoped to the current [CacheIdentity] so a
+     * user/server switch can never serve the previous identity's rows.
+     */
+    private suspend fun cachedHomeSubCall(
+        cache: TtlCache<List<MediaItem>>,
+        keyPart: String,
+        limit: Int,
+        force: Boolean,
+        fetch: suspend () -> Result<List<MediaItem>>,
+    ): Result<List<MediaItem>> {
+        val identity = currentHomeCacheIdentity()
+        val cacheKey = "${keyPart}_$limit"
+        if (!force) {
+            cache.get(identity, cacheKey)?.let { return Result.success(it) }
+        }
+        return fetch().also { result ->
+            result.getOrNull()?.let { cache.put(identity, cacheKey, it) }
+        }
+    }
+
+    /**
      * Home-path wrapper around [getLatestMedia] that consults [homeLatestMediaCache]
      * first. The home screen refreshes every 60s (foreground) and re-issues one
      * `/Items/Latest` call per library folder on each refresh; latest-in-library
      * changes less often than that, so a short TTL skips the redundant fan-out.
      * Only the home path uses this — browse/library screens still go straight to
-     * [getLatestMedia] for fresh data.
+     * [getLatestMedia] for fresh data. [force] (pull-to-refresh) bypasses the
+     * cache read but still memoises a successful fetch, so the pulled rows
+     * are what the next periodic refresh serves.
      */
-    private suspend fun getLatestMediaForHome(parentId: String, limit: Int): Result<List<MediaItem>> {
-        val identity = currentHomeCacheIdentity()
-        val cacheKey = "${parentId}_$limit"
-        homeLatestMediaCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        return getLatestMedia(parentId, limit).also { result ->
-            result.getOrNull()?.let { homeLatestMediaCache.put(identity, cacheKey, it) }
-        }
-    }
+    private suspend fun getLatestMediaForHome(parentId: String, limit: Int, force: Boolean = false): Result<List<MediaItem>> =
+        cachedHomeSubCall(homeLatestMediaCache, parentId, limit, force) { getLatestMedia(parentId, limit) }
 
     /**
      * Home-path wrapper around [getSimilarItems] (via [getRecommendations]) that
@@ -320,26 +363,29 @@ class LibraryApiClientImpl @Inject constructor(
      * recommendations fan-out (up to 5 concurrent `getSimilarItems` calls) is
      * the single most expensive part of a home refresh; seeds rarely change
      * within the TTL window, so back-to-back refreshes skip it entirely.
+     * [force] (pull-to-refresh) bypasses the cache read but still memoises a
+     * successful fetch, so the pulled rows are what the next periodic
+     * refresh serves.
      */
-    private suspend fun getSimilarItemsForHome(seedId: String, limit: Int): Result<List<MediaItem>> {
-        val identity = currentHomeCacheIdentity()
-        val cacheKey = "${seedId}_$limit"
-        homeSimilarCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        return getSimilarItems(seedId, limit).also { result ->
-            result.getOrNull()?.let { homeSimilarCache.put(identity, cacheKey, it) }
-        }
-    }
+    private suspend fun getSimilarItemsForHome(seedId: String, limit: Int, force: Boolean = false): Result<List<MediaItem>> =
+        cachedHomeSubCall(homeSimilarCache, seedId, limit, force) { getSimilarItems(seedId, limit) }
 
     /**
      * The current `(serverId, userId)` as a [CacheIdentity], read from the
-     * engine's [StateFlow]s. The home sub-call caches are identity-keyed so a
-     * user/server switch can't serve the previous identity's latest-media /
+     * engine's atomic [JellyfinApiEngine.session] flow. Reading
+     * `currentServer` and `currentUser` as two separate StateFlow snapshots
+     * could observe a synthetic `(newServer, oldUser)` mid-switch and key the
+     * caches under an identity that never existed; the session flow publishes
+     * both sides as one value. The home sub-call caches are identity-keyed so
+     * a user/server switch can't serve the previous identity's latest-media /
      * recommendations — wrong identity misses by construction, so no parallel
      * cross-boundary clearer is needed. Falls back to [CacheIdentity.UNKNOWN]
      * before login / after logout; nothing cached under that key can leak.
      */
-    private fun currentHomeCacheIdentity(): CacheIdentity =
-        CacheIdentity.ofOrNull(engine.currentServer.value?.id, engine.currentUser.value?.id)
+    private fun currentHomeCacheIdentity(): CacheIdentity {
+        val session = engine.session.value
+        return CacheIdentity.ofOrNull(session?.server?.id, session?.user?.id)
+    }
     private suspend fun fetchPinnedSections(
         pinnedSections: List<PinnedHomeSection>,
     ): List<HomeSection> {
@@ -353,7 +399,7 @@ class LibraryApiClientImpl @Inject constructor(
                         val items = getPinnedSectionItems(pinned)
                         if (items.isNotEmpty()) {
                             HomeSection(
-                                id = "pinned_${pinned.id}",
+                                id = HomeSectionType.PINNED.descriptor.idFor(pinned.id),
                                 title = pinned.title,
                                 type = HomeSectionType.PINNED,
                                 items = items,
@@ -882,6 +928,17 @@ class LibraryApiClientImpl @Inject constructor(
     override suspend fun getRecommendations(
         limit: Int,
         seeds: List<MediaItem>,
+    ): Result<RecommendationResult> = getRecommendations(limit, seeds, force = false)
+
+    /**
+     * Force-aware core of [getRecommendations]: the home path passes through the
+     * [force] it received so a pull-to-refresh also bypasses the similar-items
+     * sub-cache; callers without a force argument keep the cached behavior.
+     */
+    private suspend fun getRecommendations(
+        limit: Int,
+        seeds: List<MediaItem>,
+        force: Boolean,
     ): Result<RecommendationResult> = runCatching {
         // Reuse caller-supplied seeds when available (e.g. the home screen has
         // already fetched Continue Watching + Next Up) to avoid duplicate
@@ -909,7 +966,7 @@ class LibraryApiClientImpl @Inject constructor(
                         // TTL window, so back-to-back refreshes (60s cadence) skip
                         // the fan-out. Also benefits the detail screen's re-entry.
                         val perSeedLimit = limit / seedItems.size + 2
-                        getSimilarItemsForHome(seed.id, perSeedLimit).getOrDefault(emptyList())
+                        getSimilarItemsForHome(seed.id, perSeedLimit, force).getOrDefault(emptyList())
                     }
                     finally { semaphore.release() }
                 }
@@ -1245,11 +1302,12 @@ class LibraryApiClientImpl @Inject constructor(
         val userId = engine.currentUser.value?.id
             ?: throw IllegalStateException("Not authenticated")
         val uuid = itemId.toUUID()
-        val cacheKey = "$userId:$uuid"
-        val cached = favoriteCache[cacheKey]
+        val identity = currentHomeCacheIdentity()
+        val cacheKey = uuid.toString()
+        val cached = favoriteCache.get(identity, cacheKey)
         val isFavorite = currentIsFavorite ?: cached ?: run {
             val fetched = engine.requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
-            favoriteCache.put(cacheKey, fetched)
+            favoriteCache.put(identity, cacheKey, fetched)
             fetched
         }
         if (isFavorite) {
@@ -1257,14 +1315,14 @@ class LibraryApiClientImpl @Inject constructor(
                 userId = userId.toUUID(),
                 itemId = uuid,
             )
-            favoriteCache.put(cacheKey, false)
+            favoriteCache.put(identity, cacheKey, false)
             false
         } else {
             engine.requireApi().userLibraryApi.markFavoriteItem(
                 userId = userId.toUUID(),
                 itemId = uuid,
             )
-            favoriteCache.put(cacheKey, true)
+            favoriteCache.put(identity, cacheKey, true)
             true
         }
     }
@@ -1284,21 +1342,22 @@ class LibraryApiClientImpl @Inject constructor(
                 itemId = uuid,
             )
         }
-        favoriteCache.put("$userId:$uuid", isFavorite)
+        favoriteCache.put(currentHomeCacheIdentity(), uuid.toString(), isFavorite)
         Unit
     }
 
-    private val favoriteCache = androidx.collection.LruCache<String, Boolean>(200)
-
     /**
-     * Clears the in-memory favorite cache. Called on disconnect / server switch
-     * so stale favorite flags from a previous server don't linger until evicted
-     * by access count. Defensive — entries are also scoped per-user so a stale
-     * entry can only ever resolve for the user that wrote it.
+     * Last-known favorite flags, keyed by the current [CacheIdentity] (see
+     * [currentHomeCacheIdentity]) so a user/server switch misses by
+     * construction — the previous identity's entries can never resolve, and
+     * they expire on their own instead of being evicted by a cross-module
+     * clear on disconnect (the old `clearFavoriteCache` hand-off from
+     * `AuthApiClientImpl`).
      */
-    override fun clearFavoriteCache() {
-        favoriteCache.evictAll()
-    }
+    private val favoriteCache = TtlCache<Boolean>(
+        maxSize = FAVORITE_CACHE_MAX_ENTRIES,
+        ttlMs = FAVORITE_CACHE_TTL_MS,
+    )
 
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?, imageIndex: Int?, tag: String?): String {
         val api = engine.api ?: return ""
@@ -1335,11 +1394,5 @@ class LibraryApiClientImpl @Inject constructor(
         } catch (_: Exception) {
             emptyList()
         }
-    }
-
-    private companion object {
-        // Matches MediaRepositoryImpl's LATEST_CACHE_TTL_MS so the home path's
-        // sub-call caches and the repo's same-concept caches expire in lockstep.
-        private const val HOME_SUBCALL_CACHE_TTL_MS = 2 * 60 * 1000L
     }
 }

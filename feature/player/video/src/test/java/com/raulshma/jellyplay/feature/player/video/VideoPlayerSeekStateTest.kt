@@ -17,13 +17,13 @@ class VideoPlayerSeekStateTest {
     @Test
     fun defaults_seekDurationIs10Seconds() {
         val state = VideoPlayerUiState()
-        assertEquals(10_000L, state.seekDurationMs)
+        assertEquals(10_000L, state.gestures.seekDurationMs)
     }
 
     @Test
     fun defaults_swipeSeekMaxIs120Seconds() {
         val state = VideoPlayerUiState()
-        assertEquals(120_000L, state.swipeSeekMaxMs)
+        assertEquals(120_000L, state.gestures.swipeSeekMaxMs)
     }
 
     @Test

@@ -39,6 +39,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -59,6 +61,9 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import java.time.LocalDate
 import java.time.ZoneId
@@ -76,6 +81,16 @@ fun UpcomingCalendarScreen(
     val userMessageBus = LocalUserMessageBus.current
     val listState = rememberLazyListState()
     val today = remember { today() }
+    val isTv = LocalTvMode.current
+
+    // TV focus-on-launch: focus the first card once the calendar loads so D-pad
+    // input lands on content, not the navigation drawer.
+    val listFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = listFocusRequester,
+        itemCount = if (!featureEnabled || state.isLoading || state.error != null || state.items.isEmpty()) 0 else 1,
+        tag = "calendar_init",
+    )
 
     // Tap-month → date-picker affordance. After a date is picked the
     // visible month swaps (if needed) and the list scrolls to that day's row.
@@ -141,11 +156,15 @@ fun UpcomingCalendarScreen(
                         PullToRefreshBox(
                             isRefreshing = state.isLoading && state.items.isNotEmpty(),
                             onRefresh = { viewModel.refresh() },
+                            enabled = !isTv,
                             modifier = Modifier.fillMaxSize(),
                         ) {
                             LazyColumn(
                                 state = listState,
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .tvFocusRestorer()
+                                    .focusRequester(listFocusRequester),
                                 contentPadding = PaddingValues(
                                     start = 16.dp,
                                     top = 8.dp,

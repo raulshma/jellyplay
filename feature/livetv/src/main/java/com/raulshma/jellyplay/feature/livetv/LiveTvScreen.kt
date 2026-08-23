@@ -16,6 +16,7 @@ import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -84,21 +85,20 @@ fun LiveTvScreen(
                 backgroundColor = backgroundColor,
             )
 
+            val onProgramClick = remember(onChannelClick) { { program: LiveTvProgram -> onChannelClick(program.channelId, program.name) } }
+            val onEpgBack: () -> Unit = remember { { scope.launch { pagerState.animateScrollToPage(LiveTvTab.PROGRAMS.ordinal) } } }
+
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
             ) { page ->
                 when (tabs[page]) {
                     LiveTvTab.PROGRAMS -> ProgramsScreen(
-                        onProgramClick = { program ->
-                            onChannelClick(program.channelId, program.name)
-                        },
+                        onProgramClick = onProgramClick,
                     )
                     LiveTvTab.GUIDE -> EpgScreen(
-                        onProgramClick = { program: LiveTvProgram ->
-                            onChannelClick(program.channelId, program.name)
-                        },
-                        onBack = { scope.launch { pagerState.animateScrollToPage(LiveTvTab.PROGRAMS.ordinal) } },
+                        onProgramClick = onProgramClick,
+                        onBack = onEpgBack,
                     )
                     LiveTvTab.CHANNELS -> ChannelsScreen(
                         onChannelClick = onOpenChannelDetail,

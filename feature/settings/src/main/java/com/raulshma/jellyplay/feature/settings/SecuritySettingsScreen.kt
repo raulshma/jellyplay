@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,6 +38,7 @@ import com.raulshma.jellyplay.core.ui.components.BiometricAuthHelper
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.findFragmentActivity
+import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.rememberBiometricAvailability
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
@@ -309,7 +309,7 @@ fun SecuritySettingsScreen(
     }
 
     if (activeDialog is SecuritySettingsDialog.PinDialog) {
-        AlertDialog(
+        ImeAlertDialog(
             onDismissRequest = {
                 activeDialog = SecuritySettingsDialog.None
                 pinInput = ""
@@ -393,7 +393,7 @@ fun SecuritySettingsScreen(
     }
 
     if (activeDialog is SecuritySettingsDialog.PinDisableAuth) {
-        AlertDialog(
+        ImeAlertDialog(
             onDismissRequest = {
                 activeDialog = SecuritySettingsDialog.None
                 pinDisableAuthError = null
@@ -478,7 +478,7 @@ fun SecuritySettingsScreen(
     }
 
     if (activeDialog is SecuritySettingsDialog.QuickConnectAuthorize) {
-        AlertDialog(
+        ImeAlertDialog(
             onDismissRequest = {
                 if (!qcLoading) {
                     activeDialog = SecuritySettingsDialog.None

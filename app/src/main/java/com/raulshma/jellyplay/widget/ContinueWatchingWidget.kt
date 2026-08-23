@@ -16,7 +16,10 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class ContinueWatchingWidget : AppWidgetProvider() {
 
@@ -25,6 +28,12 @@ class ContinueWatchingWidget : AppWidgetProvider() {
     interface WidgetEntryPoint {
         fun widgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
     }
+
+    /**
+     * Runs [onDeleted] config cleanup off the main thread — mirrors the
+     * sibling `SeerrRecommendationsWidget.refreshScope` goAsync() pattern.
+     */
+    private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onDeleted(context: Context?, appWidgetIds: IntArray?) {
         super.onDeleted(context, appWidgetIds)
@@ -37,9 +46,14 @@ class ContinueWatchingWidget : AppWidgetProvider() {
         } catch (_: Exception) {
             return
         }
-        kotlinx.coroutines.runBlocking {
-            for (id in appWidgetIds) {
-                store.removeWidgetConfigForId(id)
+        val pending = goAsync()
+        cleanupScope.launch {
+            try {
+                for (id in appWidgetIds) {
+                    store.removeWidgetConfigForId(id)
+                }
+            } finally {
+                pending.finish()
             }
         }
     }
@@ -73,10 +87,6 @@ class ContinueWatchingWidget : AppWidgetProvider() {
             val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
             appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.cw_widget_list)
         }
-    }
-
-    override fun onDisabled(context: Context?) {
-        super.onDisabled(context)
     }
 
     companion object {

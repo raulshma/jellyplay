@@ -167,6 +167,66 @@ class SeerrModelsTest {
     }
     // endregion
 
+    // region withPendingRequest
+    @Test
+    fun `withPendingRequest matches movie by detail id and flips status to PENDING`() {
+        val item = SeerrSearchItem(id = 42, mediaType = "movie")
+        val details = SeerrMovieDetails(
+            id = 42,
+            mediaInfo = SeerrMediaInfo(tmdbId = 42, status = SeerrMediaStatus.UNKNOWN.value),
+        )
+
+        val flipped = details.withPendingRequest(item)
+
+        assertEquals(SeerrMediaStatus.PENDING.value, flipped.mediaInfo?.status)
+        // The existing mediaInfo is preserved (same tmdb id), not replaced.
+        assertEquals(42, flipped.mediaInfo?.tmdbId)
+    }
+
+    @Test
+    fun `withPendingRequest synthesizes absent movie mediaInfo with the item tmdbId`() {
+        // Overseerr omits mediaInfo for never-requested media — the flip must
+        // still produce a PENDING mediaInfo so the action button updates.
+        val item = SeerrSearchItem(id = 42, mediaType = "movie")
+        val details = SeerrMovieDetails(id = 42)
+
+        val flipped = details.withPendingRequest(item)
+
+        assertEquals(SeerrMediaStatus.PENDING.value, flipped.mediaInfo?.status)
+        assertEquals(42, flipped.mediaInfo?.tmdbId)
+    }
+
+    @Test
+    fun `withPendingRequest matches tv by detail id and flips status to PENDING`() {
+        val item = SeerrSearchItem(id = 7, mediaType = "tv")
+        val details = SeerrTvDetails(id = 7)
+
+        val flipped = details.withPendingRequest(item)
+
+        assertEquals(SeerrMediaStatus.PENDING.value, flipped.mediaInfo?.status)
+        assertEquals(7, flipped.mediaInfo?.tmdbId)
+    }
+
+    @Test
+    fun `withPendingRequest leaves non-matching movie untouched`() {
+        val item = SeerrSearchItem(id = 999, mediaType = "movie")
+        val details = SeerrMovieDetails(
+            id = 42,
+            mediaInfo = SeerrMediaInfo(tmdbId = 42, status = SeerrMediaStatus.AVAILABLE.value),
+        )
+
+        assertEquals(details, details.withPendingRequest(item))
+    }
+
+    @Test
+    fun `withPendingRequest leaves non-matching tv untouched`() {
+        val item = SeerrSearchItem(id = 999, mediaType = "tv")
+        val details = SeerrTvDetails(id = 7)
+
+        assertEquals(details, details.withPendingRequest(item))
+    }
+    // endregion
+
     // region profile/poster/still URL getters on details
     @Test
     fun `SeerrMovieDetails posterUrl and backdropUrl build from paths`() {

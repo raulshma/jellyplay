@@ -21,6 +21,7 @@
     <string name="detail_more_like_this_on_device">Sul dispositivo</string>
     <string name="detail_section_videos">Video</string>
     <string name="detail_section_seasons">Stagioni</string>
+    <string name="detail_section_reviews">Recensioni</string>
 
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">Riproduci</string>

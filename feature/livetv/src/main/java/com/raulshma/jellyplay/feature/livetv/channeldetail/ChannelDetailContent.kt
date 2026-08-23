@@ -40,6 +40,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +59,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.livetv.R
 import com.raulshma.jellyplay.feature.livetv.formatLiveTvTime
@@ -84,11 +87,17 @@ internal fun ChannelDetailContent(
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
 
+    // Grab focus once content composes so the first D-pad press lands on Watch Live,
+    // not the drawer rail.
+    val focusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(focusRequester = focusRequester, itemCount = 1, tag = "channel_detail_init")
+
     LazyColumn(
         modifier = modifier
             .fillMaxWidth()
             .focusGroup()
-            .tvFocusRestorer(),
+            .tvFocusRestorer()
+            .focusRequester(focusRequester),
         contentPadding = PaddingValues(start = contentPad, end = contentPad, bottom = 64.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

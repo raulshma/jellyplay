@@ -12,6 +12,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -28,6 +30,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 /**
@@ -57,6 +60,10 @@ fun PrivacyDataScreen(
     // One pending confirmation at a time: null = none.
     var pendingAction by remember { mutableStateOf<PendingPrivacyAction?>(null) }
 
+    // Grab focus into the list so the first D-pad press lands on content, not the drawer rail.
+    val focusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(focusRequester = focusRequester, itemCount = 1, tag = "privacy_init")
+
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_privacy_data),
         onBack = onBack,
@@ -66,7 +73,8 @@ fun PrivacyDataScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(innerPadding)
-                .tvFocusRestorer(),
+                .tvFocusRestorer()
+                .focusRequester(focusRequester),
             contentPadding = PaddingValues(
                 start = adaptiveInfo.contentPadding(isTv),
                 end = adaptiveInfo.contentPadding(isTv),

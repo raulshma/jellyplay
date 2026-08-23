@@ -42,11 +42,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
 import com.raulshma.jellyplay.feature.editor.R
@@ -73,6 +78,13 @@ fun MetadataTab(
 
     val mediaType = state.mediaDetail?.item?.mediaType
 
+    val isTv = LocalTvMode.current
+    val initialFocus = remember { FocusRequester() }
+    RequestOrRestoreFocus(
+        focusRequester = if (isTv) initialFocus else null,
+        debugKey = "metadata_tab_init",
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -81,7 +93,11 @@ fun MetadataTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        SectionHeader(title = stringResource(R.string.editor_section_general), initiallyExpanded = true) {
+        SectionHeader(
+            title = stringResource(R.string.editor_section_general),
+            initiallyExpanded = true,
+            modifier = Modifier.focusRequester(initialFocus),
+        ) {
             OutlinedTextField(
                 value = state.name,
                 onValueChange = { viewModel.updateField { s -> s.copy(name = it) } },
@@ -505,13 +521,14 @@ fun MetadataTab(
 private fun SectionHeader(
     title: String,
     initiallyExpanded: Boolean = false,
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxWidth()
                 .focusIndicator()
                 .clickable { expanded = !expanded }
@@ -686,7 +703,7 @@ private fun PersonEditorDialog(
     var role by remember { mutableStateOf(person.role ?: "") }
     var type by remember { mutableStateOf(person.type) }
 
-    androidx.compose.material3.AlertDialog(
+    ImeAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (isNew) stringResource(R.string.editor_add_person) else stringResource(R.string.editor_edit_person)) },
         text = {

@@ -30,7 +30,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -50,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -60,6 +60,7 @@ import com.composables.icons.tabler.outline.DeviceTv
 import com.composables.icons.tabler.outline.Message
 import com.composables.icons.tabler.outline.PlayerPause
 import androidx.compose.foundation.shape.CircleShape
+import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -447,7 +448,7 @@ private fun SendMessageDialog(
     var header by remember { mutableStateOf(defaultHeader) }
     var text by remember { mutableStateOf("") }
 
-    AlertDialog(
+    ImeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(

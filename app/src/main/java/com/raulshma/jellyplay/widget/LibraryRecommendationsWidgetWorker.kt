@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
+import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.LibraryRecommendationsSource
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -83,7 +84,7 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
 
     private suspend fun fetchLatest(): List<MediaItem> {
         val sectionsResult = mediaRepository.getHomeSections(
-            com.raulshma.jellyplay.core.data.repository.HomeSectionQuery(
+            HomeSectionQuery(
                 enabledSections = setOf(
                     com.raulshma.jellyplay.core.model.HomeSectionType.LATEST_MEDIA,
                     com.raulshma.jellyplay.core.model.HomeSectionType.RECENTLY_ADDED,

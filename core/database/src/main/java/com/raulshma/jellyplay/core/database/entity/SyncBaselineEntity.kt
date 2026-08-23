@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.database.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -25,7 +26,17 @@ import androidx.room.PrimaryKey
  * **Rows are lazy** — seeded at download time and after every check/resync. A
  * missing row means "never checked" and projects to `SyncStatus.UNKNOWN`.
  */
-@Entity(tableName = "sync_baseline")
+@Entity(
+    tableName = "sync_baseline",
+    // The "items with updates" sheet query and the badge-count flow both filter
+    // on syncUpdateAvailable / syncMediaChanged and re-run on every baseline
+    // write (a batch check writes one row per item) — indexed so they stop
+    // full-scanning the table.
+    indices = [
+        Index(value = ["syncUpdateAvailable"]),
+        Index(value = ["syncMediaChanged"]),
+    ],
+)
 data class SyncBaselineEntity(
     @PrimaryKey val id: String,
     // ---- Baseline signatures (the snapshot a check diffs against) ----

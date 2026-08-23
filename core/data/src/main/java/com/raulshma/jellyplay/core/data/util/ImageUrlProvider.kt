@@ -53,8 +53,9 @@ class ImageUrlProviderImpl @Inject constructor(
         if (maxWidth == null) {
             return playbackRepository.getImageUrl(itemId, maxWidth = null)
         }
-        // Explicit widths are honored as the caller's minimum; the default
-        // (no-arg) path is perf-aware so poster grids don't over-fetch.
+        // Non-null caller widths are deliberately replaced by this single
+        // effective width (perf-aware): one width per item keeps the Coil cache
+        // key consolidated instead of fragmenting it across caller widths.
         val effectiveWidth = if (performanceMode) PERF_MAX_WIDTH
         else ImageUrlProvider.DEFAULT_MAX_WIDTH
         val key = "p_$itemId|$effectiveWidth"

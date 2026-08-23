@@ -97,6 +97,22 @@ abstract class DataModule {
     @Singleton
     abstract fun bindAuthRepository(impl: AuthRepositoryImpl): AuthRepository
 
+    // SSDP server discovery split out of AuthRepository so the auth seam
+    // changes only for auth concerns; feature modules keep seeing a core:data
+    // type, never core:network.
+    @Binds
+    @Singleton
+    abstract fun bindServerDiscoveryRepository(
+        impl: com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepositoryImpl,
+    ): com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepository
+
+    // The realtime-socket view of the same AuthRepositoryImpl singleton:
+    // connect/disconnect/isConnected/serverUrl split out of AuthRepository so
+    // the session shell sees the transport seam, not the auth surface.
+    @Binds
+    @Singleton
+    abstract fun bindRealtimeConnection(impl: AuthRepositoryImpl): com.raulshma.jellyplay.core.data.repository.RealtimeConnection
+
     @Binds
     @Singleton
     abstract fun bindMediaRepository(impl: MediaRepositoryImpl): MediaRepository

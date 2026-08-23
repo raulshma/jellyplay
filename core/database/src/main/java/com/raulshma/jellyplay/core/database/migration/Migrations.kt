@@ -939,8 +939,39 @@ val MIGRATION_46_47 = object : Migration(46, 47) {
     }
 }
 
+// Index the two `sync_baseline` flag columns consumed by the "items with
+// updates" sheet query and the badge-count flow — both filter on
+// `syncUpdateAvailable = 1 OR syncMediaChanged = 1` and re-run on every
+// baseline write (a batch check writes one row per item), which full-scanned
+// the table. Schema-additive only; no table data changes.
+val MIGRATION_47_48 = object : Migration(47, 48) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_baseline_syncUpdateAvailable ON sync_baseline(syncUpdateAvailable)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_baseline_syncMediaChanged ON sync_baseline(syncMediaChanged)")
+    }
+}
+
+// Two composite indices for read paths whose filter+order columns no existing
+// index covers:
+//  - `downloads(status, mediaType, createdAt)` serves the completed-audio
+//    browse page query (filters `status = 'COMPLETED' AND mediaType IN (...)`,
+//    orders by `createdAt`), which previously had to pick between the
+//    single-column `status`/`createdAt` indices or full-scan + sort.
+//  - `playback_outbox(deadLetter, createdAt)` serves the outbox drain/count
+//    queries, all of which filter `WHERE deadLetter = 0` and order by
+//    `createdAt`; the table was indexed only by `itemId`/`createdAt`, so
+//    `countFlow()` (collected continuously for the sync indicator) sorted the
+//    surviving rows on every re-emission.
+// Schema-additive only; no table data changes.
+val MIGRATION_48_49 = object : Migration(48, 49) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_status_mediaType_createdAt ON downloads(status, mediaType, createdAt)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_playback_outbox_deadLetter_createdAt ON playback_outbox(deadLetter, createdAt)")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v47 migration chain, with the
+ * The complete, correctly-ordered v1→v49 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -995,4 +1026,6 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_44_45,
         MIGRATION_45_46,
         MIGRATION_46_47,
+        MIGRATION_47_48,
+        MIGRATION_48_49,
     )

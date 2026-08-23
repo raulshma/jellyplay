@@ -64,18 +64,26 @@ class OfflineDeleteActions(
      * `deleteOfflineEpisodes` algorithm; see the class KDoc for the collapse
      * rules. Accepts any [Collection] (the detail sheet selects a `List`, the
      * home sheet a `Set`).
+     *
+     * [episodes]/[seasons] override the constructor providers per call, read
+     * synchronously at entry — the pattern for snapshot-before-dismiss
+     * consumers (Home's sheet clears its state while the deletes run, so the
+     * constructor providers would read empty after dismissal and the collapse
+     * would degrade to per-episode deletes). Both default to whatever the
+     * constructor-injected providers return, so provider-wired consumers are
+     * unchanged.
      */
-    fun deleteOfflineEpisodes(episodeIds: Collection<String>) {
+    fun deleteOfflineEpisodes(
+        episodeIds: Collection<String>,
+        episodes: Map<String, List<MediaItem>> = episodesProvider(),
+        seasons: List<MediaItem> = seasonsProvider(),
+    ) {
         if (episodeIds.isEmpty()) return
         val targets = episodeIds.toSet()
-        // Snapshot the current series content once to classify whole-season vs
-        // partial selections.
-        val currentEpisodes = episodesProvider()
-        val currentSeasons = seasonsProvider()
         deleteAndNotify {
             val remainingEpisodeIds = mutableSetOf<String>()
-            currentSeasons.forEach { season ->
-                val seasonEpisodeIds = currentEpisodes[season.id].orEmpty().map { it.id }.toSet()
+            seasons.forEach { season ->
+                val seasonEpisodeIds = episodes[season.id].orEmpty().map { it.id }.toSet()
                 if (seasonEpisodeIds.isNotEmpty() && seasonEpisodeIds.all { it in targets }) {
                     offlineRepository.deleteOfflineSeason(season.id)
                 } else {
@@ -84,7 +92,7 @@ class OfflineDeleteActions(
             }
             // Defensive: any selected id not present under a known season.
             targets
-                .filter { it !in currentEpisodes.values.flatten().map { e -> e.id } }
+                .filter { it !in episodes.values.flatten().map { e -> e.id } }
                 .forEach { remainingEpisodeIds.add(it) }
             remainingEpisodeIds.forEach { offlineRepository.deleteOfflineItem(it) }
         }

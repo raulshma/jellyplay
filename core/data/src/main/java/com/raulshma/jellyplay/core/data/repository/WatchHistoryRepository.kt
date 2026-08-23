@@ -141,11 +141,11 @@ class WatchHistoryRepositoryImpl @Inject constructor(
                 val timeStr = item.lastPlayedDate?.let { dateStr ->
                     runCatching {
                         val parsed = java.time.ZonedDateTime.parse(dateStr)
-                        parsed.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+                        parsed.format(TIME_OF_DAY_FORMATTER)
                     }.getOrElse {
                         runCatching {
                             val parsed = java.time.LocalDateTime.parse(dateStr)
-                            parsed.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+                            parsed.format(TIME_OF_DAY_FORMATTER)
                         }.getOrDefault("")
                     }
                 } ?: ""
@@ -208,5 +208,9 @@ class WatchHistoryRepositoryImpl @Inject constructor(
         } while (result.second.size == batchSize && result.first > startIndex)
 
         return allItems
+    }
+
+    companion object {
+        private val TIME_OF_DAY_FORMATTER = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
     }
 }

@@ -4,19 +4,10 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
-import com.raulshma.jellyplay.core.model.MediaSource
-import com.raulshma.jellyplay.core.model.MediaStream
-import com.raulshma.jellyplay.core.model.GestureIndicatorSide
-import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
-import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SegmentBehavior
-import com.raulshma.jellyplay.core.model.StreamingQuality
-import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
-import com.raulshma.jellyplay.core.model.TrickplayInfo
-import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
@@ -29,9 +20,6 @@ import com.raulshma.jellyplay.feature.player.video.state.MediaContentState
 import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
 import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
-import com.raulshma.jellyplay.core.model.VideoEffectsConfig
-import com.raulshma.jellyplay.core.model.PersonInfo
-import com.raulshma.jellyplay.core.model.LyricsLine
 
 /**
  * Lightweight description of an in-progress pre-roll intro for Cinema Mode.
@@ -64,14 +52,72 @@ data class SegmentOverlayState(
 )
 
 /**
- * Session + prefs-mirror state for the video player.
+ * Session + prefs-mirror state for the video player, organized as seven stored
+ * slices plus a small, deliberately flat remainder.
  *
- * The sleep-timer, track, subtitle-workflow, audio-effects and SyncPlay
- * group-display slices used to live here as flat fields; they are now owned by
- * their controllers and exposed as `StateFlow`s on the ViewModel. What remains is
- * session state (item identity, transport, engine, surface flags, the
- * subtitle-preview trio, per-item resolver-driven dialogue boost) plus the
- * preferences mirror written by [SettingsProjector].
+ * ## Slice map
+ *
+ *  - [gestures] — gesture / hold-speed / seek-window / brightness / frame-rate prefs.
+ *  - [segmentState] — raw segment data + per-type behaviors fed to `SegmentCalculator`.
+ *  - [media] — what's playing and how: overview/cast/artwork/lyrics, play method,
+ *    direct-play flag, transcode reasons, media-source/stream model, series pointer.
+ *  - [autoplay] — auto-play-next settings + the user's cancellation of the current countdown.
+ *  - [videoFx] — video filter / aspect / zoom settings.
+ *  - [episodes] — series/season/episode browser state: adjacent-episode pointers,
+ *    the lists backing the episode-picker sheet, and the browser feature toggle.
+ *  - [uiPrefs] — player UI/system preferences: control visibility, orientation,
+ *    pass-out, trickplay, streaming quality/mode, lock/PIN (written by [SettingsProjector]).
+ *
+ * ## Flat survivors — and why they stay flat
+ *
+ * *Identity / transport / engine plumbing* — heterogeneous one-off session
+ * fields; grouping them would buy no cohesion:
+ * [title] / [subtitle] (display identity of the loaded item — the item id
+ * itself lives in `PlayerSessionManager`'s session state, not here),
+ * [preferredPlayerType] + [engineCapabilities] (engine selection and its
+ * probed capability set), and the transport leaves [isPlaying], [isBuffering],
+ * [playbackSpeed] (pairs cross-slice with `gestures.isHoldSpeedActive` for
+ * hold-to-speed) and [isMuted].
+ *
+ * *Subtitle styling + dialogue boost — by design:* [subtitleStyle],
+ * [dialogueBoostEnabled] and [dialogueBoostStrength] are engine-config inputs
+ * that `EngineConfigBuilder` reads as one group; a slice hop would add nothing.
+ *
+ * *Error + session-lifecycle fields — kept flat deliberately ahead of the
+ * Stage B `PlaybackSession` extraction:* [playerError], [playerErrorRetryable]
+ * and [showPlaybackErrorDialog] (the session's error events will land here),
+ * [isInitializing] (load lifecycle), [isInSyncPlaySession] (session-membership
+ * mirror read by `SegmentProjection`) and [cinemaIntroState] (pre-roll intro
+ * context; its load/advance sequencing moves into the session).
+ *
+ * *High-frequency playback progress residuals:* [currentPosition], [duration],
+ * [bufferedPosition] and [videoStats] stay on the root. The live, up-to-4 Hz
+ * source of truth is the ViewModel's dedicated StateFlows
+ * (`currentPositionMs` / `durationMs` / `bufferedPositionMs` / `videoStats`);
+ * these root fields exist as seeds/snapshots for the on-state segment math
+ * ([computeActiveSegment] and friends read [currentPosition] / [duration]) and
+ * must not churn slice copies at tick rate.
+ *
+ * *Everything else still flat* is leaf state with no slice to join:
+ * [chapters] (feeds both the media display and [toSegmentInput], so it cannot
+ * live in the media slice alone), the subtitle-sync preview trio
+ * [subtitlePreviewCues] / [subtitlePreviewSource] / [previewSheetVisible]
+ * (sheet-scoped, gate-controlled state; the wider subtitle workflow lives in
+ * `SubtitleManager`'s own state), [isScreenLocked] and [audioOnly] (transient
+ * lock / surface-gate flags) and [isConnectionMetered] (network environment
+ * signal surfaced to explain quality caps).
+ *
+ * The sleep-timer, track-selection, subtitle-workflow, audio-effects and
+ * SyncPlay group-display concerns are not here at all: they are owned by their
+ * controllers (`SleepTimerController.state`, `TrackSelectionHelper.state`,
+ * `SubtitleManager.state`, `VideoEffectsController.state`, `SyncPlayBridge.state`)
+ * and exposed as `StateFlow`s on the ViewModel.
+ *
+ * ## Reading / writing
+ *
+ * New code reads slice fields as `uiState.<slice>.<field>` (e.g.
+ * `uiState.gestures.brightnessLevel`) and writes them with nested copies:
+ * `copy(slice = slice.copy(field = value))`.
  */
 @Immutable
 data class VideoPlayerUiState(
@@ -90,42 +136,37 @@ data class VideoPlayerUiState(
     val currentPosition: Long = 0L,
     val duration: Long = 0L,
     val playbackSpeed: Float = 1.0f,
-    val overview: String = "",
-    val people: List<PersonInfo> = emptyList(),
-    val artworkUrl: String? = null,
-    val lyricsLines: List<LyricsLine> = emptyList(),
     val chapters: List<ChapterInfo> = emptyList(),
-    val aspectRatio: AspectRatio = AspectRatio.AUTO,
-    val detectedAspectRatio: AspectRatio? = null,
-    val playMethod: String = "",
-    val isDirectPlayForced: Boolean = false,
     val subtitleStyle: SubtitleStyle = SubtitleStyle.DEFAULT,
     val dialogueBoostEnabled: Boolean = false,
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
-    val nextEpisode: JellyfinMediaItem? = null,
-    val previousEpisode: JellyfinMediaItem? = null,
-    val streamUrl: String? = null,
     val preferredPlayerType: PlayerType = PlayerType.EXO_PLAYER,
-    val currentMediaSource: MediaSource? = null,
-    val mediaStreams: List<MediaStream> = emptyList(),
-    val seekDurationMs: Long = 10_000L,
-    val defaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
-    val controlsTimeoutMs: Long = 5_000L,
-    val passOutProtectionHours: Int = 0,
-    val gesturesEnabled: Boolean = true,
-    val holdSpeedEnabled: Boolean = true,
-    val holdSpeedMultiplier: Float = 2.0f,
-    val isHoldSpeedActive: Boolean = false,
-    val defaultSpeed: Float = 1.0f,
-    val swipeSeekMaxMs: Long = 120_000L,
-    val rememberBrightness: Boolean = false,
-    val brightnessLevel: Float = 0.5f,
-    val gestureIndicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
-    val frameRateMatching: Boolean = false,
-    val refreshRateMode: com.raulshma.jellyplay.core.model.RefreshRateMode = com.raulshma.jellyplay.core.model.RefreshRateMode.OFF,
-    val segments: List<MediaSegment> = emptyList(),
-    val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
-    val seriesId: String? = null,
+    /**
+     * Player UI / system preferences: control visibility, orientation,
+     * pass-out, trickplay, streaming quality/mode and lock/PIN. Formerly flat
+     * fields (`defaultOrientation` / `controlsTimeoutMs` /
+     * `passOutProtectionHours` / `showVideoStats` / `showPlaybackMetadata` /
+     * `showClock` / `showTimeRemaining` / `keepScreenOnDuringVideo` /
+     * `usePinForPlayerLock` / `hasPin` / `trickplayEnabled` /
+     * `trickplayOnSeekGesture` / `trickplayInfo` / `streamingQuality` /
+     * `adaptiveBitrateEnabled` / `playbackMode`); now a stored slice. The
+     * error fields and [preferredPlayerType] deliberately stay flat.
+     */
+    val uiPrefs: PlayerUiPrefsState = PlayerUiPrefsState(),
+    /**
+     * Gesture / hold-speed / seek-window / brightness / frame-rate prefs.
+     * Formerly flat fields (`gesturesEnabled` / `holdSpeedEnabled` /
+     * `holdSpeedMultiplier` / `isHoldSpeedActive` / `defaultSpeed` /
+     * `swipeSeekMaxMs` / `seekDurationMs` / `rememberBrightness` /
+     * `brightnessLevel` / `gestureIndicatorSide` / `frameRateMatching` /
+     * `refreshRateMode`); now a stored slice.
+     */
+    val gestures: GesturePrefsState = GesturePrefsState(),
+    /**
+     * Raw segment data + per-type behaviors. Formerly flat fields
+     * (`segments` / `segmentBehaviors`); now a stored slice.
+     */
+    val segmentState: SegmentState = SegmentState(),
     val isInSyncPlaySession: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
     /**
@@ -159,41 +200,43 @@ data class VideoPlayerUiState(
      * flag is the structured signal the legacy String channel dropped.
      */
     val playerErrorRetryable: Boolean = false,
-    val trickplayEnabled: Boolean = true,
-    val trickplayOnSeekGesture: Boolean = true,
-    val trickplayInfo: TrickplayInfo? = null,
-    val seriesSeasons: List<JellyfinMediaItem> = emptyList(),
-    val seasonEpisodes: List<JellyfinMediaItem> = emptyList(),
-    val currentSeasonId: String? = null,
-    val isLoadingEpisodes: Boolean = false,
-    val videoEpisodeBrowserEnabled: Boolean = true,
     val bufferedPosition: Long = 0L,
-    val showVideoStats: Boolean = false,
     val videoStats: EngineVideoStats = EngineVideoStats(),
-    val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
-    val adaptiveBitrateEnabled: Boolean = true,
-    val playbackMode: PlaybackMode = PlaybackMode.AUTO,
     val showPlaybackErrorDialog: Boolean = false,
-    val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val isScreenLocked: Boolean = false,
-    val usePinForPlayerLock: Boolean = false,
-    /**
-     * Presence flag for the player-lock PIN. The hash itself never
-     * leaves the VM/prefs — surfacing it through per-frame UiState churned
-     * state identity on PIN change and exposed the hash to equals/hashCode/
-     * toString (log risk). Callers only ever gate on presence.
-     */
-    val hasPin: Boolean = false,
-    val showPlaybackMetadata: Boolean = true,
-    val showClock: Boolean = false,
-    val showTimeRemaining: Boolean = false,
-    val tvZoomModePercent: Float = 0f,
-    val keepScreenOnDuringVideo: Boolean = true,
     val cinemaIntroState: CinemaIntroUiState? = null,
     val isMuted: Boolean = false,
-    val videoAutoplayNext: Boolean = false,
-    val autoPlayCountdownSec: Int = 10,
-    val autoplayCancelled: Boolean = false,
+    /**
+     * Media-content metadata: what's playing (overview, cast, artwork,
+     * lyrics), how (play method, direct-play flag, transcode reasons), the
+     * raw source/stream model, and the series pointer. Formerly flat fields
+     * (`overview` / `people` / `artworkUrl` / `lyricsLines` / `streamUrl` /
+     * `currentMediaSource` / `mediaStreams` / `playMethod` /
+     * `isDirectPlayForced` / `seriesId` / `transcodeReasons`); now a stored
+     * slice. [chapters] deliberately stays flat — it feeds both the media
+     * display and the segment calculation.
+     */
+    val media: MediaContentState = MediaContentState(),
+    /**
+     * Auto-play-next-episode settings + the user's cancellation of the current
+     * countdown. Formerly flat fields (`videoAutoplayNext` /
+     * `autoPlayCountdownSec` / `autoplayCancelled`); now a stored slice.
+     */
+    val autoplay: AutoplayState = AutoplayState(),
+    /**
+     * Video filter / aspect / zoom settings. Formerly flat fields
+     * (`videoEffects` / `aspectRatio` / `detectedAspectRatio` /
+     * `tvZoomModePercent`); now a stored slice.
+     */
+    val videoFx: VideoFxState = VideoFxState(),
+    /**
+     * Series/season/episode browser state: adjacent-episode pointers, the
+     * season/episode lists backing the episode-picker sheet, and the browser
+     * feature toggle. Formerly flat fields (`nextEpisode` / `previousEpisode` /
+     * `seriesSeasons` / `seasonEpisodes` / `currentSeasonId` /
+     * `isLoadingEpisodes` / `videoEpisodeBrowserEnabled`); now a stored slice.
+     */
+    val episodes: EpisodeBrowserState = EpisodeBrowserState(),
     /**
      * Whether the active network is metered (cellular or metered Wi-Fi).
      * Surfaced so the playback metadata can show why a quality cap is being
@@ -211,86 +254,11 @@ data class VideoPlayerUiState(
     val audioOnly: Boolean = false,
 ) {
 
-    // ── Cohesive sub-state projections ────────────────────────────────────
-    // Each groups the flat constructor fields by concern.
-    // New code should read these (e.g. `state.media.isLive`); the flat fields
-    // remain on the root for incremental call-site migration and will be
-    // deprecated once all consumers move over.
-    //
-    // These are derived `val`s (computed per access) rather than stored
-    // properties, so the data class's equality/hashCode still reflect the flat
-    // fields — the source of truth during the transition.
-    //
-    // The sleep-timer, track, subtitle-workflow, audio-effects and SyncPlay
-    // group-display slices used to have projections here too; they now live in
-    // their owning controllers (`SleepTimerController.state`,
-    // `TrackSelectionHelper.state`, `SubtitleManager.state`,
-    // `VideoEffectsController.state`, `SyncPlayBridge.state`).
-
-    val media: MediaContentState
-        get() = MediaContentState(
-            overview = overview, people = people, artworkUrl = artworkUrl,
-            lyricsLines = lyricsLines, streamUrl = streamUrl,
-            currentMediaSource = currentMediaSource, mediaStreams = mediaStreams,
-            playMethod = playMethod, isDirectPlayForced = isDirectPlayForced,
-            seriesId = seriesId,
-        )
-
-    val videoFx: VideoFxState
-        get() = VideoFxState(
-            videoEffects = videoEffects, aspectRatio = aspectRatio,
-            detectedAspectRatio = detectedAspectRatio,
-            tvZoomModePercent = tvZoomModePercent,
-        )
-
-    val segmentState: SegmentState
-        get() = SegmentState(segments = segments, segmentBehaviors = segmentBehaviors)
-
-    val episodes: EpisodeBrowserState
-        get() = EpisodeBrowserState(
-            nextEpisode = nextEpisode, seriesSeasons = seriesSeasons,
-            seasonEpisodes = seasonEpisodes, currentSeasonId = currentSeasonId,
-            isLoadingEpisodes = isLoadingEpisodes,
-            videoEpisodeBrowserEnabled = videoEpisodeBrowserEnabled,
-        )
-
-    val autoplay: AutoplayState
-        get() = AutoplayState(
-            videoAutoplayNext = videoAutoplayNext,
-            autoPlayCountdownSec = autoPlayCountdownSec,
-            autoplayCancelled = autoplayCancelled,
-        )
-
-    val gestures: GesturePrefsState
-        get() = GesturePrefsState(
-            gesturesEnabled = gesturesEnabled,
-            holdSpeedEnabled = holdSpeedEnabled,
-            holdSpeedMultiplier = holdSpeedMultiplier,
-            isHoldSpeedActive = isHoldSpeedActive,
-            defaultSpeed = defaultSpeed, swipeSeekMaxMs = swipeSeekMaxMs,
-            seekDurationMs = seekDurationMs, rememberBrightness = rememberBrightness,
-            brightnessLevel = brightnessLevel, gestureIndicatorSide = gestureIndicatorSide,
-            frameRateMatching = frameRateMatching,
-            refreshRateMode = refreshRateMode,
-        )
-
-    val uiPrefs: PlayerUiPrefsState
-        get() = PlayerUiPrefsState(
-            controlsTimeoutMs = controlsTimeoutMs,
-            defaultOrientation = defaultOrientation,
-            passOutProtectionHours = passOutProtectionHours,
-            showVideoStats = showVideoStats,
-            showPlaybackMetadata = showPlaybackMetadata,
-            showClock = showClock, showTimeRemaining = showTimeRemaining,
-            keepScreenOnDuringVideo = keepScreenOnDuringVideo,
-            usePinForPlayerLock = usePinForPlayerLock, hasPin = hasPin,
-            trickplayEnabled = trickplayEnabled,
-            trickplayOnSeekGesture = trickplayOnSeekGesture,
-            trickplayInfo = trickplayInfo,
-            streamingQuality = streamingQuality,
-            adaptiveBitrateEnabled = adaptiveBitrateEnabled,
-            playbackMode = playbackMode,
-        )
+    // ── Segment math ────────────────────────────────────────────────────────
+    // Thin delegates onto SegmentCalculator. The input (toSegmentInput) is
+    // assembled from the segmentState / autoplay / episodes / media slices
+    // plus the flat chapters / isInSyncPlaySession / duration and the position
+    // handed in by the caller (or the currentPosition snapshot).
 
     fun behaviorForType(type: MediaSegmentType): SegmentBehavior =
         SegmentCalculator.behaviorForType(toSegmentInput(), type)
@@ -321,14 +289,14 @@ data class VideoPlayerUiState(
         SegmentCalculator.computeActiveSegment(toSegmentInput(), positionMs)
 
     private fun toSegmentInput() = SegmentCalculatorInput(
-        segments = segments,
+        segments = segmentState.segments,
         chapters = chapters,
-        segmentBehaviors = segmentBehaviors,
+        segmentBehaviors = segmentState.segmentBehaviors,
         durationMs = duration,
-        autoplayCancelled = autoplayCancelled,
+        autoplayCancelled = autoplay.autoplayCancelled,
         isInSyncPlaySession = isInSyncPlaySession,
-        hasNextEpisode = nextEpisode != null,
-        seriesId = seriesId,
+        hasNextEpisode = episodes.nextEpisode != null,
+        seriesId = media.seriesId,
     )
 
     val activeSegment: MediaSegment?
@@ -361,15 +329,13 @@ data class VideoPlayerUiState(
     val isOutroNearEnd: Boolean
         get() = SegmentCalculator.isOutroNearEnd(toSegmentInput(), currentPosition)
 
+    // Derived media display values: delegated to the stored slice (the single
+    // derivation home — see MediaContentState.hdrType / videoFrameRate).
     val hdrType: String?
-        get() {
-            val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO } ?: return null
-            val range = videoStream.videoRange ?: return null
-            return if (range.equals("SDR", ignoreCase = true)) null else range
-        }
+        get() = media.hdrType
 
     val videoFrameRate: Float?
-        get() = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }?.realFrameRate
+        get() = media.videoFrameRate
 }
 
 /**

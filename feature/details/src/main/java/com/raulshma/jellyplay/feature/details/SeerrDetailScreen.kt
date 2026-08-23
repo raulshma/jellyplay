@@ -167,13 +167,10 @@ fun SeerrDetailScreen(
     val error = uiState.error
     val seerrRecommendations = uiState.recommendations
     val seerrSimilar = uiState.similar
-    val requestResult by viewModel.requestResult.collectAsStateWithLifecycle()
+    val seerrSnapshot by viewModel.seerrSnapshot.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val seerrPrefs by viewModel.seerrPreferences.collectAsStateWithLifecycle()
 
-    val radarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
-    val sonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
-    val isLoadingServices by viewModel.isLoadingServices.collectAsStateWithLifecycle()
     val selectedSeasonNumber = uiState.selectedSeasonNumber
     val episodesBySeason = uiState.episodesBySeason
     val isLoadingEpisodes = uiState.isLoadingEpisodes
@@ -284,22 +281,20 @@ fun SeerrDetailScreen(
                 }
 
                 item?.let {
-                    // Fetch service details when dialog opens
+                    // Fetch service details and TV seasons on-demand when the
+                    // dialog opens — the snapshot's seasons/anime fields are
+                    // populated by loadTvSeasons (same pattern as the search
+                    // and media-detail request dialogs).
                     LaunchedEffect(Unit) {
                         viewModel.loadServiceDetails(it.mediaType)
+                        if (it.mediaType.equals("tv", ignoreCase = true)) {
+                            viewModel.loadTvSeasons(it.id)
+                        }
                     }
-
-                    val tvSeasons = tvDetail?.seasons?.filter { season -> season.seasonNumber > 0 } ?: emptyList()
 
                     SeerrRequestDialog(
                         item = it,
-                        radarrServers = radarrServers,
-                        sonarrServers = sonarrServers,
-                        seasons = if (it.mediaType.equals("tv", ignoreCase = true)) tvSeasons else emptyList(),
-                        isLoadingServices = isLoadingServices,
-                        isRequesting = requestResult?.isLoading == true,
-                        requestSuccess = requestResult?.success,
-                        requestError = requestResult?.error,
+                        snapshot = seerrSnapshot,
                         onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
                             viewModel.requestMedia(it, seasons, serverId, profileId, rootFolder, tags)
                         },
@@ -375,25 +370,29 @@ private fun SeerrDetailContent(
 
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
-    val cardBorder = when {
-        isSynthwave -> {
-            androidx.compose.foundation.BorderStroke(
-                width = 1.5.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary,
-                        MaterialTheme.colorScheme.secondary
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val outline = MaterialTheme.colorScheme.outline
+    // Rebuilt only when the theme flags / palette change so the consuming
+    // Cards see a stable BorderStroke instance between scroll frames.
+    val cardBorder = remember(isSynthwave, isSoothing, primary, secondary, outline) {
+        when {
+            isSynthwave -> {
+                androidx.compose.foundation.BorderStroke(
+                    width = 1.5.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(primary, secondary)
                     )
                 )
-            )
+            }
+            isSoothing -> {
+                androidx.compose.foundation.BorderStroke(
+                    width = 0.8.dp,
+                    color = outline.copy(alpha = 0.35f)
+                )
+            }
+            else -> null
         }
-        isSoothing -> {
-            androidx.compose.foundation.BorderStroke(
-                width = 0.8.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-            )
-        }
-        else -> null
     }
 
     val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
@@ -503,21 +502,24 @@ private fun SeerrDetailContent(
             }
 
             val isLandscapeExpanded = isExpanded && adaptiveInfo.isLandscape
+            // Rebuilt only when the theme colour / backdrop geometry change, not
+            // on every scroll frame (mirrors DetailContent's fadeBrush).
+            val scrimBrush = remember(backgroundColor, backdropHeight, baseBackdropHeight, isLandscapeExpanded, density) {
+                Brush.verticalGradient(
+                    colors = listOf(
+                        if (isLandscapeExpanded) backgroundColor.copy(alpha = 0.5f) else Color.Transparent,
+                        backgroundColor.copy(alpha = if (isLandscapeExpanded) 0.8f else 0.4f),
+                        backgroundColor.copy(alpha = 0.9f),
+                        backgroundColor,
+                    ),
+                    startY = if (isLandscapeExpanded) 0f else with(density) { (baseBackdropHeight - 200.dp).toPx() },
+                    endY = with(density) { backdropHeight.toPx() }
+                )
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                if (isLandscapeExpanded) backgroundColor.copy(alpha = 0.5f) else Color.Transparent,
-                                backgroundColor.copy(alpha = if (isLandscapeExpanded) 0.8f else 0.4f),
-                                backgroundColor.copy(alpha = 0.9f),
-                                backgroundColor,
-                            ),
-                            startY = if (isLandscapeExpanded) 0f else with(density) { (baseBackdropHeight - 200.dp).toPx() },
-                            endY = with(density) { backdropHeight.toPx() }
-                        )
-                    )
+                    .background(scrimBrush)
             )
         }
 
@@ -1405,6 +1407,17 @@ private fun EpisodeRow(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             if (stillUrl != null) {
+                val surfaceContainerLow = MaterialTheme.colorScheme.surfaceContainerLow
+                val scrimBrush = remember(surfaceContainerLow) {
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Transparent,
+                            surfaceContainerLow.copy(alpha = 0.9f),
+                            surfaceContainerLow,
+                        ),
+                    )
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1419,16 +1432,7 @@ private fun EpisodeRow(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color.Transparent,
-                                        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.9f),
-                                        MaterialTheme.colorScheme.surfaceContainerLow,
-                                    ),
-                                )
-                            )
+                            .background(scrimBrush)
                     )
                     Text(
                         text = "${episode.episodeNumber}",
@@ -1529,7 +1533,9 @@ private fun EpisodeRow(
                     }
                 }
 
-                val directors = episode.crew.filter { it.job.equals("Director", ignoreCase = true) }
+                val directors = remember(episode.crew) {
+                    episode.crew.filter { it.job.equals("Director", ignoreCase = true) }
+                }
                 if (directors.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
@@ -1549,8 +1555,10 @@ private fun EpisodeRow(
                     }
                 }
 
-                val writers = episode.crew.filter {
-                    it.department.equals("Writing", ignoreCase = true)
+                val writers = remember(episode.crew) {
+                    episode.crew.filter {
+                        it.department.equals("Writing", ignoreCase = true)
+                    }
                 }
                 if (writers.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1942,7 +1950,9 @@ private fun MediaInformationSection(
                 MediaInfoRow(stringResource(R.string.detail_seerr_country), countryText, Tabler.Outline.World)
             }
 
-            val studios = movie?.productionCompanies?.map { it.name } ?: tv?.networks?.map { it.name } ?: emptyList()
+            val studios = remember(movie, tv) {
+                movie?.productionCompanies?.map { it.name } ?: tv?.networks?.map { it.name } ?: emptyList()
+            }
             if (studios.isNotEmpty()) {
                 MediaInfoRow(stringResource(R.string.detail_seerr_studios), studios.joinToString(", "), Tabler.Outline.Building)
             }

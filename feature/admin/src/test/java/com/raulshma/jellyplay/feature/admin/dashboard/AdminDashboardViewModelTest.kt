@@ -13,6 +13,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -38,6 +39,12 @@ class AdminDashboardViewModelTest {
         extraBufferCapacity = 8,
     )
 
+    /** replay = 1 mirrors the production channel's shareIn(replay = 1). */
+    private val tasksFlow = kotlinx.coroutines.flow.MutableSharedFlow<List<ScheduledTaskInfo>>(
+        replay = 1,
+        extraBufferCapacity = 8,
+    )
+
     private val scanTask = ScheduledTaskInfo(
         id = "task-1",
         key = "RefreshLibrary",
@@ -49,7 +56,9 @@ class AdminDashboardViewModelTest {
     fun setUp() {
         adminRepository = mockk()
         every { adminRepository.libraryScanTask } returns scanTaskFlow
-        coEvery { adminRepository.getScheduledTasks(any()) } returns Result.success(emptyList())
+        every { adminRepository.scheduledTasks } returns tasksFlow
+        // Default: no successful push ever (dead socket) — REST snapshots seed.
+        every { adminRepository.scheduledTasksLastPushAtMs } returns 0L
     }
 
     private fun summary(
@@ -98,11 +107,104 @@ class AdminDashboardViewModelTest {
         coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(tasks = listOf(running)))
 
         val viewModel = AdminDashboardViewModel(adminRepository)
-        // Read the post-load state directly: the 15s auto-refresh cycle would
-        // otherwise overwrite runningTasks with the (empty) getScheduledTasks stub.
+        // The REST snapshot seeds runningTasks until the first WS push lands
+        // (none is emitted here), so the post-load state carries it as-is.
         val state = viewModel.uiState.first { !it.isLoading }
         assertEquals(listOf(running), state.runningTasks)
-        advanceUntilIdle() // settle the auto-refresh before teardown
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `WS pushes update running tasks and drop idle ones`() = runTest(mainDispatcherRule.testDispatcher) {
+        coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(tasks = emptyList()))
+        val viewModel = AdminDashboardViewModel(adminRepository)
+        advanceUntilIdle()
+
+        val running = scanTask.copy(state = TaskState.RUNNING, currentProgressPercentage = 25.0)
+        tasksFlow.tryEmit(listOf(scanTask, running))
+        advanceUntilIdle()
+        assertEquals(listOf(running), viewModel.uiState.value.runningTasks)
+
+        // Task finished: the next push clears the card.
+        tasksFlow.tryEmit(listOf(scanTask))
+        advanceUntilIdle()
+        assertEquals(emptyList<ScheduledTaskInfo>(), viewModel.uiState.value.runningTasks)
+    }
+
+    @Test
+    fun `WS pushes exclude hidden tasks from the running list`() = runTest(mainDispatcherRule.testDispatcher) {
+        coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(tasks = emptyList()))
+        val viewModel = AdminDashboardViewModel(adminRepository)
+        advanceUntilIdle()
+
+        val hiddenRunning = ScheduledTaskInfo(
+            id = "task-2",
+            key = "SecretCleanup",
+            name = "Secret Cleanup",
+            state = TaskState.RUNNING,
+            isHidden = true,
+        )
+        tasksFlow.tryEmit(listOf(hiddenRunning))
+        advanceUntilIdle()
+
+        // Hidden tasks are excluded on both the REST seed and the WS push
+        // (see AdminDashboardViewModel.running()).
+        assertEquals(emptyList<ScheduledTaskInfo>(), viewModel.uiState.value.runningTasks)
+    }
+
+    @Test
+    fun `REST snapshot does not overwrite running tasks after a WS push`() = runTest(mainDispatcherRule.testDispatcher) {
+        val snapshotRunning = scanTask.copy(state = TaskState.RUNNING)
+        coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary(tasks = listOf(snapshotRunning)))
+
+        val viewModel = AdminDashboardViewModel(adminRepository)
+        val state = viewModel.uiState.first { !it.isLoading }
+        assertEquals(listOf(snapshotRunning), state.runningTasks) // seeded first frame
+
+        // WS pushes a newer list — it takes over immediately.
+        val wsRunning = ScheduledTaskInfo(
+            id = "task-2",
+            key = "OptimizeDatabase",
+            name = "Optimize Database",
+            state = TaskState.RUNNING,
+        )
+        tasksFlow.tryEmit(listOf(scanTask, wsRunning))
+        advanceUntilIdle()
+        assertEquals(listOf(wsRunning), viewModel.uiState.value.runningTasks)
+
+        // A later loadDashboard() carries the (now stale) snapshot: the socket
+        // owns the field, so the UI must not flicker back to the old list.
+        every { adminRepository.scheduledTasksLastPushAtMs } returns System.currentTimeMillis()
+        viewModel.loadDashboard()
+        advanceUntilIdle()
+        assertEquals(listOf(wsRunning), viewModel.uiState.value.runningTasks)
+    }
+
+    @Test
+    fun `stale WS replay does not suppress the REST refresh`() = runTest(mainDispatcherRule.testDispatcher) {
+        // Dead socket: the channel's last push is old (timestamp 0), but its
+        // shared flow still replays the last list to a new collector.
+        val oldRunning = scanTask.copy(state = TaskState.RUNNING, currentProgressPercentage = 10.0)
+        tasksFlow.tryEmit(listOf(oldRunning))
+        val snapshotRunning = ScheduledTaskInfo(
+            id = "task-3",
+            key = "OptimizeDatabase",
+            name = "Optimize Database",
+            state = TaskState.RUNNING,
+        )
+        // The mocked fetch must land AFTER the replayed emission, as a real
+        // REST snapshot always does (network latency vs instant replay).
+        coEvery { adminRepository.getDashboardSummary() } coAnswers {
+            delay(1)
+            Result.success(summary(tasks = listOf(snapshotRunning)))
+        }
+
+        val viewModel = AdminDashboardViewModel(adminRepository)
+        val state = viewModel.uiState.first { !it.isLoading }
+
+        // The replay paints first, but with no fresh push the REST snapshot
+        // must win — a frozen running-tasks card is the bug this guards.
+        assertEquals(listOf(snapshotRunning), state.runningTasks)
     }
 
     @Test

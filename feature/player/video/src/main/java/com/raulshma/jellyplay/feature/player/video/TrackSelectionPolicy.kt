@@ -7,6 +7,21 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.isLanguageMatch
 
 /**
+ * Side-loaded streaming subtitle id: `"external:{server stream index}"`.
+ * Stamped by `PlayerSessionManager.buildExternalSubtitles` onto each
+ * `SubtitleSource` and matched by [TrackSelectionPolicy.resolveByStreamIndex].
+ * Single source so constructor and matcher can't drift apart.
+ */
+internal fun externalSubtitleTrackId(streamIndex: Int): String = "external:$streamIndex"
+
+/**
+ * Offline side-loaded subtitle id: `"offline:{subtitle manifest index}"`.
+ * Stamped by `PlayerSessionManager.loadOfflineSubtitles` and matched by
+ * [TrackSelectionPolicy.resolveByOfflineSubtitleId].
+ */
+internal fun offlineSubtitleTrackId(index: Int): String = "offline:$index"
+
+/**
  * The deep, **pure** home for the track-selection *policy*: given the candidate
  * tracks, the server stream list, the resolved preference, and the cross-episode
  * memory — *which* [TrackOption] plays for this load?
@@ -114,10 +129,11 @@ internal class TrackSelectionPolicy {
      * Resolves a stored/pending server [MediaStream.index] to an engine
      * [TrackOption]. Prefers the engine track's container stream index (mpv
      * `ff-index`, which equals the server index for demuxed tracks) — robust
-     * against blank/duplicate/translated titles — and falls back to matching
-     * [targetStream]'s label for engines or side-loaded tracks that don't
-     * expose a stream index. Returns null if neither matches (the caller then
-     * handles the offline-positional-index case).
+     * against blank/duplicate/translated titles — then the side-loaded
+     * subtitle id (see below), and finally falls back to matching
+     * [targetStream]'s label for engines or tracks that expose neither key.
+     * Returns null if nothing matches (the caller then handles the
+     * offline-positional-index case).
      */
     fun resolveByStreamIndex(
         tracks: List<TrackOption>,
@@ -126,6 +142,16 @@ internal class TrackSelectionPolicy {
     ): TrackOption? {
         val byStreamIndex = tracks.firstOrNull { it.index >= 0 && it.streamIndex == streamIndex }
         if (byStreamIndex != null) return byStreamIndex
+        // Streaming side-load contract: on a transcode the server's text subs
+        // are delivered as side-loaded files and
+        // PlayerSessionManager.buildExternalSubtitles stamps
+        // [externalSubtitleTrackId] onto each SubtitleSource — propagated into
+        // TrackOption.id by both engines (the streaming mirror of the
+        // "offline:{index}" contract below). The id is exact, so it outranks
+        // the label fallback: enrichment can miss (blank or duplicate
+        // languages) and duplicate-language subs make labels ambiguous.
+        val byExternalId = tracks.firstOrNull { it.index >= 0 && it.id == externalSubtitleTrackId(streamIndex) }
+        if (byExternalId != null) return byExternalId
         val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
             ?: return null
         return tracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
@@ -155,7 +181,7 @@ internal class TrackSelectionPolicy {
         tracks: List<TrackOption>,
         index: Int,
     ): TrackOption? =
-        tracks.firstOrNull { it.index >= 0 && it.id == "offline:$index" }
+        tracks.firstOrNull { it.index >= 0 && it.id == offlineSubtitleTrackId(index) }
 
     /**
      * Maps a selected [TrackOption] back to the server [MediaStream.index] so it

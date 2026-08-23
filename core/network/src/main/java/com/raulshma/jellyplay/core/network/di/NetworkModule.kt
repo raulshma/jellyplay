@@ -335,6 +335,11 @@ abstract class NetworkModule {
                         path.startsWith("/Genres/") -> 300
                         path == "/System/Info/Public" -> 600
                         path.startsWith("/Library/MediaFolders") -> 300
+                        // The library-folder read migrated to GET /Users/{userId}/Views
+                        // (the MediaFolders branch above now only serves the admin folder
+                        // editor). Cache keys embed the userId, so no cross-user
+                        // contamination; folder lists carry no per-item UserData.
+                        path.startsWith("/Users/") && path.endsWith("/Views") -> 300
                         path == "/System/Info" -> 120
                         path.startsWith("/Sessions") -> 10
                         path.startsWith("/ScheduledTasks") -> 30

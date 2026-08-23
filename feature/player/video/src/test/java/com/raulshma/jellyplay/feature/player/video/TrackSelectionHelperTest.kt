@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -67,7 +68,7 @@ class TrackSelectionHelperTest {
             getCurrentItemId = { "item1" },
             getCurrentSeriesId = { null },
             getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
-            onReloadForStreamChange = { _, _ -> },
+            onReloadForStreamChange = { },
             playbackPreferenceResolver = noOpResolver(),
             scope = scope,
         )
@@ -96,6 +97,9 @@ class TrackSelectionHelperTest {
         getCurrentItemId: () -> String? = { "item1" },
         getCurrentSeriesId: () -> String? = { null },
         resolver: ItemPlaybackPreferenceResolver = noOpResolver(),
+        getPlayMethod: () -> com.raulshma.jellyplay.core.model.PlayMethod =
+            { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
+        onReloadForStreamChange: (MediaStreamSelection) -> Unit = { },
     ) = TrackSelectionHelper(
         engineStore = engineStore,
         subtitleStore = subtitleStore,
@@ -103,8 +107,8 @@ class TrackSelectionHelperTest {
         getMediaStreams = { mediaStreams },
         getCurrentItemId = getCurrentItemId,
         getCurrentSeriesId = getCurrentSeriesId,
-        getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
-        onReloadForStreamChange = { _, _ -> },
+        getPlayMethod = getPlayMethod,
+        onReloadForStreamChange = onReloadForStreamChange,
         playbackPreferenceResolver = resolver,
         scope = scope,
     )
@@ -260,7 +264,7 @@ class TrackSelectionHelperTest {
             mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
             mediaTrack(1, "Spanish", "spa", TrackType.AUDIO, isSelected = false),
         )
-        helper.setPendingStreams(subtitleIndex = null, audioIndex = 1)
+        helper.setPendingStreams(MediaStreamSelection(audioStreamIndex = 1))
         helper.updateTracksFromEngine()
 
         verify { engine.selectTrack(TrackType.AUDIO, 1) }
@@ -268,7 +272,7 @@ class TrackSelectionHelperTest {
 
     @Test
     fun updateTracksFromEngine_pendingAudioNegativeOne_selectsDefault() {
-        helper.setPendingStreams(subtitleIndex = null, audioIndex = -1)
+        helper.setPendingStreams(MediaStreamSelection(audioStreamIndex = -1))
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
         )
@@ -427,7 +431,7 @@ class TrackSelectionHelperTest {
             mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false, id = "offline:0"),
             mediaTrack(1, "Spanish", "spa", TrackType.SUBTITLE, isSelected = false, id = "offline:2"),
         )
-        helper.setPendingStreams(subtitleIndex = 2, audioIndex = null)
+        helper.setPendingStreams(MediaStreamSelection(subtitleStreamIndex = 2))
         helper.updateTracksFromEngine()
 
         verify { engine.selectTrack(TrackType.SUBTITLE, 1) }
@@ -492,7 +496,7 @@ class TrackSelectionHelperTest {
 
     @Test
     fun setPendingStreams_storesIndicesForLaterConsumption() {
-        helper.setPendingStreams(subtitleIndex = 2, audioIndex = 3)
+        helper.setPendingStreams(MediaStreamSelection(subtitleStreamIndex = 2, audioStreamIndex = 3))
         // Indices are consumed inside updateTracksFromEngine; verify no crash and state populated.
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
@@ -616,6 +620,166 @@ class TrackSelectionHelperTest {
             )
         )
         assertFalse(helper.state.value.hasSeriesAudioPref)
+    }
+
+    // ─── Regression: force-transcode drops the subtitle selection ─────────────
+    //
+    // On a transcode the HLS manifest carries no subtitles: the side-loaded
+    // engine track only appears on a LATER availableTracks emission. Before the
+    // fix, the ladder's first (empty-tracks) run resolved the stored selection
+    // to the synthetic server track (label == displayTitle), latched the
+    // held-selection guard against it, and no engine track was ever selected —
+    // the subtitle never showed. The auto path must no-op on synthetic picks so
+    // the next emission re-resolves against the real side-loaded track (via the
+    // "external:{index}" id stamped by buildExternalSubtitles).
+
+    @Test
+    fun updateTracksFromEngine_transcodeStoredSelection_waitsForSideLoadedTrack() {
+        every { engineStore.playerEngine } returns MutableStateFlow(
+            PlayerEngineSlice(
+                mediaStreamSelections = mapOf("item1" to MediaStreamSelection(subtitleStreamIndex = 3)),
+            ),
+        )
+        mediaStreams = listOf(
+            MediaStream(index = 3, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English - Ass"),
+        )
+        helper = makeHelper(
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE },
+        )
+
+        // First emission: side-load not materialized yet — only the synthetic
+        // server track exists. Nothing may be selected (a synthetic pick
+        // selects no engine track), and Off must not be forced either.
+        availableTracks.value = emptyList()
+        helper.updateTracksFromEngine()
+        verify(exactly = 0) { engine.selectTrack(TrackType.SUBTITLE, any()) }
+
+        // Second emission: the side-loaded ASS arrives with its
+        // "external:{server index}" id — the stored selection resolves to it.
+        availableTracks.value = listOf(
+            mediaTrack(0, "English - Ass", "eng", TrackType.SUBTITLE, isSelected = false, id = "external:3"),
+        )
+        helper.updateTracksFromEngine()
+        verify { engine.selectTrack(TrackType.SUBTITLE, 0) }
+        assertEquals(0, helper.state.value.subtitleTracks.first { it.isSelected }.index)
+    }
+
+    @Test
+    fun selectSubtitleTrack_serverTrack_autoPath_isNoOp() {
+        var reloadedSub: Int? = null
+        helper = makeHelper(
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE },
+            onReloadForStreamChange = { selection -> reloadedSub = selection.subtitleStreamIndex },
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "English - Ass", "eng", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+        io.mockk.clearMocks(engine, answers = false)
+
+        // The ladder path (isUserOverride=false) hitting a synthetic server
+        // track: no engine selection, no reload, no persistence.
+        helper.selectSubtitleTrack(TrackOption(100_003, "English - Ass", "eng", false), isUserOverride = false)
+        verify(exactly = 0) { engine.selectTrack(TrackType.SUBTITLE, any()) }
+        assertNull(reloadedSub)
+        coVerify(exactly = 0) { engineStore.setMediaStreamSelection(any(), any(), any()) }
+    }
+
+    @Test
+    fun selectSubtitleTrack_serverTrack_userPick_reloadsAndPersists() {
+        var reloadedSub: Int? = null
+        mediaStreams = listOf(
+            MediaStream(index = 3, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English - Ass"),
+        )
+        helper = makeHelper(
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE },
+            onReloadForStreamChange = { selection -> reloadedSub = selection.subtitleStreamIndex },
+        )
+        availableTracks.value = listOf(
+            // Label/language deliberately unlike the server stream so the
+            // synthetic picker row survives mergeServerStreams' label dedup.
+            mediaTrack(0, "Track 1", null, TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+
+        helper.selectSubtitleTrack(TrackOption(100_003, "English - Ass", "eng", false), isUserOverride = true)
+
+        // User picks act: session re-POST with the chosen stream index, and the
+        // pick persists so the post-reload ladder restores it on the
+        // re-side-loaded track.
+        assertEquals(3, reloadedSub)
+        coVerify {
+            engineStore.setMediaStreamSelection(
+                itemId = "item1",
+                audioStreamIndex = null,
+                subtitleStreamIndex = 3,
+            )
+        }
+        // The picker row shows the optimistic selection.
+        assertTrue(helper.state.value.subtitleTracks.first { it.index == 100_003 }.isSelected)
+    }
+
+    @Test
+    fun selectAudioTrack_serverTrack_userPick_reloadsAndPersists() {
+        var reloadedAudio: Int? = null
+        mediaStreams = listOf(
+            MediaStream(index = 1, type = StreamType.AUDIO, language = "spa", displayTitle = "Spanish"),
+        )
+        helper = makeHelper(
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE },
+            onReloadForStreamChange = { selection -> reloadedAudio = selection.audioStreamIndex },
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+
+        helper.selectAudioTrack(TrackOption(100_001, "Spanish", "spa", false), isUserOverride = true)
+
+        assertEquals(1, reloadedAudio)
+        coVerify {
+            engineStore.setMediaStreamSelection(
+                itemId = "item1",
+                audioStreamIndex = 1,
+                subtitleStreamIndex = null,
+            )
+        }
+    }
+
+    @Test
+    fun onEngineRecreated_clearsHeldSelection_allowsLadderReResolution() {
+        // A held selection survives the engine swap only as a stale engine
+        // index: onEngineRecreated drops it so the stored server-stream
+        // selection re-resolves on the replacement engine's emissions.
+        every { engineStore.playerEngine } returns MutableStateFlow(
+            PlayerEngineSlice(
+                mediaStreamSelections = mapOf("item1" to MediaStreamSelection(subtitleStreamIndex = 3)),
+            ),
+        )
+        mediaStreams = listOf(
+            MediaStream(index = 3, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English - Ass"),
+        )
+        helper = makeHelper(
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE },
+        )
+
+        availableTracks.value = listOf(
+            mediaTrack(0, "English - Ass", "eng", TrackType.SUBTITLE, isSelected = false, id = "external:3"),
+        )
+        helper.updateTracksFromEngine()
+        verify { engine.selectTrack(TrackType.SUBTITLE, 0) }
+
+        // Engine re-created (mode/quality/stream reload): held state dropped…
+        helper.onEngineRecreated()
+
+        // …so the next emission re-applies the stored selection instead of
+        // being blocked by the guard.
+        io.mockk.clearMocks(engine, answers = false)
+        availableTracks.value = listOf(
+            mediaTrack(1, "English - Ass", "eng", TrackType.SUBTITLE, isSelected = false, id = "external:3"),
+        )
+        helper.updateTracksFromEngine()
+        verify { engine.selectTrack(TrackType.SUBTITLE, 1) }
     }
 
     private fun mediaTrack(

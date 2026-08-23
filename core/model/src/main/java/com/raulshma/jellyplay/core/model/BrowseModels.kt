@@ -75,41 +75,32 @@ enum class HomeSectionType {
     PINNED,
     ;
 
-    val displayName: String
-        get() = when (this) {
-            CONTINUE_WATCHING -> "Continue Watching"
-            NEXT_UP -> "Next Up"
-            RECENTLY_ADDED -> "Recently Added"
-            LATEST_MEDIA -> "Latest Media"
-            FAVORITES -> "Favorites"
-            LIVE_TV -> "Live TV"
-            DOWNLOADED -> "Downloaded"
-            RECOMMENDATIONS -> "Recommended For You"
-            PINNED -> "Pinned"
-        }
+    /**
+     * Identity (display strings, configurability, network row id/title) is
+     * owned by the [descriptor] — these accessors delegate there so existing
+     * consumers keep compiling unchanged.
+     */
+    val displayName: String get() = descriptor.displayName
 
-    val description: String
-        get() = when (this) {
-            CONTINUE_WATCHING -> "Resume watching in-progress media"
-            NEXT_UP -> "Next unwatched episodes of your shows"
-            RECENTLY_ADDED -> "Recently added items across all libraries"
-            LATEST_MEDIA -> "Latest items from each library"
-            FAVORITES -> "Your favorited items"
-            LIVE_TV -> "Live television channels"
-            DOWNLOADED -> "Offline downloaded items"
-            RECOMMENDATIONS -> "Personalized picks based on your watch history"
-            PINNED -> "Collections and shelves you have pinned to home"
-        }
+    /** See [descriptor]; delegates. */
+    val description: String get() = descriptor.description
 
     /**
      * Whether this section type can be toggled/reordered by the user via the
      * home layout configuration (Settings → Home Screen Layout, or long-press
      * on a home section title). Non-configurable types (FAVORITES, PINNED, …)
      * are driven by other surfaces and never show the configure affordance.
+     * Delegates to [descriptor].
      */
-    val isConfigurable: Boolean get() = this in CONFIGURABLE
+    val isConfigurable: Boolean get() = descriptor.isConfigurable
 
     companion object {
+        /**
+         * The configurable types in DEFAULT ORDER. Mirrors
+         * [HomeSectionDescriptor.isConfigurable] but is spelled out because the
+         * list order defines the default home section order — deriving it from
+         * `entries` would silently reshuffle defaults.
+         */
         val CONFIGURABLE = listOf(
             CONTINUE_WATCHING,
             NEXT_UP,

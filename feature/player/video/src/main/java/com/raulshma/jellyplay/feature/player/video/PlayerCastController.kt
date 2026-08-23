@@ -40,15 +40,16 @@ import kotlinx.coroutines.flow.StateFlow
  *    then pauses the local engine.
  *  - [buildCastOptions] / [buildCastSubtitleConfigurations]: pure builders.
  *  - the one-line transport delegators ([castPlay] / [castPause] /
- *    [castSeekTo] / [setCastVolume]) and the disconnect resume ([onCastDisconnected]).
+ *    [castSeekTo] / [setCastVolume] / [disconnect]) and the disconnect resume
+ *    ([onCastDisconnected]).
  *  - the 9 cast-state pass-through flows + `isBackgroundCasting` /
  *    `backgroundCastingEnabled` (the background-cast transport controls live in
  *    the VM because they own the system [MediaSession]).
  *
  * NOT owned here: [VideoPlayerViewModel.detachForBackgroundCast] /
  * [reattachFromBackgroundCast] — those rebuild the system [MediaSession] around
- * the cast / local player and call the VM-private `releaseVideoMediaSession`;
- * they stay in the VM until media-session ownership is itself extracted.
+ * the cast / local player through the media-session controller; they stay in
+ * the VM until media-session ownership is itself extracted.
  *
  * Engine + session + uiState access is via lambdas so this class reads the
  * *current* engine (the VM swaps engines on retry) without a hard ViewModel
@@ -85,6 +86,7 @@ internal class PlayerCastController(
     fun castPause() = castManager.pause()
     fun castSeekTo(positionMs: Long) = castManager.seekTo(positionMs)
     fun setCastVolume(volume: Float) = castManager.setVolume(volume)
+    fun disconnect(context: android.content.Context) = castManager.disconnect(context)
 
     /**
      * Resume local playback when a cast session disconnects mid-item — only if

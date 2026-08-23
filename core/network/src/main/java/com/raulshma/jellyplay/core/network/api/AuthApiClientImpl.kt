@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.api
 
 import android.util.Log
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -8,6 +9,7 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -22,12 +24,12 @@ import javax.inject.Singleton
 @Singleton
 class AuthApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
-    private val libraryClient: LibraryApiClient,
     private val addressRouter: ServerAddressRouter,
 ) : AuthApiClient {
 
     override val currentServer: Flow<ServerInfo?> = engine.currentServer
     override val currentUser: Flow<UserInfo?> = engine.currentUser
+    override val session: Flow<ActiveSession?> = engine.session
 
     /**
      * Probes exactly [address] via the router's dedicated probe client. This
@@ -62,7 +64,14 @@ class AuthApiClientImpl @Inject constructor(
                 withContext(Dispatchers.IO) {
                     try {
                         val info = probeServerInfo(normalizedAddress)
-                        engine.authMutex.withLock { engine.updateServer(info) }
+                        // Atomically adopt the probed server AND drop any signed-in
+                        // user: this path is reachable while authenticated
+                        // (Settings → Server Management → Add Server), and a
+                        // single-sided updateServer would publish a synthetic
+                        // (newServer, oldUser) ActiveSession — driving HomeSession
+                        // to emit a ServerSwitched and clear Room under the wrong
+                        // identity. The follow-up login republishes a real pair.
+                        engine.authMutex.withLock { engine.updateSession(info, null) }
                         info
                     } catch (e: Exception) {
                         Log.e("JellyfinApi", "connectToServer failed for $normalizedAddress", e)
@@ -113,44 +122,14 @@ class AuthApiClientImpl @Inject constructor(
         username: String,
         password: String,
     ): Result<UserInfo> = engine.apiResultWithRetry {
-        engine.authMutex.withLock { engine.updateServer(serverInfo) }
-        val client = engine.jellyfin.createApi(serverInfo.address)
-        val authResult = client.userApi.authenticateUserByName(
-            AuthenticateUserByName(
-                username = username,
-                pw = password,
-            )
-        ).content
-        val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
-        val authenticatedClient = engine.jellyfin.createApi(
-            baseUrl = serverInfo.address,
-            accessToken = accessTokenValue,
-        )
-        engine.updateApi(authenticatedClient)
-        val userDto = authResult.user ?: throw Exception("Authentication failed")
-        val policy = userDto.policy
-        val userInfo = UserInfo(
-            id = userDto.id.toString(),
-            name = userDto.name ?: username,
-            serverAddress = serverInfo.address,
-            accessToken = accessTokenValue,
-            isAdmin = policy?.isAdministrator ?: false,
-            canDeleteContent = policy?.enableContentDeletion ?: false,
-            maxParentalAgeRating = policy?.maxParentalRating,
-            primaryImageTag = userDto.primaryImageTag,
-            enabledFolderIds = if (policy?.enableAllFolders == false) {
-                policy.enabledFolders?.map { it.toString() } ?: emptyList()
-            } else emptyList(),
-        )
-        engine.authMutex.withLock {
-            engine.updateUser(userInfo)
-            engine.updateServer(serverInfo.copy(
-                userId = userInfo.id,
-                accessToken = userInfo.accessToken,
-                isConnected = true,
-            ))
+        atomicLogin(serverInfo, fallbackName = username) { client ->
+            client.userApi.authenticateUserByName(
+                AuthenticateUserByName(
+                    username = username,
+                    pw = password,
+                )
+            ).content
         }
-        userInfo
     }
 
     override suspend fun setServer(serverInfo: ServerInfo) {
@@ -176,18 +155,20 @@ class AuthApiClientImpl @Inject constructor(
     }
 
     override suspend fun disconnect() {
-        engine.updateApi(null)
+        // One atomic publish of the cleared pair (matches the atomic publish
+        // discipline of the login paths) — session observers see stable → null
+        // in a single step. updateApi stays INSIDE the lock: a failover's
+        // rebuildApiFor (mutex-held) that already passed its `_api == null`
+        // early-return could otherwise resurrect a live client on top of the
+        // null-out below, leaving an authenticated client with a null session.
         engine.authMutex.withLock {
-            engine.updateUser(null)
-            engine.updateServer(null)
+            engine.updateApi(null)
+            engine.updateSession(null, null)
         }
-        // Defensive: clear any stale favorite flags cached against the previous
-        // server so a server switch can't surface them. No behavior change in
-        // normal use (the cache is eventually-consistent via API reads).
-        libraryClient.clearFavoriteCache()
-        // The home hot-path caches (per-folder latest + per-seed similar) are
-        // identity-keyed, so a previous user's recommendations can't leak
-        // through — no cross-boundary clear needed here.
+        // No manual cross-module cache clears here: every in-memory cache in
+        // this module (favorite flags, the home hot-path sub-caches) is keyed
+        // by the engine's atomic session identity, so a previous identity's
+        // entries miss by construction.
     }
 
     override suspend fun isQuickConnectEnabled(): Result<Boolean> = engine.apiResultWithRetry {
@@ -220,41 +201,143 @@ class AuthApiClientImpl @Inject constructor(
         serverInfo: ServerInfo,
         secret: String,
     ): Result<UserInfo> = engine.apiResultWithRetry {
-        engine.authMutex.withLock { engine.updateServer(serverInfo) }
-        val client = engine.jellyfin.createApi(serverInfo.address)
-        val authResult = client.userApi.authenticateWithQuickConnect(
-            QuickConnectDto(secret = secret)
-        ).content
-        val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
-        val authenticatedClient = engine.jellyfin.createApi(
-            baseUrl = serverInfo.address,
-            accessToken = accessTokenValue,
-        )
-        engine.updateApi(authenticatedClient)
-        val userDto = authResult.user ?: throw Exception("Quick Connect authentication failed")
-        val policy = userDto.policy
-        val userInfo = UserInfo(
-            id = userDto.id.toString(),
-            name = userDto.name ?: "",
-            serverAddress = serverInfo.address,
-            accessToken = accessTokenValue,
+        atomicLogin(serverInfo, fallbackName = "") { client ->
+            client.userApi.authenticateWithQuickConnect(
+                QuickConnectDto(secret = secret)
+            ).content
+        }
+    }
+
+    /**
+     * Shared capture/adopt/try/publish/restore spine for both login paths
+     * (name/password, Quick Connect), so the session discipline can't drift
+     * between them. Capture and pre-auth adopt happen in ONE critical
+     * section: the capture is atomic with everything [restoreSession] might
+     * undo, so a concurrent identity write between the two can't be silently
+     * clobbered by the restore. The adopt runs only when NO session is
+     * established — adopting over a working session would publish
+     * SignedOut(previous), and identity observers react destructively to that
+     * (cache drop + previous identity's SWR snapshot clear): a failed login
+     * attempt would wipe the signed-in user's cached home. The round-trip
+     * ([authenticate] lambda) runs unlocked; success replaces the pair
+     * atomically ([publishAuthenticatedSession]), and failure restores the
+     * captured values only if no other flow published in between
+     * ([restoreSession] re-checks under the mutex — a concurrent publish wins
+     * over the restore). RetryPolicy re-runs the caller's block against the
+     * same captured state, so the capture is idempotent across attempts.
+     */
+    private suspend fun atomicLogin(
+        serverInfo: ServerInfo,
+        fallbackName: String,
+        authenticate: suspend (org.jellyfin.sdk.api.client.ApiClient) -> org.jellyfin.sdk.model.api.AuthenticationResult,
+    ): UserInfo {
+        val (previousSession, previousApi) = engine.authMutex.withLock {
+            val session = engine.session.value
+            val api = engine.api
+            if (session == null) {
+                // Signed-out path: point currentServer at the target server.
+                // Identity stays null → no transition fires, nothing to wipe;
+                // the follow-up login republishes a real pair.
+                engine.updateSession(serverInfo, null)
+            }
+            session to api
+        }
+        return try {
+            val client = engine.jellyfin.createApi(serverInfo.address)
+            val authResult = authenticate(client)
+            val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
+            val authenticatedClient = engine.jellyfin.createApi(
+                baseUrl = serverInfo.address,
+                accessToken = accessTokenValue,
+            )
+            val userDto = authResult.user ?: throw Exception("Authentication failed")
+            val userInfo = userDto.toUserInfo(serverInfo.address, accessTokenValue, fallbackName = fallbackName)
+            publishAuthenticatedSession(serverInfo, userInfo, authenticatedClient)
+            userInfo
+        } catch (t: Throwable) {
+            restoreSession(previousSession, previousApi)
+            throw t
+        }
+    }
+
+    /**
+     * Maps an authentication response's user DTO to the model [UserInfo].
+     * Shared by every auth path (name/password, Quick Connect) so policy
+     * fields can't drift between them.
+     */
+    private fun org.jellyfin.sdk.model.api.UserDto.toUserInfo(
+        serverAddress: String,
+        accessToken: String,
+        fallbackName: String,
+    ): UserInfo {
+        val policy = policy
+        return UserInfo(
+            id = id.toString(),
+            name = name ?: fallbackName,
+            serverAddress = serverAddress,
+            accessToken = accessToken,
             isAdmin = policy?.isAdministrator ?: false,
             canDeleteContent = policy?.enableContentDeletion ?: false,
             maxParentalAgeRating = policy?.maxParentalRating,
-            primaryImageTag = userDto.primaryImageTag,
+            primaryImageTag = primaryImageTag,
             enabledFolderIds = if (policy?.enableAllFolders == false) {
                 policy.enabledFolders?.map { it.toString() } ?: emptyList()
             } else emptyList(),
         )
+    }
+
+    /**
+     * Single atomic publish of the authenticated (server, user) pair — one
+     * critical-section step, so session observers never see the server
+     * connected but its user missing (or vice versa). The API client is
+     * re-pointed INSIDE the same lock: a failover's rebuildApiFor (mutex-held)
+     * landing between an unguarded updateApi and this publish would rebuild
+     * the client from the OLD user's token while the session claims the new
+     * one — requests then spoke as the wrong user until something rebuilt.
+     */
+    private suspend fun publishAuthenticatedSession(
+        serverInfo: ServerInfo,
+        userInfo: UserInfo,
+        authenticatedClient: org.jellyfin.sdk.api.client.ApiClient,
+    ) {
         engine.authMutex.withLock {
-            engine.updateUser(userInfo)
-            engine.updateServer(serverInfo.copy(
-                userId = userInfo.id,
-                accessToken = userInfo.accessToken,
-                isConnected = true,
-            ))
+            engine.updateApi(authenticatedClient)
+            engine.updateSession(
+                serverInfo.copy(
+                    userId = userInfo.id,
+                    accessToken = userInfo.accessToken,
+                    isConnected = true,
+                ),
+                userInfo,
+            )
         }
-        userInfo
+    }
+
+    /**
+     * Puts a captured pre-auth session back after a failed login attempt.
+     * Pairs with the pre-auth adopt in the login paths: without this, a wrong
+     * password (or a declined Quick Connect) would leave the app signed out
+     * and the previous identity's cached home cleared. The login round-trip
+     * runs with authMutex RELEASED, so a concurrent auth flow may have
+     * published its own session in the meantime — the restore only runs when
+     * the session still equals the captured value (checked under the mutex);
+     * otherwise the newer publish wins and both the session and the API
+     * client are left untouched. Runs under
+     * [kotlinx.coroutines.NonCancellable] so the restore survives caller
+     * cancellation, and re-points the API client at the captured one in case
+     * the failure landed after a client swap had already happened.
+     */
+    private suspend fun restoreSession(
+        previousSession: ActiveSession?,
+        previousApi: org.jellyfin.sdk.api.client.ApiClient?,
+    ) {
+        withContext(NonCancellable) {
+            engine.authMutex.withLock {
+                if (engine.session.value != previousSession) return@withLock
+                engine.updateApi(previousApi)
+                engine.updateSession(previousSession?.server, previousSession?.user)
+            }
+        }
     }
 
     override suspend fun postCapabilities(): Result<Unit> = engine.apiResultWithRetry {

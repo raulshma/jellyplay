@@ -16,10 +16,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * The arguments of one session load. Mirrors [VideoPlayerViewModel.initializeInternal]'s
+ * The arguments of one session load. Mirrors [PlaybackSession.initialize]'s
  * post-routing parameters — everything the ordered load stages need after the
  * synchronous prefix (latch resets, transport re-arm, routing early-returns)
- * has run in the ViewModel.
+ * has run.
  */
 class LoadRequest(
     val itemId: String,
@@ -190,46 +190,58 @@ class SessionLoadPipeline(
         outputs.onPrefsProjected {
             copy(
                 preferredPlayerType = agg.playback.preferredPlayer,
-                seekDurationMs = agg.videoPlayer.videoSeekDurationMs,
-                defaultOrientation = agg.videoPlayer.videoDefaultOrientation,
-                controlsTimeoutMs = agg.videoPlayer.videoControlsTimeoutMs,
-                passOutProtectionHours = agg.videoPlayer.videoPassOutProtectionHours,
-                gesturesEnabled = agg.videoPlayer.videoGesturesEnabled,
-                holdSpeedEnabled = agg.videoPlayer.videoHoldSpeedEnabled,
-                holdSpeedMultiplier = agg.videoPlayer.videoHoldSpeedMultiplier,
-                defaultSpeed = agg.videoPlayer.videoDefaultSpeed,
-                swipeSeekMaxMs = agg.videoPlayer.videoSwipeSeekMaxMs,
-                rememberBrightness = agg.videoPlayer.videoRememberBrightness,
-                brightnessLevel = agg.videoPlayer.videoBrightnessLevel,
-                gestureIndicatorSide = agg.videoPlayer.videoGestureIndicatorSide,
-                frameRateMatching = agg.playback.frameRateMatching,
-                refreshRateMode = agg.playback.refreshRateMode,
-                aspectRatio = defaultAspectRatio,
-                trickplayEnabled = agg.videoPlayer.trickplayEnabled,
-                trickplayOnSeekGesture = agg.videoPlayer.trickplayOnSeekGesture,
-                segmentBehaviors = run {
-                    val base = agg.videoPlayer.segmentBehaviors.toMutableMap()
-                    if (agg.videoPlayer.videoAutoSkipIntro) {
-                        base[com.raulshma.jellyplay.core.model.MediaSegmentType.INTRO] =
-                            com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP
-                    }
-                    if (agg.videoPlayer.videoAutoSkipOutro) {
-                        base[com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO] =
-                            com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP
-                    }
-                    base.toMap()
-                },
-                videoEpisodeBrowserEnabled = agg.videoPlayer.videoEpisodeBrowserEnabled,
-                showPlaybackMetadata = agg.videoPlayer.videoShowPlaybackMetadata,
-                showClock = agg.videoPlayer.showClockInPlayer,
-                showTimeRemaining = agg.videoPlayer.showTimeRemaining,
-                tvZoomModePercent = agg.videoPlayer.tvZoomModePercent,
-                keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo,
-                streamingQuality = agg.playback.streamingQuality,
-                adaptiveBitrateEnabled = networkOfflineStore.networkOffline.value.adaptiveBitrateEnabled,
-                playbackMode = agg.playback.playbackMode,
-                videoAutoplayNext = agg.videoPlayer.videoAutoplayNext,
-                autoPlayCountdownSec = agg.playback.autoPlayCountdownSec,
+                uiPrefs = uiPrefs.copy(
+                    defaultOrientation = agg.videoPlayer.videoDefaultOrientation,
+                    controlsTimeoutMs = agg.videoPlayer.videoControlsTimeoutMs,
+                    passOutProtectionHours = agg.videoPlayer.videoPassOutProtectionHours,
+                    trickplayEnabled = agg.videoPlayer.trickplayEnabled,
+                    trickplayOnSeekGesture = agg.videoPlayer.trickplayOnSeekGesture,
+                    showPlaybackMetadata = agg.videoPlayer.videoShowPlaybackMetadata,
+                    showClock = agg.videoPlayer.showClockInPlayer,
+                    showTimeRemaining = agg.videoPlayer.showTimeRemaining,
+                    keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo,
+                    streamingQuality = agg.playback.streamingQuality,
+                    adaptiveBitrateEnabled = networkOfflineStore.networkOffline.value.adaptiveBitrateEnabled,
+                    playbackMode = agg.playback.playbackMode,
+                ),
+                gestures = gestures.copy(
+                    gesturesEnabled = agg.videoPlayer.videoGesturesEnabled,
+                    holdSpeedEnabled = agg.videoPlayer.videoHoldSpeedEnabled,
+                    holdSpeedMultiplier = agg.videoPlayer.videoHoldSpeedMultiplier,
+                    defaultSpeed = agg.videoPlayer.videoDefaultSpeed,
+                    swipeSeekMaxMs = agg.videoPlayer.videoSwipeSeekMaxMs,
+                    seekDurationMs = agg.videoPlayer.videoSeekDurationMs,
+                    rememberBrightness = agg.videoPlayer.videoRememberBrightness,
+                    brightnessLevel = agg.videoPlayer.videoBrightnessLevel,
+                    gestureIndicatorSide = agg.videoPlayer.videoGestureIndicatorSide,
+                    frameRateMatching = agg.playback.frameRateMatching,
+                    refreshRateMode = agg.playback.refreshRateMode,
+                ),
+                videoFx = videoFx.copy(
+                    aspectRatio = defaultAspectRatio,
+                    tvZoomModePercent = agg.videoPlayer.tvZoomModePercent,
+                ),
+                segmentState = segmentState.copy(
+                    segmentBehaviors = run {
+                        val base = agg.videoPlayer.segmentBehaviors.toMutableMap()
+                        if (agg.videoPlayer.videoAutoSkipIntro) {
+                            base[com.raulshma.jellyplay.core.model.MediaSegmentType.INTRO] =
+                                com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP
+                        }
+                        if (agg.videoPlayer.videoAutoSkipOutro) {
+                            base[com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO] =
+                                com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP
+                        }
+                        base.toMap()
+                    },
+                ),
+                episodes = episodes.copy(
+                    videoEpisodeBrowserEnabled = agg.videoPlayer.videoEpisodeBrowserEnabled,
+                ),
+                autoplay = autoplay.copy(
+                    videoAutoplayNext = agg.videoPlayer.videoAutoplayNext,
+                    autoPlayCountdownSec = agg.playback.autoPlayCountdownSec,
+                ),
             )
         }
         hooks.onSessionPrefsApplied(agg)

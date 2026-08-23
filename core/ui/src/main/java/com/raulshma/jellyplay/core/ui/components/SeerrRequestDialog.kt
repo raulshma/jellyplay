@@ -62,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
@@ -72,6 +73,46 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
 private const val TAG = "SeerrRequestDialog"
+
+/**
+ * The server's anime-scoped default ([anime]) when requesting an anime series,
+ * else its regular default ([regular]) — Jellyseerr's requester falls back the
+ * same way for profiles, root folders and tags.
+ */
+private fun <T> animeDefault(isAnime: Boolean, anime: T?, regular: T?): T? =
+    if (isAnime) anime ?: regular else regular
+
+/**
+ * Snapshot-fold overload — the single home for the
+ * [SeerrRequestSnapshot] → dialog-field mapping so every screen folds the
+ * holder's state the same way (a new snapshot field lands here once instead
+ * of once per screen).
+ */
+@Composable
+fun SeerrRequestDialog(
+    item: SeerrSearchItem,
+    snapshot: SeerrRequestSnapshot,
+    onConfirm: (
+        serverId: Int?,
+        profileId: Int?,
+        rootFolder: String?,
+        tags: List<Int>?,
+        seasons: List<Int>?,
+    ) -> Unit,
+    onDismiss: () -> Unit,
+) = SeerrRequestDialog(
+    item = item,
+    radarrServers = snapshot.radarrServers,
+    sonarrServers = snapshot.sonarrServers,
+    seasons = snapshot.tvSeasons,
+    tvIsAnime = snapshot.tvIsAnime,
+    isLoadingServices = snapshot.isLoadingServices,
+    isRequesting = snapshot.requestResult?.isLoading == true,
+    requestSuccess = snapshot.requestResult?.success,
+    requestError = snapshot.requestResult?.error,
+    onConfirm = onConfirm,
+    onDismiss = onDismiss,
+)
 
 /**
  * Enhanced request dialog that mirrors the Seerr web UI request options.
@@ -86,6 +127,7 @@ fun SeerrRequestDialog(
     radarrServers: List<SeerrRadarrServiceDetail> = emptyList(),
     sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
     seasons: List<SeerrSeason> = emptyList(),
+    tvIsAnime: Boolean = false,
     isLoadingServices: Boolean = false,
     isRequesting: Boolean = false,
     requestSuccess: Boolean? = null,
@@ -99,8 +141,73 @@ fun SeerrRequestDialog(
     ) -> Unit = { _, _, _, _, _ -> },
     onDismiss: () -> Unit,
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+    val isTvDevice = LocalTvMode.current
+
+    val content: @Composable ColumnScope.() -> Unit = {
+        SeerrRequestPanel(
+            item = item,
+            radarrServers = radarrServers,
+            sonarrServers = sonarrServers,
+            seasons = seasons,
+            tvIsAnime = tvIsAnime,
+            isLoadingServices = isLoadingServices,
+            isRequesting = isRequesting,
+            requestSuccess = requestSuccess,
+            requestError = requestError,
+            onConfirm = onConfirm,
+            onDismiss = onDismiss,
+        )
+    }
+
+    if (isTvDevice) {
+        TvSafeSheet(
+            onDismissRequest = { if (!isRequesting) onDismiss() },
+            content = content,
+        )
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = { if (!isRequesting) onDismiss() },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            shape = ShapeCache.smoothTop28,
+            containerColor = colorScheme.surfaceContainer,
+            dragHandle = { SheetDragHandle() },
+            content = content,
+        )
+    }
+}
+
+/**
+ * In-window request sheet body; see [SeerrRequestDialog] for the sheet shells.
+ * Extracted so UI tests can drive the selection logic without a separate
+ * sheet window (same pattern as ConfirmPanel/ConfirmDialog).
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+internal fun SeerrRequestPanel(
+    item: SeerrSearchItem,
+    radarrServers: List<SeerrRadarrServiceDetail> = emptyList(),
+    sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
+    seasons: List<SeerrSeason> = emptyList(),
+    tvIsAnime: Boolean = false,
+    isLoadingServices: Boolean = false,
+    isRequesting: Boolean = false,
+    requestSuccess: Boolean? = null,
+    requestError: String? = null,
+    onConfirm: (
+        serverId: Int?,
+        profileId: Int?,
+        rootFolder: String?,
+        tags: List<Int>?,
+        seasons: List<Int>?,
+    ) -> Unit = { _, _, _, _, _ -> },
+    onDismiss: () -> Unit = {},
+) {
+    // The media-type gates live HERE — the one place that owns item.mediaType —
+    // so callers pass the raw seasons list and tvIsAnime flag undecorated.
     val isTv = item.mediaType.equals("tv", ignoreCase = true)
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val isAnime = isTv && tvIsAnime
+    val effectiveSeasons = if (isTv) seasons else emptyList()
 
     // State for selections
     var selectedServerIndex by remember(item.id) { mutableStateOf(0) }
@@ -116,36 +223,36 @@ fun SeerrRequestDialog(
     val currentProfiles = if (isTv) currentSonarrServer?.profiles else currentRadarrServer?.profiles
     val currentRootFolders = if (isTv) currentSonarrServer?.rootFolders else currentRadarrServer?.rootFolders
     val currentTags = if (isTv) currentSonarrServer?.tags else currentRadarrServer?.tags
-    val availableSeasonNumbers = remember(seasons) {
-        seasons.mapNotNull { season -> season.seasonNumber }
+    val availableSeasonNumbers = remember(effectiveSeasons) {
+        effectiveSeasons.mapNotNull { season -> season.seasonNumber }
     }
-    val sortedSeasons = remember(seasons) {
-        seasons.sortedBy { it.seasonNumber }
+    val sortedSeasons = remember(effectiveSeasons) {
+        effectiveSeasons.sortedBy { it.seasonNumber }
     }
 
+    // Default server per Jellyseerr: isDefault && !is4k (the app never requests
+    // 4K), falling back to the first server — a 4K instance flagged default
+    // must not win over the regular one.
     LaunchedEffect(isTv, radarrServers, sonarrServers) {
-        if (isTv) {
-            if (sonarrServers.isNotEmpty()) {
-                val defaultIndex = sonarrServers.indexOfFirst { server -> server.isDefault || server.server?.isDefault == true }.takeIf { it >= 0 } ?: 0
-                selectedServerIndex = defaultIndex.coerceIn(0, sonarrServers.lastIndex)
-            } else {
-                selectedServerIndex = 0
-            }
+        fun <T> defaultIndex(servers: List<T>, isDefaultServer: (T) -> Boolean): Int =
+            if (servers.isEmpty()) 0
+            else (servers.indexOfFirst(isDefaultServer).takeIf { it >= 0 } ?: 0).coerceIn(0, servers.lastIndex)
+
+        selectedServerIndex = if (isTv) {
+            defaultIndex(sonarrServers) { s -> (s.isDefault || s.server?.isDefault == true) && !s.is4k }
         } else {
-            if (radarrServers.isNotEmpty()) {
-                val defaultIndex = radarrServers.indexOfFirst { server -> server.isDefault || server.server?.isDefault == true }.takeIf { it >= 0 } ?: 0
-                selectedServerIndex = defaultIndex.coerceIn(0, radarrServers.lastIndex)
-            } else {
-                selectedServerIndex = 0
-            }
+            defaultIndex(radarrServers) { s -> (s.isDefault || s.server?.isDefault == true) && !s.is4k }
         }
     }
 
     // Auto-select defaults when server changes
-    // Prefer nested server.defaults (from /service/ endpoint) over top-level fields
-    LaunchedEffect(currentProfiles) {
+    // Prefer nested server.defaults (from /service/ endpoint) over top-level fields;
+    // anime series use the per-server anime defaults like Jellyseerr's requester
+    LaunchedEffect(currentProfiles, isAnime) {
+        val sonarrDefaults = currentSonarrServer?.server
         val defaultProfileId = if (isTv) {
-            currentSonarrServer?.server?.activeProfileId ?: currentSonarrServer?.activeProfileId
+            animeDefault(isAnime, sonarrDefaults?.activeAnimeProfileId, sonarrDefaults?.activeProfileId)
+                ?: currentSonarrServer?.activeProfileId
         } else {
             currentRadarrServer?.server?.activeProfileId ?: currentRadarrServer?.activeProfileId
         }
@@ -153,9 +260,11 @@ fun SeerrRequestDialog(
         selectedProfileIndex = defaultIdx.coerceAtMost((currentProfiles?.size ?: 1) - 1).coerceAtLeast(0)
     }
 
-    LaunchedEffect(currentRootFolders) {
+    LaunchedEffect(currentRootFolders, isAnime) {
+        val sonarrDefaults = currentSonarrServer?.server
         val defaultDir = if (isTv) {
-            currentSonarrServer?.server?.activeDirectory ?: currentSonarrServer?.activeDirectory
+            animeDefault(isAnime, sonarrDefaults?.activeAnimeDirectory, sonarrDefaults?.activeDirectory)
+                ?: currentSonarrServer?.activeDirectory
         } else {
             currentRadarrServer?.server?.activeDirectory ?: currentRadarrServer?.activeDirectory
         }
@@ -163,22 +272,32 @@ fun SeerrRequestDialog(
         selectedRootFolderIndex = defaultIdx.coerceAtMost((currentRootFolders?.size ?: 1) - 1).coerceAtLeast(0)
     }
 
-    // Auto-select default tags when server changes
-    LaunchedEffect(currentTags) {
+    // Auto-select default tags when server or anime-ness changes (Jellyseerr
+    // re-applies defaults on those transitions; manual edits within a server
+    // are preserved)
+    var appliedTagsKey by remember(item.id) { mutableStateOf("") }
+    LaunchedEffect(currentTags, isAnime) {
+        val serverId = if (isTv) currentSonarrServer?.id else currentRadarrServer?.id
+        val key = "$serverId:$isAnime"
+        if (key == appliedTagsKey) return@LaunchedEffect
+        appliedTagsKey = key
+        val sonarrDefaults = currentSonarrServer?.server
         val defaultTags = if (isTv) {
-            currentSonarrServer?.server?.activeTags
+            animeDefault(
+                isAnime,
+                sonarrDefaults?.activeAnimeTags?.takeIf { it.isNotEmpty() },
+                sonarrDefaults?.activeTags,
+            )
         } else {
             currentRadarrServer?.server?.activeTags
         }
-        if (defaultTags != null && defaultTags.isNotEmpty() && selectedTags.isEmpty()) {
-            selectedTags.clear()
-            selectedTags.addAll(defaultTags)
-        }
+        selectedTags.clear()
+        if (!defaultTags.isNullOrEmpty()) selectedTags.addAll(defaultTags)
     }
 
     // Select all seasons by default when seasons become available
-    LaunchedEffect(seasons) {
-        if (seasons.isNotEmpty() && selectedSeasonNumbers.isEmpty()) {
+    LaunchedEffect(effectiveSeasons) {
+        if (effectiveSeasons.isNotEmpty() && selectedSeasonNumbers.isEmpty()) {
             selectAllSeasons = true
         }
     }
@@ -197,14 +316,12 @@ fun SeerrRequestDialog(
 
     val colorScheme = MaterialTheme.colorScheme
     val typography = MaterialTheme.typography
-    val isTvDevice = LocalTvMode.current
 
-    val content: @Composable ColumnScope.() -> Unit = {
-        MaterialTheme(
-            colorScheme = colorScheme,
-            typography = typography,
-        ) {
-            LazyColumn(
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = typography,
+    ) {
+        LazyColumn(
                 contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -418,7 +535,7 @@ fun SeerrRequestDialog(
 
                     // Season Selection (TV only)
                     if (isTv) {
-                        if (seasons.isNotEmpty()) {
+                        if (effectiveSeasons.isNotEmpty()) {
                             item {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -566,7 +683,7 @@ fun SeerrRequestDialog(
 
                                     onConfirm(serverId, profileId, rootFolder, tags, resolvedSeasons)
                                 },
-                                enabled = !isRequesting && (!isTv || (seasons.isNotEmpty() && (selectAllSeasons || selectedSeasonNumbers.isNotEmpty()))),
+                                enabled = !isRequesting && (!isTv || (effectiveSeasons.isNotEmpty() && (selectAllSeasons || selectedSeasonNumbers.isNotEmpty()))),
                                 shape = ShapeCache.smooth12,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = colorScheme.primary,
@@ -591,22 +708,6 @@ fun SeerrRequestDialog(
             }
         }
     }
-    if (isTvDevice) {
-        TvSafeSheet(
-            onDismissRequest = { if (!isRequesting) onDismiss() },
-            content = content,
-        )
-    } else {
-        ModalBottomSheet(
-            onDismissRequest = { if (!isRequesting) onDismiss() },
-            sheetState = sheetState,
-            shape = ShapeCache.smoothTop28,
-            containerColor = colorScheme.surfaceContainer,
-            dragHandle = { SheetDragHandle() },
-            content = content,
-        )
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

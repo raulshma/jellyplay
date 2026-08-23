@@ -60,8 +60,10 @@ internal fun mergeAccumulatedCues(
     val newStart = batched.first().startTimeUs
     // Close the open-ended span of any existing cue that is still "active"
     // (end == MAX) at the point the new cue begins.
+    var changed = false
     val closed = existing.map { cue ->
         if (cue.endTimeUs == Long.MAX_VALUE && cue.startTimeUs < newStart) {
+            changed = true
             cue.copy(endTimeUs = newStart)
         } else {
             cue
@@ -75,6 +77,12 @@ internal fun mergeAccumulatedCues(
     } else {
         batched.distinctBy { it.text }
     }
+    // Common no-change case (re-emission of the active cue): nothing was closed
+    // and nothing is fresh, so the sorted/capped result below would be
+    // structurally equal to [existing]. Return it as-is so the caller's
+    // StateFlow assignment short-circuits on identity instead of paying the
+    // O(n) equals per onCues tick.
+    if (fresh.isEmpty() && !changed) return existing
     return (closed + fresh)
         .sortedBy { it.startTimeUs }
         .takeLast(MAX_ACCUMULATED_CUES)

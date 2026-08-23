@@ -18,8 +18,6 @@ data class LiveTvPlayerUiState(
     val isBuffering: Boolean = true,
     val isPlaying: Boolean = false,
     val isAtLiveEdge: Boolean = true,
-    val positionMs: Long = 0L,
-    val durationMs: Long = -1L,
     val engineState: LiveEngineState = LiveEngineState.IDLE,
     val errorMessage: String? = null,
     /** Full technical detail for the last error (stacktrace-grade), shown in
@@ -34,6 +32,10 @@ data class LiveTvPlayerUiState(
      *  Transcode), surfaced as a badge in the player chrome. Null until the
      *  first stream resolves. */
     val playMethod: LivePlayMethod? = null,
+    /** Server-reported transcode reasons for the current stream (raw tokens);
+     *  empty when direct streaming. Appended to the error overlay's detail
+     *  section so "why is this transcoding" is answerable on Live TV too. */
+    val transcodeReasons: List<String> = emptyList(),
     /** Controls auto-hide delay sourced from the user's `videoControlsTimeoutMs`
      *  preference (mirrors the VOD player). Doubled on TV in the screen. */
     val controlsTimeoutMs: Long = 5_000L,

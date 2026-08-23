@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.datastore.ArrPreferencesStore
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.arr.ArrBlocklistItem
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
@@ -25,8 +26,6 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrSettings
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrSettings
 import com.raulshma.jellyplay.core.network.api.ApiException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -72,8 +71,10 @@ import javax.inject.Singleton
  * they degrade to empty results without throwing, so the consuming ViewModels
  * do not need their own try/catch around *arr.
  *
- * Concurrency note: the cache scope is a dedicated [SupervisorJob] + IO
- * dispatcher so a failure in one fan-out branch cannot cancel siblings.
+ * Concurrency note: the cache scope is the shared `@ApplicationScope`
+ * application scope (never cancelled — this singleton lives for the process
+ * lifetime); its `SupervisorJob` context keeps a failure in one fan-out
+ * branch from cancelling siblings.
  */
 @Singleton
 class ArrRepositoryImpl @Inject constructor(
@@ -81,9 +82,8 @@ class ArrRepositoryImpl @Inject constructor(
     private val sonarrApiClient: SonarrApiClient,
     private val seerrRepository: SeerrRepository,
     private val arrPreferencesStore: ArrPreferencesStore,
+    @ApplicationScope private val cacheScope: CoroutineScope,
 ) : ArrRepository {
-
-    private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Bounded concurrency for Seerr detail fan-out during server resolution. */
     private val resolveSemaphore = Semaphore(4)

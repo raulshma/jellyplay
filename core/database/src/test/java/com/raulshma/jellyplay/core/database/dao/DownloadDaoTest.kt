@@ -44,15 +44,17 @@ class DownloadDaoTest {
         mediaItemId: String = "item-1",
         name: String = "Test Movie",
         status: String = "PENDING",
+        mediaType: String = "MOVIE",
         seriesId: String? = null,
         seasonId: String? = null,
         downloadedBytes: Long = 0L,
         totalSizeBytes: Long = 1000L,
+        createdAt: Long = System.currentTimeMillis(),
     ) = DownloadEntity(
         id = id,
         mediaItemId = mediaItemId,
         name = name,
-        mediaType = "MOVIE",
+        mediaType = mediaType,
         downloadPath = "/downloads/test.mkv",
         downloadUrl = "https://test.example.com/Videos/item-1/stream",
         totalSizeBytes = totalSizeBytes,
@@ -60,7 +62,7 @@ class DownloadDaoTest {
         status = status,
         seriesId = seriesId,
         seasonId = seasonId,
-        createdAt = System.currentTimeMillis(),
+        createdAt = createdAt,
     )
 
     @Test
@@ -93,6 +95,18 @@ class DownloadDaoTest {
 
         val downloads = downloadDao.getAllDownloads().first()
         assertEquals(2, downloads.size)
+    }
+
+    @Test
+    fun `getCompletedAudioDownloads pages completed audio newest first`() = runTest {
+        downloadDao.insertDownload(createDownload(id = "dl-1", mediaItemId = "item-1", status = "COMPLETED", mediaType = "MUSIC", createdAt = 1000L))
+        downloadDao.insertDownload(createDownload(id = "dl-2", mediaItemId = "item-2", status = "COMPLETED", mediaType = "AUDIO", createdAt = 2000L))
+        downloadDao.insertDownload(createDownload(id = "dl-3", mediaItemId = "item-3", status = "DOWNLOADING", mediaType = "MUSIC", createdAt = 3000L))
+        downloadDao.insertDownload(createDownload(id = "dl-4", mediaItemId = "item-4", status = "COMPLETED", mediaType = "MOVIE", createdAt = 4000L))
+
+        assertEquals(listOf("dl-2"), downloadDao.getCompletedAudioDownloads(limit = 1, offset = 0).map { it.id })
+        assertEquals(listOf("dl-1"), downloadDao.getCompletedAudioDownloads(limit = 1, offset = 1).map { it.id })
+        assertEquals(emptyList<String>(), downloadDao.getCompletedAudioDownloads(limit = 1, offset = 2))
     }
 
     @Test

@@ -23,7 +23,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
-import java.net.URI
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -92,21 +91,52 @@ open class AudioStreamCache @Inject constructor(
     /**
      * Wraps [upstream] in a [CacheDataSource.Factory]. If the cache is
      * unavailable, returns [upstream] unchanged (passthrough).
+     *
+     * Production callers always pass our own [buildUpstreamFactory] result, so
+     * both the upstream chain and the derived cache factory are process-stable
+     * — memoized in [cachedUpstreamFactory]/[cachedCacheFactory] instead of
+     * being rebuilt per player creation and per [warmTrack] prefetch.
+     * Invalidated by [clear]; custom upstreams (tests) bypass the memo.
+     *
+     * Synchronized with [clear] so the memo can never hand out a factory
+     * wrapping a [SimpleCache] that [clear] just released: without the lock a
+     * reader between [ensureCache] and the memo write would keep using a dead
+     * cache (silently — FLAG_IGNORE_CACHE_ON_ERROR masks it).
      */
+    @Synchronized
     fun getCacheDataSourceFactory(upstream: DataSource.Factory): DataSource.Factory {
+        if (upstream === cachedUpstreamFactory) {
+            cachedCacheFactory?.let { return it }
+        }
         val sc = ensureCache() ?: return upstream
-        return CacheDataSource.Factory()
+        val factory = CacheDataSource.Factory()
             .setCache(sc)
             .setUpstreamDataSourceFactory(upstream)
             .setCacheKeyFactory(cacheKeyFactory)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        if (upstream === cachedUpstreamFactory) {
+            cachedCacheFactory = factory
+        }
+        return factory
     }
 
-    /** Builds the OkHttp-backed upstream factory used by both player and warmer. */
+    @Volatile private var cachedUpstreamFactory: DataSource.Factory? = null
+    @Volatile private var cachedCacheFactory: DataSource.Factory? = null
+
+    /**
+     * Builds the OkHttp-backed upstream factory used by both player and warmer.
+     * Synchronized like the other memo accessors so concurrent callers can't
+     * build racing instances (a loser's write would make callers hold a
+     * factory that no longer `===`s the memo, silently bypassing the
+     * [cachedCacheFactory] fast path) and so [clear]'s invalidation can't
+     * interleave with a memo write.
+     */
+    @Synchronized
     fun buildUpstreamFactory(): DataSource.Factory {
+        cachedUpstreamFactory?.let { return it }
         val httpFactory = OkHttpDataSource.Factory(streamingOkHttpClient)
             .setUserAgent("JellyPlay")
-        return DefaultDataSource.Factory(context, httpFactory)
+        return DefaultDataSource.Factory(context, httpFactory).also { cachedUpstreamFactory = it }
     }
 
     /** Bytes currently held in the cache. */
@@ -159,10 +189,17 @@ open class AudioStreamCache @Inject constructor(
 
     /** Releases the cache, deletes its directory, and reopens empty. */
     suspend fun clear(): Unit = withContext(Dispatchers.IO) {
-        synchronized(this) {
+        // Lock the cache instance — the same monitor the @Synchronized accessors
+        // use. A bare `this` here would capture the withContext CoroutineScope
+        // and race the readers instead of excluding them.
+        synchronized(this@AudioStreamCache) {
             cache?.release()
             cache = null
             available = false
+            // The memoized factories reference the released SimpleCache —
+            // drop them so the next request rebuilds against the fresh cache.
+            cachedCacheFactory = null
+            cachedUpstreamFactory = null
         }
         resolveCacheDir().deleteRecursively()
         resolveCacheDir().mkdirs()
@@ -180,15 +217,5 @@ open class AudioStreamCache @Inject constructor(
     }
 
     /** Strips `api_key=...` from the query string so cache keys are token-invariant. */
-    internal fun stripApiKey(url: String): String {
-        return try {
-            val uri = URI(url)
-            val query = uri.rawQuery ?: return url
-            val filtered = query.split("&").filterNot { it.startsWith("api_key=") }.joinToString("&")
-            val newQuery = if (filtered.isEmpty()) null else filtered
-            URI(uri.scheme, uri.userInfo, uri.host, uri.port, uri.path, newQuery, uri.fragment).toString()
-        } catch (e: Exception) {
-            url.replace(Regex("[?&]api_key=[^&]*"), "").replace(Regex("\\?&"), "?").replace(Regex("&&"), "&")
-        }
-    }
+    internal fun stripApiKey(url: String): String = stripVolatileQueryParams(url, STRIP_SAFE_QUERY_PARAMS)
 }

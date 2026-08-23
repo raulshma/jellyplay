@@ -41,6 +41,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
+import com.raulshma.jellyplay.core.ui.components.AddListRow
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
@@ -142,7 +143,12 @@ fun UsersScreen(
                         onRefresh = { viewModel.refresh() },
                     ) {
                         if (state.users.isEmpty()) {
-                            ScreenEmptyState(icon = Tabler.Outline.UserPlus, title = stringResource(R.string.admin_no_users))
+                            ScreenEmptyState(
+                                icon = Tabler.Outline.UserPlus,
+                                title = stringResource(R.string.admin_no_users),
+                                actionLabel = stringResource(R.string.admin_add_user_cd),
+                                onAction = { viewModel.showCreateDialog() },
+                            )
                         } else {
                             LazyColumn(
                                 modifier = Modifier
@@ -163,6 +169,17 @@ fun UsersScreen(
                                         onClick = { onUserDetail(user.id) },
                                         onDelete = { viewModel.showDeleteDialog(user) },
                                     )
+                                }
+
+                                // TV has no FAB, so the create action lives in the list.
+                                if (isTv) {
+                                    item(key = "create_user", contentType = "create_user") {
+                                        AddListRow(
+                                            label = stringResource(R.string.admin_add_user_cd),
+                                            icon = Tabler.Outline.UserPlus,
+                                            onClick = { viewModel.showCreateDialog() },
+                                        )
+                                    }
                                 }
                             }
                         }

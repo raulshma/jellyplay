@@ -332,4 +332,5 @@
     <string name="a11y_volume_increase">Increase volume</string>
     <string name="a11y_volume_decrease">Decrease volume</string>
 
+    <string name="player_direct_play_fallback">Direct Play failed — switching to transcode (%1$s)</string>
 </resources>

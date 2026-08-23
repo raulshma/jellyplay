@@ -40,6 +40,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -56,6 +58,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowRight
@@ -105,6 +108,10 @@ fun FactoryResetScreen(
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
+    // Grab focus into the list so the first D-pad press lands on content, not the drawer rail.
+    val focusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(focusRequester = focusRequester, itemCount = 1, tag = "factory_reset_init")
+
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_factory_reset),
         onBack = onBack,
@@ -114,7 +121,8 @@ fun FactoryResetScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(innerPadding)
-                .tvFocusRestorer(),
+                .tvFocusRestorer()
+                .focusRequester(focusRequester),
             contentPadding = PaddingValues(
                 start = adaptiveInfo.contentPadding(isTv),
                 end = adaptiveInfo.contentPadding(isTv),

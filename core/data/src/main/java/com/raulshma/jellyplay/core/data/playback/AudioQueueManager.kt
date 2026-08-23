@@ -26,6 +26,13 @@ interface AudioQueueManager {
 
     fun playQueue(items: List<AudioQueueItem>, startIndex: Int = 0)
     fun addToQueue(item: AudioQueueItem)
+
+    /**
+     * Bulk append. One queue emission + one player mutation instead of N, so
+     * the queue is persisted (full-list DELETE+INSERT) once rather than
+     * O(N²) rows across N transactions.
+     */
+    fun addToQueueAll(items: List<AudioQueueItem>)
     fun removeFromQueue(index: Int)
     fun clearQueue()
     fun moveQueueItem(fromIndex: Int, toIndex: Int)

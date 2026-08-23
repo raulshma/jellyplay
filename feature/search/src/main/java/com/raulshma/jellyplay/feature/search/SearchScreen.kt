@@ -150,11 +150,7 @@ fun SearchScreen(
         }
     }
     var requestItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem?>(null) }
-    val requestResult by viewModel.requestResult.collectAsStateWithLifecycle()
-    val radarrServers by viewModel.radarrServers.collectAsStateWithLifecycle()
-    val sonarrServers by viewModel.sonarrServers.collectAsStateWithLifecycle()
-    val tvSeasons by viewModel.tvSeasons.collectAsStateWithLifecycle()
-    val isLoadingSeerrServices by viewModel.isLoadingSeerrServices.collectAsStateWithLifecycle()
+    val seerrSnapshot by viewModel.seerrSnapshot.collectAsStateWithLifecycle()
     val seerrLoadingState = rememberSeerrCardLoadingState()
 
     val query = viewModel.query
@@ -300,20 +296,28 @@ fun SearchScreen(
                 .fillMaxSize()
                 .imePadding(),
         ) {
-            // ═══════════════════════════════════════════════════════════════
-            // ── Header Section (cinematic dark, white-on-dark text)
-            // ═══════════════════════════════════════════════════════════════
+            // ── Header Section (cinematic dark, white-on-dark text) ──
+            // The screen root re-executes per keystroke (query state is read
+            // here); remember the static header brush + display style so each
+            // keystroke doesn't re-allocate them.
+            val headerGradientBrush = remember(backgroundColor) {
+                Brush.verticalGradient(
+                    colors = listOf(
+                        backgroundColor.copy(alpha = 0.95f),
+                        backgroundColor,
+                    ),
+                )
+            }
+            val headlineLarge = MaterialTheme.typography.headlineLarge
+            val headerTitleStyle = remember(headlineLarge) {
+                headlineLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                )
+            }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                backgroundColor.copy(alpha = 0.95f),
-                                backgroundColor,
-                            ),
-                        )
-                    )
+                    .background(headerGradientBrush)
                     .statusBarsPadding()
                     .padding(top = 16.dp),
             ) {
@@ -335,9 +339,7 @@ fun SearchScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = stringResource(R.string.search_title),
-                                style = MaterialTheme.typography.headlineLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                ),
+                                style = headerTitleStyle,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
@@ -675,18 +677,25 @@ fun SearchScreen(
                             horizontalArrangement = Arrangement.spacedBy(spacing),
                             contentPadding = PaddingValues(end = contentPad),
                         ) { _, seerrItem, itemModifier ->
-                            SeerrMediaCard(
-                                item = seerrItem,
-                                imageUrl = seerrItem.posterUrl,
-                                isLoading = seerrLoadingState.isLoading(seerrItem.id),
-                                onClick = {
+                            val onClick = remember(seerrItem.id, seerrItem.mediaType, onNavigate) {
+                                {
                                     seerrLoadingState.startLoading(seerrItem.id)
                                     viewModel.prefetchSeerrDetails(seerrItem.id, seerrItem.mediaType) {
                                         seerrLoadingState.stopLoading(seerrItem.id)
                                         onNavigate(Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
                                     }
-                                },
-                                onRequestClick = { requestItem = seerrItem },
+                                }
+                            }
+                            // Keyed on the whole item, not just id: a refreshed
+                            // list can return a new object for the same id,
+                            // and the request dialog must show that object.
+                            val onRequestClick = remember(seerrItem) { { requestItem = seerrItem } }
+                            SeerrMediaCard(
+                                item = seerrItem,
+                                imageUrl = seerrItem.posterUrl,
+                                isLoading = seerrLoadingState.isLoading(seerrItem.id),
+                                onClick = onClick,
+                                onRequestClick = onRequestClick,
                                 modifier = itemModifier.width(seerrCardWidth),
                             )
                         }
@@ -1106,13 +1115,7 @@ fun SearchScreen(
 
         SeerrRequestDialog(
             item = item,
-            radarrServers = radarrServers,
-            sonarrServers = sonarrServers,
-            seasons = if (item.mediaType.equals("tv", ignoreCase = true)) tvSeasons else emptyList(),
-            isLoadingServices = isLoadingSeerrServices,
-            isRequesting = requestResult?.isLoading == true,
-            requestSuccess = requestResult?.success,
-            requestError = requestResult?.error,
+            snapshot = seerrSnapshot,
             onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
                 viewModel.requestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags)
             },

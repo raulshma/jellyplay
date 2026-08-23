@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -47,6 +46,7 @@ import com.composables.icons.tabler.outline.Plus
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.PluginRepository
+import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -228,7 +228,7 @@ private fun AddRepositoryDialog(
     var name by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
 
-    AlertDialog(
+    ImeAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.admin_add_repository_title)) },
         text = {

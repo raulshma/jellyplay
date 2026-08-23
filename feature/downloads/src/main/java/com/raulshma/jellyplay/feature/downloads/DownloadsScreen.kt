@@ -73,6 +73,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -138,20 +139,24 @@ fun DownloadsScreen(
     // Action-bar predicates: a bulk control is enabled only when the current
     // selection actually contains an item of the matching status, so the bar
     // never offers a no-op (e.g. Pause with only paused items selected).
-    val selectedItems = if (selectionMode) downloads.filter { it.id in selectedIds } else emptyList()
-    val hasPauseable = selectedItems.any { it.status == DownloadStatus.DOWNLOADING }
-    val hasResumable = selectedItems.any { it.status == DownloadStatus.PAUSED }
-    val hasCancellable = selectedItems.any {
-        it.status == DownloadStatus.PENDING ||
-            it.status == DownloadStatus.QUEUED ||
-            it.status == DownloadStatus.DOWNLOADING ||
-            it.status == DownloadStatus.PAUSED
+    val selectedItems = remember(selectionMode, downloads, selectedIds) {
+        if (selectionMode) downloads.filter { it.id in selectedIds } else emptyList()
+    }
+    val hasPauseable = remember(selectedItems) { selectedItems.any { it.status == DownloadStatus.DOWNLOADING } }
+    val hasResumable = remember(selectedItems) { selectedItems.any { it.status == DownloadStatus.PAUSED } }
+    val hasCancellable = remember(selectedItems) {
+        selectedItems.any {
+            it.status == DownloadStatus.PENDING ||
+                it.status == DownloadStatus.QUEUED ||
+                it.status == DownloadStatus.DOWNLOADING ||
+                it.status == DownloadStatus.PAUSED
+        }
     }
     // Global action predicates: the app-bar Pause All / Retry all failed
     // buttons are only enabled when the matching status exists anywhere in the
     // list, so neither offers a no-op (mirrors the selection-bar predicates).
-    val hasAnyDownloading = downloads.any { it.status == DownloadStatus.DOWNLOADING }
-    val hasAnyFailed = downloads.any { it.status == DownloadStatus.FAILED }
+    val hasAnyDownloading = remember(downloads) { downloads.any { it.status == DownloadStatus.DOWNLOADING } }
+    val hasAnyFailed = remember(downloads) { downloads.any { it.status == DownloadStatus.FAILED } }
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
@@ -912,7 +917,7 @@ private fun DownloadsResyncSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    androidx.compose.material3.ModalBottomSheet(
+    TvSafeSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
@@ -1135,7 +1140,7 @@ private fun ForceResyncSheet(
     val showRunning = progress.active
     val showDone = started && !progress.active
 
-    androidx.compose.material3.ModalBottomSheet(
+    TvSafeSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
@@ -1223,9 +1228,12 @@ private fun ForceResyncSheet(
                             selectedIds.size == candidates.size -> ToggleableState.On
                             else -> ToggleableState.Indeterminate
                         }
+                        val selectAllFocusState = rememberTvFocusState(focusedScale = 1.01f)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .then(selectAllFocusState.focusModifier)
+                                .tvFocusIndicator(selectAllFocusState, ShapeCache.smooth12)
                                 .clickable {
                                     selectedIds = if (triState == ToggleableState.On) emptySet()
                                     else candidates.map { it.id }.toSet()
@@ -1358,9 +1366,12 @@ private fun ForceResyncItemRow(
     checked: Boolean,
     onToggle: () -> Unit,
 ) {
+    val focusState = rememberTvFocusState(focusedScale = 1.01f)
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth12)
             .clickable { onToggle() }
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1402,9 +1413,12 @@ private fun ForceResyncDataRow(
     checked: Boolean,
     onToggle: () -> Unit,
 ) {
+    val focusState = rememberTvFocusState(focusedScale = 1.01f)
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, ShapeCache.smooth12)
             .clickable { onToggle() }
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,

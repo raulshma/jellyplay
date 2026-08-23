@@ -69,6 +69,8 @@ import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
+import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -580,9 +582,10 @@ internal fun DetailContentBody(
                 }
                 state.capabilities.localStreamInfo && source != null -> {
                     // Quality + audio (read-only, probed) share a single badge row
-                    // with the interactive local subtitle pill, matching the remote
-                    // section's 3-pill layout. Subtitles are only passed when the
-                    // manifest advertises them.
+                    // with the local subtitle pill, matching the remote section's
+                    // 3-pill layout. The pill always renders (OFF when the manifest
+                    // advertises no bundled subtitles); it is only interactive when
+                    // a list is passed.
                     LocalMediaInfoSection(
                         mediaStreams = source.mediaStreams,
                         subtitles = if (state.capabilities.localSubtitleSelection) state.localSubtitles else emptyList(),
@@ -773,6 +776,13 @@ internal fun DetailContentBody(
                             state.episodes
                         }
                     }
+                    val downloadedEpisodeIds = remember(isLocalOrigin, state.episodes, state.downloadedEpisodeIds) {
+                        when {
+                            isLocalOrigin -> state.episodes.values.flatten().map { it.id }.toSet()
+                            state.downloadedEpisodeIds.isNotEmpty() -> state.downloadedEpisodeIds
+                            else -> null
+                        }
+                    }
                     SeasonsSection(
                         seriesItem = item,
                         seasons = state.seasons,
@@ -807,11 +817,7 @@ internal fun DetailContentBody(
                         // downloaded; for a REMOTE series we surface the loaded
                         // downloadedEpisodeIds (populated when the download sheet
                         // opened) so the trash badge matches the on-disk truth.
-                        downloadedEpisodeIds = when {
-                            isLocalOrigin -> state.episodes.values.flatten().map { it.id }.toSet()
-                            state.downloadedEpisodeIds.isNotEmpty() -> state.downloadedEpisodeIds
-                            else -> null
-                        },
+                        downloadedEpisodeIds = downloadedEpisodeIds,
                         onEpisodeDeleteClick = { episode -> callbacks.onDeleteEpisode(episode.id) },
                         // Resolve a downloaded episode thumbnail from DetailAssets before
                         // falling back to the server image url (which won't load offline).
@@ -1091,6 +1097,18 @@ internal fun DetailContentBody(
                 }
             }
         }
+
+        // ── TMDB Reviews ──
+        // Fetched straight from TMDB (see DetailViewModel.loadSeerrData), so the
+        // section renders regardless of Seerr connection state. Rendered as a
+        // vertical card list — review bodies are paragraphs, not glanceable tiles,
+        // so they join the screen scroll instead of a horizontal row.
+        StaggeredDetailSection(
+            visible = showContent && state.tmdbReviews.isNotEmpty(),
+            delayIndex = 14,
+        ) {
+            ReviewsSection(reviews = state.tmdbReviews)
+        }
     }
     }
     }
@@ -1217,25 +1235,39 @@ private fun VideosSection(
     // per video per recomposition.
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
-    val videoCardBorder = when {
-        isSynthwave -> {
-            androidx.compose.foundation.BorderStroke(
-                width = 1.5.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary,
-                        MaterialTheme.colorScheme.secondary
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val outlineColor = MaterialTheme.colorScheme.outline
+    val videoCardBorder = remember(isSynthwave, isSoothing, primaryColor, secondaryColor, outlineColor) {
+        when {
+            isSynthwave -> {
+                androidx.compose.foundation.BorderStroke(
+                    width = 1.5.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(primaryColor, secondaryColor)
                     )
                 )
-            )
+            }
+            isSoothing -> {
+                androidx.compose.foundation.BorderStroke(
+                    width = 0.8.dp,
+                    color = outlineColor.copy(alpha = 0.35f)
+                )
+            }
+            else -> null
         }
-        isSoothing -> {
-            androidx.compose.foundation.BorderStroke(
-                width = 0.8.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-            )
-        }
-        else -> null
+    }
+    // Same hoist for the per-card bottom scrim: identical for every video,
+    // so build it once instead of per card per recomposition.
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val videoScrimBrush = remember(surfaceColor) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color.Transparent,
+                surfaceColor.copy(alpha = 0.85f)
+            ),
+            startY = 100f
+        )
     }
     Column {
         FadingItem {
@@ -1298,15 +1330,7 @@ private fun VideosSection(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            colors = listOf(
-                                                Color.Transparent,
-                                                MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-                                            ),
-                                            startY = 100f
-                                        )
-                                    )
+                                    .background(videoScrimBrush)
                             )
 
                             Text(
@@ -1328,6 +1352,108 @@ private fun VideosSection(
                             )
                         }
                     }
+        }
+    }
+}
+
+/** TMDB avatar URL for the 40dp review circle (w90 covers it at 2x density). */
+private fun tmdbAvatarUrl(avatarPath: String?): String? =
+    avatarPath?.takeIf { it.isNotBlank() }?.let { path ->
+        // Gravatar-linked accounts ship "/https://…" — the path is already an
+        // absolute URL, so it must not get the image.tmdb.org prefix.
+        if (path.startsWith("/http")) path.drop(1) else "${TmdbImageUrls.BASE}/w90$path"
+    }
+
+/**
+ * Vertical list of TMDB review cards. Part of the screen scroll (not a lazy
+ * row) — the VM caps the list at 5 entries, and review bodies are paragraphs
+ * that want the full content width. Cards are informational only: no click.
+ */
+@Composable
+private fun ReviewsSection(
+    reviews: List<TmdbReview>,
+) {
+    val bodyContentPad = LocalAdaptiveInfo.current.contentPadding(isTv = LocalTvMode.current)
+    Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
+        FadingItem {
+            Text(
+                text = stringResource(R.string.detail_section_reviews),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                modifier = Modifier.semantics { heading() },
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            reviews.forEach { review ->
+                FadingItem {
+                    // Display name falls back username-first: TMDB often ships an
+                    // empty author_details.name for casual reviewers.
+                    val authorName = review.authorDetails.name.takeIf { it.isNotBlank() }
+                        ?: review.authorDetails.username.takeIf { it.isNotBlank() }
+                        ?: review.author
+                    val avatarUrl = remember(review.id) { tmdbAvatarUrl(review.authorDetails.avatarPath) }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(ShapeCache.smooth16)
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (avatarUrl != null) {
+                                    MediaImage(
+                                        url = avatarUrl,
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop,
+                                    )
+                                } else {
+                                    Text(
+                                        text = authorName.take(1).uppercase().ifBlank { "?" },
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = authorName,
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                review.authorDetails.rating?.let { rating ->
+                                    Text(
+                                        text = stringResource(R.string.detail_review_rating, rating),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            text = review.content,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                            maxLines = 6,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
         }
     }
 }

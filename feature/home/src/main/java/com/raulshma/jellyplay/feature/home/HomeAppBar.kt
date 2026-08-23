@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -130,6 +131,12 @@ fun HomeTopDock(
         modifier = modifier
             .fillMaxWidth()
             .then(if (!isTv) Modifier.statusBarsPadding() else Modifier)
+            // Lift the whole dock (field + results) above the soft keyboard.
+            // Must sit OUTSIDE the results box's heightIn cap: applying
+            // imePadding below that cap lets the keyboard consume the results
+            // budget (400dp − ~368dp inset = a 32dp sliver that only fits the
+            // section header).
+            .imePadding()
             .padding(
                 start = 16.dp,
                 top = 4.dp,

@@ -8,10 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
-import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
-import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.AppliedMutation
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
@@ -20,6 +17,7 @@ import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.search.MediaSearchPreviewState
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
@@ -46,11 +44,17 @@ import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.ActiveSession
+import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
+import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchProvider
+import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -59,9 +63,11 @@ import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -78,12 +84,18 @@ import java.time.ZoneId
 /**
  * Real HomeViewModel tests. Instantiates the VM with MockK deps + a fake
  * [TimeSource], then drives it through the branches the previous tautological
- * test suite skipped: section fetch + ordering, CW side-effects, offline
- * transitions, search, and sign-in reset.
+ * test suite skipped: section fetch + ordering, offline transitions, and
+ * sign-in reset.
  *
  * Harness mirrors `DetailViewModelTest`: MockK + [MainDispatcherRule] + runTest.
- * Uses [runCurrent] (not `advanceUntilIdle`) so the periodic-refresh `while(true)`
- * loop's `delay` doesn't drive virtual time unbounded.
+ * Uses [runCurrent] (not `advanceUntilIdle`) so the refresher's periodic
+ * `while(true)` loop's `delay` doesn't drive virtual time unbounded. The
+ * concern-owned extractions from this VM each have their own JVM suite —
+ * [HomeRefresherTest] (refresh policy), `ScrollPositionStoreTest`,
+ * `PhotoFolderChildUrlsStoreTest`, `HomeSearchStateHolderTest`,
+ * `SeriesDeleteStateHolderTest` (all in this package) and
+ * `SyncStatusStateHolderTest` in :core:data — so this suite keeps only
+ * VM-level UiState/collector policy and the pass-through seams.
  */
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -110,10 +122,18 @@ class HomeViewModelTest {
     private lateinit var preferencesEditor: PreferencesEditor
     private lateinit var widgetDataStore: WidgetDataStore
 
-    /** Inline-search kernel — targeted fake instead of five collaborators. */
+    /**
+     * Inline-search kernel — targeted fake instead of five collaborators.
+     * Passed through to the VM's HomeSearchStateHolder, whose init collects
+     * `preview` from construction, so the stub must stay.
+     */
     private val mediaSearchEngine: MediaSearchEngine = mockk(relaxed = true)
 
-    /** Offline-first title+poster resolution delegated to the data layer. */
+    /**
+     * Offline-first title+poster resolution — passed through to the VM's
+     * SyncStatusStateHolder; no remaining test here resolves ids (the
+     * resolution policy is pinned by SyncStatusStateHolderTest).
+     */
     private val offlineFirstItemResolver: OfflineFirstItemResolver = mockk(relaxed = true)
 
     private lateinit var seerrRepository: SeerrRepository
@@ -124,11 +144,61 @@ class HomeViewModelTest {
     private lateinit var tvWatchNextScheduler: TvWatchNextScheduler
     private lateinit var continueWatchingBroadcaster: ContinueWatchingBroadcaster
     private lateinit var librarySyncHook: LibrarySyncHook
-    private lateinit var playbackOutboxRepository: PlaybackOutboxRepository
-    private lateinit var playbackSyncScheduler: PlaybackSyncScheduler
+
+    /**
+     * Outbox/sync collaborators — passed through to the VM's
+     * SyncStatusStateHolder. Relaxed mocks are enough here: the remaining
+     * offline→online tests only hit `count()` (relaxed → 0, drain short-
+     * circuits); the sync surface itself is pinned by
+     * SyncStatusStateHolderTest.
+     */
+    private val playbackOutboxRepository: PlaybackOutboxRepository = mockk(relaxed = true)
+    private val playbackSyncScheduler: PlaybackSyncScheduler = mockk(relaxed = true)
     private lateinit var fakeTimeSource: FakeTimeSource
 
+    /**
+     * The settings-search seam injected into the VM. In production the Hilt
+     * binding (feature/settings' SettingsSearchModule) supplies the real
+     * catalog; here a small fake with synthetic items keeps the VM's
+     * settingsSearchResults flow exercisable without depending on
+     * feature/settings from this suite.
+     */
+    private val fakeSettingsSearchProvider = object : SettingsSearchProvider {
+        override val items = listOf(
+            SettingsSearchItem(
+                id = "test_setting",
+                titleRes = 0,
+                subtitleRes = 0,
+                categoryRes = 0,
+                keywords = listOf("test"),
+                route = Route.Settings,
+                icon = mockk(relaxed = true),
+            ),
+        )
+    }
+
     private val userFlow = MutableStateFlow<UserInfo?>(null)
+
+    /**
+     * Identity plumbing for the VM's HomeSession collector (the single
+     * identity detector): a mock JellyfinApiClient exposes a real atomic
+     * session flow, and the shared real [HomeSession] runs on the rule's test
+     * dispatcher so `runCurrent()` drives classification → transition → VM
+     * routing deterministically. [userFlow] above still feeds the separate
+     * uiState.currentUser mirror collector.
+     */
+    private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
+    private val sessionApiClient: JellyfinApiClient = mockk(relaxed = true)
+    private val homeSession: HomeSession by lazy {
+        HomeSession(sessionApiClient, CoroutineScope(SupervisorJob() + mainDispatcherRule.testDispatcher))
+    }
+
+    /**
+     * Backing flow for mediaRepository.userDataChanges — the refresher inside
+     * the VM collects it from init, so it must be a real flow, not a relaxed
+     * mock. Emission behaviour itself is covered by HomeRefresherTest.
+     */
+    private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 64)
     private val homeDiscoveryFlow = MutableStateFlow(HomeDiscoverySlice())
     private val appearanceFlow = MutableStateFlow(AppearanceSlice())
     private val experimentalFlow = MutableStateFlow(ExperimentalSlice())
@@ -136,8 +206,6 @@ class HomeViewModelTest {
     private val seerrPrefsFlow = MutableStateFlow(SeerrPreferences())
     private val offlineModeFlow = MutableStateFlow(OfflineMode.ONLINE)
     private val networkStatusFlow = MutableStateFlow(NetworkStatus.Online)
-    private val outboxCountFlow = MutableStateFlow(0)
-    private val outboxEntriesFlow = MutableStateFlow<List<PlaybackOutboxEntry>>(emptyList())
 
     private lateinit var viewModel: HomeViewModel
 
@@ -165,18 +233,16 @@ class HomeViewModelTest {
         tvWatchNextScheduler = mockk(relaxed = true)
         continueWatchingBroadcaster = mockk(relaxed = true)
         librarySyncHook = mockk(relaxed = true)
-        playbackOutboxRepository = mockk(relaxed = true)
-        playbackSyncScheduler = mockk(relaxed = true)
         fakeTimeSource = FakeTimeSource()
 
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
         every { mediaSearchEngine.preview(any()) } returns flowOf(
             MediaSearchPreviewState(query = "", jellyfin = emptyList(), seerr = emptyList(), isSearching = false)
         )
-        coEvery { offlineFirstItemResolver.resolveMediaRef(any()) } returns
-            ResolvedMediaRef(item = null, posterUrl = "http://server/img")
 
         every { authRepository.currentUser } returns userFlow
+        every { sessionApiClient.session } returns sessionFlow
+        every { mediaRepository.userDataChanges } returns userDataEvents
         every { homeDiscoveryStore.homeDiscovery } returns homeDiscoveryFlow
         every { appearanceStore.appearance } returns appearanceFlow
         every { experimentalStore.experimental } returns experimentalFlow
@@ -186,8 +252,6 @@ class HomeViewModelTest {
         every { offlineModeManager.networkStatus } returns networkStatusFlow
         every { offlineModeManager.isOffline } returns false
         every { downloadRepository.getActiveDownloadCount() } returns flowOf(0)
-        every { playbackOutboxRepository.countFlow() } returns outboxCountFlow
-        every { playbackOutboxRepository.getAllFlow() } returns outboxEntriesFlow
         every { offlineRepository.getOfflineLibrary() } returns flowOf(emptyList())
         every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)
     }
@@ -216,11 +280,13 @@ class HomeViewModelTest {
         seerrRequestDelegate = seerrRequestDelegate,
         seerrPreferencesStore = seerrPreferencesStore,
         authRepository = authRepository,
+        homeSession = homeSession,
         arrRepository = arrRepository,
         tvWatchNextScheduler = tvWatchNextScheduler,
         continueWatchingBroadcaster = continueWatchingBroadcaster,
         librarySyncHook = librarySyncHook,
         timeSource = fakeTimeSource,
+        settingsSearchProvider = fakeSettingsSearchProvider,
     )
 
     @Test
@@ -238,7 +304,7 @@ class HomeViewModelTest {
         viewModel = buildViewModel()
 
         // Triggers the sign-in path: previousUserId null → userId set → fetch.
-        userFlow.value = userInfo("u1")
+        signIn("u1")
         runCurrent()
 
         val sections = viewModel.uiState.value.sections
@@ -271,10 +337,10 @@ class HomeViewModelTest {
             ),
         )
         viewModel = buildViewModel()
-        userFlow.value = userInfo("u1")
+        signIn("u1")
         runCurrent()
 
-        viewModel.markItemPlayed(item("cw1"))
+        viewModel.onEvent(HomeUiEvent.MarkItemPlayed(item("cw1")))
         runCurrent()
 
         assertEquals(listOf(Triple("cw1", true, null)), userDataMutator.playedCalls)
@@ -301,50 +367,6 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun continueWatchingChange_firesBroadcaster_andTvScheduler() = runTest {
-        // CW publishing is gated on the androidTvWatchNextEnabled pref (default true).
-        coEvery {
-            mediaRepository.getHomeSections(any())
-        } returns Result.success(
-            HomeSectionsResult(
-                sections = listOf(
-                    section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1"))),
-                ),
-            ),
-        )
-        viewModel = buildViewModel()
-
-        userFlow.value = userInfo("u1")
-        runCurrent()
-
-        verify { continueWatchingBroadcaster.refreshContinueWatching() }
-        coVerify { tvWatchNextScheduler.scheduleRefresh() }
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun continueWatchingChange_skipsTvScheduler_whenPrefDisabled() = runTest {
-        playbackFlow.value = PlaybackSlice(androidTvWatchNextEnabled = false)
-        coEvery {
-            mediaRepository.getHomeSections(any())
-        } returns Result.success(
-            HomeSectionsResult(
-                sections = listOf(
-                    section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1"))),
-                ),
-            ),
-        )
-        viewModel = buildViewModel()
-
-        userFlow.value = userInfo("u1")
-        runCurrent()
-
-        verify { continueWatchingBroadcaster.refreshContinueWatching() }
-        coVerify(exactly = 0) { tvWatchNextScheduler.scheduleRefresh() }
-        stopPeriodicRefresh()
-    }
-
-    @Test
     fun signOut_clearsSections() = runTest {
         coEvery {
             mediaRepository.getHomeSections(any())
@@ -352,11 +374,11 @@ class HomeViewModelTest {
             HomeSectionsResult(sections = listOf(section(HomeSectionType.CONTINUE_WATCHING))),
         )
         viewModel = buildViewModel()
-        userFlow.value = userInfo("u1")
+        signIn("u1")
         runCurrent()
         assertFalse(viewModel.uiState.value.sections.isEmpty())
 
-        userFlow.value = null
+        signOut()
         runCurrent()
 
         assertTrue(viewModel.uiState.value.sections.isEmpty())
@@ -365,74 +387,52 @@ class HomeViewModelTest {
 
     @Test
     fun offlineToOnline_clearsIsGoingOnline_afterFetch() = runTest {
+        // The sign-in fetch resolves immediately; the handshake's fetch parks
+        // on the gate so the busy flag is observable mid-transition via the
+        // uiState fold (the refresher owns the flag, the VM only folds it).
+        val fetchGate = CompletableDeferred<Unit>()
+        var fetchCalls = 0
         coEvery {
             mediaRepository.getHomeSections(any())
-        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        } coAnswers {
+            fetchCalls++
+            if (fetchCalls == 1) Result.success(HomeSectionsResult(sections = emptyList()))
+            else {
+                fetchGate.await()
+                Result.success(HomeSectionsResult(sections = emptyList()))
+            }
+        }
         viewModel = buildViewModel()
-        userFlow.value = userInfo("u1")
+        signIn("u1")
         runCurrent()
 
-        // Drive the offline→online transition path: the offlineMode collector's
-        // ONLINE branch sets isGoingOnline via toggleOfflineMode, then clears
-        // it in finally after the fetch resolves.
+        // Go offline first (the dock's offline toggle), like the real path.
         every { offlineModeManager.isOffline } returns true
         offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
         runCurrent()
+
+        // Go online through the real entry: the event forwards the
+        // GoingOnline trigger to the refresher, which raises the busy flag
+        // and toggles the manager; the mocked manager flips the mode flow
+        // like the real one, and the refresher's own observer runs the
+        // drain + capped fetch handshake.
         every { offlineModeManager.isOffline } returns false
-        offlineModeFlow.value = OfflineMode.ONLINE
+        every { offlineModeManager.toggleManualOffline() } answers { offlineModeFlow.value = OfflineMode.ONLINE }
+        viewModel.onEvent(HomeUiEvent.ToggleOfflineMode)
+        runCurrent()
+
+        assertTrue(
+            "isGoingOnline must be observable (via the uiState fold) while the fetch runs",
+            viewModel.uiState.value.isGoingOnline,
+        )
+        fetchGate.complete(Unit)
         runCurrent()
 
         assertFalse(
             "isGoingOnline must clear after the online fetch resolves",
             viewModel.uiState.value.isGoingOnline,
         )
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun syncNow_whenOnline_enqueuesDrain() = runTest {
-        viewModel = buildViewModel()
-        viewModel.onEvent(HomeUiEvent.SyncNow)
-        // The drain worker must be enqueued exactly once; the worker itself
-        // carries the NetworkType.CONNECTED constraint, but the VM gate also
-        // short-circuits while offline.
-        verify(exactly = 1) { playbackSyncScheduler.enqueueNow() }
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun syncNow_whenOffline_skipsEnqueue() = runTest {
-        viewModel = buildViewModel()
-        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
-        runCurrent()
-        viewModel.onEvent(HomeUiEvent.SyncNow)
-        verify(exactly = 0) { playbackSyncScheduler.enqueueNow() }
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun pendingSyncEntries_emitsWhatRepositoryProduces() = runTest {
-        val entry = PlaybackOutboxEntry(
-            id = "e1",
-            itemId = "item-1",
-            eventType = PlaybackOutboxEventType.PROGRESS,
-            sessionId = "s1",
-            positionTicks = 10_000_000L,
-            isPaused = false,
-            playMethod = PlayMethod.DIRECT_PLAY,
-            mediaSourceId = null,
-            recordedAt = 1L,
-            createdAt = 1L,
-        )
-        outboxEntriesFlow.value = listOf(entry)
-        viewModel = buildViewModel()
-        // pendingSyncEntries is stateIn(WhileSubscribed) — needs a live
-        // subscriber to pull, then its .value reflects the upstream emission.
-        val job = launch { viewModel.pendingSyncEntries.collect { } }
-        runCurrent()
-
-        assertEquals(listOf(entry), viewModel.pendingSyncEntries.value)
-        job.cancel()
+        assertFalse(viewModel.uiState.value.isLoading)
         stopPeriodicRefresh()
     }
 
@@ -450,14 +450,20 @@ class HomeViewModelTest {
             mediaRepository.getHomeSections(any())
         } coAnswers { CompletableDeferred<Result<HomeSectionsResult>>().await() }
         viewModel = buildViewModel()
-        userFlow.value = userInfo("u1")
+        signIn("u1")
         runCurrent()
 
         every { offlineModeManager.isOffline } returns true
         offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
         runCurrent()
         every { offlineModeManager.isOffline } returns false
-        offlineModeFlow.value = OfflineMode.ONLINE
+        every { offlineModeManager.toggleManualOffline() } answers { offlineModeFlow.value = OfflineMode.ONLINE }
+        viewModel.onEvent(HomeUiEvent.ToggleOfflineMode)
+        runCurrent()
+        assertTrue(
+            "isGoingOnline must be observable (via the uiState fold) while the fetch hangs",
+            viewModel.uiState.value.isGoingOnline,
+        )
         // Advance virtual time past the GOING_ONLINE_TIMEOUT_MS deadline.
         advanceTimeBy(31_000)
         runCurrent()
@@ -474,44 +480,12 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun search_keepsLatestQuery_afterSupersededEntry() = runTest {
-        viewModel = buildViewModel()
-
-        viewModel.onEvent(HomeUiEvent.UpdateSearchQuery("bat"))
-        viewModel.onEvent(HomeUiEvent.UpdateSearchQuery("batman"))
-        runCurrent()
-
-        // Query is the latest value; the intermediate "bat" was superseded by
-        // the debounce + distinctUntilChanged chain. The live query now lives
-        // on the VM's searchQuery flow (read by the leaf), not searchState.
-        assertEquals("batman", viewModel.searchQuery.value)
-        assertTrue(viewModel.uiState.value.isSearchActive)
-    }
-
-    @Test
-    fun clearSearch_resetsSearchState() = runTest {
-        viewModel = buildViewModel()
-
-        viewModel.onEvent(HomeUiEvent.UpdateSearchQuery("hello"))
-        runCurrent()
-
-        viewModel.onEvent(HomeUiEvent.ClearSearch)
-        runCurrent()
-
-        val search = viewModel.uiState.value.searchState
-        assertEquals("", viewModel.searchQuery.value)
-        assertFalse(viewModel.uiState.value.isSearchActive)
-        assertTrue(search.jellyfinResults.isEmpty())
-        assertTrue(search.seerrResults.isEmpty())
-    }
-
-    @Test
     fun prefChange_withUnrelatedPrefs_doesNotRefetch() = runTest {
         coEvery {
             mediaRepository.getHomeSections(any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
         viewModel = buildViewModel()
-        userFlow.value = userInfo("u1")
+        signIn("u1")
         runCurrent()
 
         // Reset invocation count after the sign-in fetch.
@@ -554,7 +528,7 @@ class HomeViewModelTest {
         viewModel = buildViewModel()
         runCurrent()
 
-        viewModel.setSectionVisible(HomeSectionType.NEXT_UP, visible = false)
+        viewModel.onEvent(HomeUiEvent.SetSectionVisible(HomeSectionType.NEXT_UP, visible = false))
 
         val expected = HomeSectionType.CONFIGURABLE.toSet() - HomeSectionType.NEXT_UP
         verify { preferencesEditor.setEnabledHomeSectionTypes(expected) }
@@ -569,7 +543,7 @@ class HomeViewModelTest {
         viewModel = buildViewModel()
         runCurrent()
 
-        viewModel.setSectionVisible(HomeSectionType.RECOMMENDATIONS, visible = true)
+        viewModel.onEvent(HomeUiEvent.SetSectionVisible(HomeSectionType.RECOMMENDATIONS, visible = true))
 
         verify { preferencesEditor.setEnabledHomeSectionTypes(setOf(HomeSectionType.RECOMMENDATIONS)) }
         stopPeriodicRefresh()
@@ -591,7 +565,7 @@ class HomeViewModelTest {
         viewModel = buildViewModel()
         runCurrent()
 
-        viewModel.moveSection(HomeSectionType.NEXT_UP, up = true)
+        viewModel.onEvent(HomeUiEvent.MoveSection(HomeSectionType.NEXT_UP, up = true))
 
         assertTrue(editorBlock.isCaptured)
         val recordingHome = mockk<HomeDiscoveryStore>(relaxed = true)
@@ -620,7 +594,7 @@ class HomeViewModelTest {
         viewModel = buildViewModel()
         runCurrent()
 
-        viewModel.moveSection(HomeSectionType.NEXT_UP, up = false)
+        viewModel.onEvent(HomeUiEvent.MoveSection(HomeSectionType.NEXT_UP, up = false))
 
         // NEXT_UP is already last → editor must not be touched.
         verify(exactly = 0) { preferencesEditor.edit(any()) }
@@ -637,7 +611,7 @@ class HomeViewModelTest {
 
         // Hiding LATEST_MEDIA for the "movies" library adds it to the disabled
         // set alongside the existing RECENTLY_ADDED entry.
-        viewModel.setLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = false)
+        viewModel.onEvent(HomeUiEvent.SetLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = false))
 
         verify {
             preferencesEditor.setLibraryHomeSectionOverrides(
@@ -657,48 +631,9 @@ class HomeViewModelTest {
 
         // Re-enabling the only disabled type empties the set, so the key must
         // be dropped entirely (restoring default-enabled state).
-        viewModel.setLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = true)
+        viewModel.onEvent(HomeUiEvent.SetLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = true))
 
         verify { preferencesEditor.setLibraryHomeSectionOverrides(emptyMap()) }
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun ensurePendingItemDetails_mapsResolverResultIntoState() = runTest {
-        // The offline-first fork itself is pinned by OfflineFirstItemResolverTest
-        // in :core:data; here we only pin that the VM caches the resolver's
-        // answer per outbox id.
-        coEvery { offlineFirstItemResolver.resolveMediaRef("item-1") } returns ResolvedMediaRef(
-            item = MediaItem(id = "item-1", name = "Offline Movie", mediaType = MediaType.MOVIE),
-            posterUrl = "file:///offline/poster.jpg",
-        )
-        viewModel = buildViewModel()
-
-        viewModel.ensurePendingItemDetails(listOf("item-1"))
-        runCurrent()
-
-        val resolved = viewModel.pendingItemDetails.value["item-1"]
-        assertEquals("Offline Movie", resolved?.item?.name)
-        assertEquals("file:///offline/poster.jpg", resolved?.posterUrl)
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun ensurePendingItemDetails_prunesStaleKeys_andDedupesInFlight() = runTest {
-        viewModel = buildViewModel()
-
-        viewModel.ensurePendingItemDetails(listOf("a", "b"))
-        runCurrent()
-        assertEquals(setOf("a", "b"), viewModel.pendingItemDetails.value.keys)
-
-        // Second call with overlapping ids must not re-launch resolves for
-        // already-resolved keys (dedup), and ids dropped from the input are
-        // pruned from the map.
-        viewModel.ensurePendingItemDetails(listOf("b", "c"))
-        runCurrent()
-
-        assertEquals(setOf("b", "c"), viewModel.pendingItemDetails.value.keys)
-        coVerify(exactly = 1) { offlineFirstItemResolver.resolveMediaRef("b") }
         stopPeriodicRefresh()
     }
 
@@ -749,42 +684,13 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun saveHomeScrollPosition_storesPositiveValues_andClampsNegatives() = runTest {
-        viewModel = buildViewModel()
-
-        viewModel.saveHomeScrollPosition(3, 150)
-        var pos = viewModel.getHomeScrollPosition()
-        assertEquals(3, pos.firstVisibleItemIndex)
-        assertEquals(150, pos.firstVisibleItemScrollOffset)
-
-        viewModel.saveHomeScrollPosition(-10, -50)
-        pos = viewModel.getHomeScrollPosition()
-        assertEquals(0, pos.firstVisibleItemIndex)
-        assertEquals(0, pos.firstVisibleItemScrollOffset)
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun prefetchPhotoFolderChildUrls_callsPrefetcher_andUpdatesState() = runTest {
-        val items = listOf(item("p1"))
-        coEvery { photoFolderPrefetcher.prefetch(items, any()) } returns mapOf("p1" to listOf("url1", "url2"))
-        viewModel = buildViewModel()
-
-        viewModel.prefetchPhotoFolderChildUrls(items)
-        runCurrent()
-
-        assertEquals(mapOf("p1" to listOf("url1", "url2")), viewModel.photoFolderChildUrls.value)
-        stopPeriodicRefresh()
-    }
-
-    @Test
     fun fetchAndUpdateSections_onFailure_setsErrorState() = runTest {
         coEvery {
             mediaRepository.getHomeSections(any())
         } returns Result.failure(RuntimeException("Connection timeout"))
         viewModel = buildViewModel()
 
-        userFlow.value = userInfo("u1")
+        signIn("u1")
         runCurrent()
 
         assertEquals("Connection timeout", viewModel.uiState.value.error)
@@ -809,7 +715,7 @@ class HomeViewModelTest {
         viewModel.onEvent(HomeUiEvent.ClearRequestResult)
         runCurrent()
 
-        org.junit.Assert.assertNull(viewModel.uiState.value.seerrRequestState.result)
+        org.junit.Assert.assertNull(viewModel.uiState.value.seerrRequestState.snapshot.requestResult)
         stopPeriodicRefresh()
     }
 
@@ -827,19 +733,27 @@ class HomeViewModelTest {
         stopPeriodicRefresh()
     }
 
-
-
-    @Test
-    fun lifecycleEvents_onStartAndOnStop_controlPeriodicRefresh() = runTest {
-        viewModel = buildViewModel()
-        
-        viewModel.onStart(mockk(relaxed = true))
-        runCurrent()
-
-        viewModel.onStop(mockk(relaxed = true))
-        runCurrent()
-        // Successfully starts and stops lifecycle observers without throwing exception
+    /**
+     * Signs in on BOTH surfaces, like the real login path: the atomic session
+     * pair (drives HomeSession → the VM's refresh routing) and the plain
+     * currentUser flow (drives the uiState.currentUser mirror).
+     */
+    private fun signIn(userId: String) {
+        userFlow.value = userInfo(userId)
+        sessionFlow.value = ActiveSession(serverInfo(), userInfo(userId))
     }
+
+    /** Signs out on both surfaces — see [signIn]. */
+    private fun signOut() {
+        userFlow.value = null
+        sessionFlow.value = null
+    }
+
+    private fun serverInfo() = ServerInfo(
+        id = "s1",
+        name = "Test Server",
+        address = "http://server",
+    )
 
     private fun userInfo(id: String) = UserInfo(
         id = id,
@@ -863,11 +777,13 @@ class HomeViewModelTest {
     private fun item(id: String) = MediaItem(id = id, name = id, mediaType = MediaType.MOVIE)
 
     /**
-     * Controllable [TimeSource] returning a fixed epoch so the periodic-refresh
-     * and TTL gates behave deterministically without crossing their thresholds.
+     * Controllable [TimeSource] whose clock defaults to a fixed epoch so the
+     * periodic-refresh and TTL gates stay on one side of their thresholds;
+     * tests move [nowMs] to deliberately cross one.
      */
-    private class FakeTimeSource : TimeSource {
-        override fun nowEpochMillis(): Long = 1_000L
+    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
+        override fun nowEpochMillis(): Long = nowMs
+        override fun nowElapsedRealtimeMillis(): Long = nowMs
         override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 

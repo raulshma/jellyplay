@@ -29,6 +29,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -41,6 +43,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.feedback.UiText
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
@@ -81,6 +84,16 @@ fun PluginConfigScreen(
         jsBridge.consumeEvent()
     }
 
+    // WebView content is not D-pad reachable (platform limitation), so on TV the
+    // refresh action is the screen's sole focusable — anchor initial focus there
+    // once it becomes enabled (it is disabled while the config page loads).
+    val refreshFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = refreshFocusRequester,
+        itemCount = if (state.isLoading) 0 else 1,
+        tag = "plugin_config_init",
+    )
+
     JellyPlayScreenScaffold(
         title = stringResource(R.string.admin_plugin_settings_title, pluginName),
         onBack = onBack,
@@ -90,7 +103,10 @@ fun PluginConfigScreen(
             IconButton(
                 onClick = { viewModel.refresh() },
                 enabled = !state.isLoading,
-                modifier = Modifier.then(refreshFocusState.focusModifier).tvFocusIndicator(refreshFocusState, CircleShape),
+                modifier = Modifier
+                    .focusRequester(refreshFocusRequester)
+                    .then(refreshFocusState.focusModifier)
+                    .tvFocusIndicator(refreshFocusState, CircleShape),
             ) {
                 Icon(Tabler.Outline.Refresh, contentDescription = stringResource(R.string.admin_refresh))
             }

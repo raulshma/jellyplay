@@ -328,4 +328,5 @@
     <string name="a11y_brightness_decrease">降低亮度</string>
     <string name="a11y_volume_increase">提高音量</string>
     <string name="a11y_volume_decrease">降低音量</string>
+    <string name="player_direct_play_fallback">直接播放失败——正在切换到转码（%1$s）</string>
 </resources>

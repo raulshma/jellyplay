@@ -36,13 +36,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -68,10 +72,17 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.feature.livetv.R
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+
+/** Timeline nudge for D-pad left/right presses that find no focusable program while the guide can still scroll (60 min). */
+private const val TIMELINE_SHIFT_DP = 240
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -222,6 +233,21 @@ private fun EpgGrid(
         else now.offsetDp(gridData.windowStart)
     }
     val channelColumnWidth = EpgGridLayout.CHANNEL_COLUMN_WIDTH
+    val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+
+    // D-pad right/left first runs the normal focus search; when there is no
+    // focusable program in that direction but the shared timeline window can
+    // still scroll, nudge it so the revealed programs become the next focus
+    // targets (all cells stay composed, so focus search picks them up once
+    // they're scrolled into view).
+    fun shiftTimeline(forward: Boolean): Boolean {
+        val delta = with(density) { TIMELINE_SHIFT_DP.dp.roundToPx() } * if (forward) 1 else -1
+        val target = (horizontalScrollState.value + delta).coerceIn(0, horizontalScrollState.maxValue)
+        if (target == horizontalScrollState.value) return false
+        scope.launch { horizontalScrollState.animateScrollTo(target) }
+        return true
+    }
 
     TvGrabInitialFocus(
         focusRequester = focusRequester,
@@ -229,7 +255,14 @@ private fun EpgGrid(
         tag = "epg_init",
     )
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onDpadKey(
+                onRight = { focusManager.moveFocus(FocusDirection.Right) || shiftTimeline(forward = true) },
+                onLeft = { focusManager.moveFocus(FocusDirection.Left) || shiftTimeline(forward = false) },
+            ),
+    ) {
         LazyColumn(
             state = lazyListState,
             modifier = Modifier.fillMaxSize(),
@@ -277,20 +310,32 @@ private fun EpgGrid(
         // ── "Now" vertical indicator line ──
         // Rendered as an overlay across the full grid height, offset by the
         // current horizontal scroll so it tracks the current time accurately.
+        // The scroll value is read only inside the offset/graphicsLayer
+        // lambdas (layout/draw phase) so EPG scrolling never recomposes the
+        // grid; visibility is gated by a draw-phase alpha instead of the
+        // former composition-time range check.
         if (now >= gridData.windowStart && now <= gridData.windowEnd) {
-            val scrollPx = with(density) { horizontalScrollState.value.toFloat() }
             val channelColPx = with(density) { channelColumnWidth.toPx() }
             val nowOffsetPx = with(density) { nowOffsetDp.dp.toPx() }
-            val xPx = channelColPx + nowOffsetPx - scrollPx
-            if (xPx >= channelColPx && xPx <= channelColPx + with(density) { gridData.totalWidthDp.dp.toPx() }) {
-                Box(
-                    modifier = Modifier
-                        .offset(x = with(density) { xPx.toDp() })
-                        .fillMaxHeight()
-                        .width(2.dp)
-                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.7f)),
-                )
-            }
+            val totalWidthPx = with(density) { gridData.totalWidthDp.dp.toPx() }
+            Box(
+                modifier = Modifier
+                    .offset {
+                        val scrollPx = horizontalScrollState.value
+                        IntOffset(
+                            x = (channelColPx + nowOffsetPx - scrollPx).roundToInt(),
+                            y = 0,
+                        )
+                    }
+                    .graphicsLayer {
+                        val scrollPx = horizontalScrollState.value
+                        val xPx = channelColPx + nowOffsetPx - scrollPx
+                        alpha = if (xPx >= channelColPx && xPx <= channelColPx + totalWidthPx) 1f else 0f
+                    }
+                    .fillMaxHeight()
+                    .width(2.dp)
+                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.7f)),
+            )
         }
     }
 }

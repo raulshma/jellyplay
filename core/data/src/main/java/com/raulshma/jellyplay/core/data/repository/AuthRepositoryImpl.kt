@@ -6,20 +6,21 @@ import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.model.ConnectionCredentials
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import androidx.room.withTransaction
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -35,15 +36,20 @@ import javax.inject.Singleton
 @Singleton
 class AuthRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
+    private val webSocketClient: JellyfinWebSocketClient,
     private val database: JellyPlayDatabase,
     private val serverDao: ServerDao,
     private val userDao: UserDao,
     private val serverIdentityStore: ServerIdentityStore,
     private val tokenCipher: TokenCipher,
     private val json: Json,
-) : AuthRepository {
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /**
+     * Shared application scope for the hot `stateIn` flows below (the
+     * `@ApplicationScope` binding — same lifetime discipline as
+     * `ServerIdentityStore`; never cancelled for this singleton).
+     */
+    @ApplicationScope private val externalScope: CoroutineScope,
+) : AuthRepository, RealtimeConnection {
 
     private companion object {
         private val folderIdsCache = LruCache<String, List<String>>(16)
@@ -51,17 +57,24 @@ class AuthRepositoryImpl @Inject constructor(
 
     override val servers: Flow<List<ServerInfo>> = serverDao.getAllServers().map { entities ->
         entities.map { it.toServerInfo() }
-    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    }.stateIn(externalScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     override val currentServer: Flow<ServerInfo?> = apiClient.currentServer
 
     override val currentUser: Flow<UserInfo?> = apiClient.currentUser
 
-    override val isAuthenticated: Flow<Boolean> = combine(
-        apiClient.currentServer,
-        apiClient.currentUser,
-    ) { server, user -> server != null && user != null }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+    /**
+     * Derived from the ATOMIC [JellyfinApiClient.session] flow — `session`
+     * is non-null exactly when a fully established `(server, user)` pair
+     * exists (see `ActiveSession`). The previous
+     * `combine(currentServer, currentUser)` shape observed the synthetic
+     * `(newServer, oldUser)` intermediate every two-step publish (login /
+     * switchUser) produced, briefly reporting authenticated for an identity
+     * that never existed. Never combine the two separate flows back.
+     */
+    override val isAuthenticated: Flow<Boolean> = apiClient.session
+        .map { it != null }
+        .stateIn(externalScope, SharingStarted.WhileSubscribed(5_000), false)
 
     override val currentServerUsers: Flow<List<UserInfo>> =
         apiClient.currentServer.flatMapLatest { server ->
@@ -70,7 +83,7 @@ class AuthRepositoryImpl @Inject constructor(
                     list.map { it.toUserInfo(server.address) }
                 }
             } ?: flowOf(emptyList())
-        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        }.stateIn(externalScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     override suspend fun addServer(address: String): Result<ServerInfo> {
         return apiClient.connectToServer(address).onSuccess { serverInfo ->
@@ -428,6 +441,17 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun postCapabilities(): Result<Unit> = apiClient.postCapabilities()
+
+    // ── Realtime session ──
+
+    override fun serverUrl(): String? = apiClient.getServerUrl()
+
+    override val isConnected: StateFlow<Boolean>
+        get() = webSocketClient.isConnected
+
+    override fun connect(credentials: ConnectionCredentials) = webSocketClient.connect(credentials)
+
+    override fun disconnect() = webSocketClient.disconnect()
 
     private suspend fun persistSession(server: ServerInfo, user: UserInfo, fallbackUsername: String = "") {
         val existingServer = serverDao.getServerById(server.id)

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.admin.users.detail
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,11 +11,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.BottomAppBar
@@ -40,6 +41,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -49,12 +52,17 @@ import com.composables.icons.tabler.outline.AlertTriangle
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.PasswordTextField
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.R
 import com.raulshma.jellyplay.feature.admin.users.detail.components.AccessTab
 import com.raulshma.jellyplay.feature.admin.users.detail.components.AccountTab
@@ -72,6 +80,16 @@ fun UserDetailScreen(
     LaunchedEffect(userId) { viewModel.loadUser(userId) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val backgroundColor = rememberScreenBackgroundColor()
+    val isTv = LocalTvMode.current
+
+    // TV focus-on-launch: land on the first editor tab once the user loads so
+    // D-pad input reaches the form instead of the navigation drawer.
+    val initialFocusRequester = remember { FocusRequester() }
+    TvGrabInitialFocus(
+        focusRequester = initialFocusRequester,
+        itemCount = if (state.isLoading || state.error != null) 0 else 1,
+        tag = "user_detail_init",
+    )
 
     var newPassword by remember { mutableStateOf("") }
 
@@ -92,7 +110,11 @@ fun UserDetailScreen(
     }
 
     if (state.showPasswordDialog) {
-        AlertDialog(
+        val confirmFocusRequester = remember { FocusRequester() }
+        LaunchedEffect(isTv) {
+            if (isTv) confirmFocusRequester.tryRequestFocus("user_password_confirm")
+        }
+        ImeAlertDialog(
             onDismissRequest = {
                 viewModel.dismissPasswordDialog()
                 newPassword = ""
@@ -118,10 +140,13 @@ fun UserDetailScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.updatePassword(newPassword.ifBlank { null })
-                    newPassword = ""
-                }) { Text(if (newPassword.isBlank()) stringResource(R.string.admin_reset) else stringResource(R.string.admin_set)) }
+                TextButton(
+                    onClick = {
+                        viewModel.updatePassword(newPassword.ifBlank { null })
+                        newPassword = ""
+                    },
+                    modifier = Modifier.focusRequester(confirmFocusRequester),
+                ) { Text(if (newPassword.isBlank()) stringResource(R.string.admin_reset) else stringResource(R.string.admin_set)) }
             },
             dismissButton = {
                 TextButton(onClick = {
@@ -169,9 +194,15 @@ fun UserDetailScreen(
                             parentalCount = viewModel.parentalDirtyCount(),
                             onTabSelected = { index -> scope.launch { pagerState.animateScrollToPage(index) } },
                             backgroundColor = backgroundColor,
+                            firstTabFocusRequester = initialFocusRequester,
                         )
 
-                        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(if (isTv) Modifier.tvFocusRestorer().focusGroup() else Modifier),
+                        ) { page ->
                             // Lazy-load whatever aux data this tab needs, once.
                             LaunchedEffect(tabs[page]) { viewModel.loadAuxFor(tabs[page]) }
                             // Staggered fade-and-rise reveal so the active tab's
@@ -209,10 +240,13 @@ fun UserDetailScreen(
                         }
                     }
 
-                    // Sticky Save/Discard bar (unchanged logic).
+                    // Sticky Save/Discard bar (unchanged logic). imePadding keeps it
+                    // above the soft keyboard while editing tab fields.
                     AnimatedVisibility(
                         visible = state.isDirty && !state.isSaving,
-                        modifier = Modifier.align(Alignment.BottomCenter),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .imePadding(),
                         enter = slideInVertically { it },
                         exit = slideOutVertically { it },
                     ) {
@@ -237,6 +271,7 @@ private fun UserEditTabBar(
     parentalCount: Int,
     onTabSelected: (Int) -> Unit,
     backgroundColor: androidx.compose.ui.graphics.Color,
+    firstTabFocusRequester: FocusRequester? = null,
 ) {
     val labels = listOf(R.string.admin_tab_profile, R.string.admin_tab_access, R.string.admin_tab_parental, R.string.admin_tab_account)
     val counts = listOf(profileCount, accessCount, parentalCount, 0)
@@ -265,6 +300,11 @@ private fun UserEditTabBar(
             Tab(
                 selected = selectedTabIndex == index,
                 onClick = { onTabSelected(index) },
+                modifier = if (index == 0 && firstTabFocusRequester != null) {
+                    Modifier.focusRequester(firstTabFocusRequester)
+                } else {
+                    Modifier
+                },
                 selectedContentColor = MaterialTheme.colorScheme.primary,
                 unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 text = {

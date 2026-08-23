@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -8,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithText
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -24,6 +26,7 @@ class MpvSubtitleOverlayTest {
                 MpvSubtitleOverlay(
                     cue = null,
                     style = SubtitleStyle(),
+                    fontProvider = FontProvider(LocalContext.current.applicationContext),
                 )
             }
         }
@@ -34,6 +37,7 @@ class MpvSubtitleOverlayTest {
                 MpvSubtitleOverlay(
                     cue = "",
                     style = SubtitleStyle(),
+                    fontProvider = FontProvider(LocalContext.current.applicationContext),
                 )
             }
         }
@@ -47,6 +51,7 @@ class MpvSubtitleOverlayTest {
                 MpvSubtitleOverlay(
                     cue = "Hello Native World",
                     style = SubtitleStyle(applyCustomStyle = false),
+                    fontProvider = FontProvider(LocalContext.current.applicationContext),
                 )
             }
         }
@@ -71,6 +76,7 @@ class MpvSubtitleOverlayTest {
                 MpvSubtitleOverlay(
                     cue = "Custom Subtitle Cue",
                     style = style,
+                    fontProvider = FontProvider(LocalContext.current.applicationContext),
                 )
             }
         }
@@ -90,7 +96,11 @@ class MpvSubtitleOverlayTest {
         )
         composeTestRule.setContent {
             MaterialTheme {
-                MpvSubtitleOverlay(cue = "Outlined Cue", style = style)
+                MpvSubtitleOverlay(
+                    cue = "Outlined Cue",
+                    style = style,
+                    fontProvider = FontProvider(LocalContext.current.applicationContext),
+                )
             }
         }
         assertEquals(
@@ -110,7 +120,11 @@ class MpvSubtitleOverlayTest {
         )
         composeTestRule.setContent {
             MaterialTheme {
-                MpvSubtitleOverlay(cue = "Plain Cue", style = style)
+                MpvSubtitleOverlay(
+                    cue = "Plain Cue",
+                    style = style,
+                    fontProvider = FontProvider(LocalContext.current.applicationContext),
+                )
             }
         }
         assertEquals(
@@ -135,7 +149,11 @@ class MpvSubtitleOverlayTest {
         )
         composeTestRule.setContent {
             MaterialTheme {
-                MpvSubtitleOverlay(cue = "Native Fallback", style = style)
+                MpvSubtitleOverlay(
+                    cue = "Native Fallback",
+                    style = style,
+                    fontProvider = FontProvider(LocalContext.current.applicationContext),
+                )
             }
         }
         // applyCustomStyle=false still enables the OUTLINE default edge type, so

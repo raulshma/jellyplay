@@ -23,6 +23,9 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["itemId"]),
         Index(value = ["createdAt"]),
+        // Every drain/count query filters `WHERE deadLetter = 0` and orders by
+        // createdAt; the composite serves both without a sort step.
+        Index(value = ["deadLetter", "createdAt"]),
     ],
 )
 data class PlaybackOutboxEntity(

@@ -25,7 +25,7 @@ import com.raulshma.jellyplay.feature.settings.PlaybackSettingsScreen
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsScreen
 import com.raulshma.jellyplay.feature.settings.SecuritySettingsScreen
 import com.raulshma.jellyplay.feature.settings.ServerManagementScreen
-import com.raulshma.jellyplay.feature.settings.SettingsCallbacks
+import com.raulshma.jellyplay.feature.settings.SettingsNavActions
 import com.raulshma.jellyplay.feature.settings.SettingsScreen
 import com.raulshma.jellyplay.feature.settings.StorageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.UserManagementScreen
@@ -37,46 +37,24 @@ fun EntryProviderScope<NavKey>.settingsSection(
     onCheckForUpdates: () -> Unit = {},
 ) {
     entry<Route.Settings> {
-        // Build the callbacks once per (navigator, onLogout, onSetupWizard) lifetime so
-        // the SettingsScreen subtree sees a single stable SettingsCallbacks instance
-        // (treated as @Immutable by the Compose compiler) instead of fresh lambda
-        // allocations on every recomposition.
-        val callbacks = remember(navigator, onLogout, onSetupWizard) {
-            SettingsCallbacks(
-                onServerManagement = { id -> navigator.navigate(Route.ServerManagement(id)) },
-                onUserManagement = { id -> navigator.navigate(Route.UserManagement(id)) },
-                onSeerrSettings = { id -> navigator.navigate(Route.SeerrSettings(id)) },
-                onArrSettings = { id -> navigator.navigate(Route.ArrSettings(id)) },
-                onIntegrations = { id -> navigator.navigate(Route.Integrations(id)) },
-                onAdminDashboard = { navigator.navigate(Route.AdminDashboard) },
+        // Build the facade once per (navigator, host actions) lifetime so the
+        // SettingsScreen subtree sees a single stable SettingsNavActions
+        // instance (treated as @Immutable by the Compose compiler) instead of
+        // fresh lambda allocations on every recomposition. Every drill-in is
+        // the same one-liner: navigate to the route the screen supplies (with
+        // its highlight id already baked in).
+        val navActions = remember(navigator, onLogout, onSetupWizard, onCheckForUpdates) {
+            SettingsNavActions(
+                onNavigate = { route -> navigator.navigate(route) },
+                onLogout = { onLogout(false) },
                 onSetupWizard = onSetupWizard,
-                onNewsletterClick = { navigator.navigate(Route.Newsletter) },
-                onFavoritesClick = { navigator.navigate(Route.Favorites) },
-                onAboutClick = { navigator.navigate(Route.About) },
-                onWatchProgressHeatmapClick = { navigator.navigate(Route.WatchProgressHeatmap) },
-                onActivityQueueClick = { navigator.navigate(Route.ArrQueue) },
-                onUpcomingClick = { navigator.navigate(Route.UpcomingCalendar) },
-                onRequestsClick = { navigator.navigate(Route.Requests) },
-                onAppearanceSettings = { id -> navigator.navigate(Route.AppearanceSettings(id)) },
-                onPinnedHomeSections = { id -> navigator.navigate(Route.PinnedHomeSections(id)) },
-                onHomeLayoutPresets = { id -> navigator.navigate(Route.HomeLayoutPresets(id)) },
-                onConfigureLibraries = { id -> navigator.navigate(Route.LibraryHomeSections(id)) },
-                onPlaybackSettings = { id -> navigator.navigate(Route.PlaybackSettings(id)) },
-                onAudioSettings = { id -> navigator.navigate(Route.AudioSettings(id)) },
-                onLanguageSettings = { id -> navigator.navigate(Route.LanguageSettings(id)) },
-                onNotificationSettings = { id -> navigator.navigate(Route.NotificationSettings(id)) },
-                onStorageSettings = { id -> navigator.navigate(Route.StorageSettings(id)) },
-                onSecuritySettings = { id -> navigator.navigate(Route.SecuritySettings(id)) },
-                onPrivacyData = { id -> navigator.navigate(Route.PrivacyData(id)) },
-                onBackupSettings = { id -> navigator.navigate(Route.BackupSettings(id)) },
-                onExperimentalSettings = { id -> navigator.navigate(Route.ExperimentalSettings(id)) },
-                onOpenSubtitleTester = { navigator.navigate(Route.SubtitleTester) },
+                onCheckForUpdates = onCheckForUpdates,
             )
         }
         SettingsScreen(
             onBack = { navigator.goBack() },
             onLogout = onLogout,
-            callbacks = callbacks,
+            navActions = navActions,
         )
     }
 
@@ -105,11 +83,14 @@ fun EntryProviderScope<NavKey>.settingsSection(
     }
 
     entry<Route.AppearanceSettings> { entry ->
+        // Same navigator-backed facade as the main Settings entry, so the
+        // Appearance drill-ins navigate through the same onNavigate seam.
+        val navActions = remember(navigator) {
+            SettingsNavActions(onNavigate = { route -> navigator.navigate(route) })
+        }
         AppearanceSettingsScreen(
             onBack = { navigator.goBack() },
-            onPinnedHomeSections = { id -> navigator.navigate(Route.PinnedHomeSections(id)) },
-            onHomeLayoutPresets = { id -> navigator.navigate(Route.HomeLayoutPresets(id)) },
-            onConfigureLibraries = { id -> navigator.navigate(Route.LibraryHomeSections(id)) },
+            navActions = navActions,
             highlightSettingId = entry.highlightSettingId,
         )
     }

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -9,6 +10,17 @@ import kotlinx.coroutines.flow.Flow
 interface AuthApiClient {
     val currentServer: Flow<ServerInfo?>
     val currentUser: Flow<UserInfo?>
+
+    /**
+     * The [ActiveSession] server+user pair published atomically by the
+     * engine: a session transition is observed as one step (stable pair →
+     * stable pair, or →/from null), never the synthetic `(newServer, oldUser)`
+     * intermediate that `combine(currentServer, currentUser)` produces across
+     * a two-step publish (login / switchUser / disconnect). `null` means no
+     * fully established identity. Identity observers should consume this
+     * instead of combining the two separate flows.
+     */
+    val session: Flow<ActiveSession?>
 
     suspend fun connectToServer(address: String): Result<ServerInfo>
 

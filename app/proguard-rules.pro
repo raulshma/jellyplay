@@ -1,5 +1,6 @@
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+-repackageclasses ''
 
 -keepattributes *Annotation*
 -keepattributes Signature
@@ -10,19 +11,9 @@
 # kotlinx-serialization and the Jellyfin SDK ship consumer R8 rules covering
 # serializer lookup and org.jellyfin.sdk.model.api.** — no app-level keeps needed.
 
--keep class com.raulshma.jellyplay.core.data.worker.DownloadWorker { *; }
-
--keep class com.raulshma.jellyplay.core.data.playback.JellyPlayPlaybackService { *; }
--keep class com.raulshma.jellyplay.screensaver.JellyPlayDreamService { *; }
-
 -keepclassmembers class * {
     @dagger.hilt.android.lifecycle.HiltViewModel <init>(...);
 }
-
-# TODO(perf): likely over-broad — kotlinx-serialization rules may already cover
-# NavKey routes; verify with R8 -printusage + on-device nav smoke before removing
-# (see docs/performance-analysis.md §1.5).
--keep class com.raulshma.jellyplay.core.ui.navigation.Route** { *; }
 
 # libmpv - JNI library, must keep all classes and methods
 -keep class is.xyz.mpv.** { *; }

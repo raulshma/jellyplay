@@ -405,6 +405,11 @@ class UserPreferencesStore @Inject constructor(
             keysToReset.forEach { key ->
                 prefs.remove(key)
             }
+            // The home-discovery keys are per-user namespaced (`u_<userId>::`) —
+            // dynamic, so they cannot sit in the static key list. The owning
+            // store strips every user's entries (plus its migration marker)
+            // itself; it no-ops for every other category.
+            homeDiscoveryStore.removeDynamicResetKeys(category, prefs)
         }
     }
 

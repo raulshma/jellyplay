@@ -16,6 +16,20 @@ interface PlaybackOutboxDao {
     @Query("SELECT * FROM playback_outbox WHERE itemId = :itemId AND deadLetter = 0 ORDER BY createdAt ASC")
     suspend fun getForItem(itemId: String): List<PlaybackOutboxEntity>
 
+    /**
+     * Projected single-row variant of [getForItem] for the coalescing paths —
+     * one row by (itemId, eventType) instead of reading every live row for the
+     * item and Kotlin-filtering (runs ~every 10 s during playback).
+     */
+    @Query(
+        "SELECT * FROM playback_outbox WHERE itemId = :itemId AND eventType = :eventType AND deadLetter = 0 ORDER BY createdAt ASC LIMIT 1"
+    )
+    suspend fun getForItemByType(itemId: String, eventType: String): PlaybackOutboxEntity?
+
+    /** Single-row primary-key lookup for the deterministic-id state flips. */
+    @Query("SELECT * FROM playback_outbox WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): PlaybackOutboxEntity?
+
     @Query("SELECT * FROM playback_outbox WHERE deadLetter = 0 ORDER BY createdAt ASC")
     suspend fun getAll(): List<PlaybackOutboxEntity>
 

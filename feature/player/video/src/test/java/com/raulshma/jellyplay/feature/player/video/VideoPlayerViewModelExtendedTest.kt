@@ -170,7 +170,6 @@ class VideoPlayerViewModelExtendedTest {
             castManager = castManager,
             jellyfinRemotePlayCastStrategy = jellyfinRemotePlayCastStrategy,
             syncPlayManager = syncPlayManager,
-            okHttpClient = okHttpClient,
             adaptiveBitrateManager = adaptiveBitrateManager,
             networkMonitor = networkMonitor,
             activePlayerController = activePlayerController,
@@ -207,8 +206,8 @@ class VideoPlayerViewModelExtendedTest {
 
     @Test
     fun setAudioDelay_updatesState() {
-        viewModel.setAudioDelay(150L)
-        assertEquals(150L, viewModel.effectsState.value.audioDelayMs)
+        viewModel.effects.setAudioDelay(150L)
+        assertEquals(150L, viewModel.effects.state.value.audioDelayMs)
     }
 
     @Test
@@ -251,21 +250,21 @@ class VideoPlayerViewModelExtendedTest {
     @Test
     fun setStreamingQuality_updatesState() {
         viewModel.setStreamingQuality(StreamingQuality.FHD_1080P)
-        assertEquals(StreamingQuality.FHD_1080P, viewModel.uiState.value.streamingQuality)
+        assertEquals(StreamingQuality.FHD_1080P, viewModel.uiState.value.uiPrefs.streamingQuality)
     }
 
     @Test
     fun setAdaptiveBitrateEnabled_updatesState() {
         viewModel.setAdaptiveBitrateEnabled(true)
-        assertTrue(viewModel.uiState.value.adaptiveBitrateEnabled)
+        assertTrue(viewModel.uiState.value.uiPrefs.adaptiveBitrateEnabled)
         viewModel.setAdaptiveBitrateEnabled(false)
-        assertFalse(viewModel.uiState.value.adaptiveBitrateEnabled)
+        assertFalse(viewModel.uiState.value.uiPrefs.adaptiveBitrateEnabled)
     }
 
     @Test
     fun setFrameRateMatching_updatesState() {
         viewModel.setFrameRateMatching(true)
-        assertTrue(viewModel.uiState.value.frameRateMatching)
+        assertTrue(viewModel.uiState.value.gestures.frameRateMatching)
     }
 
     @Test

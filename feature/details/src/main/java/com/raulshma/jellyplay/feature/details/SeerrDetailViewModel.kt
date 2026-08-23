@@ -4,25 +4,23 @@ import android.util.Log
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SeerrDetailPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
-import com.raulshma.jellyplay.core.model.seerr.SeerrMediaInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
-import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
+import com.raulshma.jellyplay.core.model.seerr.withPendingRequest
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
-import com.raulshma.jellyplay.core.network.seerr.buildBackdropUrl
+import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.model.seerr.buildBackdropUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -50,24 +48,22 @@ class SeerrDetailViewModel @Inject constructor(
     val seerrPreferences: StateFlow<SeerrPreferences> = seerrPreferencesStore.preferences
 
     // Single source of truth for Seerr-detail state. All mutations funnel
-    // through [_uiState.update]. Seerr request delegate state (service details,
-    // tv seasons, request result) is exposed as separate StateFlows below and
-    // read directly by the request dialog — it is not part of the atomic
-    // content snapshot.
+    // through [_uiState.update]. Seerr request state (service details, tv
+    // seasons, request result) lives in the holder below and is exposed as
+    // its single [seerrSnapshot] — it is not part of the atomic content
+    // snapshot.
     private val _uiState = MutableStateFlow(SeerrDetailUiState())
 
-    private val seerrRequestState = com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder(scope, seerrRequestDelegate)
+    private val seerrRequestState = SeerrRequestStateHolder(scope, seerrRequestDelegate)
 
     /** Atomic snapshot of the Seerr-detail screen content state. */
     val uiState: StateFlow<SeerrDetailUiState> = _uiState
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrDetailUiState())
 
-    // Seerr request delegate accessors (read by the SeerrRequestDialog).
-    val requestResult: StateFlow<SeerrRequestResult?> get() = seerrRequestState.requestResult
-    val radarrServers: StateFlow<List<SeerrRadarrServiceDetail>> get() = seerrRequestState.radarrServers
-    val sonarrServers: StateFlow<List<SeerrSonarrServiceDetail>> get() = seerrRequestState.sonarrServers
-    val isLoadingServices: StateFlow<Boolean> get() = seerrRequestState.isLoadingServices
-    val tvSeasons: StateFlow<List<SeerrSeason>> get() = seerrRequestState.tvSeasons
+    // Seerr request lifecycle state (read by the SeerrRequestDialog). The
+    // holder's snapshot is the single interface — commands go through the
+    // wrappers below.
+    val seerrSnapshot: StateFlow<SeerrRequestSnapshot> = seerrRequestState.snapshotIn(scope)
 
     val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
@@ -244,6 +240,13 @@ class SeerrDetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Requests [item] through the holder, which owns the loading/success/
+     * error result choreography. The only screen-local concern is the
+     * optimistic PENDING flip on the loaded detail, applied via the
+     * holder's `onSuccess` hook (the match-on-detail-id rule lives in the
+     * model-level [withPendingRequest] helpers).
+     */
     fun requestMedia(
         item: SeerrSearchItem,
         seasons: List<Int>? = null,
@@ -252,51 +255,22 @@ class SeerrDetailViewModel @Inject constructor(
         rootFolder: String? = null,
         tags: List<Int>? = null,
     ) {
-        launch {
-            seerrRequestState.setRequestResult(SeerrRequestResult(isLoading = true))
-            seerrRequestDelegate.requestMedia(
-                mediaType = item.mediaType,
-                tmdbId = item.id,
-                seasons = seasons,
-                serverId = serverId,
-                profileId = profileId,
-                rootFolder = rootFolder,
-                tags = tags,
-            ).onSuccess {
-                seerrRequestState.setRequestResult(SeerrRequestResult(isLoading = false, success = true))
+        seerrRequestState.requestMedia(
+            item = item,
+            seasons = seasons,
+            serverId = serverId,
+            profileId = profileId,
+            rootFolder = rootFolder,
+            tags = tags,
+            onSuccess = {
                 _uiState.update { state ->
-                    val currentMovie = state.movieDetails
-                    val currentTv = state.tvDetails
-                    // Match on the detail's own `id` — the same value used to
-                    // build the SeerrSearchItem passed into requestMedia — rather
-                    // than mediaInfo.tmdbId. Overseerr omits `mediaInfo` entirely
-                    // from /movie/{id} and /tv/{id} for media that has never been
-                    // requested, so mediaInfo.tmdbId was null and neither branch
-                    // matched, leaving the action button stuck on "Request" even
-                    // after a successful request. When mediaInfo is absent we
-                    // synthesize one so the PENDING status flips the button.
-                    when {
-                        currentMovie?.id == item.id -> state.copy(
-                            movieDetails = currentMovie.copy(
-                                mediaInfo = (currentMovie.mediaInfo
-                                    ?: SeerrMediaInfo(tmdbId = item.id))
-                                    .copy(status = SeerrMediaStatus.PENDING.value),
-                            ),
-                        )
-                        currentTv?.id == item.id -> state.copy(
-                            tvDetails = currentTv.copy(
-                                mediaInfo = (currentTv.mediaInfo
-                                    ?: SeerrMediaInfo(tmdbId = item.id))
-                                    .copy(status = SeerrMediaStatus.PENDING.value),
-                            ),
-                        )
-                        else -> state
-                    }
+                    state.copy(
+                        movieDetails = state.movieDetails?.withPendingRequest(item),
+                        tvDetails = state.tvDetails?.withPendingRequest(item),
+                    )
                 }
-            }.onFailure {
-                seerrRequestState.setRequestResult(SeerrRequestResult(isLoading = false, success = false, error = it.message))
-            }
-        }
+            },
+        )
     }
 
     fun clearRequestResult() = seerrRequestState.clearRequestResult()

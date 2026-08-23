@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -34,6 +35,7 @@ import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
+import com.raulshma.jellyplay.core.ui.components.rememberStableCallback
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 
 private enum class CastCrewTab { CAST, CREW }
@@ -94,7 +96,9 @@ fun CastAndCrewScreen(
                     itemCount = people.size,
                     key = { people[it].id },
                     columns = GridCells.Adaptive(gridMin),
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .imePadding(),
                     contentPadding = PaddingValues(
                         start = contentPad,
                         end = contentPad,
@@ -153,7 +157,7 @@ fun CastAndCrewScreen(
                         imageUrl = remember(person.id) {
                             if (person.hasPortrait()) viewModel.getImageUrl(person.id) else ""
                         },
-                        onClick = remember(person.id) { { onPersonClick(person.id) } },
+                        onClick = rememberStableCallback { onPersonClick(person.id) },
                         modifier = itemModifier,
                     )
                 }

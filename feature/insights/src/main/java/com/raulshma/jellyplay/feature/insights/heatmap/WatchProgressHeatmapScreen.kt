@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -46,6 +47,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -62,12 +66,14 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import com.raulshma.jellyplay.feature.insights.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -102,6 +108,8 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.TvFocusDefaults
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -619,6 +627,13 @@ private fun calculateGrid(
     return grid to numWeeks
 }
 
+// Start the TV cursor on today when the year covers it, otherwise on the first populated cell.
+private fun initialFocusedCellIndex(grid: Array<HeatmapCell?>): Int {
+    val todayIndex = grid.indexOfFirst { it?.date == LocalDate.now() }
+    if (todayIndex >= 0) return todayIndex
+    return grid.indexOfFirst { it != null }.coerceAtLeast(0)
+}
+
 @Composable
 private fun HeatmapGrid(
     year: Int,
@@ -688,6 +703,28 @@ private fun HeatmapGrid(
 
     val gridWidthDp = with(LocalDensity.current) { (numWeeks * (cellSizePx + cellGapPx)).toDp() }
 
+    val isTv = LocalTvMode.current
+
+    // TV D-pad cursor over the grid as a flat cell index (week * 7 + day), matching the canvas
+    // layout. Populated cells form one contiguous run (every day from the grid start up to today
+    // or year end), so clamping movement to that range clamps at the data edges without wrapping.
+    val minCellIndex = remember(grid) { grid.indexOfFirst { it != null } }
+    val maxCellIndex = remember(grid) { grid.indexOfLast { it != null } }
+    var focusedCellIndex by remember(grid) { mutableIntStateOf(initialFocusedCellIndex(grid)) }
+    var heatmapHasFocus by remember { mutableStateOf(false) }
+    var viewportWidthPx by remember { mutableFloatStateOf(0f) }
+
+    fun moveFocusedCell(delta: Int): Boolean {
+        if (minCellIndex < 0) return false
+        val next = (focusedCellIndex + delta).coerceIn(minCellIndex, maxCellIndex)
+        if (next == focusedCellIndex) return false
+        focusedCellIndex = next
+        return true
+    }
+
+    val focusRingColor = MaterialTheme.colorScheme.primary
+    val focusRingWidthPx = with(LocalDensity.current) { TvFocusDefaults.BorderWidth.toPx() }
+
     Box(modifier = Modifier
         .fillMaxWidth()) {
         DayLabels(
@@ -702,10 +739,30 @@ private fun HeatmapGrid(
             scrollState.scrollTo(scrollState.maxValue)
         }
 
+        // Keep the focused week inside the viewport while the grid holds focus (TV D-pad).
+        LaunchedEffect(focusedCellIndex, heatmapHasFocus, viewportWidthPx) {
+            if (!heatmapHasFocus || focusedCellIndex < 0) return@LaunchedEffect
+            if (viewportWidthPx <= 0f) return@LaunchedEffect
+            val cellLeft = (focusedCellIndex / 7) * (cellSizePx + cellGapPx)
+            val target = when {
+                cellLeft < scrollState.value -> cellLeft
+                cellLeft + cellSizePx > scrollState.value + viewportWidthPx -> cellLeft + cellSizePx - viewportWidthPx
+                else -> return@LaunchedEffect
+            }
+            scrollState.animateScrollTo(target.roundToInt().coerceIn(0, scrollState.maxValue))
+        }
+
         Column(
             modifier = Modifier
                 .padding(start = labelWidth)
-                .horizontalScroll(scrollState),
+                .horizontalScroll(scrollState)
+                .then(
+                    if (isTv) {
+                        Modifier.onSizeChanged { viewportWidthPx = it.width.toFloat() }
+                    } else {
+                        Modifier
+                    },
+                ),
         ) {
             Box(
                 modifier = Modifier
@@ -747,7 +804,34 @@ private fun HeatmapGrid(
                                 onDayClick(cell?.date)
                             }
                         }
-                    },
+                    }
+                    .then(
+                        if (isTv) {
+                            Modifier
+                                .onFocusChanged { heatmapHasFocus = it.isFocused }
+                                .focusable()
+                                .onDpadKey(
+                                    // Direction keys that hit the data edge are left unconsumed so
+                                    // focus traversal can move focus out of the grid; the cursor
+                                    // itself never wraps.
+                                    onLeft = { moveFocusedCell(-1) },
+                                    onRight = { moveFocusedCell(1) },
+                                    onUp = { moveFocusedCell(-7) },
+                                    onDown = { moveFocusedCell(7) },
+                                    onSelect = {
+                                        val cell = grid.getOrNull(focusedCellIndex)
+                                        if (cell != null) {
+                                            onDayClick(cell.date)
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    },
+                                )
+                        } else {
+                            Modifier
+                        },
+                    ),
             ) {
                 for (week in 0 until numWeeks) {
                     for (day in 0 until 7) {
@@ -766,6 +850,19 @@ private fun HeatmapGrid(
                             cornerRadius = CornerRadius(cornerRadiusPx),
                         )
                     }
+                }
+
+                if (isTv && heatmapHasFocus && grid.getOrNull(focusedCellIndex) != null) {
+                    val x = (focusedCellIndex / 7) * (cellSizePx + cellGapPx)
+                    val y = (focusedCellIndex % 7) * (cellSizePx + cellGapPx)
+                    val halfRing = focusRingWidthPx / 2f
+                    drawRoundRect(
+                        color = focusRingColor,
+                        topLeft = Offset(x - halfRing, y - halfRing),
+                        size = Size(cellSizePx + focusRingWidthPx, cellSizePx + focusRingWidthPx),
+                        cornerRadius = CornerRadius(cornerRadiusPx + halfRing),
+                        style = Stroke(width = focusRingWidthPx),
+                    )
                 }
             }
         }

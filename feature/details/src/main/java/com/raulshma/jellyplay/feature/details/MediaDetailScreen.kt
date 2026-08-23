@@ -253,12 +253,9 @@ fun MediaDetailScreen(
             val downloadFlow = remember(itemId) { viewModel.downloads.downloadFlow(itemId) }
             val activeDownload by downloadFlow.collectAsStateWithLifecycle(initialValue = null)
 
-            // Seerr integration state (derived from the uiState snapshot)
-            val seerrRadarrServers = uiState.seerrRadarrServers
-            val seerrSonarrServers = uiState.seerrSonarrServers
-            val seerrIsLoadingServices = uiState.isLoadingSeerrServices
-            val seerrTvSeasons = uiState.seerrTvSeasons
-            val seerrRequestResult = uiState.seerrRequestResult
+            // Seerr integration state (the holder's single snapshot, folded
+            // into uiState as-is)
+            val seerrRequest = uiState.seerrRequest
             var seerrRequestItem by remember { mutableStateOf<SeerrSearchItem?>(null) }
 
             // Seerr card loading state for prefetch animation
@@ -327,6 +324,7 @@ fun MediaDetailScreen(
                     hasIntroSegment = uiState.hasIntroSegment,
                     hasCreditSegment = uiState.hasCreditSegment,
                     relatedVideos = uiState.relatedVideos,
+                    tmdbReviews = uiState.tmdbReviews,
                     seerrRecommendations = uiState.seerrRecommendations,
                     seerrSimilar = uiState.seerrSimilar,
                     isSeerrConnected = uiState.isSeerrConnected,
@@ -545,13 +543,7 @@ fun MediaDetailScreen(
 
                     SeerrRequestDialog(
                         item = item,
-                        radarrServers = seerrRadarrServers,
-                        sonarrServers = seerrSonarrServers,
-                        seasons = if (item.mediaType.equals("tv", ignoreCase = true)) seerrTvSeasons else emptyList(),
-                        isLoadingServices = seerrIsLoadingServices,
-                        isRequesting = seerrRequestResult?.isLoading == true,
-                        requestSuccess = seerrRequestResult?.success,
-                        requestError = seerrRequestResult?.error,
+                        snapshot = seerrRequest,
                         onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
                             viewModel.seerrRequests.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
                         },
@@ -669,12 +661,17 @@ fun MediaDetailScreen(
             // the sheet treats each listed episode as deletable. Only seasons
             // that actually carry episodes are passed so the sheet renders no
             // empty rows.
-            val downloadedEpisodesBySeason = uiState.episodes
-                .filterValues { it.isNotEmpty() }
-            val downloadableSeasons = uiState.seasons.filter { it.id in downloadedEpisodesBySeason }
+            val downloadedEpisodesBySeason = remember(uiState.episodes) {
+                uiState.episodes.filterValues { it.isNotEmpty() }
+            }
+            val downloadableSeasons = remember(uiState.seasons, downloadedEpisodesBySeason) {
+                uiState.seasons.filter { it.id in downloadedEpisodesBySeason }
+            }
             val totalSizeBytes = uiState.detailContext?.seriesAggregate?.totalSizeBytes ?: 0L
-            val downloadedEpisodeCount = uiState.detailContext?.seriesAggregate?.downloadedEpisodeCount
-                ?: downloadedEpisodesBySeason.values.sumOf { it.size }
+            val downloadedEpisodeCount = remember(uiState.detailContext, downloadedEpisodesBySeason) {
+                uiState.detailContext?.seriesAggregate?.downloadedEpisodeCount
+                    ?: downloadedEpisodesBySeason.values.sumOf { it.size }
+            }
             val deleteSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             TvSafeSheet(
                 onDismissRequest = { showDeleteEpisodesSheet = false },

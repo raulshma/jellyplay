@@ -23,6 +23,12 @@ data class PlayerUiPrefsState(
     val showTimeRemaining: Boolean = false,
     val keepScreenOnDuringVideo: Boolean = true,
     val usePinForPlayerLock: Boolean = false,
+    /**
+     * Presence flag for the player-lock PIN. The hash itself never
+     * leaves the VM/prefs — surfacing it through per-frame UiState churned
+     * state identity on PIN change and exposed the hash to equals/hashCode/
+     * toString (log risk). Callers only ever gate on presence.
+     */
     val hasPin: Boolean = false,
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,

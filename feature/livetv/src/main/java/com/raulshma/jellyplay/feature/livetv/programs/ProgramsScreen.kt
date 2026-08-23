@@ -48,6 +48,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.rememberStableCallback
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -75,6 +76,9 @@ fun ProgramsScreen(
         itemCount = uiState.rows.size,
         tag = "programs_init",
     )
+
+    val onItemLongPress = remember(viewModel) { { program: LiveTvProgram -> viewModel.requestRecord(program) } }
+    val getImageUrl = remember(viewModel) { { id: String, tag: String? -> viewModel.getImageUrl(id, tag) } }
 
     when {
         uiState.isLoading && uiState.rows.isEmpty() -> {
@@ -119,8 +123,8 @@ fun ProgramsScreen(
                             contentPad = contentPad,
                             spacing = spacing,
                             onItemClick = onProgramClick,
-                            onItemLongPress = { viewModel.requestRecord(it) },
-                            getImageUrl = { id, tag -> viewModel.getImageUrl(id, tag) },
+                            onItemLongPress = onItemLongPress,
+                            getImageUrl = getImageUrl,
                         )
                     }
                 }
@@ -165,11 +169,19 @@ private fun ProgramRowSection(
             modifier = Modifier.tvFocusRestorer(),
         ) {
             items(items = row.programs, key = { it.id }) { program ->
+                // Memoized per-item derivations + click lambdas keep ProgramCard
+                // skippable across uiState emissions — the LibraryScreen grid
+                // pattern.
+                val imageUrl = remember(program.id, program.imageTag) {
+                    getImageUrl(program.id, program.imageTag)
+                }
+                val memoizedClick = rememberStableCallback { onItemClick(program) }
+                val memoizedLongPress = rememberStableCallback { onItemLongPress(program) }
                 ProgramCard(
                     program = program,
-                    imageUrl = getImageUrl(program.id, program.imageTag),
-                    onClick = { onItemClick(program) },
-                    onLongClick = { onItemLongPress(program) },
+                    imageUrl = imageUrl,
+                    onClick = memoizedClick,
+                    onLongClick = memoizedLongPress,
                 )
             }
         }

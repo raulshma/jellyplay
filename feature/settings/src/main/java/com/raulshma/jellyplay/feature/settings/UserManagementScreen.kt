@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.AddListRow
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
@@ -164,6 +165,16 @@ fun UserManagementScreen(
                                     onRemove = {
                                         viewModel.removeUser(user.id)
                                     },
+                                )
+                            }
+                        }
+
+                        // TV has no FAB, so the add action lives in the list.
+                        if (isTv) {
+                            item(key = "add_user", contentType = "add_user") {
+                                AddListRow(
+                                    label = stringResource(R.string.settings_add_user),
+                                    onClick = onAddUser,
                                 )
                             }
                         }

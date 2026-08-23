@@ -329,4 +329,5 @@
     <string name="a11y_brightness_decrease">Riduci luminosità</string>
     <string name="a11y_volume_increase">Aumenta volume</string>
     <string name="a11y_volume_decrease">Riduci volume</string>
+    <string name="player_direct_play_fallback">Direct Play non riuscito — passaggio alla transcodifica (%1$s)</string>
 </resources>

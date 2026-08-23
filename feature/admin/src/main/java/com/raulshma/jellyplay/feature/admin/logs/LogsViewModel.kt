@@ -135,28 +135,72 @@ class LogsViewModel @Inject constructor(
                         val oldLines = _state.value.selectedLogFileLines
                         val newLinesText = content.lines()
 
-                        if (newLinesText != oldLines.map { it.text }) {
-                            val updatedLines = newLinesText.mapIndexed { index, text ->
-                                if (index < oldLines.size && oldLines[index].text == text) {
-                                    oldLines[index]
-                                } else {
-                                    LogLine(
-                                        index = index,
-                                        text = text,
-                                        isNew = index >= oldLines.size,
-                                        addedTime = if (index >= oldLines.size) System.currentTimeMillis() else 0L
-                                    )
-                                }
+                        // Append-only fast path: server logs only append, so
+                        // when every previous line still lines up, reuse the
+                        // existing LogLine instances and build only the new
+                        // tail — the old path re-walked the whole (multi-MB)
+                        // file and built a second full list just to compare.
+                        // The prefix walk allocates nothing; non-append shapes
+                        // (rotation, truncation, rewrite) fall through to the
+                        // full re-diff.
+                        val appendOnly = isAppendOf(oldLines, newLinesText)
+
+                        when {
+                            appendOnly && newLinesText.size == oldLines.size -> Unit
+                            appendOnly -> {
+                                val startIndex = oldLines.size
+                                val now = System.currentTimeMillis()
+                                val appended = newLinesText.subList(startIndex, newLinesText.size)
+                                    .mapIndexed { i, text ->
+                                        LogLine(
+                                            index = startIndex + i,
+                                            text = text,
+                                            isNew = true,
+                                            addedTime = now,
+                                        )
+                                    }
+                                _state.value = _state.value.copy(
+                                    selectedLogFileContent = content,
+                                    selectedLogFileLines = oldLines + appended,
+                                )
                             }
-                            _state.value = _state.value.copy(
-                                selectedLogFileContent = content,
-                                selectedLogFileLines = updatedLines
-                            )
+                            newLinesText != oldLines.map { it.text } -> {
+                                val updatedLines = newLinesText.mapIndexed { index, text ->
+                                    if (index < oldLines.size && oldLines[index].text == text) {
+                                        oldLines[index]
+                                    } else {
+                                        LogLine(
+                                            index = index,
+                                            text = text,
+                                            isNew = index >= oldLines.size,
+                                            addedTime = if (index >= oldLines.size) System.currentTimeMillis() else 0L,
+                                        )
+                                    }
+                                }
+                                _state.value = _state.value.copy(
+                                    selectedLogFileContent = content,
+                                    selectedLogFileLines = updatedLines,
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    /**
+     * True when [oldLines] is a line-for-line prefix of [newLinesText] — i.e.
+     * the file only grew. Compares the full prefix rather than just the
+     * boundary line so a same-size or partial rewrite (rotation) can't slip
+     * through as an "append" and leave stale lines on screen.
+     */
+    private fun isAppendOf(oldLines: List<LogLine>, newLinesText: List<String>): Boolean {
+        if (newLinesText.size < oldLines.size) return false
+        for (i in oldLines.indices) {
+            if (newLinesText[i] != oldLines[i].text) return false
+        }
+        return true
     }
 
     fun toggleLogPolling() {

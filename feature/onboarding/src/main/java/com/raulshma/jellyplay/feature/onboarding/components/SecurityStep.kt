@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.feature.onboarding.R
 
 @Composable
@@ -119,6 +120,7 @@ fun SecurityStep(
                                     pinError = pinsDoNotMatch
                                 }
                             },
+                            modifier = Modifier.focusIndicator(),
                         ) {
                             Text(stringResource(R.string.onboarding_security_save_pin))
                         }

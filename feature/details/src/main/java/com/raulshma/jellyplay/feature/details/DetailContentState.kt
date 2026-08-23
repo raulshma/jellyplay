@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import com.raulshma.jellyplay.core.ui.navigation.Route
 
 /**
@@ -58,6 +59,8 @@ internal data class DetailContentState(
     /** Credits skip available (OUTRO segment resolved for the item). Drives the chip. */
     val hasCreditSegment: Boolean = false,
     val relatedVideos: List<SeerrRelatedVideo>,
+    /** TMDB-sourced reviews shown in their own section (no Seerr connection needed). */
+    val tmdbReviews: List<TmdbReview> = emptyList(),
     val seerrRecommendations: List<SeerrSearchItem>,
     val seerrSimilar: List<SeerrSearchItem>,
     val isSeerrConnected: Boolean,

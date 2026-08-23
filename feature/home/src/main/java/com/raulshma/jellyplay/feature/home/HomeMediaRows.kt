@@ -28,7 +28,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -217,6 +220,7 @@ fun ContinueWatchingRow(
     }
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun HomeMediaRow(
     title: String,
@@ -266,12 +270,28 @@ fun HomeMediaRow(
         Brush.verticalGradient(listOf(Color.Transparent, posterSurfaceColor.copy(alpha = 0.45f)))
     }
 
+    // The See All pill hugs the header's trailing edge, so geometric focus search
+    // from the cards below rarely ranks it. Redirect Up-exits from the row to the
+    // pill explicitly (sections without one keep the default search).
+    val seeAllFocusRequester = remember { FocusRequester() }
+    val rowModifier = if (isTv && onSeeAllClick != null) {
+        Modifier.focusProperties {
+            exit = { direction ->
+                if (direction == FocusDirection.Up) seeAllFocusRequester
+                else FocusRequester.Default
+            }
+        }
+    } else {
+        Modifier
+    }
+
     Column(modifier = modifier) {
         HomeSectionTitle(
             title = title,
             contentPad = contentPad,
             onLongClick = onSectionLongClick,
             onSeeAllClick = onSeeAllClick,
+            seeAllFocusRequester = seeAllFocusRequester,
         )
         if (isTv) {
             TvFocusableItemRow(
@@ -279,6 +299,7 @@ fun HomeMediaRow(
                 key = { it.id },
                 contentPadding = PaddingValues(horizontal = contentPad),
                 horizontalArrangement = Arrangement.spacedBy(spacing),
+                modifier = rowModifier,
                 focusRequester = focusRequester,
                 onRowFocused = onRowFocused,
                 clipToBounds = clippingEnabled,
@@ -375,8 +396,10 @@ fun HomeMediaRow(
  * On touch, the title surface still only intercepts long-press so the row's own
  * horizontal scroll and item clicks are unaffected; "See All" is a separate
  * trailing pill so it can be tapped without intercepting the title. On TV the
- * "See All" pill is focusable (D-pad), and the long-press maps to the
- * select-and-hold key.
+ * "See All" pill is focusable (D-pad); the long-press is touch-only — section
+ * configuration on TV goes through Settings → Home Layout. The title surface
+ * must NOT be focusable on TV: a full-width indication-less clickable between
+ * the rows is an invisible focus trap that also steals focus from the pill.
  */
 @Composable
 private fun HomeSectionTitle(
@@ -384,6 +407,7 @@ private fun HomeSectionTitle(
     contentPad: androidx.compose.ui.unit.Dp,
     onLongClick: (() -> Unit)?,
     onSeeAllClick: (() -> Unit)? = null,
+    seeAllFocusRequester: FocusRequester? = null,
 ) {
     val isTv = LocalTvMode.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -392,7 +416,7 @@ private fun HomeSectionTitle(
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (onLongClick != null) {
+                if (onLongClick != null && !isTv) {
                     Modifier.combinedClickable(
                         interactionSource = interactionSource,
                         indication = null,
@@ -416,7 +440,10 @@ private fun HomeSectionTitle(
         )
         if (onSeeAllClick != null) {
             Spacer(modifier = Modifier.width(12.dp))
-            SeeAllPill(onClick = onSeeAllClick)
+            SeeAllPill(
+                onClick = onSeeAllClick,
+                modifier = seeAllFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,
+            )
         }
     }
 }
@@ -428,12 +455,16 @@ private fun HomeSectionTitle(
  * it reads as navigational.
  */
 @Composable
-private fun SeeAllPill(onClick: () -> Unit) {
+private fun SeeAllPill(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val isLight = LocalIsLightTheme.current
     val bgColor = if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
     val contentColor = MaterialTheme.colorScheme.onSurface
     ExpressiveChipContainer(
         onClick = onClick,
+        modifier = modifier,
         containerColor = bgColor,
         contentPadding = PaddingValues(6.dp),
     ) {

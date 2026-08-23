@@ -22,6 +22,10 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true
+            // Robolectric tests resolve the module's merged string resources
+            // (e.g. TranscodeReasonsTest); without this the lookups throw
+            // Resources$NotFoundException under the stripped android.jar.
+            isIncludeAndroidResources = true
         }
     }
 }
@@ -64,6 +68,10 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    // Compose UI tests under Robolectric (focus-behavior regression tests).
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test)
+    testImplementation(libs.compose.ui.test.manifest)
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

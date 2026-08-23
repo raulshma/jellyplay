@@ -9,11 +9,11 @@ import java.io.File
 /**
  * Ratchet against reintroducing the god-state wiring pattern.
  *
- * 1. The six migrated controllers (`SleepTimerController`,
+ * 1. The seven migrated controllers (`SleepTimerController`,
  *    `TrackSelectionHelper`, `SubtitleManager`, `VideoEffectsController`,
- *    `AbRepeatController`, `SyncPlayBridge`) must not reference
- *    [VideoPlayerUiState] at all — their interface is their state class plus
- *    commands, never the state bag or a state transformer.
+ *    `AbRepeatController`, `SyncPlayBridge`, `PlaybackSession`) must not
+ *    reference [VideoPlayerUiState] at all — their interface is their state
+ *    class plus commands, never the state bag or a state transformer.
  * 2. The count of god-state wirings (`getUiState =` / `updateUiState =` /
  *    `uiState = _uiState`) in the module's src/main must never increase.
  *    Baseline: [SettingsProjector] (a deferred, prefs-mirror
@@ -30,6 +30,7 @@ class ControllerOwnershipTest {
         "VideoEffectsController.kt",
         "AbRepeatController.kt",
         "SyncPlayBridge.kt",
+        "PlaybackSession.kt",
     )
 
     /** The maximum allowed god-state wirings in src/main (see class KDoc). */
@@ -142,17 +143,26 @@ class ControllerOwnershipTest {
         // The engine-flow collector launched from the VM's init calls into
         // trackSelectionHelper; Kotlin initialises properties and init blocks
         // in declaration order, so the helpers must be declared before init.
+        // The same holds for playbackSession: init's SessionEvent forwarder
+        // collects playbackSession.events.
         val vm = mainSources().first { it.name == "VideoPlayerViewModel.kt" }.sourceText()
         val initBlock = vm.indexOf("\n    init {")
         val helperDecl = vm.indexOf("private val trackSelectionHelper = TrackSelectionHelper(")
         val resolverDecl = vm.indexOf("private val playbackPreferenceResolver = ItemPlaybackPreferenceResolver(")
+        val sessionDecl = vm.indexOf("private val playbackSession = PlaybackSession(")
         assertTrue("VideoPlayerViewModel init block not found", initBlock >= 0)
         assertTrue("trackSelectionHelper declaration not found", helperDecl >= 0)
         assertTrue("playbackPreferenceResolver declaration not found", resolverDecl >= 0)
+        assertTrue("playbackSession declaration not found", sessionDecl >= 0)
         assertTrue(
             "trackSelectionHelper + playbackPreferenceResolver must be declared before the init block " +
                 "(the engine-flow collector launched from init reaches into them)",
             helperDecl < initBlock && resolverDecl < initBlock,
+        )
+        assertTrue(
+            "playbackSession must be declared before the init block " +
+                "(init's SessionEvent forwarder collects playbackSession.events)",
+            sessionDecl < initBlock,
         )
     }
 }

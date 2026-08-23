@@ -36,7 +36,12 @@ import org.junit.Test
  *    surface. Gated by [behavioralDrivingSupported]; engines whose internal
  *    state cannot be driven from a unit test (the real Android/JNI backends
  *    in this phase) leave the hook returning `false` and Level-1 tests are
- *    auto-skipped via [assumeTrue].
+ *    auto-skipped via [assumeTrue]. The reload-preservation invariant
+ *    (`withPreservedPlayback`) is pinned against `FakeMediaEngine` here and
+ *    against the shared [ReloadablePlayerEngine] logic in
+ *    `ReloadablePlayerEngineTest` — real adapters skip Level-1 because their
+ *    native player (ExoPlayer/libmpv/libVLC) cannot be driven in a Robolectric
+ *    unit test, not because the invariant is untested.
  *
  * Adding a new universal invariant → add one `@Test` here; it runs against
  * every specimen automatically. Engine-specific behavior → `@Test`s in that
@@ -90,7 +95,10 @@ abstract class MediaEngineContractTest {
     protected open fun expectedDisplayName(): String? = null
 
     // ── Driver hooks (the fake implements these; other specimens leave them
-    //     as the default no-ops so Level-1 tests `assumeTrue`-skip). ──
+    //     as the default no-ops so Level-1 tests `assumeTrue`-skip). The two
+    //     reload-contract hooks below are fail-fast when a specimen opts into
+    //     behavioral driving without implementing them — otherwise
+    //     `reload_preservesPositionSpeedAndPlayState` would pass vacuously. ──
     protected open fun drivePlaybackState(state: EnginePlaybackState) {}
     protected open fun driveIsPlaying(value: Boolean) {}
     protected open fun driveBufferedPosition(ms: Long) {}
@@ -99,6 +107,18 @@ abstract class MediaEngineContractTest {
     protected open fun driveLiveSubtitleCue(text: CharSequence?) {}
     protected open fun emitError(error: EngineError) {}
     protected open fun emitSubtitleEvent(event: SubtitleEvent) {}
+    protected open fun drivePlaybackSpeed(speed: Float) {
+        // Fail-fast: a behavioral specimen must override this; the default
+        // no-op would make the reload contract test vacuously green.
+        check(!behavioralDrivingSupported()) {
+            "drivePlaybackSpeed not implemented — specimen claims behavioralDrivingSupported() = true but did not override drivePlaybackSpeed"
+        }
+    }
+    protected open fun simulateReloadPreserving() {
+        check(!behavioralDrivingSupported()) {
+            "simulateReloadPreserving not implemented — specimen claims behavioralDrivingSupported() = true but did not override simulateReloadPreserving"
+        }
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // LEVEL 0 — universal invariants. Every engine, including NoOpEngine.
@@ -391,5 +411,28 @@ abstract class MediaEngineContractTest {
             assertEquals(8_000L, received.await())
             collector.cancel()
         }
+    }
+
+    @Test
+    fun reload_preservesPositionSpeedAndPlayState() {
+        assumeTrue("behavioral driving not supported", behavioralDrivingSupported())
+        // Seed position, speed, and play-state, then simulate a reload that
+        // must preserve all three (mirrors ReloadablePlayerEngine.withPreservedPlayback).
+        drivePosition(12_000L)
+        drivePlaybackSpeed(1.5f)
+        driveIsPlaying(true)
+        // Guard against vacuous no-op drivers: the `before` snapshot must
+        // reflect the driven values, otherwise a specimen that left the hooks
+        // as no-ops would still pass the equality check below (0==0, 1f==1f).
+        val beforePos = engine.currentPositionMs
+        val beforeSpeed = engine.playbackSpeed
+        val beforePlaying = engine.isPlaying.value
+        assertEquals("drivePosition hook did not apply — reload contract would be vacuous", 12_000L, beforePos)
+        assertEquals("drivePlaybackSpeed hook did not apply — reload contract would be vacuous", 1.5f, beforeSpeed, 0f)
+        assertEquals("driveIsPlaying hook did not apply — reload contract would be vacuous", true, beforePlaying)
+        simulateReloadPreserving()
+        assertEquals(beforePos, engine.currentPositionMs)
+        assertEquals(beforeSpeed, engine.playbackSpeed, 0f)
+        assertEquals(beforePlaying, engine.isPlaying.value)
     }
 }

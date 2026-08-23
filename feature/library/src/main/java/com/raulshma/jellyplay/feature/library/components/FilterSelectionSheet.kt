@@ -1,33 +1,23 @@
 package com.raulshma.jellyplay.feature.library.components
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Surface
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 
 /**
  * Shared shell for the per-filter selection sheets. Renders a
- * title and a scrollable content area inside a [ModalBottomSheet] (phone) or a
- * centered [Dialog] (TV) — the same phone/TV split [LibraryFilterSheet] uses.
+ * title and a scrollable content area inside a [TvSafeSheet] — phone
+ * ModalBottomSheet / TV full-screen Dialog with D-pad focus — the same
+ * shell the app's other sheets use.
  *
  * Per-filter sheets apply immediately on selection (no Apply button), matching
  * the chip→sheet→toggle flow, so this shell only takes an [onDismiss].
@@ -39,13 +29,12 @@ fun FilterSelectionSheet(
     onDismiss: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    val isTv = LocalTvMode.current
-    // Sheet container matches the app/screen background tier: colorScheme.surface
-    // (pure #000 in OLED — identical to the Library screen — instead of the old
-    // light=Low / dark=High split that drifted from the other sheets).
-    val sheetContainerColor = MaterialTheme.colorScheme.surface
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val body: @Composable () -> Unit = {
+    TvSafeSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -63,40 +52,6 @@ fun FilterSelectionSheet(
             ) {
                 content()
             }
-        }
-    }
-
-    if (isTv) {
-        Dialog(
-            onDismissRequest = onDismiss,
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = true,
-            ),
-        ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxHeight(0.85f)
-                    .fillMaxWidth(0.6f)
-                    .clip(ShapeCache.smooth24),
-                color = sheetContainerColor,
-                tonalElevation = 6.dp,
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) { body() }
-            }
-        }
-    } else {
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(
-            onDismissRequest = onDismiss,
-            sheetState = sheetState,
-            containerColor = sheetContainerColor,
-            tonalElevation = 0.dp,
-            shape = ShapeCache.smoothTop28,
-            dragHandle = { com.raulshma.jellyplay.core.ui.components.SheetDragHandle() },
-        ) {
-            body()
         }
     }
 }

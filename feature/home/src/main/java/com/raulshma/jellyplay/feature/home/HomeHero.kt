@@ -47,7 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -118,12 +118,25 @@ fun AnimatedHeroHeader(
         }
     }
 
-    val parallaxOffset by remember(listState) {
+    // Exposed as State (not delegated): the parallax value changes on every
+    // scroll frame, and its only consumer is the graphicsLayer lambda in
+    // HeroHeader. Keeping the read inside that lambda means scroll updates
+    // re-draw the layer instead of recomposing this scope and the whole hero
+    // tree below it.
+    val parallaxOffsetState = remember(listState) {
         derivedStateOf {
             if (listState.firstVisibleItemIndex == 0) {
                 listState.firstVisibleItemScrollOffset.toFloat() * 0.45f
             } else 0f
         }
+    }
+
+    // Stable wrapper instance (the rememberStableCallback idiom, which is
+    // typed for () -> Unit): a fresh `{ parallaxOffsetState.value }` per
+    // recomposition would hand HeroHeader a new lambda on every parent
+    // invalidation and un-skip the whole header.
+    val parallaxOffset: () -> Float = remember(parallaxOffsetState) {
+        { parallaxOffsetState.value }
     }
 
     val heroIsVisible by remember {
@@ -189,7 +202,8 @@ fun HeroHeader(
     backgroundColor: Color,
     contentPadding: Dp = 16.dp,
     homeBackdropEnabled: Boolean = false,
-    parallaxOffset: Float = 0f,
+    /** Scroll-coupled parallax; deferred () -> Float so reads stay in draw/layer phase. */
+    parallaxOffset: () -> Float = { 0f },
     onClick: () -> Unit,
     onDetailsClick: (() -> Unit)? = null,
     onFocusChange: (Boolean) -> Unit = {},
@@ -208,21 +222,26 @@ fun HeroHeader(
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
+    // Animation values are kept as State and read only inside graphicsLayer
+    // lambdas below: delegating them (`by`) would invalidate this whole
+    // composable on every animation frame (breath 12s, play-pulse 1.8s,
+    // rating-pulse 2s — continuously while the hero is prominent and Home is
+    // the launch screen). Layer-property updates need no recomposition.
+    val pressScaleState = animateFloatAsState(
         targetValue = if (isPressed) 0.98f else 1f,
         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "heroPress",
     )
     val playInteractionSource = remember { MutableInteractionSource() }
     val isPlayPressed by playInteractionSource.collectIsPressedAsState()
-    val playScale by animateFloatAsState(
+    val playScaleState = animateFloatAsState(
         targetValue = if (isPlayPressed) 0.95f else 1f,
         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "playButtonScale",
     )
     val detailsInteractionSource = remember { MutableInteractionSource() }
     val isDetailsPressed by detailsInteractionSource.collectIsPressedAsState()
-    val detailsScale by animateFloatAsState(
+    val detailsScaleState = animateFloatAsState(
         targetValue = if (isDetailsPressed) 0.95f else 1f,
         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "detailsButtonScale",
@@ -248,20 +267,23 @@ fun HeroHeader(
         debugKey = "hero_play",
     )
 
-    val breathScale: Float
-    val playPulseScale: Float
-    val playPulseAlpha: Float
-    val ratingPulse: Float
+    // All four animation values are consumed exclusively by graphicsLayer
+    // lambdas below, so they are held as State<Float> (never delegated in
+    // this scope) — the loops tick layer properties only, zero recomposition.
+    val breathScaleState: androidx.compose.runtime.State<Float>
+    val playPulseScaleState: androidx.compose.runtime.State<Float>
+    val playPulseAlphaState: androidx.compose.runtime.State<Float>
+    val ratingPulseState: androidx.compose.runtime.State<Float>
 
-    if (isVisible && !reducedMotion) {
+    // The infinite animations run only while the hero is on screen and is the
+    // focal element (near the top, not scrolled under content). The slow
+    // 12 s breath and the high-frequency (1.8 s) play-pulse loops otherwise
+    // drive continuous draw-phase layer redraws that compete with scroll work
+    // and stack on the 1920×1080 backdrop decode; collapsed values match each
+    // animation's frame-0 state so the layers render identically at rest.
+    if (isVisible && isProminent && !reducedMotion) {
         val heroTransition = rememberInfiniteTransition(label = "hero_animations")
-        // Slow breath runs only while the hero is the focal element. A 12s
-        // cycle drives a continuous draw-phase redraw of the 1920x1080
-        // backdrop; during scroll (hero partially visible at top) that redraw
-        // competes with the scroll work. Gating on isProminent collapses it
-        // to a static scale while scrolling — the 12s breath is imperceptible
-        // mid-scroll anyway.
-        val rawBreathScale by if (isProminent) heroTransition.animateFloat(
+        breathScaleState = heroTransition.animateFloat(
             initialValue = 1.0f,
             targetValue = 1.04f,
             animationSpec = infiniteRepeatable(
@@ -269,56 +291,39 @@ fun HeroHeader(
                 repeatMode = RepeatMode.Reverse
             ),
             label = "breath"
-        ) else androidx.compose.runtime.mutableStateOf(1.0f)
-        breathScale = rawBreathScale
-
-        // The high-frequency (1.8s) play-pulse loops drive ~60Hz draw-phase
-        // layer redraws. Only run them when the hero is the focal element
-        // (near the top, not scrolled under content); collapse to static
-        // otherwise to cut continuous redraws during scroll.
-        if (isProminent) {
-            val rawPlayPulseScale by heroTransition.animateFloat(
-                initialValue = 1.0f,
-                targetValue = 1.35f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "playPulseScale"
-            )
-            playPulseScale = rawPlayPulseScale
-
-            val rawPlayPulseAlpha by heroTransition.animateFloat(
-                initialValue = 0.45f,
-                targetValue = 0.0f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "playPulseAlpha"
-            )
-            playPulseAlpha = rawPlayPulseAlpha
-
-            val rawRatingPulse by heroTransition.animateFloat(
-                initialValue = 0.9f,
-                targetValue = 1.1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(HERO_RATING_PULSE_DURATION_MS, easing = FancyTransitionEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "ratingPulse"
-            )
-            ratingPulse = rawRatingPulse
-        } else {
-            playPulseScale = 1.0f
-            playPulseAlpha = 0.45f
-            ratingPulse = 0.9f
-        }
+        )
+        playPulseScaleState = heroTransition.animateFloat(
+            initialValue = 1.0f,
+            targetValue = 1.35f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "playPulseScale"
+        )
+        playPulseAlphaState = heroTransition.animateFloat(
+            initialValue = 0.45f,
+            targetValue = 0.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(HERO_PLAY_PULSE_DURATION_MS, easing = AlphaEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "playPulseAlpha"
+        )
+        ratingPulseState = heroTransition.animateFloat(
+            initialValue = 0.9f,
+            targetValue = 1.1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(HERO_RATING_PULSE_DURATION_MS, easing = FancyTransitionEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "ratingPulse"
+        )
     } else {
-        breathScale = 1.0f
-        playPulseScale = 1.0f
-        playPulseAlpha = 0.45f
-        ratingPulse = 0.9f
+        breathScaleState = androidx.compose.runtime.mutableStateOf(1.0f)
+        playPulseScaleState = androidx.compose.runtime.mutableStateOf(1.0f)
+        playPulseAlphaState = androidx.compose.runtime.mutableStateOf(0.45f)
+        ratingPulseState = androidx.compose.runtime.mutableStateOf(0.9f)
     }
 
     val heroShape = remember(isTv, adaptiveInfo.windowSizeClass) {
@@ -343,8 +348,8 @@ fun HeroHeader(
             .height(height)
             .clip(heroShape)
             .graphicsLayer {
-                scaleX = pressScale
-                scaleY = pressScale
+                scaleX = pressScaleState.value
+                scaleY = pressScaleState.value
             }
             .then(
                 if (!isTv) {
@@ -398,37 +403,44 @@ fun HeroHeader(
                 // the hero stays seamless with the content at every scroll offset.
                 .then(
                     if (!reducedMotion) {
-                        Modifier.drawWithContent {
-                            drawContent()
-                            drawRect(
-                                brush = Brush.verticalGradient(
-                                    colorStops = arrayOf(
-                                        0.0f to Color.Black,
-                                        0.55f to Color.Black,
-                                        0.85f to Color.Transparent,
-                                        1.0f to Color.Transparent,
-                                    ),
+                        // drawWithCache: the dissolve mask brush is built once
+                        // per size change instead of on every draw pass (the
+                        // parallax/breath animations below redraw every frame).
+                        Modifier.drawWithCache {
+                            val mask = Brush.verticalGradient(
+                                colorStops = arrayOf(
+                                    0.0f to Color.Black,
+                                    0.55f to Color.Black,
+                                    0.85f to Color.Transparent,
+                                    1.0f to Color.Transparent,
                                 ),
-                                blendMode = BlendMode.DstIn,
                             )
+                            onDrawWithContent {
+                                drawContent()
+                                drawRect(
+                                    brush = mask,
+                                    blendMode = BlendMode.DstIn,
+                                )
+                            }
                         }
                     } else {
                         // Cheap static bottom fade drawn over the artwork so the
                         // hero's bottom edge still melts instead of hard-cutting,
                         // without the offscreen buffer. Only the bottom needs it
                         // here (the legibility scrim Box below covers the top).
-                        Modifier.drawWithContent {
-                            drawContent()
-                            drawRect(
-                                brush = Brush.verticalGradient(
-                                    colorStops = arrayOf(
-                                        0.0f to Color.Transparent,
-                                        0.6f to Color.Transparent,
-                                        0.85f to backgroundColor.copy(alpha = 0.6f),
-                                        1.0f to backgroundColor,
-                                    ),
+                        Modifier.drawWithCache {
+                            val fade = Brush.verticalGradient(
+                                colorStops = arrayOf(
+                                    0.0f to Color.Transparent,
+                                    0.6f to Color.Transparent,
+                                    0.85f to backgroundColor.copy(alpha = 0.6f),
+                                    1.0f to backgroundColor,
                                 ),
                             )
+                            onDrawWithContent {
+                                drawContent()
+                                drawRect(brush = fade)
+                            }
                         }
                     }
                 )
@@ -439,9 +451,9 @@ fun HeroHeader(
                 // still applied (scroll-coupled, not an animation), so this layer
                 // stays cheap.
                 .graphicsLayer {
-                    translationY = parallaxOffset
-                    scaleX = breathScale
-                    scaleY = breathScale
+                    translationY = parallaxOffset()
+                    scaleX = breathScaleState.value
+                    scaleY = breathScaleState.value
                 },
             contentScale = ContentScale.Crop,
             // Full-bleed hero: decode large enough to stay sharp on a 4K TV.
@@ -550,8 +562,8 @@ fun HeroHeader(
                                 modifier = Modifier
                                     .size(14.dp)
                                     .graphicsLayer {
-                                        scaleX = ratingPulse
-                                        scaleY = ratingPulse
+                                        scaleX = ratingPulseState.value
+                                        scaleY = ratingPulseState.value
                                     },
                             )
                             Spacer(Modifier.width(4.dp))
@@ -616,7 +628,7 @@ fun HeroHeader(
                     modifier = Modifier
                         .height(48.dp)
                         .tvFocusIndicator(playTvFocusState, ShapeCache.smoothPill, Color.White)
-                        .graphicsLayer { scaleX = playScale; scaleY = playScale }
+                        .graphicsLayer { scaleX = playScaleState.value; scaleY = playScaleState.value }
                 ) {
                     if (!isTv) {
                         Box(
@@ -625,9 +637,9 @@ fun HeroHeader(
                                 .aspectRatio(2.4f)
                                 .align(Alignment.Center)
                                 .graphicsLayer {
-                                    scaleX = playPulseScale
-                                    scaleY = playPulseScale
-                                    alpha = playPulseAlpha
+                                    scaleX = playPulseScaleState.value
+                                    scaleY = playPulseScaleState.value
+                                    alpha = playPulseAlphaState.value
                                 }
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), ShapeCache.smoothPill)
                         )
@@ -681,7 +693,7 @@ fun HeroHeader(
                     modifier = Modifier
                         .height(48.dp)
                         .tvFocusIndicator(detailsTvFocusState, ShapeCache.smoothPill)
-                        .graphicsLayer { scaleX = detailsScale; scaleY = detailsScale }
+                        .graphicsLayer { scaleX = detailsScaleState.value; scaleY = detailsScaleState.value }
                 ) {
                     Box(
                         modifier = Modifier

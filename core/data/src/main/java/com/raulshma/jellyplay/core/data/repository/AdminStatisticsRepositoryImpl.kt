@@ -7,13 +7,17 @@ import com.raulshma.jellyplay.core.database.dao.AuditLogDao
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
 import com.raulshma.jellyplay.core.database.entity.MediaAuditLogEntity
 import com.raulshma.jellyplay.core.database.entity.ScanStateEntity
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.model.AuditItemDetail
 import com.raulshma.jellyplay.core.model.AuditLogEntry
 import com.raulshma.jellyplay.core.model.CleanupActionType
 import com.raulshma.jellyplay.core.model.ContentBreakdown
 import com.raulshma.jellyplay.core.model.JellyfinUser
 import com.raulshma.jellyplay.core.model.MediaCleanupConfig
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaItemStub
+import com.raulshma.jellyplay.core.model.PlaybackActivityPoint
+import com.raulshma.jellyplay.core.model.PlaybackReportingActivity
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.ScanPhase
 import com.raulshma.jellyplay.core.model.ScanProgress
@@ -22,8 +26,7 @@ import com.raulshma.jellyplay.core.model.UserStatistics
 import com.raulshma.jellyplay.core.model.WatchedMediaItem
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -49,9 +52,13 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
     private val auditLogDao: AuditLogDao,
     private val scanStateDao: ScanStateDao,
     private val json: Json,
+    /**
+     * Shared application scope for the fire-and-forget background scans below
+     * (the `@ApplicationScope` binding — never cancelled for this singleton,
+     * matching the scan jobs' previous dedicated-scope lifetime).
+     */
+    @ApplicationScope private val scope: CoroutineScope,
 ) : AdminStatisticsRepository {
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * Bounds concurrency of the per-user statistics fan-out so a server with
@@ -78,17 +85,21 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getAllUsersWithStatistics(): Result<List<UserStatistics>> = runCatching {
-        val users = apiClient.getUsers().getOrThrow()
-        val sessions = apiClient.getSessions().getOrDefault(emptyList())
-        val activeUserIds = sessions.map { it.userId }.toSet()
         val pluginAvailable = _pluginStatus.value == PlaybackReportingStatus.AVAILABLE
 
-        val pluginActivity = if (pluginAvailable) {
-            apiClient.getPlaybackReportingUserActivity(days = 30).getOrDefault(emptyList())
-        } else emptyList()
-        val pluginMap = pluginActivity.associateBy { it.userId }
-
         coroutineScope {
+            val usersDeferred = async { apiClient.getUsers().getOrThrow() }
+            val sessionsDeferred = async { apiClient.getSessions().getOrDefault(emptyList()) }
+            val pluginDeferred = async {
+                if (pluginAvailable) {
+                    apiClient.getPlaybackReportingUserActivity(days = 30).getOrDefault(emptyList())
+                } else emptyList()
+            }
+
+            val users = usersDeferred.await()
+            val activeUserIds = sessionsDeferred.await().map { it.userId }.toSet()
+            val pluginMap = pluginDeferred.await().associateBy { it.userId }
+
             users.map { user ->
                 async {
                     statsSemaphore.withPermit {
@@ -248,7 +259,13 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
             ),
         ).filter { it.value > 0 }
 
-        val breakdowns = coroutineScope {
+        // Breakdowns and the enhanced wave launch together: none of the
+        // enhanced calls depends on breakdown results (only the local math
+        // after the awaits does), so overlapping removes a full sequential
+        // round-trip wave from the detail-page load.
+        val breakdowns: BreakdownResults
+        val enhancedDeferreds: EnhancedDeferreds?
+        coroutineScope {
             val genreDeferred = async {
                 if (pluginAvailable) apiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = userId).getOrDefault(emptyList()) else emptyList()
             }
@@ -262,7 +279,40 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                 if (pluginAvailable) apiClient.getPlaybackReportingUserActivity(days = 30).getOrDefault(emptyList()) else emptyList()
             }
             val watchDeferred = async { computeWatchTimeBreakdown(userId) }
-            BreakdownResults(
+            enhancedDeferreds = if (pluginAvailable) {
+                EnhancedDeferreds(
+                    weeklyActivity = async {
+                        apiClient.getPlaybackReportingUserActivity(days = 7).getOrDefault(emptyList())
+                    },
+                    sixMonthCount = async {
+                        apiClient.getPlaybackReportingPlayActivity(days = 180, dataType = "count", filter = userId)
+                            .getOrDefault(emptyList())
+                    },
+                    musicGenreBreakdown = async {
+                        apiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = "$userId,Audio")
+                            .getOrDefault(emptyList())
+                    },
+                    musicArtistBreakdown = async {
+                        apiClient.getPlaybackReportingArtistBreakdown(days = 30, filter = "$userId,Audio")
+                            .getOrDefault(emptyList())
+                    },
+                    musicTopItems = async {
+                        apiClient.getItemsWithUserData(
+                            userId = userId,
+                            includeItemTypes = listOf("Audio"),
+                            isPlayed = true,
+                            sortBy = "PlayCount",
+                            sortOrder = "Descending",
+                            startIndex = 0,
+                            limit = 10,
+                        ).getOrDefault(Pair(0, emptyList()))
+                    },
+                    audioPlayCount = async {
+                        apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0)
+                    },
+                )
+            } else null
+            breakdowns = BreakdownResults(
                 genre = genreDeferred.await(),
                 method = methodDeferred.await(),
                 device = deviceDeferred.await(),
@@ -289,72 +339,38 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
             totalWatchTimeSec = watchTimeBreakdown.totalSeconds
         }
 
-        val enhancedData = if (pluginAvailable) {
-            coroutineScope {
-                val weeklyActivity = async {
-                    apiClient.getPlaybackReportingUserActivity(days = 7).getOrDefault(emptyList())
-                }
-                val monthlyActivity = async {
-                    pluginActivity
-                }
-                val sixMonthCount = async {
-                    apiClient.getPlaybackReportingPlayActivity(days = 180, dataType = "count", filter = userId)
-                        .getOrDefault(emptyList())
-                }
-                val thirtyDayCount = async {
-                    apiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId)
-                        .getOrDefault(emptyList())
-                }
-                val musicGenreBreakdown = async {
-                    apiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = "$userId,Audio")
-                        .getOrDefault(emptyList())
-                }
-                val musicArtistBreakdown = async {
-                    apiClient.getPlaybackReportingArtistBreakdown(days = 30, filter = "$userId,Audio")
-                        .getOrDefault(emptyList())
-                }
-                val musicTopItems = async {
-                    apiClient.getItemsWithUserData(
-                        userId = userId,
-                        includeItemTypes = listOf("Audio"),
-                        isPlayed = true,
-                        sortBy = "PlayCount",
-                        sortOrder = "Descending",
-                        startIndex = 0,
-                        limit = 10,
-                    ).getOrDefault(Pair(0, emptyList()))
-                }
-                val audioPlayCount = async {
-                    apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0)
-                }
+        // enhancedDeferreds is non-null exactly when the plugin wave launched
+        // (same pluginAvailable gate), so the null check is the plugin gate.
+        val enhancedData = enhancedDeferreds?.let { deferreds ->
+            val weeklyUserData = deferreds.weeklyActivity.await().firstOrNull { it.userId == userId }
+            var weeklyWatchTimeSec = weeklyUserData?.totalTime ?: 0L
+            var monthlyWatchTimeSec = userPluginActivity?.totalTime ?: 0L
 
-                val weeklyUserData = weeklyActivity.await().firstOrNull { it.userId == userId }
-                var weeklyWatchTimeSec = weeklyUserData?.totalTime ?: 0L
-                var monthlyWatchTimeSec = userPluginActivity?.totalTime ?: 0L
+            if (weeklyWatchTimeSec == 0L) weeklyWatchTimeSec = watchTimeBreakdown.last7DaysSeconds
+            if (monthlyWatchTimeSec == 0L) monthlyWatchTimeSec = watchTimeBreakdown.last30DaysSeconds
 
-                if (weeklyWatchTimeSec == 0L) weeklyWatchTimeSec = watchTimeBreakdown.last7DaysSeconds
-                if (monthlyWatchTimeSec == 0L) monthlyWatchTimeSec = watchTimeBreakdown.last30DaysSeconds
+            val streakData = deferreds.sixMonthCount.await()
+            val viewingStreak = calculateViewingStreak(streakData)
 
-                val streakData = sixMonthCount.await()
-                val viewingStreak = calculateViewingStreak(streakData)
+            // pluginChart already holds the identical 30-day/count/userId
+            // series — reusing it drops a duplicate round-trip per load.
+            val pluginTrend = pluginChart.sortedBy { it.date }
+            val trendData = if (pluginTrend.isNotEmpty() && pluginTrend.any { it.value > 0 }) pluginTrend else fallbackTrendData
+            val activeDays = trendData.count { it.value > 0 }.coerceAtLeast(1)
+            val averageDailyMinutes = if (monthlyWatchTimeSec > 0) {
+                (monthlyWatchTimeSec / 60 / activeDays).toInt()
+            } else 0
 
-                val pluginTrend = thirtyDayCount.await().sortedBy { it.date }
-                val trendData = if (pluginTrend.isNotEmpty() && pluginTrend.any { it.value > 0 }) pluginTrend else fallbackTrendData
-                val activeDays = trendData.count { it.value > 0 }.coerceAtLeast(1)
-                val averageDailyMinutes = if (monthlyWatchTimeSec > 0) {
-                    (monthlyWatchTimeSec / 60 / activeDays).toInt()
-                } else 0
+            val currentMonthMinutes = monthlyWatchTimeSec / 60
+            val previousMonthMinutes = watchTimeBreakdown.previous30DaysSeconds / 60
+            val percentageChange = if (previousMonthMinutes > 0) {
+                ((currentMonthMinutes - previousMonthMinutes).toFloat() / previousMonthMinutes.toFloat()) * 100f
+            } else if (currentMonthMinutes > 0) 100f else 0f
 
-                val currentMonthMinutes = monthlyWatchTimeSec / 60
-                val previousMonthMinutes = watchTimeBreakdown.previous30DaysSeconds / 60
-                val percentageChange = if (previousMonthMinutes > 0) {
-                    ((currentMonthMinutes - previousMonthMinutes).toFloat() / previousMonthMinutes.toFloat()) * 100f
-                } else if (currentMonthMinutes > 0) 100f else 0f
-
-                val musicGenres = musicGenreBreakdown.await()
-                val musicArtists = musicArtistBreakdown.await()
-                val musicItems = musicTopItems.await()
-                val audioCount = audioPlayCount.await()
+            val musicGenres = deferreds.musicGenreBreakdown.await()
+            val musicArtists = deferreds.musicArtistBreakdown.await()
+            val musicItems = deferreds.musicTopItems.await()
+            val audioCount = deferreds.audioPlayCount.await()
 
                 val musicTopTracks = musicItems.second.map { item ->
                     com.raulshma.jellyplay.core.model.UserTopItem(
@@ -389,8 +405,7 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                     ),
                     genrePieData = genrePieData,
                 )
-            }
-        } else {
+        } ?: run {
             EnhancedStatistics(
                 weeklyWatchTimeSec = watchTimeBreakdown.last7DaysSeconds,
                 monthlyWatchTimeSec = watchTimeBreakdown.last30DaysSeconds,
@@ -837,6 +852,19 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
         val device: List<com.raulshma.jellyplay.core.model.ContentBreakdown>,
         val pluginActivity: List<com.raulshma.jellyplay.core.model.PlaybackReportingActivity>,
         val watchTime: WatchTimeBreakdown,
+    )
+
+    /**
+     * Enhanced-wave deferreds, launched alongside the breakdowns wave so both
+     * fan-outs overlap (none of these calls depends on breakdown results).
+     */
+    private data class EnhancedDeferreds(
+        val weeklyActivity: Deferred<List<PlaybackReportingActivity>>,
+        val sixMonthCount: Deferred<List<PlaybackActivityPoint>>,
+        val musicGenreBreakdown: Deferred<List<ContentBreakdown>>,
+        val musicArtistBreakdown: Deferred<List<ContentBreakdown>>,
+        val musicTopItems: Deferred<Pair<Int, List<MediaItem>>>,
+        val audioPlayCount: Deferred<Int>,
     )
 
     private data class EnhancedStatistics(

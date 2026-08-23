@@ -29,6 +29,18 @@ interface SeerrRepository {
 
     suspend fun getSimilar(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse>
 
+    /**
+     * Related videos (trailers) fetched straight from TMDB — the fallback used
+     * for the details screen's extras when Seerr itself is not connected.
+     */
+    suspend fun getTmdbVideos(tmdbId: Int, mediaType: MediaType): Result<List<SeerrRelatedVideo>>
+
+    /**
+     * Reviews fetched straight from TMDB — shown on the details screen's
+     * reviews section independent of whether Seerr itself is connected.
+     */
+    suspend fun getTmdbReviews(tmdbId: Int, mediaType: MediaType): Result<List<TmdbReview>>
+
     suspend fun requestMedia(
         tmdbId: Int,
         mediaType: String,

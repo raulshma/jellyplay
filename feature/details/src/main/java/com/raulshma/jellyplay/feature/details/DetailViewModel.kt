@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
+import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DetailCapabilities
@@ -23,12 +24,8 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
-import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
-import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
+import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
-import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.seriesIdForDetail
@@ -36,6 +33,7 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,14 +44,16 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
 class DetailViewModel @Inject internal constructor(
     // Context only for the storage probe behind [getAvailableStorageBytes];
@@ -175,21 +175,10 @@ class DetailViewModel @Inject internal constructor(
         // Group 1 — core load state (detail/seasons/episodes/smart-play/...).
         val core = _uiState.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
         // Group 2 — Seerr request-flow ephemera (radarr/sonarr/result/dialog state).
-        val seerrRequest = combine(
-            seerrRequestState.requestResult,
-            seerrRequestState.radarrServers,
-            seerrRequestState.sonarrServers,
-            seerrRequestState.isLoadingServices,
-            seerrRequestState.tvSeasons,
-        ) { requestResult, radarrServers, sonarrServers, isLoadingServices, tvSeasons ->
-            SeerrRequestSnapshot(
-                requestResult = requestResult,
-                radarrServers = radarrServers,
-                sonarrServers = sonarrServers,
-                isLoadingServices = isLoadingServices,
-                tvSeasons = tvSeasons,
-            )
-        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrRequestSnapshot())
+        // The holder's snapshot flow already combines + dedupes its six
+        // sub-flows; snapshotIn gives the group its dedicated StateFlow so its
+        // ticks don't re-run the outer combine.
+        val seerrRequest = seerrRequestState.snapshotIn(scope)
         // Group 3 — Seerr connection flags that only gate recommendation visibility.
         val seerrFlags = combine(
             remoteDiscovery.seerrRepository.isConnected(),
@@ -200,11 +189,7 @@ class DetailViewModel @Inject internal constructor(
 
         combine(core, seerrRequest, seerrFlags) { primary, request, flags ->
             primary.copy(
-                seerrRequestResult = request.requestResult,
-                seerrRadarrServers = request.radarrServers,
-                seerrSonarrServers = request.sonarrServers,
-                isLoadingSeerrServices = request.isLoadingServices,
-                seerrTvSeasons = request.tvSeasons,
+                seerrRequest = request,
                 isSeerrConnected = flags.isConnected,
                 isSeerrRecommendationsEnabled = flags.isRecommendationsEnabled,
             )
@@ -388,6 +373,32 @@ class DetailViewModel @Inject internal constructor(
         launch { stores.libraryStore.setCompactEpisodeList(enabled) }
     }
 
+    init {
+        // Live refresh on server `UserDataChanged` pushes (e.g. another
+        // client flipping played/favorite on the item on screen). The server
+        // emits one change per item, so ids are accumulated across the
+        // debounce window and membership is checked at the drain — plain
+        // debounce would keep only the last change of a burst and miss the
+        // earlier items. Refresh reuses the pull-to-refresh path, which owns
+        // the per-type cache invalidation and keeps the current content
+        // visible under the Refreshing state.
+        launch {
+            val burstIds = mutableSetOf<String>()
+            mediaRepository.userDataChanges
+                .onEach { change -> burstIds += change.itemIds }
+                .debounce(HomeFreshness.USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS)
+                .collect {
+                    val changedIds = burstIds.toList()
+                    burstIds.clear()
+                    val itemId = currentItemId ?: return@collect
+                    if (_uiState.value.detail?.item?.id != itemId) return@collect
+                    if (itemId in changedIds) {
+                        loadItemInternal(itemId, refresh = true)
+                    }
+                }
+        }
+    }
+
     fun loadItem(itemId: String) {
         loadItemInternal(itemId, refresh = false)
     }
@@ -453,6 +464,7 @@ class DetailViewModel @Inject internal constructor(
                     seerrRecommendations = emptyList(),
                     seerrSimilar = emptyList(),
                     relatedVideos = emptyList(),
+                    tmdbReviews = emptyList(),
                     sonarrServersResolved = false,
                 )
             }
@@ -1136,6 +1148,7 @@ class DetailViewModel @Inject internal constructor(
                     seerrRecommendations = emptyList(),
                     seerrSimilar = emptyList(),
                     relatedVideos = emptyList(),
+                    tmdbReviews = emptyList(),
                 )
             }
 
@@ -1146,6 +1159,17 @@ class DetailViewModel @Inject internal constructor(
 
             val tmdbId = resolveTmdbId(detail) // top-level fn in TmdbIdResolver.kt
             if (tmdbId == null) return@launch
+
+            // Reviews come straight from TMDB — neither the Seerr connection nor
+            // the recommendations preference gates them. Separate launch so the
+            // review section doesn't serialize behind the Seerr fetches below.
+            launch {
+                val reviews = remoteDiscovery.seerrRepository.getTmdbReviews(tmdbId, mediaType)
+                    .getOrElse { emptyList() }
+                if (generation == seerrDataGeneration) {
+                    _uiState.update { it.copy(tmdbReviews = reviews.take(5)) }
+                }
+            }
 
             // Read the already-resolved Seerr connection booleans from the
             // published [uiState] aggregator — NOT [_uiState]. The flags are
@@ -1169,7 +1193,7 @@ class DetailViewModel @Inject internal constructor(
                     _uiState.update { it.copy(relatedVideos = videos) }
                 }
             } else {
-                val videosResult = remoteDiscovery.tmdbApiClient.getVideos(tmdbId, mediaType == MediaType.MOVIE)
+                val videosResult = remoteDiscovery.seerrRepository.getTmdbVideos(tmdbId, mediaType)
                 if (generation == seerrDataGeneration) {
                     val videos = videosResult.getOrElse { emptyList() }
                     _uiState.update { it.copy(relatedVideos = videos) }
@@ -1288,23 +1312,8 @@ class DetailViewModel @Inject internal constructor(
 }
 
 /**
- * Snapshot of the Seerr request-flow ephemera (dialog picker state + result
- * banner). Grouped so its upstream flows get a dedicated [StateFlow] in the
- * [DetailViewModel.uiState] combine chain — a tick here doesn't invalidate the
- * core detail or Seerr-connection groups.
- */
-@Immutable
-private data class SeerrRequestSnapshot(
-    val requestResult: SeerrRequestResult? = null,
-    val radarrServers: List<SeerrRadarrServiceDetail> = emptyList(),
-    val sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
-    val isLoadingServices: Boolean = false,
-    val tvSeasons: List<SeerrSeason> = emptyList(),
-)
-
-/**
  * Snapshot of the Seerr connection flags that only gate recommendation
- * visibility. Grouped for the same reason as [SeerrRequestSnapshot].
+ * visibility. Grouped for the same reason as the request snapshot.
  */
 @Immutable
 private data class SeerrConnectionFlags(

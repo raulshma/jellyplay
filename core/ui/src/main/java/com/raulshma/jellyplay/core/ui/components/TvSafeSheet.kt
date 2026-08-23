@@ -1,10 +1,13 @@
 package com.raulshma.jellyplay.core.ui.components
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -16,6 +19,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -113,31 +117,32 @@ private fun TvSheetDialog(
                             text = title,
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.focusRequester(initialFocus),
                         )
                     }
-                    ColumnContent(initialFocus = if (title == null) initialFocus else null, content = content)
+                    // focusGroup + focusRequester on the content (not the title Text — Text has no
+                    // focus target) so requesting initialFocus redirects into the first focusable
+                    // child, matching the TvFocusable* container contract. Same modifier order:
+                    // focusGroup first, requester last.
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusGroup()
+                            .focusRequester(initialFocus),
+                        content = content,
+                    )
                 }
             }
         }
     }
 
+    // 3-frame retry defends against sheet content that composes focusables asynchronously —
+    // same idiom as RequestOrRestoreFocus.
     LaunchedEffect(Unit) {
-        initialFocus.tryRequestFocus()
+        for (attempt in 1..3) {
+            withFrameNanos { }
+            if (initialFocus.tryRequestFocus("tv_sheet_init")) break
+        }
     }
-}
-
-@Composable
-private fun ColumnContent(
-    initialFocus: FocusRequester?,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(initialFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
-        content = content,
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -168,7 +173,17 @@ private fun MobileBottomSheet(
             colorScheme = colorScheme,
             typography = typography,
         ) {
-            content()
+            // Edge-to-edge: the sheet's own window does not inset its content, so
+            // callers must not add navigationBars/IME padding themselves — it is
+            // applied once here (sheet background still draws behind the bars).
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding(),
+            ) {
+                content()
+            }
         }
     }
 }

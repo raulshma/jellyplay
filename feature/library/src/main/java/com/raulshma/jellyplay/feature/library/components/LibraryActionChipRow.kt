@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.library.components
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +13,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -26,6 +30,7 @@ import com.composables.icons.tabler.outline.Stack2
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
+import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.library.R
 
 /**
@@ -45,6 +50,7 @@ import com.raulshma.jellyplay.feature.library.R
  * glow, via [ExpressiveChipContainer]) but adds a leading icon since these are
  * actions, not filter overflows.
  */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun LibraryActionChipRow(
     viewMode: LibraryViewMode,
@@ -53,6 +59,9 @@ fun LibraryActionChipRow(
     onSizeClick: () -> Unit,
     onGroupClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** TV: leaf anchor on the first chip — target of the screen-level vertical
+     *  navigation that hops between the header rows. */
+    firstChipFocus: FocusRequester? = null,
 ) {
     val (viewIcon, viewLabel) = when (viewMode) {
         LibraryViewMode.GRID -> Tabler.Outline.LayoutGrid to stringResource(R.string.library_grid_view)
@@ -64,7 +73,11 @@ fun LibraryActionChipRow(
     LazyRow(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp),
+            .padding(vertical = 2.dp)
+            // Same focus contract as the folder-pill/filter rows: group + restorer so D-pad
+            // traversal into the row restores the last-focused chip instead of restarting.
+            .focusGroup()
+            .tvFocusRestorer(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(horizontal = 24.dp),
     ) {
@@ -73,6 +86,7 @@ fun LibraryActionChipRow(
                 icon = viewIcon,
                 label = viewLabel,
                 onClick = onViewCycle,
+                modifier = firstChipFocus?.let { Modifier.focusRequester(it) } ?: Modifier,
             )
         }
         item(key = "size") {
@@ -105,8 +119,7 @@ private fun LibraryActionChip(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-) {
-    val isLight = LocalIsLightTheme.current
+) {    val isLight = LocalIsLightTheme.current
     val bgColor = if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
     val contentColor = MaterialTheme.colorScheme.onSurface
 

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import android.content.Context
 import android.net.Uri
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
+import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -12,6 +13,7 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateSto
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.isSideLoadableEmbeddedSubtitle
 import com.raulshma.jellyplay.core.model.toMediaItem
@@ -34,6 +36,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/**
+ * Session state for the VOD player: resolved item metadata, stream info, and
+ * the play-method badge fields surfaced by the player chrome.
+ */
 data class PlayerSessionState(
     val currentItemId: String? = null,
     val mediaDetail: MediaDetail? = null,
@@ -43,6 +49,9 @@ data class PlayerSessionState(
     val subtitle: String = "",
     val playMethodString: String = "Direct Play",
     val playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
+    /** Server-reported transcode reasons for the current stream; empty when
+     *  direct playing (or when the client forced its own fallback URL). */
+    val transcodeReasons: List<String> = emptyList(),
     val isDirectPlayForced: Boolean = false,
     /**
      * The server-issued play session id returned by the `PlaybackInfo`
@@ -87,6 +96,29 @@ class PlayerSessionManager(
 
     private var lastPlaybackRequest: PlaybackRequest? = null
 
+    /** Owns the in-flight transcode-reason lookup; cancelled/replaced per resolution. */
+    private val transcodeReasonsRefresher =
+        TranscodeReasonsRefresher(scope, playbackRepository::fetchActiveTranscodeReasons)
+
+    /**
+     * Populates [PlayerSessionState.transcodeReasons] from the server's live
+     * session (`TranscodingInfo`) when the resolution chose [PlayMethod.TRANSCODE],
+     * and clears it otherwise. The server registers the transcoding session a
+     * beat after playback starts, so the fetch waits, then retries once —
+     * reasons are diagnostics and a miss simply leaves the list empty.
+     */
+    private fun scheduleTranscodeReasonsRefresh(itemId: String?, playMethod: PlayMethod) {
+        transcodeReasonsRefresher.refresh(
+            itemId,
+            isTranscode = playMethod == PlayMethod.TRANSCODE,
+            isCurrent = { _sessionState.value.currentItemId == itemId },
+            clear = { _sessionState.update { it.copy(transcodeReasons = emptyList()) } },
+            onReasons = { reasons ->
+                _sessionState.update { it.copy(transcodeReasons = reasons) }
+            },
+        )
+    }
+
     /**
      * The external (side-loaded) subtitle sources for the current session, or
      * null when no media is loaded. Exposed so features like the subtitle-sync
@@ -130,10 +162,13 @@ class PlayerSessionManager(
     }
 
     fun bindReclaimedEngine(engine: MediaEngine, itemId: String, detail: MediaDetail) {
+        // Same stale-fetch hazard as loadMedia: a reclaimed engine for the
+        // same item must not inherit the previous session's in-flight fetch.
+        transcodeReasonsRefresher.cancel()
         _engine.value = engine
         playerLifecycleManager.activeCallbacks = engine
         pipController.requestAutoEnterPip(engine.capabilities.supportsPip)
-        _sessionState.update { 
+        _sessionState.update {
             it.copy(
                 currentItemId = itemId,
                 mediaDetail = detail,
@@ -144,6 +179,7 @@ class PlayerSessionManager(
                     seasonNumber = detail.item.seasonNumber,
                     episodeNumber = detail.item.episodeNumber,
                 ),
+                transcodeReasons = emptyList(),
                 isReady = true
             )
         }
@@ -173,6 +209,11 @@ class PlayerSessionManager(
      */
     suspend fun loadMedia(source: PlaybackSource, startPositionTicks: Long) {
         val itemId = source.itemId
+        // Kill any in-flight reasons fetch up front: reloading the *same*
+        // item (watch-again, offline switch) would let the old fetch's
+        // isCurrent guard pass and land the previous session's reasons in
+        // the fresh session before the resolve path re-arms or clears them.
+        transcodeReasonsRefresher.cancel()
         _sessionState.update { it.copy(currentItemId = itemId, isReady = false) }
 
         // The download lookup is needed both for Auto resolution and for
@@ -267,6 +308,7 @@ class PlayerSessionManager(
                 subtitle = subtitle,
                 playMethodString = "Offline",
                 playMethod = PlayMethod.DIRECT_PLAY,
+                transcodeReasons = emptyList(),
                 streamUrl = url,
             )
         }
@@ -397,6 +439,7 @@ class PlayerSessionManager(
                 streamUrl = url,
             )
         }
+        scheduleTranscodeReasonsRefresh(itemId, playMethod)
 
         if (playerType == PlayerType.EXTERNAL) {
             _sessionState.update { it.copy(isReady = true) }
@@ -450,16 +493,29 @@ class PlayerSessionManager(
         playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
         mimeType: String? = null,
     ) {
-        // Release the outgoing engine and null the reference before creating the
-        // replacement, so a failure in create()/setup can never leave the field
-        // pointing at an already-released engine.
-        try {
-            _engine.value?.release()
-        } finally {
-            _engine.value = null
+        // Reuse the live engine when the player type is unchanged (the common
+        // binge-watch/autoplay case): every engine's load() resets per-item
+        // state, and ExoPlayerEngine fast-paths an unchanged-config load with
+        // setMediaItem+prepare instead of a full teardown/rebuild — keeping the
+        // media-session wiring and audio-effect chain attached and avoiding a
+        // rebuffer at every episode boundary. First creation, an engine
+        // switch, or a released engine takes the original release+create path.
+        val existingEngine = _engine.value
+        val eng = if (existingEngine != null && playerType == lastPlayerType) {
+            existingEngine
+        } else {
+            // Release the outgoing engine and null the reference before creating
+            // the replacement, so a failure in create()/setup can never leave the
+            // field pointing at an already-released engine.
+            try {
+                _engine.value?.release()
+            } finally {
+                _engine.value = null
+            }
+            playerEngineFactory.create(playerType).also { created ->
+                _engine.value = created
+            }
         }
-        val eng = playerEngineFactory.create(playerType)
-        _engine.value = eng
         lastPlayerType = playerType
 
         playerLifecycleManager.activeCallbacks = eng
@@ -499,6 +555,7 @@ class PlayerSessionManager(
                 else null,
             serverUrl = serverUrl,
             authToken = token,
+            playMethod = playMethod,
             minBufferMs = agg.videoPlayer.videoPreloadBufferSize.minBufferMs,
             maxBufferMs = agg.videoPlayer.videoPreloadBufferSize.maxBufferMs,
             normalizationGain = detail.item.normalizationGain,
@@ -527,6 +584,14 @@ class PlayerSessionManager(
      * mid-playback so a switch to/from transcode swaps the underlying stream
      * without restarting the item.
      *
+     * [selection] carries the currently-selected server streams into the
+     * re-POST: the server bakes a single audio track into the transcoded
+     * manifest and burns in image subs, so dropping the indices would silently
+     * reset those choices to the server defaults. Text subs are side-loaded
+     * regardless (see [buildExternalSubtitles]) — for them the indices are
+     * echoed for the server's DefaultSubtitleStreamIndex bookkeeping; the
+     * client-side selection is restored by the track ladder.
+     *
      * Returns the resolved [ResolvedPlayback] (or `null` on failure) so the
      * caller can react — e.g. fall back to transcode when a forced direct
      * play request yields no playable method.
@@ -535,6 +600,7 @@ class PlayerSessionManager(
         mode: PlaybackMode,
         quality: com.raulshma.jellyplay.core.model.StreamingQuality,
         currentPositionMs: Long,
+        selection: MediaStreamSelection? = null,
     ): ResolvedPlayback? {
         val itemId = _sessionState.value.currentItemId ?: return null
         val sourceId = _sessionState.value.currentMediaSource?.id ?: ""
@@ -546,8 +612,8 @@ class PlayerSessionManager(
             itemId = itemId,
             mediaSourceId = sourceId,
             startTimeTicks = currentPositionMs * 10_000,
-            audioStreamIndex = null,
-            subtitleStreamIndex = null,
+            audioStreamIndex = selection?.audioStreamIndex,
+            subtitleStreamIndex = selection?.subtitleStreamIndex,
             maxStreamingBitrateBits = maxBitrate,
             mode = mode,
             playerType = playerType,
@@ -565,6 +631,7 @@ class PlayerSessionManager(
                 streamUrl = url,
             )
         }
+        scheduleTranscodeReasonsRefresh(itemId, playMethod)
 
         // Swap the engine onto the freshly resolved URL. The engine-level
         // bitrate cap is only meaningful for AUTO (server-side cap drives
@@ -583,14 +650,15 @@ class PlayerSessionManager(
             maxVideoBitrate = engineMaxBitrate,
             uriOverride = url,
             externalSubtitlesOverride = rebuiltSubtitles,
+            playMethodOverride = playMethod,
         )
         return resolved
     }
 
     /**
      * Reload playback for the current item at [currentPositionMs] with a new
-     * [audioStreamIndex] and/or [subtitleStreamIndex]. Used when the user
-     * selects a server-origin audio/subtitle track during transcoded playback
+     * audio/subtitle stream [selection]. Used when the user selects a
+     * server-origin audio/subtitle track during transcoded playback
      * — mpv cannot switch audio in-place on an HLS manifest, and embedded subs
      * aren't delivered in the transcode, so the server must re-issue the
      * stream with the chosen index baked in (standard Jellyfin PlaybackInfo
@@ -602,8 +670,7 @@ class PlayerSessionManager(
      * play method.
      */
     suspend fun reloadForStreamChange(
-        audioStreamIndex: Int?,
-        subtitleStreamIndex: Int?,
+        selection: MediaStreamSelection,
         currentPositionMs: Long,
     ): ResolvedPlayback? {
         val itemId = _sessionState.value.currentItemId ?: return null
@@ -617,8 +684,8 @@ class PlayerSessionManager(
             itemId = itemId,
             mediaSourceId = sourceId,
             startTimeTicks = currentPositionMs * 10_000,
-            audioStreamIndex = audioStreamIndex,
-            subtitleStreamIndex = subtitleStreamIndex,
+            audioStreamIndex = selection.audioStreamIndex,
+            subtitleStreamIndex = selection.subtitleStreamIndex,
             maxStreamingBitrateBits = maxBitrate,
             mode = mode,
             playerType = playerType,
@@ -635,6 +702,7 @@ class PlayerSessionManager(
                 streamUrl = url,
             )
         }
+        scheduleTranscodeReasonsRefresh(itemId, playMethod)
 
         val engineMaxBitrate = if (mode == PlaybackMode.AUTO) maxBitrate?.toInt() else null
         val state = _sessionState.value
@@ -648,6 +716,7 @@ class PlayerSessionManager(
             maxVideoBitrate = engineMaxBitrate,
             uriOverride = url,
             externalSubtitlesOverride = rebuiltSubtitles,
+            playMethodOverride = playMethod,
         )
         return resolved
     }
@@ -659,6 +728,7 @@ class PlayerSessionManager(
         maxVideoBitrate: Int? = null,
         uriOverride: String? = null,
         externalSubtitlesOverride: List<SubtitleSource>? = null,
+        playMethodOverride: PlayMethod? = null,
     ) {
         val last = lastPlaybackRequest ?: return
         val agg = aggregateStore.aggregate.value
@@ -691,6 +761,10 @@ class PlayerSessionManager(
             maxVideoBitrate = maxVideoBitrate,
             uri = uriOverride ?: last.uri,
             externalSubtitles = externalSubtitlesOverride ?: last.externalSubtitles,
+            // A URL swap (mode/quality/stream-index reload) re-resolves the
+            // play method with it; without this the stale Direct-Play method
+            // would survive a switch to a transcode URL.
+            playMethod = playMethodOverride ?: last.playMethod,
         )
         lastPlaybackRequest = request
         eng.load(request)
@@ -761,7 +835,7 @@ class PlayerSessionManager(
                 codec = stream.codec,
                 isDefault = stream.isDefault,
                 isForced = stream.isForced,
-                id = "external:${stream.index}",
+                id = externalSubtitleTrackId(stream.index),
             )
         }
     }
@@ -785,13 +859,14 @@ class PlayerSessionManager(
                     codec = entry.codec,
                     isDefault = entry.isDefault,
                     isForced = entry.isForced,
-                    id = "offline:${entry.index}",
+                    id = offlineSubtitleTrackId(entry.index),
                 )
             )
         }
     }
 
     fun release() {
+        transcodeReasonsRefresher.cancel()
         _engine.value?.release()
         _engine.value = null
         lastPlaybackRequest = null

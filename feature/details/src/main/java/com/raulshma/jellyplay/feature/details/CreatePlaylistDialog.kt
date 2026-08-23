@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -19,6 +18,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 
@@ -43,7 +43,7 @@ internal fun CreatePlaylistDialog(
     val nameFocusRequester = remember { FocusRequester() }
     RequestOrRestoreFocus(nameFocusRequester, "create_playlist_name")
 
-    AlertDialog(
+    ImeAlertDialog(
         onDismissRequest = { if (!isLoading) onDismiss() },
         title = { Text(stringResource(R.string.detail_playlist_new_title)) },
         text = {

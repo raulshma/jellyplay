@@ -88,6 +88,15 @@ interface AdminRepository {
      */
     val scheduledTasks: Flow<List<ScheduledTaskInfo>>
 
+    /**
+     * Wall time of the last successful ScheduledTasksInfo push (0 = none
+     * this process). Freshness signal for [scheduledTasks] consumers: the
+     * shared flow replays its last emission to every new collector, and that
+     * replay can be arbitrarily old, so recency must be judged from the push
+     * time, not the collection time.
+     */
+    val scheduledTasksLastPushAtMs: Long
+
     /** The "Scan media library" task when present/running, else null. */
     val libraryScanTask: Flow<ScheduledTaskInfo?>
 

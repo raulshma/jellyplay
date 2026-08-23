@@ -34,13 +34,10 @@ import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
@@ -53,7 +50,7 @@ import kotlinx.coroutines.cancel
 class MpvPlayerEngine(
     private val context: Context,
     private val fontProvider: FontProvider,
-) : BasePlayerEngine() {
+) : ReloadablePlayerEngine(context) {
 
     companion object {
         private const val TAG = "MpvPlayerEngine"
@@ -147,8 +144,6 @@ class MpvPlayerEngine(
     // cannot resolve a duration for HLS/transcoded streams (where `duration`
     // is frequently 0/partial). Set from PlaybackRequest in load().
     @Volatile private var serverDurationMs: Long = 0L
-
-    @Volatile private var lastUnmuteVolume: Float = 1f
 
     // mpv handles its own internal EQ via af filters; this helper exists
     // solely to host the dialogue-boost overlay (see DialogueBoostHelper
@@ -971,9 +966,9 @@ class MpvPlayerEngine(
 
     override fun setVolume(value: Float) {
         try {
-            val clamped = value.coerceIn(0f, 1f)
-            val pct = (clamped * 100.0).coerceIn(0.0, 200.0)
-            mpvView?.mpv?.setPropertyDouble("volume", pct)
+            val clamped = clamp01(value)
+            rememberUnmuteVolumeIfAudible(clamped)
+            mpvView?.mpv?.setPropertyDouble("volume", (clamped * 100.0).coerceIn(0.0, 200.0))
             MediaStreamVolume.setNormalized(context, clamped)
         } catch (_: Exception) {}
     }
@@ -984,7 +979,9 @@ class MpvPlayerEngine(
             val current = m.getPropertyDouble("volume") ?: 100.0
             val next = (current + delta * 100.0).coerceIn(0.0, 200.0)
             m.setPropertyDouble("volume", next)
-            MediaStreamVolume.setNormalized(context, (next / 100.0).toFloat().coerceIn(0f, 1f))
+            val next01 = (next / 100.0).toFloat().coerceIn(0f, 1f)
+            rememberUnmuteVolumeIfAudible(next01)
+            MediaStreamVolume.setNormalized(context, next01)
         } catch (_: Exception) {}
     }
 
@@ -994,7 +991,9 @@ class MpvPlayerEngine(
             val current = m.getPropertyDouble("volume") ?: 100.0
             val next = (current - delta * 100.0).coerceAtLeast(0.0)
             m.setPropertyDouble("volume", next)
-            MediaStreamVolume.setNormalized(context, (next / 100.0).toFloat().coerceIn(0f, 1f))
+            val next01 = (next / 100.0).toFloat().coerceIn(0f, 1f)
+            rememberUnmuteVolumeIfAudible(next01)
+            MediaStreamVolume.setNormalized(context, next01)
         } catch (_: Exception) {}
     }
 
@@ -1002,21 +1001,10 @@ class MpvPlayerEngine(
         try { mpvView?.mpv?.setPropertyBoolean("mute", muted) } catch (_: Exception) {}
         try {
             if (muted) {
-                // Snapshot the system STREAM_MUSIC level before zeroing so unmute
-                // restores it. mpv mutes internally, but the system stream is the
-                // value the user actually controls (gesture path / hardware keys),
-                // and zeroing it here means we must remember what to restore.
-                lastUnmuteVolume = MediaStreamVolume.getNormalized(context)
-                    .takeIf { it > 0f } ?: lastUnmuteVolume
+                snapshotSystemVolumeForMute()
                 MediaStreamVolume.setNormalized(context, 0f)
             } else {
-                // mpv's native `mute` preserves its own `volume`; restore the
-                // system stream to the snapshot captured at mute time rather
-                // than blasting full volume.
-                MediaStreamVolume.setNormalized(
-                    context,
-                    lastUnmuteVolume.coerceIn(0.05f, 1f),
-                )
+                MediaStreamVolume.setNormalized(context, unmuteTarget())
             }
         } catch (_: Exception) {}
     }
@@ -1171,46 +1159,26 @@ class MpvPlayerEngine(
     override val audioSessionId: Int
         get() = generatedAudioSessionId
 
-    override val positionFlow: Flow<Long> = callbackFlow {
-        trySend(currentPositionMs)
-        // The polling loop (bounded paused-wait, play↔pause edge detection) is
-        // shared via [EnginePositionTicker].
-        val ticker = EnginePositionTicker(
-            scope = engineScope,
-            pollingIntervalMs = _pollingIntervalMs,
-            isPlayingFlow = _isPlaying,
-            isCurrentlyPlaying = { _isPlaying.value },
-            onActive = {
-                // Push the observer-cached position downstream. No JNI here:
-                // time-pos / demuxer-cache-duration / duration are observed
-                // properties whose callbacks populate the cached fields. This
-                // is the hot path (fires every poll) so keeping it allocation-
-                // and JNI-free eliminates the primary source of main-thread
-                // jank during mpv playback.
-                val posMs = cachedPositionMs
-                trySend(posMs)
-                val dur = durationMs
-                if (dur > 0L) {
-                    _bufferedPositionMs.value = cachedBufferedPositionMs.coerceAtMost(dur)
-                } else {
-                    _bufferedPositionMs.value = cachedBufferedPositionMs
-                }
-                if (_videoStatsEnabled.value) {
-                    // Stats require ~12 property reads. Run them on the MAIN
-                    // thread (the ticker's onActive already runs on engineScope
-                    // = Dispatchers.Main) to serialise against
-                    // mpv_terminate_destroy. Offloading to Dispatchers.IO would
-                    // race the destroy posted to releaseThread during teardown
-                    // (same use-after-free window that hung the player on
-                    // subtitle-reload engine swaps). The reads are quick
-                    // individual property gets and only run while the stats
-                    // overlay is open.
-                    updateVideoStatsOnly(posMs)
-                }
-            },
-        ).launch()
-        awaitClose { ticker.cancel() }
-    }.conflate() // only the most-recent position is meaningful; drop stale ticks
+    override val positionFlow: Flow<Long> = positionFlowWithTicker {
+        // Push the observer-cached position downstream. No JNI here:
+        // time-pos / demuxer-cache-duration / duration are observed properties whose
+        // callbacks populate the cached fields. This is the hot path (fires every poll)
+        // so keeping it allocation- and JNI-free eliminates the primary source of
+        // main-thread jank during mpv playback.
+        val posMs = cachedPositionMs
+        val dur = durationMs
+        if (dur > 0L) {
+            _bufferedPositionMs.value = cachedBufferedPositionMs.coerceAtMost(dur)
+        } else {
+            _bufferedPositionMs.value = cachedBufferedPositionMs
+        }
+        if (_videoStatsEnabled.value) {
+            // Stats require ~12 property reads. Run them on the MAIN thread (the
+            // ticker's onActive already runs on engineScope = Dispatchers.Main) to
+            // serialise against mpv_terminate_destroy.
+            updateVideoStatsOnly(posMs)
+        }
+    }
 
     private fun updateVideoStatsOnly(posMs: Long) {
         val m = mpvView?.mpv ?: return
@@ -1268,10 +1236,7 @@ class MpvPlayerEngine(
                 voDelayedMs = m.propDoubleOrNull("vo-delayed")?.let { if (it != 0f) it else null },
                 voFrameDropCount = m.propIntOrNull("frame-drop-count")?.toLong(),
             )
-            val currentStats = _videoStats.value
-            if (newStats != currentStats) {
-                _videoStats.value = newStats
-            }
+            publishStatsIfChanged(newStats)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to read MPV video stats", e)
         }

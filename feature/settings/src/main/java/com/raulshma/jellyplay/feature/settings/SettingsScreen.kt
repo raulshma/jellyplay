@@ -85,6 +85,7 @@ import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.navigation.withHighlightSettingId
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -115,7 +116,6 @@ import androidx.compose.ui.graphics.Color
 import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchMatcher
-import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchRegistry
 import com.raulshma.jellyplay.core.ui.settingssearch.resolve
 import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
 import androidx.compose.ui.graphics.Brush
@@ -146,48 +146,32 @@ private val ACTION_ONLY_IDS = setOf("logout", "sign_out_from_server")
 // `PickerState` dispatcher rather than a screen-local sealed dialog enum.
 
 /**
- * Bundles the sub-screen navigation callbacks passed into [SettingsScreen].
+ * Bundles the navigation actions passed into [SettingsScreen] (and
+ * [AppearanceSettingsScreen]'s drill-ins).
  *
  * Grouping them into a single `@Immutable` value lets the navigation call site
- * `remember` one instance, so the [SettingsScreen] subtree is treated as
- * skip-worthy by the Compose compiler instead of recomposing on every parent
- * state change (each unstable lambda parameter would otherwise be a distinct
- * stability key). Mirrors the [com.raulshma.jellyplay.feature.home.HomeCallbacks]
+ * `remember` one instance, so the screen subtree is treated as skip-worthy by
+ * the Compose compiler instead of recomposing on every parent state change
+ * (each unstable lambda parameter would otherwise be a distinct stability
+ * key). Mirrors the [com.raulshma.jellyplay.feature.home.HomeCallbacks]
  * pattern.
  *
- * Callers should construct via `remember(...) { SettingsCallbacks(...) }` so the
- * same instance is reused across recompositions.
+ * [onNavigate] is the single seam for every sub-screen drill-in: the caller
+ * passes the target [Route] with its `highlightSettingId` already set — e.g.
+ * `Route.AppearanceSettings("theme_mode")` — so screens never grow a per-route
+ * lambda again (this facade replaced a 28-lambda `SettingsCallbacks`).
+ * [onSetupWizard] keeps its host-level indirection; [onLogout] and
+ * [onCheckForUpdates] complete the host-provided action surface.
+ *
+ * Callers should construct via `remember(...) { SettingsNavActions(...) }` so
+ * the same instance is reused across recompositions.
  */
 @Immutable
-data class SettingsCallbacks(
-    val onServerManagement: (String?) -> Unit = {},
-    val onUserManagement: (String?) -> Unit = {},
-    val onSeerrSettings: (String?) -> Unit = {},
-    val onArrSettings: (String?) -> Unit = {},
-    val onIntegrations: (String?) -> Unit = {},
-    val onAdminDashboard: () -> Unit = {},
+data class SettingsNavActions(
+    val onNavigate: (Route) -> Unit = {},
+    val onLogout: () -> Unit = {},
     val onSetupWizard: () -> Unit = {},
-    val onNewsletterClick: () -> Unit = {},
-    val onFavoritesClick: () -> Unit = {},
-    val onAboutClick: () -> Unit = {},
-    val onWatchProgressHeatmapClick: () -> Unit = {},
-    val onActivityQueueClick: () -> Unit = {},
-    val onUpcomingClick: () -> Unit = {},
-    val onRequestsClick: () -> Unit = {},
-    val onAppearanceSettings: (String?) -> Unit = {},
-    val onPinnedHomeSections: (String?) -> Unit = {},
-    val onHomeLayoutPresets: (String?) -> Unit = {},
-    val onConfigureLibraries: (String?) -> Unit = {},
-    val onPlaybackSettings: (String?) -> Unit = {},
-    val onAudioSettings: (String?) -> Unit = {},
-    val onLanguageSettings: (String?) -> Unit = {},
-    val onNotificationSettings: (String?) -> Unit = {},
-    val onStorageSettings: (String?) -> Unit = {},
-    val onSecuritySettings: (String?) -> Unit = {},
-    val onPrivacyData: (String?) -> Unit = {},
-    val onBackupSettings: (String?) -> Unit = {},
-    val onExperimentalSettings: (String?) -> Unit = {},
-    val onOpenSubtitleTester: () -> Unit = {},
+    val onCheckForUpdates: () -> Unit = {},
 )
 
 /**
@@ -326,37 +310,12 @@ private fun SettingsSearchResultRow(
 fun SettingsScreen(
     onBack: () -> Unit,
     onLogout: (Boolean) -> Unit,
-    callbacks: SettingsCallbacks,
+    navActions: SettingsNavActions,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
-    val onServerManagement = callbacks.onServerManagement
-    val onUserManagement = callbacks.onUserManagement
-    val onSeerrSettings = callbacks.onSeerrSettings
-    val onArrSettings = callbacks.onArrSettings
-    val onIntegrations = callbacks.onIntegrations
-    val onNewsletterClick = callbacks.onNewsletterClick
-    val onAboutClick = callbacks.onAboutClick
-    val onActivityQueueClick = callbacks.onActivityQueueClick
-    val onUpcomingClick = callbacks.onUpcomingClick
-    val onRequestsClick = callbacks.onRequestsClick
-    val onFavoritesClick = callbacks.onFavoritesClick
-    val onWatchProgressHeatmapClick = callbacks.onWatchProgressHeatmapClick
-    val onAdminDashboard = callbacks.onAdminDashboard
-    val onSetupWizard = callbacks.onSetupWizard
-    val onAppearanceSettings = callbacks.onAppearanceSettings
-    val onPinnedHomeSections = callbacks.onPinnedHomeSections
-    val onHomeLayoutPresets = callbacks.onHomeLayoutPresets
-    val onPlaybackSettings = callbacks.onPlaybackSettings
-    val onAudioSettings = callbacks.onAudioSettings
-    val onLanguageSettings = callbacks.onLanguageSettings
-    val onNotificationSettings = callbacks.onNotificationSettings
-    val onStorageSettings = callbacks.onStorageSettings
-    val onSecuritySettings = callbacks.onSecuritySettings
-    val onPrivacyData = callbacks.onPrivacyData
-    val onBackupSettings = callbacks.onBackupSettings
-    val onExperimentalSettings = callbacks.onExperimentalSettings
-    val onOpenSubtitleTester = callbacks.onOpenSubtitleTester
-    val onConfigureLibraries = callbacks.onConfigureLibraries
+    val onNavigate = navActions.onNavigate
+    val onSetupWizard = navActions.onSetupWizard
+    val onNewsletterClick: () -> Unit = { onNavigate(Route.Newsletter) }
     val preferences = viewModel.preferences
     val userName = viewModel.currentUserName
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -417,7 +376,7 @@ fun SettingsScreen(
 
     // Debounced + off-main-thread fuzzy search. Each keystroke only re-runs the
     // matcher after a short quiet period, and the Damerau-Levenshtein work happens
-    // on Dispatchers.Default so typing stays smooth on low-end devices. The registry's
+    // on Dispatchers.Default so typing stays smooth on low-end devices. The catalog's
     // @StringRes ids are resolved to the current locale once per query, so matching and
     // the rendered results both reflect the user's language.
     val context = LocalContext.current
@@ -428,20 +387,20 @@ fun SettingsScreen(
         snapshotFlow { searchQuery }
             .debounce(120)
             .distinctUntilChanged()
-            .map { SettingsSearchMatcher.search(it, SettingsSearchRegistry.items.resolve(context::getString)) }
+            .map { SettingsSearchMatcher.search(it, SettingsSearchCatalog.items.resolve(context::getString)) }
             .flowOn(Dispatchers.Default)
             .collect { value = it }
     }
 
     // The last-used setting ids (most-recent first), resolved back to renderable
-    // items against the registry. Stale ids — a recorded setting whose registry
+    // items against the catalog. Stale ids — a recorded setting whose catalog
     // entry no longer exists — drop out via mapNotNull and naturally age out as new
     // ids displace them. Only re-resolved when the persisted id list changes.
     val recentIds by viewModel.recentSettingIds.collectAsStateWithLifecycle()
     val recentItems = remember(recentIds) {
         if (recentIds.isEmpty()) emptyList()
         else {
-            val byId = SettingsSearchRegistry.items.resolve(context::getString).associateBy { it.id }
+            val byId = SettingsSearchCatalog.items.resolve(context::getString).associateBy { it.id }
             recentIds.mapNotNull { byId[it] }
         }
     }
@@ -468,9 +427,13 @@ fun SettingsScreen(
 
         // Shared tap handler for both the live search results and the recent
         // settings list: flips the advanced toggle on if needed, dispatches the
-        // per-route navigation, records the setting as recently used (skipping
-        // pure actions like logout), then collapses the search panel. Extracted so
-        // the two lists never drift in click behavior.
+        // navigation, records the setting as recently used (skipping pure
+        // actions like logout), then collapses the search panel. Extracted so
+        // the two lists never drift in click behavior. Navigation is the same
+        // one-liner as the home header search: inject the matched id as the
+        // route's deep-link highlight target. Only the non-navigate special
+        // cases (sign-out dialogs, the on-screen screensaver group, the
+        // host-indirected setup wizard) keep bespoke branches.
         val onResultClick: (ResolvedSettingsItem) -> Unit = { item ->
             if (item.isAdvanced && !preferences.showAdvancedSettings) {
                 viewModel.setShowAdvancedSettings(true)
@@ -481,96 +444,6 @@ fun SettingsScreen(
                 showSignOutConfirm = true
             } else {
                 when (item.route) {
-                    is Route.ServerManagement -> onServerManagement(item.id)
-                    is Route.UserManagement -> onUserManagement(item.id)
-                    is Route.SeerrSettings -> {
-                        lastClickedSettingId = "seerr_settings"
-                        onSeerrSettings(item.id)
-                    }
-                    Route.Favorites -> {
-                        lastClickedSettingId = "favorites"
-                        onFavoritesClick()
-                    }
-                    Route.WatchProgressHeatmap -> {
-                        lastClickedSettingId = "watch_progress_heatmap"
-                        onWatchProgressHeatmapClick()
-                    }
-                    Route.ArrQueue -> {
-                        lastClickedSettingId = "activity_queue"
-                        onActivityQueueClick()
-                    }
-                    Route.UpcomingCalendar -> {
-                        lastClickedSettingId = "upcoming"
-                        onUpcomingClick()
-                    }
-                    Route.Requests -> {
-                        lastClickedSettingId = "requests"
-                        onRequestsClick()
-                    }
-                    Route.AdminDashboard -> {
-                        lastClickedSettingId = "admin_dashboard"
-                        onAdminDashboard()
-                    }
-                    Route.Onboarding -> {
-                        lastClickedSettingId = "setup_wizard"
-                        onSetupWizard()
-                    }
-                    is Route.ArrSettings -> {
-                        lastClickedSettingId = "integrations"
-                        onArrSettings(item.id)
-                    }
-                    is Route.Integrations -> {
-                        lastClickedSettingId = "integrations"
-                        onIntegrations(item.id)
-                    }
-                    is Route.AppearanceSettings -> {
-                        lastClickedSettingId = "appearance"
-                        onAppearanceSettings(item.id)
-                    }
-                    is Route.PinnedHomeSections -> {
-                        lastClickedSettingId = "appearance"
-                        onPinnedHomeSections(item.id)
-                    }
-                    is Route.HomeLayoutPresets -> {
-                        lastClickedSettingId = "appearance"
-                        onHomeLayoutPresets(item.id)
-                    }
-                    is Route.PlaybackSettings -> {
-                        lastClickedSettingId = "playback"
-                        onPlaybackSettings(item.id)
-                    }
-                    is Route.AudioSettings -> {
-                        lastClickedSettingId = "audio"
-                        onAudioSettings(item.id)
-                    }
-                    is Route.LanguageSettings -> {
-                        lastClickedSettingId = "language"
-                        onLanguageSettings(item.id)
-                    }
-                    is Route.NotificationSettings -> {
-                        lastClickedSettingId = "notifications"
-                        onNotificationSettings(item.id)
-                    }
-                    is Route.StorageSettings -> {
-                        lastClickedSettingId = "storage"
-                        onStorageSettings(item.id)
-                    }
-                    is Route.SecuritySettings -> {
-                        lastClickedSettingId = "security"
-                        onSecuritySettings(item.id)
-                    }
-                    is Route.BackupSettings -> {
-                        lastClickedSettingId = "backup"
-                        onBackupSettings(item.id)
-                    }
-                    is Route.LibraryHomeSections -> {
-                        lastClickedSettingId = "configure_libraries"
-                        onConfigureLibraries(item.id)
-                    }
-                    Route.SubtitleTester -> {
-                        lastClickedSettingId = "subtitle_tester"
-                        onOpenSubtitleTester()
-                    }
                     Route.Settings -> {
                         // Bare-settings targets live on this screen: the
                         // sign-out-from-server action opens the confirm dialog,
@@ -582,15 +455,21 @@ fun SettingsScreen(
                             lastClickedSettingId = item.id
                         }
                     }
-                    is Route.ExperimentalSettings -> {
-                        lastClickedSettingId = "experimental"
-                        onExperimentalSettings(item.id)
+                    Route.Onboarding -> {
+                        lastClickedSettingId = "setup_wizard"
+                        onSetupWizard()
                     }
-                    Route.About -> {
-                        lastClickedSettingId = "about"
-                        onAboutClick()
+                    else -> {
+                        // Entries into sub-screens mark a pending highlight for
+                        // the TV re-entry focus policy — except Server/User
+                        // Management, which the old per-route dispatch never
+                        // marked. Unknown highlight ids are no-ops downstream
+                        // (rememberHighlightScrollIndex resolves them to -1).
+                        if (item.route !is Route.ServerManagement && item.route !is Route.UserManagement) {
+                            lastClickedSettingId = item.id
+                        }
+                        onNavigate(item.route.withHighlightSettingId(item.id))
                     }
-                    else -> {}
                 }
             }
             if (item.id !in ACTION_ONLY_IDS) viewModel.recordSettingUsed(item.id)
@@ -885,8 +764,8 @@ fun SettingsScreen(
                                         showAdvanced = preferences.showAdvancedSettings,
                                         onToggleAdvanced = { viewModel.setShowAdvancedSettings(!preferences.showAdvancedSettings) },
                                         onNewsletterClick = onNewsletterClick,
-                                        onUserManagementClick = { onUserManagement(null) },
-                                        onServerManagementClick = { onServerManagement(null) },
+                                        onUserManagementClick = { onNavigate(Route.UserManagement(null)) },
+                                        onServerManagementClick = { onNavigate(Route.ServerManagement(null)) },
                                     )
                                 }
                             }
@@ -922,7 +801,7 @@ fun SettingsScreen(
                                         index = 0, count = 4,
                                         onClick = {
                                             lastClickedSettingId = "server_management"
-                                            onServerManagement(null)
+                                            onNavigate(Route.ServerManagement(lastClickedSettingId))
                                         },
                                     )
                                     SettingListItem(
@@ -932,7 +811,7 @@ fun SettingsScreen(
                                         index = 1, count = 4,
                                         onClick = {
                                             lastClickedSettingId = "user_management"
-                                            onUserManagement(null)
+                                            onNavigate(Route.UserManagement(lastClickedSettingId))
                                         },
                                     )
                                     SettingListItem(
@@ -995,7 +874,7 @@ fun SettingsScreen(
                                         index = 0, count = insightsCount,
                                         onClick = {
                                             lastClickedSettingId = "favorites"
-                                            onFavoritesClick()
+                                            onNavigate(Route.Favorites)
                                         },
                                     )
                                     SettingListItem(
@@ -1005,7 +884,7 @@ fun SettingsScreen(
                                         index = 1, count = insightsCount,
                                         onClick = {
                                             lastClickedSettingId = "watch_progress_heatmap"
-                                            onWatchProgressHeatmapClick()
+                                            onNavigate(Route.WatchProgressHeatmap)
                                         },
                                     )
                                     SettingListItem(
@@ -1015,7 +894,7 @@ fun SettingsScreen(
                                         index = 2, count = insightsCount,
                                         onClick = {
                                             lastClickedSettingId = "activity_queue"
-                                            onActivityQueueClick()
+                                            onNavigate(Route.ArrQueue)
                                         },
                                     )
                                     SettingListItem(
@@ -1025,7 +904,7 @@ fun SettingsScreen(
                                         index = 3, count = insightsCount,
                                         onClick = {
                                             lastClickedSettingId = "upcoming"
-                                            onUpcomingClick()
+                                            onNavigate(Route.UpcomingCalendar)
                                         },
                                     )
                                     SettingListItem(
@@ -1036,7 +915,7 @@ fun SettingsScreen(
                                         trailingText = pendingCount.takeIf { it > 0 }?.toString(),
                                         onClick = {
                                             lastClickedSettingId = "requests"
-                                            onRequestsClick()
+                                            onNavigate(Route.Requests)
                                         },
                                     )
                                 }
@@ -1079,7 +958,7 @@ fun SettingsScreen(
                                             index = systemIndex++, count = systemCount,
                                             onClick = {
                                                 lastClickedSettingId = "admin_dashboard"
-                                                onAdminDashboard()
+                                                onNavigate(Route.AdminDashboard)
                                             },
                                         )
                                     }
@@ -1106,7 +985,7 @@ fun SettingsScreen(
                                     index = 0, count = 1,
                                     onClick = {
                                         lastClickedSettingId = "appearance"
-                                        onAppearanceSettings(null)
+                                        onNavigate(Route.AppearanceSettings(lastClickedSettingId))
                                     },
                                 )
                             }
@@ -1121,7 +1000,7 @@ fun SettingsScreen(
                                     index = 0, count = 1,
                                     onClick = {
                                         lastClickedSettingId = "playback"
-                                        onPlaybackSettings(null)
+                                        onNavigate(Route.PlaybackSettings(lastClickedSettingId))
                                     },
                                 )
                             }
@@ -1136,7 +1015,7 @@ fun SettingsScreen(
                                     index = 0, count = 1,
                                     onClick = {
                                         lastClickedSettingId = "audio"
-                                        onAudioSettings(null)
+                                        onNavigate(Route.AudioSettings(lastClickedSettingId))
                                     },
                                 )
                             }
@@ -1151,7 +1030,7 @@ fun SettingsScreen(
                                     index = 0, count = 1,
                                     onClick = {
                                         lastClickedSettingId = "language"
-                                        onLanguageSettings(null)
+                                        onNavigate(Route.LanguageSettings(lastClickedSettingId))
                                     },
                                 )
                             }
@@ -1167,7 +1046,7 @@ fun SettingsScreen(
                                     index = 0, count = 1,
                                     onClick = {
                                         lastClickedSettingId = "notifications"
-                                        onNotificationSettings(null)
+                                        onNavigate(Route.NotificationSettings(lastClickedSettingId))
                                     },
                                 )
                             }
@@ -1182,7 +1061,7 @@ fun SettingsScreen(
                                     index = 0, count = 1,
                                     onClick = {
                                         lastClickedSettingId = "storage"
-                                        onStorageSettings(null)
+                                        onNavigate(Route.StorageSettings(lastClickedSettingId))
                                     },
                                 )
                             }
@@ -1201,7 +1080,7 @@ fun SettingsScreen(
                                     index = 0, count = 1,
                                     onClick = {
                                         lastClickedSettingId = "security"
-                                        onSecuritySettings(null)
+                                        onNavigate(Route.SecuritySettings(lastClickedSettingId))
                                     },
                                 )
                             }
@@ -1216,7 +1095,7 @@ fun SettingsScreen(
                                     index = 0, count = 1,
                                     onClick = {
                                         lastClickedSettingId = "privacy_data"
-                                        onPrivacyData(null)
+                                        onNavigate(Route.PrivacyData(lastClickedSettingId))
                                     },
                                 )
                             }
@@ -1231,7 +1110,7 @@ fun SettingsScreen(
                                     index = 0, count = 1,
                                     onClick = {
                                         lastClickedSettingId = "backup"
-                                        onBackupSettings(null)
+                                        onNavigate(Route.BackupSettings(lastClickedSettingId))
                                     },
                                 )
                             }
@@ -1359,7 +1238,7 @@ fun SettingsScreen(
                                     index = 0, count = 1,
                                     onClick = {
                                         lastClickedSettingId = "experimental"
-                                        onExperimentalSettings(null)
+                                        onNavigate(Route.ExperimentalSettings(lastClickedSettingId))
                                     },
                                 )
                             }
@@ -1374,7 +1253,7 @@ fun SettingsScreen(
                                     index = 0, count = 1,
                                     onClick = {
                                         lastClickedSettingId = "integrations"
-                                        onIntegrations(null)
+                                        onNavigate(Route.Integrations(lastClickedSettingId))
                                     },
                                 )
                             }
@@ -1389,7 +1268,7 @@ fun SettingsScreen(
                                     index = 0, count = 1,
                                     onClick = {
                                         lastClickedSettingId = "about"
-                                        onAboutClick()
+                                        onNavigate(Route.About)
                                     },
                                 )
                             }

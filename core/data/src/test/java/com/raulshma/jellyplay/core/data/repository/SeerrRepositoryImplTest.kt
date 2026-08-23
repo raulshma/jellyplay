@@ -2,13 +2,16 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrStatusResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestCount
 import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
+import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
+import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -24,8 +27,29 @@ import org.junit.Test
 class SeerrRepositoryImplTest {
 
     private val seerrApiClient: SeerrApiClient = mockk(relaxed = true)
+    private val tmdbApiClient: TmdbApiClient = mockk(relaxed = true)
     private val seerrPreferencesStore: SeerrPreferencesStore = mockk(relaxed = true)
     private val secureCredentialsStore: SeerrSecureCredentialsStore = mockk(relaxed = true)
+
+    // Real HomeSession over a permanently-null session flow + the registry
+    // that owns identity reactions; this suite never switches identity, so
+    // CacheIdentity.UNKNOWN is the detail cache's key surface.
+    private val sessionApiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient = mockk {
+        every { session } returns MutableStateFlow(null)
+    }
+    private val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(
+        sessionApiClient,
+        kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+        ),
+    )
+    private val sessionCacheRegistry = com.raulshma.jellyplay.core.data.session.SessionCacheRegistry(
+        homeSession,
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob()),
+    )
+    private val repoScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
+    )
 
     private lateinit var repository: SeerrRepositoryImpl
 
@@ -42,7 +66,7 @@ class SeerrRepositoryImplTest {
         every { secureCredentialsStore.getSessionCookie() } returns ""
         coEvery { seerrApiClient.getRequestCount(any(), any()) } returns Result.success(SeerrRequestCount())
         coEvery { seerrApiClient.getCurrentUser(any(), any()) } returns Result.success(SeerrCurrentUser(permissions = 2L))
-        repository = SeerrRepositoryImpl(seerrApiClient, seerrPreferencesStore, secureCredentialsStore)
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore, homeSession, sessionCacheRegistry, repoScope)
     }
 
     @Test
@@ -51,7 +75,7 @@ class SeerrRepositoryImplTest {
             SeerrPreferences(enabled = true, serverUrl = "")
         )
         every { secureCredentialsStore.getApiKey() } returns ""
-        repository = SeerrRepositoryImpl(seerrApiClient, seerrPreferencesStore, secureCredentialsStore)
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore, homeSession, sessionCacheRegistry, repoScope)
 
         val result = repository.testConnection()
 
@@ -78,7 +102,7 @@ class SeerrRepositoryImplTest {
             SeerrPreferences(enabled = true, serverUrl = "")
         )
         every { secureCredentialsStore.getApiKey() } returns ""
-        repository = SeerrRepositoryImpl(seerrApiClient, seerrPreferencesStore, secureCredentialsStore)
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore, homeSession, sessionCacheRegistry, repoScope)
 
         val result = repository.search("test query")
 
@@ -126,5 +150,18 @@ class SeerrRepositoryImplTest {
         assertTrue(first.isSuccess)
         assertTrue(second.isSuccess)
         coVerify(exactly = 1) { seerrApiClient.getTvDetails(any(), any(), 456) }
+    }
+
+    @Test
+    fun `getTmdbReviews caches result`() = runTest {
+        val review = TmdbReview(id = "r1", author = "Reviewer")
+        coEvery { tmdbApiClient.getReviews(123, MediaType.MOVIE) } returns Result.success(listOf(review))
+
+        val first = repository.getTmdbReviews(123, MediaType.MOVIE)
+        val second = repository.getTmdbReviews(123, MediaType.MOVIE)
+
+        assertTrue(first.isSuccess)
+        assertEquals(listOf(review), second.getOrNull())
+        coVerify(exactly = 1) { tmdbApiClient.getReviews(123, MediaType.MOVIE) }
     }
 }

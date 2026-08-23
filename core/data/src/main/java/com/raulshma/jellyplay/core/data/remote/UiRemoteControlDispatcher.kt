@@ -35,8 +35,8 @@ class UiRemoteControlDispatcher @Inject constructor() : RemoteControlDispatcher 
                 Log.d(TAG, "SetMaxStreamingBitrate=${command.bitrate} (applied at engine level)")
             }
             is GeneralCommand.DisplayMessage -> {
-                // Surfaced via MainViewModel.globalMessage which observes
-                // RemoteNavigationBridge and the receiver's displayMessage flow.
+                // Surfaced by the app shell: MainViewModel collects
+                // RemoteControlReceiver.displayMessages into the user message bus.
                 Log.d(TAG, "DisplayMessage: ${command.header} | ${command.text}")
             }
             is GeneralCommand.Unknown -> Log.d(TAG, "Unhandled general command: ${command.name}")

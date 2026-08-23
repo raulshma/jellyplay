@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
+import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -27,6 +28,7 @@ import org.junit.Test
 class SeerrRepositoryImplExtendedTest {
 
     private val seerrApiClient: SeerrApiClient = mockk(relaxed = true)
+    private val tmdbApiClient: TmdbApiClient = mockk(relaxed = true)
     private val seerrPreferencesStore: SeerrPreferencesStore = mockk(relaxed = true)
     private val secureCredentialsStore: SeerrSecureCredentialsStore = mockk(relaxed = true)
 
@@ -34,6 +36,26 @@ class SeerrRepositoryImplExtendedTest {
         enabled = true,
         serverUrl = "https://seerr.example.com",
         authMethod = SeerrAuthMethod.API_KEY,
+    )
+
+    // Real HomeSession over a permanently-null session flow + the registry
+    // that owns identity reactions; this suite never switches identity, so
+    // CacheIdentity.UNKNOWN is the detail cache's key surface.
+    private val sessionApiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient = mockk {
+        every { session } returns MutableStateFlow(null)
+    }
+    private val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(
+        sessionApiClient,
+        kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+        ),
+    )
+    private val sessionCacheRegistry = com.raulshma.jellyplay.core.data.session.SessionCacheRegistry(
+        homeSession,
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob()),
+    )
+    private val repoScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
     )
 
     private lateinit var repository: SeerrRepositoryImpl
@@ -47,14 +69,14 @@ class SeerrRepositoryImplExtendedTest {
         coEvery { seerrApiClient.getRequestCount(any(), any()) } returns Result.success(mockk(relaxed = true))
         coEvery { seerrApiClient.getCurrentUser(any(), any()) } returns
             Result.success(SeerrCurrentUser(permissions = 2L))
-        repository = SeerrRepositoryImpl(seerrApiClient, seerrPreferencesStore, secureCredentialsStore)
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore, homeSession, sessionCacheRegistry, repoScope)
     }
 
     private fun rebuildWith(prefs: SeerrPreferences, apiKey: String = "test-api-key", cookie: String = "") {
         every { seerrPreferencesStore.preferences } returns MutableStateFlow(prefs)
         every { secureCredentialsStore.getApiKey() } returns apiKey
         every { secureCredentialsStore.getSessionCookie() } returns cookie
-        repository = SeerrRepositoryImpl(seerrApiClient, seerrPreferencesStore, secureCredentialsStore)
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore, homeSession, sessionCacheRegistry, repoScope)
     }
 
     // region credentials resolution by authMethod

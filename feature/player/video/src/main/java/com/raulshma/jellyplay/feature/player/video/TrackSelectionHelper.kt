@@ -53,7 +53,7 @@ internal class TrackSelectionHelper(
     private val getCurrentItemId: () -> String?,
     private val getCurrentSeriesId: () -> String?,
     private val getPlayMethod: () -> PlayMethod,
-    private val onReloadForStreamChange: (audioStreamIndex: Int?, subtitleStreamIndex: Int?) -> Unit,
+    private val onReloadForStreamChange: (selection: MediaStreamSelection) -> Unit,
     private val playbackPreferenceResolver: ItemPlaybackPreferenceResolver,
     // Persists the remembered track to the series-scope preference row (G5).
     // Default no-op so unit tests that don't exercise persistence compile unchanged.
@@ -87,7 +87,9 @@ internal class TrackSelectionHelper(
     // re-resolution was the cause of the "subtitle flashes then resets" bug on
     // offline playback (empty mediaStreams → resolveMediaStreamIndex returned
     // null → the next availableTracks emission re-resolved and dropped to Off).
-    // Cleared on a fresh item load (setPendingStreams) and explicit reset.
+    // Cleared on a fresh item load (setPendingStreams), an explicit reset, and
+    // an engine recreation (onEngineRecreated — engine indices don't survive
+    // the swap, but the stored server-stream keys do).
     private var audioSelectionHeld = false
     private var subtitleSelectionHeld = false
 
@@ -95,9 +97,9 @@ internal class TrackSelectionHelper(
     private var pendingSubtitleStreamIndex: Int? = null
     private var pendingAudioStreamIndex: Int? = null
 
-    fun setPendingStreams(subtitleIndex: Int?, audioIndex: Int?) {
-        pendingSubtitleStreamIndex = subtitleIndex
-        pendingAudioStreamIndex = audioIndex
+    fun setPendingStreams(selection: MediaStreamSelection?) {
+        pendingAudioStreamIndex = selection?.audioStreamIndex
+        pendingSubtitleStreamIndex = selection?.subtitleStreamIndex
         // New item: a selection has not yet been applied for it.
         audioSelectionHeld = false
         subtitleSelectionHeld = false
@@ -130,20 +132,7 @@ internal class TrackSelectionHelper(
         // switch audio in-place on a transcoded HLS manifest. Re-resolve
         // playback with the new audioStreamIndex and reload the engine at the
         // current position. The picker refreshes once the new stream loads.
-        if (option.index >= SERVER_TRACK_INDEX_BASE) {
-            val streamIndex = option.index - SERVER_TRACK_INDEX_BASE
-            selectedAudioTrackIndex = option.index
-            audioSelectionHeld = true
-            _state.update { state ->
-                state.copy(audioTracks = state.audioTracks.map { track ->
-                    track.copy(isSelected = track.index == option.index)
-                })
-            }
-            if (isUserOverride) {
-                onReloadForStreamChange(streamIndex, null)
-            }
-            return
-        }
+        if (selectServerTrack(option, TrackType.AUDIO, isUserOverride)) return
         val engine = getEngine() ?: return
         engine.selectTrack(TrackType.AUDIO, option.index)
         selectedAudioTrackIndex = if (option.index < 0) null else option.index
@@ -188,20 +177,7 @@ internal class TrackSelectionHelper(
         // and mpv hasn't side-loaded it yet. Re-resolve playback with the new
         // subtitleStreamIndex so the server delivers it (and side-loads it via
         // buildExternalSubtitles on the reloaded engine).
-        if (option.index >= SERVER_TRACK_INDEX_BASE) {
-            val streamIndex = option.index - SERVER_TRACK_INDEX_BASE
-            selectedSubtitleTrackIndex = option.index
-            subtitleSelectionHeld = true
-            _state.update { state ->
-                state.copy(subtitleTracks = state.subtitleTracks.map { track ->
-                    track.copy(isSelected = track.index == option.index)
-                })
-            }
-            if (isUserOverride) {
-                onReloadForStreamChange(null, streamIndex)
-            }
-            return
-        }
+        if (selectServerTrack(option, TrackType.SUBTITLE, isUserOverride)) return
         val engine = getEngine() ?: return
 
         engine.selectTrack(TrackType.SUBTITLE, option.index)
@@ -240,6 +216,60 @@ internal class TrackSelectionHelper(
                 subtitleTrackOption = option,
             )
         }
+    }
+
+    /**
+     * Shared body of the server-origin branches ([SERVER_TRACK_INDEX_BASE] and
+     * up) in [selectAudioTrack] / [selectSubtitleTrack]. A synthetic server
+     * track is a picker affordance, not an engine track: the auto-resolution
+     * ladder (pending/stored/preference) hits this branch before the
+     * replacement engine has published the real track (it materializes a beat
+     * after the engine re-creates), so acting there would latch the
+     * held-selection guard against a track that never exists — nothing maps it
+     * back to the engine — permanently blocking re-resolution. Only a
+     * deliberate user pick acts; the auto path stays unlatched so the next
+     * availableTracks emission re-resolves.
+     *
+     * Returns true when [option] is server-origin (handled, or deliberately
+     * ignored on the auto path); false when it is an engine track and the
+     * caller must continue with the in-place selection.
+     */
+    private fun selectServerTrack(
+        option: TrackOption,
+        type: TrackType,
+        isUserOverride: Boolean,
+    ): Boolean {
+        if (option.index < SERVER_TRACK_INDEX_BASE) return false
+        if (!isUserOverride) return true
+        val streamIndex = option.index - SERVER_TRACK_INDEX_BASE
+        if (type == TrackType.AUDIO) {
+            selectedAudioTrackIndex = option.index
+            audioSelectionHeld = true
+        } else {
+            selectedSubtitleTrackIndex = option.index
+            subtitleSelectionHeld = true
+        }
+        _state.update { state ->
+            val tracks = if (type == TrackType.AUDIO) state.audioTracks else state.subtitleTracks
+            val updated = tracks.map { track ->
+                track.copy(isSelected = track.index == option.index)
+            }
+            if (type == TrackType.AUDIO) state.copy(audioTracks = updated)
+            else state.copy(subtitleTracks = updated)
+        }
+        // Persist before the reload: the engine re-creation invalidates
+        // engine-positional indices, so the stored server-stream index is the
+        // only key the post-reload ladder can restore the pick from (subs via
+        // the "external:{index}" id contract — see TrackSelectionPolicy).
+        persistStreamSelectionFromPlayer(
+            audioTrackOption = option.takeIf { type == TrackType.AUDIO },
+            subtitleTrackOption = option.takeIf { type == TrackType.SUBTITLE },
+        )
+        onReloadForStreamChange(
+            if (type == TrackType.AUDIO) MediaStreamSelection(audioStreamIndex = streamIndex)
+            else MediaStreamSelection(subtitleStreamIndex = streamIndex),
+        )
+        return true
     }
 
     fun updateTracksFromEngine() {
@@ -599,6 +629,29 @@ internal class TrackSelectionHelper(
      */
     fun resetForItem() {
         _state.value = TrackState()
+    }
+
+    /**
+     * Drops engine-positional selection state after a same-item engine
+     * recreation ([com.raulshma.jellyplay.feature.player.video.PlayerSessionManager.reloadWithEngine]
+     * — mode/quality/stream-index reload, engine switch, error retry). The
+     * replacement engine renumbers tracks and re-side-loads subtitles, so a
+     * held selection — or its stale engine/synthetic index — can no longer
+     * match anything; leaving it latched blocks the stored/pending/preference
+     * re-resolution in [updateTracksFromEngine] and silently drops the
+     * selection for the rest of the session (the force-transcode subtitle
+     * regression). Only engine-scoped state is cleared: the *stable* keys
+     * survive — the stored per-item server-stream indices and the
+     * cross-episode remembered-track memory — so the first post-reload track
+     * emission re-applies them. Mirrors what [setPendingStreams] does for a
+     * fresh item, minus the pending seeding (the reload paths that know the
+     * target indices arm [setPendingStreams] themselves).
+     */
+    fun onEngineRecreated() {
+        selectedAudioTrackIndex = null
+        selectedSubtitleTrackIndex = null
+        audioSelectionHeld = false
+        subtitleSelectionHeld = false
     }
 
     /**

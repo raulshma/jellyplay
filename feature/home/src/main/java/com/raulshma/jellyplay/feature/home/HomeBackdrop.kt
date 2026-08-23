@@ -148,8 +148,11 @@ private fun ScrimOverlay(
                     oledMode = oledMode,
                     isLightTheme = isLightTheme,
                 )
+                // Built in the cache phase so the Brush isn't re-allocated on
+                // every draw pass.
+                val overlayBrush = Brush.verticalGradient(overlay)
                 onDrawBehind {
-                    drawRect(brush = Brush.verticalGradient(overlay))
+                    drawRect(brush = overlayBrush)
                 }
             },
     )

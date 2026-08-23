@@ -58,14 +58,23 @@ internal class MediaSessionController(
      * Build + activate a session for the current item, pinning [title] /
      * [subtitle] + the item's artwork. No-op if no underlying player is bound.
      *
-     * The prior session is released *atomically* by [PlaybackSessionManager.setActiveSession]
-     * when the new session takes the slot — do NOT release it here first. Releasing
-     * here briefly nulls the singleton slot, which fires `onSessionChanged(null)`
-     * and `stopSelf`s the service mid-reload; under background-start restrictions
-     * the service then cannot be restarted (see [PlaybackSessionManager.startPlaybackService]).
+     * Same-item rebuilds (force-transcode / quality / engine-fallback reloads)
+     * reuse the outgoing session's ID (`jellyplay_video_<itemId>`), and Media3
+     * registers session IDs in a process-wide map *at construction time*,
+     * throwing `IllegalStateException: Session ID must be unique` if the old
+     * session is still registered when the replacement is built. So the held
+     * session is released by [releaseSupersededSession] before building; the
+     * manager slot is still vacated only atomically by
+     * [PlaybackSessionManager.setActiveSession] when the new session takes it —
+     * releasing via [release]'s clearSession would fire `onSessionChanged(null)`
+     * and `stopSelf` the service mid-reload, and under background-start
+     * restrictions the service then cannot be restarted (see
+     * [PlaybackSessionManager.startPlaybackService]).
      */
     fun createForItem(itemId: String, title: String, subtitle: String) {
         val player = getPlayer() ?: return
+
+        releaseSupersededSession()
 
         val artworkUri = getImageUrl(itemId, ARTWORK_MAX_WIDTH)
             .takeIf { it.isNotBlank() }
@@ -88,7 +97,9 @@ internal class MediaSessionController(
     /**
      * Build + activate a bare session around [player] with the given [sessionId]
      * (used by background-cast detach/reattach, which swap the player surface).
-     * Atomic replace semantics — see [createForItem].
+     * [releaseSupersededSession] runs first — the caller's [sessionId] is stable
+     * across reattach, so a rebuild hits the same Media3 ID-uniqueness check as
+     * [createForItem]. Slot vacating stays atomic — see [createForItem].
      *
      * [videoItemId], when supplied (the local-engine reattach path), pins the
      * session activity to [buildPlayerSessionActivity] so the notification still
@@ -97,6 +108,8 @@ internal class MediaSessionController(
      * launcher intent (browse UI), preserving prior behaviour.
      */
     fun createForPlayer(player: Player, sessionId: String, videoItemId: String? = null) {
+        releaseSupersededSession()
+
         val builder = MediaLibrarySession.Builder(context, player, NO_OP_LIBRARY_CALLBACK)
             .setId(sessionId)
         videoItemId?.let { builder.setSessionActivity(buildPlayerSessionActivity(it)) }
@@ -109,6 +122,29 @@ internal class MediaSessionController(
         if (sessionManager.currentSession === current) {
             sessionManager.clearSession(current)
         }
+        try { current.release() } catch (_: Exception) { }
+        session = null
+    }
+
+    /**
+     * Releases the held session ahead of a rebuild without vacating the
+     * [PlaybackSessionManager] slot (the slot swap stays atomic in [activate]).
+     * Needed because Media3 registers session IDs at construction time — the
+     * outgoing session must be deregistered before a same-ID replacement is
+     * built or the constructor throws "Session ID must be unique". Three
+     * properties make this mid-rebuild release safe:
+     *  - the slot keeps pointing at the retired session, so listeners never
+     *    observe `onSessionChanged(null)` (which stopSelfs the service
+     *    mid-reload); [activate]'s swap fires `onSessionChanged(new, old)` and
+     *    the service removes the retired session from its registry then;
+     *  - the retired session's player reads `isPlaying == false` (ExoPlayer
+     *    masks `STATE_IDLE` on release), so [PlaybackSessionManager]'s
+     *    priority guard cannot reject the incoming rebuild;
+     *  - [MediaSession.release] is idempotent, so the slot swap's second
+     *    release of the retired session is a no-op.
+     */
+    private fun releaseSupersededSession() {
+        val current = session ?: return
         try { current.release() } catch (_: Exception) { }
         session = null
     }

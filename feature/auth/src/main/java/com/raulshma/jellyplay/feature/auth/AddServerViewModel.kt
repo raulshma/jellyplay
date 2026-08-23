@@ -2,10 +2,10 @@ package com.raulshma.jellyplay.feature.auth
 
 import android.content.Context
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepository
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.model.ServerInfo
-import com.raulshma.jellyplay.core.network.LocalNetworkAccess
-import com.raulshma.jellyplay.core.network.ServerDiscoveryService
+import com.raulshma.jellyplay.core.ui.util.LocalNetworkAccess
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,7 +25,7 @@ data class AddServerUiState(
 @HiltViewModel
 class AddServerViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val discoveryService: ServerDiscoveryService,
+    private val serverDiscoveryRepository: ServerDiscoveryRepository,
     @ApplicationContext private val appContext: Context,
 ) : JellyPlayViewModel() {
 
@@ -52,7 +52,7 @@ class AddServerViewModel @Inject constructor(
 
         discoveryJob = launch {
             try {
-                discoveryService.discoverLocalServers().collect { server ->
+                serverDiscoveryRepository.discoverLocalServers().collect { server ->
                     val current = _uiState.value.discoveredServers
                     if (current.none { it.id == server.id || it.address == server.address }) {
                         _uiState.update {

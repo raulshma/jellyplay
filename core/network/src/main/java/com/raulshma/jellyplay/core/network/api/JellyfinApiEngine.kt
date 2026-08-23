@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.api
 
 import android.content.Context
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -30,16 +31,42 @@ import javax.inject.Singleton
 @Singleton
 class JellyfinApiEngine @Inject constructor(
     @ApplicationContext val context: Context,
-    val jellyfin: Jellyfin,
-    val okHttpClient: OkHttpClient,
+    // dagger.Lazy defers construction of both the Jellyfin SDK instance and
+    // the shared OkHttpClient off the synchronous Hilt graph: MainViewModel's
+    // constructor chain resolves this engine on the main thread before
+    // setContent, and provideJellyfin/provideOkHttpClient both do real work
+    // (DataStore-backed device-id read, PackageManager binder call, disk cache
+    // mkdirs). First .get() happens inside suspend repository code well after
+    // ServerIdentityStore.identity (Eagerly-started) has populated, so the
+    // runBlocking fallback in provideJellyfin never fires on the main thread.
+    private val jellyfinLazy: dagger.Lazy<Jellyfin>,
+    private val okHttpClientLazy: dagger.Lazy<OkHttpClient>,
     private val deviceProfileProvider: DeviceProfileProvider,
     private val addressRouter: ServerAddressRouter,
 ) {
+    val jellyfin: Jellyfin get() = jellyfinLazy.get()
+    val okHttpClient: OkHttpClient get() = okHttpClientLazy.get()
     private val _currentServer = MutableStateFlow<ServerInfo?>(null)
     val currentServer: StateFlow<ServerInfo?> = _currentServer.asStateFlow()
 
     private val _currentUser = MutableStateFlow<UserInfo?>(null)
     val currentUser: StateFlow<UserInfo?> = _currentUser.asStateFlow()
+
+    /**
+     * The [ActiveSession] server+user pair published as ONE atomic value.
+     * `currentServer` and `currentUser` are separate StateFlows, so any
+     * caller that updates them as two assignments (login / switchUser /
+     * disconnect) lets a `combine(currentServer, currentUser)` downstream
+     * observe a synthetic mixed `(newServer, oldUser)` intermediate — an
+     * identity that never existed. This flow is updated inside the same
+     * critical sections (see [updateSession]) so a session transition is
+     * always observed as a single step from one stable session to the next,
+     * or to/from `null`. `null` means "no fully-established identity"
+     * (either side missing), matching the `if (server != null && user != null)`
+     * projection consumers used to derive from the separate flows.
+     */
+    private val _session = MutableStateFlow<ActiveSession?>(null)
+    val session: StateFlow<ActiveSession?> = _session.asStateFlow()
 
     val authMutex = Mutex()
 
@@ -63,7 +90,12 @@ class JellyfinApiEngine @Inject constructor(
         // URLs — REST, images via imageApi — follow the active address too.
         engineScope.launch {
             addressRouter.activeAddress.drop(1).collect { address ->
-                if (address != null) rebuildApiFor(address)
+                // Under authMutex: rebuildApiFor republishes the session via
+                // updateUser, and without the lock an address failover could
+                // interleave with an authMutex-guarded updateSession — publishing
+                // the mixed (currentServer, refreshedUser) pair the atomic
+                // session exists to prevent.
+                if (address != null) authMutex.withLock { rebuildApiFor(address) }
             }
         }
     }
@@ -73,11 +105,35 @@ class JellyfinApiEngine @Inject constructor(
 
     fun updateServer(server: ServerInfo?) {
         _currentServer.value = server
+        publishSession(server, _currentUser.value)
         if (server == null) addressRouter.clear() else addressRouter.configure(server)
     }
 
     fun updateUser(user: UserInfo?) {
         _currentUser.value = user
+        publishSession(_currentServer.value, user)
+    }
+
+    /**
+     * Atomically adopts BOTH sides of the session in one critical-section
+     * step, so [session] observers never see the mixed intermediate that two
+     * separate [updateServer]+[updateUser] calls would produce. Callers that
+     * know both sides at once (the login / switchUser / disconnect paths in
+     * [AuthApiClientImpl]) must use this; [updateServer]/[updateUser] remain
+     * for legitimate single-side updates and pair with the current other side
+     * (e.g. `updateUser(token-refreshed-user)` re-publishes the same
+     * identity).
+     */
+    fun updateSession(server: ServerInfo?, user: UserInfo?) {
+        _currentServer.value = server
+        _currentUser.value = user
+        publishSession(server, user)
+        if (server == null) addressRouter.clear() else addressRouter.configure(server)
+    }
+
+    /** Publishes the combined session; a missing side collapses it to null. */
+    private fun publishSession(server: ServerInfo?, user: UserInfo?) {
+        _session.value = if (server != null && user != null) ActiveSession(server, user) else null
     }
 
     fun updateApi(api: ApiClient?) {
@@ -90,14 +146,18 @@ class JellyfinApiEngine @Inject constructor(
      * stays valid) and mirroring the address into the published user so
      * URL-building consumers see the active endpoint. Only retargets an
      * existing client — creating one from here would race setUser's
-     * authoritative construction.
+     * authoritative construction. MUST be called while holding [authMutex]:
+     * it republishes the combined session, and an unguarded publish could
+     * interleave with an authMutex-guarded [updateSession].
      */
     private fun rebuildApiFor(address: String) {
         if (_api == null) return
         val user = _currentUser.value
         _api = user?.let { jellyfin.createApi(baseUrl = address, accessToken = it.accessToken) }
         if (user != null) {
-            _currentUser.value = user.copy(serverAddress = address)
+            // updateUser (not a raw assignment) so the combined session flow
+            // republishes the pair with the mirrored address.
+            updateUser(user.copy(serverAddress = address))
         }
     }
 

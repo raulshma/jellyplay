@@ -60,9 +60,7 @@ class PlaybackOutboxRepositoryImpl @Inject constructor(
     ) = withContext(Dispatchers.IO) {
         mutex.withLock {
             val now = nowMillis()
-            val existing = dao.getForItem(itemId).firstOrNull {
-                it.eventType == PlaybackOutboxEventType.PROGRESS.name
-            }
+            val existing = dao.getForItemByType(itemId, PlaybackOutboxEventType.PROGRESS.name)
             if (existing != null) {
                 // Coalesce: a newer PROGRESS supersedes the older one for this
                 // item. Reuse the id so REPLACE lands in place; bump createdAt
@@ -146,7 +144,7 @@ class PlaybackOutboxRepositoryImpl @Inject constructor(
         val now = nowMillis()
         dao.upsert(
             PlaybackOutboxEntity(
-                id = "played_state:$itemId",
+                id = playedStateId(itemId),
                 itemId = itemId,
                 eventType = if (isPlayed) PlaybackOutboxEventType.PLAYED.name else PlaybackOutboxEventType.UNPLAYED.name,
                 sessionId = "",
@@ -158,9 +156,7 @@ class PlaybackOutboxRepositoryImpl @Inject constructor(
                 // Preserve original createdAt on an overwrite so drain ordering
                 // keeps the first flip's position — only the target state
                 // changes, not the queue position. Fresh on first insert.
-                createdAt = dao.getForItem(itemId)
-                    .firstOrNull { it.id == "played_state:$itemId" }
-                    ?.createdAt ?: now,
+                createdAt = dao.getById(playedStateId(itemId))?.createdAt ?: now,
             )
         )
     }
@@ -174,7 +170,7 @@ class PlaybackOutboxRepositoryImpl @Inject constructor(
         val now = nowMillis()
         dao.upsert(
             PlaybackOutboxEntity(
-                id = "favorite_state:$itemId",
+                id = favoriteStateId(itemId),
                 itemId = itemId,
                 eventType = if (isFavorite) PlaybackOutboxEventType.FAVORITE.name else PlaybackOutboxEventType.UNFAVORITE.name,
                 sessionId = "",
@@ -186,11 +182,16 @@ class PlaybackOutboxRepositoryImpl @Inject constructor(
                 // Preserve original createdAt on an overwrite so drain ordering
                 // keeps the first flip's position — only the target state
                 // changes, not the queue position. Fresh on first insert.
-                createdAt = dao.getForItem(itemId)
-                    .firstOrNull { it.id == "favorite_state:$itemId" }
-                    ?.createdAt ?: now,
+                createdAt = dao.getById(favoriteStateId(itemId))?.createdAt ?: now,
             )
         )
+    }
+
+    private companion object {
+        // Stable single-row ids for the user-intent channels: insert and
+        // overwrite lookup must agree, so both sites go through these.
+        fun playedStateId(itemId: String) = "played_state:$itemId"
+        fun favoriteStateId(itemId: String) = "favorite_state:$itemId"
     }
 
     override suspend fun drain(): List<PlaybackOutboxEntry> = withContext(Dispatchers.IO) {

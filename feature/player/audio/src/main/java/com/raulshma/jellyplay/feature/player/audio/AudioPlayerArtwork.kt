@@ -499,7 +499,7 @@ internal fun AlbumArtwork(
                 com.raulshma.jellyplay.feature.player.audio.lyrics.KaraokeLyricsView(
                     lyrics = lyrics,
                     currentIndex = currentLyricIndex,
-                    currentPositionMs = currentPositionMs.value,
+                    currentPositionMs = currentPositionMs,
                 )
             } else {
                 LyricsOverlay(

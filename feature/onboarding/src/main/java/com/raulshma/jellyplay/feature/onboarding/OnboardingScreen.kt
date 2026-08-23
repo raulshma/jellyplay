@@ -15,9 +15,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
@@ -131,7 +134,7 @@ fun OnboardingScreen(
                     when (OnboardingStep.entries[page]) {
                         OnboardingStep.WELCOME -> {
                             WelcomeStep(
-                                modifier = Modifier.verticalScroll(rememberScrollState()),
+                                modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
 
@@ -151,7 +154,7 @@ fun OnboardingScreen(
                                 onAccentColorSwatchChange = viewModel::setAccentColorSwatch,
                                 onColorStyleChange = viewModel::setColorStyle,
                                 onHomeHeroEnabledChange = viewModel::setHomeHeroEnabled,
-                                modifier = Modifier.verticalScroll(rememberScrollState()),
+                                modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
 
@@ -159,7 +162,7 @@ fun OnboardingScreen(
                             PerformanceStep(
                                 performanceMode = preferences.performanceMode,
                                 onPerformanceModeChange = viewModel::setPerformanceMode,
-                                modifier = Modifier.verticalScroll(rememberScrollState()),
+                                modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
 
@@ -171,7 +174,7 @@ fun OnboardingScreen(
                                 onHomeModeChange = viewModel::setHomeMode,
                                 onNavBarShowLabelsChange = viewModel::setNavBarShowLabels,
                                 onEnabledHomeSectionTypesChange = viewModel::setEnabledHomeSectionTypes,
-                                modifier = Modifier.verticalScroll(rememberScrollState()),
+                                modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
 
@@ -189,7 +192,7 @@ fun OnboardingScreen(
                                 onGesturesEnabledChange = viewModel::setVideoGesturesEnabled,
                                 onDefaultOrientationChange = viewModel::setVideoDefaultOrientation,
                                 onAutoplayNextChange = viewModel::setVideoAutoplayNext,
-                                modifier = Modifier.verticalScroll(rememberScrollState()),
+                                modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
 
@@ -205,7 +208,7 @@ fun OnboardingScreen(
                                 onCrossfadeDurationChange = viewModel::setCrossfadeDurationMs,
                                 onNormalizationEnabledChange = viewModel::setAudioNormalizationEnabled,
                                 onAutoplayNextChange = viewModel::setAudioAutoplayNext,
-                                modifier = Modifier.verticalScroll(rememberScrollState()),
+                                modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
 
@@ -213,7 +216,7 @@ fun OnboardingScreen(
                             SubtitlesStep(
                                 subtitleStyle = preferences.subtitleStyle,
                                 onSubtitleStyleChange = viewModel::setSubtitleStyle,
-                                modifier = Modifier.verticalScroll(rememberScrollState()),
+                                modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
 
@@ -229,7 +232,7 @@ fun OnboardingScreen(
                                 onBiometricLockEnabledChange = viewModel::setBiometricLockEnabled,
                                 onAutoLockTimerMsChange = viewModel::setAutoLockTimerMs,
                                 hashPin = viewModel::hashPin,
-                                modifier = Modifier.verticalScroll(rememberScrollState()),
+                                modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
 
@@ -250,7 +253,7 @@ fun OnboardingScreen(
                                 onSetStreamingRegion = viewModel::setSeerrStreamingRegion,
                                 onSetDiscoverRegion = viewModel::setSeerrDiscoverRegion,
                                 onDisconnect = viewModel::seerrDisconnect,
-                                modifier = Modifier.verticalScroll(rememberScrollState()),
+                                modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
 
@@ -260,7 +263,7 @@ fun OnboardingScreen(
                                     viewModel.completeOnboarding()
                                     onComplete()
                                 },
-                                modifier = Modifier.verticalScroll(rememberScrollState()),
+                                modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
                     }
@@ -296,7 +299,8 @@ fun OnboardingScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        // max(nav bar, IME) so the bar rises above the keyboard too
+                        .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
                         .padding(horizontal = 24.dp)
                         .padding(top = 12.dp),
                 )

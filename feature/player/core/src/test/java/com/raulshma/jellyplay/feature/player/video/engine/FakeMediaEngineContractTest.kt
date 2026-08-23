@@ -48,7 +48,16 @@ class FakeMediaEngineContractTest : MediaEngineContractTest() {
     }
 
     override fun drivePosition(ms: Long) {
+        fake().advanceTo(ms)
         fake().positionEmissions.value = flowOf(ms)
+    }
+
+    override fun drivePlaybackSpeed(speed: Float) {
+        engine.setPlaybackSpeed(speed)
+    }
+
+    override fun simulateReloadPreserving() {
+        fake().simulateReloadPreserving()
     }
 
     override fun driveCurrentCues(cues: List<TimedCue>) {

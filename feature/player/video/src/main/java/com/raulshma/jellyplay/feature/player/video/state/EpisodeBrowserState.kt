@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 @Immutable
 data class EpisodeBrowserState(
     val nextEpisode: JellyfinMediaItem? = null,
+    /** Adjacent-episode snapshot's previous entry; written alongside [nextEpisode] by fetchAdjacentEpisodes. */
+    val previousEpisode: JellyfinMediaItem? = null,
     val seriesSeasons: List<JellyfinMediaItem> = emptyList(),
     val seasonEpisodes: List<JellyfinMediaItem> = emptyList(),
     val currentSeasonId: String? = null,

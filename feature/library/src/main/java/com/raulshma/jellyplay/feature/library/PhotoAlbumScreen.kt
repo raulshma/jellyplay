@@ -65,7 +65,7 @@ import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.feature.library.R
 import com.raulshma.jellyplay.feature.library.components.PhotoGridCard
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun PhotoAlbumScreen(
     parentId: String,
@@ -94,6 +94,9 @@ fun PhotoAlbumScreen(
     val gridState = rememberLazyGridState(
         initialFirstVisibleItemIndex = savedScroll.first,
         initialFirstVisibleItemScrollOffset = savedScroll.second,
+        // Same TV cache-window tuning as the library grid — prefetch ahead so fast D-pad
+        // scrolling doesn't pop cards in.
+        cacheWindow = com.raulshma.jellyplay.core.ui.tv.TvGridCacheWindow,
     )
 
     LaunchedEffect(gridState) {

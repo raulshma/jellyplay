@@ -32,6 +32,8 @@ import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.ui.player.FormattedTranscodeReason
+import com.raulshma.jellyplay.core.ui.R as CoreUiR
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -57,6 +59,11 @@ fun PlaybackErrorOverlay(
     onRetry: () -> Unit,
     onRetryWithEngine: (PlayerType) -> Unit,
     onDismiss: () -> Unit,
+    /** Server-reported transcode reasons when the failed stream was a
+     *  transcode; naturally empty for direct-play errors — the session-side
+     *  fetch only arms on transcode resolves, so the engine error stands
+     *  alone there. */
+    transcodeReasons: List<FormattedTranscodeReason> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     val alternativeEngines = PlayerType.entries.filter {
@@ -112,6 +119,32 @@ fun PlaybackErrorOverlay(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     )
                 }
+                if (transcodeReasons.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Surface(
+                        shape = ShapeCache.smooth12,
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                stringResource(CoreUiR.string.transcode_reasons_title),
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            transcodeReasons.forEach { reason ->
+                                Text(
+                                    text = reason.renderedText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
                 if (retryable) {
                     Spacer(Modifier.height(20.dp))
                     OutlinedButton(
@@ -163,6 +196,7 @@ fun PlaybackErrorDialog(
     onRetry: () -> Unit,
     onRetryWithEngine: (PlayerType) -> Unit,
     onDismiss: () -> Unit,
+    transcodeReasons: List<FormattedTranscodeReason> = emptyList(),
 ) {
     PlaybackErrorOverlay(
         errorMessage = errorMessage,
@@ -171,5 +205,6 @@ fun PlaybackErrorDialog(
         onRetry = onRetry,
         onRetryWithEngine = onRetryWithEngine,
         onDismiss = onDismiss,
+        transcodeReasons = transcodeReasons,
     )
 }

@@ -39,6 +39,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -74,6 +76,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationMs
+import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
 
 /**
@@ -99,6 +102,11 @@ fun PlayOnCompanionScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // Land initial focus on the play/pause transport button so the first D-pad press
+    // acts on content instead of falling to the navigation drawer rail.
+    val playFocusRequester = remember { FocusRequester() }
+    RequestOrRestoreFocus(playFocusRequester, debugKey = "play_on_play")
 
     // If the session drops while we're open (disconnect elsewhere, remote left),
     // pop back to where we came from instead of stranding a control surface over
@@ -228,6 +236,7 @@ fun PlayOnCompanionScreen(
 
             CompanionTransportRow(
                 isPlaying = uiState.isPlaying,
+                playFocusRequester = playFocusRequester,
                 onPlayPause = {
                     if (uiState.isPlaying) viewModel.castPause() else viewModel.castPlay()
                 },
@@ -346,6 +355,7 @@ private fun CompanionSeekRow(
 @Composable
 private fun CompanionTransportRow(
     isPlaying: Boolean,
+    playFocusRequester: FocusRequester,
     onPlayPause: () -> Unit,
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
@@ -389,6 +399,7 @@ private fun CompanionTransportRow(
             shape = CircleShape,
             modifier = Modifier
                 .size(64.dp)
+                .focusRequester(playFocusRequester)
                 .focusIndicator(CircleShape),
         ) {
             Icon(

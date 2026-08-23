@@ -22,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 
 class NowPlayingWidget : AppWidgetProvider() {
 
@@ -80,9 +81,14 @@ class NowPlayingWidget : AppWidgetProvider() {
         } catch (_: Exception) {
             return
         }
-        kotlinx.coroutines.runBlocking {
-            for (id in appWidgetIds) {
-                store.removeWidgetConfigForId(id)
+        val pending = goAsync()
+        refreshScope.launch {
+            try {
+                for (id in appWidgetIds) {
+                    store.removeWidgetConfigForId(id)
+                }
+            } finally {
+                pending.finish()
             }
         }
     }
@@ -332,6 +338,42 @@ class NowPlayingWidget : AppWidgetProvider() {
             }
         }
 
+        /**
+         * Position-only push for the 1 Hz ticker. Uses
+         * [AppWidgetManager.partiallyUpdateAppWidget] so only the position
+         * label and progress-bar actions cross the binder — no artwork bitmap
+         * re-parceling, no responsive-layout re-application, and the existing
+         * click PendingIntents are retained by the host. Rendered output is
+         * identical to a full update; only the diff transport is cheaper.
+         */
+        fun updateAllWidgetsPosition(
+            context: Context,
+            positionMs: Long,
+            durationMs: Long,
+            isPlaying: Boolean,
+        ) {
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            val componentName = ComponentName(context, NowPlayingWidget::class.java)
+            val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
+            if (appWidgetIds.isEmpty()) return
+
+            val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
+            views.setTextViewText(
+                R.id.widget_position,
+                formatPosition(positionMs, durationMs, isPlaying),
+            )
+            if (durationMs > 0L) {
+                val progress = ((positionMs.toFloat() / durationMs) * 1_000f).toInt()
+                    .coerceIn(0, 1_000)
+                views.setProgressBar(R.id.widget_progress, 1_000, progress, false)
+            } else {
+                views.setProgressBar(R.id.widget_progress, 1_000, 0, false)
+            }
+            for (appWidgetId in appWidgetIds) {
+                appWidgetManager.partiallyUpdateAppWidget(appWidgetId, views)
+            }
+        }
+
         private fun applyResponsiveLayout(
             context: Context,
             appWidgetManager: AppWidgetManager,
@@ -392,37 +434,31 @@ class NowPlayingWidget : AppWidgetProvider() {
         }
 
         private fun wireClickIntents(context: Context, views: RemoteViews) {
-            val appIntent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val appPending = PendingIntent.getActivity(
-                context, REQ_OPEN_APP, appIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-            views.setOnClickPendingIntent(R.id.widget_container, appPending)
-            views.setOnClickPendingIntent(R.id.widget_album_art, appPending)
-            views.setOnClickPendingIntent(R.id.widget_backdrop, appPending)
-            views.setOnClickPendingIntent(R.id.widget_empty_state, appPending)
+            val app = context.applicationContext
+            views.setOnClickPendingIntent(R.id.widget_container, cachedOpenAppPending(app))
+            views.setOnClickPendingIntent(R.id.widget_album_art, cachedOpenAppPending(app))
+            views.setOnClickPendingIntent(R.id.widget_backdrop, cachedOpenAppPending(app))
+            views.setOnClickPendingIntent(R.id.widget_empty_state, cachedOpenAppPending(app))
 
             views.setOnClickPendingIntent(
                 R.id.widget_play_pause,
-                broadcastPending(context, ACTION_PLAY_PAUSE, REQ_PLAY_PAUSE),
+                cachedBroadcastPending(app, ACTION_PLAY_PAUSE, REQ_PLAY_PAUSE),
             )
             views.setOnClickPendingIntent(
                 R.id.widget_next,
-                broadcastPending(context, ACTION_NEXT, REQ_NEXT),
+                cachedBroadcastPending(app, ACTION_NEXT, REQ_NEXT),
             )
             views.setOnClickPendingIntent(
                 R.id.widget_prev,
-                broadcastPending(context, ACTION_PREV, REQ_PREV),
+                cachedBroadcastPending(app, ACTION_PREV, REQ_PREV),
             )
             views.setOnClickPendingIntent(
                 R.id.widget_rewind,
-                broadcastPending(context, ACTION_REWIND, REQ_REWIND),
+                cachedBroadcastPending(app, ACTION_REWIND, REQ_REWIND),
             )
             views.setOnClickPendingIntent(
                 R.id.widget_forward,
-                broadcastPending(context, ACTION_FORWARD, REQ_FORWARD),
+                cachedBroadcastPending(app, ACTION_FORWARD, REQ_FORWARD),
             )
 
             val seekZoneIds = SEEK_ZONE_IDS
@@ -430,9 +466,47 @@ class NowPlayingWidget : AppWidgetProvider() {
                 val percent = SEEK_PERCENTS[i]
                 views.setOnClickPendingIntent(
                     seekZoneIds[i],
-                    seekPending(context, percent, REQ_SEEK_BASE + i),
+                    cachedSeekPending(app, percent, REQ_SEEK_BASE + i),
                 )
             }
+        }
+
+        // Click PendingIntents are process-stable (fixed request codes, fixed
+        // intents) — memoized so full widget pushes don't force the system's
+        // PendingIntent table rewrite (FLAG_UPDATE_CURRENT) on every rebuild.
+        // Request codes are unique across open-app (100), transports (101–105)
+        // and seek zones (200+), so one table keyed by request code covers all
+        // of them. Races only ever build the same instance twice, which is
+        // benign.
+        private val pendingIntents = ConcurrentHashMap<Int, PendingIntent>()
+
+        private fun cachedOpenAppPending(context: Context): PendingIntent =
+            pendingIntents.computeIfAbsent(REQ_OPEN_APP) {
+                PendingIntent.getActivity(
+                    context, REQ_OPEN_APP, openAppIntent(context),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            }
+
+        private fun openAppIntent(context: Context): Intent =
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+
+        private fun cachedBroadcastPending(
+            context: Context,
+            action: String,
+            requestCode: Int,
+        ): PendingIntent = pendingIntents.computeIfAbsent(requestCode) {
+            broadcastPending(context, action, requestCode)
+        }
+
+        private fun cachedSeekPending(
+            context: Context,
+            percent: Int,
+            requestCode: Int,
+        ): PendingIntent = pendingIntents.computeIfAbsent(requestCode) {
+            seekPending(context, percent, requestCode)
         }
 
         private fun broadcastPending(

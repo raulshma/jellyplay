@@ -329,4 +329,5 @@
     <string name="a11y_brightness_decrease">Diminuer la luminosité</string>
     <string name="a11y_volume_increase">Augmenter le volume</string>
     <string name="a11y_volume_decrease">Diminuer le volume</string>
+    <string name="player_direct_play_fallback">Échec de la lecture directe — bascule vers le transcodage (%1$s)</string>
 </resources>

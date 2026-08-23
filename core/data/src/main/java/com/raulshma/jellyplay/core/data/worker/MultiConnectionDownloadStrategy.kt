@@ -91,8 +91,11 @@ internal object MultiConnectionDownloadStrategy {
                     while (isActive && !cancelled.get()) {
                         val now = System.currentTimeMillis()
                         val currentDownloaded = totalDownloaded.get()
-                        val currentEntity = dao.getDownloadById(downloadId)
-                        if (currentEntity == null || DownloadStates.isInactive(currentEntity.status)) {
+                        // Only the status is consumed — the projected query
+                        // avoids deserializing the full 23-column entity per
+                        // tick (same as DownloadTransferRunner).
+                        val status = dao.getStatus(downloadId)
+                        if (status == null || DownloadStates.isInactive(status)) {
                             cancelled.set(true)
                             break
                         }
@@ -114,7 +117,12 @@ internal object MultiConnectionDownloadStrategy {
                             context, downloadId, notificationId, entity.name, progress,
                             currentDownloaded, totalSize, speedBytesPerSec,
                         )
-                        DownloadNotificationHelper.refreshSummary(context, dao.getInFlightDownloadCount())
+                        // Per-download notification only from this worker; the
+                        // shared summary is refreshed on lifecycle transitions
+                        // (start/complete) by DownloadWorker — with N concurrent
+                        // workers each re-posting the identical summary on its
+                        // own tick, this was N redundant notify() + count
+                        // queries per 2 s window.
 
                         delay(PROGRESS_UPDATE_INTERVAL_MS)
                     }

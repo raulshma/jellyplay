@@ -8,6 +8,9 @@ import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
+import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
+import com.raulshma.jellyplay.feature.player.video.state.MediaContentState
+import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -111,7 +114,9 @@ class VideoPlayerUiStateExtendedTest {
                 ChapterInfo(name = "Intro", startPositionTicks = 0L),
                 ChapterInfo(name = "Main", startPositionTicks = 300_000_000L),
             ),
-            segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            segmentState = SegmentState(
+                segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            ),
         )
         assertTrue(state.isInSegmentType(MediaSegmentType.INTRO))
     }
@@ -125,7 +130,9 @@ class VideoPlayerUiStateExtendedTest {
                 ChapterInfo(name = "Intro", startPositionTicks = 0L),
                 ChapterInfo(name = "Main", startPositionTicks = 300_000_000L),
             ),
-            segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.IGNORE),
+            segmentState = SegmentState(
+                segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.IGNORE),
+            ),
         )
         assertFalse(state.isInSegmentType(MediaSegmentType.INTRO))
     }
@@ -139,7 +146,9 @@ class VideoPlayerUiStateExtendedTest {
                 ChapterInfo(name = "Intro", startPositionTicks = 0L),
                 ChapterInfo(name = "Main", startPositionTicks = 300_000_000L),
             ),
-            segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            segmentState = SegmentState(
+                segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            ),
         )
         assertFalse(state.isInSegmentType(MediaSegmentType.OUTRO))
     }
@@ -155,8 +164,10 @@ class VideoPlayerUiStateExtendedTest {
         )
         val state = VideoPlayerUiState(
             currentPosition = 5_000L,
-            segments = listOf(segment),
-            segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            segmentState = SegmentState(
+                segments = listOf(segment),
+                segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            ),
         )
         assertEquals(300_000_000L, state.segmentEndTicksForType(MediaSegmentType.INTRO))
     }
@@ -170,15 +181,17 @@ class VideoPlayerUiStateExtendedTest {
         )
         val state = VideoPlayerUiState(
             currentPosition = 5_000L,
-            segments = listOf(segment),
-            segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            segmentState = SegmentState(
+                segments = listOf(segment),
+                segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
+            ),
         )
         assertNull(state.segmentEndTicksForType(MediaSegmentType.OUTRO))
     }
 
     @Test
     fun segmentEndTicksForType_noActiveSegment_returnsNull() {
-        val state = VideoPlayerUiState(currentPosition = 30_000L, segments = emptyList())
+        val state = VideoPlayerUiState(currentPosition = 30_000L, segmentState = SegmentState(segments = emptyList()))
         assertNull(state.segmentEndTicksForType(MediaSegmentType.INTRO))
     }
 
@@ -191,7 +204,7 @@ class VideoPlayerUiStateExtendedTest {
             type = MediaSegmentType.INTRO,
             startTicks = 0L, endTicks = 600_000_000L,
         )
-        val state = VideoPlayerUiState(segments = listOf(seg))
+        val state = VideoPlayerUiState(segmentState = SegmentState(segments = listOf(seg)))
         assertEquals(600_000_000L, state.segmentEndTicks(seg))
     }
 
@@ -222,8 +235,10 @@ class VideoPlayerUiStateExtendedTest {
         val state = VideoPlayerUiState(
             currentPosition = duration - 30_000L,
             duration = duration,
-            segments = listOf(segment),
-            segmentBehaviors = mapOf(MediaSegmentType.OUTRO to SegmentBehavior.SHOW_BUTTON),
+            segmentState = SegmentState(
+                segments = listOf(segment),
+                segmentBehaviors = mapOf(MediaSegmentType.OUTRO to SegmentBehavior.SHOW_BUTTON),
+            ),
         )
         assertTrue(state.isOutroNearEnd)
     }
@@ -242,8 +257,10 @@ class VideoPlayerUiStateExtendedTest {
         val state = VideoPlayerUiState(
             currentPosition = duration - 350_000L,
             duration = duration,
-            segments = listOf(segment),
-            segmentBehaviors = mapOf(MediaSegmentType.OUTRO to SegmentBehavior.SHOW_BUTTON),
+            segmentState = SegmentState(
+                segments = listOf(segment),
+                segmentBehaviors = mapOf(MediaSegmentType.OUTRO to SegmentBehavior.SHOW_BUTTON),
+            ),
         )
         assertFalse(state.isOutroNearEnd)
     }
@@ -258,14 +275,14 @@ class VideoPlayerUiStateExtendedTest {
 
     @Test
     fun hdrType_noStreams_returnsNull() {
-        val state = VideoPlayerUiState(mediaStreams = emptyList())
+        val state = VideoPlayerUiState(media = MediaContentState(mediaStreams = emptyList()))
         assertNull(state.hdrType)
     }
 
     @Test
     fun hdrType_sdrVideoStream_returnsNull() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "SDR"))
+            media = MediaContentState(mediaStreams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "SDR")))
         )
         assertNull(state.hdrType)
     }
@@ -273,7 +290,7 @@ class VideoPlayerUiStateExtendedTest {
     @Test
     fun hdrType_hdrVideoStream_returnsRange() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "HDR10"))
+            media = MediaContentState(mediaStreams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "HDR10")))
         )
         assertEquals("HDR10", state.hdrType)
     }
@@ -281,7 +298,7 @@ class VideoPlayerUiStateExtendedTest {
     @Test
     fun hdrType_noVideoStream_returnsNull() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(MediaStream(index = 0, type = StreamType.AUDIO))
+            media = MediaContentState(mediaStreams = listOf(MediaStream(index = 0, type = StreamType.AUDIO)))
         )
         assertNull(state.hdrType)
     }
@@ -290,14 +307,14 @@ class VideoPlayerUiStateExtendedTest {
 
     @Test
     fun videoFrameRate_noVideoStream_returnsNull() {
-        val state = VideoPlayerUiState(mediaStreams = emptyList())
+        val state = VideoPlayerUiState(media = MediaContentState(mediaStreams = emptyList()))
         assertNull(state.videoFrameRate)
     }
 
     @Test
     fun videoFrameRate_videoStreamWithRate_returnsRate() {
         val state = VideoPlayerUiState(
-            mediaStreams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, realFrameRate = 23.976f))
+            media = MediaContentState(mediaStreams = listOf(MediaStream(index = 0, type = StreamType.VIDEO, realFrameRate = 23.976f)))
         )
         assertEquals(23.976f, state.videoFrameRate!!, 0.001f)
     }
@@ -306,14 +323,16 @@ class VideoPlayerUiStateExtendedTest {
 
     @Test
     fun behaviorForType_defaultsToIgnore_forUnspecifiedType() {
-        val state = VideoPlayerUiState(segmentBehaviors = emptyMap())
+        val state = VideoPlayerUiState(segmentState = SegmentState(segmentBehaviors = emptyMap()))
         assertEquals(SegmentBehavior.IGNORE, state.behaviorForType(MediaSegmentType.COMMERCIAL))
     }
 
     @Test
     fun behaviorForType_customBehavior_returnsCustom() {
         val state = VideoPlayerUiState(
-            segmentBehaviors = mapOf(MediaSegmentType.COMMERCIAL to SegmentBehavior.AUTO_SKIP)
+            segmentState = SegmentState(
+                segmentBehaviors = mapOf(MediaSegmentType.COMMERCIAL to SegmentBehavior.AUTO_SKIP)
+            )
         )
         assertEquals(SegmentBehavior.AUTO_SKIP, state.behaviorForType(MediaSegmentType.COMMERCIAL))
     }
@@ -321,7 +340,9 @@ class VideoPlayerUiStateExtendedTest {
     @Test
     fun behaviorForType_showSkipButton_returnsShowSkipButton() {
         val state = VideoPlayerUiState(
-            segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON)
+            segmentState = SegmentState(
+                segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON)
+            )
         )
         assertEquals(SegmentBehavior.SHOW_BUTTON, state.behaviorForType(MediaSegmentType.INTRO))
     }
@@ -375,11 +396,13 @@ class VideoPlayerUiStateSyncPlayTest {
     fun shouldShowUpNext_falseWhenInSyncPlaySession() {
         val state = VideoPlayerUiState(
             isInSyncPlaySession = true,
-            nextEpisode = com.raulshma.jellyplay.core.model.MediaItem(
-                id = "ep2", name = "Episode 2",
-                mediaType = com.raulshma.jellyplay.core.model.MediaType.EPISODE
+            episodes = EpisodeBrowserState(
+                nextEpisode = com.raulshma.jellyplay.core.model.MediaItem(
+                    id = "ep2", name = "Episode 2",
+                    mediaType = com.raulshma.jellyplay.core.model.MediaType.EPISODE
+                ),
             ),
-            seriesId = "series1",
+            media = MediaContentState(seriesId = "series1"),
             duration = 3_600_000L,
             currentPosition = 3_570_000L, // would normally show up-next
         )
@@ -390,8 +413,8 @@ class VideoPlayerUiStateSyncPlayTest {
     fun shouldShowUpNext_falseWhenNoNextEpisode() {
         val state = VideoPlayerUiState(
             isInSyncPlaySession = false,
-            nextEpisode = null,
-            seriesId = "series1",
+            episodes = EpisodeBrowserState(nextEpisode = null),
+            media = MediaContentState(seriesId = "series1"),
             duration = 3_600_000L,
             currentPosition = 3_570_000L,
         )
@@ -402,11 +425,13 @@ class VideoPlayerUiStateSyncPlayTest {
     fun shouldShowUpNext_falseWhenNoSeriesId() {
         val state = VideoPlayerUiState(
             isInSyncPlaySession = false,
-            nextEpisode = com.raulshma.jellyplay.core.model.MediaItem(
-                id = "ep2", name = "Episode 2",
-                mediaType = com.raulshma.jellyplay.core.model.MediaType.EPISODE
+            episodes = EpisodeBrowserState(
+                nextEpisode = com.raulshma.jellyplay.core.model.MediaItem(
+                    id = "ep2", name = "Episode 2",
+                    mediaType = com.raulshma.jellyplay.core.model.MediaType.EPISODE
+                ),
             ),
-            seriesId = null,
+            media = MediaContentState(seriesId = null),
             duration = 3_600_000L,
             currentPosition = 3_570_000L,
         )

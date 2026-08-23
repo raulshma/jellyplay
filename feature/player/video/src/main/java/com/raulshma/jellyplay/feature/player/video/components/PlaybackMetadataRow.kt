@@ -50,8 +50,9 @@ import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapsh
  *
  * Each metadata item is rendered as a refined glassmorphic pill chip with a
  * category-tuned translucent backdrop, delicate hairline border, and crisp
- * typography. The subtitle delay chip is clickable and triggers the subtitle
- * delay overlay.
+ * typography. The play-method chip is clickable (when [onPlayMethodClick] is
+ * provided) and opens the playback-mode picker; the subtitle delay chip is
+ * clickable and triggers the subtitle delay overlay.
  *
  * Pure function of its arguments: all state is hoisted to the caller.
  */
@@ -67,6 +68,7 @@ internal fun PlaybackMetadataRow(
     isConnectionMetered: Boolean = false,
     subtitleDelayMs: Long = 0L,
     onSubtitleDelayClick: () -> Unit = {},
+    onPlayMethodClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
@@ -171,6 +173,8 @@ internal fun PlaybackMetadataRow(
         playMethodHasDot,
         isConnectionMetered,
         subtitleDelayMs,
+        onPlayMethodClick,
+        onSubtitleDelayClick,
     ) {
         listOfNotNull(
             MetadataItem(
@@ -180,6 +184,7 @@ internal fun PlaybackMetadataRow(
                 borderColor = playMethodBorderColor,
                 hasIndicatorDot = playMethodHasDot,
                 dotColor = playMethodTextColor,
+                onClick = onPlayMethodClick,
             ),
             resolutionLabel?.let {
                 MetadataItem(
@@ -246,7 +251,7 @@ internal fun PlaybackMetadataRow(
                     containerColor = primaryColor.copy(alpha = 0.16f),
                     borderColor = primaryColor.copy(alpha = 0.40f),
                     icon = Tabler.Outline.Clock,
-                    isClickable = true,
+                    onClick = onSubtitleDelayClick,
                 )
             } else null,
             // Metered link explains a silent quality cap (AUTO caps at
@@ -276,7 +281,7 @@ internal fun PlaybackMetadataRow(
         items.forEach { item ->
             MetadataChip(
                 item = item,
-                onClick = if (item.isClickable) onSubtitleDelayClick else null,
+                onClick = item.onClick,
             )
         }
     }
@@ -424,6 +429,6 @@ private data class MetadataItem(
     val icon: ImageVector? = null,
     val hasIndicatorDot: Boolean = false,
     val dotColor: Color = Color.Unspecified,
-    val isClickable: Boolean = false,
+    val onClick: (() -> Unit)? = null,
 )
 

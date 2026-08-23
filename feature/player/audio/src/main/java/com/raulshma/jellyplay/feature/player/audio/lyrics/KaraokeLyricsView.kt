@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.LongState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -32,12 +33,16 @@ import com.raulshma.jellyplay.core.model.LyricsLine
  * Karaoke-style lyrics display that highlights each word as it is being sung.
  * Falls back to a non-word-level display when the current line has no inline
  * word timings.
+ *
+ * Position arrives as a [LongState] so the 4 Hz tick only recomposes the active
+ * line's leaf ([KaraokeLine]); this body does not re-execute per tick (rows are
+ * keyed and LyricsLine is @Immutable, so LazyColumn items skip).
  */
 @Composable
 fun KaraokeLyricsView(
     lyrics: List<LyricsLine>,
     currentIndex: Int,
-    currentPositionMs: Long,
+    currentPositionMs: LongState,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -75,6 +80,8 @@ fun KaraokeLyricsView(
                 if (isCurrent && line.words.isNotEmpty()) {
                     KaraokeLine(
                         line = line,
+                        // Pass the state itself: only this leaf re-executes on
+                        // the position tick, not the LazyColumn above.
                         positionMs = currentPositionMs,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -98,16 +105,17 @@ fun KaraokeLyricsView(
 @Composable
 private fun KaraokeLine(
     line: LyricsLine,
-    positionMs: Long,
+    positionMs: LongState,
     modifier: Modifier = Modifier,
 ) {
-    val positionInLine = (positionMs - line.timeMs).coerceAtLeast(0L)
+    val positionInLine = (positionMs.value - line.timeMs).coerceAtLeast(0L)
     val activeColor = MaterialTheme.colorScheme.primary
     val inactiveColor = Color.White.copy(alpha = 0.6f)
 
     // Compute directly from positionInLine (a plain Long, not a tracked State) so the
     // active word advances correctly. The previous derivedStateOf captured positionInLine
-    // once and never re-evaluated, so per-word highlighting was frozen.
+    // once and never re-evaluated, so per-word highlighting was frozen. Reading
+    // positionMs.value here scopes the 4 Hz recomposition to this leaf only.
     val activeWordIndex = remember(line, positionInLine) {
         LrcParser.findCurrentWordIndex(line, positionInLine)
     }

@@ -16,7 +16,6 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 
@@ -25,9 +24,11 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
  * [RemoteViewsFactory] that pulls the latest snapshot from
  * [WidgetDataStore.continueWatching].
  *
- * RemoteViewsFactory operations are synchronous, so the Hilt entry point
- * is used to grab a [WidgetDataStore] handle and the latest list is
- * loaded with [runBlocking] on each [onDataSetChanged] call. The
+ * `onDataSetChanged` runs on the main thread; the list is read from the
+ * store's eagerly-warmed [kotlinx.coroutines.flow.StateFlow] snapshot, so
+ * no DataStore disk IO blocks it once warmed. On a cold process the first
+ * read pays one bounded (≤1 s) warm-up — see [WidgetDataStore]'s
+ * *Snapshot() docs. The
  * [ContinueWatchingWidget] calls
  * [AppWidgetManager.notifyAppWidgetViewDataChanged] whenever the data
  * changes, which re-binds the factory.
@@ -72,7 +73,10 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
 
         override fun onDataSetChanged() {
             val maxCount = store.getWidgetConfigForIdSync(appWidgetId).continueWatchingItemCount
-            items = runBlocking { store.continueWatching.first() }.take(maxCount)
+            // Memory read from the store's eagerly-warmed snapshot — no
+            // DataStore disk IO on the main thread once warmed (cold-process
+            // behavior: see WidgetDataStore's *Snapshot() docs).
+            items = store.continueWatchingSnapshot().take(maxCount)
             // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.
             // A slow URL is bounded by `WidgetImageLoader`'s internal timeout.
             val urlById = items.associate { item ->

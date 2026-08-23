@@ -289,7 +289,11 @@ class JellyPlayNotificationProvider(
         const val CHANNEL_ID = "jellyplay_media_playback"
         const val NOTIFICATION_ID = 1001
         private const val CONTENT_REQUEST_CODE = 2001
-        private const val ARTWORK_SIZE = 512
+        // Large-icon slot renders ~256–384 px across densities — 384 keeps the
+        // artwork crisp at notification scale while trimming the decode cost
+        // and bitmap memory of every track change (the memory cache is
+        // deliberately disabled, so each change re-decodes).
+        private const val ARTWORK_SIZE = 384
         private const val FALLBACK_COLOR = 0xFF006878.toInt() // md_theme_light_primary
     }
 }

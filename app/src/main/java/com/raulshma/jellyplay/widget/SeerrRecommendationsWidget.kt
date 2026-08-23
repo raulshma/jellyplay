@@ -21,9 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 /**
  * Home-screen widget that surfaces Seerr (Jellyseerr/Overseerr)
@@ -56,8 +54,11 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
+        // The server-configured check reads a widget-independent pref — read
+        // it once for the whole batch instead of per widget ID.
+        val isServerConfigured = hasServerConfigured(context)
         for (id in appWidgetIds) {
-            updateAppWidget(context, appWidgetManager, id)
+            updateAppWidget(context, appWidgetManager, id, isServerConfigured)
         }
         triggerInitialRefresh(context)
     }
@@ -127,6 +128,7 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
             context: Context,
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int,
+            isServerConfigured: Boolean = hasServerConfigured(context),
         ) {
             val views = RemoteViews(context.packageName, R.layout.seerr_recommendations_widget)
             views.setTextViewText(R.id.sr_widget_subtitle, readSourceLabel(context, appWidgetId))
@@ -150,18 +152,7 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
                 }
             }
 
-            val entryPoint = EntryPointAccessors.fromApplication(
-                context.applicationContext,
-                WidgetEntryPoint::class.java,
-            )
-            val isConnected = runCatching {
-                runBlocking {
-                    val prefs = entryPoint.seerrPreferencesStore().preferences.first()
-                    prefs.serverUrl.isNotBlank()
-                }
-            }.getOrDefault(false)
-
-            if (isConnected) {
+            if (isServerConfigured) {
                 views.setTextViewText(
                     R.id.sr_widget_empty_title,
                     context.getString(R.string.widget_seerr_no_recommendations)
@@ -231,9 +222,23 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
                 context.applicationContext,
                 WidgetEntryPoint::class.java,
             )
-            runBlocking {
-                entryPoint.widgetDataStore().getWidgetConfigForId(appWidgetId).first()
-            }.seerrSource.displayName
+            // Sync snapshot accessor — `onUpdate`/`onAppWidgetOptionsChanged` run
+            // on the main thread, so a blocking DataStore read is not acceptable.
+            entryPoint.widgetDataStore().getWidgetConfigForIdSync(appWidgetId).seerrSource.displayName
         }.getOrDefault(SeerrWidgetSource.TRENDING.displayName)
+
+        // Widget-independent server-configured read (serverUrl pref is set) —
+        // callers looping over widget IDs should hoist this out of the loop.
+        // `preferences` is an eagerly-started StateFlow, so `.value` is a
+        // memory read safe for the main thread.
+        private fun hasServerConfigured(context: Context): Boolean {
+            val entryPoint = EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                WidgetEntryPoint::class.java,
+            )
+            return runCatching {
+                entryPoint.seerrPreferencesStore().preferences.value.serverUrl.isNotBlank()
+            }.getOrDefault(false)
+        }
     }
 }

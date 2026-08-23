@@ -47,7 +47,7 @@ class DeviceProfileProvider @Inject constructor(
         playerType: PlayerType,
         pgsDirectPlay: Boolean = false,
     ): org.jellyfin.sdk.model.api.DeviceProfile = when (playerType) {
-        PlayerType.MPV -> mpvProfile(pgsDirectPlay)
+        PlayerType.MPV -> if (pgsDirectPlay) mpvProfilePgsDirectPlay else mpvProfileDefault
         PlayerType.EXO_PLAYER, PlayerType.LIBVLC -> hardwareProfile
         PlayerType.EXTERNAL -> hardwareProfile
     }
@@ -100,6 +100,19 @@ class DeviceProfileProvider @Inject constructor(
      * known yet (defaults to the device-derived hardware profile).
      */
     val default: org.jellyfin.sdk.model.api.DeviceProfile get() = hardwareProfile
+
+    /**
+     * Both [mpvProfile] variants, lazily computed once each — the profile
+     * content is process-static (libav's decoder set never changes at runtime),
+     * so rebuilding it per `PlaybackInfo` request is pure overhead. Mirrors the
+     * memoization of [hardwareProfile].
+     */
+    private val mpvProfileDefault: org.jellyfin.sdk.model.api.DeviceProfile by lazy {
+        mpvProfile(pgsDirectPlay = false)
+    }
+    private val mpvProfilePgsDirectPlay: org.jellyfin.sdk.model.api.DeviceProfile by lazy {
+        mpvProfile(pgsDirectPlay = true)
+    }
 
     private fun mpvProfile(pgsDirectPlay: Boolean): org.jellyfin.sdk.model.api.DeviceProfile = buildDeviceProfile {
         name = "jellyplay-mpv"

@@ -35,6 +35,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
+import androidx.collection.LruCache
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -69,6 +70,15 @@ class OfflineRepositoryImpl @Inject constructor(
     private val database: JellyPlayDatabase,
 ) : OfflineRepository {
 
+    /**
+     * Per-item artwork memo (see [ArtworkInputKey]): maps item id to its
+     * last resolution inputs and result so download progress ticks skip the
+     * FS stats + series-prefetch queries entirely. Same memoization pattern
+     * as the file-level JSON decode caches below.
+     */
+    private val artworkMemoCache =
+        androidx.collection.LruCache<String, Pair<ArtworkInputKey, ResolvedArtwork>>(512)
+
     override fun getOfflineDetail(id: String): Flow<OfflineMediaItem?> =
         offlineMediaDao.getByIdWithPlaybackFlow(id).flatMapLatest { row ->
             if (row == null) {
@@ -83,7 +93,7 @@ class OfflineRepositoryImpl @Inject constructor(
                     // resolver substitutes an existing local file when one is
                     // beside the download, else preserves the original value.
                     flow<OfflineMediaItem?> { emit(withContext(Dispatchers.IO) { resolveItemArtwork(item) }) }
-                }
+                }.distinctUntilChanged()
             }
         }.distinctUntilChanged()
 
@@ -121,6 +131,14 @@ class OfflineRepositoryImpl @Inject constructor(
                     .filter { it.media.mediaType != MediaType.SERIES.name }
                     .map { it.media.id }
                     .toList()
+                // Map metadata rows to models once per metadata emission: the
+                // mapping depends solely on offline_media/playback_state
+                // columns, so re-running it inside the combine below would only
+                // repeat the JSON/CSV decodes on every downloads re-emission
+                // (2 s progress ticks during transfers). The combine instead
+                // projects just the download-derived fields onto these items
+                // via cheap data-class copies.
+                val baseItems = rows.map { it.toOfflineMediaItem() }
                 val directDownloadsFlow: Flow<Map<String, DownloadEntity>> =
                     if (directIds.isEmpty()) {
                         flowOf(emptyMap())
@@ -138,20 +156,23 @@ class OfflineRepositoryImpl @Inject constructor(
                 // Combine both maps so the summary re-emits as episode
                 // downloads progress (Room re-emits each Flow on writes to its
                 // tables). SERIES rows take their bytes from the aggregate;
-                // everything else from its direct download row.
+                // everything else from its direct download row. Both branches
+                // are cheap copies over the pre-mapped items — only the
+                // download-derived fields are re-projected.
                 combine(directDownloadsFlow, seriesAggregatesFlow) { downloadMap, aggregateMap ->
-                    rows.map { row ->
-                        if (row.media.mediaType == MediaType.SERIES.name) {
-                            val agg = aggregateMap[row.media.id]
-                            row.toOfflineMediaItem().copy(
+                    baseItems.map { item ->
+                        if (item.mediaType == MediaType.SERIES) {
+                            val agg = aggregateMap[item.id]
+                            item.copy(
                                 downloadedBytes = agg?.downloadedBytes ?: 0L,
                                 totalSizeBytes = agg?.totalSizeBytes ?: 0L,
                             )
                         } else {
-                            row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
+                            item.withDownload(downloadMap[item.id])
                         }
                     }
-                }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+                }.distinctUntilChanged()
+                    .flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
             }
         }.distinctUntilChanged()
 
@@ -170,7 +191,8 @@ class OfflineRepositoryImpl @Inject constructor(
                 rows.map { row ->
                     row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
                 }
-            }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+            }.distinctUntilChanged()
+                .flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
         }.distinctUntilChanged()
 
     override suspend fun getEpisodesForSeries(seriesId: String): List<OfflineMediaItem> {
@@ -214,6 +236,11 @@ class OfflineRepositoryImpl @Inject constructor(
             playbackStateDao.deleteById(id)
             syncBaselineDao.deleteById(id)
         }
+        // The deleted row's artifacts (and possibly its whole dir) are gone;
+        // cached local artwork paths for it and its series siblings would
+        // dangle until process death. Deletes are rare — a full evict is
+        // cheap and the next read re-resolves from disk.
+        artworkMemoCache.evictAll()
         // Prune cast images after the row is gone so the reference scan only
         // counts surviving rows.
         cleanupOrphanedCastArtwork(
@@ -221,6 +248,11 @@ class OfflineRepositoryImpl @Inject constructor(
             candidateCastIds = entity?.let(::castIdsOf).orEmpty(),
         )
         cleanupOrphans()
+    }
+
+    private suspend fun offlineMediaById(downloads: List<DownloadEntity>): Map<String, OfflineMediaEntity> {
+        if (downloads.isEmpty()) return emptyMap()
+        return offlineMediaDao.getByIds(downloads.map { it.mediaItemId }).associateBy { it.id }
     }
 
     override suspend fun deleteOfflineSeries(seriesId: String) {
@@ -246,8 +278,8 @@ class OfflineRepositoryImpl @Inject constructor(
         // Capture the deleted episodes' cast ids before the rows are removed so
         // the cast images written beside each episode at fetch time can be
         // pruned afterward (reference scan runs post-delete).
-        val deletedCastIds = downloads.map { offlineMediaDao.getById(it.mediaItemId) }
-            .filterNotNull()
+        val mediaById = offlineMediaById(downloads)
+        val deletedCastIds = downloads.mapNotNull { mediaById[it.mediaItemId] }
             .flatMap(::castIdsOf)
             .distinct()
         database.withTransaction {
@@ -257,6 +289,9 @@ class OfflineRepositoryImpl @Inject constructor(
             playbackStateDao.deleteBySeriesId(seriesId)
             syncBaselineDao.deleteBySeriesId(seriesId)
         }
+        // Series-scoped artwork cleanup above removed episode-dir artifacts
+        // the memo may still resolve to — drop it and re-resolve from disk.
+        artworkMemoCache.evictAll()
         cleanupOrphanedCastArtwork(episodeDirs, deletedCastIds)
         cleanupOrphans()
     }
@@ -277,8 +312,8 @@ class OfflineRepositoryImpl @Inject constructor(
             .mapNotNull { File(it).parentFile }
             .distinct()
             .toList()
-        val deletedCastIds = downloads.map { offlineMediaDao.getById(it.mediaItemId) }
-            .filterNotNull()
+        val mediaById = offlineMediaById(downloads)
+        val deletedCastIds = downloads.mapNotNull { mediaById[it.mediaItemId] }
             .flatMap(::castIdsOf)
             .distinct()
         database.withTransaction {
@@ -288,6 +323,9 @@ class OfflineRepositoryImpl @Inject constructor(
             playbackStateDao.deleteBySeasonId(seasonId)
             syncBaselineDao.deleteBySeasonId(seasonId)
         }
+        // Deleted episode artifacts may have served as this series' cached
+        // artwork source — drop the memo and re-resolve from disk.
+        artworkMemoCache.evictAll()
         cleanupOrphanedCastArtwork(episodeDirs, deletedCastIds)
         cleanupOrphans()
     }
@@ -476,12 +514,73 @@ class OfflineRepositoryImpl @Inject constructor(
      * table writes, not per recomposition.
      */
     private suspend fun resolveItemArtwork(item: OfflineMediaItem): OfflineMediaItem =
-        resolveItemArtwork(item, SeriesPrefetch())
+        resolveItemArtwork(item, artworkInputKey(item), SeriesPrefetch())
+
+    /**
+     * Memoization seam for the artwork pass: everything the resolver reads
+     * (its FS stats and series-prefetch queries) is a pure function of these
+     * inputs, so a cached result can be replayed when they are unchanged.
+     * Byte-count-only download progress ticks — the 2 s cadence during active
+     * transfers — never appear in the key, which is what keeps ~1000 stats +
+     * 2 queries per tick off the offline screen. Only the download's
+     * completed-ness is keyed, not the full status: artwork appears beside
+     * the file when the download completes, so COMPLETED↔not transitions must
+     * re-resolve — but a PAUSED↔DOWNLOADING flip changes nothing the resolver
+     * reads and keeps the memo hit.
+     */
+    private data class ArtworkInputKey(
+        val id: String,
+        val mediaType: MediaType,
+        val seriesId: String?,
+        val posterPath: String?,
+        val backdropPath: String?,
+        val downloadPath: String?,
+        val downloadIsComplete: Boolean,
+        val cast: List<OfflinePersonInfo>,
+    )
+
+    private data class ResolvedArtwork(
+        val posterPath: String?,
+        val backdropPath: String?,
+        val cast: List<OfflinePersonInfo>,
+    )
+
+    private fun artworkInputKey(item: OfflineMediaItem) = ArtworkInputKey(
+        id = item.id,
+        mediaType = item.mediaType,
+        seriesId = item.seriesId,
+        posterPath = item.posterPath,
+        backdropPath = item.backdropPath,
+        downloadPath = item.downloadPath,
+        downloadIsComplete = item.downloadStatus == DownloadStatus.COMPLETED,
+        cast = item.cast,
+    )
+
+    private fun applyResolvedArtwork(
+        item: OfflineMediaItem,
+        resolved: ResolvedArtwork,
+    ): OfflineMediaItem =
+        if (resolved.posterPath == item.posterPath &&
+            resolved.backdropPath == item.backdropPath &&
+            resolved.cast === item.cast
+        ) {
+            item
+        } else {
+            item.copy(
+                posterPath = resolved.posterPath,
+                backdropPath = resolved.backdropPath,
+                cast = resolved.cast,
+            )
+        }
 
     private suspend fun resolveItemArtwork(
         item: OfflineMediaItem,
+        key: ArtworkInputKey,
         prefetch: SeriesPrefetch,
     ): OfflineMediaItem {
+        artworkMemoCache.get(item.id)?.let { (cachedKey, resolved) ->
+            if (cachedKey == key) return applyResolvedArtwork(item, resolved)
+        }
         // First: the item's own artifact beside its media file (all types).
         val ownDir = item.downloadPath
             ?.takeIf { it.isNotBlank() }
@@ -506,21 +605,9 @@ class OfflineRepositoryImpl @Inject constructor(
         } else {
             item.cast
         }
-        // Fast path: nothing on the row needed artwork resolution (no remote
-        // poster/backdrop and no cast, or cast but no artifact dir). Avoids a
-        // copy() allocation on the hot library-grid read path.
-        return if (posterResolved == item.posterPath &&
-            backdropResolved == item.backdropPath &&
-            resolvedCast === item.cast
-        ) {
-            item
-        } else {
-            item.copy(
-                posterPath = posterResolved,
-                backdropPath = backdropResolved,
-                cast = resolvedCast,
-            )
-        }
+        val resolved = ResolvedArtwork(posterResolved, backdropResolved, resolvedCast)
+        artworkMemoCache.put(item.id, key to resolved)
+        return applyResolvedArtwork(item, resolved)
     }
 
     /**
@@ -537,16 +624,28 @@ class OfflineRepositoryImpl @Inject constructor(
     private suspend fun resolveArtworkList(items: List<OfflineMediaItem>): List<OfflineMediaItem> {
         if (items.isEmpty()) return items
         return withContext(Dispatchers.IO) {
-            // All episodes of a season share one seriesId — prefetch each
-            // distinct parent series row once instead of re-querying it per
-            // episode on every emission. Same for each SERIES item's
-            // downloaded-episode dir (one projected query for the whole
-            // list instead of a getDownloadsForSeries round-trip per series).
-            val prefetch = SeriesPrefetch(
-                seriesRowsById = prefetchSeriesRows(items),
-                seriesDirsById = prefetchSeriesArtifactDirs(items),
-            )
-            items.map { resolveItemArtwork(it, prefetch) }
+            val keys = items.map(::artworkInputKey)
+            // Snapshot each entry ONCE: a second get() after the all-cached
+            // check could miss (a concurrent collector's puts evicting LRU
+            // entries between the two reads) and trip the non-null assertion.
+            val cachedEntries = items.map { artworkMemoCache.get(it.id) }
+            val allCached = cachedEntries.indices.all { i -> cachedEntries[i]?.first == keys[i] }
+            if (allCached) {
+                items.mapIndexed { i, item ->
+                    applyResolvedArtwork(item, cachedEntries[i]!!.second)
+                }
+            } else {
+                // All episodes of a season share one seriesId — prefetch each
+                // distinct parent series row once instead of re-querying it per
+                // episode on every emission. Same for each SERIES item's
+                // downloaded-episode dir (one projected query for the whole
+                // list instead of a getDownloadsForSeries round-trip per series).
+                val prefetch = SeriesPrefetch(
+                    seriesRowsById = prefetchSeriesRows(items),
+                    seriesDirsById = prefetchSeriesArtifactDirs(items),
+                )
+                items.mapIndexed { i, item -> resolveItemArtwork(item, keys[i], prefetch) }
+            }
         }
     }
 
@@ -831,12 +930,29 @@ internal val offlineJson: Json = Json {
     encodeDefaults = true
 }
 
+/**
+ * Memo caches for the pure JSON-column decodes below: the library/episodes/
+ * season flows re-map every row on each Room re-emission (2 s progress ticks
+ * during transfers), and the decodes are deterministic, so equal inputs always
+ * yield equal outputs.
+ */
+private val castDecodeCache = LruCache<String, List<OfflinePersonInfo>>(256)
+private val providerIdsDecodeCache = LruCache<String, Map<String, String>>(256)
+private val externalUrlsDecodeCache = LruCache<String, List<com.raulshma.jellyplay.core.model.ExternalUrl>>(256)
+
+private inline fun <T : Any> memoizedDecode(cache: LruCache<String, T>, json: String, fallback: T, decode: () -> T): T {
+    cache.get(json)?.let { return it }
+    val value = runCatching(decode).getOrDefault(fallback)
+    cache.put(json, value)
+    return value
+}
+
 /** Decodes a [peopleJson] blob into a cast list, tolerating null/garbage rows. */
 internal fun decodeCast(peopleJson: String?): List<OfflinePersonInfo> {
     if (peopleJson.isNullOrBlank()) return emptyList()
-    return runCatching {
-        offlineJson.decodeFromString<List<OfflinePersonInfo>>(peopleJson)
-    }.getOrDefault(emptyList())
+    return memoizedDecode(castDecodeCache, peopleJson, emptyList()) {
+        offlineJson.decodeFromString(peopleJson)
+    }
 }
 
 /** Encodes a cast list into the persisted JSON column form. */
@@ -854,15 +970,15 @@ internal fun encodeExternalUrls(urls: List<com.raulshma.jellyplay.core.model.Ext
 /** Decodes a [providerIdsJson] blob into a map, tolerating null/garbage. */
 private fun decodeProviderIds(providerIdsJson: String?): Map<String, String> {
     if (providerIdsJson.isNullOrBlank()) return emptyMap()
-    return runCatching {
-        offlineJson.decodeFromString<Map<String, String>>(providerIdsJson)
-    }.getOrDefault(emptyMap())
+    return memoizedDecode(providerIdsDecodeCache, providerIdsJson, emptyMap()) {
+        offlineJson.decodeFromString(providerIdsJson)
+    }
 }
 
 /** Decodes a [externalUrlsJson] blob into a URL list, tolerating null/garbage. */
 private fun decodeExternalUrls(externalUrlsJson: String?): List<com.raulshma.jellyplay.core.model.ExternalUrl> {
     if (externalUrlsJson.isNullOrBlank()) return emptyList()
-    return runCatching {
-        offlineJson.decodeFromString<List<com.raulshma.jellyplay.core.model.ExternalUrl>>(externalUrlsJson)
-    }.getOrDefault(emptyList())
+    return memoizedDecode(externalUrlsDecodeCache, externalUrlsJson, emptyList()) {
+        offlineJson.decodeFromString(externalUrlsJson)
+    }
 }

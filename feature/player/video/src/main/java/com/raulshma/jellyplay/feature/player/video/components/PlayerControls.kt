@@ -549,6 +549,7 @@ internal fun PlayerControls(
                         isConnectionMetered = isConnectionMetered,
                         subtitleDelayMs = subtitleDelayMs,
                         onSubtitleDelayClick = onSubtitleDelayClick,
+                        onPlayMethodClick = onPlaybackModeClick,
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
