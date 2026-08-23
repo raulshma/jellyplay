@@ -180,7 +180,7 @@ dependencies {
     implementation(project(":feature:player:live"))
     implementation(project(":feature:downloads"))
     implementation(project(":feature:settings"))
-    implementation(project(":feature:music"))
+    implementation(project(":shared:feature:music"))
     implementation(project(":feature:livetv"))
     implementation(project(":feature:syncplay"))
     implementation(project(":feature:subtitle-tester"))

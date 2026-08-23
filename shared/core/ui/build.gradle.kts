@@ -72,3 +72,7 @@ kotlin {
 // accessors land in `...core.ui.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.core.ui.generated.resources"
+// Cross-module string sharing: shared/feature modules resolve a handful of
+// core strings (core_delete/core_cancel, ...) directly, which requires the
+// generated Res object + accessors to be public (internal by default).
+composeResources.publicResClass = true

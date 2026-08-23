@@ -68,6 +68,8 @@ jobs:
           :shared:feature:search:compileAndroidMain
           :shared:feature:library:jvmJar
           :shared:feature:library:compileAndroidMain
+          :shared:feature:music:jvmJar
+          :shared:feature:music:compileAndroidMain
           --stacktrace
 
       - name: Shared tests (JVM)
@@ -82,4 +84,5 @@ jobs:
           :shared:core:player-contract:jvmTest
           :shared:feature:search:jvmTest
           :shared:feature:library:jvmTest
+          :shared:feature:music:jvmTest
           --stacktrace

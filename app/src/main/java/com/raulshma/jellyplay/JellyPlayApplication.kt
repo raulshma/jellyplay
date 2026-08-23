@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.di.hiltInteropModule
 import com.raulshma.jellyplay.feature.search.di.searchModule
 import com.raulshma.jellyplay.feature.library.di.androidPhotoExportModule
 import com.raulshma.jellyplay.feature.library.di.libraryModule
+import com.raulshma.jellyplay.feature.music.di.musicModule
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
@@ -130,6 +131,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 hiltInteropModule(this@JellyPlayApplication),
                 searchModule,
                 libraryModule,
+                musicModule,
                 // MediaStore/FileProvider photo-export actual for the library
                 // feature's PhotoExport seam (androidDataModule pattern).
                 androidPhotoExportModule(this@JellyPlayApplication),

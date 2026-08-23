@@ -34,6 +34,10 @@ dependencies {
     // desktop-inert until a gallery/share story lands there).
     implementation(project(":shared:feature:library"))
 
+    // …music, third conveyor item (DI registration only — instant-mix needs
+    // AudioQueueFacade defs that arrive with the desktop player slice).
+    implementation(project(":shared:feature:music"))
+
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
     implementation(libs.jna)

@@ -38,10 +38,8 @@ data class DownloadRequest(
     val selectedSubtitleIndices: Set<Int>? = null,
 )
 
-data class DownloadResult(
-    val downloadItem: DownloadItem?,
-    val error: String?,
-)
+// DownloadResult lives in shared/core/data commonMain (same package,
+// re-exported) so feature modules in shared/ can consume it.
 
 @Singleton
 class DownloadDelegate @Inject constructor(

@@ -25,6 +25,8 @@ import com.raulshma.jellyplay.desktop.player.desktopPlayerModule
 import com.raulshma.jellyplay.feature.search.di.searchModule
 import com.raulshma.jellyplay.feature.library.di.desktopPhotoExportModule
 import com.raulshma.jellyplay.feature.library.di.libraryModule
+import com.raulshma.jellyplay.feature.music.di.musicModule
+import com.raulshma.jellyplay.feature.music.feedback.desktopMusicMessageBusModule
 import org.koin.core.context.startKoin
 
 fun main() {
@@ -50,6 +52,10 @@ fun main() {
             // desktop only needs the (inert) photo-export actual registered.
             libraryModule,
             desktopPhotoExportModule(),
+            // …music, third conveyor item — same inert-module pattern: VM deps
+            // resolve lazily, desktop only needs the (no-op) message-bus actual.
+            musicModule,
+            desktopMusicMessageBusModule(),
         )
     }
 
