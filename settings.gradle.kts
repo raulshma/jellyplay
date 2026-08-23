@@ -71,6 +71,7 @@ include(":shared:core:database")
 include(":shared:core:network")
 include(":shared:core:data")
 include(":shared:core:ui")
+include(":shared:core:player-contract")
 
 // Desktop shell (plan §Phase V1b)
 include(":apps:desktop")

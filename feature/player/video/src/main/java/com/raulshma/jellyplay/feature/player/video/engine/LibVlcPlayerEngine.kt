@@ -40,7 +40,7 @@ import org.videolan.libvlc.util.VLCVideoLayout
 class LibVlcPlayerEngine(
     private val context: Context,
     private val fontProvider: FontProvider,
-) : ReloadablePlayerEngine(context) {
+) : ReloadablePlayerEngine(context), AndroidSurfaceProvider {
 
     companion object {
         private const val TAG = "LibVlcPlayerEngine"

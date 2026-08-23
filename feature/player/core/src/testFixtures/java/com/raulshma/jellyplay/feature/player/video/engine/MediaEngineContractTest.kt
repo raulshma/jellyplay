@@ -249,8 +249,12 @@ abstract class MediaEngineContractTest {
             "specimen does not create a usable View in this environment",
             supportsViewCreation(),
         )
+        // View creation is the Android-only AndroidSurfaceProvider seam since
+        // the Phase V2 common-ization of the contract — reach it via cast.
+        val surfaceProvider = engine as? AndroidSurfaceProvider
+        assumeTrue("specimen exposes no Android View surface", surfaceProvider != null)
         val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
-        val view = engine.createSurfaceView(context)
+        val view = surfaceProvider!!.createSurfaceView(context)
         assertNotNull(view)
     }
 

@@ -31,7 +31,7 @@ import kotlinx.coroutines.flow.emptyFlow
  * [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine] contract) — the
  * little mutable state here is backed by `@Volatile` fields.
  */
-internal class NoOpEngine : MediaEngine {
+internal class NoOpEngine : MediaEngine, AndroidSurfaceProvider {
 
     override val capabilities = EngineCapabilityMatrix.EXTERNAL
     override val displayName: String = PlayerType.EXTERNAL.displayName

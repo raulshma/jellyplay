@@ -40,7 +40,8 @@ jobs:
         # The AGP KMP library plugin exposes no per-variant assembleDebug;
         # android target verifies via its single androidMain compilation.
         # wasmJs target exists on model/datastore/designsystem/network only —
-        # database and data ship without it (no Room on wasm v1, plan §Phase W).
+        # database, data and player-contract ship without it (no Room on wasm v1,
+        # plan §Phase W; player-contract supertypes live in shared core:data).
         run: >
           ./gradlew
           :shared:core:model:jvmJar
@@ -61,6 +62,8 @@ jobs:
           :shared:core:data:compileAndroidMain
           :shared:core:ui:jvmJar
           :shared:core:ui:compileAndroidMain
+          :shared:core:player-contract:jvmJar
+          :shared:core:player-contract:compileAndroidMain
           --stacktrace
 
       - name: Shared tests (JVM)
@@ -72,4 +75,5 @@ jobs:
           :shared:core:network:jvmTest
           :shared:core:data:jvmTest
           :shared:core:ui:jvmTest
+          :shared:core:player-contract:jvmTest
           --stacktrace

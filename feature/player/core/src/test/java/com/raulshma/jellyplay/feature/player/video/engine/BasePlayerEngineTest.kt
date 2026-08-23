@@ -18,7 +18,7 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class BasePlayerEngineTest {
 
-    private class ConcreteBaseEngine : BasePlayerEngine() {
+    private class ConcreteBaseEngine : BasePlayerEngine(), AndroidSurfaceProvider {
         override val capabilities: EngineCapabilities = EngineCapabilities()
         override val displayName: String = "test-engine"
 

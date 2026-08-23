@@ -35,19 +35,20 @@ android {
 }
 
 dependencies {
-    implementation(project(":core:model"))
-    implementation(project(":core:data"))
+    // Phase V2a: the engine contract (MediaEngine + value types) lives in
+    // :shared:core:player-contract under the SAME package, so consumers
+    // compile unchanged. This module keeps only the Android engine
+    // implementation details: BasePlayerEngine (Handler/Looper plumbing) and
+    // ExoPlaybackErrorMapper (media3 → EngineError), plus the engine test
+    // fixtures. No logic may live in two places (plan §0 anti-drift rule).
+    api(project(":shared:core:player-contract"))
+
     implementation(platform(libs.compose.bom))
-    // MediaEngine.kt annotates its @Immutable / @Stable data classes with
-    // androidx.compose.runtime markers (same pattern as :core:model). Only the
-    // runtime artifact is needed — there are no @Composable functions in this
-    // contract module, so the compose compiler plugin is not applied.
     implementation(libs.compose.runtime)
     implementation(libs.kotlinx.coroutines.android)
-    // media3-common (androidx.media3.common.Player) arrives transitively via
-    // media3-exoplayer; declared explicitly so the engine contract module has
-    // a stable, declared surface for the Player type used in MediaEngine /
-    // RemotePlayableEngine.
+    // media3-common (PlaybackException for ExoPlaybackErrorMapper) arrives
+    // transitively via media3-exoplayer; declared explicitly for a stable
+    // surface.
     implementation(libs.media3.exoplayer)
 
     testImplementation(libs.junit)
@@ -62,8 +63,7 @@ dependencies {
     // source set does not inherit the main `implementation` classpath, so every
     // module the base class touches must be redeclared here. Available to every
     // consumer of this module's test fixtures (currently :feature:player:video).
-    testFixturesImplementation(project(":core:model"))
-    testFixturesImplementation(project(":core:data"))
+    testFixturesImplementation(project(":shared:core:player-contract"))
     testFixturesImplementation(platform(libs.compose.bom))
     testFixturesImplementation(libs.compose.runtime)
     testFixturesImplementation(libs.kotlinx.coroutines.android)

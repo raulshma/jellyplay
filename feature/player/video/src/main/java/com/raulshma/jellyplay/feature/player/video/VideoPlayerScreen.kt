@@ -120,6 +120,7 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
 import com.raulshma.jellyplay.feature.player.video.engine.styleChangedExcludingDelay
+import com.raulshma.jellyplay.feature.player.video.engine.AndroidSurfaceProvider
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
@@ -1147,7 +1148,10 @@ fun VideoPlayerScreen(
                 key(currentEngine) {
                     AndroidView(
                         factory = { ctx ->
-                            val view = currentEngine.createSurfaceView(ctx)
+                            val view = (currentEngine as? AndroidSurfaceProvider)?.createSurfaceView(ctx)
+                                // Non-View-surface engine (desktop-style, impossible on Android
+                                // today): empty surface, audio-only playback continues.
+                                ?: android.view.View(ctx)
                             lastAppliedSubtitleStyle = uiState.subtitleStyle
                             viewModel.applySubtitleStyle()
                             playerViewRef = view
@@ -1239,9 +1243,9 @@ fun VideoPlayerScreen(
                                             android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                                             android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                                         )
-                                    }.also { currentEngine.setExternalSubtitleHost(it) }
+                                    }.also { host -> (currentEngine as? AndroidSurfaceProvider)?.setExternalSubtitleHost(host) }
                                 },
-                                onRelease = { currentEngine.setExternalSubtitleHost(null) },
+                                onRelease = { (currentEngine as? AndroidSurfaceProvider)?.setExternalSubtitleHost(null) },
                                 // Sibling of the zoomed video — explicitly NOT in a
                                 // graphicsLayer, so it stays pinned to the screen.
                                 modifier = Modifier.fillMaxSize(),

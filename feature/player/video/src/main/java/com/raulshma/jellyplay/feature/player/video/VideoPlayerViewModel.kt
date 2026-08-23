@@ -418,7 +418,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val mediaSessionController = MediaSessionController(
         context = context,
         sessionManager = sessionManager,
-        getPlayer = { playerSessionManager.engine?.underlyingPlayer },
+        getPlayer = { playerSessionManager.engine?.underlyingPlayer as? Player },
         getImageUrl = { itemId, maxWidth -> playbackRepository.getImageUrl(itemId = itemId, maxWidth = maxWidth) },
     )
 
@@ -2499,7 +2499,7 @@ class VideoPlayerViewModel @Inject constructor(
         if (engine != null) {
             val sessionState = playerSessionManager.sessionState.value
             val itemId = sessionState.currentItemId ?: return
-            val player = engine.underlyingPlayer ?: return
+            val player = engine.underlyingPlayer as? Player ?: return
             mediaSessionController.createForPlayer(player, "jellyplay_video_$itemId", itemId)
         }
     }

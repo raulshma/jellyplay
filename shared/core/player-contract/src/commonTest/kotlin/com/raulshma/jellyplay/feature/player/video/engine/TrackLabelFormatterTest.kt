@@ -1,24 +1,24 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import java.util.Locale
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
+import kotlin.test.AfterTest
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 
 class TrackLabelFormatterTest {
 
     private val savedLocale = Locale.getDefault()
 
-    @Before
+    @BeforeTest
     fun fixLocale() {
         // displayLanguage is locale-dependent; pin to English for determinism.
         Locale.setDefault(Locale.ENGLISH)
     }
 
-    @After
+    @AfterTest
     fun restoreLocale() = Locale.setDefault(savedLocale)
 
     @Test

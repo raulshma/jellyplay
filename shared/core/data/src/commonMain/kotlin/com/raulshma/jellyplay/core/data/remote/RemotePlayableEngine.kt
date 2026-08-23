@@ -1,17 +1,17 @@
 package com.raulshma.jellyplay.core.data.remote
 
-import androidx.media3.common.Player
 import com.raulshma.jellyplay.core.model.TrackType
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Engine-agnostic subset of [com.raulshma.jellyplay.feature.player.video.engine.MediaEngine]
- * used by the Jellyfin "Play To" / remote control receiver. Defined here so
- * the [ActivePlayerController] and the remote-control dispatchers in
- * `core:data` do not need to depend on the `feature:player:video` module.
+ * Engine-agnostic subset of `MediaEngine`
+ * (`com.raulshma.jellyplay.feature.player.video.engine`) used by the Jellyfin
+ * "Play To" / remote control receiver. Defined here so the
+ * `ActivePlayerController` and the remote-control dispatchers in `core:data`
+ * do not need to depend on the `feature:player:video` module.
  *
- * The video [com.raulshma.jellyplay.feature.player.video.engine.MediaEngine]
- * implements this interface directly — no adapter is required.
+ * The video `MediaEngine` implements this interface directly — no adapter is
+ * required.
  *
  * All control methods are required to be safe to call from any thread.
  * Implementations must marshal the call to the engine's owning thread
@@ -22,7 +22,15 @@ import kotlinx.coroutines.flow.StateFlow
 interface RemotePlayableEngine {
     val currentPositionMs: Long
     val isPlaying: StateFlow<Boolean>
-    val underlyingPlayer: Player?
+
+    /**
+     * Opaque native player handle for platform integrations, or `null` when
+     * the engine has no exposed native player. Android consumers cast to
+     * `androidx.media3.common.Player` (ExoPlayer); implementations may narrow
+     * the type via val covariance. Was a media3 `Player?` before the Phase V2
+     * common-ization — kept type-erased so this interface stays commonMain-pure.
+     */
+    val underlyingPlayer: Any?
 
     val volume: Float
 

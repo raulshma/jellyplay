@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.subtitle.tester.preview
 import android.content.Context
 import android.view.View
 import android.widget.FrameLayout
+import com.raulshma.jellyplay.feature.player.video.engine.AndroidSurfaceProvider
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 
 /**
@@ -22,7 +23,7 @@ class PreviewEngineHost(
 
     fun attach(engine: MediaEngine) {
         detach()
-        val surface = engine.createSurfaceView(context)
+        val surface = (engine as? AndroidSurfaceProvider)?.createSurfaceView(context) ?: return
         // Force MATCH_PARENT: engines whose surface view does not set its own
         // layout params (e.g. libVLC's VLCVideoLayout) would otherwise measure
         // to wrap/zero content and render smaller than the preview tile. ExoPlayer

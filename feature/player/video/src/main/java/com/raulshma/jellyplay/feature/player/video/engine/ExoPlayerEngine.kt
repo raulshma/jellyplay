@@ -26,6 +26,7 @@ import androidx.media3.exoplayer.metadata.MetadataOutput
 import androidx.media3.exoplayer.text.TextOutput
 import androidx.media3.exoplayer.video.VideoRendererEventListener
 import androidx.media3.exoplayer.NoSampleRenderer
+import androidx.media3.exoplayer.drm.DrmSessionManager
 import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.RenderersFactory
 import androidx.media3.common.text.Cue
@@ -120,7 +121,7 @@ class ExoPlayerEngine(
     // Nullable + defaulted so non-Hilt constructions (contract tests) compile
     // unchanged; a null cache simply disables byte caching (passthrough).
     private val videoStreamCache: VideoStreamCache? = null,
-) : ReloadablePlayerEngine(context) {
+) : ReloadablePlayerEngine(context), AndroidSurfaceProvider {
 
     @Volatile
     private var cachedVolume: Float = 1f
@@ -594,8 +595,12 @@ class ExoPlayerEngine(
         // point for content protection — the engine never hard-codes Widevine
         // or any scheme, so it stays testable without a DRM framework. A `null`
         // manager (clear content) leaves Media3's default no-DRM path in place.
-        currentConfig.drmSessionManagerProvider?.provide()?.let { drmManager ->
-            msf.setDrmSessionManagerProvider { drmManager }
+        // The provider's return is type-erased (`Any?`, Phase V2 common-ization);
+        // only a media3 DrmSessionManager attaches — anything else is ignored.
+        currentConfig.drmSessionManagerProvider?.provide()?.let { raw ->
+            (raw as? DrmSessionManager)?.let { drmManager ->
+                msf.setDrmSessionManagerProvider { drmManager }
+            }
         }
 
         val audioAttrs = AudioAttributes.Builder()

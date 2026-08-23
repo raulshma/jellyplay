@@ -27,7 +27,7 @@ import java.time.Duration
 @RunWith(RobolectricTestRunner::class)
 class PositionFlowWithTickerTest {
 
-    private class Harness(context: Context) : ReloadablePlayerEngine(context) {
+    private class Harness(context: Context) : ReloadablePlayerEngine(context), AndroidSurfaceProvider {
         override val capabilities: EngineCapabilities = EngineCapabilities()
         override val displayName: String = "TickerHarness"
         override val durationMs: Long get() = 0L

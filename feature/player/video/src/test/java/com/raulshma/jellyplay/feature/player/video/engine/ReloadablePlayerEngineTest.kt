@@ -30,7 +30,7 @@ class ReloadablePlayerEngineTest {
 
     private open class Harness(
         context: Context = ApplicationProvider.getApplicationContext(),
-    ) : ReloadablePlayerEngine(context) {
+    ) : ReloadablePlayerEngine(context), AndroidSurfaceProvider {
 
         override val capabilities: EngineCapabilities = EngineCapabilities()
         override val displayName: String = "Harness"

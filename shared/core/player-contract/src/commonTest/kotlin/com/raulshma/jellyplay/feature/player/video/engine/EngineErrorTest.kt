@@ -1,11 +1,11 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertSame
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
+import kotlin.test.Test
 
 class EngineErrorTest {
 
@@ -44,7 +44,7 @@ class EngineErrorTest {
         val retryableCodes = listOf(500, 502, 503, 504)
         retryableCodes.forEach { code ->
             val error = EngineError.Source(httpStatus = code, cause = null)
-            assertTrue("HTTP $code must be retryable", error.retryable)
+            assertTrue(error.retryable, "HTTP $code must be retryable")
         }
     }
 
@@ -53,7 +53,7 @@ class EngineErrorTest {
         val nonRetryableCodes = listOf(400, 401, 403, 404, 410, 429)
         nonRetryableCodes.forEach { code ->
             val error = EngineError.Source(httpStatus = code, cause = null)
-            assertFalse("HTTP $code must not be retryable", error.retryable)
+            assertFalse(error.retryable, "HTTP $code must not be retryable")
         }
     }
 

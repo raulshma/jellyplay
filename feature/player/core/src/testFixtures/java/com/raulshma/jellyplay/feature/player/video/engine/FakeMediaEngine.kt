@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.conflate
  */
 class FakeMediaEngine(
     private val tickerScope: CoroutineScope? = null,
-) : MediaEngine {
+) : MediaEngine, AndroidSurfaceProvider {
 
     override var capabilities: EngineCapabilities = EngineCapabilities()
 

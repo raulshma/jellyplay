@@ -1,8 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
-import android.content.Context
-import android.view.View
-import android.view.ViewGroup
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleCallbacks
@@ -90,9 +87,11 @@ data class EngineConfig(
     val pauseOnAudioFocusLoss: Boolean = true,
     /**
      * Optional DRM hook. When non-null, engines that support DRM (currently
-     * [ExoPlayerEngine]) attach the supplied [androidx.media3.exoplayer.drm.DrmSessionManager].
-     * Defaults to `null` so non-DRM playback — and the rest of the codebase —
-     * is unaffected. See [EngineDrmSessionManagerProvider].
+     * ExoPlayerEngine on Android) attach the supplied session manager —
+     * `androidx.media3.exoplayer.drm.DrmSessionManager` on Android, passed
+     * through the type-erased [EngineDrmSessionManagerProvider]. Defaults to
+     * `null` so non-DRM playback — and the rest of the codebase — is
+     * unaffected. See [EngineDrmSessionManagerProvider].
      */
     val drmSessionManagerProvider: EngineDrmSessionManagerProvider? = null,
 )
@@ -180,8 +179,8 @@ enum class ZoomSafeSubtitleStrategy {
 
     /**
      * Engine reparents its native subtitle View into an app-supplied host
-     * ([MediaEngine.setExternalSubtitleHost]); full native fidelity, relocated
-     * outside the zoom transform (ExoPlayer).
+     * (`AndroidSurfaceProvider.setExternalSubtitleHost`, Android-only seam);
+     * full native fidelity, relocated outside the zoom transform (ExoPlayer).
      */
     NATIVE_PINNED,
 
@@ -312,7 +311,15 @@ interface MediaEngine :
     override val currentPositionMs: Long
     override fun selectTrack(type: TrackType, index: Int)
     override fun setMaxVideoBitrate(bps: Int?)
-    override val underlyingPlayer: androidx.media3.common.Player? get() = null
+
+    /**
+     * Opaque native player handle (re-declaration of the type-erased
+     * `RemotePlayableEngine.underlyingPlayer` with the contract-level null
+     * default). Android engines narrow it via val covariance — ExoPlayerEngine
+     * returns `androidx.media3.common.Player?`; consumers on Android cast.
+     * Desktop engines may expose the mpv handle; default is `null`.
+     */
+    override val underlyingPlayer: Any? get() = null
 
     // ── Identity ──
     /**
@@ -412,8 +419,9 @@ interface MediaEngine :
     //    instead of reverse-engineering the strategy from a pair of capability
     //    booleans. Each strategy carries its own mechanical contract:
     //      · NATIVE_PINNED — the engine reparents its native subtitle View into
-    //        an app-supplied host ([setExternalSubtitleHost]); full native
-    //        fidelity, just relocated (ExoPlayer).
+    //        an app-supplied host (AndroidSurfaceProvider.setExternalSubtitleHost,
+    //        the Android-only surface seam); full native fidelity, just
+    //        relocated (ExoPlayer).
     //      · COMPOSE_CUE    — the engine emits the live line via
     //        [liveSubtitleCue] and toggles native rendering via
     //        [setNativeSubtitlesVisible]; the screen renders a Compose overlay
@@ -444,17 +452,6 @@ interface MediaEngine :
     fun applySubtitleStyle(style: SubtitleStyle)
 
     /**
-     * Optionally reparents the engine's native subtitle `View`(s) into an
-     * app-supplied [host] pinned to the screen (a sibling of the zoomed video
-     * surface, outside the pinch/crop transform), so captions stay put when the
-     * video is zoomed or cropped. Pass `null` to detach and revert to the
-     * engine's default in-frame parenting. Only meaningful for engines that
-     * advertise [ZoomSafeSubtitleStrategy.NATIVE_PINNED] (ExoPlayer); every
-     * other engine no-ops.
-     */
-    fun setExternalSubtitleHost(host: ViewGroup?) {}
-
-    /**
      * Toggles the engine's native subtitle rendering at runtime. Used to hide
      * native subs while the screen renders a zoom-safe Compose overlay (see
      * [liveSubtitleCue] / [ZoomSafeSubtitleStrategy.COMPOSE_CUE]), avoiding
@@ -464,7 +461,10 @@ interface MediaEngine :
     fun setNativeSubtitlesVisible(visible: Boolean) {}
 
     // ── Native surface creation and aspect-ratio control. ──
-    fun createSurfaceView(context: Context): View
+    //    Surface creation itself is platform-specific and lives on
+    //    platform-seam interfaces (`AndroidSurfaceProvider` in this module's
+    //    androidMain) — a `View` cannot cross into commonMain. Aspect-ratio
+    //    control stays here because it is engine-logical, not view-mechanical.
 
     /**
      * Apply the user's aspect-ratio choice to this engine's native surface.
