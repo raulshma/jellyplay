@@ -54,6 +54,7 @@ import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayQueueCore
 import com.raulshma.jellyplay.core.data.syncplay.TimeSyncManager
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
+import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.data.util.SystemTimeSource
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.worker.DownloadTransferClient
@@ -116,6 +117,12 @@ val dataJvmModule: Module = module {
     single { AdaptiveBitrateSelector(get(), get()) }
 
     single { OrderHomeSectionsUseCase() }
+
+    // V3 library conveyor: Koin owns construction; legacy Hilt injectors
+    // (HomeViewModel, PhotoFolderChildUrlsStore) reach this single through the
+    // DataModule koin().get() bridge. MediaRepository resolves via the app's
+    // Hilt interop on Android.
+    single { PhotoFolderPrefetcher(get()) }
 
     // JellyfinApiClient resolves from :shared:core:network's networkJvmModule.
     single { ServerHealthMonitor(get()) }

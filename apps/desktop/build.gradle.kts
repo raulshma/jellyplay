@@ -30,6 +30,10 @@ dependencies {
     // graph wiring lands with the desktop search slice).
     implementation(project(":shared:feature:search"))
 
+    // …library, second conveyor item (DI registration only; PhotoExport is
+    // desktop-inert until a gallery/share story lands there).
+    implementation(project(":shared:feature:library"))
+
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
     implementation(libs.jna)

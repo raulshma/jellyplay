@@ -23,6 +23,8 @@ import com.raulshma.jellyplay.core.network.di.desktopNetworkModule
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
 import com.raulshma.jellyplay.desktop.player.desktopPlayerModule
 import com.raulshma.jellyplay.feature.search.di.searchModule
+import com.raulshma.jellyplay.feature.library.di.desktopPhotoExportModule
+import com.raulshma.jellyplay.feature.library.di.libraryModule
 import org.koin.core.context.startKoin
 
 fun main() {
@@ -44,6 +46,10 @@ fun main() {
             // V3 feature conveyor: search (DI registration; the desktop nav
             // wiring lands later in the conveyor).
             searchModule,
+            // …library, second conveyor item — its VM deps resolve lazily, so
+            // desktop only needs the (inert) photo-export actual registered.
+            libraryModule,
+            desktopPhotoExportModule(),
         )
     }
 

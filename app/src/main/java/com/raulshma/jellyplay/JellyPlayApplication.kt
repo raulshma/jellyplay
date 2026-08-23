@@ -24,6 +24,8 @@ import com.raulshma.jellyplay.core.network.di.networkJvmModule
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import com.raulshma.jellyplay.di.hiltInteropModule
 import com.raulshma.jellyplay.feature.search.di.searchModule
+import com.raulshma.jellyplay.feature.library.di.androidPhotoExportModule
+import com.raulshma.jellyplay.feature.library.di.libraryModule
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
@@ -127,6 +129,10 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // Koin graph until the Phase X DownloadRepository flip.
                 hiltInteropModule(this@JellyPlayApplication),
                 searchModule,
+                libraryModule,
+                // MediaStore/FileProvider photo-export actual for the library
+                // feature's PhotoExport seam (androidDataModule pattern).
+                androidPhotoExportModule(this@JellyPlayApplication),
             )
         }
         super.onCreate()

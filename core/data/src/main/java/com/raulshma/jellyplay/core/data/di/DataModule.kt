@@ -105,6 +105,13 @@ abstract class DataModule {
         fun provideOrderHomeSectionsUseCase(): com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase =
             koin().get()
 
+        // V3 library conveyor: moved into :shared:core:data (Koin-owned);
+        // HomeViewModel + PhotoFolderChildUrlsStore still Hilt-inject it.
+        @dagger.Provides
+        @Singleton
+        fun providePhotoFolderPrefetcher(): com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher =
+            koin().get()
+
         @dagger.Provides
         @Singleton
         fun provideServerHealthMonitor(): com.raulshma.jellyplay.core.data.network.ServerHealthMonitor = koin().get()

@@ -36,7 +36,6 @@ include(":core:notification")
 include(":core:testing")
 include(":feature:auth")
 include(":feature:home")
-include(":feature:library")
 include(":feature:details")
 include(":feature:player:core")
 include(":feature:player:video")
@@ -75,6 +74,7 @@ include(":shared:core:player-contract")
 // Feature conveyor (plan §Phase V3): one shared feature module per migration
 // PR, same shape as the shared core stack above.
 include(":shared:feature:search")
+include(":shared:feature:library")
 
 // Desktop shell (plan §Phase V1b)
 include(":apps:desktop")

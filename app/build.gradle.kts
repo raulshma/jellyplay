@@ -171,7 +171,7 @@ dependencies {
     implementation(project(":core:notification"))
     implementation(project(":feature:auth"))
     implementation(project(":feature:home"))
-    implementation(project(":feature:library"))
+    implementation(project(":shared:feature:library"))
     implementation(project(":shared:feature:search"))
     implementation(project(":feature:details"))
     implementation(project(":feature:player:video"))
