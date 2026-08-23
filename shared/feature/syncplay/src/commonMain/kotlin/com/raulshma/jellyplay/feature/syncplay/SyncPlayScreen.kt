@@ -28,9 +28,6 @@ import androidx.compose.foundation.layout.padding
 import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -62,14 +59,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
-import com.raulshma.jellyplay.feature.syncplay.R
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
@@ -95,12 +92,42 @@ import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
+import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.Res
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_cancel
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_connected
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_create
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_create_group
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_create_group_title
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_create_group_together
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_disconnected
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_group_name
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_group_settings
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_join
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_join_group_confirm
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_join_group_question
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_leave
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_leave_group
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_leave_group_confirm_message
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_leave_group_confirm_title
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_no_active_groups
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_participants
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_participants_count
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_pause
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_paused
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_play
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_playing
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_playing_item
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_retry
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_stop
+import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_title
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SyncPlayScreen(
     onBack: () -> Unit,
-    viewModel: SyncPlayViewModel = hiltViewModel(),
+    viewModel: SyncPlayViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val groups = uiState.groups
@@ -151,14 +178,17 @@ fun SyncPlayScreen(
     LaunchedEffect(Unit) {
         viewModel.notifications.collect { message ->
             snackbarHostState.showSnackbar(
-                message = message,
+                message = when (message) {
+                    is SyncPlayMessage.Resource -> getString(message.res)
+                    is SyncPlayMessage.Raw -> message.text
+                },
                 duration = SnackbarDuration.Short,
             )
         }
     }
 
     JellyPlayScreenScaffold(
-        title = stringResource(R.string.syncplay_title),
+        title = stringResource(Res.string.syncplay_title),
         onBack = onBack,
         actions = {
             HeaderStatusIndicator(
@@ -169,8 +199,8 @@ fun SyncPlayScreen(
                 TooltipIconButton(
                     onClick = { leaveConfirm.request { viewModel.leaveGroup() } },
                     imageVector = Tabler.Outline.Logout,
-                    contentDescription = stringResource(R.string.syncplay_leave_group),
-                    tooltipText = stringResource(R.string.syncplay_leave_group),
+                    contentDescription = stringResource(Res.string.syncplay_leave_group),
+                    tooltipText = stringResource(Res.string.syncplay_leave_group),
                 )
             }
         },
@@ -182,10 +212,10 @@ fun SyncPlayScreen(
                         modifier = Modifier.align(Alignment.Center),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Text(error, color = MaterialTheme.colorScheme.error)
+                        Text(error.asText(), color = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.height(8.dp))
                         OutlinedButton(onClick = { viewModel.loadGroups() }, modifier = Modifier.focusIndicator()) {
-                            Text(stringResource(R.string.syncplay_retry))
+                            Text(stringResource(Res.string.syncplay_retry))
                         }
                     }
                 }
@@ -216,8 +246,8 @@ fun SyncPlayScreen(
                     if (groups.isEmpty()) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Users,
-                            title = stringResource(R.string.syncplay_no_active_groups),
-                            description = stringResource(R.string.syncplay_create_group_together),
+                            title = stringResource(Res.string.syncplay_no_active_groups),
+                            description = stringResource(Res.string.syncplay_create_group_together),
                         )
                     } else {
                         LazyColumn(
@@ -273,8 +303,8 @@ fun SyncPlayScreen(
                     modifier = Modifier
                         .then(createGroupFocusState.focusModifier)
                         .tvFocusIndicator(createGroupFocusState, ShapeCache.smooth16),
-                    icon = { Icon(Tabler.Outline.Plus, contentDescription = stringResource(R.string.syncplay_create_group)) },
-                    text = { Text(stringResource(R.string.syncplay_create_group)) },
+                    icon = { Icon(Tabler.Outline.Plus, contentDescription = stringResource(Res.string.syncplay_create_group)) },
+                    text = { Text(stringResource(Res.string.syncplay_create_group)) },
                 )
             }
         }
@@ -289,21 +319,21 @@ fun SyncPlayScreen(
 
     if (leaveConfirm.isVisible) {
         leaveConfirm.ConfirmDialog(
-            title = stringResource(R.string.syncplay_leave_group_confirm_title),
-            message = stringResource(R.string.syncplay_leave_group_confirm_message),
-            confirmText = stringResource(R.string.syncplay_leave_group),
-            dismissText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
+            title = stringResource(Res.string.syncplay_leave_group_confirm_title),
+            message = stringResource(Res.string.syncplay_leave_group_confirm_message),
+            confirmText = stringResource(Res.string.syncplay_leave_group),
+            dismissText = stringResource(CoreUiRes.string.core_cancel),
         )
     }
 
     uiState.pendingJoin?.let { pending ->
         ConfirmDialog(
-            title = stringResource(R.string.syncplay_join_group_question),
-            message = stringResource(R.string.syncplay_join_group_confirm, pending.groupName),
-            confirmText = stringResource(R.string.syncplay_join),
+            title = stringResource(Res.string.syncplay_join_group_question),
+            message = stringResource(Res.string.syncplay_join_group_confirm, pending.groupName),
+            confirmText = stringResource(Res.string.syncplay_join),
             onConfirm = { viewModel.confirmJoin() },
             onDismiss = { viewModel.cancelJoin() },
-            dismissText = stringResource(R.string.syncplay_cancel),
+            dismissText = stringResource(Res.string.syncplay_cancel),
             tone = ConfirmTone.NEUTRAL,
         )
     }
@@ -347,7 +377,7 @@ private fun SyncPlayGroupCard(
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        pluralStringResource(R.plurals.syncplay_participants_count, group.participantCount, group.participantCount),
+                        pluralStringResource(Res.plurals.syncplay_participants_count, group.participantCount, group.participantCount),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -355,7 +385,7 @@ private fun SyncPlayGroupCard(
                 group.playingItemName?.let { name ->
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        stringResource(R.string.syncplay_playing_item, name),
+                        stringResource(Res.string.syncplay_playing_item, name),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
@@ -364,7 +394,7 @@ private fun SyncPlayGroupCard(
                 }
             }
             FilledTonalButton(onClick = onJoin, modifier = Modifier.focusIndicator()) {
-                Text(stringResource(R.string.syncplay_join))
+                Text(stringResource(Res.string.syncplay_join))
             }
         }
     }
@@ -415,7 +445,7 @@ private fun ActiveGroupView(
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        pluralStringResource(R.plurals.syncplay_participants_count, groupInfo.participants.size, groupInfo.participants.size),
+                        pluralStringResource(Res.plurals.syncplay_participants_count, groupInfo.participants.size, groupInfo.participants.size),
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 }
@@ -432,7 +462,7 @@ private fun ActiveGroupView(
                 }
 
                 Text(
-                    stringResource(if (groupInfo.isPlaying) R.string.syncplay_playing else R.string.syncplay_paused),
+                    stringResource(if (groupInfo.isPlaying) Res.string.syncplay_playing else Res.string.syncplay_paused),
                     style = MaterialTheme.typography.labelLarge,
                     color = if (groupInfo.isPlaying) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.outline,
@@ -447,18 +477,18 @@ private fun ActiveGroupView(
                     FilledTonalButton(onClick = onTogglePlayback, modifier = Modifier.focusIndicator()) {
                         Icon(
                             if (groupInfo.isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                            contentDescription = stringResource(if (groupInfo.isPlaying) R.string.syncplay_pause else R.string.syncplay_play),
+                            contentDescription = stringResource(if (groupInfo.isPlaying) Res.string.syncplay_pause else Res.string.syncplay_play),
                         )
                         Spacer(Modifier.width(4.dp))
-                        Text(stringResource(if (groupInfo.isPlaying) R.string.syncplay_pause else R.string.syncplay_play))
+                        Text(stringResource(if (groupInfo.isPlaying) Res.string.syncplay_pause else Res.string.syncplay_play))
                     }
                     FilledTonalButton(onClick = onStop, modifier = Modifier.focusIndicator()) {
-                        Icon(Tabler.Outline.PlayerStop, contentDescription = stringResource(R.string.syncplay_stop))
+                        Icon(Tabler.Outline.PlayerStop, contentDescription = stringResource(Res.string.syncplay_stop))
                     }
                     OutlinedButton(onClick = onLeave, modifier = Modifier.focusIndicator()) {
-                        Icon(Tabler.Outline.Logout, contentDescription = stringResource(R.string.syncplay_leave))
+                        Icon(Tabler.Outline.Logout, contentDescription = stringResource(Res.string.syncplay_leave))
                         Spacer(Modifier.width(4.dp))
-                        Text(stringResource(R.string.syncplay_leave))
+                        Text(stringResource(Res.string.syncplay_leave))
                     }
                 }
             }
@@ -467,7 +497,7 @@ private fun ActiveGroupView(
         Spacer(Modifier.height(16.dp))
 
         Text(
-            stringResource(R.string.syncplay_group_settings),
+            stringResource(Res.string.syncplay_group_settings),
             style = MaterialTheme.typography.titleMedium,
         )
         Spacer(Modifier.height(8.dp))
@@ -526,7 +556,7 @@ private fun ActiveGroupView(
         Spacer(Modifier.height(16.dp))
 
         Text(
-            stringResource(R.string.syncplay_participants),
+            stringResource(Res.string.syncplay_participants),
             style = MaterialTheme.typography.titleMedium,
         )
         Spacer(Modifier.height(8.dp))
@@ -567,7 +597,7 @@ private fun ActiveGroupView(
                             )
                         }
                         Text(
-                            stringResource(if (participant.isConnected) R.string.syncplay_connected else R.string.syncplay_disconnected),
+                            stringResource(if (participant.isConnected) Res.string.syncplay_connected else Res.string.syncplay_disconnected),
                             style = MaterialTheme.typography.labelSmall,
                             color = if (participant.isConnected) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.outline,
@@ -588,12 +618,12 @@ private fun CreateGroupDialog(
 
     ImeAlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.syncplay_create_group_title)) },
+        title = { Text(stringResource(Res.string.syncplay_create_group_title)) },
         text = {
             OutlinedTextField(
                 value = groupName,
                 onValueChange = { groupName = it },
-                label = { Text(stringResource(R.string.syncplay_group_name)) },
+                label = { Text(stringResource(Res.string.syncplay_group_name)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -604,12 +634,12 @@ private fun CreateGroupDialog(
                 enabled = groupName.isNotBlank(),
                 modifier = Modifier.focusIndicator(),
             ) {
-                Text(stringResource(R.string.syncplay_create))
+                Text(stringResource(Res.string.syncplay_create))
             }
         },
         dismissButton = {
             OutlinedButton(onClick = onDismiss, modifier = Modifier.focusIndicator()) {
-                Text(stringResource(R.string.syncplay_cancel))
+                Text(stringResource(Res.string.syncplay_cancel))
             }
         },
     )

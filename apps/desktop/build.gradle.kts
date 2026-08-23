@@ -49,6 +49,11 @@ dependencies {
     // stays safe).
     implementation(project(":shared:feature:downloads"))
 
+    // …syncplay, sixth conveyor item (DI registration only — documented-latent:
+    // mediaRepository has no desktop def yet, resolution is lazy so boot stays
+    // safe, and the desktop shell has no SyncPlay nav entry).
+    implementation(project(":shared:feature:syncplay"))
+
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
     implementation(libs.jna)

@@ -31,6 +31,7 @@ import com.raulshma.jellyplay.feature.music.di.musicModule
 import com.raulshma.jellyplay.feature.music.feedback.desktopMusicMessageBusModule
 import com.raulshma.jellyplay.feature.livetv.di.liveTvModule
 import com.raulshma.jellyplay.feature.downloads.di.downloadsModule
+import com.raulshma.jellyplay.feature.syncplay.di.syncPlayModule
 import org.koin.core.context.startKoin
 
 fun main() {
@@ -75,6 +76,13 @@ fun main() {
             // Hilt interop) remain documented-latent, so the downloadsModule
             // itself is only resolved once that screen opens.
             downloadsModule,
+            // …syncplay, sixth conveyor item — documented-latent: VM deps
+            // like mediaRepository (Hilt interop) have no desktop definitions
+            // yet (SyncPlayManager/SyncPlayCastStore do resolve from the
+            // data/datastore modules), resolution is lazy and the desktop
+            // shell has no SyncPlay nav entry, so the module is registered
+            // but never instantiated (same inert-module pattern as livetv).
+            syncPlayModule,
         )
     }
 

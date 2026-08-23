@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.feature.library.di.libraryModule
 import com.raulshma.jellyplay.feature.music.di.musicModule
 import com.raulshma.jellyplay.feature.livetv.di.liveTvModule
 import com.raulshma.jellyplay.feature.downloads.di.downloadsModule
+import com.raulshma.jellyplay.feature.syncplay.di.syncPlayModule
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
@@ -145,6 +146,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 musicModule,
                 liveTvModule,
                 downloadsModule,
+                syncPlayModule,
                 // MediaStore/FileProvider photo-export actual for the library
                 // feature's PhotoExport seam (androidDataModule pattern).
                 androidPhotoExportModule(this@JellyPlayApplication),
