@@ -86,8 +86,10 @@ jobs:
       # GMD emulator needs writable /dev/kvm. ubuntu runners expose it, but not
       # always world/group-accessible for the runner user — apply the same udev
       # rule android-emulator-runner uses, then fail fast with a clear message
-      # if the runner genuinely lacks nested virtualization. Both flavor legs
-      # generate their baseline profile on a managed emulator, so both need it.
+      # if the runner genuinely lacks nested virtualization. Only the phone leg
+      # generates a baseline profile (on a managed emulator), so strictly only
+      # it needs KVM, but keep the guard unconditional to catch runner
+      # regressions on both legs.
       - name: Enable KVM access
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -99,11 +101,11 @@ jobs:
       # Generates the ART baseline/startup profile on a headless Gradle Managed
       # Device and writes baseline-prof.txt + startup-prof.txt into the app's
       # <flavor>Release sources; the androidx.baselineprofile consumer plugin
-      # merges them into the release APK automatically during assemble. Each
-      # flavor has its own producer module targeting its applicationId:
-      # phone ← :baselineprofile (ciPixel8), tv ← :baselineprofile-tv
-      # (ciTv1080p, android-tv system image).
+      # merges them into the release APK automatically during assemble.
+      # Phone only — AGP cannot run TV images on Gradle Managed Devices, so the
+      # tv flavor ships without generated profiles.
       - name: Generate Baseline Profile
+        if: matrix.flavor == 'phone'
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
