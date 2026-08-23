@@ -23,6 +23,12 @@ dependencies {
     implementation(project(":shared:core:database"))
     implementation(project(":shared:core:network"))
     implementation(project(":shared:core:data"))
+    // MediaEngine contract for the desktop player engine (Phase V2).
+    implementation(project(":shared:core:player-contract"))
+
+    // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
+    // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
+    implementation(libs.jna)
 
     // Swing Main dispatcher (SyncPlayPlaybackCore constructs on
     // Dispatchers.Main.immediate; plain JVM has none without this).
@@ -38,6 +44,18 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.okhttp)
+
+    testImplementation(kotlin("test"))
+}
+
+tasks.named<Test>("test") {
+    useJUnitPlatform()
+    // libmpv for MpvDesktopEngine's tests: dev-only checkout location
+    // (gitignored, fetched per machine); without it the engine tests skip.
+    systemProperty(
+        "jna.library.path",
+        rootProject.layout.projectDirectory.dir("tools/mpv").asFile.absolutePath,
+    )
 }
 
 compose.desktop {
@@ -48,7 +66,6 @@ compose.desktop {
             // Ship unsigned minimal packaging for V1; hardening is §Phase X.
             isEnabled = false
         }
-
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Dmg)
             packageName = "JellyPlay"

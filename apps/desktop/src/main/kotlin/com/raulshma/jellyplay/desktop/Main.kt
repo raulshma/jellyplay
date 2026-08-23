@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.core.datastore.di.desktopDatastoreModule
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.network.di.desktopNetworkModule
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
+import com.raulshma.jellyplay.desktop.player.desktopPlayerModule
 import org.koin.core.context.startKoin
 
 fun main() {
@@ -38,6 +39,7 @@ fun main() {
             desktopNetworkModule(paths.configDir),
             dataJvmModule,
             desktopDataModule(paths.dataDirNio),
+            desktopPlayerModule,
         )
     }
 

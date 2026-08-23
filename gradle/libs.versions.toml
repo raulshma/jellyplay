@@ -66,6 +66,8 @@ playServicesCast = "22.3.1"
 mediarouter = "1.9.0-alpha01"
 slf4j = "2.0.18"
 libmpv = "0.1.12"
+# JNA for the desktop libmpv binding (Phase V2 MpvDesktopEngine)
+jna = "5.17.0"
 libvlc = "3.7.5"
 assMedia = "0.5.0"
 truetypeParser = "2.1.4"
@@ -130,6 +132,9 @@ lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", 
 # Koin (shared/core/* commonMain+jvmShared module defs; koin-test for jvmTest verify())
 koin-core = { group = "io.insert-koin", name = "koin-core", version.ref = "koin" }
 koin-test = { group = "io.insert-koin", name = "koin-test", version.ref = "koin" }
+# KMP viewModel scoping for shared feature modules (koinViewModel() in nav entries)
+koin-compose = { group = "io.insert-koin", name = "koin-compose", version.ref = "koin" }
+koin-compose-viewmodel = { group = "io.insert-koin", name = "koin-compose-viewmodel", version.ref = "koin" }
 
 # javax.inject (Hilt constructor-injection annotations, usable from non-Hilt modules)
 javax-inject = { group = "javax.inject", name = "javax.inject", version = "1" }
@@ -227,6 +232,9 @@ slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version.ref = "slf4j" }
 
 # Player Engines
 libmpv = { group = "io.github.abdallahmehiz", name = "mpv-android-lib", version.ref = "libmpv" }
+# Desktop libmpv access (mpv-2.dll / libmpv.so / libmpv.dylib) for MpvDesktopEngine
+jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
+jna-platform = { group = "net.java.dev.jna", name = "jna-platform", version.ref = "jna" }
 libvlc-all = { group = "org.videolan.android", name = "libvlc-all", version.ref = "libvlc" }
 # libass wired into Media3's renderer pipeline — full ASS/SSA rendering
 # (positioning, fonts, animations, karaoke, vector drawing) on the
