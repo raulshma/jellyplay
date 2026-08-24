@@ -13,12 +13,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.ItemCounts
-import com.raulshma.jellyplay.feature.newsletter.R
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.Res
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_stat_activity
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_stat_albums
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_stat_episodes
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_stat_in_progress
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_stat_movies
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_stat_new_this_week
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_stat_series
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_stat_songs
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_stat_total_items
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun NewsletterAggregatedStats(
@@ -34,18 +43,18 @@ fun NewsletterAggregatedStats(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             StatCard(
-                label = stringResource(R.string.newsletter_stat_total_items),
+                label = stringResource(Res.string.newsletter_stat_total_items),
                 count = stats.totalCount,
                 modifier = Modifier.weight(1f),
                 highlight = true,
             )
             StatCard(
-                label = stringResource(R.string.newsletter_stat_movies),
+                label = stringResource(Res.string.newsletter_stat_movies),
                 count = stats.movieCount,
                 modifier = Modifier.weight(1f),
             )
             StatCard(
-                label = stringResource(R.string.newsletter_stat_series),
+                label = stringResource(Res.string.newsletter_stat_series),
                 count = stats.seriesCount,
                 modifier = Modifier.weight(1f),
             )
@@ -58,17 +67,17 @@ fun NewsletterAggregatedStats(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             StatCard(
-                label = stringResource(R.string.newsletter_stat_episodes),
+                label = stringResource(Res.string.newsletter_stat_episodes),
                 count = stats.episodeCount,
                 modifier = Modifier.weight(1f),
             )
             StatCard(
-                label = stringResource(R.string.newsletter_stat_albums),
+                label = stringResource(Res.string.newsletter_stat_albums),
                 count = stats.albumCount,
                 modifier = Modifier.weight(1f),
             )
             StatCard(
-                label = stringResource(R.string.newsletter_stat_songs),
+                label = stringResource(Res.string.newsletter_stat_songs),
                 count = stats.songCount,
                 modifier = Modifier.weight(1f),
             )
@@ -81,19 +90,19 @@ fun NewsletterAggregatedStats(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             StatCard(
-                label = stringResource(R.string.newsletter_stat_new_this_week),
+                label = stringResource(Res.string.newsletter_stat_new_this_week),
                 count = recentlyAddedCount.toLong(),
                 modifier = Modifier.weight(1f),
                 highlight = recentlyAddedCount > 0,
             )
             StatCard(
-                label = stringResource(R.string.newsletter_stat_in_progress),
+                label = stringResource(Res.string.newsletter_stat_in_progress),
                 count = continueWatchingCount.toLong(),
                 modifier = Modifier.weight(1f),
                 highlight = continueWatchingCount > 0,
             )
             StatCard(
-                label = stringResource(R.string.newsletter_stat_activity),
+                label = stringResource(Res.string.newsletter_stat_activity),
                 count = activityCount.toLong(),
                 modifier = Modifier.weight(1f),
             )

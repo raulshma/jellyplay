@@ -87,6 +87,14 @@ dependencies {
     implementation(project(":shared:feature:shortcuts"))
 
 
+    // …newsletter, conveyor item after requests (DI registration only —
+    // documented-latent: imageUrlProvider/notificationStore/authRepository
+    // have desktop defs, but mediaRepository does not yet, so the ViewModel
+    // would only resolve after the data-layer flip; the shell has no
+    // newsletter nav entry yet either way).
+    implementation(project(":shared:feature:newsletter"))
+
+
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
     implementation(libs.jna)

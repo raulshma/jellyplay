@@ -45,6 +45,8 @@ import com.raulshma.jellyplay.feature.calendar.di.calendarModule
 import com.raulshma.jellyplay.feature.requests.di.requestsModule
 import com.raulshma.jellyplay.feature.shortcuts.di.shortcutsModule
 
+import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
+
 import org.koin.core.context.startKoin
 
 fun main() {
@@ -144,12 +146,24 @@ fun main() {
             requestsModule,
 
 
+
             // …shortcuts, a later conveyor item — same fully-live shape as
             // calendar/requests above: the single ctor dep (AuthRepository)
             // already resolves from dataJvmModule, so this registration is
             // live-resolvable on desktop; it stays dormant only because the
             // desktop shell has no shortcuts nav entry yet.
             shortcutsModule,
+
+            // …newsletter, conveyor item after requests — DI registration
+            // only. Unlike calendar/requests above it is documented-latent:
+            // imageUrlProvider (desktopDataModule), notificationStore
+            // (datastoreCommonModule) and authRepository resolve here, but
+            // mediaRepository has no desktop definition yet, so
+            // instantiating the ViewModel would throw. Koin defers
+            // resolution and the shell has no newsletter nav entry, so the
+            // registration is inert until the data layer flips.
+            newsletterModule,
+
 
         )
     }

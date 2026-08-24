@@ -5,17 +5,16 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
-import com.raulshma.jellyplay.core.ui.feedback.UiText
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.distinctUntilChangedBy
-import com.raulshma.jellyplay.feature.newsletter.R
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.Res
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_send_failed
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_send_success
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_test_sent
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import javax.inject.Inject
 
-@HiltViewModel
-class NewsletterViewModel @Inject constructor(
+class NewsletterViewModel(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val notificationStore: NotificationStore,
@@ -133,15 +132,13 @@ class NewsletterViewModel @Inject constructor(
                 it.copy(
                     isSending = false,
                     sendResult = if (result.isSuccess) {
-                        UiText.Resource(
-                            if (action == NewsletterSendAction.SEND_NOW) {
-                                R.string.newsletter_send_success
-                            } else {
-                                R.string.newsletter_test_sent
-                            }
-                        )
+                        if (action == NewsletterSendAction.SEND_NOW) {
+                            NewsletterMessage.SendSuccess(Res.string.newsletter_send_success)
+                        } else {
+                            NewsletterMessage.TestSent(Res.string.newsletter_test_sent)
+                        }
                     } else {
-                        UiText.Resource(R.string.newsletter_send_failed)
+                        NewsletterMessage.SendFailed(Res.string.newsletter_send_failed)
                     },
                 )
             }

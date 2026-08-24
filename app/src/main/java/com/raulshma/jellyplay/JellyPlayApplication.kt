@@ -45,6 +45,8 @@ import com.raulshma.jellyplay.feature.calendar.di.calendarModule
 
 import com.raulshma.jellyplay.feature.requests.di.requestsModule
 
+import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
+
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
@@ -202,6 +204,12 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // features above — this registration involves no Hilt interop
                 // at all.
                 requestsModule,
+
+                // V3 newsletter conveyor: imageUrlProvider/notificationStore/
+                // authRepository were already Koin-native; mediaRepository
+                // resolves through the hiltInteropModule single above — no
+                // new interop definitions were needed for this feature.
+                newsletterModule,
 
             )
         }

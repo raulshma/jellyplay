@@ -43,7 +43,6 @@ include(":feature:player:audio")
 include(":feature:player:live")
 include(":feature:subtitle-tester")
 include(":feature:onboarding")
-include(":feature:newsletter")
 include(":feature:insights")
 include(":feature:arrqueue")
 include(":baselineprofile")
@@ -72,6 +71,8 @@ include(":shared:feature:syncplay")
 include(":shared:feature:settings")
 include(":shared:feature:admin")
 include(":shared:feature:requests")
+
+include(":shared:feature:newsletter")
 
 include(":shared:feature:editor")
 

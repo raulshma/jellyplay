@@ -18,11 +18,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -35,22 +33,29 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
-import com.raulshma.jellyplay.feature.newsletter.R
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.Res
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_continue_watching
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_fresh_picks
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_next_up
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_no_items_available
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_recently_added
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun NewsletterSectionListScreen(
     sectionType: String,
     onBack: () -> Unit,
     onItemClick: (MediaItem) -> Unit = {},
-    viewModel: NewsletterViewModel = hiltViewModel(),
+    viewModel: NewsletterViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     val title = when (sectionType) {
-        "FRESH_PICKS" -> stringResource(R.string.newsletter_fresh_picks)
-        "RECENTLY_ADDED" -> stringResource(R.string.newsletter_recently_added)
-        "CONTINUE_WATCHING" -> stringResource(R.string.newsletter_continue_watching)
-        "NEXT_UP" -> stringResource(R.string.newsletter_next_up)
+        "FRESH_PICKS" -> stringResource(Res.string.newsletter_fresh_picks)
+        "RECENTLY_ADDED" -> stringResource(Res.string.newsletter_recently_added)
+        "CONTINUE_WATCHING" -> stringResource(Res.string.newsletter_continue_watching)
+        "NEXT_UP" -> stringResource(Res.string.newsletter_next_up)
         else -> sectionType
     }
 
@@ -74,7 +79,7 @@ fun NewsletterSectionListScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = stringResource(R.string.newsletter_no_items_available),
+                    text = stringResource(Res.string.newsletter_no_items_available),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

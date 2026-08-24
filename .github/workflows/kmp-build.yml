@@ -92,8 +92,13 @@ jobs:
           :shared:feature:requests:jvmJar
           :shared:feature:requests:compileAndroidMain
 
+
           :shared:feature:shortcuts:jvmJar
           :shared:feature:shortcuts:compileAndroidMain
+
+          :shared:feature:newsletter:jvmJar
+          :shared:feature:newsletter:compileAndroidMain
+
 
           --stacktrace
 
@@ -124,6 +129,10 @@ jobs:
 
           :shared:feature:requests:jvmTest
 
+
           :shared:feature:shortcuts:jvmTest
+
+          :shared:feature:newsletter:jvmTest
+
 
           --stacktrace

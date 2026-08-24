@@ -23,9 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
@@ -35,13 +33,25 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
-import com.raulshma.jellyplay.core.ui.feedback.asString
+import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
+import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
+import com.raulshma.jellyplay.core.ui.generated.resources.core_retry
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.raulshma.jellyplay.feature.newsletter.R
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.Res
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_could_not_load
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_preparing_digest
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_send_admin_only
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_send_confirm_body
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_send_confirm_title
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_send_now
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_send_test
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_title
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.DotsVertical
 import com.composables.icons.tabler.outline.Mail
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +60,7 @@ fun NewsletterScreen(
     onItemClick: (MediaItem) -> Unit = {},
     onPlayClick: (String, String?, Long) -> Unit = { _, _, _ -> },
     onViewAllFreshPicks: () -> Unit = {},
-    viewModel: NewsletterViewModel = hiltViewModel(),
+    viewModel: NewsletterViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val backgroundColor = rememberScreenBackgroundColor()
@@ -71,7 +81,7 @@ fun NewsletterScreen(
     )
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val sendResultText = state.sendResult?.asString()
+    val sendResultText = state.sendResult?.asText()
     LaunchedEffect(sendResultText) {
         if (sendResultText != null) {
             snackbarHostState.showSnackbar(sendResultText)
@@ -80,7 +90,7 @@ fun NewsletterScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = stringResource(R.string.newsletter_title),
+        title = stringResource(Res.string.newsletter_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -100,16 +110,16 @@ fun NewsletterScreen(
                 when {
                     state.isLoading && !hasAnyData -> {
                         ScreenLoadingState(
-                            message = stringResource(R.string.newsletter_preparing_digest),
+                            message = stringResource(Res.string.newsletter_preparing_digest),
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
                     state.error != null && !hasAnyData -> {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Mail,
-                            title = stringResource(R.string.newsletter_could_not_load),
+                            title = stringResource(Res.string.newsletter_could_not_load),
                             description = state.error,
-                            actionLabel = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_retry),
+                            actionLabel = stringResource(CoreUiRes.string.core_retry),
                             onAction = { viewModel.onEvent(NewsletterUiEvent.Refresh) },
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -147,12 +157,12 @@ fun NewsletterScreen(
     state.pendingSendAction?.let { action ->
         val isSendNow = action == NewsletterSendAction.SEND_NOW
         ConfirmDialog(
-            title = stringResource(R.string.newsletter_send_confirm_title),
-            message = stringResource(R.string.newsletter_send_confirm_body),
+            title = stringResource(Res.string.newsletter_send_confirm_title),
+            message = stringResource(Res.string.newsletter_send_confirm_body),
             confirmText = stringResource(
-                if (isSendNow) R.string.newsletter_send_now else R.string.newsletter_send_test
+                if (isSendNow) Res.string.newsletter_send_now else Res.string.newsletter_send_test
             ),
-            dismissText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
+            dismissText = stringResource(CoreUiRes.string.core_cancel),
             onConfirm = { viewModel.onEvent(NewsletterUiEvent.ConfirmSend) },
             onDismiss = { viewModel.onEvent(NewsletterUiEvent.DismissSendDialog) },
             tone = ConfirmTone.PRIMARY,
@@ -170,7 +180,7 @@ private fun NewsletterAdminActions(
         IconButton(onClick = { menuExpanded = true }, enabled = !isSending) {
             Icon(
                 imageVector = Tabler.Outline.DotsVertical,
-                contentDescription = stringResource(R.string.newsletter_send_admin_only),
+                contentDescription = stringResource(Res.string.newsletter_send_admin_only),
             )
         }
         DropdownMenu(
@@ -178,14 +188,14 @@ private fun NewsletterAdminActions(
             onDismissRequest = { menuExpanded = false },
         ) {
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.newsletter_send_now)) },
+                text = { Text(stringResource(Res.string.newsletter_send_now)) },
                 onClick = {
                     menuExpanded = false
                     viewModel.onEvent(NewsletterUiEvent.SendNow)
                 },
             )
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.newsletter_send_test)) },
+                text = { Text(stringResource(Res.string.newsletter_send_test)) },
                 onClick = {
                     menuExpanded = false
                     viewModel.onEvent(NewsletterUiEvent.SendTest)

@@ -187,7 +187,7 @@ dependencies {
     implementation(project(":shared:feature:editor"))
     implementation(project(":shared:feature:admin"))
     implementation(project(":feature:onboarding"))
-    implementation(project(":feature:newsletter"))
+    implementation(project(":shared:feature:newsletter"))
     implementation(project(":feature:insights"))
     implementation(project(":shared:feature:requests"))
     implementation(project(":shared:feature:shortcuts"))

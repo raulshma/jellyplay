@@ -23,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,7 +33,9 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.feature.newsletter.R
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.Res
+import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_recently_added
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,7 +47,7 @@ fun NewsletterRecentlyAdded(
 ) {
     Column(modifier = modifier.padding(top = 12.dp)) {
         Text(
-            text = stringResource(R.string.newsletter_recently_added),
+            text = stringResource(Res.string.newsletter_recently_added),
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),

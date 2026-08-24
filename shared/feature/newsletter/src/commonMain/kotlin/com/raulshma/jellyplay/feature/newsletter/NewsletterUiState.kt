@@ -5,7 +5,6 @@ import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
-import com.raulshma.jellyplay.core.ui.feedback.UiText
 
 @Immutable
 data class NewsletterUiState(
@@ -22,7 +21,7 @@ data class NewsletterUiState(
     val error: String? = null,
     val isAdmin: Boolean = false,
     val isSending: Boolean = false,
-    val sendResult: UiText? = null,
+    val sendResult: NewsletterMessage? = null,
     val pendingSendAction: NewsletterSendAction? = null,
 )
 
