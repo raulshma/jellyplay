@@ -46,6 +46,8 @@ import com.raulshma.jellyplay.feature.calendar.di.calendarModule
 
 import com.raulshma.jellyplay.feature.requests.di.requestsModule
 
+import com.raulshma.jellyplay.feature.shortcuts.di.shortcutsModule
+
 
 import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
 
@@ -212,6 +214,12 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // features above — this registration involves no Hilt interop
                 // at all.
                 requestsModule,
+
+                // V3 shortcuts conveyor: sole ctor dep AuthRepository is
+                // Koin-native — zero Hilt interop (calendar/requests class).
+                // Missed at the feature's landing; caught by the Phase X
+                // Koin-registration audit (NoDefinitionFound on Route.Shortcuts).
+                shortcutsModule,
 
 
                 // V3 newsletter conveyor: imageUrlProvider/notificationStore/
