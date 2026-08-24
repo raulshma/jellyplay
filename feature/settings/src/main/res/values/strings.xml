@@ -184,6 +184,13 @@
     <string name="settings_update_available">Update available: v%1$s</string>
     <string name="settings_up_to_date">Up to date (v%1$s)</string>
     <string name="settings_check_for_updates">Check for Updates</string>
+    <string name="settings_update_dismiss_title">Hide Dismissed Updates For</string>
+    <string name="settings_update_dismiss_subtitle">How long an update you dismissed with \"Later\" stays hidden</string>
+    <string name="settings_update_dismiss_12_hours">12 hours</string>
+    <string name="settings_update_dismiss_24_hours">24 hours</string>
+    <string name="settings_update_dismiss_3_days">3 days</string>
+    <string name="settings_update_dismiss_1_week">1 week</string>
+    <string name="settings_update_dismiss_never">Never show this update</string>
     <string name="settings_acknowledgements">Acknowledgements</string>
     <string name="settings_built_with_jellyfin">Built with Jellyfin SDK</string>
 

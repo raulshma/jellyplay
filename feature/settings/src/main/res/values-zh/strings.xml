@@ -158,6 +158,13 @@
     <string name="settings_update_available">有可用更新：v%1$s</string>
     <string name="settings_up_to_date">已是最新版本 (v%1$s)</string>
     <string name="settings_check_for_updates">检查更新</string>
+    <string name="settings_update_dismiss_title">已忽略更新的隐藏时长</string>
+    <string name="settings_update_dismiss_subtitle">点击“稍后”后，该更新的隐藏时长</string>
+    <string name="settings_update_dismiss_12_hours">12 小时</string>
+    <string name="settings_update_dismiss_24_hours">24 小时</string>
+    <string name="settings_update_dismiss_3_days">3 天</string>
+    <string name="settings_update_dismiss_1_week">1 周</string>
+    <string name="settings_update_dismiss_never">不再显示此更新</string>
     <string name="settings_acknowledgements">鸣谢</string>
 
     <!-- NotificationSettingsScreen.kt -->

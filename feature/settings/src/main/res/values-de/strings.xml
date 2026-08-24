@@ -158,6 +158,13 @@
     <string name="settings_update_available">Update verfügbar: v%1$s</string>
     <string name="settings_up_to_date">Auf dem neuesten Stand (v%1$s)</string>
     <string name="settings_check_for_updates">Nach Updates suchen</string>
+    <string name="settings_update_dismiss_title">Verworfene Updates ausblenden für</string>
+    <string name="settings_update_dismiss_subtitle">Wie lange ein mit „Später“ verworfenes Update ausgeblendet bleibt</string>
+    <string name="settings_update_dismiss_12_hours">12 Stunden</string>
+    <string name="settings_update_dismiss_24_hours">24 Stunden</string>
+    <string name="settings_update_dismiss_3_days">3 Tage</string>
+    <string name="settings_update_dismiss_1_week">1 Woche</string>
+    <string name="settings_update_dismiss_never">Dieses Update nie zeigen</string>
     <string name="settings_acknowledgements">Danksagung</string>
 
     <!-- NotificationSettingsScreen.kt -->

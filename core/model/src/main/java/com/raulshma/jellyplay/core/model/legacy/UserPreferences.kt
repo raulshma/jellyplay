@@ -280,6 +280,12 @@ data class UserPreferences(
     val dismissedUpdateVersion: String? = null,
     val dismissedUpdateAtMs: Long = 0L,
     /**
+     * How long a dismissed update prompt stays suppressed for the same version
+     * on launch auto-checks. [UpdateDismissPeriod.NEVER] hides that version
+     * until a newer release appears. Manual checks ignore this.
+     */
+    val updateDismissPeriod: UpdateDismissPeriod = UpdateDismissPeriod.DEFAULT,
+    /**
      * Cached Jellyfin playlist id backing the pinned "Watch Later" row in the
      * Add-to-Playlist picker. `null` until the first time the user adds to
      * Watch Later, at which point the playlist is created and its id stored

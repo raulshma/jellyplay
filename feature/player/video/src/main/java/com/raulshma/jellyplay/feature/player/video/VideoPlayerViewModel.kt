@@ -1076,6 +1076,14 @@ class VideoPlayerViewModel @Inject constructor(
                     videoMiniPlayerState.release()
                     release()
                     _closePlayer.trySend(Unit)
+                    // Re-arm the one-shot flag here too, not only via
+                    // performRelease's pipController.reset(): release() can
+                    // early-return on its idempotence latch (already-released
+                    // session), which used to leave pipDismissed=true stuck on
+                    // this @Singleton. The next player instance then read it as
+                    // its initial collected value and closed instantly
+                    // (issue #145, "can't start play on anything").
+                    pipController.clearPipDismissed()
                 }
             }
         }
@@ -1470,6 +1478,14 @@ class VideoPlayerViewModel @Inject constructor(
         subtitleStreamIndex: Int? = null,
         audioStreamIndex: Int? = null,
     ) {
+        // Defensive: PipController is a process @Singleton whose one-shot event
+        // flags outlive this Activity. A flag left set by an abnormally torn
+        // down previous session must never greet the next load — the fresh
+        // screen would react to it instantly and close (issue #145). Legitimate
+        // in-flight dismiss flows end in release + close, never a new
+        // initialize, so this cannot swallow a live signal.
+        pipController.clearPipDismissed()
+        pipController.consumeAutoExitPip()
         playbackSession.initialize(
             LoadRequest(
                 itemId = itemId,

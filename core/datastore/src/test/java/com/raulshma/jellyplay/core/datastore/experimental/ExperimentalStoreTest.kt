@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -135,5 +136,27 @@ class ExperimentalStoreTest {
         val slice = store.experimental.first()
         assertNull(slice.dismissedUpdateVersion)
         assertEquals(0L, slice.dismissedUpdateAtMs)
+    }
+
+    @Test
+    fun `updateDismissPeriod defaults to 24h`() = runTest {
+        assertEquals(UpdateDismissPeriod.HOURS_24, store.experimental.first().updateDismissPeriod)
+    }
+
+    @Test
+    fun `setUpdateDismissPeriod round-trips`() = runTest {
+        store.setUpdateDismissPeriod(UpdateDismissPeriod.NEVER)
+        assertEquals(UpdateDismissPeriod.NEVER, store.experimental.first().updateDismissPeriod)
+        store.setUpdateDismissPeriod(UpdateDismissPeriod.WEEK_1)
+        assertEquals(UpdateDismissPeriod.WEEK_1, store.experimental.first().updateDismissPeriod)
+    }
+
+    @Test
+    fun `unknown persisted dismiss period name falls back to default`() = runTest {
+        store.setUpdateDismissPeriod(UpdateDismissPeriod.DAYS_3)
+        dataStore.edit {
+            it[androidx.datastore.preferences.core.stringPreferencesKey("update_dismiss_period")] = "BOGUS"
+        }
+        assertEquals(UpdateDismissPeriod.HOURS_24, store.experimental.first().updateDismissPeriod)
     }
 }

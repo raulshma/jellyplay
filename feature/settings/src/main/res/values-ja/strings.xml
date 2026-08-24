@@ -158,6 +158,13 @@
     <string name="settings_update_available">更新があります: v%1$s</string>
     <string name="settings_up_to_date">最新です (v%1$s)</string>
     <string name="settings_check_for_updates">更新を確認</string>
+    <string name="settings_update_dismiss_title">閉じた更新を非表示にする期間</string>
+    <string name="settings_update_dismiss_subtitle">「後で」で閉じた更新が再び表示されるまでの期間</string>
+    <string name="settings_update_dismiss_12_hours">12時間</string>
+    <string name="settings_update_dismiss_24_hours">24時間</string>
+    <string name="settings_update_dismiss_3_days">3日間</string>
+    <string name="settings_update_dismiss_1_week">1週間</string>
+    <string name="settings_update_dismiss_never">この更新を表示しない</string>
     <string name="settings_acknowledgements">謝辞</string>
 
     <!-- NotificationSettingsScreen.kt -->

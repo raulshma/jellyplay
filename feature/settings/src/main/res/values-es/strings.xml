@@ -158,6 +158,13 @@
     <string name="settings_update_available">Actualización disponible: v%1$s</string>
     <string name="settings_up_to_date">Actualizado (v%1$s)</string>
     <string name="settings_check_for_updates">Buscar actualizaciones</string>
+    <string name="settings_update_dismiss_title">Ocultar actualizaciones descartadas durante</string>
+    <string name="settings_update_dismiss_subtitle">Cuánto tiempo permanece oculta una actualización tras pulsar «Más tarde»</string>
+    <string name="settings_update_dismiss_12_hours">12 horas</string>
+    <string name="settings_update_dismiss_24_hours">24 horas</string>
+    <string name="settings_update_dismiss_3_days">3 días</string>
+    <string name="settings_update_dismiss_1_week">1 semana</string>
+    <string name="settings_update_dismiss_never">No mostrar esta actualización</string>
     <string name="settings_acknowledgements">Agradecimientos</string>
 
     <!-- NotificationSettingsScreen.kt -->

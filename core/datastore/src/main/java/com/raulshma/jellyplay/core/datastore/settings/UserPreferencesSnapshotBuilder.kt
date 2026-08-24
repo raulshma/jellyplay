@@ -261,6 +261,7 @@ fun buildUserPreferencesSnapshot(
     selfUpdateDownloadEnabled = experimental.selfUpdateDownloadEnabled,
     dismissedUpdateVersion = experimental.dismissedUpdateVersion,
     dismissedUpdateAtMs = experimental.dismissedUpdateAtMs,
+    updateDismissPeriod = experimental.updateDismissPeriod,
     watchLaterPlaylistId = runtime.watchLaterPlaylistId,
     hideEpisodeThumbnails = library.hideEpisodeThumbnails,
     episodesDescending = library.episodesDescending,

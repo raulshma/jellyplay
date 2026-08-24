@@ -158,6 +158,13 @@
     <string name="settings_update_available">업데이트 가능: v%1$s</string>
     <string name="settings_up_to_date">최신 버전입니다 (v%1$s)</string>
     <string name="settings_check_for_updates">업데이트 확인</string>
+    <string name="settings_update_dismiss_title">닫은 업데이트 숨기기 기간</string>
+    <string name="settings_update_dismiss_subtitle">\'나중에\'로 닫은 업데이트가 다시 표시되기까지의 기간</string>
+    <string name="settings_update_dismiss_12_hours">12시간</string>
+    <string name="settings_update_dismiss_24_hours">24시간</string>
+    <string name="settings_update_dismiss_3_days">3일</string>
+    <string name="settings_update_dismiss_1_week">1주</string>
+    <string name="settings_update_dismiss_never">이 업데이트를 다시 표시 안 함</string>
     <string name="settings_acknowledgements">감사의 말</string>
 
     <!-- NotificationSettingsScreen.kt -->

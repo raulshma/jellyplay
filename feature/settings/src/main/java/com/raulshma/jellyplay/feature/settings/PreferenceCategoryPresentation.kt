@@ -413,6 +413,7 @@ private fun miscAppFields(prefs: UserPreferences, factory: UserPreferences): Lis
     PreferenceField("Haptics", prefs.hapticsEnabled.onOff(), factory.hapticsEnabled.onOff()),
     PreferenceField("Self-Update Check", prefs.selfUpdateCheckEnabled.onOff(), factory.selfUpdateCheckEnabled.onOff()),
     PreferenceField("Self-Update Auto Download", prefs.selfUpdateDownloadEnabled.onOff(), factory.selfUpdateDownloadEnabled.onOff()),
+    PreferenceField("Update Dismiss Period", prefs.updateDismissPeriod.enumDisplay(), factory.updateDismissPeriod.enumDisplay()),
     PreferenceField("App Language", prefs.appLanguage ?: "System", factory.appLanguage ?: "System"),
     PreferenceField("User Data Sync", prefs.userDataSyncEnabled.onOff(), factory.userDataSyncEnabled.onOff()),
     PreferenceField("Share Media Option", prefs.showShareMediaOption.onOff(), factory.showShareMediaOption.onOff()),
