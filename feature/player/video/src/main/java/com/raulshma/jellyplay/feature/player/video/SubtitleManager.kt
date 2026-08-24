@@ -10,13 +10,18 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderIds
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleQuery
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
+import com.raulshma.jellyplay.core.model.subtitle.externalSubtitleIndices
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
 import com.raulshma.jellyplay.feature.player.video.state.SubtitleState
+import com.raulshma.jellyplay.feature.player.video.state.providerSubtitleEngineId
+import com.raulshma.jellyplay.feature.player.video.state.providerSubtitleRowKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,6 +35,28 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/**
+ * What [SubtitleManager] hands back after refreshing media detail following an
+ * in-player subtitle download/upload — a named value object so the callback
+ * call sites read instead of relying on positional `(MediaDetail, Boolean,
+ * Int?)` flags.
+ *
+ * - [detail] — the re-fetched item detail.
+ * - [attachToEngine] — true when the new server-side stream still needs to be
+ *   side-loaded into the live engine (server download / upload paths); false
+ *   when the caller already side-loaded a local copy itself (the provider path
+ *   saves + attaches before uploading, so attaching again would duplicate the
+ *   track).
+ * - [newSubtitleStreamIndex] — the server `MediaStream.index` of the
+ *   just-downloaded subtitle, when known — arms the ViewModel's one-shot
+ *   auto-select of the new track.
+ */
+data class MediaDetailRefresh(
+    val detail: MediaDetail,
+    val attachToEngine: Boolean = true,
+    val newSubtitleStreamIndex: Int? = null,
+)
 
 /**
  * Owns the in-player "Subtitle Manager" workflow: downloading server-default
@@ -55,7 +82,9 @@ import kotlinx.coroutines.withContext
  * to [onMediaDetailRefreshed], which the VM implements to re-apply the detail
  * and refresh the shared `currentMediaSource` / `mediaStreams` /
  * `detectedAspectRatio` fields (those are session state owned by the ViewModel;
- * access here is a narrow [getMediaStreams] read).
+ * access here is a narrow [getMediaStreams] read). For server downloads the
+ * newly appeared stream's index rides along so the VM can make the fresh
+ * subtitle the active track without a manual picker hunt.
  *
  * File reads (`queryFileSizeBytes` / `readAndEncode`) live here because they
  * only need [context]; they are private to this class.
@@ -71,7 +100,17 @@ internal class SubtitleManager(
     private val addExternalSubtitle: (SubtitleSource) -> Unit,
     private val getMediaStreams: () -> List<MediaStream>,
     private val getCurrentItemId: () -> String?,
-    private val onMediaDetailRefreshed: (MediaDetail) -> Unit,
+    /**
+     * Id of the media source currently playing, when known. Post-download
+     * stream attribution is scoped to this source so multi-version items
+     * cannot attribute another version's same-language stream.
+     */
+    private val getCurrentSourceId: () -> String? = { null },
+    /**
+     * Hands the refreshed detail to the VM after a download/upload — see
+     * [MediaDetailRefresh] for the per-field contract.
+     */
+    private val onMediaDetailRefreshed: (MediaDetailRefresh) -> Unit,
     /**
      * In-memory [MediaDetail] snapshot held by the VM (populated at playback
      * start). Preferred over a fresh [mediaRepository.getMediaDetail] round-trip
@@ -111,8 +150,15 @@ internal class SubtitleManager(
         val itemId = getCurrentItemId() ?: return
         _state.update { it.copy(isLoadingRemoteSubtitles = true) }
         scope.launch {
-            val subs = playbackRepository.getRemoteSubtitles(itemId).getOrElse { emptyList() }
-            _state.update { it.copy(remoteSubtitles = subs, isLoadingRemoteSubtitles = false) }
+            playbackRepository.getRemoteSubtitles(itemId).fold(
+                onSuccess = { subs ->
+                    _state.update { it.copy(remoteSubtitles = subs, isLoadingRemoteSubtitles = false) }
+                },
+                onFailure = { e ->
+                    userMessageBus.error("Could not load subtitle list: ${e.message ?: "unknown error"}")
+                    _state.update { it.copy(remoteSubtitles = emptyList(), isLoadingRemoteSubtitles = false) }
+                },
+            )
         }
     }
 
@@ -155,71 +201,158 @@ internal class SubtitleManager(
     /**
      * Polls the (cache-busted) media detail until the freshly downloaded
      * subtitle surfaces as a new `MediaStream`, then hands the refreshed detail
-     * to [onMediaDetailRefreshed] (which re-applies source/track state) and marks
-     * the row DOWNLOADED.
+     * to [onMediaDetailRefreshed] (which re-applies source/track state), records
+     * the new stream's hints for the "Use" action, and marks the row DOWNLOADED.
+     * Returns the new stream's index, or null if it never surfaced.
      *
      * Jellyfin queues remote-subtitle downloads server-side: the
      * `POST .../Remote/Subtitles/{id}` call returns once the file is saved, but
-     * the new stream is not guaranteed to appear in the item's media info on the
-     * very next read. Without this poll the row would flip to "done" while the
-     * subtitle is still invisible to the player — so we wait, bounded.
+     * the new stream is not guaranteed to appear in the item's media info on
+     * the very next read. Without this poll the row would flip to "done" while
+     * the subtitle is still invisible to the player — so we wait.
+     *
+     * The wait is two-phase. The fast phase (~9 s) covers the common case; if
+     * it expires the row flips to DELAYED ("taking a while") **but the poll
+     * keeps running on a slower cadence** — previously we gave up entirely
+     * here, which left the session without the refreshed detail/track list and
+     * forced the user to exit and reopen the player to see the subtitle even
+     * though the download had actually succeeded server-side. A late arrival
+     * in the slow phase runs exactly the same success path as a fast one
+     * (refresh + select + DOWNLOADED + toast).
      *
      * The forced [getMediaDetail] read is load-bearing:
      * [getMediaDetail] is a single-flight cached read with a TTL, so without
      * the force flag the poll would keep returning the stale pre-download
-     * detail and never see the new stream. The budget
-     * ([SUBTITLE_APPEAR_MAX_ATTEMPTS] × inter-attempt
-     * [SUBTITLE_APPEAR_POLL_DELAY_MS]) is deliberately short (~9 s); on expiry we
-     * mark the row DELAYED (not FAILED) — the server may still finish — and let
-     * the user retry.
+     * detail and never see the new stream.
      */
     private suspend fun waitForSubtitleToAppear(
         itemId: String,
         subtitleInfo: RemoteSubtitleInfo,
         preDownloadStreamIndices: Set<Int>,
-    ) {
+    ): Int? {
         val subtitleId = subtitleInfo.id
-        repeat(SUBTITLE_APPEAR_MAX_ATTEMPTS) { attempt ->
-            // Force the read so a stale single-flight cache hit can't mask the
-            // new stream the server has just attached.
-            val detail = mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
-            currentCoroutineContext().ensureActive()
-            if (detail != null && subtitleHasAppeared(detail, subtitleInfo, preDownloadStreamIndices)) {
-                onMediaDetailRefreshed(detail)
-                markDownloadStatus(subtitleId, SubtitleDownloadState.DOWNLOADED)
-                return
-            }
-            // Don't sleep after the last attempt — the timeout branch below is
-            // the terminal state for this run, and an extra delay just slows the
-            // DELAYED transition with no benefit.
-            if (attempt < SUBTITLE_APPEAR_MAX_ATTEMPTS - 1) {
-                delay(SUBTITLE_APPEAR_POLL_DELAY_MS)
-            }
-        }
+        pollUntilAppeared(
+            itemId,
+            subtitleInfo,
+            preDownloadStreamIndices,
+            attempts = SUBTITLE_APPEAR_MAX_ATTEMPTS,
+            delayMs = SUBTITLE_APPEAR_POLL_DELAY_MS,
+            delayBeforePoll = false,
+        )?.let { return it }
         // Budget elapsed without the stream surfacing. The server may still be
-        // processing, so this is a soft state, not a hard failure — the user can
-        // retry from the row.
+        // processing, so this is a soft state, not a hard failure — but unlike
+        // a terminal failure we keep watching on a slower cadence below so a
+        // late-arriving stream completes the flow without user intervention.
         userMessageBus.info("Subtitle is taking a while to appear on the server")
         markDownloadStatus(subtitleId, SubtitleDownloadState.DELAYED)
+        return pollUntilAppeared(
+            itemId,
+            subtitleInfo,
+            preDownloadStreamIndices,
+            attempts = SUBTITLE_APPEAR_LATE_MAX_ATTEMPTS,
+            delayMs = SUBTITLE_APPEAR_LATE_POLL_DELAY_MS,
+            // The DELAYED notice already spent time; sleep before polling.
+            delayBeforePoll = true,
+        )
     }
 
     /**
-     * True if [detail]'s media sources now carry a subtitle stream attributable
-     * to the just-downloaded [subtitleInfo]. Prefers a stream whose index is
-     * *not* in [preDownloadStreamIndices] (i.e. genuinely new), to avoid a false
-     * positive on an existing same-language subtitle. Falls back to a plain
-     * language match when no snapshot was captured (defensive). The language is
-     * compared case-insensitively against the remote info's three-letter ISO
-     * name (server streams use the same form), then the human-readable name.
+     * One phase of [waitForSubtitleToAppear]: up to [attempts] cache-busted
+     * polls [delayMs] apart (no sleep after the last), returning the new
+     * stream's index or null when it never surfaced. The fast phase polls
+     * immediately and sleeps between attempts ([delayBeforePoll] = false); the
+     * slow phase sleeps first.
      */
-    private fun subtitleHasAppeared(
+    private suspend fun pollUntilAppeared(
+        itemId: String,
+        subtitleInfo: RemoteSubtitleInfo,
+        preDownloadStreamIndices: Set<Int>,
+        attempts: Int,
+        delayMs: Long,
+        delayBeforePoll: Boolean,
+    ): Int? {
+        repeat(attempts) { attempt ->
+            if (delayBeforePoll && attempt < attempts - 1) {
+                delay(delayMs)
+            }
+            currentCoroutineContext().ensureActive()
+            pollForSubtitle(itemId, subtitleInfo, preDownloadStreamIndices)?.let { return it }
+            if (!delayBeforePoll && attempt < attempts - 1) {
+                delay(delayMs)
+            }
+        }
+        return null
+    }
+
+    /**
+     * One cache-busted poll attempt of the media detail. Returns the newly
+     * appeared subtitle stream's index and completes the success side effects
+     * (detail refresh callback, ready-hints, toast, DOWNLOADED status), or null
+     * when the stream has not surfaced yet.
+     */
+    private suspend fun pollForSubtitle(
+        itemId: String,
+        subtitleInfo: RemoteSubtitleInfo,
+        preDownloadStreamIndices: Set<Int>,
+    ): Int? {
+        val subtitleId = subtitleInfo.id
+        // Force the read so a stale single-flight cache hit can't mask the
+        // new stream the server has just attached.
+        val detail = mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
+        currentCoroutineContext().ensureActive()
+        val appeared = detail?.let { findAppearedSubtitleStream(it, subtitleInfo, preDownloadStreamIndices) }
+        if (detail == null || appeared == null) return null
+        onMediaDetailRefreshed(
+            MediaDetailRefresh(
+                detail = detail,
+                attachToEngine = true,
+                newSubtitleStreamIndex = appeared.index,
+            ),
+        )
+        recordReadySubtitle(
+            subtitleId,
+            ReadySubtitleHint(
+                trackId = externalSubtitleTrackId(appeared.index),
+                serverStreamIndex = appeared.index,
+            ),
+        )
+        userMessageBus.info("Subtitle downloaded")
+        markDownloadStatus(subtitleId, SubtitleDownloadState.DOWNLOADED)
+        return appeared.index
+    }
+
+    /** Records the "Use"-action hints for a row that became usable. */
+    private fun recordReadySubtitle(rowKey: String, hint: ReadySubtitleHint) {
+        _state.update { it.copy(readySubtitles = it.readySubtitles + (rowKey to hint)) }
+    }
+
+    /**
+     * The subtitle stream in [detail] attributable to the just-downloaded
+     * [subtitleInfo], or null. Prefers a stream whose index is *not* in
+     * [preDownloadStreamIndices] (i.e. genuinely new), to avoid a false
+     * positive on an existing same-language subtitle; among candidates the
+     * highest index wins (the server appends). Falls back to a plain language
+     * match when no snapshot was captured (defensive). The language is compared
+     * case-insensitively against the remote info's three-letter ISO name
+     * (server streams use the same form), then the human-readable name.
+     */
+    private fun findAppearedSubtitleStream(
         detail: MediaDetail,
         subtitleInfo: RemoteSubtitleInfo,
         preDownloadStreamIndices: Set<Int>,
-    ): Boolean {
-        val subtitleStreams = detail.mediaSources.flatMap { it.mediaStreams }
+    ): MediaStream? {
+        // Attribute the new stream to the PLAYING source when known —
+        // flat-mapping every media source could match a same-language stream
+        // from another version whose index collides.
+        val playingSourceId = getCurrentSourceId()
+        val sources = if (playingSourceId != null) {
+            detail.mediaSources.filter { it.id == playingSourceId }.ifEmpty { detail.mediaSources }
+        } else {
+            detail.mediaSources
+        }
+        val subtitleStreams = sources.flatMap { it.mediaStreams }
             .filter { it.type == StreamType.SUBTITLE }
-        if (subtitleStreams.isEmpty()) return false
+        if (subtitleStreams.isEmpty()) return null
         val targetLang = subtitleInfo.threeLetterISOLanguageName.ifBlank { subtitleInfo.language.orEmpty() }
         val byLanguage = if (targetLang.isBlank()) {
             subtitleStreams
@@ -232,12 +365,14 @@ internal class SubtitleManager(
         // index whose language matches — otherwise an existing same-language
         // subtitle would read as a false positive the instant the download call
         // returns.
-        if (preDownloadStreamIndices.isNotEmpty()) {
-            return byLanguage.any { it.index !in preDownloadStreamIndices }
+        val candidates = if (preDownloadStreamIndices.isNotEmpty()) {
+            byLanguage.filter { it.index !in preDownloadStreamIndices }
+        } else {
+            // No snapshot (e.g. mediaStreams were empty at download time): a plain
+            // language match is the best we can do.
+            byLanguage
         }
-        // No snapshot (e.g. mediaStreams were empty at download time): a plain
-        // language match is the best we can do.
-        return byLanguage.isNotEmpty()
+        return candidates.maxByOrNull { it.index }
     }
 
     /** Current subtitle-stream indices across all media sources, for the snapshot. */
@@ -282,6 +417,7 @@ internal class SubtitleManager(
             id = "local:${System.currentTimeMillis()}",
         )
         addExternalSubtitle(source)
+        userMessageBus.info("Local subtitle loaded")
     }
 
     /**
@@ -307,6 +443,7 @@ internal class SubtitleManager(
                 downloadingSubtitles = emptyMap(),
                 providerSearchResults = emptyList(),
                 providerSearchErrors = emptyMap(),
+                readySubtitles = emptyMap(),
             )
         }
     }
@@ -484,7 +621,7 @@ internal class SubtitleManager(
      */
     fun downloadProviderSubtitle(result: SubtitleSearchResult) {
         val itemId = getCurrentItemId() ?: return
-        val statusKey = "${result.provider}:${result.id}"
+        val statusKey = providerSubtitleRowKey(result.provider, result.id)
         when (result.provider) {
             SubtitleProviderKind.JELLYFIN -> {
                 val jellyfinInfo = result.jellyfinInfo ?: return
@@ -528,9 +665,12 @@ internal class SubtitleManager(
                                 codec = codec,
                                 isDefault = false,
                                 isForced = result.isForced,
-                                id = "provider:$statusKey",
+                                id = providerSubtitleEngineId(statusKey),
                             )
                             addExternalSubtitle(source)
+                            // The side-loaded track carries source.id, so the
+                            // sheet's "Use" action can resolve it exactly.
+                            recordReadySubtitle(statusKey, ReadySubtitleHint(trackId = source.id))
 
                             // Best-effort: upload to the Jellyfin server so the
                             // subtitle is also persisted as a MediaStream (and thus
@@ -539,6 +679,7 @@ internal class SubtitleManager(
                             // durable on-device copy still backs the side-load and
                             // survives replay via the streaming-subtitle store.
                             val base64 = android.util.Base64.encodeToString(file.bytes, android.util.Base64.NO_WRAP)
+                            val preUploadExternalIndices = getMediaStreams().externalSubtitleIndices()
                             val uploadResult = playbackRepository.uploadSubtitle(
                                 itemId = itemId,
                                 data = base64,
@@ -559,7 +700,19 @@ internal class SubtitleManager(
                                     // would keep returning the pre-upload
                                     // snapshot.
                                     mediaRepository.getMediaDetail(itemId, force = true).getOrNull()?.let { detail ->
-                                        onMediaDetailRefreshed(detail)
+                                        // attachToEngine = false: the provider
+                                        // download already side-loaded its local
+                                        // copy above; attaching the server echo
+                                        // would list the same subtitle twice.
+                                        onMediaDetailRefreshed(MediaDetailRefresh(detail, attachToEngine = false))
+                                        detail.mediaSources.firstOrNull()?.mediaStreams?.let { streams ->
+                                            streamingSubtitleStore.attributeUploadedSubtitle(
+                                                itemId = itemId,
+                                                saved = saved,
+                                                streamsAfterUpload = streams,
+                                                preUploadExternalIndices = preUploadExternalIndices,
+                                            )
+                                        }
                                     }
                                     userMessageBus.info("Subtitle added")
                                     markProviderDownloadStatus(statusKey, SubtitleDownloadState.DOWNLOADED)
@@ -673,8 +826,11 @@ internal class SubtitleManager(
             result.onSuccess {
                 // Refresh media detail so the uploaded track surfaces in the
                 // subtitle track list — same approach as downloadSubtitle().
-                mediaRepository.getMediaDetail(itemId).getOrNull()?.let { detail ->
-                    onMediaDetailRefreshed(detail)
+                // Forced: getMediaDetail is a single-flight cached read, and
+                // without the force flag the cache keeps serving the
+                // pre-upload snapshot (see waitForSubtitleToAppear).
+                mediaRepository.getMediaDetail(itemId, force = true).getOrNull()?.let { detail ->
+                    onMediaDetailRefreshed(MediaDetailRefresh(detail))
                 }
                 userMessageBus.info("Subtitle uploaded")
             }.onFailure { e ->
@@ -692,17 +848,28 @@ internal class SubtitleManager(
 
     /**
      * How many times to re-fetch (cache-busted) media detail while waiting for a
-     * freshly downloaded subtitle stream to surface. See [waitForSubtitleToAppear].
+     * freshly downloaded subtitle stream to surface in the fast phase. See
+     * [waitForSubtitleToAppear].
      */
     private val SUBTITLE_APPEAR_MAX_ATTEMPTS = 6
 
     /**
-     * Delay between media-detail polls while waiting for a downloaded subtitle
-     * to appear. Jellyfin queues the download server-side, so the new stream
-     * typically surfaces within the first couple of retries. See
-     * [waitForSubtitleToAppear].
+     * Delay between media-detail polls during the fast phase. Jellyfin queues
+     * the download server-side, so the new stream typically surfaces within the
+     * first couple of retries. See [waitForSubtitleToAppear].
      */
     private val SUBTITLE_APPEAR_POLL_DELAY_MS = 1500L
+
+    /**
+     * Slow-phase poll attempts after DELAYED. A server that finishes the
+     * subtitle download late still completes the full success path (refresh +
+     * select + DOWNLOADED) without the user having to leave playback. See
+     * [waitForSubtitleToAppear].
+     */
+    private val SUBTITLE_APPEAR_LATE_MAX_ATTEMPTS = 8
+
+    /** Delay between slow-phase media-detail polls. See [waitForSubtitleToAppear]. */
+    private val SUBTITLE_APPEAR_LATE_POLL_DELAY_MS = 5000L
 
     /** Returns the byte size of [uri] via OpenableColumns.SIZE, or 0 if unknown. */
     private fun queryFileSizeBytes(uri: Uri): Long {

@@ -9,15 +9,18 @@ import com.raulshma.jellyplay.core.model.EditorPerson
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.ImageProviderInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MetadataEditorInfo
 import com.raulshma.jellyplay.core.model.RemoteImageResult
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
+import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderIds
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
+import com.raulshma.jellyplay.core.model.subtitle.externalSubtitleIndices
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -355,11 +358,23 @@ class EditorViewModel @Inject constructor(
     fun deleteSubtitle(index: Int) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
+            // Capture the stream being deleted so legacy local copies (saved
+            // before serverStreamIndex linkage existed) can be attribute-matched.
+            val deletedStream = currentSubtitleStreams().firstOrNull { it.index == index }
             editorRepository.deleteSubtitle(itemId, index)
-                .onSuccess { loadEditorData(itemId) }
+                .onSuccess {
+                    streamingSubtitleStore.purgeDeletedServerStreamCopies(itemId, index, deletedStream)
+                    loadEditorData(itemId)
+                }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
     }
+
+    private fun currentSubtitleStreams(): List<MediaStream> =
+        _uiState.value.mediaDetail?.mediaSources
+            ?.firstOrNull()?.mediaStreams
+            ?.filter { it.type == StreamType.SUBTITLE }
+            ?: emptyList()
 
     fun searchRemoteSubtitles(language: String) {
         launch {
@@ -449,7 +464,7 @@ class EditorViewModel @Inject constructor(
                         // even if the server upload fails (e.g. offline). Mirrors
                         // the player's SubtitleManager provider-download path.
                         val codec = file.format
-                        streamingSubtitleStore.save(
+                        val saved = streamingSubtitleStore.save(
                             itemId = itemId,
                             provider = result.provider,
                             providerSubtitleId = result.id,
@@ -461,6 +476,7 @@ class EditorViewModel @Inject constructor(
                             bytes = file.bytes,
                         )
                         val base64 = Base64.encodeToString(file.bytes, Base64.NO_WRAP)
+                        val preUploadExternalIndices = currentSubtitleStreams().externalSubtitleIndices()
                         editorRepository.uploadSubtitle(
                             itemId,
                             base64,
@@ -468,7 +484,15 @@ class EditorViewModel @Inject constructor(
                             file.language,
                             result.isForced,
                             result.isHearingImpaired,
-                        ).onSuccess { loadEditorData(itemId) }
+                        ).onSuccess {
+                            loadEditorData(itemId)
+                            streamingSubtitleStore.attributeUploadedSubtitle(
+                                itemId = itemId,
+                                saved = saved,
+                                streamsAfterUpload = currentSubtitleStreams(),
+                                preUploadExternalIndices = preUploadExternalIndices,
+                            )
+                        }
                             // Best-effort: the durable on-device copy already backs
                             // this subtitle, so an upload failure (server offline)
                             // is surfaced as an info note rather than a hard error.

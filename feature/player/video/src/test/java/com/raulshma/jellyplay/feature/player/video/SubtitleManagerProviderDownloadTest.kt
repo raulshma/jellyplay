@@ -116,7 +116,7 @@ class SubtitleManagerProviderDownloadTest {
         addExternalSubtitle = { addedSubtitles += it },
         getMediaStreams = { emptyList() },
         getCurrentItemId = { "item-1" },
-        onMediaDetailRefreshed = { refreshedDetails += it },
+        onMediaDetailRefreshed = { refresh -> refreshedDetails += refresh.detail },
         getCurrentMediaDetail = { null },
     )
 
@@ -169,6 +169,11 @@ class SubtitleManagerProviderDownloadTest {
         val status = m.state.value.downloadingSubtitles["OPENSUBTITLES:os-42"]
         assertEquals(SubtitleDownloadState.DOWNLOADED, status?.state)
         assertNull(status?.errorMessage)
+        // 6. The side-loaded track id is recorded so "Use" can activate it.
+        assertEquals(
+            addedSubtitles.single().id,
+            m.state.value.readySubtitles["OPENSUBTITLES:os-42"]?.trackId,
+        )
         coVerify { userMessageBus.info(any<String>()) }
     }
 

@@ -2283,9 +2283,11 @@ private fun PlayerSheetRouter(
                 onSearchAllProviders = { viewModel.subtitles.searchAllProviders(it) },
                 onDownloadProviderSubtitle = { viewModel.subtitles.downloadProviderSubtitle(it) },
                 downloadingSubtitles = subtitleState.downloadingSubtitles,
-                // "Use" affordance: the hub switches to its Tracks tab itself;
-                // this callback is a no-op placeholder for the host.
-                onUseSubtitle = {},
+                // "Use" activates the downloaded subtitle as the current track
+                // (resolved from the manager's ready hints); on success the hub
+                // shows the Tracks tab with the new selection, otherwise it
+                // stays on Get while the pending selection auto-applies.
+                onUseSubtitle = { rowKey -> viewModel.useDownloadedSubtitle(rowKey) },
                 isUploading = subtitleState.isUploadingSubtitle,
                 onUpload = { uri, fileName, language, isForced, isHearingImpaired ->
                     viewModel.subtitles.uploadSubtitle(uri, fileName, language, isForced, isHearingImpaired)

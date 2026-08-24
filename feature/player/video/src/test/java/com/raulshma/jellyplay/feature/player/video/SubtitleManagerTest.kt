@@ -56,6 +56,8 @@ class SubtitleManagerTest {
     private lateinit var userMessageBus: UserMessageBus
     private lateinit var addedSubtitles: MutableList<SubtitleSource>
     private var refreshedDetails: MutableList<MediaDetail> = mutableListOf()
+    /** The new-subtitle stream index handed to the VM with each refreshed detail. */
+    private var refreshedIndexes: MutableList<Int?> = mutableListOf()
     private var currentDetail: MediaDetail? = null
     private lateinit var manager: SubtitleManager
     private var mediaStreams: List<MediaStream> = emptyList()
@@ -72,6 +74,7 @@ class SubtitleManagerTest {
         userMessageBus = mockk(relaxed = true)
         addedSubtitles = mutableListOf()
         refreshedDetails.clear()
+        refreshedIndexes.clear()
         currentDetail = null
         mediaStreams = emptyList()
 
@@ -86,7 +89,10 @@ class SubtitleManagerTest {
             addExternalSubtitle = { addedSubtitles += it },
             getMediaStreams = { mediaStreams },
             getCurrentItemId = { "item-1" },
-            onMediaDetailRefreshed = { refreshedDetails += it },
+            onMediaDetailRefreshed = { refresh ->
+                refreshedDetails += refresh.detail
+                refreshedIndexes += refresh.newSubtitleStreamIndex
+            },
             getCurrentMediaDetail = { currentDetail },
         )
     }
@@ -286,7 +292,8 @@ class SubtitleManagerTest {
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
             coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(detail)
 
-            managerInScope(this).downloadSubtitle(
+            val m = managerInScope(this)
+            m.downloadSubtitle(
                 RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"),
             )
 
@@ -295,6 +302,42 @@ class SubtitleManagerTest {
             // force-read freshness seam).
             io.mockk.coVerify(atLeast = 1) { mediaRepository.getMediaDetail("item-1", force = true) }
             assertEquals(listOf(detail), refreshedDetails)
+            // The new stream's index rides along so the VM can select it.
+            assertEquals(listOf<Int?>(2), refreshedIndexes)
+            // The "Use" hints land in state: side-loaded track id + server index.
+            assertEquals("external:2", m.state.value.readySubtitles["s1"]?.trackId)
+            assertEquals(2, m.state.value.readySubtitles["s1"]?.serverStreamIndex)
+            // Success is surfaced to the user.
+            io.mockk.verify { userMessageBus.info(any<String>()) }
+        }
+
+    @Test
+    fun downloadSubtitle_lateSurfacing_completesSuccessPathAfterDelayed() =
+        runTest(UnconfinedTestDispatcher()) {
+            // The server is slow: the fast poll budget exhausts (row flips
+            // DELAYED) but the stream surfaces during the slower follow-up
+            // phase. The full success path must still run — refresh + hints +
+            // DOWNLOADED — so the user never has to leave playback to see the
+            // subtitle (the old behaviour stopped at DELAYED).
+            val fresh = mediaDetailWithSubtitle("item-1", streamIndex = 2, language = "eng")
+            var calls = 0
+            coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
+            coEvery { mediaRepository.getMediaDetail("item-1", any()) } coAnswers {
+                calls++
+                if (calls <= 8) Result.success(mediaDetail("item-1")) else Result.success(fresh)
+            }
+
+            val m = managerInScope(this)
+            m.downloadSubtitle(RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"))
+            advanceUntilIdle()
+
+            assertEquals(
+                SubtitleDownloadState.DOWNLOADED,
+                m.state.value.downloadingSubtitles["s1"]?.state,
+            )
+            assertEquals(listOf(fresh), refreshedDetails)
+            assertEquals(2, m.state.value.readySubtitles["s1"]?.serverStreamIndex)
+            io.mockk.verify { userMessageBus.info(any<String>()) }
         }
 
     @Test
@@ -451,7 +494,10 @@ class SubtitleManagerTest {
         addExternalSubtitle = { addedSubtitles += it },
         getMediaStreams = { mediaStreams },
         getCurrentItemId = { id },
-        onMediaDetailRefreshed = { refreshedDetails += it },
+        onMediaDetailRefreshed = { refresh ->
+            refreshedDetails += refresh.detail
+            refreshedIndexes += refresh.newSubtitleStreamIndex
+        },
         getCurrentMediaDetail = { currentDetail },
     )
 
@@ -471,7 +517,10 @@ class SubtitleManagerTest {
         addExternalSubtitle = { addedSubtitles += it },
         getMediaStreams = { mediaStreams },
         getCurrentItemId = { "item-1" },
-        onMediaDetailRefreshed = { refreshedDetails += it },
+        onMediaDetailRefreshed = { refresh ->
+            refreshedDetails += refresh.detail
+            refreshedIndexes += refresh.newSubtitleStreamIndex
+        },
         getCurrentMediaDetail = { currentDetail },
     )
 

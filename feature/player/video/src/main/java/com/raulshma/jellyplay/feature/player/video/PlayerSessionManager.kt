@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -360,8 +361,9 @@ class PlayerSessionManager(
         // for this item in the streaming-subtitle store. `SubtitleManager`
         // always writes provider downloads there regardless of online/offline
         // playback, so offline (downloaded) media must restore them too —
-        // otherwise a subtitle downloaded once vanishes on reopen.
-        loadStreamingSubtitles(itemId)
+        // otherwise a subtitle downloaded once vanishes on reopen. No server
+        // stream list exists offline, so no deletion reconciliation runs.
+        loadStreamingSubtitles(itemId, currentStreams = null)
 
         val trickplayDir = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
             .getLocalTrickplayDir(downloadPath, itemId)
@@ -452,7 +454,7 @@ class PlayerSessionManager(
         // (OpenSubtitles/Wyzie) for this streaming item. These persist across
         // replays on-device, so a subtitle downloaded once (even offline) is
         // available on the next playback without a server round-trip.
-        loadStreamingSubtitles(itemId)
+        loadStreamingSubtitles(itemId, streams)
 
         _sessionState.update { it.copy(isReady = true) }
     }
@@ -462,10 +464,32 @@ class PlayerSessionManager(
      * durable streaming-subtitle store. Mirrors [loadOfflineSubtitles] but for
      * streaming (non-downloaded) items — keyed by `itemId`, not a media-file
      * path. Files missing on disk are silently skipped.
+     *
+     * Entries that recorded a [SavedSubtitle.serverStreamIndex] are reconciled
+     * against [currentStreams]: when the user deleted the subtitle from the
+     * metadata editor, its server stream is gone — and side-loading the local
+     * copy would resurrect the deleted track on every playback. Null disables
+     * reconciliation (offline playback has no server state to reconcile
+     * against). Legacy entries (no recorded index) and device-only downloads
+     * (upload failed, so no index was ever recorded) always load: the durable
+     * local copy is their only copy.
      */
-    private suspend fun loadStreamingSubtitles(itemId: String) {
+    private suspend fun loadStreamingSubtitles(itemId: String, currentStreams: List<MediaStream>?) {
         val saved = streamingSubtitleStore.loadAll(itemId)
+        val currentIndexes = currentStreams
+            ?.filter { it.type == StreamType.SUBTITLE }
+            ?.map { it.index }
+            ?.toSet()
         for (entry in saved) {
+            val recordedIndex = entry.serverStreamIndex
+            if (recordedIndex != null && currentIndexes != null && recordedIndex !in currentIndexes) {
+                Log.d(
+                    "SubtitleUse",
+                    "loadStreamingSubtitles: skipping ${entry.provider}:${entry.providerSubtitleId} " +
+                        "(server stream $recordedIndex deleted)",
+                )
+                continue
+            }
             val file = streamingSubtitleStore.fileFor(itemId, entry)
             if (!file.exists()) continue
             addExternalSubtitle(
@@ -778,6 +802,102 @@ class PlayerSessionManager(
     }
 
     /**
+     * The [MediaSource] of [detail] corresponding to the session's playing
+     * source, matched by id so multi-version items keep the playing version's
+     * streams (falling back to the CURRENT session source, never to a
+     * same-position different-version stream). With [fallbackToFirst], a
+     * session without a source (offline) resolves to the detail's first
+     * source; without it the result stays null so offline sessions keep their
+     * source-less state. Single home for the "which of this detail's sources
+     * is ours?" walk used by refresh/attach paths and the ViewModel fold.
+     */
+    fun matchedMediaSource(detail: MediaDetail, fallbackToFirst: Boolean): MediaSource? {
+        val current = _sessionState.value.currentMediaSource
+        return when {
+            current != null -> detail.mediaSources.firstOrNull { it.id == current.id } ?: current
+            fallbackToFirst -> detail.mediaSources.firstOrNull()
+            else -> null
+        }
+    }
+
+    /**
+     * Applies a refreshed [MediaDetail] after a mid-session metadata change
+     * (subtitle download/upload). Merges into session state FIRST so mode/
+     * quality/stream-index reloads rebuild the side-loaded subtitle set from
+     * the refreshed detail instead of the pre-change snapshot, and the session
+     * collector re-publishes the refreshed streams instead of reverting them;
+     * then optionally side-loads newly attached subtitle streams into the live
+     * engine ([attachToEngine] = false when the caller already side-loaded a
+     * local copy itself — attaching again would duplicate the track). One
+     * entry point so this ordering contract lives here, not in callers.
+     */
+    fun applyRefreshedDetail(detail: MediaDetail, attachToEngine: Boolean) {
+        refreshMediaDetail(detail)
+        if (attachToEngine) attachNewSubtitleStreams(detail)
+    }
+
+    /**
+     * Merges a re-fetched [MediaDetail] into the session state after a
+     * mid-session metadata change (subtitle download/upload). Without this,
+     * [reloadPlayback] / [reloadForStreamChange] rebuild the side-loaded
+     * subtitle set from the stale pre-change [PlayerSessionState.mediaDetail],
+     * silently dropping a just-downloaded subtitle on the next mode/quality/
+     * stream-index switch, and the ViewModel's session collector re-publishes
+     * the stale stream list over the refreshed one.
+     *
+     * Offline sessions keep their null source and empty stream list — their
+     * side-loaded subs are keyed by the offline id contract, and the
+     * track-restore ladder depends on `mediaStreams` staying empty offline.
+     */
+    fun refreshMediaDetail(detail: MediaDetail) {
+        val itemId = _sessionState.value.currentItemId ?: return
+        if (detail.item.id != itemId) return
+        val source = matchedMediaSource(detail, fallbackToFirst = false)
+        val streams = source?.mediaStreams ?: emptyList()
+        _sessionState.update {
+            it.copy(
+                mediaDetail = detail,
+                currentMediaSource = source,
+                mediaStreams = streams,
+            )
+        }
+    }
+
+    /**
+     * Side-loads subtitle streams that appeared in [detail] but are not yet
+     * attached to the current session — the missing step after an in-player
+     * subtitle download/upload. The engine was loaded with the pre-change
+     * subtitle set, and on Direct Play the picker is built purely from engine
+     * tracks, so a server-attached stream stays invisible until the engine
+     * itself learns about it. Re-runs [buildExternalSubtitles]' per-stream
+     * gates so the mid-session set matches a fresh load, then attaches only
+     * genuinely new entries (by `external:{index}` / `offline:{index}` id) to
+     * avoid duplicating already side-loaded streams.
+     */
+    fun attachNewSubtitleStreams(detail: MediaDetail) {
+        if (lastPlaybackRequest == null) return
+        val state = _sessionState.value
+        val itemId = state.currentItemId ?: return
+        if (detail.item.id != itemId) return
+        val source = matchedMediaSource(detail, fallbackToFirst = true) ?: return
+        val existingIds = lastPlaybackRequest?.externalSubtitles?.map { it.id }?.toSet().orEmpty()
+        val built = buildExternalSubtitles(detail, source, state.playMethod)
+            .filter { sub ->
+                if (sub.id in existingIds) return@filter false
+                // An offline-bundled sidecar with the same stream index is the
+                // same subtitle — don't re-attach it under the external id.
+                val index = externalSubtitleTrackStreamIndex(sub.id)
+                index == null || offlineSubtitleTrackId(index) !in existingIds
+            }
+        Log.d(
+            "SubtitleUse",
+            "attachNewSubtitleStreams: playMethod=${state.playMethod}, existing=${existingIds.size}, " +
+                "attaching=${built.map { "${it.id} '${it.label.take(24)}'" }}",
+        )
+        built.forEach { addExternalSubtitle(it) }
+    }
+
+    /**
      * Builds the side-loaded [SubtitleSource] list for the engine.
      *
      * Subtitles that already carry a server [MediaStream.deliveryUrl] (the
@@ -815,7 +935,10 @@ class PlayerSessionManager(
                 // side-load text-side-loadable streams. Image subs are left to
                 // the server's burn-in (transcode) or the player's container
                 // demux (direct play on MPV).
-                !isSideLoadableEmbeddedSubtitle(stream.codec) -> return@mapNotNull null
+                !isSideLoadableEmbeddedSubtitle(stream.codec) -> {
+                    Log.d("SubtitleUse", "buildExternalSubtitles: skipping non-sideloadable codec=${stream.codec} index=${stream.index}")
+                    return@mapNotNull null
+                }
                 // See the KDoc above for the DIRECT_PLAY rationale: embedded
                 // text subs are side-loaded only when not direct-playing.
                 stream.isExternal ||
@@ -823,9 +946,15 @@ class PlayerSessionManager(
                     playbackRepository.buildSubtitleDeliveryUrl(
                         detail.item.id, source.id, stream.index, stream.codec,
                     )
-                else -> return@mapNotNull null
+                else -> {
+                    Log.d("SubtitleUse", "buildExternalSubtitles: skipping embedded sub on direct play index=${stream.index}")
+                    return@mapNotNull null
+                }
             }
-            if (subUrl.isBlank()) return@mapNotNull null
+            if (subUrl.isBlank()) {
+                Log.d("SubtitleUse", "buildExternalSubtitles: blank url for index=${stream.index}")
+                return@mapNotNull null
+            }
 
             SubtitleSource(
                 url = subUrl,

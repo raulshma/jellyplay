@@ -113,7 +113,12 @@ internal fun SubtitleHubSheet(
     onSearchAllProviders: (String) -> Unit,
     onDownloadProviderSubtitle: (SubtitleSearchResult) -> Unit,
     downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
-    onUseSubtitle: () -> Unit,
+    /**
+     * Activates the downloaded subtitle identified by [rowKey]. Returns true
+     * when the track is now selected (callers may navigate to Tracks); false
+     * when the side-load is still in flight (the host retries automatically).
+     */
+    onUseSubtitle: (String) -> Boolean,
     isUploading: Boolean,
     onUpload: (Uri, String, String?, Boolean, Boolean) -> Unit,
     // Delay tab — opens the transparent overlay (no in-sheet cue preview).
@@ -249,13 +254,18 @@ internal fun SubtitleHubSheet(
                     onSearchAllProviders = onSearchAllProviders,
                     onDownloadProviderSubtitle = onDownloadProviderSubtitle,
                     downloadingSubtitles = downloadingSubtitles,
-                    // After a download surfaces, jump to the Tracks tab so the
-                    // user can apply the freshly-attached subtitle — replaces the
-                    // old sheet-to-sheet onSheetChange(PlayerSheet.Subtitle) hop.
-                    onUseSubtitle = {
-                        onUseSubtitle()
-                        selectedTabIndex = visibleTabs.indexOf(SubtitleHubTab.TRACKS)
-                            .takeIf { it >= 0 } ?: 0
+                    // "Use" activates the downloaded subtitle as the current
+                    // track (host callback) and jumps to the Tracks tab so the
+                    // user sees the applied selection. When the side-load has
+                    // not landed yet the host arms an automatic retry instead;
+                    // stay on the Get tab then — jumping to an unselected track
+                    // list is exactly the confusion this guard avoids.
+                    onUseSubtitle = { rowKey ->
+                        val activated = onUseSubtitle(rowKey)
+                        if (activated) {
+                            selectedTabIndex = visibleTabs.indexOf(SubtitleHubTab.TRACKS)
+                                .takeIf { it >= 0 } ?: 0
+                        }
                     },
                     isUploading = isUploading,
                     onUpload = onUpload,

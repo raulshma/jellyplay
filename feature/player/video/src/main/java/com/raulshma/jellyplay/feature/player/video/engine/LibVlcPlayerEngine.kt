@@ -47,6 +47,10 @@ class LibVlcPlayerEngine(
         // libVLC uses 0 for the weakest slave priority and 4 for the strongest.
         // The tester's external track must win auto-selection immediately.
         private const val EXTERNAL_SUBTITLE_PRIORITY = 4
+        // Poll cadence + budget while waiting for a just-added slave subtitle to
+        // materialize as a new spu track (see [scheduleSlaveTrackRegistration]).
+        private const val SLAVE_TRACK_POLL_DELAY_MS = 250L
+        private const val SLAVE_TRACK_REGISTRATION_ATTEMPTS = 16
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
@@ -64,6 +68,49 @@ class LibVlcPlayerEngine(
     private var hasRenderer = false
     private var pendingRendererItem: RendererItem? = null
     private var cachedDurationMs: Long = 0L
+
+    /**
+     * Side-loaded-subtitle id registry: libVLC spu track id → [SubtitleSource.id].
+     *
+     * libVLC offers no handle linking an `addSlave` call to the spu track it
+     * produces (tracks surface as bare `TrackDescription`s with synthetic ids),
+     * so without this registry a side-loaded subtitle's stable id was lost and
+     * [buildTracks] could only stamp `"vlc_sub_${desc.id}"` — meaning
+     * [com.raulshma.jellyplay.feature.player.video.TrackSelectionHelper] could
+     * never resolve a downloaded subtitle by its `external:{index}` /
+     * `provider:` id and the picker's "Use" action silently failed. The
+     * registration identifies the new track by diffing the spu list before and
+     * after the add ([slavePollTick]); [releaseInternal] clears the map since
+     * track ids don't survive a media change.
+     */
+    @Volatile
+    private var sideLoadedSubtitleIds: Map<Int, String> = emptyMap()
+
+    /**
+     * Serialized slave-registration state. Adds are chained one-at-a-time —
+     * [PendingSlave.knownSpuIds] is snapshotted immediately before THAT add's
+     * `addSlave`, and the next queued add begins only after the current one
+     * resolves or times out. Independent concurrent pollers would race: two
+     * overlapping pre-add snapshots can each claim the other's track and stamp
+     * the wrong stable id, silently activating the wrong subtitle on "Use".
+     */
+    private class PendingSlave(
+        val sourceId: String,
+        val knownSpuIds: Set<Int>,
+        var attemptsLeft: Int,
+    )
+
+    @Volatile
+    private var pendingSlave: PendingSlave? = null
+    private val queuedSlaveSourceIds = ArrayDeque<String>()
+
+    /**
+     * Incremented on every teardown ([releaseInternal]); scheduled polls carry
+     * their generation and abort when it moves, so a late tick can never
+     * register a stale diff against the NEXT media's track ids.
+     */
+    @Volatile
+    private var mediaGeneration = 0
 
     override fun onActivityPause() {
         wasPlayingBeforeActivityPause = _isPlaying.value
@@ -303,6 +350,12 @@ class LibVlcPlayerEngine(
 
     private fun releaseInternal(releaseVlc: Boolean) {
         mainHandler.removeCallbacksAndMessages(null)
+        // Invalidate in-flight polls and drop per-media registration state:
+        // track ids are meaningless for the next media.
+        mediaGeneration++
+        pendingSlave = null
+        queuedSlaveSourceIds.clear()
+        sideLoadedSubtitleIds = emptyMap()
         pendingPlay = false
         currentPlaybackRequest = null
         pendingStartPositionMs = 0L
@@ -429,7 +482,76 @@ class LibVlcPlayerEngine(
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to add external subtitle: ${source.url}", e)
+            return
         }
+        if (source.id.isBlank()) return
+        val pending = pendingSlave
+        if (pending == null) {
+            beginSlaveRegistration(source.id)
+        } else {
+            queuedSlaveSourceIds.addLast(source.id)
+        }
+    }
+
+    /**
+     * Starts the registration chain for one slave: snapshot the spu ids
+     * immediately before its diff window opens (the add itself already ran in
+     * [addExternalSubtitle], but the track materializes asynchronously so the
+     * pre-add list is still the correct baseline).
+     */
+    private fun beginSlaveRegistration(sourceId: String) {
+        val knownSpuIds = try {
+            mediaPlayer?.getSpuTracks()?.filter { it.id != -1 }?.map { it.id }?.toSet()
+        } catch (_: Exception) {
+            null
+        } ?: emptySet()
+        pendingSlave = PendingSlave(sourceId, knownSpuIds, SLAVE_TRACK_REGISTRATION_ATTEMPTS)
+        scheduleSlavePoll(mediaGeneration)
+    }
+
+    private fun scheduleSlavePoll(generation: Int) {
+        mainHandler.postDelayed({ slavePollTick(generation) }, SLAVE_TRACK_POLL_DELAY_MS)
+    }
+
+    /**
+     * One tick of the serialized registration loop: pair the first spu track
+     * that appeared since this slave's baseline (and is not yet registered)
+     * with the pending source id. The slave parses asynchronously (local file
+     * or remote fetch), so poll until it shows up or the budget runs out.
+     */
+    private fun slavePollTick(generation: Int) {
+        val pending = pendingSlave ?: return
+        if (generation != mediaGeneration || mediaPlayer == null) return
+        val addedTrackId = try {
+            mediaPlayer?.getSpuTracks()
+                ?.filter { it.id != -1 && it.id !in pending.knownSpuIds && sideLoadedSubtitleIds[it.id] == null }
+                ?.firstOrNull()?.id
+        } catch (_: Exception) {
+            null
+        }
+        if (addedTrackId != null) {
+            sideLoadedSubtitleIds = sideLoadedSubtitleIds + (addedTrackId to pending.sourceId)
+            Log.d("SubtitleUse", "vlc slave registered: vlcTrackId=$addedTrackId ← id=${pending.sourceId}")
+            // Republish: the ESAdded event may have fired before this
+            // registration landed, leaving the picker without the id.
+            _availableTracks.value = buildTracks()
+            advanceSlaveRegistration()
+            return
+        }
+        pending.attemptsLeft--
+        if (pending.attemptsLeft <= 0) {
+            Log.w(TAG, "Side-loaded subtitle did not surface as a track: id=${pending.sourceId}")
+            advanceSlaveRegistration()
+        } else {
+            scheduleSlavePoll(generation)
+        }
+    }
+
+    /** Retires the current registration and starts the next queued one, if any. */
+    private fun advanceSlaveRegistration() {
+        pendingSlave = null
+        val nextSourceId = queuedSlaveSourceIds.removeFirstOrNull() ?: return
+        beginSlaveRegistration(nextSourceId)
     }
 
     override fun setMaxVideoBitrate(bps: Int?) {
@@ -866,7 +988,14 @@ class LibVlcPlayerEngine(
                     val info = TrackLabelInfo(title = desc.name)
                     result.add(
                         MediaTrack(
-                            id = "vlc_sub_${desc.id}",
+                            // Prefer the side-loaded subtitle's stable
+                            // SubtitleSource.id (registered by the post-add diff
+                            // in scheduleSlaveTrackRegistration) over the
+                            // synthetic vlc id — mirrors ExoPlayer's
+                            // SubtitleConfiguration.id and mpv's label registry,
+                            // and is what lets a downloaded subtitle be resolved
+                            // (and thus "Use"-activated) by id.
+                            id = sideLoadedSubtitleIds[desc.id] ?: "vlc_sub_${desc.id}",
                             index = index,
                             label = TrackLabelFormatter.primary(info).ifBlank { "Subtitle ${index + 1}" },
                             language = parseLanguageFromLabel(desc.name),

@@ -67,6 +67,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
 import com.raulshma.jellyplay.feature.player.video.state.GesturePrefsState
 import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
+import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
 import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
@@ -385,7 +386,8 @@ class VideoPlayerViewModel @Inject constructor(
         addExternalSubtitle = { playerSessionManager.addExternalSubtitle(it) },
         getMediaStreams = { _uiState.value.media.mediaStreams },
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
-        onMediaDetailRefreshed = { detail -> applyMediaDetailAndSourceState(detail) },
+        getCurrentSourceId = { playerSessionManager.sessionState.value.currentMediaSource?.id },
+        onMediaDetailRefreshed = { refresh -> applyMediaDetailAndSourceState(refresh) },
         getCurrentMediaDetail = { mediaDetail },
     )
     internal val sleepTimer = SleepTimerController(
@@ -2444,16 +2446,27 @@ class VideoPlayerViewModel @Inject constructor(
         imageUrlProvider.getImageUrl(itemId, maxWidth = maxWidth)
 
     /**
-     * Re-applies [mediaDetail] and refreshes the shared source/stream/aspect-ratio
-     * UiState fields after a subtitle download/upload adds a new stream. The
-     * duplicated inline block previously lived separately in [downloadSubtitle]
-     * and [uploadSubtitle]; folding it here lets [SubtitleManager] trigger the
-     * refresh via its [onMediaDetailRefreshed] callback without a hard VM
-     * reference.
+     * Re-applies a refreshed [MediaDetail] and refreshes the shared source/
+     * stream/aspect-ratio UiState fields after a subtitle download/upload adds
+     * a new stream — see [MediaDetailRefresh] for the per-field contract.
      */
-    private fun applyMediaDetailAndSourceState(detail: com.raulshma.jellyplay.core.model.MediaDetail) {
+    private fun applyMediaDetailAndSourceState(refresh: MediaDetailRefresh) {
+        val detail = refresh.detail
         applyMediaDetail(detail)
-        val source = detail.mediaSources.firstOrNull()
+        // One session entry point: sync the session manager FIRST so (a)
+        // mode/quality/stream-index reloads rebuild the side-loaded subtitle
+        // set from the refreshed detail instead of the pre-download snapshot,
+        // (b) the session collector re-publishes the refreshed streams instead
+        // of reverting the uiState write below to the stale ones — then
+        // side-load subtitle streams the download/upload attached server-side.
+        // On Direct Play (and offline playback) the picker is built purely
+        // from engine tracks, and the engine still holds the pre-change
+        // subtitle set — without this the new subtitle never surfaces and the
+        // "Use" action lands on an empty track list.
+        playerSessionManager.applyRefreshedDetail(detail, attachToEngine = refresh.attachToEngine)
+        // Match the session's source id so multi-version items publish the
+        // playing version's streams; offline falls back to the detail's first.
+        val source = playerSessionManager.matchedMediaSource(detail, fallbackToFirst = true)
         val streams = source?.mediaStreams ?: emptyList()
         _uiState.update { it.copy(
             media = it.media.copy(
@@ -2464,12 +2477,57 @@ class VideoPlayerViewModel @Inject constructor(
         ) }
         updatePipAspectRatio(streams)
         // Rebuild the audio/subtitle track options from the refreshed server
-        // streams. A subtitle download/upload attaches a new MediaStream server-
-        // side, but the engine's availableTracks flow only re-emits on an engine-
-        // level change — so without this call the newly attached subtitle never
-        // surfaces in the track picker (trackState.subtitleTracks) and the
-        // user couldn't apply it. `mergeServerStreams` picks it up here.
+        // streams. The side-load above re-emits the engine's availableTracks
+        // (its own collector re-runs this), but that emission is async — call
+        // it directly too so the picker updates immediately on transcode,
+        // where `mergeServerStreams` surfaces the stream without the engine.
         trackSelectionHelper.updateTracksFromEngine()
+        refresh.newSubtitleStreamIndex?.let { index ->
+            trackSelectionHelper.requestSubtitleSelection(
+                ReadySubtitleHint(
+                    trackId = externalSubtitleTrackId(index),
+                    serverStreamIndex = index,
+                ),
+            )
+        }
+    }
+
+    /**
+     * "Use" action for a downloaded-subtitle row: activates that subtitle as
+     * the current track. [rowKey] is the plain remote-subtitle id for Jellyfin
+     * rows and the composite `"{provider}:{id}"` key for external-provider
+     * rows — matching how [SubtitleManager] records its ready hints.
+     *
+     * Returns true when the subtitle was activated now; false when it has not
+     * surfaced yet (the side-load into the engine is asynchronous — mpv
+     * republishes its track list on a delay, ExoPlayer re-prepares the media
+     * item). In that case the ready hint is armed as a pending selection so it
+     * applies automatically on the next track-list emissions instead of the
+     * user having to re-tap "Use" — and callers should not navigate away from
+     * the download row.
+     */
+    fun useDownloadedSubtitle(rowKey: String): Boolean {
+        val hint = subtitles.state.value.readySubtitles[rowKey]
+        Log.d(
+            USE_LOG_TAG,
+            "Use pressed: rowKey=$rowKey, hint=$hint, playMethod=${playerSessionManager.sessionState.value.playMethod}, " +
+                "pickerRows=" + trackSelectionHelper.state.value.subtitleTracks
+                    .joinToString { "(i=${it.index},id=${it.id},si=${it.streamIndex},sel=${it.isSelected},'${it.label.take(24)}')" },
+        )
+        if (hint == null) {
+            userMessageBus.info("Subtitle not active yet — please try again shortly")
+            return false
+        }
+        val option = trackSelectionHelper.findSubtitleOptionFor(hint)
+        Log.d(USE_LOG_TAG, "Resolution: ${option?.let { "index=${it.index} id=${it.id}" } ?: "<none>"}")
+        if (option == null) {
+            trackSelectionHelper.requestSubtitleSelection(hint)
+            userMessageBus.info("Subtitle still loading — it will be selected automatically")
+            return false
+        }
+        selectSubtitleTrack(option)
+        userMessageBus.info("Subtitle selected")
+        return true
     }
 
     // endregion
@@ -2727,5 +2785,12 @@ class VideoPlayerViewModel @Inject constructor(
 
     private companion object {
         const val TAG = "VideoPlayerViewModel"
+
+        /**
+         * Shared tag across the whole "downloaded subtitle → Use → activate"
+         * chain (VM, session manager, engines) so one logcat filter captures
+         * the full path: `adb logcat -s SubtitleUse`.
+         */
+        const val USE_LOG_TAG = "SubtitleUse"
     }
 }

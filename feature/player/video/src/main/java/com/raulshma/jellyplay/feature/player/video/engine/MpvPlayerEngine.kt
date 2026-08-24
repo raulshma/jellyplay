@@ -1531,14 +1531,14 @@ class MpvPlayerEngine(
                         "url=${redactSensitive(sub.url)}"
                 )
                 if (sub.language.isNullOrBlank()) {
-                    mpv.command("sub-add", sub.url, flags, sub.label)
+                    mpv.command("sub-add", mpvOpenableUrl(sub.url), flags, sub.label)
                 } else {
                     // Local val captures the non-null value: SubtitleSource.language
                     // now lives in :feature:player:core (different module), so
                     // Kotlin can no longer smart-cast the cross-module property.
                     // The else branch proves non-blank (hence non-null).
                     val language = sub.language!!
-                    mpv.command("sub-add", sub.url, flags, sub.label, language)
+                    mpv.command("sub-add", mpvOpenableUrl(sub.url), flags, sub.label, language)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to add Jellyfin subtitle: ${redactSensitive(sub.url)}", e)
@@ -1550,30 +1550,55 @@ class MpvPlayerEngine(
 
     override fun addExternalSubtitle(source: SubtitleSource) {
         val mpv = mpvView?.mpv ?: return
-        // Skip if a track with the same label is already present (double-tap in
-        // the picker, or a re-add after a config reload). See addPendingSubtitles
-        // for the rationale on label-keyed dedup.
-        if (source.label in existingSubLabels()) {
+        // True re-add of a source already attached (double-tap, re-attach after
+        // a config reload): skip. Same-id dedup when the caller supplies an id;
+        // legacy same-label dedup otherwise (the id check can't fire for it).
+        if (source.id.isNotBlank()) {
+            if (sideLoadedSubtitleIds.containsValue(source.id)) {
+                Log.d(TAG, "Skipping duplicate external subtitle (id already registered): id=${source.id}")
+                return
+            }
+        } else if (source.label in existingSubLabels()) {
             Log.d(TAG, "Skipping duplicate external subtitle (already in track-list): label=${source.label}")
             return
+        }
+        // Uniquify the label when a track with the same title already exists —
+        // a downloaded subtitle frequently shares its display title/language
+        // label with an embedded track. The old behaviour skipped the sub-add
+        // entirely, which made the new subtitle permanently unselectable: it
+        // never entered the track-list, so neither its side-loaded id nor any
+        // other resolution key existed and the picker's "Use" action could
+        // never activate it. The uniquified string is both the `title` passed
+        // to sub-add AND the registry key buildTracks looks up, so they stay
+        // in lockstep by construction.
+        var label = source.label.ifBlank { "External subtitle" }
+        val existing = existingSubLabels()
+        if (label in existing) {
+            var n = 2
+            while ("$label ($n)" in existing) n++
+            label = "$label ($n)"
         }
         // Register the caller-supplied id (when present) so buildTracks can
         // stamp it onto the resulting MediaTrack.id instead of the synthetic
         // mpv id — mirroring ExoPlayer's SubtitleConfiguration.id propagation.
         if (source.id.isNotBlank()) {
-            sideLoadedSubtitleIds = sideLoadedSubtitleIds + (source.label to source.id)
+            sideLoadedSubtitleIds = sideLoadedSubtitleIds + (label to source.id)
         }
         try {
+            // mpv cannot open File.toURI()'s single-slash file:/ URIs — see
+            // [mpvOpenableUrl].
+            val openUrl = mpvOpenableUrl(source.url)
             if (source.language.isNullOrBlank()) {
-                mpv.command("sub-add", source.url, "select", source.label)
+                mpv.command("sub-add", openUrl, "select", label)
             } else {
                 // Local val captures the non-null value: SubtitleSource.language
                 // now lives in :feature:player:core (different module), so
                 // Kotlin can no longer smart-cast the cross-module property.
                 // The else branch proves non-blank (hence non-null).
                 val language = source.language!!
-                mpv.command("sub-add", source.url, "select", source.label, language)
+                mpv.command("sub-add", openUrl, "select", label, language)
             }
+            Log.d("SubtitleUse", "mpv sub-add ok: id=${source.id}, label='$label', url=${redactSensitive(openUrl)}")
             refreshTracks("addExternalSubtitle", delayMs = 500)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to add external subtitle: ${redactSensitive(source.url)}", e)
@@ -1839,6 +1864,30 @@ class MpvPlayerEngine(
  * `setOptionString`) and `updateConfig` (live, `setPropertyString`).
  * Keeping the mapping in one place stops the two sites from drifting.
  */
+
+/**
+ * Converts [url] into a form mpv's stream layer can actually open.
+ *
+ * `File.toURI()` produces single-slash `"file:/data/…"` URIs, and mpv's file
+ * stream handler only strips the scheme for the `"file://…"` form — the
+ * single-slash form is opened literally as a relative path and fails with
+ * ENOENT (observed on-device: a freshly downloaded side-load's `sub-add`
+ * succeeded but its demuxer open failed, so the track never materialized,
+ * while ExoPlayer opened the identical URI fine). Returns the decoded
+ * absolute path for file URIs; bare paths and every other scheme
+ * (`content://`, `http(s)://`) pass through unchanged. Top-level for
+ * unit-testability without an engine.
+ */
+internal fun mpvOpenableUrl(url: String): String =
+    if (url.startsWith("file:")) {
+        try {
+            java.net.URI(url).path?.takeIf { it.isNotEmpty() } ?: url
+        } catch (_: Exception) {
+            url
+        }
+    } else {
+        url
+    }
 
 internal fun decoderModeToHwdec(mode: DecoderMode): String = when (mode) {
     // Zero-copy `mediacodec` first: mpv picks the first entry that inits, and

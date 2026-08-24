@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelFormatter
 import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelInfo
+import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
 import com.raulshma.jellyplay.feature.player.video.state.TrackState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -96,6 +97,20 @@ internal class TrackSelectionHelper(
     @Suppress("DEPRECATION")
     private var pendingSubtitleStreamIndex: Int? = null
     private var pendingAudioStreamIndex: Int? = null
+
+    /**
+     * One-shot "select the freshly downloaded subtitle once it shows up" intent.
+     * After an in-player download the side-load into the engine is asynchronous
+     * (ExoPlayer re-prepares the media item; mpv refreshes its track list on a
+     * delay), so at the moment the download completes the picker list usually
+     * does not contain the new track yet. This pending intent survives across
+     * [updateTracksFromEngine] runs and is consumed the first run whose rebuilt
+     * list resolves it, bounded by [PENDING_SERVER_SUBTITLE_MAX_ATTEMPTS] runs
+     * so a side-load that never lands cannot hijack later selections. Cleared on
+     * item switch, reset and engine recreation (a new engine renumbers tracks).
+     */
+    private var pendingServerSubtitleHint: ReadySubtitleHint? = null
+    private var pendingServerSubtitleAttempts = 0
 
     fun setPendingStreams(selection: MediaStreamSelection?) {
         pendingAudioStreamIndex = selection?.audioStreamIndex
@@ -270,6 +285,70 @@ internal class TrackSelectionHelper(
             else MediaStreamSelection(subtitleStreamIndex = streamIndex),
         )
         return true
+    }
+
+    /**
+     * Requests that the downloaded subtitle described by [hint] — its
+     * side-loaded engine track id, plus optionally the server `MediaStream.index`
+     * for the synthetic transcode picker rows — becomes the active subtitle as
+     * soon as it is resolvable — immediately when possible, otherwise on the
+     * next [updateTracksFromEngine] run whose list carries it. Used after an
+     * in-player subtitle download so the user does not have to open the track
+     * picker and hunt for the new row.
+     */
+    fun requestSubtitleSelection(hint: ReadySubtitleHint) {
+        pendingServerSubtitleHint = hint
+        pendingServerSubtitleAttempts = PENDING_SERVER_SUBTITLE_MAX_ATTEMPTS
+        tryConsumePendingServerSubtitleSelection()
+    }
+
+    /**
+     * Resolves a downloaded-subtitle hint to a picker row. Match order: exact
+     * side-loaded id → container stream index → synthetic transcode row
+     * ([SERVER_TRACK_INDEX_BASE] + stream index). Returns null when the track
+     * has not surfaced yet.
+     *
+     * [allowSyntheticRow] gates the third match. The synthetic row is a
+     * picker affordance whose selection triggers a full session reload
+     * (see [selectServerTrack]) — right for an explicit user pick, wrong for
+     * the auto-armed post-download intent, which must apply in place once the
+     * side-load lands (or not at all) rather than surprise-reload playback.
+     */
+    fun findSubtitleOptionFor(hint: ReadySubtitleHint, allowSyntheticRow: Boolean = true): TrackOption? {
+        val tracks = _state.value.subtitleTracks
+        tracks.firstOrNull { it.id == hint.trackId }?.let { return it }
+        val serverStreamIndex = hint.serverStreamIndex ?: return null
+        tracks.firstOrNull { it.streamIndex == serverStreamIndex }?.let { return it }
+        if (!allowSyntheticRow) return null
+        return tracks.firstOrNull {
+            it.index >= SERVER_TRACK_INDEX_BASE &&
+                it.index - SERVER_TRACK_INDEX_BASE == serverStreamIndex
+        }
+    }
+
+    private fun tryConsumePendingServerSubtitleSelection() {
+        val hint = pendingServerSubtitleHint ?: return
+        // Synthetic rows excluded: the auto intent waits for the real
+        // side-loaded track (or expires); it must never trigger the reload a
+        // synthetic-row selection causes.
+        val option = findSubtitleOptionFor(hint, allowSyntheticRow = false)
+        if (option != null) {
+            clearPendingServerSubtitleSelection()
+            selectSubtitleTrack(option, isUserOverride = true)
+            return
+        }
+        // Not resolvable yet (side-load still in flight): burn one attempt. The
+        // next availableTracks emission re-runs the consume via
+        // updateTracksFromEngine until the cap drops the intent.
+        pendingServerSubtitleAttempts--
+        if (pendingServerSubtitleAttempts <= 0) {
+            clearPendingServerSubtitleSelection()
+        }
+    }
+
+    private fun clearPendingServerSubtitleSelection() {
+        pendingServerSubtitleHint = null
+        pendingServerSubtitleAttempts = 0
     }
 
     fun updateTracksFromEngine() {
@@ -572,6 +651,10 @@ internal class TrackSelectionHelper(
                 }
             }
         }
+
+        // A pending post-download selection consumes the rebuilt list last so
+        // it wins over the auto-resolution ladder above.
+        tryConsumePendingServerSubtitleSelection()
     }
 
     fun resetAudioSelection() {
@@ -618,6 +701,7 @@ internal class TrackSelectionHelper(
         rememberedAudioTrack = null
         rememberedSubtitleTrack = null
         trackedSeriesId = null
+        clearPendingServerSubtitleSelection()
     }
 
     /**
@@ -629,6 +713,7 @@ internal class TrackSelectionHelper(
      */
     fun resetForItem() {
         _state.value = TrackState()
+        clearPendingServerSubtitleSelection()
     }
 
     /**
@@ -652,6 +737,7 @@ internal class TrackSelectionHelper(
         selectedSubtitleTrackIndex = null
         audioSelectionHeld = false
         subtitleSelectionHeld = false
+        clearPendingServerSubtitleSelection()
     }
 
     /**
@@ -779,6 +865,15 @@ internal class TrackSelectionHelper(
          * requires a session reload (audio) or side-load (subtitle) on select.
          */
         internal const val SERVER_TRACK_INDEX_BASE = 100_000
+
+        /**
+         * How many [updateTracksFromEngine] runs a pending post-download
+         * selection survives before giving up. The side-load → track-list
+         * republish round-trip takes one or two emissions; the cap only exists
+         * so a side-load that never lands (network failure, engine without the
+         * codec) cannot hijack every later selection.
+         */
+        internal const val PENDING_SERVER_SUBTITLE_MAX_ATTEMPTS = 10
     }
 
     private fun persistStreamSelectionFromPlayer(

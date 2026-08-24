@@ -63,6 +63,7 @@ import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadState
 import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadStatus
+import com.raulshma.jellyplay.feature.player.video.state.providerSubtitleRowKey
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.components.SheetTabRow
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -120,7 +121,8 @@ fun SubtitleManagerSheet(
     // failed) for both Download + Search rows, and the "Use" affordance that opens
     // the subtitle track picker once a download has surfaced.
     downloadingSubtitles: Map<String, SubtitleDownloadStatus> = emptyMap(),
-    onUseSubtitle: (RemoteSubtitleInfo) -> Unit = {},
+    /** Row key: the remote-subtitle id (Jellyfin rows) or `"provider:id"` composite (external rows). */
+    onUseSubtitle: (String) -> Unit = {},
     // Upload tab
     isUploading: Boolean,
     onUpload: (Uri, String, String?, Boolean, Boolean) -> Unit,
@@ -201,7 +203,8 @@ internal fun androidx.compose.foundation.layout.ColumnScope.SubtitleManagerSecti
     onSearchAllProviders: (String) -> Unit,
     onDownloadProviderSubtitle: (com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult) -> Unit,
     downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
-    onUseSubtitle: (RemoteSubtitleInfo) -> Unit,
+    /** Row key: the remote-subtitle id (Jellyfin rows) or `"provider:id"` composite (external rows). */
+    onUseSubtitle: (String) -> Unit,
     isUploading: Boolean,
     onUpload: (Uri, String, String?, Boolean, Boolean) -> Unit,
     isTv: Boolean,
@@ -306,7 +309,7 @@ private fun DownloadTab(
     onDownload: (RemoteSubtitleInfo) -> Unit,
     onLoadLocalFile: () -> Unit,
     downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
-    onUseSubtitle: (RemoteSubtitleInfo) -> Unit,
+    onUseSubtitle: (String) -> Unit,
     isTv: Boolean,
     focusRequester: FocusRequester,
     loadBtnFocus: TvFocusState,
@@ -364,7 +367,7 @@ private fun DownloadTab(
                         itemCount = subtitles.size,
                         status = downloadingSubtitles[sub.id],
                         onDownload = { onDownload(sub) },
-                        onUse = { onUseSubtitle(sub) },
+                        onUse = { onUseSubtitle(sub.id) },
                     )
                 }
             }
@@ -593,7 +596,7 @@ private fun SearchTab(
     onSearch: (String) -> Unit,
     onDownload: (RemoteSubtitleInfo) -> Unit,
     downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
-    onUseSubtitle: (RemoteSubtitleInfo) -> Unit,
+    onUseSubtitle: (String) -> Unit,
     isTv: Boolean,
     focusRequester: FocusRequester,
     // Multi-provider search state.
@@ -648,10 +651,11 @@ private fun SearchTab(
                 downloadingSubtitles = downloadingSubtitles,
                 onDownload = onDownloadProviderSubtitle,
                 onUse = { result ->
-                    // For Jellyfin provider rows, re-route through the legacy "use"
-                    // path so the track picker opens; external rows are already
-                    // side-loaded and the picker will pick them up after addExternalSubtitle.
-                    result.jellyfinInfo?.let { onUseSubtitle(it) }
+                    // Jellyfin rows key their download status + ready hints on
+                    // the plain remote-subtitle id; external rows on the
+                    // composite "provider:id" key. Both routes end in the same
+                    // "activate this subtitle" action.
+                    onUseSubtitle(result.jellyfinInfo?.id ?: providerSubtitleRowKey(result.provider, result.id))
                 },
             )
         } else {
@@ -681,7 +685,7 @@ private fun LegacySearchResults(
     searchError: String?,
     downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
     onDownload: (RemoteSubtitleInfo) -> Unit,
-    onUseSubtitle: (RemoteSubtitleInfo) -> Unit,
+    onUseSubtitle: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxWidth()) {
@@ -745,7 +749,7 @@ private fun LegacySearchResults(
                     itemCount = results.size,
                     status = downloadingSubtitles[sub.id],
                     onDownload = { onDownload(sub) },
-                    onUse = { onUseSubtitle(sub) },
+                    onUse = { onUseSubtitle(sub.id) },
                 )
             }
         }
@@ -807,7 +811,7 @@ private fun ProviderSearchResults(
                             result = r,
                             isLast = index == visible.lastIndex,
                             itemCount = visible.size,
-                            status = downloadingSubtitles["${r.provider}:${r.id}"],
+                            status = downloadingSubtitles[providerSubtitleRowKey(r.provider, r.id)],
                             onDownload = { onDownload(r) },
                             onUse = { onUse(r) },
                         )
