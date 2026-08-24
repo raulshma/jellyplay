@@ -42,7 +42,6 @@ include(":feature:player:video")
 include(":feature:player:audio")
 include(":feature:player:live")
 include(":feature:subtitle-tester")
-include(":feature:onboarding")
 
 
 
@@ -84,6 +83,8 @@ include(":shared:feature:calendar")
 include(":shared:feature:shortcuts")
 
 include(":shared:feature:insights")
+
+include(":shared:feature:onboarding")
 
 
 

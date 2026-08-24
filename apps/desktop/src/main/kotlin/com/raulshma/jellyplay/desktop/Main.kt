@@ -48,6 +48,7 @@ import com.raulshma.jellyplay.feature.shortcuts.di.shortcutsModule
 import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
 
 import com.raulshma.jellyplay.feature.insights.di.insightsModule
+import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
 import org.koin.core.context.startKoin
 
@@ -177,6 +178,18 @@ fun main() {
             // instantiates it (and the share seam's null actual hides the
             // share button regardless).
             insightsModule,
+
+
+
+            // …onboarding, conveyor feature — fully live registration
+            // (calendar/requests/shortcuts class): all four wizard VM deps
+            // resolve on desktop (PreferenceProjections/
+            // SeerrPreferencesStore/PreferencesEditor from datastoreCommon
+            // Module, SeerrSecureCredentialsStore from desktopDatastore
+            // Module). It stays dormant only because the desktop shell has
+            // no first-run gate wiring — the wizard is rendered by the
+            // Android app's JellyPlayApp gate, and TV auto-completes.
+            onboardingModule,
 
 
         )

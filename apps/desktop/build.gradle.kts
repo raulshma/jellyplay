@@ -103,6 +103,12 @@ dependencies {
     implementation(project(":shared:feature:insights"))
 
 
+    // …onboarding, conveyor feature — DI registration only (Main.kt): the
+    // wizard VM's four ctor deps are all Koin-native here, but the desktop
+    // shell renders no first-run gate, so nothing instantiates it.
+    implementation(project(":shared:feature:onboarding"))
+
+
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
     implementation(libs.jna)

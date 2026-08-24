@@ -186,7 +186,7 @@ dependencies {
     implementation(project(":feature:subtitle-tester"))
     implementation(project(":shared:feature:editor"))
     implementation(project(":shared:feature:admin"))
-    implementation(project(":feature:onboarding"))
+    implementation(project(":shared:feature:onboarding"))
 
     implementation(project(":shared:feature:newsletter"))
     implementation(project(":shared:feature:insights"))

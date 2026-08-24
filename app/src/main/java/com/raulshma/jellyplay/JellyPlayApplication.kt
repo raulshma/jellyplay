@@ -50,6 +50,8 @@ import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
 
 import com.raulshma.jellyplay.feature.insights.di.insightsModule
 
+import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
+
 
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
@@ -221,6 +223,13 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // MediaRepository dep resolves through the hiltInteropModule
                 // single above (impl stays Hilt-bound until Phase X).
                 insightsModule,
+
+                // V3 onboarding conveyor: all four wizard VM deps
+                // (PreferenceProjections, SeerrPreferencesStore,
+                // SeerrSecureCredentialsStore, PreferencesEditor) were already
+                // Koin-owned in the shared datastore graph — zero Hilt interop,
+                // calendar/requests class.
+                onboardingModule,
 
 
             )
