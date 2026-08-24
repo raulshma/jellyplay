@@ -193,7 +193,7 @@ dependencies {
 
     implementation(project(":shared:feature:requests"))
     implementation(project(":shared:feature:shortcuts"))
-    implementation(project(":feature:arrqueue"))
+    implementation(project(":shared:feature:arrqueue"))
     implementation(project(":shared:feature:calendar"))
 
     implementation(libs.androidx.core.ktx)

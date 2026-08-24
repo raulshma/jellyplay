@@ -101,6 +101,7 @@ dependencies {
     // insights nav entry, and the share seam's null actual keeps the share
     // button hidden when a screen lands).
     implementation(project(":shared:feature:insights"))
+    implementation(project(":shared:feature:arrqueue"))
 
 
     // …onboarding, conveyor feature — DI registration only (Main.kt): the

@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -42,11 +43,9 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
@@ -74,18 +73,77 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.feature.arrqueue.R
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.Res
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_blocklist_search
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_brand_radarr
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_brand_sonarr
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_cancel
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_clear_selection
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_delete
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_disabled_body
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_disabled_title
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_empty_body
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_empty_title
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_grab
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_grab_message
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_grab_title
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_import
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_import_message
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_import_title
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_open_settings
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_refresh
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_remove_body_bulk
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_remove_body_single
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_remove_item_title
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_remove_only
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_remove_search
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_remove_selected_title
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_retry
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_select_all
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_selected_count
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_completed
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_downloading
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_failed
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_imported
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_paused
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_queued
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_unknown
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_warning
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_title
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_unknown_error
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ArrQueueScreen(
     onBack: () -> Unit,
     onOpenArrSettings: () -> Unit = {},
-    viewModel: ArrQueueViewModel = hiltViewModel(),
+    viewModel: ArrQueueViewModel = koinViewModel(),
 ) {
     val state by viewModel.state
     val featureEnabled by viewModel.featureEnabled.collectAsStateWithLifecycle()
     val isTv = LocalTvMode.current
+
+    // One-shot action feedback (livetv screen-forward pattern): the VM emits
+    // unresolved ArrQueueMessage values; this collector resolves them with the
+    // suspend compose-resources getString — the args-bearing acks (release
+    // title) can't be pre-resolved in composition the way livetv's two fixed
+    // strings were — and forwards through the messenger actual (Android: the
+    // app-wide UserMessageBus; desktop: null, messages drop). Collector is
+    // screen-scoped, so an ack emitted just before a quick-back is dropped
+    // (livetv-documented accepted delta).
+    val messenger = rememberArrQueueMessenger()
+    LaunchedEffect(messenger) {
+        viewModel.messages.collect { message ->
+            when (message) {
+                is ArrQueueMessage.Info -> messenger?.info(getString(message.res, *message.args.toTypedArray()))
+                is ArrQueueMessage.Error -> messenger?.error(getString(message.res, *message.args.toTypedArray()))
+                is ArrQueueMessage.Raw -> messenger?.error(message.text)
+            }
+        }
+    }
 
     // TV focus-on-launch: focus the first queue card once data arrives so D-pad
     // input lands on content, not the navigation drawer.
@@ -97,7 +155,7 @@ fun ArrQueueScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = stringResource(R.string.arrqueue_title),
+        title = stringResource(Res.string.arrqueue_title),
         onBack = onBack,
         actions = {
             val focusState = rememberTvFocusState()
@@ -108,7 +166,7 @@ fun ArrQueueScreen(
                     .then(focusState.focusModifier)
                     .tvFocusIndicator(focusState, CircleShape),
             ) {
-                Icon(Tabler.Outline.Refresh, contentDescription = stringResource(R.string.arrqueue_refresh))
+                Icon(Tabler.Outline.Refresh, contentDescription = stringResource(Res.string.arrqueue_refresh))
             }
         },
     ) { paddingValues ->
@@ -129,7 +187,7 @@ fun ArrQueueScreen(
                 }
 
                 state.error != null && state.queue.isEmpty() -> ErrorState(
-                    message = state.error ?: stringResource(R.string.arrqueue_unknown_error),
+                    message = state.error ?: stringResource(Res.string.arrqueue_unknown_error),
                     onRetry = { viewModel.refresh() },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -216,21 +274,21 @@ fun ArrQueueScreen(
                 },
             )
             is ArrQueueAction.Grab -> ConfirmDialog(
-                title = stringResource(R.string.arrqueue_grab_title),
-                message = stringResource(R.string.arrqueue_grab_message, action.item.title),
-                confirmText = stringResource(R.string.arrqueue_grab),
+                title = stringResource(Res.string.arrqueue_grab_title),
+                message = stringResource(Res.string.arrqueue_grab_message, action.item.title),
+                confirmText = stringResource(Res.string.arrqueue_grab),
                 onConfirm = { viewModel.grabItem(action.item) },
                 onDismiss = { viewModel.dismissAction() },
-                dismissText = stringResource(R.string.arrqueue_cancel),
+                dismissText = stringResource(Res.string.arrqueue_cancel),
                 tone = ConfirmTone.NEUTRAL,
             )
             is ArrQueueAction.Import -> ConfirmDialog(
-                title = stringResource(R.string.arrqueue_import_title),
-                message = stringResource(R.string.arrqueue_import_message, action.item.title, serviceName(action.item.serverKind)),
-                confirmText = stringResource(R.string.arrqueue_import),
+                title = stringResource(Res.string.arrqueue_import_title),
+                message = stringResource(Res.string.arrqueue_import_message, action.item.title, serviceName(action.item.serverKind)),
+                confirmText = stringResource(Res.string.arrqueue_import),
                 onConfirm = { viewModel.importItem(action.item) },
                 onDismiss = { viewModel.dismissAction() },
-                dismissText = stringResource(R.string.arrqueue_cancel),
+                dismissText = stringResource(Res.string.arrqueue_cancel),
                 tone = ConfirmTone.NEUTRAL,
             )
         }
@@ -360,7 +418,7 @@ private fun QueueRow(
                     ) {
                         Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.arrqueue_delete))
+                        Text(stringResource(Res.string.arrqueue_delete))
                     }
                     OutlinedButton(
                         onClick = onGrab,
@@ -370,7 +428,7 @@ private fun QueueRow(
                     ) {
                         Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.arrqueue_grab))
+                        Text(stringResource(Res.string.arrqueue_grab))
                     }
                     OutlinedButton(
                         onClick = onImport,
@@ -380,7 +438,7 @@ private fun QueueRow(
                     ) {
                         Icon(Tabler.Outline.Download, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.arrqueue_import))
+                        Text(stringResource(Res.string.arrqueue_import))
                     }
                 }
             }
@@ -391,8 +449,8 @@ private fun QueueRow(
 @Composable
 private fun ServiceBadge(kind: ArrServiceKind) {
     val (label, color) = when (kind) {
-        ArrServiceKind.RADARR -> stringResource(R.string.arrqueue_brand_radarr) to StatusColors.requested
-        ArrServiceKind.SONARR -> stringResource(R.string.arrqueue_brand_sonarr) to StatusColors.pending
+        ArrServiceKind.RADARR -> stringResource(Res.string.arrqueue_brand_radarr) to StatusColors.requested
+        ArrServiceKind.SONARR -> stringResource(Res.string.arrqueue_brand_sonarr) to StatusColors.pending
     }
     Surface(
         shape = RoundedCornerShape(6.dp),
@@ -411,14 +469,14 @@ private fun ServiceBadge(kind: ArrServiceKind) {
 @Composable
 private fun StatusChip(status: ArrDownloadStatus) {
     val (label, color) = when (status) {
-        ArrDownloadStatus.DOWNLOADING -> stringResource(R.string.arrqueue_status_downloading) to StatusColors.available
-        ArrDownloadStatus.QUEUED -> stringResource(R.string.arrqueue_status_queued) to StatusColors.info
-        ArrDownloadStatus.PAUSED -> stringResource(R.string.arrqueue_status_paused) to StatusColors.pending
-        ArrDownloadStatus.COMPLETED -> stringResource(R.string.arrqueue_status_completed) to StatusColors.available
-        ArrDownloadStatus.IMPORTED -> stringResource(R.string.arrqueue_status_imported) to StatusColors.success
-        ArrDownloadStatus.FAILED -> stringResource(R.string.arrqueue_status_failed) to StatusColors.error
-        ArrDownloadStatus.WARNING -> stringResource(R.string.arrqueue_status_warning) to StatusColors.warning
-        ArrDownloadStatus.UNKNOWN -> stringResource(R.string.arrqueue_status_unknown) to StatusColors.debug
+        ArrDownloadStatus.DOWNLOADING -> stringResource(Res.string.arrqueue_status_downloading) to StatusColors.available
+        ArrDownloadStatus.QUEUED -> stringResource(Res.string.arrqueue_status_queued) to StatusColors.info
+        ArrDownloadStatus.PAUSED -> stringResource(Res.string.arrqueue_status_paused) to StatusColors.pending
+        ArrDownloadStatus.COMPLETED -> stringResource(Res.string.arrqueue_status_completed) to StatusColors.available
+        ArrDownloadStatus.IMPORTED -> stringResource(Res.string.arrqueue_status_imported) to StatusColors.success
+        ArrDownloadStatus.FAILED -> stringResource(Res.string.arrqueue_status_failed) to StatusColors.error
+        ArrDownloadStatus.WARNING -> stringResource(Res.string.arrqueue_status_warning) to StatusColors.warning
+        ArrDownloadStatus.UNKNOWN -> stringResource(Res.string.arrqueue_status_unknown) to StatusColors.debug
     }
     Surface(
         shape = RoundedCornerShape(6.dp),
@@ -457,13 +515,13 @@ private fun FeatureDisabledState(onOpenSettings: () -> Unit, modifier: Modifier 
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                stringResource(R.string.arrqueue_disabled_title),
+                stringResource(Res.string.arrqueue_disabled_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                stringResource(R.string.arrqueue_disabled_body),
+                stringResource(Res.string.arrqueue_disabled_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -471,7 +529,7 @@ private fun FeatureDisabledState(onOpenSettings: () -> Unit, modifier: Modifier 
             Button(onClick = onOpenSettings, shape = ShapeCache.smooth12) {
                 Icon(Tabler.Outline.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.arrqueue_open_settings))
+                Text(stringResource(Res.string.arrqueue_open_settings))
             }
         }
     }
@@ -489,13 +547,13 @@ private fun EmptyQueueState(modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                stringResource(R.string.arrqueue_empty_title),
+                stringResource(Res.string.arrqueue_empty_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                stringResource(R.string.arrqueue_empty_body),
+                stringResource(Res.string.arrqueue_empty_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -513,7 +571,7 @@ private fun ErrorState(message: String, onRetry: () -> Unit, modifier: Modifier 
                 color = MaterialTheme.colorScheme.error,
             )
             Spacer(Modifier.height(12.dp))
-            TextButton(onClick = onRetry) { Text(stringResource(R.string.arrqueue_retry)) }
+            TextButton(onClick = onRetry) { Text(stringResource(Res.string.arrqueue_retry)) }
         }
     }
 }
@@ -538,15 +596,15 @@ private fun SelectionActionBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                stringResource(R.string.arrqueue_selected_count, selectedCount),
+                stringResource(Res.string.arrqueue_selected_count, selectedCount),
                 style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = onSelectAll, enabled = !actionInProgress) {
-                Icon(Tabler.Outline.Check, contentDescription = stringResource(R.string.arrqueue_select_all))
+                Icon(Tabler.Outline.Check, contentDescription = stringResource(Res.string.arrqueue_select_all))
             }
             IconButton(onClick = onClear, enabled = !actionInProgress) {
-                Icon(Tabler.Outline.X, contentDescription = stringResource(R.string.arrqueue_clear_selection))
+                Icon(Tabler.Outline.X, contentDescription = stringResource(Res.string.arrqueue_clear_selection))
             }
             FilledTonalButton(
                 onClick = onBulkDelete,
@@ -558,7 +616,7 @@ private fun SelectionActionBar(
             ) {
                 Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.arrqueue_delete))
+                Text(stringResource(Res.string.arrqueue_delete))
             }
         }
     }
@@ -579,17 +637,17 @@ private fun DeleteActionDialog(
     // confirm button renders, and Cancel lives in the dismiss slot.
     ConfirmDialog(
         title = if (bulk) {
-            stringResource(R.string.arrqueue_remove_selected_title)
+            stringResource(Res.string.arrqueue_remove_selected_title)
         } else {
-            stringResource(R.string.arrqueue_remove_item_title, item?.title ?: "")
+            stringResource(Res.string.arrqueue_remove_item_title, item?.title ?: "")
         },
         message = if (bulk) {
-            stringResource(R.string.arrqueue_remove_body_bulk)
+            stringResource(Res.string.arrqueue_remove_body_bulk)
         } else {
-            stringResource(R.string.arrqueue_remove_body_single)
+            stringResource(Res.string.arrqueue_remove_body_single)
         },
         onDismiss = onDismiss,
-        dismissText = stringResource(R.string.arrqueue_cancel),
+        dismissText = stringResource(Res.string.arrqueue_cancel),
         tone = ConfirmTone.DESTRUCTIVE,
         icon = Tabler.Outline.Trash,
         content = {
@@ -601,7 +659,7 @@ private fun DeleteActionDialog(
                     onClick = { onConfirm(false, false); onDismiss() },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(stringResource(R.string.arrqueue_remove_only))
+                    Text(stringResource(Res.string.arrqueue_remove_only))
                 }
                 OutlinedButton(
                     onClick = { onConfirm(false, true); onDismiss() },
@@ -609,7 +667,7 @@ private fun DeleteActionDialog(
                 ) {
                     Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.arrqueue_remove_search))
+                    Text(stringResource(Res.string.arrqueue_remove_search))
                 }
                 OutlinedButton(
                     onClick = { onConfirm(true, true); onDismiss() },
@@ -620,7 +678,7 @@ private fun DeleteActionDialog(
                 ) {
                     Icon(Tabler.Outline.Ban, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.arrqueue_blocklist_search))
+                    Text(stringResource(Res.string.arrqueue_blocklist_search))
                 }
             }
         },
@@ -631,8 +689,8 @@ private fun DeleteActionDialog(
 
 @Composable
 private fun serviceName(kind: ArrServiceKind): String = when (kind) {
-    ArrServiceKind.RADARR -> stringResource(R.string.arrqueue_brand_radarr)
-    ArrServiceKind.SONARR -> stringResource(R.string.arrqueue_brand_sonarr)
+    ArrServiceKind.RADARR -> stringResource(Res.string.arrqueue_brand_radarr)
+    ArrServiceKind.SONARR -> stringResource(Res.string.arrqueue_brand_sonarr)
 }
 
 private fun Long.toReadableBytes(): String = when {

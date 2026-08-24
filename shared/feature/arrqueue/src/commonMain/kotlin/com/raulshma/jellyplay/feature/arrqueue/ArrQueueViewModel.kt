@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.arrqueue
 
-import android.content.Context
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
@@ -9,15 +8,18 @@ import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
-import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.Res
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_grab_sent
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_import_sent
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_unknown_error
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
-import javax.inject.Inject
 
 /**
  * Inline action dialog shown for a queue row. Drives a small confirmation
@@ -47,16 +49,25 @@ data class ArrQueueUiState(
     val pendingAction: ArrQueueAction? = null,
 )
 
-@HiltViewModel
-class ArrQueueViewModel @Inject constructor(
+class ArrQueueViewModel(
     private val arrRepository: ArrRepository,
-    @ApplicationContext private val context: Context,
-    private val userMessageBus: UserMessageBus,
     experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(ArrQueueUiState())
     val state: State<ArrQueueUiState> = _state.asState()
+
+    /**
+     * One-shot action ack/failure feedback, screen-forward seam replacing the
+     * legacy UserMessageBus + Context ctor deps (the bus + string resources
+     * live in the Android-only layer and are not visible from commonMain).
+     * Same one-shot semantics as the bus: buffered, single collector, never
+     * replayed — [ArrQueueScreen] resolves the resource text (compose-resources
+     * suspend getString, args included) and forwards through the
+     * ArrQueueMessenger actual.
+     */
+    private val messageChannel = Channel<ArrQueueMessage>(Channel.BUFFERED)
+    val messages: Flow<ArrQueueMessage> = messageChannel.receiveAsFlow()
 
     /**
      * Whether the Direct *arr Integration experimental flag is enabled.
@@ -160,7 +171,9 @@ class ArrQueueViewModel @Inject constructor(
                         if (tmdb != null) arrRepository.searchForTmdb(tmdb, item.serverKind)
                     }
                 }
-                .onFailure { userMessageBus.error(it.message ?: context.getString(R.string.arrqueue_unknown_error)) }
+                .onFailure { e ->
+                    messageChannel.trySend(e.message?.let { ArrQueueMessage.Raw(it) } ?: ArrQueueMessage.Error(Res.string.arrqueue_unknown_error))
+                }
             _state.value = _state.value.copy(actionInProgress = false)
         }
     }
@@ -187,7 +200,9 @@ class ArrQueueViewModel @Inject constructor(
                     }
                     clearSelection()
                 }
-                .onFailure { userMessageBus.error(it.message ?: context.getString(R.string.arrqueue_unknown_error)) }
+                .onFailure { e ->
+                    messageChannel.trySend(e.message?.let { ArrQueueMessage.Raw(it) } ?: ArrQueueMessage.Error(Res.string.arrqueue_unknown_error))
+                }
             _state.value = _state.value.copy(actionInProgress = false)
         }
     }
@@ -197,10 +212,12 @@ class ArrQueueViewModel @Inject constructor(
             _state.value = _state.value.copy(actionInProgress = true, pendingAction = null)
             arrRepository.grabQueueItem(item)
                 .onSuccess {
-                    userMessageBus.info(context.getString(R.string.arrqueue_grab_sent, item.title))
+                    messageChannel.trySend(ArrQueueMessage.Info(Res.string.arrqueue_grab_sent, listOf(item.title)))
                     refresh()
                 }
-                .onFailure { userMessageBus.error(it.message ?: context.getString(R.string.arrqueue_unknown_error)) }
+                .onFailure { e ->
+                    messageChannel.trySend(e.message?.let { ArrQueueMessage.Raw(it) } ?: ArrQueueMessage.Error(Res.string.arrqueue_unknown_error))
+                }
             _state.value = _state.value.copy(actionInProgress = false)
         }
     }
@@ -210,10 +227,12 @@ class ArrQueueViewModel @Inject constructor(
             _state.value = _state.value.copy(actionInProgress = true, pendingAction = null)
             arrRepository.importQueueItem(item)
                 .onSuccess {
-                    userMessageBus.info(context.getString(R.string.arrqueue_import_sent, item.title))
+                    messageChannel.trySend(ArrQueueMessage.Info(Res.string.arrqueue_import_sent, listOf(item.title)))
                     refresh()
                 }
-                .onFailure { userMessageBus.error(it.message ?: context.getString(R.string.arrqueue_unknown_error)) }
+                .onFailure { e ->
+                    messageChannel.trySend(e.message?.let { ArrQueueMessage.Raw(it) } ?: ArrQueueMessage.Error(Res.string.arrqueue_unknown_error))
+                }
             _state.value = _state.value.copy(actionInProgress = false)
         }
     }

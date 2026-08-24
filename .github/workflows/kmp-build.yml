@@ -106,6 +106,9 @@ jobs:
           :shared:feature:onboarding:jvmJar
           :shared:feature:onboarding:compileAndroidMain
 
+          :shared:feature:arrqueue:jvmJar
+          :shared:feature:arrqueue:compileAndroidMain
+
 
           --stacktrace
 
@@ -145,6 +148,8 @@ jobs:
 
           :shared:feature:insights:jvmTest
           :shared:feature:onboarding:jvmTest
+
+          :shared:feature:arrqueue:jvmTest
 
 
           --stacktrace

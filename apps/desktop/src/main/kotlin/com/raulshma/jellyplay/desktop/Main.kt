@@ -48,7 +48,11 @@ import com.raulshma.jellyplay.feature.shortcuts.di.shortcutsModule
 import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
 
 import com.raulshma.jellyplay.feature.insights.di.insightsModule
+
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
+
+import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
+
 
 import org.koin.core.context.startKoin
 
@@ -181,6 +185,7 @@ fun main() {
 
 
 
+
             // …onboarding, conveyor feature — fully live registration
             // (calendar/requests/shortcuts class): all four wizard VM deps
             // resolve on desktop (PreferenceProjections/
@@ -190,6 +195,15 @@ fun main() {
             // no first-run gate wiring — the wizard is rendered by the
             // Android app's JellyPlayApp gate, and TV auto-completes.
             onboardingModule,
+
+            // …arrqueue, conveyor feature — same shape as
+            // calendar/requests (fully Koin-native on both platforms:
+            // ArrRepository from dataJvmModule, ExperimentalStore from
+            // datastoreCommonModule), so the registration is
+            // live-resolvable on desktop; it stays dormant only because
+            // the desktop shell has no arrqueue nav entry yet.
+            arrqueueModule,
+
 
 
         )

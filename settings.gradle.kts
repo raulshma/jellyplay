@@ -45,7 +45,6 @@ include(":feature:subtitle-tester")
 
 
 
-include(":feature:arrqueue")
 include(":baselineprofile")
 include(":baselineprofile-tv")
 
@@ -84,7 +83,11 @@ include(":shared:feature:shortcuts")
 
 include(":shared:feature:insights")
 
+
 include(":shared:feature:onboarding")
+
+include(":shared:feature:arrqueue")
+
 
 
 

@@ -49,6 +49,7 @@ import com.raulshma.jellyplay.feature.requests.di.requestsModule
 import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
 
 import com.raulshma.jellyplay.feature.insights.di.insightsModule
+import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
 
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
@@ -231,7 +232,12 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // calendar/requests class.
                 onboardingModule,
 
-
+                // V3 arrqueue conveyor: ArrRepository (dataJvmModule) and
+                // ExperimentalStore (datastoreCommonModule) were already
+                // Koin-owned — zero Hilt interop; message feedback flows
+                // through the ArrQueueMessenger seam instead of the legacy
+                // UserMessageBus ctor dep.
+                arrqueueModule,
             )
         }
         super.onCreate()
