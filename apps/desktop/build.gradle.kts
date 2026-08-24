@@ -84,6 +84,7 @@ dependencies {
     // so the registration is live; the desktop shell has no requests nav
     // entry yet).
     implementation(project(":shared:feature:requests"))
+    implementation(project(":shared:feature:shortcuts"))
 
 
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads

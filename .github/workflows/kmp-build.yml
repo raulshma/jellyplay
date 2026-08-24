@@ -92,6 +92,9 @@ jobs:
           :shared:feature:requests:jvmJar
           :shared:feature:requests:compileAndroidMain
 
+          :shared:feature:shortcuts:jvmJar
+          :shared:feature:shortcuts:compileAndroidMain
+
           --stacktrace
 
       - name: Shared tests (JVM)
@@ -120,5 +123,7 @@ jobs:
 
 
           :shared:feature:requests:jvmTest
+
+          :shared:feature:shortcuts:jvmTest
 
           --stacktrace

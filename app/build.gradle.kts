@@ -190,7 +190,7 @@ dependencies {
     implementation(project(":feature:newsletter"))
     implementation(project(":feature:insights"))
     implementation(project(":shared:feature:requests"))
-    implementation(project(":feature:shortcuts"))
+    implementation(project(":shared:feature:shortcuts"))
     implementation(project(":feature:arrqueue"))
     implementation(project(":shared:feature:calendar"))
 

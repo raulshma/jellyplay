@@ -45,7 +45,6 @@ include(":feature:subtitle-tester")
 include(":feature:onboarding")
 include(":feature:newsletter")
 include(":feature:insights")
-include(":feature:shortcuts")
 include(":feature:arrqueue")
 include(":baselineprofile")
 include(":baselineprofile-tv")
@@ -77,6 +76,8 @@ include(":shared:feature:requests")
 include(":shared:feature:editor")
 
 include(":shared:feature:calendar")
+
+include(":shared:feature:shortcuts")
 
 
 // Desktop shell (plan §Phase V1b)

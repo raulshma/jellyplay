@@ -43,6 +43,7 @@ import com.raulshma.jellyplay.feature.calendar.di.calendarModule
 
 
 import com.raulshma.jellyplay.feature.requests.di.requestsModule
+import com.raulshma.jellyplay.feature.shortcuts.di.shortcutsModule
 
 import org.koin.core.context.startKoin
 
@@ -141,6 +142,14 @@ fun main() {
             // live (no documented-latent deps). A desktop nav entry is
             // still future conveyor work, so nothing instantiates it yet.
             requestsModule,
+
+
+            // …shortcuts, a later conveyor item — same fully-live shape as
+            // calendar/requests above: the single ctor dep (AuthRepository)
+            // already resolves from dataJvmModule, so this registration is
+            // live-resolvable on desktop; it stays dormant only because the
+            // desktop shell has no shortcuts nav entry yet.
+            shortcutsModule,
 
         )
     }

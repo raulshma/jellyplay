@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.shortcuts
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -40,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -51,13 +51,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Apps
@@ -81,17 +78,34 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.adaptive.settingsColumns
 import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
 import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
+import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
+import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
+import com.raulshma.jellyplay.core.ui.generated.resources.core_search
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.Res
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_admin_badge
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_empty_action
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_empty_description
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_empty_title
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_filter_all
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_screen_title
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_search_clear
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_search_no_results
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_search_placeholder
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 
 // ─── Filter Model ──────────────────────────────────────────────────────────
 
@@ -108,7 +122,7 @@ private sealed interface ShortcutFilter {
 
 @Composable
 private fun ShortcutFilter.label(): String = when (this) {
-    ShortcutFilter.All -> stringResource(R.string.shortcuts_filter_all)
+    ShortcutFilter.All -> stringResource(Res.string.shortcuts_filter_all)
     is ShortcutFilter.Category -> stringResource(category.displayNameRes)
 }
 
@@ -129,12 +143,11 @@ private val ShortcutFilter.icon: ImageVector
 fun ShortcutsScreen(
     onBack: () -> Unit,
     onNavigate: (Route) -> Unit,
-    viewModel: ShortcutsViewModel = hiltViewModel(),
+    viewModel: ShortcutsViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val context = LocalContext.current
     val backgroundColor = rememberScreenBackgroundColor()
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -165,14 +178,39 @@ fun ShortcutsScreen(
         state.categories.values.flatten()
     }
 
-    val filteredItemsByQuery = remember(allItems, searchQuery) {
+    // Search matching needs the resolved title/description labels, which only
+    // the suspend compose-resources resolver can produce outside composition
+    // (syncplay flow-escape lesson). The map is keyed per item and recomputed
+    // whenever the item list changes. Documented delta (livetv 🟢 class): HEAD
+    // re-resolved via Context.getString on every keystroke, so a mid-session
+    // locale switch applied from the next keystroke on; this resolve-once-per-
+    // items map stays stale in that corner until the screen is re-entered —
+    // the same accepted-staleness class. Same trigger class when allItems
+    // changes mid-search (admin toggle): brand-new items fall through the
+    // `?: ("" to "")` below for the one producer window before the map
+    // re-lands, so they miss the active filter for that frame (HEAD
+    // re-resolved per keystroke and never excluded them). Self-healing.
+    val labels by produceState(
+        initialValue = emptyMap<ShortcutItem, Pair<String, String>>(),
+        allItems,
+    ) {
+        value = allItems.associate { item ->
+            item to (getString(item.titleRes) to getString(item.descriptionRes))
+        }
+    }
+
+    val filteredItemsByQuery = remember(labels, searchQuery) {
         if (searchQuery.isBlank()) null
+        // Guard: while the label map hasn't resolved yet a restored non-blank
+        // query (rememberSaveable survives process restore) would match zero
+        // labels and flash a false "No results" state — treat it as unfiltered
+        // until the produceState block above lands its first value.
+        else if (labels.isEmpty()) null
         else {
             val q = searchQuery.trim().lowercase()
             allItems.filter { item ->
-                val title = context.getString(item.titleRes).lowercase()
-                val desc = context.getString(item.descriptionRes).lowercase()
-                title.contains(q) || desc.contains(q)
+                val (title, desc) = labels[item] ?: ("" to "")
+                title.lowercase().contains(q) || desc.lowercase().contains(q)
             }
         }
     }
@@ -196,7 +234,7 @@ fun ShortcutsScreen(
         }
     }
 
-    BackHandler(enabled = isSearchActive || searchQuery.isNotEmpty() || activeFilter != ShortcutFilter.All) {
+    JellyPlayBackHandler(enabled = isSearchActive || searchQuery.isNotEmpty() || activeFilter != ShortcutFilter.All) {
         when {
             searchQuery.isNotEmpty() -> searchQuery = ""
             isSearchActive -> isSearchActive = false
@@ -205,7 +243,7 @@ fun ShortcutsScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = stringResource(R.string.shortcuts_screen_title),
+        title = stringResource(Res.string.shortcuts_screen_title),
         onBack = onBack,
         topBarStyle = TopBarStyle.Standard,
         backgroundColor = backgroundColor,
@@ -223,8 +261,8 @@ fun ShortcutsScreen(
                 Icon(
                     imageVector = if (isSearchActive) Tabler.Outline.X else Tabler.Outline.Search,
                     contentDescription = stringResource(
-                        if (isSearchActive) com.raulshma.jellyplay.core.ui.R.string.core_cancel
-                        else com.raulshma.jellyplay.core.ui.R.string.core_search
+                        if (isSearchActive) CoreUiRes.string.core_cancel
+                        else CoreUiRes.string.core_search
                     ),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -285,9 +323,9 @@ fun ShortcutsScreen(
                     if (searchQuery.isNotBlank()) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Search,
-                            title = stringResource(R.string.shortcuts_search_no_results, searchQuery),
-                            description = stringResource(R.string.shortcuts_empty_description),
-                            actionLabel = stringResource(R.string.shortcuts_search_clear),
+                            title = stringResource(Res.string.shortcuts_search_no_results, searchQuery),
+                            description = stringResource(Res.string.shortcuts_empty_description),
+                            actionLabel = stringResource(Res.string.shortcuts_search_clear),
                             onAction = { searchQuery = "" },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -296,9 +334,9 @@ fun ShortcutsScreen(
                     } else {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Apps,
-                            title = stringResource(R.string.shortcuts_empty_title),
-                            description = stringResource(R.string.shortcuts_empty_description),
-                            actionLabel = stringResource(R.string.shortcuts_empty_action),
+                            title = stringResource(Res.string.shortcuts_empty_title),
+                            description = stringResource(Res.string.shortcuts_empty_description),
+                            actionLabel = stringResource(Res.string.shortcuts_empty_action),
                             onAction = { onNavigate(Route.Library) },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -474,7 +512,7 @@ private fun ShortcutSearchBar(
             .tvFocusIndicator(focusState, ShapeCache.smooth16),
         placeholder = {
             Text(
-                text = stringResource(R.string.shortcuts_search_placeholder),
+                text = stringResource(Res.string.shortcuts_search_placeholder),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -492,7 +530,7 @@ private fun ShortcutSearchBar(
                 IconButton(onClick = { onQueryChange("") }) {
                     Icon(
                         imageVector = Tabler.Outline.X,
-                        contentDescription = stringResource(R.string.shortcuts_search_clear),
+                        contentDescription = stringResource(Res.string.shortcuts_search_clear),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
                     )
@@ -501,7 +539,7 @@ private fun ShortcutSearchBar(
                 IconButton(onClick = onClose) {
                     Icon(
                         imageVector = Tabler.Outline.X,
-                        contentDescription = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
+                        contentDescription = stringResource(CoreUiRes.string.core_cancel),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
                     )
@@ -670,7 +708,7 @@ private fun AdminBadge(
                 modifier = Modifier.size(11.dp),
             )
             Text(
-                text = stringResource(R.string.shortcuts_admin_badge),
+                text = stringResource(Res.string.shortcuts_admin_badge),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onTertiaryContainer,
