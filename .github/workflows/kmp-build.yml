@@ -105,6 +105,8 @@ jobs:
           :shared:feature:insights:compileAndroidMain
           :shared:feature:onboarding:jvmJar
           :shared:feature:onboarding:compileAndroidMain
+          :shared:feature:subtitle-tester:jvmJar
+          :shared:feature:subtitle-tester:compileAndroidMain
 
           :shared:feature:arrqueue:jvmJar
           :shared:feature:arrqueue:compileAndroidMain
@@ -148,6 +150,7 @@ jobs:
 
           :shared:feature:insights:jvmTest
           :shared:feature:onboarding:jvmTest
+          :shared:feature:subtitle-tester:jvmTest
 
           :shared:feature:arrqueue:jvmTest
 

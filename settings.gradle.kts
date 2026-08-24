@@ -41,7 +41,9 @@ include(":feature:player:core")
 include(":feature:player:video")
 include(":feature:player:audio")
 include(":feature:player:live")
-include(":feature:subtitle-tester")
+
+
+
 
 
 
@@ -84,11 +86,15 @@ include(":shared:feature:shortcuts")
 include(":shared:feature:insights")
 
 
+
 include(":shared:feature:onboarding")
 
 include(":shared:feature:arrqueue")
 
 
+
+
+include(":shared:feature:subtitle-tester")
 
 
 // Desktop shell (plan §Phase V1b)

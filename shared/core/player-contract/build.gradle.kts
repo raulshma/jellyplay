@@ -44,5 +44,13 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.coroutines.test)
         }
+        // EngineCapabilityMatrixTest moved here from :feature:player:video's
+        // unit-test source set with the subtitle-tester conveyor (feature
+        // seventeen): the matrix itself moved to this module's commonMain
+        // (same package) so shared feature modules can consume it; the test
+        // follows its subject. kotlin.test replaces the org.junit imports.
+        getByName("jvmTest").dependencies {
+            implementation(kotlin("test"))
+        }
     }
 }

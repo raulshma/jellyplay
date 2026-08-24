@@ -183,7 +183,7 @@ dependencies {
     implementation(project(":shared:feature:livetv"))
     implementation(project(":shared:feature:downloads"))
     implementation(project(":shared:feature:syncplay"))
-    implementation(project(":feature:subtitle-tester"))
+    implementation(project(":shared:feature:subtitle-tester"))
     implementation(project(":shared:feature:editor"))
     implementation(project(":shared:feature:admin"))
     implementation(project(":shared:feature:onboarding"))

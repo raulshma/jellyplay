@@ -11,6 +11,8 @@ import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
+import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -55,6 +57,8 @@ interface HiltInteropEntryPoint {
     fun adminRepository(): AdminRepository
     fun adminStatisticsRepository(): AdminStatisticsRepository
     fun streamingSubtitleStore(): StreamingSubtitleStore
+    fun playerEngineFactory(): PlayerEngineFactory
+    fun fontProvider(): FontProvider
 }
 
 private fun interopEntryPoint(application: Application): HiltInteropEntryPoint =
@@ -85,4 +89,12 @@ fun hiltInteropModule(application: Application): Module = module {
     // SubtitleModule — same lazy interop single as above. The player's
     // Hilt injectors keep constructing the impl directly and are unaffected.
     single<StreamingSubtitleStore> { interopEntryPoint(application).streamingSubtitleStore() }
+    // Subtitle-tester conveyor (final feature): the tester's Koin-owned
+    // ViewModel ctor-injects the two playback singletons that stay Hilt-bound
+    // in :feature:player:video. Lazy is load-bearing here in particular:
+    // PlayerEngineFactory owns a process-wide media3 DefaultBandwidthMeter,
+    // and FontProvider materializes a font cache on first use — neither may
+    // be touched at startKoin time.
+    single<PlayerEngineFactory> { interopEntryPoint(application).playerEngineFactory() }
+    single<FontProvider> { interopEntryPoint(application).fontProvider() }
 }

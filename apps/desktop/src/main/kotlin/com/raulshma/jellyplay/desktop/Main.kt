@@ -186,6 +186,7 @@ fun main() {
 
 
 
+
             // …onboarding, conveyor feature — fully live registration
             // (calendar/requests/shortcuts class): all four wizard VM deps
             // resolve on desktop (PreferenceProjections/
@@ -205,6 +206,16 @@ fun main() {
             arrqueueModule,
 
 
+
+
+            // …subtitle-tester, the FINAL conveyor feature, deliberately has
+            // NO registration here: the entire feature (ViewModel, screen,
+            // preview engine host, raw-asset factory) lives in the shared
+            // module's androidMain — its engine factory and font provider are
+            // Android/Hilt types with no desktop halves — so there is no
+            // commonMain Koin module to register. The shared settings-search
+            // row for Route.SubtitleTester dead-clicks on desktop, the same
+            // dormant state as every un-wired desktop route.
 
         )
     }

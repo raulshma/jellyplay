@@ -36,6 +36,7 @@ import com.raulshma.jellyplay.feature.settings.di.settingsModule
 import com.raulshma.jellyplay.feature.settings.di.androidSettingsPlatformModule
 import com.raulshma.jellyplay.feature.admin.di.adminModule
 import com.raulshma.jellyplay.feature.admin.di.androidAdminModule
+import com.raulshma.jellyplay.feature.subtitle.tester.di.androidSubtitleTesterModule
 
 
 import com.raulshma.jellyplay.feature.editor.di.editorModule
@@ -225,6 +226,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // single above (impl stays Hilt-bound until Phase X).
                 insightsModule,
 
+
                 // V3 onboarding conveyor: all four wizard VM deps
                 // (PreferenceProjections, SeerrPreferencesStore,
                 // SeerrSecureCredentialsStore, PreferencesEditor) were already
@@ -238,6 +240,19 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // through the ArrQueueMessenger seam instead of the legacy
                 // UserMessageBus ctor dep.
                 arrqueueModule,
+
+                // V3 subtitle-tester conveyor (final feature): the whole
+                // feature is Android-only (androidMain-heavy module — the
+                // preview engines, surface host, SAF font picker and raw-asset
+                // factory have no desktop halves), so this is the only
+                // registration. PlayerEngineFactory and FontProvider resolve
+                // through the hiltInteropModule singles above; the
+                // PlaybackRequestFactory single is constructed with the
+                // application context here.
+                androidSubtitleTesterModule(this@JellyPlayApplication),
+
+
+
             )
         }
         super.onCreate()

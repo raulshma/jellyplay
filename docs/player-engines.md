@@ -229,7 +229,7 @@ try switching to software decoding.
 
 ## Subtitle Style Tester
 
-A standalone screen (`:feature:subtitle-tester`) lets you preview subtitle
+A standalone screen (`:shared:feature:subtitle-tester`) lets you preview subtitle
 styling with a switchable-engine live render over a bundled color host clip,
 then **Apply** the config to your real preference. Because subtitle rendering
 differs across engines (e.g. only mpv honours full ASS style override), the

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subtitle_tester_title">Testeur de style des sous-titres</string>
+    <string name="subtitle_tester_apply">Appliquer</string>
+    <string name="subtitle_tester_reset">Réinitialiser</string>
+    <string name="subtitle_tester_discard_title">Abandonner les modifications ?</string>
+    <string name="subtitle_tester_discard_message">Vos ajustements d\'aperçu n\'ont pas été appliqués.</string>
+    <string name="subtitle_tester_discard_confirm">Abandonner</string>
+    <string name="subtitle_tester_discard_cancel">Continuer la modification</string>
+    <string name="subtitle_tester_engine">Moteur</string>
+    <string name="subtitle_tester_preset">Exemple</string>
+    <string name="subtitle_tester_reloading">Rechargement…</string>
+    <string name="subtitle_tester_hint_hot">Très réactif · l\'aperçu se met à jour instantanément</string>
+    <string name="subtitle_tester_hint_libvlc">Les changements de style rechargent brièvement ce moteur</string>
+
+    <string name="subtitle_tester_preset_dialogue">Dialogue</string>
+    <string name="subtitle_tester_preset_lyrics">Paroles de chanson</string>
+    <string name="subtitle_tester_preset_signs">Panneaux / notes de traduction</string>
+    <string name="subtitle_tester_preset_action">Scènes d\'action</string>
+
+    <!-- Preview playback media + sample subtitle track -->
+    <string name="subtitle_tester_preview_title">Testeur de sous-titres</string>
+    <string name="subtitle_tester_track_sample">Exemple</string>
+</resources>
