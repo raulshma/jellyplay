@@ -72,6 +72,9 @@ libvlc = "3.7.5"
 assMedia = "0.5.0"
 truetypeParser = "2.1.4"
 okhttp = "5.4.0"
+# Ktor: wasmJs HTTP/WebSocket client (plan §Phase W). Desktop/Android keep
+# OkHttp; Ktor exists for the wasm target of shared/core/network + apps/web.
+ktor = "3.5.2"
 smoothCornerRect = "v1.0.0"
 tvMaterial = "1.1.0"
 tablerIcons = "2.2.1"
@@ -181,6 +184,8 @@ android-desugar-jdk = { group = "com.android.tools", name = "desugar_jdk_libs", 
 # Coil
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
+# Ktor-backed network fetcher for wasmJs (apps/web; Phase W.4)
+coil-network-ktor = { group = "io.coil-kt.coil3", name = "coil-network-ktor", version.ref = "coil" }
 
 # Markdown renderer (GitHub-flavoured; used for release notes & plugin changelogs)
 multiplatform-markdown-renderer = { group = "com.mikepenz", name = "multiplatform-markdown-renderer", version.ref = "multiplatformMarkdownRenderer" }
@@ -258,6 +263,14 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
+
+# Ktor (wasmJs transport, Phase W) — engine for wasmJs comes from ktor-client-js
+# (ships js+wasmJs variants); desktop/Android HTTP stays on OkHttp.
+ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
+ktor-client-js = { group = "io.ktor", name = "ktor-client-js", version.ref = "ktor" }
+ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-client-websockets = { group = "io.ktor", name = "ktor-client-websockets", version.ref = "ktor" }
 
 # Smooth Corner Rect
 smooth-corner-rect = { group = "com.github.racra", name = "smooth-corner-rect-android-compose", version.ref = "smoothCornerRect" }

@@ -20,5 +20,8 @@ actual object NetworkLog {
         println("E/$tag: $message${error?.let { ": ${it.message}" } ?: ""}")
     }
 
-    actual fun isDebugEnabled(tag: String): Boolean = true
+    // Gated like the android/jvm actuals (debug builds only) — leaving this
+    // true made RetryPolicy's per-attempt logs unconditional in the browser
+    // console. Flip locally when debugging the web client.
+    actual fun isDebugEnabled(tag: String): Boolean = false
 }

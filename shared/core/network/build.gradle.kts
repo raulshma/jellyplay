@@ -26,7 +26,16 @@ kotlin {
     }
 
     wasmJs {
-        browser()
+        browser {
+            testTask {
+                // commonTest suites run via jvmTest; the wasmJs browser test
+                // run needs a local Chrome/Chromium (karma) and stays opt-in
+                // until Phase W wires a headless wasm test lane — without this
+                // guard, `gradlew build`/`check` would fail on Chrome-less
+                // machines that previously ran no wasm tests at all.
+                enabled = false
+            }
+        }
     }
 
     applyDefaultHierarchyTemplate()
@@ -77,6 +86,20 @@ kotlin {
             // Real org.json for the desktop target (see jvmShared note above);
             // android resolves the same classes from its own framework jar.
             implementation(libs.org.json)
+        }
+        getByName("wasmJsMain").dependencies {
+            // Phase W chunk 1 (wasm transport + auth client): the Ktor stack
+            // is confined to wasmJsMain so nothing leaks into the android/jvm
+            // compile paths — commonMain stays transport-pure and keeps using
+            // the jvmShared OkHttp + Jellyfin-SDK impls. The Js engine ships a
+            // wasmJs variant (fetch-backed) since Ktor 3.0.
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.js)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.kotlinx.json)
+            // networkWasmModule (Koin construction owner on wasm, mirroring
+            // networkJvmModule's role for android/jvm).
+            implementation(libs.koin.core)
         }
         getByName("commonTest").dependencies {
             implementation(kotlin("test"))

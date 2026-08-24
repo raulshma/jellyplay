@@ -3,10 +3,6 @@ package com.raulshma.jellyplay.core.network
 import com.raulshma.jellyplay.core.network.api.ApiException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-import java.io.IOException
-import java.net.ConnectException
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.random.Random
@@ -27,12 +23,7 @@ object RetryPolicy {
         // Prefer the typed marker: ApiException carries a pre-classified retryable flag set
         // at the source (Jellyfin SDK or Seerr) before friendly-message mapping.
         if (exception is ApiException) return exception.isRetryable
-        when (exception) {
-            is SocketTimeoutException -> return true
-            is ConnectException -> return true
-            is UnknownHostException -> return true
-            is IOException -> return true
-        }
+        if (isRetryableNetworkError(exception)) return true
         val message = exception.message ?: return false
         return RETRYABLE_STATUS_CODES.any { code ->
             message.contains("HTTP $code")
@@ -64,7 +55,7 @@ object RetryPolicy {
                 NetworkLog.d(
                     TAG,
                     "not retrying (attempt ${attempt + 1}): " +
-                        "${exception.javaClass.simpleName}: ${exception.message}",
+                        "${exception::class.simpleName}: ${exception.message}",
                 )
                 return lastResult
             }
@@ -88,3 +79,16 @@ object RetryPolicy {
 
     private const val TAG = "RetryPolicy"
 }
+
+/**
+ * Phase W seam (docs/kmp-migration-plan.md §Phase W chunk 1): platform
+ * throwable classification for [RetryPolicy.isRetryable]. The retry/backoff
+ * math above is pure and now common; which raw throwables count as transient
+ * network errors is platform-specific:
+ *  - jvmShared actual (android + desktop, verbatim from the pre-split
+ *    RetryPolicy): `SocketTimeoutException` / `ConnectException` /
+ *    `UnknownHostException` / `IOException`.
+ *  - wasmJsMain actual: Ktor request/connect timeouts and the fetch-backed
+ *    engine's IO errors.
+ */
+internal expect fun isRetryableNetworkError(exception: Throwable): Boolean
