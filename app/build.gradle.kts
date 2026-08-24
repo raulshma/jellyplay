@@ -185,7 +185,7 @@ dependencies {
     implementation(project(":shared:feature:syncplay"))
     implementation(project(":feature:subtitle-tester"))
     implementation(project(":feature:editor"))
-    implementation(project(":feature:admin"))
+    implementation(project(":shared:feature:admin"))
     implementation(project(":feature:onboarding"))
     implementation(project(":feature:newsletter"))
     implementation(project(":feature:insights"))

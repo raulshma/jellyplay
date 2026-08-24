@@ -34,6 +34,8 @@ import com.raulshma.jellyplay.feature.downloads.di.downloadsModule
 import com.raulshma.jellyplay.feature.syncplay.di.syncPlayModule
 import com.raulshma.jellyplay.feature.settings.di.settingsModule
 import com.raulshma.jellyplay.feature.settings.di.androidSettingsPlatformModule
+import com.raulshma.jellyplay.feature.admin.di.adminModule
+import com.raulshma.jellyplay.feature.admin.di.androidAdminModule
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
@@ -162,6 +164,13 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // MediaStore/FileProvider photo-export actual for the library
                 // feature's PhotoExport seam (androidDataModule pattern).
                 androidPhotoExportModule(this@JellyPlayApplication),
+                // V3 admin conveyor (eighth feature): the shared admin
+                // ViewModels plus the Android-only plugin-config WebView
+                // ViewModel (Context ctor param). AdminRepository and
+                // AdminStatisticsRepository resolve through the
+                // hiltInteropModule singles above.
+                adminModule,
+                androidAdminModule(this@JellyPlayApplication),
             )
         }
         super.onCreate()

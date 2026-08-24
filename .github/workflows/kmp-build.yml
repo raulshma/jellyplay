@@ -78,6 +78,8 @@ jobs:
           :shared:feature:syncplay:compileAndroidMain
           :shared:feature:settings:jvmJar
           :shared:feature:settings:compileAndroidMain
+          :shared:feature:admin:jvmJar
+          :shared:feature:admin:compileAndroidMain
           --stacktrace
 
       - name: Shared tests (JVM)
@@ -97,4 +99,5 @@ jobs:
           :shared:feature:downloads:jvmTest
           :shared:feature:syncplay:jvmTest
           :shared:feature:settings:jvmTest
+          :shared:feature:admin:jvmTest
           --stacktrace

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.di
 import android.app.Application
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -51,6 +52,7 @@ interface HiltInteropEntryPoint {
     fun audioQueueFacade(): AudioQueueFacade
     fun userMessageBus(): UserMessageBus
     fun adminRepository(): AdminRepository
+    fun adminStatisticsRepository(): AdminStatisticsRepository
 }
 
 private fun interopEntryPoint(application: Application): HiltInteropEntryPoint =
@@ -71,4 +73,8 @@ fun hiltInteropModule(application: Application): Module = module {
     single<AudioQueueFacade> { interopEntryPoint(application).audioQueueFacade() }
     single<MusicMessageBus> { HiltMusicMessageBus(interopEntryPoint(application).userMessageBus()) }
     single<AdminRepository> { interopEntryPoint(application).adminRepository() }
+    // Admin conveyor (eighth feature): the AdminStatisticsRepository interface
+    // moved to shared :core:data jvmShared while its impl stays Hilt-bound in
+    // legacy :core:data's DataModule — same lazy interop single as above.
+    single<AdminStatisticsRepository> { interopEntryPoint(application).adminStatisticsRepository() }
 }

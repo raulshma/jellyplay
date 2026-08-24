@@ -34,6 +34,7 @@ import com.raulshma.jellyplay.feature.downloads.di.downloadsModule
 import com.raulshma.jellyplay.feature.syncplay.di.syncPlayModule
 import com.raulshma.jellyplay.feature.settings.di.settingsModule
 import com.raulshma.jellyplay.feature.settings.di.desktopSettingsPlatformModule
+import com.raulshma.jellyplay.feature.admin.di.adminModule
 import org.koin.core.context.startKoin
 
 fun main() {
@@ -94,6 +95,14 @@ fun main() {
             // /zero-degradation) desktop platform actuals resolve eagerly.
             settingsModule,
             desktopSettingsPlatformModule(),
+            // …admin, eighth conveyor item — documented-latent, syncplay
+            // pattern: the AdminRepository/AdminStatisticsRepository deps
+            // (Hilt interop on Android) have no desktop definitions yet, but
+            // resolution is lazy so boot stays safe, and the desktop shell
+            // has no admin nav entry, so the module is registered but never
+            // instantiated. The Android-only plugin-config WebView ViewModel
+            // lives in androidAdminModule and is never registered here.
+            adminModule,
         )
     }
 

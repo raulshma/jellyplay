@@ -60,6 +60,12 @@ dependencies {
     // settings nav entry).
     implementation(project(":shared:feature:settings"))
 
+    // …admin, eighth conveyor item (DI registration only — documented-latent:
+    // AdminRepository/AdminStatisticsRepository have no desktop defs yet,
+    // resolution is lazy so boot stays safe, and the desktop shell has no
+    // admin nav entry).
+    implementation(project(":shared:feature:admin"))
+
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
     implementation(libs.jna)
