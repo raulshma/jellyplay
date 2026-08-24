@@ -34,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -56,8 +55,50 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.feature.requests.R
+import com.raulshma.jellyplay.feature.requests.generated.resources.Res
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_approve
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_blocklist_search
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_decline
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_delete_confirm
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_delete_request
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_remove_from_service
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_remove_search
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_retry_request
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_view_media_details
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_completed
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_downloading
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_failed
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_imported
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_paused
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_queued
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_unknown
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_warning
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_detail_row_download
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_detail_row_quality_profile
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_detail_row_request_id
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_detail_row_requested
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_detail_row_requested_by
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_detail_row_root_folder
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_detail_row_seasons
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_detail_row_tmdb_id
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_detail_row_type
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_detail_year_type
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_download_in_queue
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_download_time_left
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_fallback_title
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_service_radarr
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_service_sonarr
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_available
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_declined
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_deleted
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_failed
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_partially_available
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_pending
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_processing
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_unknown
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -104,19 +145,19 @@ fun RequestDetailBottomSheet(
     }
     val effectiveMediaStatus = if (request.is4k) request.media.status4k else request.media.status
     val mediaStatus = remember(effectiveMediaStatus) { SeerrMediaStatus.fromValue(effectiveMediaStatus) }
-    val displayTitle = mediaInfo?.title ?: stringResource(R.string.requests_fallback_title, request.media.tmdbId)
+    val displayTitle = mediaInfo?.title ?: stringResource(Res.string.requests_fallback_title, request.media.tmdbId)
 
     val (statusLabelRes, statusColor) = when {
-        requestStatus == SeerrRequestStatus.DECLINED -> R.string.requests_status_declined to StatusColors.error
-        requestStatus == SeerrRequestStatus.FAILED -> R.string.requests_status_failed to StatusColors.error
-        requestStatus == SeerrRequestStatus.PENDING && mediaStatus == SeerrMediaStatus.DELETED -> R.string.requests_status_pending to StatusColors.pending
+        requestStatus == SeerrRequestStatus.DECLINED -> Res.string.requests_status_declined to StatusColors.error
+        requestStatus == SeerrRequestStatus.FAILED -> Res.string.requests_status_failed to StatusColors.error
+        requestStatus == SeerrRequestStatus.PENDING && mediaStatus == SeerrMediaStatus.DELETED -> Res.string.requests_status_pending to StatusColors.pending
         else -> when (mediaStatus) {
-            SeerrMediaStatus.AVAILABLE -> R.string.requests_status_available to StatusColors.available
-            SeerrMediaStatus.PROCESSING -> R.string.requests_status_processing to StatusColors.info
-            SeerrMediaStatus.PARTIALLY_AVAILABLE -> R.string.requests_status_partially_available to StatusColors.pendingLight
-            SeerrMediaStatus.PENDING -> R.string.requests_status_pending to StatusColors.pending
-            SeerrMediaStatus.DELETED -> R.string.requests_status_deleted to StatusColors.error
-            SeerrMediaStatus.UNKNOWN -> R.string.requests_status_unknown to colorScheme.onSurfaceVariant
+            SeerrMediaStatus.AVAILABLE -> Res.string.requests_status_available to StatusColors.available
+            SeerrMediaStatus.PROCESSING -> Res.string.requests_status_processing to StatusColors.info
+            SeerrMediaStatus.PARTIALLY_AVAILABLE -> Res.string.requests_status_partially_available to StatusColors.pendingLight
+            SeerrMediaStatus.PENDING -> Res.string.requests_status_pending to StatusColors.pending
+            SeerrMediaStatus.DELETED -> Res.string.requests_status_deleted to StatusColors.error
+            SeerrMediaStatus.UNKNOWN -> Res.string.requests_status_unknown to colorScheme.onSurfaceVariant
         }
     }
     val statusLabel = stringResource(statusLabelRes)
@@ -198,7 +239,7 @@ fun RequestDetailBottomSheet(
                     if (mediaInfo?.year != null) {
                         Text(
                             text = stringResource(
-                                R.string.requests_detail_year_type,
+                                Res.string.requests_detail_year_type,
                                 mediaInfo.year,
                                 request.type.replaceFirstChar { it.uppercase() },
                             ),
@@ -222,16 +263,16 @@ fun RequestDetailBottomSheet(
             HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.3f))
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DetailRow(stringResource(R.string.requests_detail_row_request_id), "#${request.id}")
-                DetailRow(stringResource(R.string.requests_detail_row_type), request.type.replaceFirstChar { it.uppercase() })
-                DetailRow(stringResource(R.string.requests_detail_row_tmdb_id), request.media.tmdbId.toString())
-                request.requestedBy.username?.let { DetailRow(stringResource(R.string.requests_detail_row_requested_by), it) }
-                DetailRow(stringResource(R.string.requests_detail_row_requested), formattedDate)
-                request.profileName?.let { DetailRow(stringResource(R.string.requests_detail_row_quality_profile), it) }
-                request.rootFolder?.let { DetailRow(stringResource(R.string.requests_detail_row_root_folder), it) }
+                DetailRow(stringResource(Res.string.requests_detail_row_request_id), "#${request.id}")
+                DetailRow(stringResource(Res.string.requests_detail_row_type), request.type.replaceFirstChar { it.uppercase() })
+                DetailRow(stringResource(Res.string.requests_detail_row_tmdb_id), request.media.tmdbId.toString())
+                request.requestedBy.username?.let { DetailRow(stringResource(Res.string.requests_detail_row_requested_by), it) }
+                DetailRow(stringResource(Res.string.requests_detail_row_requested), formattedDate)
+                request.profileName?.let { DetailRow(stringResource(Res.string.requests_detail_row_quality_profile), it) }
+                request.rootFolder?.let { DetailRow(stringResource(Res.string.requests_detail_row_root_folder), it) }
                 if (request.seasons.isNotEmpty()) {
                     DetailRow(
-                        stringResource(R.string.requests_detail_row_seasons),
+                        stringResource(Res.string.requests_detail_row_seasons),
                         request.seasons.joinToString(", ") { "S${it.seasonNumber}" },
                     )
                 }
@@ -245,16 +286,16 @@ fun RequestDetailBottomSheet(
                         append('%')
                         downloadProgress.timeLeft?.takeIf { it.isNotBlank() }?.let {
                             append(" · ")
-                            append(stringResource(R.string.requests_download_time_left, it))
+                            append(stringResource(Res.string.requests_download_time_left, it))
                         }
                     }
-                    DetailRow(stringResource(R.string.requests_detail_row_download), text)
+                    DetailRow(stringResource(Res.string.requests_detail_row_download), text)
                 } else if (request.media.downloadStatus.isNotEmpty()) {
                     val downloadStatusText = request.media.downloadStatus
                         .mapNotNull { it.status }
                         .joinToString(", ")
-                        .ifBlank { stringResource(R.string.requests_download_in_queue) }
-                    DetailRow(stringResource(R.string.requests_detail_row_download), downloadStatusText)
+                        .ifBlank { stringResource(Res.string.requests_download_in_queue) }
+                    DetailRow(stringResource(Res.string.requests_detail_row_download), downloadStatusText)
                 }
             }
 
@@ -275,7 +316,7 @@ fun RequestDetailBottomSheet(
                     ) {
                         Icon(Tabler.Outline.X, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.requests_action_remove_search))
+                        Text(stringResource(Res.string.requests_action_remove_search))
                     }
                     OutlinedButton(
                         onClick = { onRemoveFromQueue(true, true) },
@@ -284,7 +325,7 @@ fun RequestDetailBottomSheet(
                     ) {
                         Icon(Tabler.Outline.Ban, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.requests_action_blocklist_search))
+                        Text(stringResource(Res.string.requests_action_blocklist_search))
                     }
                 }
             }
@@ -304,7 +345,7 @@ fun RequestDetailBottomSheet(
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.requests_action_view_media_details))
+                Text(stringResource(Res.string.requests_action_view_media_details))
             }
 
             if (isAdmin) {
@@ -324,7 +365,7 @@ fun RequestDetailBottomSheet(
                             ) {
                                 Icon(Tabler.Outline.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text(stringResource(R.string.requests_action_retry_request), style = MaterialTheme.typography.labelLarge)
+                                Text(stringResource(Res.string.requests_action_retry_request), style = MaterialTheme.typography.labelLarge)
                             }
                         }
                         requestStatus == SeerrRequestStatus.PENDING -> {
@@ -345,7 +386,7 @@ fun RequestDetailBottomSheet(
                                 ) {
                                     Icon(Tabler.Outline.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(6.dp))
-                                    Text(stringResource(R.string.requests_action_approve), style = MaterialTheme.typography.labelLarge)
+                                    Text(stringResource(Res.string.requests_action_approve), style = MaterialTheme.typography.labelLarge)
                                 }
                                 Button(
                                     onClick = onDecline,
@@ -360,7 +401,7 @@ fun RequestDetailBottomSheet(
                                 ) {
                                     Icon(Tabler.Outline.X, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(6.dp))
-                                    Text(stringResource(R.string.requests_action_decline), style = MaterialTheme.typography.labelLarge)
+                                    Text(stringResource(Res.string.requests_action_decline), style = MaterialTheme.typography.labelLarge)
                                 }
                             }
                         }
@@ -388,8 +429,8 @@ fun RequestDetailBottomSheet(
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 stringResource(
-                                    if (isConfirmingDelete) R.string.requests_action_delete_confirm
-                                    else R.string.requests_action_delete_request
+                                    if (isConfirmingDelete) Res.string.requests_action_delete_confirm
+                                    else Res.string.requests_action_delete_request
                                 )
                             )
                         }
@@ -401,8 +442,8 @@ fun RequestDetailBottomSheet(
                     // download files even while a request is still pending.
                     if (request.canRemove) {
                         val serviceLabel = stringResource(
-                            if (request.type.equals("movie", ignoreCase = true)) R.string.requests_service_radarr
-                            else R.string.requests_service_sonarr
+                            if (request.type.equals("movie", ignoreCase = true)) Res.string.requests_service_radarr
+                            else Res.string.requests_service_sonarr
                         )
                         OutlinedButton(
                             onClick = {
@@ -425,8 +466,8 @@ fun RequestDetailBottomSheet(
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 stringResource(
-                                    if (isConfirmingRemoveFromService) R.string.requests_action_delete_confirm
-                                    else R.string.requests_action_remove_from_service,
+                                    if (isConfirmingRemoveFromService) Res.string.requests_action_delete_confirm
+                                    else Res.string.requests_action_remove_from_service,
                                     serviceLabel
                                 )
                             )
@@ -473,17 +514,17 @@ private fun DetailRow(label: String, value: String) {
 }
 
 /**
- * String resource id for an [ArrDownloadStatus], surfaced in the Download
+ * String resource for an [ArrDownloadStatus], surfaced in the Download
  * row of [RequestDetailBottomSheet] when direct *arr progress is available.
  */
 @androidx.compose.runtime.Composable
-private fun arrStatusRes(status: ArrDownloadStatus): Int = when (status) {
-    ArrDownloadStatus.QUEUED -> R.string.requests_arr_status_queued
-    ArrDownloadStatus.DOWNLOADING -> R.string.requests_arr_status_downloading
-    ArrDownloadStatus.PAUSED -> R.string.requests_arr_status_paused
-    ArrDownloadStatus.COMPLETED -> R.string.requests_arr_status_completed
-    ArrDownloadStatus.FAILED -> R.string.requests_arr_status_failed
-    ArrDownloadStatus.WARNING -> R.string.requests_arr_status_warning
-    ArrDownloadStatus.IMPORTED -> R.string.requests_arr_status_imported
-    ArrDownloadStatus.UNKNOWN -> R.string.requests_arr_status_unknown
+private fun arrStatusRes(status: ArrDownloadStatus): StringResource = when (status) {
+    ArrDownloadStatus.QUEUED -> Res.string.requests_arr_status_queued
+    ArrDownloadStatus.DOWNLOADING -> Res.string.requests_arr_status_downloading
+    ArrDownloadStatus.PAUSED -> Res.string.requests_arr_status_paused
+    ArrDownloadStatus.COMPLETED -> Res.string.requests_arr_status_completed
+    ArrDownloadStatus.FAILED -> Res.string.requests_arr_status_failed
+    ArrDownloadStatus.WARNING -> Res.string.requests_arr_status_warning
+    ArrDownloadStatus.IMPORTED -> Res.string.requests_arr_status_imported
+    ArrDownloadStatus.UNKNOWN -> Res.string.requests_arr_status_unknown
 }

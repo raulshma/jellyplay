@@ -29,7 +29,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowDown
@@ -40,7 +39,23 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 import com.raulshma.jellyplay.core.ui.animation.horizontalFadingEdges
 import com.raulshma.jellyplay.core.ui.components.SearchField
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
-import com.raulshma.jellyplay.feature.requests.R
+import com.raulshma.jellyplay.feature.requests.generated.resources.Res
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_cd_sort_direction
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_filter_all
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_filter_approved
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_filter_available
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_filter_failed
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_filter_mine
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_filter_pending
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_filter_processing
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_filter_unavailable
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_media_all
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_media_movies
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_media_tv
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_search_placeholder
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_sort_modified
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_sort_recent
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun RequestsFilterBar(
@@ -74,7 +89,7 @@ fun RequestsFilterBar(
         SearchField(
             value = searchQuery,
             onValueChange = onSearchChange,
-            placeholder = stringResource(R.string.requests_search_placeholder),
+            placeholder = stringResource(Res.string.requests_search_placeholder),
         )
 
         Row(
@@ -95,13 +110,13 @@ fun RequestsFilterBar(
                         Text(
                             stringResource(
                                 when (filter) {
-                                    SeerrRequestFilter.ALL -> R.string.requests_filter_all
-                                    SeerrRequestFilter.PENDING -> R.string.requests_filter_pending
-                                    SeerrRequestFilter.APPROVED -> R.string.requests_filter_approved
-                                    SeerrRequestFilter.PROCESSING -> R.string.requests_filter_processing
-                                    SeerrRequestFilter.AVAILABLE -> R.string.requests_filter_available
-                                    SeerrRequestFilter.UNAVAILABLE -> R.string.requests_filter_unavailable
-                                    SeerrRequestFilter.FAILED -> R.string.requests_filter_failed
+                                    SeerrRequestFilter.ALL -> Res.string.requests_filter_all
+                                    SeerrRequestFilter.PENDING -> Res.string.requests_filter_pending
+                                    SeerrRequestFilter.APPROVED -> Res.string.requests_filter_approved
+                                    SeerrRequestFilter.PROCESSING -> Res.string.requests_filter_processing
+                                    SeerrRequestFilter.AVAILABLE -> Res.string.requests_filter_available
+                                    SeerrRequestFilter.UNAVAILABLE -> Res.string.requests_filter_unavailable
+                                    SeerrRequestFilter.FAILED -> Res.string.requests_filter_failed
                                 }
                             ),
                             style = MaterialTheme.typography.labelSmall,
@@ -128,9 +143,9 @@ fun RequestsFilterBar(
         ) {
             listOf(null, "movie", "tv").forEach { type ->
                 val label = when (type) {
-                    null -> stringResource(R.string.requests_media_all)
-                    "movie" -> stringResource(R.string.requests_media_movies)
-                    else -> stringResource(R.string.requests_media_tv)
+                    null -> stringResource(Res.string.requests_media_all)
+                    "movie" -> stringResource(Res.string.requests_media_movies)
+                    else -> stringResource(Res.string.requests_media_tv)
                 }
                 val isSelected = currentMediaType == type
                 FilterChip(
@@ -161,8 +176,8 @@ fun RequestsFilterBar(
             )
 
             listOf(
-                SeerrRequestSort.ADDED to stringResource(R.string.requests_sort_recent),
-                SeerrRequestSort.MODIFIED to stringResource(R.string.requests_sort_modified),
+                SeerrRequestSort.ADDED to stringResource(Res.string.requests_sort_recent),
+                SeerrRequestSort.MODIFIED to stringResource(Res.string.requests_sort_modified),
             ).forEach { (sort, label) ->
                 val isSelected = currentSort == sort
                 FilterChip(
@@ -190,7 +205,7 @@ fun RequestsFilterBar(
             ) {
                 Icon(
                     if (currentSortDirection == "desc") Tabler.Outline.ArrowDown else Tabler.Outline.ArrowUp,
-                    contentDescription = stringResource(R.string.requests_cd_sort_direction),
+                    contentDescription = stringResource(Res.string.requests_cd_sort_direction),
                     modifier = Modifier.size(16.dp),
                     tint = colorScheme.onSurfaceVariant,
                 )
@@ -213,7 +228,7 @@ fun RequestsFilterBar(
                         .padding(horizontal = 4.dp),
                 ) {
                     Text(
-                        stringResource(R.string.requests_filter_mine),
+                        stringResource(Res.string.requests_filter_mine),
                         style = MaterialTheme.typography.labelSmall,
                         color = if (showMyRequestsOnly) colorScheme.primary else colorScheme.onSurfaceVariant,
                     )

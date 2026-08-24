@@ -36,9 +36,13 @@ import com.raulshma.jellyplay.feature.settings.di.settingsModule
 import com.raulshma.jellyplay.feature.settings.di.desktopSettingsPlatformModule
 import com.raulshma.jellyplay.feature.admin.di.adminModule
 
+
 import com.raulshma.jellyplay.feature.editor.di.editorModule
 
 import com.raulshma.jellyplay.feature.calendar.di.calendarModule
+
+
+import com.raulshma.jellyplay.feature.requests.di.requestsModule
 
 import org.koin.core.context.startKoin
 
@@ -109,6 +113,7 @@ fun main() {
             // lives in androidAdminModule and is never registered here.
             adminModule,
 
+
             // …editor, ninth conveyor item — documented-latent, syncplay
             // pattern: the StreamingSubtitleStore dep (Hilt interop on
             // Android) has no desktop definition yet, but resolution is
@@ -126,6 +131,16 @@ fun main() {
             // ViewModel would actually work. It stays dormant because the
             // desktop shell has no calendar nav entry yet.
             calendarModule,
+
+
+            // …requests, eleventh conveyor item — a feature VM whose
+            // entire ctor graph is Koin-native on BOTH platforms (calendar
+            // above was the first): SeerrRepository + ArrRepository resolve
+            // from dataJvmModule and ExperimentalStore from
+            // datastoreCommonModule above, so this registration is fully
+            // live (no documented-latent deps). A desktop nav entry is
+            // still future conveyor work, so nothing instantiates it yet.
+            requestsModule,
 
         )
     }

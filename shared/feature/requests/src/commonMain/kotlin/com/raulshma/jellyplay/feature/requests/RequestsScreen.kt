@@ -36,10 +36,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
@@ -52,16 +50,32 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
+import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.raulshma.jellyplay.feature.requests.R
+import com.raulshma.jellyplay.feature.requests.generated.resources.Res
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_approve
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_decline
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_retry
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_empty_subtitle
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_empty_title
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_error_unknown
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_pagination_label
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_pagination_next
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_pagination_prev
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_select_all
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_selected_count
+import com.raulshma.jellyplay.feature.requests.generated.resources.requests_title
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RequestsScreen(
     onBack: () -> Unit,
     onNavigateToDetail: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
-    viewModel: RequestsViewModel = hiltViewModel(),
+    viewModel: RequestsViewModel = koinViewModel(),
 ) {
     val state by viewModel.state
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
@@ -78,7 +92,7 @@ fun RequestsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = stringResource(R.string.requests_title),
+        title = stringResource(Res.string.requests_title),
         onBack = onBack,
     ) { paddingValues ->
         val bottomPadding = paddingValues.calculateBottomPadding()
@@ -119,7 +133,7 @@ fun RequestsScreen(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = state.error ?: stringResource(R.string.requests_error_unknown),
+                                    text = state.error ?: stringResource(Res.string.requests_error_unknown),
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.error,
                                 )
@@ -128,7 +142,7 @@ fun RequestsScreen(
                                     onClick = { viewModel.loadRequests(refresh = true) },
                                     modifier = Modifier.focusIndicator(),
                                 ) {
-                                    Text(stringResource(R.string.requests_action_retry))
+                                    Text(stringResource(Res.string.requests_action_retry))
                                 }
                             }
                         }
@@ -146,13 +160,13 @@ fun RequestsScreen(
                                 )
                                 Spacer(Modifier.height(16.dp))
                                 Text(
-                                    stringResource(R.string.requests_empty_title),
+                                    stringResource(Res.string.requests_empty_title),
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    stringResource(R.string.requests_empty_subtitle),
+                                    stringResource(Res.string.requests_empty_subtitle),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -234,11 +248,11 @@ fun RequestsScreen(
                                                 modifier = Modifier.size(18.dp),
                                             )
                                             Spacer(Modifier.width(4.dp))
-                                            Text(stringResource(R.string.requests_pagination_prev))
+                                            Text(stringResource(Res.string.requests_pagination_prev))
                                         }
                                         Spacer(Modifier.width(16.dp))
                                         Text(
-                                            stringResource(R.string.requests_pagination_label, state.currentPage, state.totalPages),
+                                            stringResource(Res.string.requests_pagination_label, state.currentPage, state.totalPages),
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
@@ -249,7 +263,7 @@ fun RequestsScreen(
                                             shape = ShapeCache.smooth12,
                                             modifier = Modifier.focusIndicator(),
                                         ) {
-                                            Text(stringResource(R.string.requests_pagination_next))
+                                            Text(stringResource(Res.string.requests_pagination_next))
                                             Spacer(Modifier.width(4.dp))
                                             Icon(
                                                 Tabler.Outline.ChevronRight,
@@ -345,19 +359,19 @@ private fun SelectionActionBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = stringResource(R.string.requests_selected_count, selectedCount),
+                text = stringResource(Res.string.requests_selected_count, selectedCount),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f),
             )
             androidx.compose.material3.TextButton(onClick = onSelectAll, enabled = !actionInProgress) {
-                Text(stringResource(R.string.requests_select_all))
+                Text(stringResource(Res.string.requests_select_all))
             }
             androidx.compose.material3.FilledTonalButton(
                 onClick = onApprove,
                 enabled = !actionInProgress && selectedCount > 0,
             ) {
-                Text(stringResource(R.string.requests_action_approve))
+                Text(stringResource(Res.string.requests_action_approve))
             }
             androidx.compose.material3.FilledTonalButton(
                 onClick = onDecline,
@@ -367,12 +381,12 @@ private fun SelectionActionBar(
                     contentColor = MaterialTheme.colorScheme.onErrorContainer,
                 ),
             ) {
-                Text(stringResource(R.string.requests_action_decline))
+                Text(stringResource(Res.string.requests_action_decline))
             }
             androidx.compose.material3.IconButton(onClick = onClear, enabled = !actionInProgress) {
                 Icon(
                     Tabler.Outline.X,
-                    contentDescription = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
+                    contentDescription = stringResource(CoreUiRes.string.core_cancel),
                 )
             }
         }

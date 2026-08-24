@@ -16,7 +16,6 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.debounce
@@ -26,7 +25,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import javax.inject.Inject
 
 data class RequestMediaInfo(
     val title: String?,
@@ -90,8 +88,7 @@ data class RequestsFilterState(
 )
 
 @OptIn(FlowPreview::class)
-@HiltViewModel
-class RequestsViewModel @Inject constructor(
+class RequestsViewModel(
     private val seerrRepository: SeerrRepository,
     private val arrRepository: ArrRepository,
     private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,

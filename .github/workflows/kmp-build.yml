@@ -81,11 +81,16 @@ jobs:
           :shared:feature:admin:jvmJar
           :shared:feature:admin:compileAndroidMain
 
+
           :shared:feature:editor:jvmJar
           :shared:feature:editor:compileAndroidMain
 
           :shared:feature:calendar:jvmJar
           :shared:feature:calendar:compileAndroidMain
+
+
+          :shared:feature:requests:jvmJar
+          :shared:feature:requests:compileAndroidMain
 
           --stacktrace
 
@@ -108,8 +113,12 @@ jobs:
           :shared:feature:settings:jvmTest
           :shared:feature:admin:jvmTest
 
+
           :shared:feature:editor:jvmTest
 
           :shared:feature:calendar:jvmTest
+
+
+          :shared:feature:requests:jvmTest
 
           --stacktrace

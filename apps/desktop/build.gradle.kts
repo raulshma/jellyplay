@@ -67,6 +67,7 @@ dependencies {
     implementation(project(":shared:feature:admin"))
 
 
+
     // …editor, ninth conveyor item (DI registration only — documented-latent:
     // StreamingSubtitleStore has no desktop def yet, resolution is lazy so
     // boot stays safe, and the desktop shell has no editor nav entry).
@@ -76,6 +77,13 @@ dependencies {
     // live-resolvable: all three VM ctor deps have desktop defs; dormant
     // because the shell has no calendar nav entry yet).
     implementation(project(":shared:feature:calendar"))
+
+
+    // …requests, eleventh conveyor item (DI registration only — a fully
+    // Koin-native ctor graph on desktop too, same shape as calendar above,
+    // so the registration is live; the desktop shell has no requests nav
+    // entry yet).
+    implementation(project(":shared:feature:requests"))
 
 
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads

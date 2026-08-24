@@ -37,9 +37,13 @@ import com.raulshma.jellyplay.feature.settings.di.androidSettingsPlatformModule
 import com.raulshma.jellyplay.feature.admin.di.adminModule
 import com.raulshma.jellyplay.feature.admin.di.androidAdminModule
 
+
 import com.raulshma.jellyplay.feature.editor.di.editorModule
 
 import com.raulshma.jellyplay.feature.calendar.di.calendarModule
+
+
+import com.raulshma.jellyplay.feature.requests.di.requestsModule
 
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
@@ -177,6 +181,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 adminModule,
                 androidAdminModule(this@JellyPlayApplication),
 
+
                 // V3 editor conveyor (ninth feature): the shared metadata
                 // editor ViewModel. MetadataEditorRepository / AuthRepository /
                 // SubtitleProviderRepository are Koin-native; the
@@ -189,6 +194,14 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // in the shared graph — the first conveyor module with zero
                 // Hilt-interop edges.
                 calendarModule,
+
+
+                // V3 requests conveyor (eleventh feature): all three ctor deps
+                // (SeerrRepository, ArrRepository, ExperimentalStore) were
+                // already Koin-owned, so — like calendar, and unlike the nine
+                // features above — this registration involves no Hilt interop
+                // at all.
+                requestsModule,
 
             )
         }
