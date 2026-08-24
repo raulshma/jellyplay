@@ -41,10 +41,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Calendar
@@ -59,14 +57,36 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
-import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
-import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
+import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
+import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ok
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
+import com.raulshma.jellyplay.feature.calendar.generated.resources.Res
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_empty_desc
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_empty_title
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_error_unknown
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_feature_disabled_desc
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_feature_disabled_title
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_filter_all
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_filter_movies
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_filter_series
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_go_today
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_next_month_cd
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_no_detail
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_open_settings
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_pick_date_cd
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_prev_month_cd
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_refresh_cd
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_releases_count
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_title
+import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_today
 import java.time.LocalDate
 import java.time.ZoneId
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -74,11 +94,16 @@ fun UpcomingCalendarScreen(
     onBack: () -> Unit,
     onOpenArrSettings: () -> Unit = {},
     onItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
-    viewModel: UpcomingCalendarViewModel = hiltViewModel(),
+    viewModel: UpcomingCalendarViewModel = koinViewModel(),
 ) {
     val state by viewModel.state
     val featureEnabled by viewModel.featureEnabled.collectAsStateWithLifecycle()
-    val userMessageBus = LocalUserMessageBus.current
+    // No-detail tap feedback (screen-forward seam): resolve the string here and
+    // forward through the messenger actual — the legacy UserMessageBus /
+    // UiText(R.id) machinery stays behind the Android actual (livetv
+    // LiveTvMessenger pattern; desktop drops the message).
+    val messenger = rememberCalendarMessenger()
+    val noDetailText = stringResource(Res.string.calendar_no_detail)
     val listState = rememberLazyListState()
     val today = remember { today() }
     val isTv = LocalTvMode.current
@@ -111,12 +136,12 @@ fun UpcomingCalendarScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = stringResource(R.string.calendar_title),
+        title = stringResource(Res.string.calendar_title),
         onBack = onBack,
         topBarStyle = TopBarStyle.Collapsing,
         actions = {
             IconButton(onClick = { viewModel.refresh() }, enabled = !state.isLoading) {
-                Icon(Tabler.Outline.Refresh, contentDescription = stringResource(R.string.calendar_refresh_cd))
+                Icon(Tabler.Outline.Refresh, contentDescription = stringResource(Res.string.calendar_refresh_cd))
             }
         },
     ) { paddingValues ->
@@ -134,7 +159,7 @@ fun UpcomingCalendarScreen(
                 )
 
                 state.error != null && state.items.isEmpty() -> ErrorScreen(
-                    message = state.error ?: stringResource(R.string.calendar_error_unknown),
+                    message = state.error ?: stringResource(Res.string.calendar_error_unknown),
                     onRetry = { viewModel.refresh() },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -146,9 +171,9 @@ fun UpcomingCalendarScreen(
                     if (days.isEmpty()) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Calendar,
-                            title = stringResource(R.string.calendar_empty_title),
-                            description = stringResource(R.string.calendar_empty_desc),
-                            actionLabel = stringResource(R.string.calendar_go_today),
+                            title = stringResource(Res.string.calendar_empty_title),
+                            description = stringResource(Res.string.calendar_empty_desc),
+                            actionLabel = stringResource(Res.string.calendar_go_today),
                             onAction = { viewModel.goToToday() },
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -212,7 +237,7 @@ fun UpcomingCalendarScreen(
                                                     val mediaType = if (item.mediaType == ArrMediaType.MOVIE) "movie" else "tv"
                                                     onItemClick(tmdbId, mediaType)
                                                 } else {
-                                                    userMessageBus.info(uiTextOf(R.string.calendar_no_detail))
+                                                    messenger?.info(noDetailText)
                                                 }
                                             },
                                         )
@@ -246,12 +271,12 @@ fun UpcomingCalendarScreen(
                             showDatePicker = false
                         },
                     ) {
-                        Text(stringResource(com.raulshma.jellyplay.core.ui.R.string.core_ok))
+                        Text(stringResource(CoreUiRes.string.core_ok))
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showDatePicker = false }) {
-                        Text(stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel))
+                        Text(stringResource(CoreUiRes.string.core_cancel))
                     }
                 },
             ) {
@@ -282,11 +307,11 @@ private fun MonthNavHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onPrevious, enabled = canGoBack) {
-                Icon(Tabler.Outline.ChevronLeft, contentDescription = stringResource(R.string.calendar_prev_month_cd))
+                Icon(Tabler.Outline.ChevronLeft, contentDescription = stringResource(Res.string.calendar_prev_month_cd))
             }
             // Tapping the month label opens a date picker so the user can
             // jump straight to a day instead of paging month by month.
-            val pickDateLabel = stringResource(R.string.calendar_pick_date_cd)
+            val pickDateLabel = stringResource(Res.string.calendar_pick_date_cd)
             Row(
                 modifier = Modifier
                     .weight(1f)
@@ -315,10 +340,10 @@ private fun MonthNavHeader(
                 )
             }
             IconButton(onClick = onNext) {
-                Icon(Tabler.Outline.ChevronRight, contentDescription = stringResource(R.string.calendar_next_month_cd))
+                Icon(Tabler.Outline.ChevronRight, contentDescription = stringResource(Res.string.calendar_next_month_cd))
             }
             TextButton(onClick = onToday) {
-                Text(stringResource(R.string.calendar_today))
+                Text(stringResource(Res.string.calendar_today))
             }
         }
     }
@@ -330,9 +355,9 @@ private fun FilterRow(
     onSelect: (CalendarFilter) -> Unit,
 ) {
     val options = listOf(
-        CalendarFilter.ALL to stringResource(R.string.calendar_filter_all),
-        CalendarFilter.MOVIES to stringResource(R.string.calendar_filter_movies),
-        CalendarFilter.SERIES to stringResource(R.string.calendar_filter_series),
+        CalendarFilter.ALL to stringResource(Res.string.calendar_filter_all),
+        CalendarFilter.MOVIES to stringResource(Res.string.calendar_filter_movies),
+        CalendarFilter.SERIES to stringResource(Res.string.calendar_filter_series),
     )
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         options.forEachIndexed { index, (filter, label) ->
@@ -382,7 +407,7 @@ private fun DayHeader(date: LocalDate, today: LocalDate, count: Int) {
         }
         Spacer(Modifier.size(8.dp))
         Text(
-            text = stringResource(R.string.calendar_releases_count, count),
+            text = stringResource(Res.string.calendar_releases_count, count),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -403,13 +428,13 @@ private fun FeatureDisabledState(onOpenSettings: () -> Unit, modifier: Modifier 
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                stringResource(R.string.calendar_feature_disabled_title),
+                stringResource(Res.string.calendar_feature_disabled_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                stringResource(R.string.calendar_feature_disabled_desc),
+                stringResource(Res.string.calendar_feature_disabled_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -417,7 +442,7 @@ private fun FeatureDisabledState(onOpenSettings: () -> Unit, modifier: Modifier 
             Button(onClick = onOpenSettings, shape = ShapeCache.smooth12) {
                 Icon(Tabler.Outline.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.size(8.dp))
-                Text(stringResource(R.string.calendar_open_settings))
+                Text(stringResource(Res.string.calendar_open_settings))
             }
         }
     }

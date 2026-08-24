@@ -66,10 +66,17 @@ dependencies {
     // admin nav entry).
     implementation(project(":shared:feature:admin"))
 
+
     // …editor, ninth conveyor item (DI registration only — documented-latent:
     // StreamingSubtitleStore has no desktop def yet, resolution is lazy so
     // boot stays safe, and the desktop shell has no editor nav entry).
     implementation(project(":shared:feature:editor"))
+
+    // …calendar, next conveyor item (DI registration only — fully
+    // live-resolvable: all three VM ctor deps have desktop defs; dormant
+    // because the shell has no calendar nav entry yet).
+    implementation(project(":shared:feature:calendar"))
+
 
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.

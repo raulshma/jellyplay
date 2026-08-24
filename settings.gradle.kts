@@ -48,7 +48,6 @@ include(":feature:insights")
 include(":feature:requests")
 include(":feature:shortcuts")
 include(":feature:arrqueue")
-include(":feature:calendar")
 include(":baselineprofile")
 include(":baselineprofile-tv")
 
@@ -74,7 +73,11 @@ include(":shared:feature:downloads")
 include(":shared:feature:syncplay")
 include(":shared:feature:settings")
 include(":shared:feature:admin")
+
 include(":shared:feature:editor")
+
+include(":shared:feature:calendar")
+
 
 // Desktop shell (plan §Phase V1b)
 include(":apps:desktop")

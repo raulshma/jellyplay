@@ -35,7 +35,11 @@ import com.raulshma.jellyplay.feature.syncplay.di.syncPlayModule
 import com.raulshma.jellyplay.feature.settings.di.settingsModule
 import com.raulshma.jellyplay.feature.settings.di.desktopSettingsPlatformModule
 import com.raulshma.jellyplay.feature.admin.di.adminModule
+
 import com.raulshma.jellyplay.feature.editor.di.editorModule
+
+import com.raulshma.jellyplay.feature.calendar.di.calendarModule
+
 import org.koin.core.context.startKoin
 
 fun main() {
@@ -104,6 +108,7 @@ fun main() {
             // instantiated. The Android-only plugin-config WebView ViewModel
             // lives in androidAdminModule and is never registered here.
             adminModule,
+
             // …editor, ninth conveyor item — documented-latent, syncplay
             // pattern: the StreamingSubtitleStore dep (Hilt interop on
             // Android) has no desktop definition yet, but resolution is
@@ -113,6 +118,15 @@ fun main() {
             // file-picker actuals return null, so even a future editor
             // screen would degrade to URL-only uploads, not crash.
             editorModule,
+
+            // …calendar, next conveyor item — unlike the features above it is
+            // FULLY live-resolvable here: ArrRepository + SeerrRepository
+            // (dataJvmModule) and ExperimentalStore (datastoreCommonModule)
+            // all have desktop definitions, so instantiating the calendar
+            // ViewModel would actually work. It stays dormant because the
+            // desktop shell has no calendar nav entry yet.
+            calendarModule,
+
         )
     }
 

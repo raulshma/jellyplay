@@ -10,7 +10,6 @@ import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,7 +23,6 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
-import javax.inject.Inject
 
 /**
  * Whole-screen state for the Upcoming Calendar. The merged calendar stream is
@@ -42,8 +40,7 @@ data class UpcomingCalendarUiState(
     val enrichedPosters: Map<Int, String> = emptyMap(),
 )
 
-@HiltViewModel
-class UpcomingCalendarViewModel @Inject constructor(
+class UpcomingCalendarViewModel(
     private val arrRepository: ArrRepository,
     private val seerrRepository: SeerrRepository,
     experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
