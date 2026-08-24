@@ -80,6 +80,8 @@ jobs:
           :shared:feature:settings:compileAndroidMain
           :shared:feature:admin:jvmJar
           :shared:feature:admin:compileAndroidMain
+          :shared:feature:editor:jvmJar
+          :shared:feature:editor:compileAndroidMain
           --stacktrace
 
       - name: Shared tests (JVM)
@@ -100,4 +102,5 @@ jobs:
           :shared:feature:syncplay:jvmTest
           :shared:feature:settings:jvmTest
           :shared:feature:admin:jvmTest
+          :shared:feature:editor:jvmTest
           --stacktrace

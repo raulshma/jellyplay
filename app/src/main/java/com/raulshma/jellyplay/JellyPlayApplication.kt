@@ -36,6 +36,7 @@ import com.raulshma.jellyplay.feature.settings.di.settingsModule
 import com.raulshma.jellyplay.feature.settings.di.androidSettingsPlatformModule
 import com.raulshma.jellyplay.feature.admin.di.adminModule
 import com.raulshma.jellyplay.feature.admin.di.androidAdminModule
+import com.raulshma.jellyplay.feature.editor.di.editorModule
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
@@ -171,6 +172,12 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // hiltInteropModule singles above.
                 adminModule,
                 androidAdminModule(this@JellyPlayApplication),
+                // V3 editor conveyor (ninth feature): the shared metadata
+                // editor ViewModel. MetadataEditorRepository / AuthRepository /
+                // SubtitleProviderRepository are Koin-native; the
+                // StreamingSubtitleStore dep resolves through the
+                // hiltInteropModule single above (impl stays Hilt-bound).
+                editorModule,
             )
         }
         super.onCreate()

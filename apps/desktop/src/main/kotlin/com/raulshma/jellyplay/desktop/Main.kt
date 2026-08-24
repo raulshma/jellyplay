@@ -35,6 +35,7 @@ import com.raulshma.jellyplay.feature.syncplay.di.syncPlayModule
 import com.raulshma.jellyplay.feature.settings.di.settingsModule
 import com.raulshma.jellyplay.feature.settings.di.desktopSettingsPlatformModule
 import com.raulshma.jellyplay.feature.admin.di.adminModule
+import com.raulshma.jellyplay.feature.editor.di.editorModule
 import org.koin.core.context.startKoin
 
 fun main() {
@@ -103,6 +104,15 @@ fun main() {
             // instantiated. The Android-only plugin-config WebView ViewModel
             // lives in androidAdminModule and is never registered here.
             adminModule,
+            // …editor, ninth conveyor item — documented-latent, syncplay
+            // pattern: the StreamingSubtitleStore dep (Hilt interop on
+            // Android) has no desktop definition yet, but resolution is
+            // lazy so boot stays safe, and the desktop shell has no editor
+            // nav entry (grep confirms no route/screen reference), so the
+            // module is registered but never instantiated. The desktop
+            // file-picker actuals return null, so even a future editor
+            // screen would degrade to URL-only uploads, not crash.
+            editorModule,
         )
     }
 

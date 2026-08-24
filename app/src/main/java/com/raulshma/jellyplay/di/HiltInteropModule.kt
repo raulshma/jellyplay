@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
@@ -53,6 +54,7 @@ interface HiltInteropEntryPoint {
     fun userMessageBus(): UserMessageBus
     fun adminRepository(): AdminRepository
     fun adminStatisticsRepository(): AdminStatisticsRepository
+    fun streamingSubtitleStore(): StreamingSubtitleStore
 }
 
 private fun interopEntryPoint(application: Application): HiltInteropEntryPoint =
@@ -77,4 +79,10 @@ fun hiltInteropModule(application: Application): Module = module {
     // moved to shared :core:data jvmShared while its impl stays Hilt-bound in
     // legacy :core:data's DataModule — same lazy interop single as above.
     single<AdminStatisticsRepository> { interopEntryPoint(application).adminStatisticsRepository() }
+    // Editor conveyor (ninth feature): the StreamingSubtitleStore interface
+    // lives in shared :core:data commonMain but its impl
+    // (StreamingSubtitleStoreImpl) stays Hilt-bound in legacy :core:data's
+    // SubtitleModule — same lazy interop single as above. The player's
+    // Hilt injectors keep constructing the impl directly and are unaffected.
+    single<StreamingSubtitleStore> { interopEntryPoint(application).streamingSubtitleStore() }
 }
