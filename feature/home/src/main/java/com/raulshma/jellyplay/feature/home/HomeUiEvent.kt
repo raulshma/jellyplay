@@ -101,4 +101,30 @@ sealed interface HomeUiEvent {
 
     /** Resolves pending-sync row metadata while the sync details sheet is open. */
     data class EnsurePendingItemDetails(val itemIds: Collection<String>) : HomeUiEvent
+
+    /**
+     * A SERIES card's play affordance was tapped. The VM resolves which
+     * episode to start (resume → next unplayed → replay — the smart-play rule)
+     * and fires [onResolved] exactly once on the main thread with the outcome;
+     * navigation itself stays with the caller. Mirrors [PrefetchSeerrDetails]'s
+     * `onDone`. See [SeriesPlayResolution].
+     */
+    data class PlaySeries(
+        val series: MediaItem,
+        val onResolved: (SeriesPlayResolution) -> Unit,
+    ) : HomeUiEvent
+}
+
+/**
+ * The outcome of [HomeUiEvent.PlaySeries]: either the resolved target episode
+ * ([Episode], carrying its resume position in ticks — 0 unless resuming) or a
+ * fallback to the series' details screen ([Details]) when nothing was
+ * resolvable (catalogue load failure, empty/unavailable series).
+ */
+sealed interface SeriesPlayResolution {
+    /** Play [item] (always an EPISODE) from [startPositionTicks]. */
+    data class Episode(val item: MediaItem, val startPositionTicks: Long) : SeriesPlayResolution
+
+    /** Nothing resolvable — open the details screen for [series] instead. */
+    data class Details(val series: MediaItem) : SeriesPlayResolution
 }

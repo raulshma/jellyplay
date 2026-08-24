@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.home
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.core.data.catalogue.NextEpisode
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
@@ -73,6 +75,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
+    private val episodeCatalogue: EpisodeCatalogue,
     private val userDataMutator: UserDataMutator,
     private val mediaSearchEngine: MediaSearchEngine,
     private val offlineFirstItemResolver: OfflineFirstItemResolver,
@@ -547,6 +550,7 @@ class HomeViewModel @Inject constructor(
             is HomeUiEvent.SetLibrarySectionVisible -> setLibrarySectionVisible(event.libraryId, event.type, event.visible)
             is HomeUiEvent.PrefetchPhotoFolderChildUrls -> prefetchPhotoFolderChildUrls(event.items)
             is HomeUiEvent.EnsurePendingItemDetails -> ensurePendingItemDetails(event.itemIds)
+            is HomeUiEvent.PlaySeries -> resolveSeriesPlay(event)
         }
     }
 
@@ -560,6 +564,62 @@ class HomeViewModel @Inject constructor(
 
     fun saveHomeScrollPosition(firstVisibleItemIndex: Int, firstVisibleItemScrollOffset: Int) =
         scrollPositionStore.save(firstVisibleItemIndex, firstVisibleItemScrollOffset)
+
+    /** Single-flight latch for [resolveSeriesPlay] — main-thread only. */
+    private var seriesPlayResolveInFlight = false
+
+    /**
+     * Resolves which EPISODE of a home section SERIES card's play affordance
+     * should start: the shared catalogue-side smart-play decision
+     * ([NextEpisode.forSorted] over the playback-sorted snapshot — resume →
+     * next unplayed → replay first), i.e. the same rule the detail screen's
+     * primary button applies. A series folder must never be handed to the
+     * player itself.
+     *
+     * Cards resolve against the server catalogue; when the screen is
+     * rendering downloaded content ([isRenderingDownloads]) the catalogue
+     * reads local episodes instead — so an implicit-offline session (fetch
+     * failed, downloads shown) never pokes the server that just failed.
+     * Single-flight: taps arriving while a resolve is in flight are dropped.
+     * [HomeUiEvent.PlaySeries.onResolved] fires on the main thread exactly
+     * once per accepted request.
+     */
+    private fun resolveSeriesPlay(event: HomeUiEvent.PlaySeries) {
+        // Single-flight: rapid double-taps must not stack catalogue loads or
+        // double-navigate.
+        if (seriesPlayResolveInFlight) return
+        seriesPlayResolveInFlight = true
+        launch {
+            try {
+                val target = episodeCatalogue.loadSeriesEpisodes(
+                    event.series.id,
+                    offline = isRenderingDownloads(),
+                ).getOrNull()?.let { NextEpisode.forSorted(it.sortedEpisodes) }
+                val episode = target?.episode
+                event.onResolved(
+                    if (episode != null) {
+                        SeriesPlayResolution.Episode(episode, target.startPositionTicks)
+                    } else {
+                        SeriesPlayResolution.Details(event.series)
+                    },
+                )
+            } finally {
+                seriesPlayResolveInFlight = false
+            }
+        }
+    }
+
+    /**
+     * True when the home screen renders (or would render) downloaded content
+     * rather than server content: explicit offline mode, or the implicit one
+     * — the online fetch failed leaving only downloads to show (the same
+     * condition `MainHomeContent` uses to swap in [OfflineHomeContent]). The
+     * empty-library corner of that render check is deliberately omitted: with
+     * no downloads the error screen shows and no series card can fire this.
+     */
+    private fun isRenderingDownloads(): Boolean = _uiState.value.let { state ->
+        state.offlineMode != OfflineMode.ONLINE || (state.error != null && state.sections.isEmpty())
+    }
 
     /**
      * Shared offline-delete module (core/data) — the same collapse/defense

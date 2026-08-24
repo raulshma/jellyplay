@@ -281,8 +281,35 @@ private fun MainHomeContent(
     val currentOnItemClick by rememberUpdatedState(callbacks.onItemClick)
     val mediaOnItemClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> currentOnItemClick(item.id, item.mediaType, item.parentId, item.name) } }
     val currentOnPlayClick by rememberUpdatedState(callbacks.onPlayClick)
+    // Single funnel for every play affordance on a media card (overlay button,
+    // quick-action menu, continue-watching ASK dialog). A SERIES card must
+    // never route its own folder id to the player — the VM resolves which
+    // episode to start first (resume → next unplayed → replay, the detail
+    // screen's smart-play rule), through the onEvent funnel like every other
+    // intent; this lambda only maps the outcome onto the navigation callbacks.
     val mediaOnPlayClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem ->
-        currentOnPlayClick(item.id, null, item.playbackPositionTicks ?: 0L, item.mediaType, item.parentId, item.name)
+        if (item.mediaType == MediaType.SERIES) {
+            viewModel.onEvent(HomeUiEvent.PlaySeries(item) { resolution ->
+                when (resolution) {
+                    is SeriesPlayResolution.Episode -> currentOnPlayClick(
+                        resolution.item.id,
+                        null,
+                        resolution.startPositionTicks,
+                        resolution.item.mediaType,
+                        resolution.item.parentId,
+                        resolution.item.name,
+                    )
+                    is SeriesPlayResolution.Details -> currentOnItemClick(
+                        resolution.series.id,
+                        resolution.series.mediaType,
+                        resolution.series.parentId,
+                        resolution.series.name,
+                    )
+                }
+            })
+        } else {
+            currentOnPlayClick(item.id, null, item.playbackPositionTicks ?: 0L, item.mediaType, item.parentId, item.name)
+        }
     } }
 
     // Item awaiting a delete-confirm from the offline home's quick-action menu.

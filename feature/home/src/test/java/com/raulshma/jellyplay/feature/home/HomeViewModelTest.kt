@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.lifecycle.LifecycleOwner
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
@@ -73,11 +75,14 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.io.IOException
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -108,6 +113,7 @@ class HomeViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var episodeCatalogue: EpisodeCatalogue
     private lateinit var userDataMutator: FakeUserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var photoFolderPrefetcher: PhotoFolderPrefetcher
@@ -212,6 +218,7 @@ class HomeViewModelTest {
     @Before
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
+        episodeCatalogue = mockk(relaxed = true)
         userDataMutator = FakeUserDataMutator()
         imageUrlProvider = mockk(relaxed = true)
         photoFolderPrefetcher = mockk(relaxed = true)
@@ -258,6 +265,7 @@ class HomeViewModelTest {
 
     private fun buildViewModel(): HomeViewModel = HomeViewModel(
         mediaRepository = mediaRepository,
+        episodeCatalogue = episodeCatalogue,
         userDataMutator = userDataMutator,
         mediaSearchEngine = mediaSearchEngine,
         offlineFirstItemResolver = offlineFirstItemResolver,
@@ -775,6 +783,130 @@ class HomeViewModelTest {
     )
 
     private fun item(id: String) = MediaItem(id = id, name = id, mediaType = MediaType.MOVIE)
+
+    private fun episode(id: String, played: Boolean = false, ticks: Long? = null) = MediaItem(
+        id = id,
+        name = id,
+        mediaType = MediaType.EPISODE,
+        parentId = "season-1",
+        playbackPositionTicks = ticks,
+        isPlayed = played,
+    )
+
+    // ── PlaySeries (series card smart-play resolution) ──────────────────────
+
+    private fun snapshot(seriesId: String, episodes: List<MediaItem>) = EpisodeCatalogueSnapshot(
+        seriesId = seriesId,
+        seasons = emptyList(),
+        episodesBySeason = mapOf("season-1" to episodes),
+        fetchedSeasonIds = setOf("season-1"),
+        sortedEpisodes = episodes,
+        epoch = 1L,
+    )
+
+    private fun series(id: String) = MediaItem(id = id, name = id, mediaType = MediaType.SERIES)
+
+    @Test
+    fun playSeries_picksResumeEpisode_fromCatalogueDecision() = runTest {
+        val episodes = listOf(
+            episode("ep-1", played = true),
+            episode("ep-2", ticks = 600_000_000L),
+            episode("ep-3"),
+        )
+        coEvery {
+            episodeCatalogue.loadSeriesEpisodes("series-1", offline = false)
+        } returns Result.success(snapshot("series-1", episodes))
+        viewModel = buildViewModel()
+
+        var resolved: SeriesPlayResolution? = null
+        viewModel.onEvent(HomeUiEvent.PlaySeries(series("series-1")) { resolved = it })
+        runCurrent()
+
+        val target = resolved as SeriesPlayResolution.Episode
+        assertEquals("ep-2", target.item.id)
+        assertEquals(600_000_000L, target.startPositionTicks)
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun playSeries_catalogueFailure_fallsBackToDetails() = runTest {
+        coEvery {
+            episodeCatalogue.loadSeriesEpisodes("series-x", offline = false)
+        } returns Result.failure(IllegalStateException("server unreachable"))
+        viewModel = buildViewModel()
+
+        var resolved: SeriesPlayResolution? = null
+        viewModel.onEvent(HomeUiEvent.PlaySeries(series("series-x")) { resolved = it })
+        runCurrent()
+
+        assertEquals("series-x", (resolved as SeriesPlayResolution.Details).series.id)
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun playSeries_offlineHome_readsDownloadedEpisodes() = runTest {
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        viewModel = buildViewModel()
+        runCurrent()
+        assertEquals(OfflineMode.OFFLINE_MANUAL, viewModel.uiState.value.offlineMode)
+
+        coEvery {
+            episodeCatalogue.loadSeriesEpisodes("series-1", offline = true)
+        } returns Result.success(snapshot("series-1", listOf(episode("dl-ep-1"))))
+
+        var resolved: SeriesPlayResolution? = null
+        viewModel.onEvent(HomeUiEvent.PlaySeries(series("series-1")) { resolved = it })
+        runCurrent()
+
+        assertEquals("dl-ep-1", (resolved as SeriesPlayResolution.Episode).item.id)
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun playSeries_failedFetchWithDownloads_isImplicitOffline() = runTest {
+        // The screen's implicit-offline render branch: online mode, but the
+        // fetch failed leaving only downloads. Resolution must read local
+        // episodes, not poke the server that just failed.
+        coEvery { mediaRepository.getHomeSections(any()) } returns
+            Result.failure(IOException("server down"))
+        viewModel = buildViewModel()
+        signIn("u1")
+        runCurrent()
+        assertEquals(OfflineMode.ONLINE, viewModel.uiState.value.offlineMode)
+        assertNotNull(viewModel.uiState.value.error)
+
+        coEvery {
+            episodeCatalogue.loadSeriesEpisodes("series-1", offline = true)
+        } returns Result.success(snapshot("series-1", listOf(episode("dl-ep-1"))))
+
+        var resolved: SeriesPlayResolution? = null
+        viewModel.onEvent(HomeUiEvent.PlaySeries(series("series-1")) { resolved = it })
+        runCurrent()
+
+        assertEquals("dl-ep-1", (resolved as SeriesPlayResolution.Episode).item.id)
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun playSeries_rapidSecondTap_whileResolveInFlight_isDropped() = runTest {
+        val gate = CompletableDeferred<Result<EpisodeCatalogueSnapshot>>()
+        coEvery {
+            episodeCatalogue.loadSeriesEpisodes(any(), any())
+        } coAnswers { gate.await() }
+        viewModel = buildViewModel()
+
+        var firstResolved: SeriesPlayResolution? = null
+        var secondResolved: SeriesPlayResolution? = null
+        viewModel.onEvent(HomeUiEvent.PlaySeries(series("s-a")) { firstResolved = it })
+        viewModel.onEvent(HomeUiEvent.PlaySeries(series("s-b")) { secondResolved = it })
+
+        gate.complete(Result.success(snapshot("s-a", listOf(episode("a-ep-1")))))
+        runCurrent()
+
+        assertEquals("a-ep-1", (firstResolved as SeriesPlayResolution.Episode).item.id)
+        assertNull(secondResolved)
+        stopPeriodicRefresh()
+    }
 
     /**
      * Controllable [TimeSource] whose clock defaults to a fixed epoch so the
