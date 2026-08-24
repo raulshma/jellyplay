@@ -45,7 +45,11 @@ import com.raulshma.jellyplay.feature.calendar.di.calendarModule
 
 import com.raulshma.jellyplay.feature.requests.di.requestsModule
 
+
 import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
+
+import com.raulshma.jellyplay.feature.insights.di.insightsModule
+
 
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
@@ -205,11 +209,19 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // at all.
                 requestsModule,
 
+
                 // V3 newsletter conveyor: imageUrlProvider/notificationStore/
                 // authRepository were already Koin-native; mediaRepository
                 // resolves through the hiltInteropModule single above — no
                 // new interop definitions were needed for this feature.
                 newsletterModule,
+
+                // V3 insights conveyor: WatchHistoryRepository and
+                // PlaybackRepository are Koin-native (dataJvmModule); the
+                // MediaRepository dep resolves through the hiltInteropModule
+                // single above (impl stays Hilt-bound until Phase X).
+                insightsModule,
+
 
             )
         }

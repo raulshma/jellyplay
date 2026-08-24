@@ -1,8 +1,5 @@
 package com.raulshma.jellyplay.feature.insights.heatmap
 
-import android.content.Context
-import android.content.Intent
-import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -67,24 +64,50 @@ import androidx.compose.ui.semantics.semantics
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import com.raulshma.jellyplay.feature.insights.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
-import androidx.core.view.drawToBitmap
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.layout.ContentScale
 import coil3.size.Size as CoilSize
+import com.raulshma.jellyplay.feature.insights.generated.resources.Res
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_activity_grid
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_cd_configure_heatmap
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_cd_next_year
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_cd_previous_year
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_cd_share
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_day_sat
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_day_sun
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_day_thu
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_day_tue
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_days_format
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_duration_hm
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_duration_m
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_duration_under_minute
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_filter_type
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_heatmap_summary
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_legend_less
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_legend_more
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_loading
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_minutes_watched
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_no_activity
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_no_activity_for_year
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_played
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_plugin_missing_message
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_select_year
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_sessions_watched
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_share_chooser_title
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_stat_active_days
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_stat_current_streak
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_stat_longest_streak
+import com.raulshma.jellyplay.feature.insights.generated.resources.insights_title_watch_progress
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 import com.composables.icons.tabler.Tabler
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.composables.icons.tabler.outline.Check
@@ -110,11 +133,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvFocusDefaults
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -125,13 +144,17 @@ import java.time.temporal.ChronoUnit
 fun WatchProgressHeatmapScreen(
     onBack: () -> Unit,
     onItemClick: (String) -> Unit = {},
-    viewModel: WatchProgressHeatmapViewModel = hiltViewModel(),
+    viewModel: WatchProgressHeatmapViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val view = LocalView.current
     val adaptiveInfo = LocalAdaptiveInfo.current
+    // Share seam (editor picker gating pattern): the Android actual carries the
+    // capture + FileProvider chooser bodies; the desktop actual is null and the
+    // share IconButton below stays hidden. The chooser title resolves here in
+    // composition — the legacy body called Context.getString at share time.
+    val shareChooserTitle = stringResource(Res.string.insights_share_chooser_title)
+    val share = rememberHeatmapShare(shareChooserTitle)
 
     // TV focus-on-launch: focus the heatmap content once it arrives so D-pad input lands on
     // content, not the navigation drawer.
@@ -142,30 +165,25 @@ fun WatchProgressHeatmapScreen(
         tag = "heatmap_init",
     )
 
-    if (state.shareRequested) {
+    if (state.shareRequested && share != null) {
         LaunchedEffect(state.shareRequested) {
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    // TODO(F-23): capture only the HeatmapGrid subtree once
-                    // rememberGraphicsLayer is available in the Compose BOM.
-                    val bitmap = view.drawToBitmap()
-                    shareHeatmapImage(context, bitmap)
-                }
-            }
+            share.shareHeatmapImage()
             viewModel.onEvent(HeatmapEvent.ShareConsumed)
         }
     }
 
     JellyPlayScreenScaffold(
-        title = stringResource(R.string.insights_title_watch_progress),
+        title = stringResource(Res.string.insights_title_watch_progress),
         onBack = onBack,
         actions = {
-            val shareFocusState = rememberTvFocusState()
-            IconButton(
-                onClick = { viewModel.onEvent(HeatmapEvent.RequestShare) },
-                modifier = Modifier.then(shareFocusState.focusModifier).tvFocusIndicator(shareFocusState, CircleShape),
-            ) {
-                Icon(Tabler.Outline.Share, contentDescription = stringResource(R.string.insights_cd_share))
+            if (share != null) {
+                val shareFocusState = rememberTvFocusState()
+                IconButton(
+                    onClick = { viewModel.onEvent(HeatmapEvent.RequestShare) },
+                    modifier = Modifier.then(shareFocusState.focusModifier).tvFocusIndicator(shareFocusState, CircleShape),
+                ) {
+                    Icon(Tabler.Outline.Share, contentDescription = stringResource(Res.string.insights_cd_share))
+                }
             }
             var menuExpanded by remember { mutableStateOf(false) }
             Box {
@@ -174,14 +192,14 @@ fun WatchProgressHeatmapScreen(
                     onClick = { menuExpanded = true },
                     modifier = Modifier.then(filterFocusState.focusModifier).tvFocusIndicator(filterFocusState, CircleShape),
                 ) {
-                    Icon(Tabler.Outline.Filter, contentDescription = stringResource(R.string.insights_cd_configure_heatmap))
+                    Icon(Tabler.Outline.Filter, contentDescription = stringResource(Res.string.insights_cd_configure_heatmap))
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
                 ) {
                     Text(
-                        text = stringResource(R.string.insights_filter_type),
+                        text = stringResource(Res.string.insights_filter_type),
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         color = MaterialTheme.colorScheme.primary,
@@ -205,7 +223,7 @@ fun WatchProgressHeatmapScreen(
                     }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     Text(
-                        text = stringResource(R.string.insights_select_year),
+                        text = stringResource(Res.string.insights_select_year),
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         color = MaterialTheme.colorScheme.primary,
@@ -235,7 +253,7 @@ fun WatchProgressHeatmapScreen(
         val isTv = LocalTvMode.current
         if (state.isLoading) {
             ScreenLoadingState(
-                message = stringResource(R.string.insights_loading),
+                message = stringResource(Res.string.insights_loading),
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
@@ -281,7 +299,7 @@ fun WatchProgressHeatmapScreen(
                                 color = MaterialTheme.colorScheme.errorContainer,
                             ) {
                                 Text(
-                                    text = stringResource(R.string.insights_plugin_missing_message),
+                                    text = stringResource(Res.string.insights_plugin_missing_message),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     modifier = Modifier.padding(12.dp),
@@ -297,7 +315,7 @@ fun WatchProgressHeatmapScreen(
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                             ) {
                                 Text(
-                                    text = stringResource(R.string.insights_no_activity_for_year, state.year),
+                                    text = stringResource(Res.string.insights_no_activity_for_year, state.year),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(12.dp),
@@ -355,7 +373,7 @@ fun WatchProgressHeatmapScreen(
                                     color = MaterialTheme.colorScheme.errorContainer,
                                 ) {
                                     Text(
-                                        text = stringResource(R.string.insights_plugin_missing_message),
+                                        text = stringResource(Res.string.insights_plugin_missing_message),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onErrorContainer,
                                         modifier = Modifier.padding(12.dp),
@@ -370,7 +388,7 @@ fun WatchProgressHeatmapScreen(
                                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 ) {
                                     Text(
-                                        text = stringResource(R.string.insights_no_activity_for_year, state.year),
+                                        text = stringResource(Res.string.insights_no_activity_for_year, state.year),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(12.dp),
@@ -398,7 +416,7 @@ fun WatchProgressHeatmapScreen(
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
                             Text(
-                                text = stringResource(R.string.insights_activity_grid),
+                                text = stringResource(Res.string.insights_activity_grid),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                             )
@@ -454,7 +472,7 @@ private fun YearSelector(
             onClick = { onYearChange(year - 1) },
             modifier = Modifier.then(prevYearFocusState.focusModifier).tvFocusIndicator(prevYearFocusState, CircleShape),
         ) {
-            Icon(Tabler.Outline.ChevronLeft, contentDescription = stringResource(R.string.insights_cd_previous_year))
+            Icon(Tabler.Outline.ChevronLeft, contentDescription = stringResource(Res.string.insights_cd_previous_year))
         }
         Text(
             text = year.toString(),
@@ -468,7 +486,7 @@ private fun YearSelector(
             enabled = year < currentYear,
             modifier = Modifier.then(nextYearFocusState.focusModifier).tvFocusIndicator(nextYearFocusState, CircleShape),
         ) {
-            Icon(Tabler.Outline.ChevronRight, contentDescription = stringResource(R.string.insights_cd_next_year))
+            Icon(Tabler.Outline.ChevronRight, contentDescription = stringResource(Res.string.insights_cd_next_year))
         }
     }
 }
@@ -494,21 +512,21 @@ private fun StreakStats(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StatItem(stringResource(R.string.insights_stat_current_streak), stringResource(R.string.insights_days_format, streakInfo.currentStreak))
+            StatItem(stringResource(Res.string.insights_stat_current_streak), stringResource(Res.string.insights_days_format, streakInfo.currentStreak))
             Box(
                 modifier = Modifier
                     .width(1.dp)
                     .height(24.dp)
                     .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
             )
-            StatItem(stringResource(R.string.insights_stat_longest_streak), stringResource(R.string.insights_days_format, streakInfo.longestStreak))
+            StatItem(stringResource(Res.string.insights_stat_longest_streak), stringResource(Res.string.insights_days_format, streakInfo.longestStreak))
             Box(
                 modifier = Modifier
                     .width(1.dp)
                     .height(24.dp)
                     .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
             )
-            StatItem(stringResource(R.string.insights_stat_active_days), streakInfo.totalActiveDays.toString())
+            StatItem(stringResource(Res.string.insights_stat_active_days), streakInfo.totalActiveDays.toString())
         }
     }
 }
@@ -645,7 +663,7 @@ private fun HeatmapGrid(
         calculateGrid(year, dailyActivities, minActivityDate)
     }
     val activeDays = remember(grid) { grid.count { it != null && it.level > 0 } }
-    val heatmapSummary = pluralStringResource(R.plurals.insights_heatmap_summary, activeDays, year, activeDays)
+    val heatmapSummary = pluralStringResource(Res.plurals.insights_heatmap_summary, activeDays, year, activeDays)
 
     val cellSize = 11.dp
     val cellGap = 2.dp
@@ -693,10 +711,10 @@ private fun HeatmapGrid(
         months
     }
 
-    val sun = stringResource(R.string.insights_day_sun)
-    val tue = stringResource(R.string.insights_day_tue)
-    val thu = stringResource(R.string.insights_day_thu)
-    val sat = stringResource(R.string.insights_day_sat)
+    val sun = stringResource(Res.string.insights_day_sun)
+    val tue = stringResource(Res.string.insights_day_tue)
+    val thu = stringResource(Res.string.insights_day_thu)
+    val sat = stringResource(Res.string.insights_day_sat)
     val dayLabels = remember(sun, tue, thu, sat) {
         listOf(sun, "", tue, "", thu, "", sat)
     }
@@ -876,7 +894,7 @@ private fun HeatmapGrid(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            stringResource(R.string.insights_legend_less),
+            stringResource(Res.string.insights_legend_less),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -891,7 +909,7 @@ private fun HeatmapGrid(
             Spacer(Modifier.width(2.dp))
         }
         Text(
-            stringResource(R.string.insights_legend_more),
+            stringResource(Res.string.insights_legend_more),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -971,13 +989,13 @@ private fun DayDetailSheet(
                 val hours = totalMinutes / 60
                 val mins = totalMinutes % 60
                 val durationText = when {
-                    hours > 0 -> stringResource(R.string.insights_duration_hm, hours, mins)
-                    mins > 0 -> stringResource(R.string.insights_duration_m, mins)
-                    dayInfo.sessions.isNotEmpty() -> stringResource(R.string.insights_duration_under_minute)
-                    else -> stringResource(R.string.insights_no_activity)
+                    hours > 0 -> stringResource(Res.string.insights_duration_hm, hours, mins)
+                    mins > 0 -> stringResource(Res.string.insights_duration_m, mins)
+                    dayInfo.sessions.isNotEmpty() -> stringResource(Res.string.insights_duration_under_minute)
+                    else -> stringResource(Res.string.insights_no_activity)
                 }
                 Text(
-                    text = pluralStringResource(R.plurals.insights_sessions_watched, dayInfo.sessions.size, dayInfo.sessions.size, durationText),
+                    text = pluralStringResource(Res.plurals.insights_sessions_watched, dayInfo.sessions.size, dayInfo.sessions.size, durationText),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1043,7 +1061,7 @@ private fun DayDetailSheet(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                text = if (posMinutes > 0) stringResource(R.string.insights_minutes_watched, posMinutes) else stringResource(R.string.insights_played),
+                                text = if (posMinutes > 0) stringResource(Res.string.insights_minutes_watched, posMinutes) else stringResource(Res.string.insights_played),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -1082,13 +1100,13 @@ private fun DayDetailSheet(
                 val hours = totalMinutes / 60
                 val mins = totalMinutes % 60
                 val durationText = when {
-                    hours > 0 -> stringResource(R.string.insights_duration_hm, hours, mins)
-                    mins > 0 -> stringResource(R.string.insights_duration_m, mins)
-                    dayInfo.sessions.isNotEmpty() -> stringResource(R.string.insights_duration_under_minute)
-                    else -> stringResource(R.string.insights_no_activity)
+                    hours > 0 -> stringResource(Res.string.insights_duration_hm, hours, mins)
+                    mins > 0 -> stringResource(Res.string.insights_duration_m, mins)
+                    dayInfo.sessions.isNotEmpty() -> stringResource(Res.string.insights_duration_under_minute)
+                    else -> stringResource(Res.string.insights_no_activity)
                 }
                 Text(
-                    text = pluralStringResource(R.plurals.insights_sessions_watched, dayInfo.sessions.size, dayInfo.sessions.size, durationText),
+                    text = pluralStringResource(Res.plurals.insights_sessions_watched, dayInfo.sessions.size, dayInfo.sessions.size, durationText),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1154,7 +1172,7 @@ private fun DayDetailSheet(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                text = if (posMinutes > 0) stringResource(R.string.insights_minutes_watched, posMinutes) else stringResource(R.string.insights_played),
+                                text = if (posMinutes > 0) stringResource(Res.string.insights_minutes_watched, posMinutes) else stringResource(Res.string.insights_played),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -1169,22 +1187,4 @@ private fun DayDetailSheet(
             }
         }
     }
-}
-
-private fun shareHeatmapImage(context: Context, bitmap: Bitmap) {
-    val file = File(context.cacheDir, "watch_progress_heatmap.png")
-    FileOutputStream(file).use { out ->
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-    }
-    val uri = FileProvider.getUriForFile(
-        context,
-        "${context.packageName}.fileprovider",
-        file,
-    )
-    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-        type = "image/png"
-        putExtra(Intent.EXTRA_STREAM, uri)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.insights_share_chooser_title)))
 }

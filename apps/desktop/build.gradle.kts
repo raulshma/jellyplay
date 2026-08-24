@@ -73,7 +73,7 @@ dependencies {
     // boot stays safe, and the desktop shell has no editor nav entry).
     implementation(project(":shared:feature:editor"))
 
-    // …calendar, next conveyor item (DI registration only — fully
+    // …calendar, conveyor feature (DI registration only — fully
     // live-resolvable: all three VM ctor deps have desktop defs; dormant
     // because the shell has no calendar nav entry yet).
     implementation(project(":shared:feature:calendar"))
@@ -93,6 +93,14 @@ dependencies {
     // would only resolve after the data-layer flip; the shell has no
     // newsletter nav entry yet either way).
     implementation(project(":shared:feature:newsletter"))
+
+
+    // …insights, conveyor feature (DI registration only — the heatmap VM
+    // takes two Koin-native deps plus MediaRepository, which has no desktop
+    // definition yet, so the registration is latent; the shell has no
+    // insights nav entry, and the share seam's null actual keeps the share
+    // button hidden when a screen lands).
+    implementation(project(":shared:feature:insights"))
 
 
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads

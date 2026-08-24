@@ -47,6 +47,8 @@ import com.raulshma.jellyplay.feature.shortcuts.di.shortcutsModule
 
 import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
 
+import com.raulshma.jellyplay.feature.insights.di.insightsModule
+
 import org.koin.core.context.startKoin
 
 fun main() {
@@ -127,7 +129,7 @@ fun main() {
             // screen would degrade to URL-only uploads, not crash.
             editorModule,
 
-            // …calendar, next conveyor item — unlike the features above it is
+            // …calendar, conveyor feature — unlike the features above it is
             // FULLY live-resolvable here: ArrRepository + SeerrRepository
             // (dataJvmModule) and ExperimentalStore (datastoreCommonModule)
             // all have desktop definitions, so instantiating the calendar
@@ -147,6 +149,7 @@ fun main() {
 
 
 
+
             // …shortcuts, a later conveyor item — same fully-live shape as
             // calendar/requests above: the single ctor dep (AuthRepository)
             // already resolves from dataJvmModule, so this registration is
@@ -163,6 +166,17 @@ fun main() {
             // resolution and the shell has no newsletter nav entry, so the
             // registration is inert until the data layer flips.
             newsletterModule,
+
+
+            // …insights, conveyor feature — WatchHistoryRepository and
+            // PlaybackRepository resolve from dataJvmModule, but the third
+            // ctor dep (MediaRepository) has no desktop definition yet, so
+            // resolution would throw NoDefinitionFound — the same
+            // documented-latent state as search/library/music/livetv/admin.
+            // The desktop shell has no insights nav entry, so nothing
+            // instantiates it (and the share seam's null actual hides the
+            // share button regardless).
+            insightsModule,
 
 
         )

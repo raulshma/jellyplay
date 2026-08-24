@@ -10,12 +10,10 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import javax.inject.Inject
 
 @Immutable
 data class WatchProgressHeatmapUiState(
@@ -55,8 +53,7 @@ sealed interface HeatmapEvent {
     data object ShareConsumed : HeatmapEvent
 }
 
-@HiltViewModel
-class WatchProgressHeatmapViewModel @Inject constructor(
+class WatchProgressHeatmapViewModel(
     private val watchHistoryRepository: WatchHistoryRepository,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
