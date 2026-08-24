@@ -8,6 +8,11 @@ import org.koin.core.qualifier.named
  * shim one-to-one (docs/kmp-migration-plan.md §Phase C4). Cross-module: the
  * shared database/network Koin modules and the Android Hilt bridges resolve
  * the application scope through [applicationScope].
+ *
+ * commonMain since §Phase W (was jvmShared): the qualifiers are pure Koin
+ * naming with no platform symbols, and the web shell needs them to bind its
+ * platform DataStores. Same package as before the move, so no consumer
+ * import changes.
  */
 object DatastoreQualifiers {
 

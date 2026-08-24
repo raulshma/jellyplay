@@ -39,9 +39,10 @@ jobs:
       - name: Build shared targets (JVM + wasm + Android)
         # The AGP KMP library plugin exposes no per-variant assembleDebug;
         # android target verifies via its single androidMain compilation.
-        # wasmJs target exists on model/datastore/designsystem/network only —
-        # database, data and player-contract ship without it (no Room on wasm v1,
-        # plan §Phase W; player-contract supertypes live in shared core:data).
+        # wasmJs target exists on model/datastore/designsystem/network plus
+        # the apps:web shell (§Phase W) — database, data and player-contract
+        # ship without it (no Room on wasm v1, plan §Phase W;
+        # player-contract supertypes live in shared core:data).
         run: >
           ./gradlew
           :shared:core:model:jvmJar
@@ -111,6 +112,7 @@ jobs:
           :shared:feature:arrqueue:jvmJar
           :shared:feature:arrqueue:compileAndroidMain
 
+          :apps:web:compileKotlinWasmJs
 
           --stacktrace
 
@@ -156,3 +158,10 @@ jobs:
 
 
           --stacktrace
+
+      - name: Shell tests (Koin registration guard)
+        # :apps:desktop:test hosts the Koin-registration ratchet
+        # (KoinModuleRegistrationGuardTest) — startKoin wiring is runtime-only
+        # and invisible to every compile gate (arrqueue/shortcuts lessons,
+        # plan §Phase X), so it must run in CI, not just locally.
+        run: ./gradlew :apps:desktop:test --stacktrace

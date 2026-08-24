@@ -33,18 +33,14 @@ kotlin {
 
     sourceSets {
         // JVM-semantics code shared verbatim by android + desktop: PinHasher
-        // (java.security PBKDF2/SHA-256) and UUID generation. Wasm gets
-        // replacements when its consumers ship (plan §Phase W).
+        // (java.security PBKDF2/SHA-256), UUID generation and runBlocking
+        // first-value reads. The DI module/qualifiers moved to commonMain in
+        // §Phase W (web shell needs them); jvmShared keeps only these
+        // platform actuals.
         val jvmShared = create("jvmShared")
         jvmShared.dependsOn(getByName("commonMain"))
         getByName("androidMain") { dependsOn(jvmShared) }
         getByName("jvmMain") { dependsOn(jvmShared) }
-
-        getByName("jvmShared").dependencies {
-            // Module/qualifier types appear in the public di signatures
-            // (Phase C4 Koin construction owner). Never visible to wasmJs.
-            api(libs.koin.core)
-        }
 
         getByName("commonMain").dependencies {
             api(project(":shared:core:model"))
@@ -52,6 +48,10 @@ kotlin {
             // (the Android-only Context delegate stays in the legacy shim's DI).
             api(libs.datastore.preferences.core)
             api(libs.okio)
+            // Koin module/qualifier types are public commonMain API since
+            // §Phase W (the web shell binds its DataStores through them);
+            // koin-core publishes android/jvm/wasmJs.
+            api(libs.koin.core)
             implementation(libs.kotlinx.serialization.json)
             // Annotation-only Compose usage (@Immutable/@Stable on preference
             // models), same pattern as :shared:core:model.
@@ -65,6 +65,12 @@ kotlin {
         getByName("jvmMain").dependencies {
             // SecureKeyValueStorage desktop actual (OS keyring via JNA).
             implementation(libs.java.keyring)
+        }
+        getByName("wasmJsMain").dependencies {
+            // DOM access for the localStorage-backed DataStore storage of
+            // webDatastoreModule (§Phase W spike: datastore 1.2.1 ships a
+            // public Storage/StorageConnection API on wasmJs).
+            implementation(libs.kotlinx.browser)
         }
         getByName("commonTest").dependencies {
             implementation(kotlin("test"))

@@ -99,3 +99,8 @@ include(":shared:feature:subtitle-tester")
 
 // Desktop shell (plan §Phase V1b)
 include(":apps:desktop")
+
+// Web shell (plan §Phase W): wasmJs/browser skeleton over the shared
+// datastore DI stack; API transport (Ktor) and image engine (Coil) land
+// with the W.1/W.4 slices.
+include(":apps:web")
