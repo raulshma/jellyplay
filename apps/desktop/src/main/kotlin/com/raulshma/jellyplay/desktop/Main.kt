@@ -202,7 +202,10 @@ fun main() {
             // commonMain Koin module to register. The shared settings-search
             // row for Route.SubtitleTester stays unreachable on desktop
             // (settings itself is omitted v1); desktop's navigateFilter
-            // guards any un-registered route a shared screen pushes.
+            // intercepts the un-registered routes a shared screen pushes
+            // TODAY — the guard list is hand-enumerated
+            // (isDesktopDeadEndRoute in DesktopAppRoot) and must be kept
+            // in sync when features gain or change pushed routes.
 
         )
     }

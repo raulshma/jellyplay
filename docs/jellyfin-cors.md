@@ -9,9 +9,14 @@ Sharing rules. If JellyPlay Web is served from one origin (e.g.
 (e.g. `https://media.example.net`), the browser will refuse to expose the
 responses **unless your Jellyfin reverse proxy sends CORS headers**.
 
-Jellyfin's own server does not emit `Access-Control-Allow-Origin` for
-third-party origins (only for its bundled web client), so the proxy in front
-of it must add them. This guide shows the minimal nginx and Caddy snippets.
+**Check your server first**: stock Jellyfin (≥10.9) ships a permissive CORS
+default — `network.xml`'s `CorsHosts` defaults to `*` with any-header
+allowed, and its ASP.NET middleware answers `OPTIONS` preflights itself — so
+a default install serves third-party origins out of the box and you likely
+need none of this. This guide is for hardened setups where `CorsHosts` has
+been restricted (or CORS is terminated/rewritten at the proxy), plus the one
+gap that exists even on default installs: the browser hides response headers
+like `Retry-After` unless `Access-Control-Expose-Headers` is set.
 
 ## What the web client sends
 
@@ -27,7 +32,9 @@ exactly like the SDK-based native clients:
 
 `Authorization`, `X-Emby-Token` and a JSON `Content-Type` are all
 non-simple per the fetch spec, so **every API request triggers an `OPTIONS`
-preflight**. The proxy must answer preflights itself — Jellyfin does not.
+preflight**. On a default Jellyfin install the server's own CORS middleware
+answers those; if you are adding CORS at the proxy instead, the proxy must
+answer preflights itself.
 
 Images (`/Items/{itemId}/Images/{type}`) and subtitle files are plain GETs;
 their URLs are built without an `api_key` query parameter (auth travels on

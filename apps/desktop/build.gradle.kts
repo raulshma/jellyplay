@@ -150,7 +150,7 @@ tasks.named<Test>("test") {
 configurations.all {
     resolutionStrategy.dependencySubstitution {
         substitute(module("androidx.navigation3:navigation3-ui"))
-            .using(module("org.jetbrains.androidx.navigation3:navigation3-ui:${libs.versions.jbNavigation3Ui.get()}"))
+            .using(module(libs.jb.navigation3.ui.get().toString()))
             .because("google navigation3-ui is jvm-stubbed; desktop NavDisplay needs the JetBrains fork")
     }
 }

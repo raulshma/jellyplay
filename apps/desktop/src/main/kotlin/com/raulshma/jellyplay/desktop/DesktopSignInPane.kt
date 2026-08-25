@@ -148,7 +148,7 @@ internal fun DesktopSignInPane(authRepository: AuthRepository = koinInject()) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (signingIn) {
-                    CircularProgressIndicator(Modifier.height(20.dp).padding(end = 12.dp))
+                    CircularProgressIndicator(Modifier.padding(end = 12.dp).height(20.dp))
                 }
                 Button(
                     enabled = canSubmit,
@@ -156,13 +156,23 @@ internal fun DesktopSignInPane(authRepository: AuthRepository = koinInject()) {
                         signingIn = true
                         errorMessage = null
                         scope.launch {
-                            val result = authRepository.login(serverUrl.trim(), username, password)
-                            signingIn = false
-                            // On success isAuthenticated flips and
-                            // DesktopAppRoot swaps this pane out; only
-                            // failures land here.
-                            result.onFailure { failure ->
+                            try {
+                                val result = authRepository.login(serverUrl.trim(), username.trim(), password)
+                                // On success isAuthenticated flips and
+                                // DesktopAppRoot swaps this pane out; only
+                                // failures land here.
+                                result.onFailure { failure ->
+                                    errorMessage = failure.message ?: "Sign-in failed."
+                                }
+                            } catch (failure: Throwable) {
+                                // login() rethrows on unreachable/typo'd server
+                                // URLs (connectToServer Result → getOrThrow
+                                // inside the API client); onFailure alone would
+                                // leave the spinner stuck.
+                                if (failure is kotlinx.coroutines.CancellationException) throw failure
                                 errorMessage = failure.message ?: "Sign-in failed."
+                            } finally {
+                                signingIn = false
                             }
                         }
                     },
