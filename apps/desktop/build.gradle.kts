@@ -26,41 +26,38 @@ dependencies {
     // MediaEngine contract for the desktop player engine (Phase V2).
     implementation(project(":shared:core:player-contract"))
 
-    // V3 feature conveyor: search (DI registration only for now — the nav
-    // graph wiring lands with the desktop search slice).
+    // V3 feature conveyor: search — LIVE since the Phase X desktop nav v1
+    // (DesktopAppRoot's NavDisplay renders searchSection as the start tab).
     implementation(project(":shared:feature:search"))
 
-    // …library, second conveyor item (DI registration only; PhotoExport is
-    // desktop-inert until a gallery/share story lands there).
+    // …library, second conveyor item — LIVE like search; PhotoExport's
+    // desktop actual is the desktop-inert half (isSupported=false gates the
+    // share buttons).
     implementation(project(":shared:feature:library"))
 
-    // …music, third conveyor item (DI registration only — instant-mix needs
-    // AudioQueueFacade defs that arrive with the desktop player slice).
+    // …music, third conveyor item — PARTIAL, omitted from nav v1: the
+    // AudioQueueFacade cluster (instant-mix + now-playing screens) has no
+    // desktop defs until the desktop player slice.
     implementation(project(":shared:feature:music"))
 
-    // …livetv, fourth conveyor item (DI registration only — documented-latent:
-    // VM deps like mediaRepository have no desktop defs yet, resolution is
-    // lazy so boot stays safe).
+    // …livetv, fourth conveyor item — LIVE since the MediaRepository
+    // cluster flip; liveTvSection renders in the rail.
     implementation(project(":shared:feature:livetv"))
 
-    // …downloads, fifth conveyor item (DI registration only — documented-latent:
-    // downloadRepository/userDataMutator and the OfflineSyncManager single's
-    // repository edges have no desktop defs yet, resolution is lazy so boot
-    // stays safe).
+    // …downloads, fifth conveyor item — fully live since the cluster flip
+    // (series downloads included); downloadsSection renders in the rail.
     implementation(project(":shared:feature:downloads"))
 
-    // …syncplay, sixth conveyor item (DI registration only — documented-latent:
-    // mediaRepository has no desktop def yet, resolution is lazy so boot stays
-    // safe, and the desktop shell has no SyncPlay nav entry).
+    // …syncplay, sixth conveyor item — LIVE since the cluster flip;
+    // syncPlaySection renders in the rail.
     implementation(project(":shared:feature:syncplay"))
 
-    // …settings, seventh conveyor item (DI registration only — documented-latent:
-    // several VM deps (MediaRepository, AdminRepository) have no desktop defs
-    // yet, resolution is lazy so boot stays safe, and the desktop shell has no
-    // settings nav entry).
+    // …settings, seventh conveyor item — PARTIAL, omitted from nav v1:
+    // SettingsViewModel + AboutViewModel still need AdminRepository
+    // (Hilt-only, no desktop def); the shell guards the settings routes.
     implementation(project(":shared:feature:settings"))
 
-    // …admin, eighth conveyor item (DI registration only — documented-latent:
+    // …admin, eighth conveyor item (DI registration only — latent:
     // AdminRepository/AdminStatisticsRepository have no desktop defs yet,
     // resolution is lazy so boot stays safe, and the desktop shell has no
     // admin nav entry).
@@ -68,45 +65,37 @@ dependencies {
 
 
 
-    // …editor, ninth conveyor item (DI registration only — documented-latent:
+    // …editor, ninth conveyor item (DI registration only — latent:
     // StreamingSubtitleStore has no desktop def yet, resolution is lazy so
     // boot stays safe, and the desktop shell has no editor nav entry).
     implementation(project(":shared:feature:editor"))
 
-    // …calendar, conveyor feature (DI registration only — fully
-    // live-resolvable: all three VM ctor deps have desktop defs; dormant
-    // because the shell has no calendar nav entry yet).
+    // …calendar, conveyor feature — LIVE and wired in nav v1
+    // (calendarSection in the rail; all three VM ctor deps resolve).
     implementation(project(":shared:feature:calendar"))
 
 
-    // …requests, eleventh conveyor item (DI registration only — a fully
-    // Koin-native ctor graph on desktop too, same shape as calendar above,
-    // so the registration is live; the desktop shell has no requests nav
-    // entry yet).
+    // …requests, eleventh conveyor item — LIVE and wired in nav v1
+    // (requestsSection in the rail; fully Koin-native ctor graph).
     implementation(project(":shared:feature:requests"))
     implementation(project(":shared:feature:shortcuts"))
 
 
-    // …newsletter, conveyor item after requests (DI registration only —
-    // documented-latent: imageUrlProvider/notificationStore/authRepository
-    // have desktop defs, but mediaRepository does not yet, so the ViewModel
-    // would only resolve after the data-layer flip; the shell has no
-    // newsletter nav entry yet either way).
+    // …newsletter, conveyor item after requests — LIVE since the cluster
+    // flip and wired in nav v1 (newsletterSection in the rail).
     implementation(project(":shared:feature:newsletter"))
 
 
-    // …insights, conveyor feature (DI registration only — the heatmap VM
-    // takes two Koin-native deps plus MediaRepository, which has no desktop
-    // definition yet, so the registration is latent; the shell has no
-    // insights nav entry, and the share seam's null actual keeps the share
-    // button hidden when a screen lands).
+    // …insights, conveyor feature — LIVE since the cluster flip and wired
+    // in nav v1 (insightsSection in the rail; the share seam's null actual
+    // keeps the share button hidden).
     implementation(project(":shared:feature:insights"))
     implementation(project(":shared:feature:arrqueue"))
 
 
-    // …onboarding, conveyor feature — DI registration only (Main.kt): the
-    // wizard VM's four ctor deps are all Koin-native here, but the desktop
-    // shell renders no first-run gate, so nothing instantiates it.
+    // …onboarding, conveyor feature — LIVE; nav v1 registers
+    // onboardingSection (reachable from Shortcuts). A desktop first-run
+    // gate remains future work.
     implementation(project(":shared:feature:onboarding"))
 
 
@@ -118,8 +107,13 @@ dependencies {
     // Dispatchers.Main.immediate; plain JVM has none without this).
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.koin.core)
-    // NavKey is public API surface of shared/core/ui's navigation helpers.
+    // koinInject() for shell-level services (AuthRepository in the sign-in
+    // gate); feature screens bring their own koin-compose-viewmodel edges.
+    implementation(libs.koin.compose)
+    // NavKey is public API surface of shared/core/ui's navigation helpers;
+    // NavDisplay + entryDecorator wiring need the -ui artifact alongside.
     implementation(libs.navigation3.runtime)
+    implementation(libs.navigation3.ui)
     implementation(libs.kotlinx.serialization.json)
     // NavKey polymorphic registration enumerates Route's sealed leaves.
     implementation(kotlin("reflect"))
@@ -128,6 +122,9 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.okhttp)
+
+    // Rail icons (same tabler set the shared feature screens use).
+    implementation(libs.tabler.icons.outline)
 
     testImplementation(kotlin("test"))
 }
@@ -140,6 +137,22 @@ tasks.named<Test>("test") {
         "jna.library.path",
         rootProject.layout.projectDirectory.dir("tools/mpv").asFile.absolutePath,
     )
+}
+
+// google's androidx.navigation3:navigation3-ui publishes only an API-stub for
+// JVM ("jvmstubs") — NavDisplay dies at runtime with
+// "Implemented only in JetBrains fork". The real desktop implementation is
+// the JetBrains fork coordinate; the fork's POM depends on the google runtime
+// artifact, so only the -ui module is swapped (1.1.5 requests collapse onto
+// the fork's 1.1.1 — same androidx.navigation3.ui package, ABI-stable surface).
+// Shared feature modules' jvm artifacts carry the google -ui dep transitively,
+// hence the graph-wide substitution instead of swapping our own direct edge.
+configurations.all {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("androidx.navigation3:navigation3-ui"))
+            .using(module("org.jetbrains.androidx.navigation3:navigation3-ui:${libs.versions.jbNavigation3Ui.get()}"))
+            .because("google navigation3-ui is jvm-stubbed; desktop NavDisplay needs the JetBrains fork")
+    }
 }
 
 compose.desktop {

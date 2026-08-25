@@ -27,6 +27,11 @@ hilt = "2.60.1"
 hiltNavigationCompose = "1.4.0"
 hiltWork = "1.4.0"
 navigation3 = "1.1.5"
+# JetBrains fork of navigation3-ui: google's -ui artifact ships Android plus
+# jvm/linux STUBS only (runtime throws "Implemented only in JetBrains fork");
+# the fork holds the real desktop/web NavDisplay. Runtime stays on the google
+# artifact — the fork's POM depends on it too, so only -ui needs swapping.
+jbNavigation3Ui = "1.1.1"
 lifecycleViewmodelNav3 = "2.11.0"
 jellyfinSdk = "1.8.12"
 media3 = "1.10.1"
@@ -128,6 +133,9 @@ compose-material3-adaptive-navigation-suite = { group = "androidx.compose.materi
 # Navigation 3
 navigation3-runtime = { group = "androidx.navigation3", name = "navigation3-runtime", version.ref = "navigation3" }
 navigation3-ui = { group = "androidx.navigation3", name = "navigation3-ui", version.ref = "navigation3" }
+# Desktop swap target for navigation3-ui (see jbNavigation3Ui version note) —
+# used via resolutionStrategy substitution in apps/desktop, never a direct dep.
+jb-navigation3-ui = { group = "org.jetbrains.androidx.navigation3", name = "navigation3-ui", version.ref = "jbNavigation3Ui" }
 lifecycle-viewmodel-navigation3 = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-navigation3", version.ref = "lifecycleViewmodelNav3" }
 
 # Lifecycle

@@ -72,46 +72,45 @@ fun main() {
             dataJvmModule,
             desktopDataModule(paths.dataDirNio),
             desktopPlayerModule,
-            // V3 feature conveyor: search (DI registration; the desktop nav
-            // wiring lands later in the conveyor).
+            // V3 feature conveyor: search — LIVE since the Phase X desktop
+            // nav v1 (DesktopAppRoot renders searchSection as the start
+            // tab); all VM deps resolve since the MediaRepository cluster
+            // flip.
             searchModule,
-            // …library, second conveyor item — its VM deps resolve lazily, so
-            // desktop only needs the (inert) photo-export actual registered.
+            // …library, second conveyor item — LIVE like search: the VM
+            // deps resolved with the cluster flip, and desktopPhotoExport
+            // supplies the photo-export actual (unsupported=no-op).
             libraryModule,
             desktopPhotoExportModule(),
-            // …music, third conveyor item — same inert-module pattern: VM deps
-            // resolve lazily, desktop only needs the (no-op) message-bus actual.
+            // …music, third conveyor item — PARTIAL, nav v1 omits the whole
+            // feature: the Albums/Artists/MusicBrowse/Genres/Playlists VMs
+            // resolve, but the instant-mix cluster needs AudioQueueFacade,
+            // which has no desktop definition yet (rides the desktop player
+            // slice). The message-bus actual stays registered for the day it
+            // lands.
             musicModule,
             desktopMusicMessageBusModule(),
-            // …livetv, fourth conveyor item — documented-latent: VM deps like
-            // mediaRepository (Hilt interop) have no desktop definitions yet,
-            // but resolution is lazy so boot stays safe (same inert-module
-            // pattern; the desktop LiveTvMessenger actual returns null).
+            // …livetv, fourth conveyor item — LIVE since the cluster flip
+            // (mediaRepository and friends are Koin singles in dataJvm
+            // Module now); nav v1 renders liveTvSection in the rail.
             liveTvModule,
-            // …downloads, fifth conveyor item — the engine half of the
-            // conveyor moved the download stack into :shared:core:data, so
-            // desktop single-item downloads now work end-to-end (storage
-            // layout under appdata, Range-resumable transfers, the in-process
-            // DesktopDownloadManager and the 6 h auto-download loop started
-            // below). Series downloads fail loudly until the Phase X
-            // MediaRepository flip; the VM's other deps (userDataMutator via
-            // Hilt interop) remain documented-latent, so the downloadsModule
-            // itself is only resolved once that screen opens.
+            // …downloads, fifth conveyor item — fully live since the
+            // cluster flip: single-item AND series downloads resolve
+            // (MediaRepository/UserDataMutator are Koin-owned), the
+            // in-process DesktopDownloadManager and the 6 h auto-download
+            // loop start below, and nav v1 renders downloadsSection.
             downloadsModule,
-            // …syncplay, sixth conveyor item — documented-latent: VM deps
-            // like mediaRepository (Hilt interop) have no desktop definitions
-            // yet (SyncPlayManager/SyncPlayCastStore do resolve from the
-            // data/datastore modules), resolution is lazy and the desktop
-            // shell has no SyncPlay nav entry, so the module is registered
-            // but never instantiated (same inert-module pattern as livetv).
+            // …syncplay, sixth conveyor item — LIVE since the cluster flip:
+            // the former mediaRepository edge resolves from dataJvmModule,
+            // and nav v1 renders syncPlaySection in the rail.
             syncPlayModule,
-            // …settings, seventh conveyor item — documented-latent, syncplay
-            // pattern: several VM deps (MediaRepository, AdminRepository —
-            // Hilt interop) have no desktop definitions, but resolution is
-            // lazy so boot stays safe, and the desktop shell has no settings
-            // nav entry (grep confirms no route/screen reference), so the
-            // module is registered but never instantiated. Only the (no-op
-            // /zero-degradation) desktop platform actuals resolve eagerly.
+            // …settings, seventh conveyor item — PARTIAL, nav v1 omits the
+            // feature: the mediaRepository edges resolved with the cluster
+            // flip, but SettingsViewModel + AboutViewModel still need
+            // AdminRepository (Hilt-only, no desktop definition), so the
+            // shell registers no settings section and the navigateFilter
+            // guards the routes shortcuts pushes. Only the no-op desktop
+            // platform actuals resolve eagerly.
             settingsModule,
             desktopSettingsPlatformModule(),
             // …admin, eighth conveyor item — documented-latent, syncplay
@@ -134,53 +133,41 @@ fun main() {
             // screen would degrade to URL-only uploads, not crash.
             editorModule,
 
-            // …calendar, conveyor feature — unlike the features above it is
-            // FULLY live-resolvable here: ArrRepository + SeerrRepository
+            // …calendar, conveyor feature — LIVE and wired in nav v1
+            // (calendarSection in the rail): ArrRepository + SeerrRepository
             // (dataJvmModule) and ExperimentalStore (datastoreCommonModule)
-            // all have desktop definitions, so instantiating the calendar
-            // ViewModel would actually work. It stays dormant because the
-            // desktop shell has no calendar nav entry yet.
+            // all resolve on desktop.
             calendarModule,
 
 
-            // …requests, eleventh conveyor item — a feature VM whose
-            // entire ctor graph is Koin-native on BOTH platforms (calendar
-            // above was the first): SeerrRepository + ArrRepository resolve
-            // from dataJvmModule and ExperimentalStore from
-            // datastoreCommonModule above, so this registration is fully
-            // live (no documented-latent deps). A desktop nav entry is
-            // still future conveyor work, so nothing instantiates it yet.
+            // …requests, eleventh conveyor item — LIVE and wired in nav v1
+            // (requestsSection in the rail): the entire ctor graph is
+            // Koin-native on BOTH platforms (SeerrRepository +
+            // ArrRepository from dataJvmModule, ExperimentalStore from
+            // datastoreCommonModule above).
             requestsModule,
 
 
 
 
-            // …shortcuts, a later conveyor item — same fully-live shape as
-            // calendar/requests above: the single ctor dep (AuthRepository)
-            // already resolves from dataJvmModule, so this registration is
-            // live-resolvable on desktop; it stays dormant only because the
-            // desktop shell has no shortcuts nav entry yet.
+            // …shortcuts, a later conveyor item — LIVE and wired in nav v1
+            // (shortcutsSection in the rail): the single ctor dep
+            // (AuthRepository) resolves from dataJvmModule.
             shortcutsModule,
 
-            // …newsletter, conveyor item after requests — DI registration
-            // only. Unlike calendar/requests above it is documented-latent:
-            // imageUrlProvider (desktopDataModule), notificationStore
-            // (datastoreCommonModule) and authRepository resolve here, but
-            // mediaRepository has no desktop definition yet, so
-            // instantiating the ViewModel would throw. Koin defers
-            // resolution and the shell has no newsletter nav entry, so the
-            // registration is inert until the data layer flips.
+            // …newsletter, conveyor item after requests — LIVE since the
+            // cluster flip (the former mediaRepository edge now resolves
+            // from dataJvmModule) and wired in nav v1 (newsletterSection in
+            // the rail).
             newsletterModule,
 
 
-            // …insights, conveyor feature — WatchHistoryRepository and
-            // PlaybackRepository resolve from dataJvmModule, but the third
-            // ctor dep (MediaRepository) has no desktop definition yet, so
-            // resolution would throw NoDefinitionFound — the same
-            // documented-latent state as search/library/music/livetv/admin.
-            // The desktop shell has no insights nav entry, so nothing
-            // instantiates it (and the share seam's null actual hides the
-            // share button regardless).
+            // …insights, conveyor feature — LIVE since the cluster flip:
+            // all three heatmap-VM ctor deps resolve on desktop
+            // (WatchHistoryRepository + PlaybackRepository from
+            // dataJvmModule, MediaRepository from the flipped cluster), and
+            // nav v1 renders insightsSection in the rail. The share seam's
+            // null actual keeps the share button hidden.
             insightsModule,
 
 
@@ -192,17 +179,16 @@ fun main() {
             // resolve on desktop (PreferenceProjections/
             // SeerrPreferencesStore/PreferencesEditor from datastoreCommon
             // Module, SeerrSecureCredentialsStore from desktopDatastore
-            // Module). It stays dormant only because the desktop shell has
-            // no first-run gate wiring — the wizard is rendered by the
-            // Android app's JellyPlayApp gate, and TV auto-completes.
+            // Module). Nav v1 registers onboardingSection (reachable from
+            // Shortcuts); a desktop first-run gate is still future work —
+            // the wizard is auto-gated by the Android app and TV
+            // auto-completes.
             onboardingModule,
 
-            // …arrqueue, conveyor feature — same shape as
-            // calendar/requests (fully Koin-native on both platforms:
-            // ArrRepository from dataJvmModule, ExperimentalStore from
-            // datastoreCommonModule), so the registration is
-            // live-resolvable on desktop; it stays dormant only because
-            // the desktop shell has no arrqueue nav entry yet.
+            // …arrqueue, conveyor feature — LIVE and wired in nav v1
+            // (arrQueueSection in the rail): ArrRepository from
+            // dataJvmModule and ExperimentalStore from
+            // datastoreCommonModule resolve on desktop.
             arrqueueModule,
 
 
@@ -214,8 +200,9 @@ fun main() {
             // module's androidMain — its engine factory and font provider are
             // Android/Hilt types with no desktop halves — so there is no
             // commonMain Koin module to register. The shared settings-search
-            // row for Route.SubtitleTester dead-clicks on desktop, the same
-            // dormant state as every un-wired desktop route.
+            // row for Route.SubtitleTester stays unreachable on desktop
+            // (settings itself is omitted v1); desktop's navigateFilter
+            // guards any un-registered route a shared screen pushes.
 
         )
     }
