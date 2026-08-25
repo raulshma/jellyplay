@@ -4,6 +4,10 @@ import android.app.Application
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
+import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
+import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
+import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
@@ -59,6 +63,10 @@ interface HiltInteropEntryPoint {
     fun streamingSubtitleStore(): StreamingSubtitleStore
     fun playerEngineFactory(): PlayerEngineFactory
     fun fontProvider(): FontProvider
+    fun playbackSyncScheduler(): PlaybackSyncScheduler
+    fun tvWatchNextScheduler(): TvWatchNextScheduler
+    fun continueWatchingBroadcaster(): ContinueWatchingBroadcaster
+    fun librarySyncHook(): LibrarySyncHook
 }
 
 private fun interopEntryPoint(application: Application): HiltInteropEntryPoint =
@@ -89,4 +97,14 @@ fun hiltInteropModule(application: Application): Module = module {
     // be touched at startKoin time.
     single<PlayerEngineFactory> { interopEntryPoint(application).playerEngineFactory() }
     single<FontProvider> { interopEntryPoint(application).fontProvider() }
+    // Home conveyor (Phase X cutover): HomeViewModel's four remaining
+    // Hilt-owned ctor deps — the WorkManager-backed schedulers (legacy
+    // :core:data DataModule @Binds) and the app widget broadcast receiver
+    // pair (:app WidgetModule @Binds). The interfaces moved to
+    // :shared:core:data commonMain with the feature; only these lazy interop
+    // singles remain, and they die with the Phase X Hilt removal.
+    single<PlaybackSyncScheduler> { interopEntryPoint(application).playbackSyncScheduler() }
+    single<TvWatchNextScheduler> { interopEntryPoint(application).tvWatchNextScheduler() }
+    single<ContinueWatchingBroadcaster> { interopEntryPoint(application).continueWatchingBroadcaster() }
+    single<LibrarySyncHook> { interopEntryPoint(application).librarySyncHook() }
 }

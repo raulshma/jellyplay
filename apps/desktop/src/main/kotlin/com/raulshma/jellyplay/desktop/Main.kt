@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.feature.insights.di.insightsModule
 
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
+import com.raulshma.jellyplay.feature.home.di.homeModule
 import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
 
 
@@ -193,6 +194,17 @@ fun main() {
             // dataJvmModule and ExperimentalStore from
             // datastoreCommonModule resolve on desktop.
             arrqueueModule,
+
+            // Home conveyor: registered LATENT — four HomeViewModel ctor deps
+            // (PlaybackSyncScheduler, TvWatchNextScheduler,
+            // ContinueWatchingBroadcaster, LibrarySyncHook) are Android-only
+            // Hilt interop singles with no desktop defs yet, so resolving the
+            // VM here would throw NoDefinitionFound. Desktop nav does not wire
+            // a home entry (home/details/players are the remaining legacy
+            // features), so nothing constructs it today; flip when the nav
+            // lands (see the HomeLifecycleSeam jvm actual for the refresher
+            // start/stop decision that wiring will need).
+            homeModule,
 
 
 

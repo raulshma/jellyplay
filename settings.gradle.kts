@@ -35,7 +35,6 @@ include(":core:ui")
 include(":core:notification")
 include(":core:testing")
 include(":feature:auth")
-include(":feature:home")
 include(":feature:details")
 include(":feature:player:core")
 include(":feature:player:video")
@@ -90,6 +89,8 @@ include(":shared:feature:insights")
 include(":shared:feature:onboarding")
 
 include(":shared:feature:arrqueue")
+
+include(":shared:feature:home")
 
 
 

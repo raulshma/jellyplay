@@ -99,6 +99,14 @@ dependencies {
     implementation(project(":shared:feature:onboarding"))
 
 
+    // …home, Phase X cutover feature (the desktop landing screen) — module
+    // compiles and homeModule is registered LATENT: four HomeViewModel ctor
+    // deps are Android-only Hilt interop singles with no desktop defs yet,
+    // and desktop nav does not wire a home entry, so nothing constructs the
+    // VM. The nav wiring lands with the coordinator's post-merge pass.
+    implementation(project(":shared:feature:home"))
+
+
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
     implementation(libs.jna)

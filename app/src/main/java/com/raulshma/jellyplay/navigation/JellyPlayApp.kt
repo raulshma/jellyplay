@@ -156,6 +156,7 @@ import com.raulshma.jellyplay.feature.admin.navigation.adminSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
 import com.raulshma.jellyplay.feature.editor.navigation.editorSection
+import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
 import com.raulshma.jellyplay.feature.home.navigation.homeSection
 import com.raulshma.jellyplay.feature.insights.navigation.insightsSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
@@ -1561,7 +1562,19 @@ private fun MainNavDisplay(
                 homeMode = homeMode,
                 onModeChange = onModeChange,
                 onPlayOnClick = onPlayOnClick,
-                playOnStrategy = playOnStrategy,
+                // The shared home module narrows the Play-On surface to its
+                // HomePlayOnRedirect seam (the concrete cast strategy is
+                // Android-bound); adapt the real strategy here — probe +
+                // fling, exactly the inline shape the legacy homeSection had.
+                playOnStrategy = playOnStrategy?.let { strategy ->
+                    HomePlayOnRedirect { itemId, startPositionMs ->
+                        strategy.isConnected.value.also { connected ->
+                            if (connected) {
+                                strategy.loadMedia(itemId = itemId, startPositionMs = startPositionMs)
+                            }
+                        }
+                    }
+                },
                 surpriseRequests = surpriseRequests,
                 musicContent = {
                     MusicHomeScreen(

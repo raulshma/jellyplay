@@ -19,7 +19,6 @@ import com.raulshma.jellyplay.core.data.playback.DownloadConcurrencyLimiter
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
-import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
@@ -133,17 +132,10 @@ abstract class DataModule {
         fun provideAdaptiveBitrateSelector(): com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector =
             koin().get()
 
-        @dagger.Provides
-        @Singleton
-        fun provideOrderHomeSectionsUseCase(): com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase =
-            koin().get()
-
-        // V3 library conveyor: moved into :shared:core:data (Koin-owned);
-        // HomeViewModel + PhotoFolderChildUrlsStore still Hilt-inject it.
-        @dagger.Provides
-        @Singleton
-        fun providePhotoFolderPrefetcher(): com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher =
-            koin().get()
+        // Home conveyor: the OrderHomeSectionsUseCase + PhotoFolderPrefetcher
+        // koin().get() bridges died with :feature:home — their only Hilt
+        // injectors (HomeViewModel, PhotoFolderChildUrlsStore) moved to
+        // :shared:feature:home and are Koin-constructed now.
 
         @dagger.Provides
         @Singleton
@@ -260,9 +252,9 @@ abstract class DataModule {
         @Singleton
         fun provideLocalStreamProbe(): LocalStreamProbe = koin().get()
 
-        @dagger.Provides
-        @Singleton
-        fun provideHomeSession(): HomeSession = koin().get()
+        // Home conveyor: the HomeSession koin().get() bridge died with
+        // :feature:home (HomeViewModel was its only Hilt injector; the Koin
+        // single lives in dataJvmModule).
 
         @dagger.Provides
         @Singleton
