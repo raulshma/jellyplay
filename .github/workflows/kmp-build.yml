@@ -115,6 +115,9 @@ jobs:
           :shared:feature:arrqueue:jvmJar
           :shared:feature:arrqueue:compileAndroidMain
 
+          :shared:feature:auth:jvmJar
+          :shared:feature:auth:compileAndroidMain
+
           :apps:web:compileKotlinWasmJs
 
           --stacktrace
@@ -158,6 +161,8 @@ jobs:
           :shared:feature:subtitle-tester:jvmTest
 
           :shared:feature:arrqueue:jvmTest
+
+          :shared:feature:auth:jvmTest
 
 
           --stacktrace

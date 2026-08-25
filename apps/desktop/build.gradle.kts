@@ -99,6 +99,14 @@ dependencies {
     implementation(project(":shared:feature:onboarding"))
 
 
+    // …auth, Phase X cutover (feature-conveyor transform): desktop does
+    // not render the auth screens yet (the shell signs in through its own
+    // DesktopSignInPane, and the settings UserManagement drill-ins stay
+    // dead-end-guarded), but the whole ctor graph is Koin-native here, so
+    // the registration is live-resolvable, not latent.
+    implementation(project(":shared:feature:auth"))
+
+
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
     implementation(libs.jna)

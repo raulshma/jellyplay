@@ -52,6 +52,8 @@ import com.raulshma.jellyplay.feature.insights.di.insightsModule
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
 import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
+import com.raulshma.jellyplay.feature.auth.di.authModule
+import com.raulshma.jellyplay.feature.auth.di.desktopAuthPlatformModule
 
 
 import org.koin.core.context.startKoin
@@ -193,6 +195,20 @@ fun main() {
             // dataJvmModule and ExperimentalStore from
             // datastoreCommonModule resolve on desktop.
             arrqueueModule,
+
+            // …auth, Phase X cutover (feature-conveyor transform from the
+            // legacy :feature:auth): the entire ctor graph resolves on
+            // desktop (AuthRepository + ServerDiscoveryRepository from
+            // dataJvmModule, LocalNetworkStatus from the jvmMain platform
+            // pick below), so this registration is live-resolvable — NOT
+            // dormant-for-missing-deps like editor. The shell still signs
+            // in through its own DesktopSignInPane and the settings
+            // UserManagement drill-ins (Route.AddServer/ServerList) stay
+            // dead-end-guarded in DesktopAppRoot: no desktop nav entry
+            // instantiates these ViewModels yet — wiring them (or unifying
+            // on the shared sign-in flow) is Phase X nav work.
+            authModule,
+            desktopAuthPlatformModule,
 
 
 
