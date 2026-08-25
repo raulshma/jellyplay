@@ -4,8 +4,10 @@ import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.KtorWasmAuthApiClient
 import com.raulshma.jellyplay.core.network.api.KtorWasmLibraryApiClient
 import com.raulshma.jellyplay.core.network.api.KtorWasmPlaybackApiClient
+import com.raulshma.jellyplay.core.network.api.KtorWasmUserApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
+import com.raulshma.jellyplay.core.network.api.UserApiClient
 import com.raulshma.jellyplay.core.network.api.WasmClientIdentity
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.network.createWasmHttpClient
@@ -73,7 +75,15 @@ val networkWasmModule: Module = module {
             identity = get(),
         )
     }
+    single {
+        KtorWasmUserApiClient(
+            httpClient = get(),
+            sessionState = get(),
+            identity = get(),
+        )
+    }
     single<AuthApiClient> { get<KtorWasmAuthApiClient>() }
     single<LibraryApiClient> { get<KtorWasmLibraryApiClient>() }
     single<PlaybackApiClient> { get<KtorWasmPlaybackApiClient>() }
+    single<UserApiClient> { get<KtorWasmUserApiClient>() }
 }
