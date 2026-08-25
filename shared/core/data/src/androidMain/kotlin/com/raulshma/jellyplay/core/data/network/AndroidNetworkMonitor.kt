@@ -81,7 +81,11 @@ class AndroidNetworkMonitor(
      * Whether the active network is metered (e.g. cellular, metered Wi-Fi).
      * True when the network lacks [NetworkCapabilities.NET_CAPABILITY_NOT_METERED].
      * Used by [com.raulshma.jellyplay.core.data.playback.AudioCachePolicyGuard]
-     * to gate proactive audio-cache prefetching.
+     * to gate proactive audio-cache prefetching, and by
+     * [com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager]
+     * (the former synchronous ConnectivityManager read — hence the seeded
+     * initialValue below, so a cold `.value` read before the first
+     * subscription reports real state, matching the legacy per-call probe).
      */
     override val isMetered: StateFlow<Boolean> = callbackFlow {
         val sendCurrent: () -> Unit = { trySend(currentMetered()) }
@@ -119,7 +123,11 @@ class AndroidNetworkMonitor(
         .stateIn(
             scope = scope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = false,
+            // Seeded with a one-shot synchronous probe (not a hardcoded
+            // false): WhileSubscribed means the upstream callback flow only
+            // runs while a collector is active, so an un-subscribed `.value`
+            // read would otherwise always see the initial constant.
+            initialValue = currentMetered(),
         )
 
     // ── helpers ──────────────────────────────────────────────

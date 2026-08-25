@@ -289,9 +289,10 @@ private fun DesktopNavScaffold() {
             // full section (browse/albums/artists/genres/mood+smart
             // playlists/playlist details) renders; play/enqueue/instant-mix
             // resolve AudioQueueFacade to the desktop StubAudioQueueFacade
-            // (desktopPlayerModule), which fails honestly into the in-screen
-            // error states. Track clicks push Route.AudioPlayer — still
-            // guarded below.
+            // (desktopPlayerModule). Only instant-mix surfaces its failure
+            // in-screen; play/enqueue outcomes are discarded by the call
+            // sites (silent no-ops on desktop v1). Track clicks push
+            // Route.AudioPlayer — still guarded below.
             musicSection(guardedNavigator)
             downloadsSection(guardedNavigator)
             syncPlaySection(guardedNavigator)
@@ -442,9 +443,9 @@ private fun NavKey.isDesktopDeadEndRoute(): Boolean = when (this) {
     Route.Home -> true
     // Legacy details/players — app-side screens, no shared sections. Of
     // these, Route.AudioPlayer is the music section's track-click target: the
-    // legacy now-playing screen has no desktop home, so those clicks (and
-    // every other play/enqueue path failing through StubAudioQueueFacade)
-    // surface the snackbar instead.
+    // legacy now-playing screen has no desktop home, so those clicks surface
+    // the snackbar instead (other play/enqueue paths degrade silently
+    // through StubAudioQueueFacade — only instant-mix shows an error).
     is Route.MediaDetail, is Route.CollectionDetail,
     is Route.VideoPlayer, is Route.AudioPlayer, is Route.LiveTvChannelPlayer,
     -> true

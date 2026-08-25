@@ -85,9 +85,11 @@ fun main() {
             // …music, third conveyor item — LIVE since Wave wC (browse-live,
             // playback-degrades): every music VM ctor dep resolves now that
             // desktopPlayerModule provides the StubAudioQueueFacade
-            // AudioQueueFacade actual (play/enqueue/instant-mix fail honestly
-            // into in-screen error states), and nav renders musicSection in
-            // the rail. The message-bus actual drops messages (no host yet).
+            // AudioQueueFacade actual (only instant-mix surfaces its failure
+            // in-screen; play/enqueue outcomes are discarded by the call
+            // sites, so those buttons are silent no-ops on desktop v1), and
+            // nav renders musicSection in the rail. The message-bus actual
+            // drops messages (no host yet).
             musicModule,
             desktopMusicMessageBusModule(),
             // …livetv, fourth conveyor item — LIVE since the cluster flip

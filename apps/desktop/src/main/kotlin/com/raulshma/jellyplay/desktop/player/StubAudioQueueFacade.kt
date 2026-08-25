@@ -20,9 +20,11 @@ import kotlinx.coroutines.withContext
  * Every play/enqueue attempt returns [AudioQueueOutcome.Failed], never
  * [AudioQueueOutcome.Started]: `Started` would fake success — the mix
  * scroll-to-first-track side effects (`queue.first().id`) would fire and the
- * user would hear nothing — while `Failed` routes into the call sites'
- * existing error states (e.g. AlbumDetailViewModel maps the outcome into its
- * in-screen error), so the degradation is visible and honest. The two
+ * user would hear nothing. Visibility of the failure is MIXED, by call-site
+ * behavior (verified against the shared music VMs): only `startInstantMix`
+ * surfaces it — AlbumDetail/ArtistDetail map `Failed` into their in-screen
+ * error state — while every play/enqueue/playPlaylist call site DISCARDS the
+ * outcome, so on desktop v1 those buttons are silent no-ops. The two
  * outcomes that are NOT about playback capability keep their interface
  * contract: empty inputs still yield [AudioQueueOutcome.Empty] ("nothing to
  * play" is true regardless of engine), and a caller [guard] veto still yields
@@ -72,9 +74,13 @@ internal class StubAudioQueueFacade : AudioQueueFacade {
         albumFallback: String?,
         guard: () -> Boolean,
     ): AudioQueueOutcome =
-        // Same order as the real facade's veto: the guard runs on the main
-        // thread before any outcome — a caller that navigated away stays
-        // silent (Suppressed), everything else fails honestly.
+        // The guard runs on the main thread before the outcome — a caller
+        // that navigated away stays silent (Suppressed), everything else
+        // fails. NOTE: unlike the real facade (which checks mix-empty BEFORE
+        // the guard and would return Empty), this stub has no mix to fetch,
+        // so the guard-veto wins the empty-mix corner — Suppressed, not
+        // Empty. Unobservable: guard() is only false after navigation drift,
+        // where neither outcome is rendered.
         if (!withContext(Dispatchers.Main) { guard() }) {
             AudioQueueOutcome.Suppressed
         } else {
