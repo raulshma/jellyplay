@@ -15,7 +15,9 @@ import com.raulshma.jellyplay.core.network.user.UpdateUserPasswordRequestDtoWire
 import com.raulshma.jellyplay.core.network.user.overlayWith
 import com.raulshma.jellyplay.core.network.user.toManagedUser
 import com.raulshma.jellyplay.core.network.user.toParentalRatingOptions
+import com.raulshma.jellyplay.core.network.userPostWireJson
 import io.ktor.client.HttpClient
+import kotlinx.serialization.encodeToString
 
 /**
  * The wasmJs [UserApiClient] — a hand-rolled Ktor replacement for the
@@ -49,9 +51,11 @@ import io.ktor.client.HttpClient
  *
  * Zero semantic deltas vs jvmShared by design. The only wire-level notes:
  * date fields keep the server's raw strings (the wasm convention — jvmShared
- * re-formats through the SDK DateTime), and JSON bodies are encoded with the
- * shared `wasmWireJson` whose `encodeDefaults = false` matches the SDK's
- * serializer, so default-valued fields are omitted identically.
+ * re-formats through the SDK DateTime), and the rename/policy POST bodies are
+ * encoded with `encodeDefaults = true` ([userPostWireJson]) because the SDK
+ * DTOs have no field defaults — the JVM always writes every field, false
+ * included, and omitting a `false` permission would let the server's own
+ * permissive defaults resurrect it.
  */
 class KtorWasmUserApiClient(
     httpClient: HttpClient,
@@ -118,7 +122,9 @@ class KtorWasmUserApiClient(
             postStatusOnly(
                 url = apiUrl(server.address, "/Users"),
                 accessToken = currentToken(),
-                bodyText = encodeBody(renamed),
+                // Full-DTO write: every field must land on the wire (see
+                // userPostWireJson) or the server would reset the omitted ones.
+                bodyText = userPostWireJson.encodeToString(renamed),
                 query = listOf("userId" to userId),
             )
             getJson<ManagedUserDtoWire>(
@@ -145,7 +151,10 @@ class KtorWasmUserApiClient(
         postStatusOnly(
             url = apiUrl(server.address, "/Users/$userId/Policy"),
             accessToken = currentToken(),
-            bodyText = encodeBody(merged),
+            // Full-policy write: an edited-off permission is often `false` —
+            // the wire default — so this body MUST encode defaults or the
+            // server would silently restore its permissive CLR default.
+            bodyText = userPostWireJson.encodeToString(merged),
         )
     }
 

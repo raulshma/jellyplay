@@ -80,6 +80,10 @@ object WebPlaybackMappings {
      *    not retryable on the same engine, the UI should offer transcoding
      *  - ABORTED (1) and unknown codes → [EngineError.Unknown] carrying
      *    [rawMessage] when the element supplied one
+     *
+     * [rawMessage] only surfaces on the Unknown branches — Network/Decoder
+     * carry no message slot the engine fills today (kotlinx-browser's
+     * MediaError binding exposes `code` only, so the caller passes null).
      */
     fun engineErrorForMediaErrorCode(code: Int, rawMessage: String? = null): EngineError =
         when (code) {

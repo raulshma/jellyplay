@@ -19,6 +19,18 @@ internal val wasmWireJson: Json = Json {
 }
 
 /**
+ * POST-body encoder for user-management writes (rename + policy overlay).
+ * The Jellyfin SDK's `UserDto`/`UserPolicy` fields carry NO Kotlin defaults,
+ * so the JVM client always encodes every field — including `false`/`0`.
+ * [wasmWireJson] runs `encodeDefaults = false`, which would omit those values
+ * from the wire and let the server's permissive CLR defaults silently
+ * re-enable permissions (an edited-off EnableMediaPlayback would never land).
+ */
+internal val userPostWireJson: Json = Json(from = wasmWireJson) {
+    encodeDefaults = true
+}
+
+/**
  * Phase W chunk 1: the Ktor HTTP stack for the wasmJs target. The Js engine
  * is fetch-backed on wasmJs and ships a wasmJs variant since Ktor 3.0 —
  * `libs.ktor.client.js` resolves directly for this target (no separate wasm

@@ -23,15 +23,13 @@ import org.koin.dsl.module
  * Koin construction owner for the admin feature (docs/kmp-migration-plan.md
  * §Phase V3, admin conveyor — eighth feature). The HiltViewModel/@Inject
  * annotations were stripped at the move — Koin is the single constructor
- * owner (one framework per type). Ctor deps:
- *  - AdminRepository resolves through the Android Hilt interop edge
- *    (app-side hiltInteropModule lazy single) and has no desktop definition
- *    yet (documented-latent, syncplay pattern);
- *  - AdminStatisticsRepository likewise bridges app-side through the Hilt
- *    interop module (its interface lives in shared :core:data jvmShared, the
- *    impl stays Hilt-owned in legacy :core:data);
- *  - AuthRepository resolves from the shared :core:data Koin graph
- *    (dataJvmModule) on both platforms.
+ * owner (one framework per type). Ctor deps all resolve from the shared
+ * :core:data Koin graph (dataJvmModule) on BOTH platforms since the admin
+ * repo flip:
+ *  - AdminRepository + AdminStatisticsRepository are dataJvmModule singles
+ *    (impls moved out of legacy :core:data; the app's DataModule only keeps
+ *    koin().get() @Provides bridges for its remaining Hilt injectors);
+ *  - AuthRepository likewise resolves from dataJvmModule.
  *
  * The Android-only PluginConfigViewModel (WebView quartet, Context ctor dep)
  * lives in androidAdminModule in this module's androidMain.

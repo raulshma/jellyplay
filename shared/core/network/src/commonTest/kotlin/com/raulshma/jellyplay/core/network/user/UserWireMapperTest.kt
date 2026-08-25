@@ -223,6 +223,48 @@ class UserWireMapperTest {
         assertEquals(decoded, reDecoded, "decode → encode → decode must be lossless")
     }
 
+    @Test
+    fun `policy POST body must encode defaults or an edited-off permission is dropped`() {
+        val serverPolicy = json.decodeFromString<ManagedUserPolicyDtoWire>(fullPolicyJson())
+        // An admin edits ONE permission off — false, which equals the wire
+        // DTO's default. The SDK's UserPolicy has no Kotlin defaults, so the
+        // JVM POSTs every field; the wasm client must therefore encode this
+        // body with encodeDefaults = true (userPostWireJson). Pin that the
+        // false permission lands on the wire, and that the shared lenient
+        // instance would have silently omitted it — the server would then
+        // restore its permissive CLR default and the edit would no-op.
+        val merged = serverPolicy.overlayWith(
+            ManagedUserPolicy(enableMediaPlayback = false),
+            userId = "u1",
+        )
+
+        val postJson = Json(from = json) { encodeDefaults = true }
+        val body = postJson.encodeToString(merged)
+        assertTrue("\"EnableMediaPlayback\":false" in body, "edited-off permission must be written")
+        // isAdministrator is EDITABLE — the overlay flips it to the edited
+        // policy's default (false) — so pin a genuine bookkeeping field that
+        // must survive from the server policy.
+        assertTrue("\"InvalidLoginAttemptCount\":2" in body, "server bookkeeping still written")
+
+        val lenientBody = json.encodeToString(merged)
+        assertEquals(
+            false,
+            "\"EnableMediaPlayback\":false" in lenientBody,
+            "encodeDefaults=false drops the false permission — the derived POST Json exists precisely to avoid this",
+        )
+    }
+
+    @Test
+    fun `rename POST body writes the false-valued bookkeeping fields`() {
+        val renamed = ManagedUserDtoWire(id = "u1", name = "robert")
+
+        val postJson = Json(from = json) { encodeDefaults = true }
+        val body = postJson.encodeToString(renamed)
+        assertTrue("\"HasPassword\":false" in body, "full-DTO write keeps SDK-always-encoded booleans")
+        assertTrue("\"HasConfiguredPassword\":false" in body)
+        assertTrue("\"Name\":\"robert\"" in body)
+    }
+
     // ── Policy overlay (updateUserPolicy merge) ────────────────────────────
 
     @Test

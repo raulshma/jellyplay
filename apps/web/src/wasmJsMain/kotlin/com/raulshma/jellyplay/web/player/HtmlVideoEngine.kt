@@ -85,6 +85,16 @@ import org.w3c.dom.events.Event
  *    non-VTT [SubtitleSource]s (SRT/ASS extraction URLs) are skipped.
  *    Track elements appended after the media is loaded only activate on the
  *    next `load()` (HTML spec re-runs the track algorithm there).
+ *    **CORS caveat (reviewer catch):** track fetches inherit the media
+ *    element's `crossOrigin`, which this engine leaves unset ("no CORS"
+ *    mode) — setting it to "anonymous" would flip the VIDEO request to CORS
+ *    mode and break servers without CORS headers. Consequence: cross-origin
+ *    subtitle URLs fail silently (no cues rendered). In practice subtitles
+ *    need same-origin serving (reverse proxy in front of both page and
+ *    Jellyfin — see docs/jellyfin-cors.md) until a fetch-and-blob track
+ *    loader replaces the plain `<track src>` wiring.
+ *  - **`PlaybackRequest.mimeType` dropped.** `<video src>` carries no type
+ *    hint; the browser sniffs the container (accepted cost of direct play).
  *  - **No audio effects / delays / passthrough / subtitle styling.** A bare
  *    `<video>` exposes none of them — every capability flag is false and the
  *    corresponding contract calls no-op, per the EngineCapabilityMatrix
@@ -302,12 +312,18 @@ class HtmlVideoEngine : MediaEngine {
                 }
             }
             WebPlaybackMappings.EVENT_DURATIONCHANGE ->
-                durationValue = WebPlaybackMappings.secondsToMs(video.duration)
+                if (hasMetadataOrBetter()) {
+                    durationValue = WebPlaybackMappings.secondsToMs(video.duration)
+                }
             WebPlaybackMappings.EVENT_TIMEUPDATE ->
-                positionMs = WebPlaybackMappings.secondsToMs(video.currentTime)
+                if (hasMetadataOrBetter()) {
+                    positionMs = WebPlaybackMappings.secondsToMs(video.currentTime)
+                }
             WebPlaybackMappings.EVENT_PROGRESS ->
-                _bufferedPositionMs.value =
-                    WebPlaybackMappings.bufferedTailMs(bufferedRangeEndsMs(), durationMs)
+                if (hasMetadataOrBetter()) {
+                    _bufferedPositionMs.value =
+                        WebPlaybackMappings.bufferedTailMs(bufferedRangeEndsMs(), durationMs)
+                }
             WebPlaybackMappings.EVENT_RATECHANGE ->
                 speedValue = video.playbackRate.toFloat()
             WebPlaybackMappings.EVENT_VOLUMECHANGE -> {
@@ -330,6 +346,17 @@ class HtmlVideoEngine : MediaEngine {
         _playbackState.value = state
         updateVisibility()
     }
+
+    /**
+     * Stale-event guard for the src-swap race (reviewer catch): load() resets
+     * the scalars synchronously, but timeupdate/progress/durationchange tasks
+     * already queued for the OLD src still run afterward (single JS thread ≠
+     * cancelled tasks). Per spec the readyState drops to HAVE_NOTHING when
+     * load() drops the resource, and the new item only emits these events
+     * once metadata exists — so gating on it keeps the old item's
+     * position/buffer/duration out of the new item's BUFFERING window.
+     */
+    private fun hasMetadataOrBetter(): Boolean = video.readyState.toInt() > 0
 
     private fun bufferedRangeEndsMs(): List<Long> {
         val buffered = video.buffered
@@ -427,6 +454,13 @@ class HtmlVideoEngine : MediaEngine {
     override fun seekTo(positionMs: Long) {
         if (released) return
         val clamped = WebPlaybackMappings.clampSeekMs(positionMs, durationMs)
+        if (_playbackState.value == EnginePlaybackState.ENDED && clamped < durationMs) {
+            // Scrubbing back off the last frame exits ENDED (mpv's eof-reached
+            // flip on seek): READY-but-paused. Without this, the next play()
+            // would take the replay path and discard the position the user
+            // just chose; seeking exactly to the end keeps ENDED.
+            setPlaybackState(EnginePlaybackState.READY)
+        }
         video.currentTime = clamped / 1000.0
         this.positionMs = clamped
     }
