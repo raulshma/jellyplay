@@ -65,7 +65,9 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
 import com.raulshma.jellyplay.feature.admin.navigation.adminSection
 import com.raulshma.jellyplay.feature.arrqueue.navigation.arrQueueSection
+import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.calendar.navigation.calendarSection
+import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
 import com.raulshma.jellyplay.feature.insights.navigation.insightsSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
@@ -95,11 +97,19 @@ import org.koin.compose.koinInject
  * What is deliberately NOT wired yet (each omission is guarded by
  * [isDesktopDeadEndRoute] so a shared screen pushing the route shows a
  * snackbar instead of crashing NavDisplay with an unregistered entry):
- *  - home/details/players — legacy app-side screens, no shared sections;
- *  - auth-cluster drill-ins — AddServer/ServerList live in the app-side auth
- *    section with no desktop twin (desktop signs in via DesktopSignInPane);
+ *  - home/players — home is registered LATENT (four HomeViewModel ctor deps
+ *    are Android-only interop singles with no desktop defs), players are
+ *    legacy app-side screens with no shared sections;
  *  - SubtitleTester — androidMain-only, no commonMain section at all;
  *  - editor — latent (StreamingSubtitleStore is still Hilt-owned).
+ *
+ * Details + the auth drill-ins went live with the details/auth conveyor
+ * flips: [detailsSection] renders behind every shared screen that pushes a
+ * detail route (search results, requests/calendar → SeerrDetail, person/
+ * cast/collection drill-ins), and [authSection] backs the settings
+ * Server/UserManagement pushes (AddServer/ServerList/Login/QuickConnect/
+ * UserSelection). Desktop still signs IN through DesktopSignInPane — the
+ * auth section serves signed-in server management only.
  *
  * Settings + admin went live with the admin repositories' Koin flip (Wave
  * wB): AdminRepository/AdminStatisticsRepository are Koin singles in
@@ -284,6 +294,19 @@ private fun DesktopNavScaffold() {
         entryProvider {
             searchSection(guardedNavigator)
             librarySection(guardedNavigator)
+            // Details, live since the details conveyor flip: every VM ctor
+            // dep resolves on desktop (data layer Koin-native, platform seams
+            // from desktopDetailsPlatformModule, AudioQueueFacade stub).
+            // Details is drill-in only — no rail entry; shared screens push
+            // Route.MediaDetail/SeerrDetail/PersonDetail/etc. Play/edit pushes
+            // stay guarded below (VideoPlayer/AudioPlayer/MetadataEditor).
+            detailsSection(guardedNavigator)
+            // Auth cluster drill-ins, live since the auth conveyor flip: the
+            // settings Server/UserManagement screens push AddServer/ServerList
+            // into these entries. Signed-OUT users still get DesktopSignInPane
+            // (this scaffold only renders authenticated); onAuthenticated =
+            // goBack, the Android wiring (JellyPlayApp).
+            authSection(guardedNavigator) { guardedNavigator.goBack() }
             liveTvSection(guardedNavigator)
             // Music, live since Wave wC — browse-live, playback-degrades: the
             // full section (browse/albums/artists/genres/mood+smart
@@ -441,21 +464,18 @@ private fun NavKey.isDesktopDeadEndRoute(): Boolean = when (this) {
     // No shared home feature; nothing should push Home but belt-and-braces
     // (a saved-state restore could resurrect one).
     Route.Home -> true
-    // Legacy details/players — app-side screens, no shared sections. Of
-    // these, Route.AudioPlayer is the music section's track-click target: the
-    // legacy now-playing screen has no desktop home, so those clicks surface
+    // Players — legacy app-side screens, no shared sections. Of these,
+    // Route.AudioPlayer is the music section's track-click target and
+    // VideoPlayer/LiveTvChannelPlayer are pushed by details/livetv: the
+    // legacy player surfaces have no desktop home, so those clicks surface
     // the snackbar instead (other play/enqueue paths degrade silently
     // through StubAudioQueueFacade — only instant-mix shows an error).
-    is Route.MediaDetail, is Route.CollectionDetail,
     is Route.VideoPlayer, is Route.AudioPlayer, is Route.LiveTvChannelPlayer,
     -> true
-    // Pushed by requests/calendar/search but registered by no shared
-    // section anywhere (dead-clicks on Android too).
-    is Route.SeerrDetail -> true
-    // Auth-cluster drill-ins, pushed by the (live) ServerManagement /
-    // UserManagement settings screens: the app-side authSection has no
-    // desktop twin — desktop signs in through DesktopSignInPane instead.
-    Route.AddServer, Route.ServerList -> true
+    // Pushed by MediaDetailScreen's edit action: the editor feature is
+    // registered but latent on desktop (StreamingSubtitleStore has no
+    // desktop Koin def) and has no desktop nav section.
+    is Route.MetadataEditor -> true
     // LanguageSettings pushes this from the now-live settings cluster; the
     // subtitle-tester feature is androidMain-only (no commonMain section).
     Route.SubtitleTester -> true
