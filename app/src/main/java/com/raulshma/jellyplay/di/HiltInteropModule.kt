@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.di
 import android.app.Application
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
@@ -45,12 +44,11 @@ import org.koin.dsl.module
  * framework per type). The engine's MediaRepository edge now resolves the
  * Koin-owned single through the androidDataModule's MediaRepositoryAccess def.
  *
- * The Phase X cluster flip added the single NEW reverse bridge:
- * PlaybackSourceResolver stays Hilt-owned (its impl uses android.net.Uri),
- * but the Koin-owned UnifiedMediaDetailProviderImpl ctor-injects the
- * interface — on Android this single is how that dep resolves. Latent on
- * desktop (no definition there yet; MediaDetailProvider resolves only when
- * a desktop PlaybackSourceResolver actual arrives).
+ * The PlaybackSourceResolver reverse bridge (added by the Phase X cluster
+ * flip, when the impl still used android.net.Uri) left with the
+ * playback-flips wave: the impl moved to :shared:core:data Uri-free, so Koin
+ * (dataJvmModule) owns it on both platforms and the legacy DataModule
+ * bridges Hilt injectors to the single — no reverse direction remains here.
  */
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -61,7 +59,6 @@ interface HiltInteropEntryPoint {
     fun streamingSubtitleStore(): StreamingSubtitleStore
     fun playerEngineFactory(): PlayerEngineFactory
     fun fontProvider(): FontProvider
-    fun playbackSourceResolver(): PlaybackSourceResolver
 }
 
 private fun interopEntryPoint(application: Application): HiltInteropEntryPoint =
@@ -92,11 +89,4 @@ fun hiltInteropModule(application: Application): Module = module {
     // be touched at startKoin time.
     single<PlayerEngineFactory> { interopEntryPoint(application).playerEngineFactory() }
     single<FontProvider> { interopEntryPoint(application).fontProvider() }
-    // Phase X MediaRepository cluster flip: UnifiedMediaDetailProviderImpl
-    // (Koin, dataJvmModule) ctor-injects PlaybackSourceResolver, whose impl
-    // stays Hilt-owned in legacy :core:data (android.net.Uri). This single —
-    // resolved only when MediaDetailProvider is first requested, long after
-    // Hilt's component exists — is the Android answer; desktop stays latent
-    // until a desktop PlaybackSourceResolver actual lands.
-    single<PlaybackSourceResolver> { interopEntryPoint(application).playbackSourceResolver() }
 }

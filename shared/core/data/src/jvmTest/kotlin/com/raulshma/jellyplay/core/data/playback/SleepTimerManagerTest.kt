@@ -1,32 +1,47 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import com.raulshma.jellyplay.core.data.util.TimeSource
+import java.time.LocalDate
+import java.time.ZoneId
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
 
+/**
+ * Moved from legacy `:core:data` JUnit4 to shared kotlin.test with the impl:
+ * the monotonic clock now rides the [TimeSource] seam (the legacy build read
+ * `SystemClock.elapsedRealtime`, which the old module's unit-test preset
+ * stubbed to 0). The fake below pins elapsed time explicitly.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SleepTimerManagerTest {
 
-    private val testDispatcher = StandardTestDispatcher()
-    private lateinit var manager: SleepTimerManager
-
-    @Before
-    fun setUp() {
-        Dispatchers.setMain(testDispatcher)
-        manager = SleepTimerManager()
+    /** Hand fake: elapsed monotonic millis the manager will read. */
+    private class FakeTimeSource(var elapsedMillis: Long = 0L) : TimeSource {
+        override fun nowEpochMillis(): Long = elapsedMillis
+        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
+        override fun nowElapsedRealtimeMillis(): Long = elapsedMillis
     }
 
-    @After
+    private val testDispatcher = StandardTestDispatcher()
+    private val timeSource = FakeTimeSource()
+    private lateinit var manager: SleepTimerManager
+
+    @BeforeTest
+    fun setUp() {
+        Dispatchers.setMain(testDispatcher)
+        manager = SleepTimerManager(timeSource)
+    }
+
+    @AfterTest
     fun tearDown() {
         manager.cancel()
         Dispatchers.resetMain()

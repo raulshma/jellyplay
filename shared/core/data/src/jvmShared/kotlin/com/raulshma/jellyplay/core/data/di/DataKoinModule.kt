@@ -2,14 +2,20 @@ package com.raulshma.jellyplay.core.data.di
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
+import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.network.ServerHealthMonitor
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
+import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.AudioCachePolicyGuard
 import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
+import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
 import com.raulshma.jellyplay.core.data.playback.DownloadConcurrencyLimiter
+import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
+import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolverImpl
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
+import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.data.remote.UiRemoteControlDispatcher
@@ -125,13 +131,13 @@ import org.koin.dsl.module
  * constructs nothing from the cluster anymore; its @Binds became
  * `koin().get()` bridges, and the app's HiltInteropModule dropped the
  * reverse-direction MediaRepository / UserDataMutator / MediaSearchEngine
- * singles (Koin builds them natively now). `PlaybackSourceResolver` — the one
- * remaining ctor dep of UnifiedMediaDetailProviderImpl that is not defined
- * here — stays Hilt-owned in the legacy module (its impl uses
- * `android.net.Uri`): the app composition root exposes it to Koin through a
- * Hilt interop single on Android; it is deliberately latent on desktop (no
- * definition, so MediaDetailProvider resolves only on Android — the desktop
- * detail screens arrive with a later phase).
+ * singles (Koin builds them natively now). `PlaybackSourceResolver` left
+ * that latent-on-desktop state with the playback-flips wave: its impl moved
+ * here Uri-free (`File.toURI()` instead of `android.net.Uri.fromFile`), so
+ * UnifiedMediaDetailProviderImpl's ctor dep resolves from this module on
+ * BOTH platforms and MediaDetailProvider is live on desktop too. The app's
+ * HiltInteropModule reverse single for it was deleted (one framework per
+ * type); the legacy DataModule @Binds became a `koin().get()` bridge.
  *
  * The V3 downloads conveyor (C4-part-2 notes, fifth conveyor item) moved the
  * download engine here — `DownloadRepositoryImpl`, `DownloadDelegate` and the
@@ -263,13 +269,12 @@ val dataJvmModule: Module = module {
 
     // ── C4 part 2, batch 3: session / playback / sync / syncplay / worker ──
     // Constructors mirrored verbatim from the moved impls. The types whose
-    // ctor deps are still Hilt-owned in the legacy shim (MediaRepository,
-    // DownloadRepository, AudioPlaybackManager, LyricsRepository,
-    // OfflinePlaybackFacade) are deliberately NOT defined here — the legacy
+    // ctor deps are still Hilt-owned in the legacy shim (AudioPlaybackManager,
+    // the media3 audio graph) are deliberately NOT defined here — the legacy
     // DataModule constructs them via interim @Provides until those flip:
-    // AudioLyricsManager, DefaultAudioQueueFacade, PlaybackSourceResolverImpl
-    // (platform). OfflineSyncManager moved off that list with the V3 downloads
-    // conveyor (see its definition below — the Hilt-interop edges resolve).
+    // DefaultAudioQueueFacade only. OfflineSyncManager, AudioLyricsManager and
+    // (playback-flips wave) PlaybackSourceResolverImpl all moved off that
+    // list as their ctor deps became Koin-resolvable.
 
     single<TimeSource> { SystemTimeSource() }
 
@@ -297,6 +302,26 @@ val dataJvmModule: Module = module {
     single { PlayerLifecycleManager(get()) }
 
     single { QueuePersistenceHelper(get()) }
+
+    // Playback-flips wave: SleepTimerManager moved from the legacy :core:data
+    // shim — SystemClock.elapsedRealtime became the TimeSource seam above
+    // (the Android actual IS SystemClock.elapsedRealtime, so the countdown is
+    // unchanged). Legacy Hilt injectors (core:data AudioPlaybackManager,
+    // feature:player:audio AudioPlayerViewModel, feature:player:video
+    // SleepTimerController / VideoPlayerViewModel — all on the concrete
+    // class) ride the DataModule koin().get() bridge onto this single. No
+    // Hilt injector needs the AudioSleepTimerManager interface, so only the
+    // Koin alias exists here.
+    single { SleepTimerManager(get()) }
+    single<AudioSleepTimerManager> { get<SleepTimerManager>() }
+
+    // Playback-flips wave: AdaptiveBitrateManager moved from the legacy
+    // :core:data shim — ConnectivityManager became the NetworkMonitor seam
+    // (null-network/metered parity documented on the class). Legacy Hilt
+    // injectors (feature:details DownloadLifecycleActions, feature:player:video
+    // PlayerCastController / PlaybackSession / PlayerSessionManager /
+    // VideoPlayerViewModel) ride the DataModule koin().get() bridge.
+    single { AdaptiveBitrateManager(get(), get(), get()) }
 
     // V3 livetv conveyor: the mini-player holder moved from the legacy
     // :core:data shim (one framework per type — @Singleton/@Inject stripped at
@@ -419,12 +444,25 @@ val dataJvmModule: Module = module {
     }
     single<MediaSearchEngine> { get<MediaSearchEngineImpl>() }
 
-    // PlaybackSourceResolver (the ctor dep marked "Android interop" below) is
-    // NOT defined here: its impl stays Hilt-owned in the legacy module
-    // (android.net.Uri). On Android the app composition root exposes it to
-    // Koin via a Hilt interop single; on desktop it is latent — nothing
-    // resolves MediaDetailProvider there until the detail screens arrive
-    // with a desktop PlaybackSourceResolver actual.
+    // Playback-flips wave: PlaybackSourceResolverImpl moved from the legacy
+    // :core:data shim (Uri.fromFile → File.toURI, see the impl's URI-shape
+    // note) — UnifiedMediaDetailProviderImpl's ctor dep below now resolves
+    // from this module on BOTH platforms, and the app's HiltInterop reverse
+    // single for the interface was deleted. Legacy Hilt injectors of the
+    // interface (app MainViewModel, feature:player:video
+    // PlayerSessionManager, the core:data audio trio) ride the DataModule
+    // koin().get() bridge.
+    single {
+        PlaybackSourceResolverImpl(
+            downloadRepository = get(),
+            mediaRepository = get(),
+            playbackRepository = get(),
+            offlineRepository = get(),
+            offlinePlaybackFacade = get(),
+        )
+    }
+    single<PlaybackSourceResolver> { get<PlaybackSourceResolverImpl>() }
+
     single {
         UnifiedMediaDetailProviderImpl(
             mediaRepository = get(),
@@ -450,9 +488,10 @@ val dataJvmModule: Module = module {
     }
     single<OfflineFirstItemResolver> { get<OfflineFirstItemResolverImpl>() }
 
-    // Concrete class (no interface): the legacy Hilt injector is
-    // PlaybackSourceResolverImpl, which rides the DataModule koin().get()
-    // bridge onto this single.
+    // Concrete class (no interface). Playback-flips wave: its one legacy Hilt
+    // injector (PlaybackSourceResolverImpl) moved into this module too, so
+    // construction is all-Koin here; the DataModule koin().get() bridge
+    // carries any remaining Hilt injectors onto this single.
     single { OfflinePlaybackFacade(get(), get()) }
 
     // AudioLyricsManager left the DataModule interim direct-construction
