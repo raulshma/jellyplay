@@ -43,6 +43,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Bolt
 import com.composables.icons.tabler.outline.Calendar
 import com.composables.icons.tabler.outline.DeviceTv
+import com.composables.icons.tabler.outline.Disc
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Flame
 import com.composables.icons.tabler.outline.Library
@@ -69,6 +70,7 @@ import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
 import com.raulshma.jellyplay.feature.insights.navigation.insightsSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
 import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
+import com.raulshma.jellyplay.feature.music.navigation.musicSection
 import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
@@ -94,8 +96,6 @@ import org.koin.compose.koinInject
  * [isDesktopDeadEndRoute] so a shared screen pushing the route shows a
  * snackbar instead of crashing NavDisplay with an unregistered entry):
  *  - home/details/players — legacy app-side screens, no shared sections;
- *  - music — partial on desktop (the AudioQueueFacade cluster has no desktop
- *    defs), so the whole feature is omitted rather than half-broken;
  *  - auth-cluster drill-ins — AddServer/ServerList live in the app-side auth
  *    section with no desktop twin (desktop signs in via DesktopSignInPane);
  *  - SubtitleTester — androidMain-only, no commonMain section at all;
@@ -106,6 +106,14 @@ import org.koin.compose.koinInject
  * dataJvmModule on both platforms, so [settingsSection] and [adminSection]
  * render below (the settings drill-ins SeerrSettings/ArrSettings included —
  * their Seerr/Arr/datastore ctor deps are all Koin-native).
+ *
+ * Music went live next (Wave wC) — browse-live, playback-degrades: the last
+ * unresolved music ctor dep (AudioQueueFacade) gained a desktop definition
+ * (StubAudioQueueFacade in desktopPlayerModule), so [musicSection] renders
+ * below with its full browse/albums/artists/genres/playlists cluster. Play/
+ * enqueue/instant-mix actions fail honestly through the stub (in-screen
+ * error states, no fake success), and Route.AudioPlayer stays guarded — the
+ * legacy now-playing screen has no desktop home.
  */
 @Composable
 internal fun DesktopAppRoot(showAbout: Boolean, onDismissAbout: () -> Unit) {
@@ -277,6 +285,14 @@ private fun DesktopNavScaffold() {
             searchSection(guardedNavigator)
             librarySection(guardedNavigator)
             liveTvSection(guardedNavigator)
+            // Music, live since Wave wC — browse-live, playback-degrades: the
+            // full section (browse/albums/artists/genres/mood+smart
+            // playlists/playlist details) renders; play/enqueue/instant-mix
+            // resolve AudioQueueFacade to the desktop StubAudioQueueFacade
+            // (desktopPlayerModule), which fails honestly into the in-screen
+            // error states. Track clicks push Route.AudioPlayer — still
+            // guarded below.
+            musicSection(guardedNavigator)
             downloadsSection(guardedNavigator)
             syncPlaySection(guardedNavigator)
             newsletterSection(guardedNavigator)
@@ -338,6 +354,9 @@ private fun DesktopNavScaffold() {
             DesktopRailItem(Route.Search, "Search", Tabler.Outline.Search, currentTopLevel, guardedNavigator)
             DesktopRailItem(Route.Library, "Library", Tabler.Outline.Library, currentTopLevel, guardedNavigator)
             DesktopRailItem(Route.LiveTv, "Live TV", Tabler.Outline.DeviceTv, currentTopLevel, guardedNavigator)
+            // Same icon the Android app's nav uses for Route.MusicBrowse
+            // (JellyPlayApp.routeToIcon): Tabler.Outline.Disc.
+            DesktopRailItem(Route.MusicBrowse, "Music", Tabler.Outline.Disc, currentTopLevel, guardedNavigator)
             DesktopRailItem(Route.Downloads, "Downloads", Tabler.Outline.Download, currentTopLevel, guardedNavigator)
             DesktopRailItem(Route.Newsletter, "Newsletter", Tabler.Outline.Mail, currentTopLevel, guardedNavigator)
             DesktopRailItem(Route.WatchProgressHeatmap, "Insights", Tabler.Outline.Flame, currentTopLevel, guardedNavigator)
@@ -381,6 +400,7 @@ private val DESKTOP_TOP_LEVEL_ROUTES: Set<Route> = setOf(
     Route.Search,
     Route.Library,
     Route.LiveTv,
+    Route.MusicBrowse,
     Route.Downloads,
     Route.Newsletter,
     Route.WatchProgressHeatmap,
@@ -420,13 +440,14 @@ private fun NavKey.isDesktopDeadEndRoute(): Boolean = when (this) {
     // No shared home feature; nothing should push Home but belt-and-braces
     // (a saved-state restore could resurrect one).
     Route.Home -> true
-    // Legacy details/players — app-side screens, no shared sections.
+    // Legacy details/players — app-side screens, no shared sections. Of
+    // these, Route.AudioPlayer is the music section's track-click target: the
+    // legacy now-playing screen has no desktop home, so those clicks (and
+    // every other play/enqueue path failing through StubAudioQueueFacade)
+    // surface the snackbar instead.
     is Route.MediaDetail, is Route.CollectionDetail,
     is Route.VideoPlayer, is Route.AudioPlayer, is Route.LiveTvChannelPlayer,
     -> true
-    // Music v1 omission: the library section pushes the playlist cluster,
-    // and the rest of music needs AudioQueueFacade (no desktop def).
-    is Route.Playlists, is Route.MoodPlaylists, is Route.SmartPlaylists -> true
     // Pushed by requests/calendar/search but registered by no shared
     // section anywhere (dead-clicks on Android too).
     is Route.SeerrDetail -> true
