@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.di
 
 import android.app.Application
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
-import com.raulshma.jellyplay.core.data.repository.AdminRepository
-import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
@@ -34,8 +32,11 @@ import org.koin.dsl.module
  * UserMessageBus behind the shared module's [MusicMessageBus] seam
  * (HiltMusicMessageBus below).
  *
- * The settings conveyor (Wave 2) reaches the same way for the still
- * Hilt-bound AdminRepository (SettingsViewModel + AboutViewModel ctor dep).
+ * The settings conveyor (Wave 2) originally reached this way for the
+ * Hilt-bound AdminRepository too — that single (and its
+ * AdminStatisticsRepository sibling) left with the admin flip (Wave wB):
+ * both repositories are Koin-owned in dataJvmModule on both platforms now,
+ * so the shared settings/admin ViewModels resolve them directly.
  *
  * DownloadRepository left this module with the V3 downloads conveyor: the
  * download engine moved to :shared:core:data and Koin (dataJvmModule) owns
@@ -57,8 +58,6 @@ interface HiltInteropEntryPoint {
     fun downloadIntake(): DownloadIntake
     fun audioQueueFacade(): AudioQueueFacade
     fun userMessageBus(): UserMessageBus
-    fun adminRepository(): AdminRepository
-    fun adminStatisticsRepository(): AdminStatisticsRepository
     fun streamingSubtitleStore(): StreamingSubtitleStore
     fun playerEngineFactory(): PlayerEngineFactory
     fun fontProvider(): FontProvider
@@ -79,11 +78,6 @@ fun hiltInteropModule(application: Application): Module = module {
     single<DownloadIntake> { interopEntryPoint(application).downloadIntake() }
     single<AudioQueueFacade> { interopEntryPoint(application).audioQueueFacade() }
     single<MusicMessageBus> { HiltMusicMessageBus(interopEntryPoint(application).userMessageBus()) }
-    single<AdminRepository> { interopEntryPoint(application).adminRepository() }
-    // Admin conveyor (eighth feature): the AdminStatisticsRepository interface
-    // moved to shared :core:data jvmShared while its impl stays Hilt-bound in
-    // legacy :core:data's DataModule — same lazy interop single as above.
-    single<AdminStatisticsRepository> { interopEntryPoint(application).adminStatisticsRepository() }
     // Editor conveyor (ninth feature): the StreamingSubtitleStore interface
     // lives in shared :core:data commonMain but its impl
     // (StreamingSubtitleStoreImpl) stays Hilt-bound in legacy :core:data's

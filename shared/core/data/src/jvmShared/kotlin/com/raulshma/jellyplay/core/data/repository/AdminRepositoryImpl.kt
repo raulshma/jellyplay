@@ -24,11 +24,8 @@ import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChanne
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class AdminRepositoryImpl @Inject constructor(
+class AdminRepositoryImpl constructor(
     private val apiClient: JellyfinApiClient,
     private val engine: JellyfinApiEngine,
     private val realtimeTasks: ScheduledTasksRealtimeChannel,

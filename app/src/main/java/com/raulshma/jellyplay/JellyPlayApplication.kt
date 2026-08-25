@@ -23,6 +23,7 @@ import com.raulshma.jellyplay.core.network.di.androidNetworkModule
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import com.raulshma.jellyplay.di.hiltInteropModule
+import com.raulshma.jellyplay.di.androidAdminSeamsModule
 import com.raulshma.jellyplay.di.androidDownloadSeamsModule
 import com.raulshma.jellyplay.di.androidSettingsSeamsModule
 import com.raulshma.jellyplay.feature.search.di.searchModule
@@ -163,6 +164,11 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // legacy DataModule bridges its remaining Hilt injectors to
                 // them via koin().get().
                 androidDownloadSeamsModule(this@JellyPlayApplication),
+                // Admin flip (Wave wB): Android actual of the admin-statistics
+                // label seam — legacy core:data R.string over the Koin-owned
+                // AdminStatisticsRepositoryImpl (dataJvmModule), byte-identical
+                // to the pre-move context.getString calls.
+                androidAdminSeamsModule(this@JellyPlayApplication),
                 // V3 feature conveyor: shared feature ViewModels. The interop
                 // bridge exposes the still-Hilt-owned data-layer types to the
                 // Koin graph until the Phase X MediaRepository flip.
@@ -188,8 +194,8 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // V3 admin conveyor (eighth feature): the shared admin
                 // ViewModels plus the Android-only plugin-config WebView
                 // ViewModel (Context ctor param). AdminRepository and
-                // AdminStatisticsRepository resolve through the
-                // hiltInteropModule singles above.
+                // AdminStatisticsRepository resolve from dataJvmModule
+                // (Koin-owned since the Wave wB admin flip).
                 adminModule,
                 androidAdminModule(this@JellyPlayApplication),
 

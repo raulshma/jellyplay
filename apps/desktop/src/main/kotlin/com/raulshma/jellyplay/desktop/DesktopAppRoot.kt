@@ -49,6 +49,8 @@ import com.composables.icons.tabler.outline.Library
 import com.composables.icons.tabler.outline.Mail
 import com.composables.icons.tabler.outline.Movie
 import com.composables.icons.tabler.outline.Search
+import com.composables.icons.tabler.outline.Settings
+import com.composables.icons.tabler.outline.Shield
 import com.composables.icons.tabler.outline.Stack
 import com.composables.icons.tabler.outline.Users
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
@@ -59,6 +61,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
+import com.raulshma.jellyplay.feature.admin.navigation.adminSection
 import com.raulshma.jellyplay.feature.arrqueue.navigation.arrQueueSection
 import com.raulshma.jellyplay.feature.calendar.navigation.calendarSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
@@ -69,6 +72,7 @@ import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
+import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
 import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
 import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
 import kotlin.reflect.KClass
@@ -91,10 +95,16 @@ import org.koin.compose.koinInject
  *  - home/details/players — legacy app-side screens, no shared sections;
  *  - music — partial on desktop (the AudioQueueFacade cluster has no desktop
  *    defs), so the whole feature is omitted rather than half-broken;
- *  - settings — its main VM (SettingsViewModel) + AboutViewModel need
- *    AdminRepository, which is still Hilt-only;
- *  - admin/editor — latent (Hilt-only repository deps);
- *  - subtitle-tester — androidMain-only, no commonMain section at all.
+ *  - auth-cluster drill-ins — AddServer/ServerList live in the app-side auth
+ *    section with no desktop twin (desktop signs in via DesktopSignInPane);
+ *  - SubtitleTester — androidMain-only, no commonMain section at all;
+ *  - editor — latent (StreamingSubtitleStore is still Hilt-owned).
+ *
+ * Settings + admin went live with the admin repositories' Koin flip (Wave
+ * wB): AdminRepository/AdminStatisticsRepository are Koin singles in
+ * dataJvmModule on both platforms, so [settingsSection] and [adminSection]
+ * render below (the settings drill-ins SeerrSettings/ArrSettings included —
+ * their Seerr/Arr/datastore ctor deps are all Koin-native).
  */
 @Composable
 internal fun DesktopAppRoot(showAbout: Boolean, onDismissAbout: () -> Unit) {
@@ -177,6 +187,41 @@ private fun DesktopNavScaffold() {
     val networkStatus = remember { MutableStateFlow(NetworkStatus.Online) }
     val serverHealth = remember { MutableStateFlow(ServerHealth.Unknown) }
 
+    // Admin gate + logout — the Android shell's MainViewModel duties,
+    // inlined for desktop (no desktop MainViewModel exists). isAdmin maps
+    // the shared currentUser flow; refreshAdminStatus de-dupes to one
+    // server call per 30 s with an in-flight flag, the same contract
+    // AdminRouteContainer gets on Android (MainViewModel.refreshAdminStatus).
+    val authRepository: AuthRepository = koinInject()
+    var isAdmin by remember { mutableStateOf(false) }
+    var isRefreshingAdmin by remember { mutableStateOf(false) }
+    var lastAdminRefreshAt by remember { mutableStateOf(0L) }
+    LaunchedEffect(authRepository) {
+        authRepository.currentUser.collect { user -> isAdmin = user?.isAdmin == true }
+    }
+    val refreshAdminStatus = {
+        val now = System.currentTimeMillis()
+        if (!isRefreshingAdmin && now - lastAdminRefreshAt >= ADMIN_REFRESH_INTERVAL_MS) {
+            isRefreshingAdmin = true
+            scope.launch {
+                try {
+                    authRepository.refreshCurrentUser()
+                    lastAdminRefreshAt = System.currentTimeMillis()
+                } finally {
+                    isRefreshingAdmin = false
+                }
+            }
+        }
+    }
+    val onLogout: (Boolean) -> Unit = { revoke ->
+        // Same semantics as the Android SessionCoordinator pair: revoke=true
+        // also revokes the server session. isAuthenticated flips false and
+        // DesktopAppRoot swaps in the sign-in pane.
+        scope.launch {
+            if (revoke) authRepository.revokeServerSession() else authRepository.logout()
+        }
+    }
+
     // Dead-end guard (runtime safety, not polish): NavDisplay with an
     // unregistered top-of-stack entry is a crash hazard, and the shared
     // screens freely push routes that have no desktop section (see class
@@ -219,6 +264,24 @@ private fun DesktopNavScaffold() {
             shortcutsSection(guardedNavigator)
             arrQueueSection(guardedNavigator)
             onboardingSection { guardedNavigator.goBack() }
+            // Settings + admin, live since the admin repositories' Koin flip
+            // (Wave wB) — every settings/admin VM ctor dep resolves on
+            // desktop now (AdminRepository/AdminStatisticsRepository from
+            // dataJvmModule, platform seams from desktopSettingsPlatform
+            // Module). Desktop update-check stays a no-op: self-update is an
+            // Android app concern, and the About row is pref-gated off.
+            settingsSection(
+                navigator = guardedNavigator,
+                onLogout = onLogout,
+                onSetupWizard = { guardedNavigator.navigate(Route.Onboarding) },
+                onCheckForUpdates = {},
+            )
+            adminSection(
+                navigator = guardedNavigator,
+                isAdmin = { isAdmin },
+                isRefreshingAdmin = { isRefreshingAdmin },
+                onRefreshAdmin = { refreshAdminStatus() },
+            )
         }
     }
 
@@ -263,6 +326,11 @@ private fun DesktopNavScaffold() {
             DesktopRailItem(Route.UpcomingCalendar, "Calendar", Tabler.Outline.Calendar, currentTopLevel, guardedNavigator)
             DesktopRailItem(Route.ArrQueue, "Arr Queue", Tabler.Outline.Stack, currentTopLevel, guardedNavigator)
             DesktopRailItem(Route.Shortcuts, "Shortcuts", Tabler.Outline.Bolt, currentTopLevel, guardedNavigator)
+
+            Spacer(Modifier.height(12.dp))
+
+            DesktopRailItem(Route.Settings, "Settings", Tabler.Outline.Settings, currentTopLevel, guardedNavigator)
+            DesktopRailItem(Route.AdminDashboard, "Admin", Tabler.Outline.Shield, currentTopLevel, guardedNavigator)
         }
 
         CompositionLocalProvider(
@@ -298,6 +366,8 @@ private val DESKTOP_TOP_LEVEL_ROUTES: Set<Route> = setOf(
     Route.UpcomingCalendar,
     Route.ArrQueue,
     Route.Shortcuts,
+    Route.Settings,
+    Route.AdminDashboard,
 )
 
 @Composable
@@ -337,11 +407,15 @@ private fun NavKey.isDesktopDeadEndRoute(): Boolean = when (this) {
     // Pushed by requests/calendar/search but registered by no shared
     // section anywhere (dead-clicks on Android too).
     is Route.SeerrDetail -> true
-    // Settings/admin latent: VMs need AdminRepository (Hilt-only). Pushed by
-    // shortcuts (settings cluster) and calendar/arrqueue (ArrSettings).
-    Route.Settings, is Route.ServerManagement, is Route.UserManagement,
-    is Route.SeerrSettings, is Route.ArrSettings,
-    Route.AdminDashboard, Route.About,
-    -> true
+    // Auth-cluster drill-ins, pushed by the (live) ServerManagement /
+    // UserManagement settings screens: the app-side authSection has no
+    // desktop twin — desktop signs in through DesktopSignInPane instead.
+    Route.AddServer, Route.ServerList -> true
+    // LanguageSettings pushes this from the now-live settings cluster; the
+    // subtitle-tester feature is androidMain-only (no commonMain section).
+    Route.SubtitleTester -> true
     else -> false
 }
+
+/** Admin-status re-validation window, matching MainViewModel's 30 s dedup. */
+private const val ADMIN_REFRESH_INTERVAL_MS = 30_000L
