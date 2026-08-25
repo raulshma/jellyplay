@@ -55,6 +55,7 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.isMusicTrack
+import com.raulshma.jellyplay.core.ui.feedback.UiText
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.R
@@ -89,14 +90,27 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 /** Minimum resolved duration (ms) before smart-download auto-cleanup may fire. */
 private const val MIN_DURATION_FOR_SMART_DELETE_MS = 5 * 60 * 1000L
+
+/**
+ * How long a next-episode load may hold its single-flight latch while waiting
+ * for the session to settle onto the new item before the button re-arms. Error
+ * paths release earlier via [SessionEvent.ShowError]; this backstop covers
+ * paths that change nothing (e.g. remote-play routing). Sized for the slowest
+ * network preset's timeout chain (VERY_RELAXED 60 s + failover retries).
+ */
+// internal so the latch tests can drive the scheduler by exactly this value.
+internal const val NEXT_EPISODE_SETTLE_TIMEOUT_MS = 90_000L
 
 // The process-death resume-position persistence (SavedStateHandle keys,
 // throttle/coalesce windows, the staleness threshold and the pure
@@ -240,6 +254,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val subtitlePreviewRepository: com.raulshma.jellyplay.feature.player.video.subtitle.SubtitlePreviewRepository,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
+    private val offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(VideoPlayerUiState())
@@ -307,6 +322,14 @@ class VideoPlayerViewModel @Inject constructor(
     )
     val resumeReminder: kotlinx.coroutines.flow.SharedFlow<Long> = _resumeReminder
 
+    /**
+     * True while a next-episode load is in flight and unsettled. The Up Next
+     * overlay disables its play button on this flag, so rapid re-taps can
+     * neither stack duplicate loads nor restart playback once per tap (#146).
+     */
+    private val _nextEpisodeLoading = MutableStateFlow(false)
+    val isNextEpisodeLoading: StateFlow<Boolean> = _nextEpisodeLoading.asStateFlow()
+
     private val playerSessionManager = PlayerSessionManager(
         context = context,
         scope = scope,
@@ -321,6 +344,8 @@ class VideoPlayerViewModel @Inject constructor(
         pipController = pipController,
         playbackSourceResolver = playbackSourceResolver,
         streamingSubtitleStore = streamingSubtitleStore,
+        offlineModeManager = offlineModeManager,
+        userMessageBus = userMessageBus,
     )
 
     // ── Engine-event orchestration ──────────────────────────────────────────
@@ -2243,32 +2268,69 @@ class VideoPlayerViewModel @Inject constructor(
         val seriesId = detail.item.seriesId ?: return
         val seasonId = detail.item.seasonId ?: return
         val currentItemId = playerSessionManager.sessionState.value.currentItemId ?: return
+        // Single-flight latch (#146): every tap used to launch an independent
+        // resolve → mark-played → initialize chain. Offline, each stage blocked
+        // on a full network timeout, so re-taps landed minutes later as
+        // staggered teardown+reload passes — one visible restart per extra tap.
+        if (!_nextEpisodeLoading.compareAndSet(false, true)) return
         launch {
-            val episodes = resolveEpisodes(seriesId, seasonId)
-            val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
-            if (currentIndex < 0 || currentIndex + 1 >= episodes.size) return@launch
-            val next = episodes[currentIndex + 1]
-
-            // Auto-advancing is only reachable near the episode's end, so the
-            // current episode was effectively watched. Mark it played so it
-            // drops out of Continue Watching. This also covers the SyncPlay
-            // branch below, which bypasses [initialize] and its stopped-position
-            // report.
-            if (!cachedAggregate.videoPlayer.incognitoModeEnabled) {
-                runCatching { userDataMutator.setPlayed(currentItemId, played = true) }
-            }
-
-            if (syncPlayManager.isInSyncPlaySession) {
-                val group = syncPlayManager.currentGroup
-                val currentPlaylistItemId = group?.playingPlaylistItemId
-                val nextExistsInQueue = group?.playlistItemMap?.values?.contains(next.id) == true
-                if (currentPlaylistItemId != null && nextExistsInQueue) {
-                    syncPlay.sendNextItem(currentPlaylistItemId)
+            try {
+                val episodesResult = episodeCatalogue.loadSeasonEpisodes(
+                    seriesId,
+                    seasonId,
+                    playerSessionManager.sessionState.value.isOffline,
+                )
+                val episodes = episodesResult.getOrElse {
+                    // A failed resolution used to fall through to an empty list
+                    // and silently do nothing; tell the user instead.
+                    userMessageBus.error(UiText.Resource(R.string.player_video_error_next_episode_load))
                     return@launch
                 }
-            }
+                val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
+                if (currentIndex < 0 || currentIndex + 1 >= episodes.size) return@launch
+                val next = episodes[currentIndex + 1]
 
-            initialize(next.id, null, 0L)
+                // Auto-advancing is only reachable near the episode's end, so the
+                // current episode was effectively watched. Mark it played so it
+                // drops out of Continue Watching. This also covers the SyncPlay
+                // branch below, which bypasses [initialize] and its stopped-position
+                // report.
+                if (!cachedAggregate.videoPlayer.incognitoModeEnabled) {
+                    runCatching { userDataMutator.setPlayed(currentItemId, played = true) }
+                }
+
+                if (syncPlayManager.isInSyncPlaySession) {
+                    val group = syncPlayManager.currentGroup
+                    val currentPlaylistItemId = group?.playingPlaylistItemId
+                    val nextExistsInQueue = group?.playlistItemMap?.values?.contains(next.id) == true
+                    if (currentPlaylistItemId != null && nextExistsInQueue) {
+                        syncPlay.sendNextItem(currentPlaylistItemId)
+                        return@launch
+                    }
+                }
+
+                initialize(next.id, null, 0L)
+
+                // Keep holding the latch until the load actually settles — the
+                // session binds a different, non-null item or an error
+                // surfaces — so taps landing inside this window are ignored
+                // rather than queued as a second teardown+reload of the same
+                // episode (#146). The non-null guard matters: initialize()'s
+                // per-item teardown resets PlayerSessionState (currentItemId =
+                // null) BEFORE the pipeline rebinds the new item, and that
+                // transient must not read as "settled" — without it the latch
+                // releases the instant this line returns.
+                withTimeoutOrNull(NEXT_EPISODE_SETTLE_TIMEOUT_MS) {
+                    merge(
+                        playerSessionManager.sessionState.map {
+                            it.currentItemId != currentItemId && it.currentItemId != null
+                        },
+                        playbackSession.events.map { it is SessionEvent.ShowError },
+                    ).filter { settled -> settled }.first()
+                }
+            } finally {
+                _nextEpisodeLoading.value = false
+            }
         }
     }
 

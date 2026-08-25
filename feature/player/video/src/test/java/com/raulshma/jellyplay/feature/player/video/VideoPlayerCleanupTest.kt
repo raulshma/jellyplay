@@ -285,6 +285,7 @@ class VideoPlayerCleanupTest {
             savedStateHandle = androidx.lifecycle.SavedStateHandle(),
             subtitlePreviewRepository = mockk(relaxed = true),
             userDataMutator = mockk(relaxed = true),
+            offlineModeManager = mockk(relaxed = true),
         )
 
         // Set some media-specific states to verify they are cleared on release
@@ -403,6 +404,7 @@ class VideoPlayerCleanupTest {
             savedStateHandle = androidx.lifecycle.SavedStateHandle(),
             subtitlePreviewRepository = mockk(relaxed = true),
             userDataMutator = mockk(relaxed = true),
+            offlineModeManager = mockk(relaxed = true),
         )
     }
 }

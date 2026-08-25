@@ -262,6 +262,8 @@
     <string name="player_video_remember_subtitles_off">Keep subtitles off for this series</string>
     <string name="player_video_error_offline_file_missing">Error: offline file missing</string>
     <string name="player_video_error_loading_media">Error loading media</string>
+    <string name="player_video_error_offline_stream">You\u2019re offline \u2014 reconnect to stream this title</string>
+    <string name="player_video_error_next_episode_load">Couldn\u2019t load the next episode. Check your connection and try again</string>
     <string name="player_video_trickplay_thumbnail">Trickplay thumbnail</string>
 
     <plurals name="player_video_participants">

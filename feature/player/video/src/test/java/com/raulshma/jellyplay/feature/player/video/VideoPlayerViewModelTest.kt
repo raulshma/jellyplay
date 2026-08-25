@@ -44,9 +44,11 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -76,6 +78,8 @@ class VideoPlayerViewModelTest {
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var offlinePlaybackFacade: com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
     private lateinit var playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
+    private lateinit var episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+    private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
 
     @Before
     fun setUp() {
@@ -89,6 +93,8 @@ class VideoPlayerViewModelTest {
         offlineRepository = mockk(relaxed = true)
         offlinePlaybackFacade = mockk(relaxed = true)
         playbackSourceResolver = mockk(relaxed = true)
+        episodeCatalogue = mockk(relaxed = true)
+        userDataMutator = mockk(relaxed = true)
         val itemPlaybackPreferenceRepository = mockk<ItemPlaybackPreferenceRepository>(relaxed = true)
         aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
         val engineStore = mockk<PlayerEngineStore>(relaxed = true)
@@ -169,7 +175,7 @@ class VideoPlayerViewModelTest {
             offlineRepository = offlineRepository,
             offlinePlaybackFacade = offlinePlaybackFacade,
             playbackSourceResolver = playbackSourceResolver,
-            episodeCatalogue = mockk(relaxed = true),
+            episodeCatalogue = episodeCatalogue,
             itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
             aggregateStore = aggregateStore,
             engineStore = engineStore,
@@ -203,7 +209,8 @@ class VideoPlayerViewModelTest {
             fontProvider = mockk(relaxed = true),
             savedStateHandle = androidx.lifecycle.SavedStateHandle(),
             subtitlePreviewRepository = mockk(relaxed = true),
-            userDataMutator = mockk(relaxed = true),
+            userDataMutator = userDataMutator,
+            offlineModeManager = mockk(relaxed = true),
         )
     }
 
@@ -529,4 +536,151 @@ class VideoPlayerViewModelTest {
 
     private suspend fun callResolveOfflineResumeTicks(itemId: String, startPositionTicks: Long): Long =
         viewModel.resolveOfflineResumeTicks(itemId, startPositionTicks)
+
+    // ── Next-episode single-flight latch (#146) ──────────────────────────
+
+    /** Loads "item-1" (a series episode) via the EXTERNAL fast path so the
+     *  VM has a mediaDetail with series/season ids and a bound currentItemId. */
+    private fun loadCurrentEpisodeExternally() {
+        every { aggregateStore.aggregate } returns MutableStateFlow(
+            VideoPlayerAggregate(playback = PlaybackSlice(preferredPlayer = PlayerType.EXTERNAL))
+        )
+        every { aggregateStore.aggregateRaw } returns flowOf(
+            VideoPlayerAggregate(playback = PlaybackSlice(preferredPlayer = PlayerType.EXTERNAL))
+        )
+        every { jellyfinRemotePlayCastStrategy.isConnected } returns MutableStateFlow(false)
+        coEvery {
+            playbackSourceResolver.resolveStartPositionTicks("item-1", 0L)
+        } returns 0L
+        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(
+            MediaDetail(
+                item = MediaItem(
+                    id = "item-1",
+                    name = "Episode One",
+                    mediaType = MediaType.EPISODE,
+                    seriesId = "series-1",
+                    seasonId = "season-1",
+                ),
+            )
+        )
+        // This detail carries series/season ids, so the load's background
+        // episode hooks (fetchAdjacentEpisodes / loadSeriesEpisodes) DO reach
+        // the catalogue. Give every method a typed default answer — a fully
+        // relaxed mock hands back Object-valued Results whose casts explode
+        // asynchronously on Dispatchers.Main and poison the next runTest-based
+        // class in this JVM (observed as UncaughtExceptionsBeforeTest in
+        // GestureSeekControllerTest).
+        coEvery { episodeCatalogue.loadSeasonEpisodes(any(), any(), any()) } returns
+            Result.success(emptyList())
+        coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns
+            Result.success(
+                com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot.empty("series-1")
+            )
+
+        viewModel.initialize("item-1", null, 0L)
+    }
+
+    @Test
+    fun playNextEpisode_whileLoadInFlight_ignoresRetaps() {
+        loadCurrentEpisodeExternally()
+        // The resolution hangs (the offline dead-air case from #146): the
+        // request never completes, so the latch must stay held and every
+        // re-tap during the window must be swallowed, not queued. Installed
+        // AFTER the initial load, every counted call below is tap-driven —
+        // no other caller can run while the resolution never settles.
+        var resolutionCalls = 0
+        val hang = kotlinx.coroutines.CompletableDeferred<Result<List<MediaItem>>>()
+        coEvery { episodeCatalogue.loadSeasonEpisodes(any(), any(), any()) } coAnswers {
+            resolutionCalls++
+            hang.await()
+        }
+
+        viewModel.playNextEpisode()
+        assertEquals(1, resolutionCalls)
+        viewModel.playNextEpisode()
+        viewModel.playNextEpisode()
+
+        // Retaps must not spawn duplicate resolutions…
+        assertEquals(1, resolutionCalls)
+        // …nor reach mark-played / initialize behind them.
+        io.mockk.coVerify(exactly = 0) { userDataMutator.setPlayed(any(), any()) }
+        assertTrue(viewModel.isNextEpisodeLoading.value)
+    }
+
+    @Test
+    fun playNextEpisode_whenResolutionFails_clearsLatch() {
+        loadCurrentEpisodeExternally()
+        coEvery { episodeCatalogue.loadSeasonEpisodes(any(), any(), any()) } returns
+            Result.failure(java.io.IOException("dead air"))
+
+        viewModel.playNextEpisode()
+
+        assertFalse(viewModel.isNextEpisodeLoading.value)
+    }
+
+    @Test
+    fun playNextEpisode_happyPath_latchHeldUntilSessionSettles_thenReleases() {
+        loadCurrentEpisodeExternally()
+        coEvery { episodeCatalogue.loadSeasonEpisodes(any(), any(), any()) } returns
+            Result.success(
+                listOf(
+                    MediaItem(id = "item-1", name = "Episode One", mediaType = MediaType.EPISODE),
+                    MediaItem(id = "item-2", name = "Episode Two", mediaType = MediaType.EPISODE),
+                )
+            )
+        // Park the pipeline's playhead seed — the last stage before loadMedia.
+        // Resolution has finished and initialize has returned, but the session
+        // has not moved yet: this is the window the latch exists for.
+        val seedGate = CompletableDeferred<Long>()
+        coEvery {
+            playbackSourceResolver.resolveStartPositionTicks("item-2", 0L)
+        } coAnswers { seedGate.await() }
+        coEvery { mediaRepository.getMediaDetail("item-2") } returns Result.success(
+            MediaDetail(
+                item = MediaItem(id = "item-2", name = "Episode Two", mediaType = MediaType.EPISODE),
+            )
+        )
+
+        viewModel.playNextEpisode()
+
+        // Held while the next load is still unsettled — not released merely
+        // because resolution + initialize returned (their teardown resets
+        // currentItemId to null; that transient must not count as settling).
+        assertTrue(viewModel.isNextEpisodeLoading.value)
+
+        // Settle the session onto item-2 (loadMedia flips currentItemId)…
+        seedGate.complete(0L)
+
+        // …and only then does the latch release. The current item was also
+        // marked played on the way, exactly once.
+        assertFalse(viewModel.isNextEpisodeLoading.value)
+        io.mockk.coVerify(exactly = 1) {
+            userDataMutator.setPlayed("item-1", played = true)
+        }
+    }
+
+    @Test
+    fun playNextEpisode_routedToRemotePlay_backstopTimeoutReleasesLatch() {
+        loadCurrentEpisodeExternally()
+        // "Play On" routing takes the load away without touching local session
+        // state: currentItemId stays on item-1 and no ShowError fires, so only
+        // the NEXT_EPISODE_SETTLE_TIMEOUT_MS backstop can re-arm the button.
+        every { jellyfinRemotePlayCastStrategy.isConnected } returns MutableStateFlow(true)
+        coEvery { episodeCatalogue.loadSeasonEpisodes(any(), any(), any()) } returns
+            Result.success(
+                listOf(
+                    MediaItem(id = "item-1", name = "Episode One", mediaType = MediaType.EPISODE),
+                    MediaItem(id = "item-2", name = "Episode Two", mediaType = MediaType.EPISODE),
+                )
+            )
+
+        viewModel.playNextEpisode()
+
+        assertTrue(viewModel.isNextEpisodeLoading.value)
+
+        testDispatcher.scheduler.advanceTimeBy(NEXT_EPISODE_SETTLE_TIMEOUT_MS)
+        testDispatcher.scheduler.runCurrent()
+
+        assertFalse(viewModel.isNextEpisodeLoading.value)
+    }
 }

@@ -87,6 +87,13 @@ class PlayerSessionManager(
     private val playerEngineFactory: PlayerEngineFactory,
     private val playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver,
     private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
+    /**
+     * Fail-fast gate for online resolution (#146): without it a dead network
+     * made every load stage block on full OkHttp timeouts before silently
+     * bailing, which read as "the Next button did nothing".
+     */
+    private val offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager,
+    private val userMessageBus: com.raulshma.jellyplay.core.ui.feedback.UserMessageBus,
 ) {
     private val _sessionState = MutableStateFlow(PlayerSessionState())
     val sessionState: StateFlow<PlayerSessionState> = _sessionState.asStateFlow()
@@ -229,6 +236,15 @@ class PlayerSessionManager(
             is PlaybackSource.Online -> source
         }
 
+        // Offline gate: an Online-resolved item cannot play without the server.
+        // Fail fast with feedback instead of dead-airing through every network
+        // stage's timeout (#146). Offline (download) sources are unaffected —
+        // that is exactly the path offline mode exists for.
+        if (resolved is PlaybackSource.Online && offlineModeManager.isOffline) {
+            failLoad(context.getString(R.string.player_video_error_offline_stream))
+            return
+        }
+
         when (resolved) {
             is PlaybackSource.Offline -> loadOffline(
                 itemId = itemId,
@@ -243,6 +259,16 @@ class PlayerSessionManager(
             )
             is PlaybackSource.Auto -> error("PlaybackSource.Auto must be resolved before dispatch")
         }
+    }
+
+    /**
+     * Fail a load: publish the not-ready state and surface the reason to the
+     * user. Every [loadMedia] failure path converges here so the state write
+     * and the feedback emission cannot drift apart (#146).
+     */
+    private fun failLoad(message: String) {
+        _sessionState.update { it.copy(title = message, isReady = false) }
+        userMessageBus.error(message)
     }
 
     private suspend fun loadOffline(
@@ -383,7 +409,9 @@ class PlayerSessionManager(
     ) {
         val detailResult = mediaRepository.getMediaDetail(itemId)
         val detail = detailResult.getOrElse {
-            _sessionState.update { it.copy(title = context.getString(R.string.player_video_error_loading_media)) }
+            // Surface the failure — the old silent bail left the user staring
+            // at a "loading" veil that had lifted over nothing (#146).
+            failLoad(context.getString(R.string.player_video_error_loading_media))
             return
         }
 

@@ -699,6 +699,9 @@ fun VideoPlayerScreen(
     val activeSegment = segmentOverlay.activeSegment
     val activeSegmentBehavior = segmentOverlay.activeSegmentBehavior
     val cinemaIntroState = uiState.cinemaIntroState
+    // Drives the Up Next overlay's in-flight state: play button shows progress
+    // and stops accepting clicks until the next-episode load settles (#146).
+    val isNextEpisodeLoading by viewModel.isNextEpisodeLoading.collectAsStateWithLifecycle()
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
         val effectiveRatio = if (aspectRatio == AspectRatio.AUTO) {
@@ -1440,6 +1443,7 @@ fun VideoPlayerScreen(
                     onToggleAutoplay = { viewModel.setVideoAutoplayNext(!uiState.autoplay.videoAutoplayNext) },
                     isPlaying = isPlaying,
                     pauseCountdown = currentSheet != PlayerSheet.None || isScreenLocked,
+                    isLoading = isNextEpisodeLoading,
                     focusRequester = tvNextEpisodeFocusRequester,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)

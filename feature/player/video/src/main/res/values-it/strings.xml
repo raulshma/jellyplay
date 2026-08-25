@@ -255,6 +255,8 @@
     <string name="player_video_remember_subtitles_off">Mantieni sottotitoli disattivati per questa serie</string>
     <string name="player_video_error_offline_file_missing">Errore: file offline mancante</string>
     <string name="player_video_error_loading_media">Errore durante il caricamento dei contenuti</string>
+    <string name="player_video_error_offline_stream">Sei offline \u2014 riconnettiti per riprodurre questo titolo</string>
+    <string name="player_video_error_next_episode_load">Impossibile caricare il prossimo episodio. Controlla la connessione e riprova</string>
     <string name="player_video_trickplay_thumbnail">Miniatura trickplay</string>
 
     <plurals name="player_video_participants">

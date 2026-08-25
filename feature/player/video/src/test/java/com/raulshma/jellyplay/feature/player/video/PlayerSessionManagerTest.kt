@@ -18,6 +18,8 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.ui.feedback.UiText
+import com.raulshma.jellyplay.core.ui.feedback.UserMessage
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -27,6 +29,9 @@ import io.mockk.unmockkStatic
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
@@ -60,6 +65,8 @@ class PlayerSessionManagerTest {
     private lateinit var aggregateStore: VideoPlayerAggregateStore
     private lateinit var playerLifecycleManager: PlayerLifecycleManager
     private lateinit var adaptiveBitrateManager: AdaptiveBitrateManager
+    private lateinit var offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+    private lateinit var userMessageBus: com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
     private lateinit var sessionManager: PlayerSessionManager
 
     @Before
@@ -76,6 +83,10 @@ class PlayerSessionManagerTest {
         playerLifecycleManager = mockk(relaxed = true)
         val pipController = mockk<com.raulshma.jellyplay.core.data.playback.PipController>(relaxed = true)
         adaptiveBitrateManager = mockk(relaxed = true)
+        // Relaxed mock: isOffline defaults to false (online), matching the
+        // historical no-gate behaviour the existing tests were written against.
+        offlineModeManager = mockk(relaxed = true)
+        userMessageBus = com.raulshma.jellyplay.core.ui.feedback.UserMessageBus()
 
         // Default: EXTERNAL player to avoid real engine instantiation in unit tests.
         every { aggregateStore.aggregate } returns
@@ -121,6 +132,8 @@ class PlayerSessionManagerTest {
             ),
             playbackSourceResolver = playbackSourceResolver,
             streamingSubtitleStore = noOpStreamingSubtitleStore(),
+            offlineModeManager = offlineModeManager,
+            userMessageBus = userMessageBus,
         )
     }
 
@@ -161,6 +174,72 @@ class PlayerSessionManagerTest {
         assertEquals("Direct Play", state.playMethodString)
         assertTrue(state.isReady)
         coVerify(exactly = 1) { mediaRepository.getMediaDetail(itemId) }
+    }
+
+    // ── Offline gate (#146) ───────────────────────────────────────────
+
+    @Test
+    fun loadMedia_offlineMode_blocksOnlineResolutionInsteadOfDeadAir() = runTest(testDispatcher) {
+        val itemId = "item-movie"
+        every {
+            context.getString(com.raulshma.jellyplay.feature.player.video.R.string.player_video_error_offline_stream)
+        } returns "You're offline"
+        every { offlineModeManager.isOffline } returns true
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns null
+
+        sessionManager.loadMedia(PlaybackSource.Auto(itemId, null), startPositionTicks = 0L)
+
+        val state = sessionManager.sessionState.value
+        assertEquals("You're offline", state.title)
+        assertFalse(state.isReady)
+        // The whole point: no network stage runs while offline.
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+    }
+
+    @Test
+    fun loadMedia_offlineMode_stillPlaysLocalDownloads() = runTest(testDispatcher) {
+        val tempFile = Files.createTempFile("test-video", ".mp4").toFile()
+        tempFile.deleteOnExit()
+        val itemId = "item-movie"
+        every { offlineModeManager.isOffline } returns true
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns
+            downloadItem(itemId, tempFile.absolutePath)
+        coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineMediaItem(itemId)
+
+        sessionManager.loadMedia(PlaybackSource.Auto(itemId, null), startPositionTicks = 0L)
+
+        val state = sessionManager.sessionState.value
+        assertEquals("Offline", state.playMethodString)
+        assertTrue(state.isReady)
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+    }
+
+    @Test
+    fun loadOnline_detailFetchFailure_surfacesFeedbackAndIsNotReady() = runTest(testDispatcher) {
+        val itemId = "item-movie"
+        every {
+            context.getString(com.raulshma.jellyplay.feature.player.video.R.string.player_video_error_loading_media)
+        } returns "Error loading media"
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns null
+        coEvery { mediaRepository.getMediaDetail(itemId) } returns
+            Result.failure(java.io.IOException("dead air"))
+        // The bus buffers (trySend into a BUFFERED channel), so the emission is
+        // observable even though no host collector is attached in unit tests.
+        val errors = mutableListOf<UserMessage.Error>()
+        launch {
+            userMessageBus.messages
+                .filterIsInstance<UserMessage.Error>()
+                .first { (it.text as UiText.Raw).value == "Error loading media" }
+                .let { errors += it }
+        }
+
+        sessionManager.loadMedia(PlaybackSource.Auto(itemId, null), startPositionTicks = 0L)
+
+        val state = sessionManager.sessionState.value
+        assertEquals("Error loading media", state.title)
+        assertFalse(state.isReady)
+        // The name's promise: feedback actually reached the bus.
+        assertEquals(1, errors.size)
     }
 
     @Test

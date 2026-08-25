@@ -78,6 +78,8 @@ class PlayerSessionManagerExtendedTest {
             ),
             playbackSourceResolver = playbackSourceResolver,
             streamingSubtitleStore = noOpStreamingSubtitleStore(),
+            offlineModeManager = mockk(relaxed = true),
+            userMessageBus = com.raulshma.jellyplay.core.ui.feedback.UserMessageBus(),
         )
     }
 

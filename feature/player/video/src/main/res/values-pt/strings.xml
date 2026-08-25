@@ -255,6 +255,8 @@
     <string name="player_video_remember_subtitles_off">Manter legendas desativadas para esta série</string>
     <string name="player_video_error_offline_file_missing">Erro: ficheiro offline em falta</string>
     <string name="player_video_error_loading_media">Erro ao carregar conteúdo</string>
+    <string name="player_video_error_offline_stream">Está sem ligação \u2014 reconecte-se para reproduzir este título</string>
+    <string name="player_video_error_next_episode_load">Não foi possível carregar o próximo episódio. Verifique a ligação e tente novamente</string>
     <string name="player_video_trickplay_thumbnail">Miniatura trickplay</string>
 
     <plurals name="player_video_participants">

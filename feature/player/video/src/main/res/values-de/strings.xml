@@ -255,6 +255,8 @@
     <string name="player_video_remember_subtitles_off">Untertitel für diese Serie deaktiviert lassen</string>
     <string name="player_video_error_offline_file_missing">Fehler: Offlinedatei fehlt</string>
     <string name="player_video_error_loading_media">Fehler beim Laden der Medien</string>
+    <string name="player_video_error_offline_stream">Du bist offline \u2014 verbinde dich erneut, um diesen Titel zu streamen</string>
+    <string name="player_video_error_next_episode_load">Nächste Episode konnte nicht geladen werden. Prüfe deine Verbindung und versuche es erneut</string>
     <string name="player_video_trickplay_thumbnail">Trickplay-Miniaturansicht</string>
 
     <plurals name="player_video_participants">

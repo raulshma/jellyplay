@@ -299,6 +299,7 @@ class VideoPlayerResetEquivalenceTest {
             savedStateHandle = androidx.lifecycle.SavedStateHandle(),
             subtitlePreviewRepository = mockk(relaxed = true),
             userDataMutator = mockk(relaxed = true),
+            offlineModeManager = mockk(relaxed = true),
         )
     }
 

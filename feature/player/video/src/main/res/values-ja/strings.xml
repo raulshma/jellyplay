@@ -255,6 +255,8 @@
     <string name="player_video_remember_subtitles_off">このシリーズの字幕をオフのままにする</string>
     <string name="player_video_error_offline_file_missing">エラー: オフラインファイルが見つかりません</string>
     <string name="player_video_error_loading_media">メディアの読み込みエラー</string>
+    <string name="player_video_error_offline_stream">オフラインです \u2014 このタイトルをストリーミングするには再接続してください</string>
+    <string name="player_video_error_next_episode_load">次のエピソードを読み込めませんでした。接続を確認して再試行してください</string>
     <string name="player_video_trickplay_thumbnail">トリックプレイのサムネイル</string>
 
     <plurals name="player_video_participants">

@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import com.raulshma.jellyplay.feature.player.video.R
@@ -82,6 +83,10 @@ fun NextEpisodeOverlay(
     // is locked, so the user isn't rushed out of a menu (or surprised by an
     // auto-advance they couldn't cancel on a locked screen).
     pauseCountdown: Boolean = false,
+    // True while the triggered next-episode load is in flight and unsettled:
+    // the play button shows progress and stops accepting clicks, so rapid
+    // re-taps can't stack duplicate loads (#146).
+    isLoading: Boolean = false,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
 ) {
@@ -103,8 +108,8 @@ fun NextEpisodeOverlay(
         }
     }
 
-    LaunchedEffect(isVisible, countdown, dismissed, isPlaying, autoplayEnabled, pauseCountdown) {
-        if (isVisible && !dismissed && isPlaying && autoplayEnabled && !pauseCountdown) {
+    LaunchedEffect(isVisible, countdown, dismissed, isPlaying, autoplayEnabled, pauseCountdown, isLoading) {
+        if (isVisible && !dismissed && isPlaying && autoplayEnabled && !pauseCountdown && !isLoading) {
             if (countdown > 0) {
                 kotlinx.coroutines.delay(1000)
                 countdown--
@@ -176,23 +181,34 @@ fun NextEpisodeOverlay(
                                 .ifElse(isTv, Modifier.focusRequester(tvPlayNextFocusRequester))
                                 .then(playFocusState.focusModifier)
                                 .tvFocusIndicator(playFocusState, CircleShape)
-                                .clickable(onClick = {
-                                    // Dismiss before invoking so the countdown
-                                    // LaunchedEffect stops (it would otherwise
-                                    // re-fire onPlayNext) and the card gives
-                                    // instant visual feedback. Mirrors the cancel
-                                    // button below.
-                                    dismissed = true
-                                    onPlayNext()
-                                }),
+                                .clickable(
+                                    enabled = !isLoading,
+                                    onClick = {
+                                        // Dismiss before invoking so the countdown
+                                        // LaunchedEffect stops (it would otherwise
+                                        // re-fire onPlayNext) and the card gives
+                                        // instant visual feedback. Mirrors the cancel
+                                        // button below.
+                                        dismissed = true
+                                        onPlayNext()
+                                    },
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Tabler.Outline.PlayerPlay,
-                                contentDescription = stringResource(R.string.player_video_play_next),
-                                tint = playerOnScrim(),
-                                modifier = Modifier.size(30.dp),
-                            )
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(26.dp),
+                                    color = playerOnScrim(),
+                                    strokeWidth = 2.5.dp,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Tabler.Outline.PlayerPlay,
+                                    contentDescription = stringResource(R.string.player_video_play_next),
+                                    tint = playerOnScrim(),
+                                    modifier = Modifier.size(30.dp),
+                                )
+                            }
                         }
 
                         val closeFocusState = rememberTvFocusState(focusedScale = 1.2f)
