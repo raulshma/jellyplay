@@ -6,6 +6,8 @@ import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -80,6 +82,11 @@ import org.koin.core.context.stopKoin
  * PlaybackSourceResolver ctor dep has no desktop definition (the impl is
  * Android-only, android.net.Uri) — asserting it here would fail by design
  * until a desktop actual lands with the detail screens.
+ *
+ * The admin flip (Wave wB) followed: AdminRepository and
+ * AdminStatisticsRepository (label seam satisfied by the desktop
+ * English-literals actual) resolve on desktop too — the desktop settings +
+ * admin nav sections ride on that.
  */
 class DataKoinModulesTest {
 
@@ -192,6 +199,16 @@ class DataKoinModulesTest {
             assertResolves<OfflineFirstItemResolver>(koin)
             assertResolves<OfflinePlaybackFacade>(koin)
             assertResolves<com.raulshma.jellyplay.core.data.playback.AudioLyricsManager>(koin)
+
+            // ── Admin flip (Wave wB) ──────────────────────────────────────
+            // Both admin repositories resolve on desktop: every ctor dep is
+            // Koin-native (API client/engine + realtime channels from
+            // networkJvmModule, DAOs from databaseDaosModule, Json from
+            // networkJvmModule, application scope from DatastoreQualifiers,
+            // and the label seam's desktop actual — English literals — from
+            // desktopDataModule).
+            assertResolves<AdminRepository>(koin)
+            assertResolves<AdminStatisticsRepository>(koin)
         } finally {
             database.close()
             stopKoin()

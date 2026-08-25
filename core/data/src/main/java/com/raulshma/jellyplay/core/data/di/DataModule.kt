@@ -1,9 +1,7 @@
 package com.raulshma.jellyplay.core.data.di
 
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
-import com.raulshma.jellyplay.core.data.repository.AdminRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
-import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepositoryImpl
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadIntakeImpl
@@ -400,6 +398,19 @@ abstract class DataModule {
         @dagger.Provides
         @Singleton
         fun provideAudioLyricsManager(): AudioLyricsManager = koin().get()
+
+        // Admin flip (Wave wB): both admin repositories moved to
+        // :shared:core:data jvmShared and Koin owns construction on both
+        // platforms (the app's Hilt interop singles for them were deleted —
+        // one framework per type). These bridges carry the legacy Hilt
+        // injectors over to the Koin singles.
+        @dagger.Provides
+        @Singleton
+        fun provideAdminRepository(): AdminRepository = koin().get()
+
+        @dagger.Provides
+        @Singleton
+        fun provideAdminStatisticsRepository(): AdminStatisticsRepository = koin().get()
     }
 
     // Phase X MediaRepository cluster flip: the former bindMediaRepository /
@@ -441,16 +452,10 @@ abstract class DataModule {
         impl: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager,
     ): com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 
-    // The administration seam for Jellyfin-native admin screens: absorbs each
-    // screen's fan-out, lookup, and fallback policy behind screen operations
-    // so features never see the raw transport client.
-    @Binds
-    @Singleton
-    abstract fun bindAdminRepository(impl: AdminRepositoryImpl): AdminRepository
-
-    @Binds
-    @Singleton
-    abstract fun bindAdminStatisticsRepository(impl: AdminStatisticsRepositoryImpl): AdminStatisticsRepository
+    // Admin flip (Wave wB): the former bindAdminRepository /
+    // bindAdminStatisticsRepository @Binds moved to Koin (dataJvmModule) with
+    // their impls; the companion-object koin().get() bridges above replaced
+    // them.
 
     @Binds
     @Singleton

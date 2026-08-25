@@ -104,22 +104,22 @@ fun main() {
             // the former mediaRepository edge resolves from dataJvmModule,
             // and nav v1 renders syncPlaySection in the rail.
             syncPlayModule,
-            // …settings, seventh conveyor item — PARTIAL, nav v1 omits the
-            // feature: the mediaRepository edges resolved with the cluster
-            // flip, but SettingsViewModel + AboutViewModel still need
-            // AdminRepository (Hilt-only, no desktop definition), so the
-            // shell registers no settings section and the navigateFilter
-            // guards the routes shortcuts pushes. Only the no-op desktop
-            // platform actuals resolve eagerly.
+            // …settings, seventh conveyor item — LIVE since the admin
+            // repositories' Koin flip (Wave wB): the last Hilt-only edges
+            // (SettingsViewModel/AboutViewModel's AdminRepository) resolve
+            // from dataJvmModule, and nav v1+ renders settingsSection in the
+            // rail (with the desktop platform actuals below). Desktop's
+            // update-check callback is a documented no-op.
             settingsModule,
             desktopSettingsPlatformModule(),
-            // …admin, eighth conveyor item — documented-latent, syncplay
-            // pattern: the AdminRepository/AdminStatisticsRepository deps
-            // (Hilt interop on Android) have no desktop definitions yet, but
-            // resolution is lazy so boot stays safe, and the desktop shell
-            // has no admin nav entry, so the module is registered but never
-            // instantiated. The Android-only plugin-config WebView ViewModel
-            // lives in androidAdminModule and is never registered here.
+            // …admin, eighth conveyor item — LIVE since the same flip:
+            // AdminRepository + AdminStatisticsRepository are Koin singles in
+            // dataJvmModule on both platforms, and nav v1+ renders
+            // adminSection in the rail (gated by the desktop admin-status
+            // state in DesktopAppRoot). The Android-only plugin-config
+            // WebView ViewModel lives in androidAdminModule and is never
+            // registered here (the shared PluginConfigHost desktop actual
+            // renders its "not available" fallback).
             adminModule,
 
 
@@ -201,9 +201,9 @@ fun main() {
             // Android/Hilt types with no desktop halves — so there is no
             // commonMain Koin module to register. The shared settings-search
             // row for Route.SubtitleTester stays unreachable on desktop
-            // (settings itself is omitted v1); desktop's navigateFilter
-            // intercepts the un-registered routes a shared screen pushes
-            // TODAY — the guard list is hand-enumerated
+            // (LanguageSettings' push is intercepted by the guard); desktop's
+            // navigateFilter intercepts the un-registered routes a shared
+            // screen pushes TODAY — the guard list is hand-enumerated
             // (isDesktopDeadEndRoute in DesktopAppRoot) and must be kept
             // in sync when features gain or change pushed routes.
 

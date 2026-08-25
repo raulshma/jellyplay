@@ -1,13 +1,10 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import android.content.Context
-import android.util.Log
-import com.raulshma.jellyplay.core.data.R
+import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.database.dao.AuditLogDao
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
 import com.raulshma.jellyplay.core.database.entity.MediaAuditLogEntity
 import com.raulshma.jellyplay.core.database.entity.ScanStateEntity
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.model.AuditItemDetail
 import com.raulshma.jellyplay.core.model.AuditLogEntry
 import com.raulshma.jellyplay.core.model.CleanupActionType
@@ -41,23 +38,29 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class AdminStatisticsRepositoryImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
+class AdminStatisticsRepositoryImpl constructor(
     private val apiClient: JellyfinApiClient,
     private val auditLogDao: AuditLogDao,
     private val scanStateDao: ScanStateDao,
     private val json: Json,
     /**
      * Shared application scope for the fire-and-forget background scans below
-     * (the `@ApplicationScope` binding — never cancelled for this singleton,
+     * (the application-scope Koin single — never cancelled for this singleton,
      * matching the scan jobs' previous dedicated-scope lifetime).
      */
-    @ApplicationScope private val scope: CoroutineScope,
+    private val scope: CoroutineScope,
+    /**
+     * Locale-aware user-visible labels for the stale/watched-media scan rows
+     * and the per-user type breakdown. The repository persists these strings
+     * (scan results land in Room as JSON), so the seam keeps formatting at the
+     * platform edge instead of hardcoding English in shared code. Android
+     * def: the app composition root over legacy core:data R.string (all 9
+     * locales); desktop def: base-locale English literals
+     * ([DesktopAdminStatisticsLabels] — English-only, the downloads-string
+     * precedent).
+     */
+    private val labels: AdminStatisticsLabelProvider,
 ) : AdminStatisticsRepository {
 
     /**
@@ -243,17 +246,17 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
 
         val typeBreakdown = listOf(
             ContentBreakdown(
-                label = context.getString(R.string.data_label_movies),
+                label = labels.movies(),
                 value = moviePlayedCount.toLong(),
                 colorIndex = 0,
             ),
             ContentBreakdown(
-                label = context.getString(R.string.data_label_episodes),
+                label = labels.episodes(),
                 value = episodePlayedCount.toLong(),
                 colorIndex = 1,
             ),
             ContentBreakdown(
-                label = context.getString(R.string.data_label_songs),
+                label = labels.songs(),
                 value = songPlayedCount.toLong(),
                 colorIndex = 2,
             ),
@@ -514,11 +517,11 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                             val addedDate = java.time.LocalDate.parse(added.take(10))
                             val days = java.time.temporal.ChronoUnit.DAYS.between(addedDate, java.time.LocalDate.now())
                             when {
-                                days < 1 -> context.getString(R.string.data_added_today)
-                                days == 1L -> context.getString(R.string.data_added_one_day_ago)
-                                days < 30 -> context.getString(R.string.data_added_days_ago, days.toInt())
-                                days < 365 -> context.getString(R.string.data_added_months_ago, (days / 30).toInt())
-                                else -> context.getString(R.string.data_added_years_ago, (days / 365).toInt())
+                                days < 1 -> labels.addedToday()
+                                days == 1L -> labels.addedOneDayAgo()
+                                days < 30 -> labels.addedDaysAgo(days.toInt())
+                                days < 365 -> labels.addedMonthsAgo((days / 30).toInt())
+                                else -> labels.addedYearsAgo((days / 365).toInt())
                             }
                         } catch (_: Exception) { null }
                     }
@@ -528,10 +531,10 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                         type = staleItem.type,
                         sizeText = staleItem.sizeText,
                         detail = buildString {
-                            if (staleItem.daysSincePlay > 0) append(context.getString(R.string.data_days_since_play, staleItem.daysSincePlay))
-                            else append(context.getString(R.string.data_never_played))
+                            if (staleItem.daysSincePlay > 0) append(labels.daysSincePlay(staleItem.daysSincePlay))
+                            else append(labels.neverPlayed())
                             if (staleItem.playCount > 0) {
-                                append(" · " + context.getString(R.string.data_plays_count, staleItem.playCount))
+                                append(" · " + labels.playsCount(staleItem.playCount))
                             }
                         },
                         seriesName = staleItem.seriesName,
@@ -539,11 +542,11 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                         seasonNumber = staleItem.seasonNumber,
                         episodeNumber = staleItem.episodeNumber,
                         dateText = if (config.useDateAdded) {
-                            formattedDate?.let { context.getString(R.string.data_added_date, it) } ?: context.getString(R.string.data_added_unknown)
+                            formattedDate?.let { labels.addedDate(it) } ?: labels.addedUnknown()
                         } else if (neverPlayed) {
-                            addedAgoText ?: context.getString(R.string.data_never_played)
+                            addedAgoText ?: labels.neverPlayed()
                         } else {
-                            formattedDate?.let { context.getString(R.string.data_played_date, it) }
+                            formattedDate?.let { labels.playedDate(it) }
                         },
                     )
                 }

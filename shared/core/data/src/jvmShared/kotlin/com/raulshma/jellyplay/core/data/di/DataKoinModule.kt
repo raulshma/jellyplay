@@ -15,6 +15,11 @@ import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.data.remote.UiRemoteControlDispatcher
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.ArrRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.data.repository.AdminRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.AdminStatisticsLabelProvider
+import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
+import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
@@ -147,6 +152,16 @@ import org.koin.dsl.module
  * flip (its sole dep, the LyricsRepository view of MediaRepository, is
  * defined below); the `OfflineSyncManager` provider flipped with the V3
  * downloads conveyor.
+ *
+ * The admin flip (Wave wB) moved the last two Hilt-owned repositories here:
+ * `AdminRepositoryImpl` (verbatim — no platform surface) and
+ * `AdminStatisticsRepositoryImpl`, whose Android surfaces became seams: the
+ * former `context.getString(R.string.data_*)` labels now flow through
+ * [AdminStatisticsLabelProvider] (Android def in the app composition root
+ * over legacy core:data resources; desktop def = base-locale English
+ * literals), `android.util.Log` became the core.data.log facade, and the
+ * `@ApplicationScope` scope is the DatastoreQualifiers single. The desktop
+ * settings + admin sections went live with this flip.
  *
  * Platform-bound definitions (Context / dataDir-shaped picks) live in
  * [androidDataModule] / [desktopDataModule].
@@ -575,4 +590,37 @@ val dataJvmModule: Module = module {
         )
     }
     single<ArrRepository> { get<ArrRepositoryImpl>() }
+
+    // ── Phase X admin flip (Wave wB) ──────────────────────────────────────
+    // AdminRepositoryImpl + AdminStatisticsRepositoryImpl moved from the
+    // legacy :core:data shim (Hilt @Binds -> koin().get() bridges there, the
+    // app's Hilt interop singles deleted). Every ctor dep resolves natively
+    // here: the API client + engine + the two realtime channels from
+    // networkJvmModule, the DAOs from databaseDaosModule, Json from
+    // networkJvmModule, the application scope from DatastoreQualifiers, and
+    // the label seam from the platform data modules (Android: the app's
+    // androidAdminSeamsModule over legacy core:data R.string, desktop:
+    // English literals in desktopDataModule).
+
+    single {
+        AdminRepositoryImpl(
+            apiClient = get(),
+            engine = get(),
+            realtimeTasks = get(),
+            activityLogRealtimeChannel = get(),
+        )
+    }
+    single<AdminRepository> { get<AdminRepositoryImpl>() }
+
+    single {
+        AdminStatisticsRepositoryImpl(
+            apiClient = get(),
+            auditLogDao = get(),
+            scanStateDao = get(),
+            json = get(),
+            scope = get(DatastoreQualifiers.applicationScope),
+            labels = get<AdminStatisticsLabelProvider>(),
+        )
+    }
+    single<AdminStatisticsRepository> { get<AdminStatisticsRepositoryImpl>() }
 }

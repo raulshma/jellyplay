@@ -6,6 +6,8 @@ import com.raulshma.jellyplay.core.data.network.DesktopNetworkMonitor
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.DesktopOfflineModeManager
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.repository.AdminStatisticsLabelProvider
+import com.raulshma.jellyplay.core.data.repository.DesktopAdminStatisticsLabels
 import com.raulshma.jellyplay.core.data.repository.DesktopDownloadStorageLayout
 import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
 import com.raulshma.jellyplay.core.data.repository.DownloadProgressNotifier
@@ -69,6 +71,13 @@ fun desktopDataModule(dataDir: Path): Module {
         }
 
         single<LocalStreamProbe> { DesktopLocalStreamProbe() }
+
+        // Phase X admin flip: desktop actual of the admin-statistics label
+        // seam — base-locale English literals (see the object's kdoc for the
+        // accepted locale delta). The Android actual lives in the app
+        // composition root (androidAdminSeamsModule) over legacy core:data
+        // R.string.
+        single<AdminStatisticsLabelProvider> { DesktopAdminStatisticsLabels }
 
         // ── V3 downloads conveyor: desktop actuals of the engine seams ──────
 
