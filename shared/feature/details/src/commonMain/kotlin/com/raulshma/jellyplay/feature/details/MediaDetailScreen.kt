@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -200,18 +201,26 @@ fun MediaDetailScreen(
     // Composition state hop for the queued-episodes plural snackbar (see the
     // SeriesDownload branch below): the plural resolves in composition
     // (@Composable pluralStringResource — CMP's suspend plural resolver is
-    // internal), the effect shows it and clears the hop.
-    var queuedEpisodesSnackbarCount by remember { mutableStateOf<Int?>(null) }
-    val queuedEpisodesCount = queuedEpisodesSnackbarCount
-    if (queuedEpisodesCount != null) {
+    // internal). FIFO list, NOT a bare Int: a burst of SeriesDownload
+    // messages must queue (a bare field would overwrite earlier counts
+    // before recomposition drops them), and the head is popped only AFTER
+    // showSnackbar returns — restoring the one-at-a-time serialization the
+    // legacy collect loop had. Residual edge: a directly-following
+    // DetailMessage.Text can still win the SnackbarHostState mutex before
+    // this effect's next frame — transient ordering only, accepted.
+    val pendingPluralCounts = remember { mutableStateListOf<Int>() }
+    val headCount = pendingPluralCounts.firstOrNull()
+    if (headCount != null) {
         val queuedText = pluralStringResource(
             Res.plurals.detail_episodes_queued,
-            queuedEpisodesCount,
-            queuedEpisodesCount,
+            headCount,
+            headCount,
         )
-        LaunchedEffect(queuedEpisodesCount) {
+        // size joins the key so duplicate counts ([3, 3]) each get their own
+        // showing after the previous pop.
+        LaunchedEffect(headCount, pendingPluralCounts.size) {
             snackbarHostState.showSnackbar(queuedText)
-            queuedEpisodesSnackbarCount = null
+            pendingPluralCounts.removeFirstOrNull()
         }
     }
 
@@ -229,7 +238,7 @@ fun MediaDetailScreen(
                     if (message.error != null) {
                         snackbarHostState.showSnackbar(message.error)
                     } else if (message.queuedCount > 0) {
-                        queuedEpisodesSnackbarCount = message.queuedCount
+                        pendingPluralCounts.add(message.queuedCount)
                     } else {
                         snackbarHostState.showSnackbar(getString(Res.string.detail_msg_no_episodes_queued))
                     }

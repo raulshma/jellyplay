@@ -231,8 +231,9 @@ fun main() {
             // ContinueWatchingBroadcaster, LibrarySyncHook) are Android-only
             // Hilt interop singles with no desktop defs yet, so resolving the
             // VM here would throw NoDefinitionFound. Desktop nav does not wire
-            // a home entry (home/details/players are the remaining legacy
-            // features), so nothing constructs it today; flip when the nav
+            // a home entry (the players are the remaining legacy features;
+            // details/auth went live in this wave), so nothing constructs it
+            // today; flip when the nav
             // lands (see the HomeLifecycleSeam jvm actual for the refresher
             // start/stop decision that wiring will need).
             homeModule,

@@ -261,7 +261,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 arrqueueModule,
 
                 // Home conveyor (Phase X cutover; desktop landing screen):
-                // 30 of HomeViewModel's 34 ctor deps are Koin-native in the
+                // 26 of HomeViewModel's 30 ctor deps are Koin-native in the
                 // shared graph; the remaining four (PlaybackSyncScheduler,
                 // TvWatchNextScheduler, ContinueWatchingBroadcaster,
                 // LibrarySyncHook — WorkManager/widget-backed) ride the

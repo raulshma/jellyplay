@@ -139,7 +139,8 @@ class HomeRefresherTest {
         refresher?.stop()
         refresherScope?.cancel()
 
-        Dispatchers.resetMain()    }
+        Dispatchers.resetMain()
+    }
 
     /**
      * Builds the refresher on a scope that mirrors the production viewModelScope

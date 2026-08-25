@@ -55,7 +55,8 @@ class HomeSearchStateHolderTest {
     fun stopHolder() {
         holderScope?.cancel()
 
-        Dispatchers.resetMain()    }
+        Dispatchers.resetMain()
+    }
 
     private fun TestScope.buildHolder(): HomeSearchStateHolder {
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))

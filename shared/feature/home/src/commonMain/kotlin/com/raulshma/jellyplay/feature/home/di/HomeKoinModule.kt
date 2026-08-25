@@ -11,7 +11,7 @@ import org.koin.dsl.module
  * the move, Koin is the single constructor owner).
  *
  * Dep resolution:
- *  - 30 of the 34 ctor deps are Koin-native on BOTH platforms — the
+ *  - 26 of the 30 ctor deps are Koin-native on BOTH platforms — the
  *    dataJvmModule/datastoreCommonModule singles (incl. the cluster-flipped
  *    MediaRepository/UserDataMutator/MediaSearchEngine) plus the platform
  *    data modules (ImageUrlProvider, OfflineModeManager) and the settings

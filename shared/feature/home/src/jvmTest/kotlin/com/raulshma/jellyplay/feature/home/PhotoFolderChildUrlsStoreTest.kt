@@ -48,7 +48,8 @@ class PhotoFolderChildUrlsStoreTest {
     fun stopStore() {
         storeScope?.cancel()
 
-        Dispatchers.resetMain()    }
+        Dispatchers.resetMain()
+    }
 
     private fun TestScope.buildStore(): PhotoFolderChildUrlsStore {
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))

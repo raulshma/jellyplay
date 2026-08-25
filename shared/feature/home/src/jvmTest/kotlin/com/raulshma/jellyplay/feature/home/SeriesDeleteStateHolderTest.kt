@@ -57,7 +57,8 @@ class SeriesDeleteStateHolderTest {
     fun stopHolder() {
         holderScope?.cancel()
 
-        Dispatchers.resetMain()    }
+        Dispatchers.resetMain()
+    }
 
     private fun TestScope.buildHolder(): SeriesDeleteStateHolder {
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
