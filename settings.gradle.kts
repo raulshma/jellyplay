@@ -35,7 +35,6 @@ include(":core:ui")
 include(":core:notification")
 include(":core:testing")
 include(":feature:home")
-include(":feature:details")
 include(":feature:player:core")
 include(":feature:player:video")
 include(":feature:player:audio")
@@ -94,6 +93,7 @@ include(":shared:feature:arrqueue")
 
 
 include(":shared:feature:subtitle-tester")
+include(":shared:feature:details")
 
 include(":shared:feature:auth")
 

@@ -173,7 +173,7 @@ dependencies {
     implementation(project(":feature:home"))
     implementation(project(":shared:feature:library"))
     implementation(project(":shared:feature:search"))
-    implementation(project(":feature:details"))
+    implementation(project(":shared:feature:details"))
     implementation(project(":feature:player:video"))
     implementation(project(":feature:player:core"))
     implementation(project(":feature:player:audio"))
