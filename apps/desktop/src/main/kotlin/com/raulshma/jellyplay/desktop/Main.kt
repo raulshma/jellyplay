@@ -49,6 +49,8 @@ import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
 
 import com.raulshma.jellyplay.feature.insights.di.insightsModule
 
+import com.raulshma.jellyplay.feature.details.desktopDetailsPlatformModule
+import com.raulshma.jellyplay.feature.details.detailsModule
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
 import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
@@ -194,6 +196,19 @@ fun main() {
             // datastoreCommonModule resolve on desktop.
             arrqueueModule,
 
+
+
+            // …details, Phase X cutover wave (legacy :feature:details was the
+            // largest never-conveyor module): registration fully
+            // live-resolvable — every data-layer ctor dep is Koin-native
+            // (dataJvmModule/datastoreCommonModule), AudioQueueFacade comes
+            // from desktopPlayerModule's stub, and the module-local platform
+            // seams below supply no-op audio/theme playback + the appdata
+            // storage probe. Dormant only for lack of nav wiring — the
+            // coordinator wires the MediaDetail/SeerrDetail routes post-
+            // merge; until then no desktop route instantiates a details VM.
+            detailsModule,
+            desktopDetailsPlatformModule(paths.dataDirNio),
 
 
 

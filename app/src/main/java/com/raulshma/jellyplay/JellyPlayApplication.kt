@@ -55,6 +55,8 @@ import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
 import com.raulshma.jellyplay.feature.insights.di.insightsModule
 import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
 
+import com.raulshma.jellyplay.feature.details.androidDetailsModule
+import com.raulshma.jellyplay.feature.details.detailsModule
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
 
@@ -265,7 +267,14 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // application context here.
                 androidSubtitleTesterModule(this@JellyPlayApplication),
 
-
+                // Details conveyor (Phase X cutover wave): the shared details
+                // ViewModels + helpers. Data-layer deps are all Koin-native
+                // (dataJvmModule/datastoreCommonModule); the two media3
+                // playback seams (per-item audio play, ambient theme music)
+                // resolve through the hiltInteropModule singles above; the
+                // storage probe is the StatFs androidMain actual below.
+                detailsModule,
+                androidDetailsModule(this@JellyPlayApplication),
 
             )
         }

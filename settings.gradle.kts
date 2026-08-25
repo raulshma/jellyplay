@@ -36,7 +36,6 @@ include(":core:notification")
 include(":core:testing")
 include(":feature:auth")
 include(":feature:home")
-include(":feature:details")
 include(":feature:player:core")
 include(":feature:player:video")
 include(":feature:player:audio")
@@ -95,6 +94,7 @@ include(":shared:feature:arrqueue")
 
 
 include(":shared:feature:subtitle-tester")
+include(":shared:feature:details")
 
 
 // Desktop shell (plan §Phase V1b)

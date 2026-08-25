@@ -2,9 +2,13 @@ package com.raulshma.jellyplay.di
 
 import android.app.Application
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
+import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
+import com.raulshma.jellyplay.feature.details.DetailAudioPlayback
+import com.raulshma.jellyplay.feature.details.DetailThemeMusic
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
@@ -59,6 +63,8 @@ interface HiltInteropEntryPoint {
     fun streamingSubtitleStore(): StreamingSubtitleStore
     fun playerEngineFactory(): PlayerEngineFactory
     fun fontProvider(): FontProvider
+    fun audioPlaybackManager(): AudioPlaybackManager
+    fun themeMusicPlayer(): ThemeMusicPlayer
 }
 
 private fun interopEntryPoint(application: Application): HiltInteropEntryPoint =
@@ -69,6 +75,28 @@ private class HiltMusicMessageBus(
     private val bus: UserMessageBus,
 ) : MusicMessageBus {
     override fun error(message: String) = bus.error(message)
+}
+
+/**
+ * Details conveyor (Phase X cutover wave): the shared details module's
+ * per-item audio-playback and ambient-theme-music seams over the two
+ * Hilt-owned media3 singletons in legacy :core:data. LAZY is load-bearing
+ * (same as every interop single: startKoin runs before Hilt's component).
+ * Desktop halves are the no-op defs in the module's jvmMain; these adapters
+ * die when AudioPlaybackManager/ThemeMusicPlayer flip or stay app-side at
+ * Phase X.
+ */
+private class HiltDetailAudioPlayback(
+    private val manager: AudioPlaybackManager,
+) : DetailAudioPlayback {
+    override fun play(itemId: String) = manager.play(itemId)
+}
+
+private class HiltDetailThemeMusic(
+    private val player: ThemeMusicPlayer,
+) : DetailThemeMusic {
+    override fun playThemeFor(itemId: String) = player.playThemeFor(itemId)
+    override fun stop() = player.stop()
 }
 
 fun hiltInteropModule(application: Application): Module = module {
@@ -89,4 +117,7 @@ fun hiltInteropModule(application: Application): Module = module {
     // be touched at startKoin time.
     single<PlayerEngineFactory> { interopEntryPoint(application).playerEngineFactory() }
     single<FontProvider> { interopEntryPoint(application).fontProvider() }
+    // Details conveyor (Phase X cutover wave): see the adapter KDocs above.
+    single<DetailAudioPlayback> { HiltDetailAudioPlayback(interopEntryPoint(application).audioPlaybackManager()) }
+    single<DetailThemeMusic> { HiltDetailThemeMusic(interopEntryPoint(application).themeMusicPlayer()) }
 }

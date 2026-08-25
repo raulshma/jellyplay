@@ -97,6 +97,7 @@ dependencies {
     // onboardingSection (reachable from Shortcuts). A desktop first-run
     // gate remains future work.
     implementation(project(":shared:feature:onboarding"))
+    implementation(project(":shared:feature:details"))
 
 
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
