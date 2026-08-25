@@ -3,15 +3,6 @@ package com.raulshma.jellyplay.core.data.playback
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 
 /**
- * Lifecycle callbacks for the active player engine.
- * Implemented by each engine (ExoPlayer, MPV, LibVLC) differently.
- */
-interface PlayerLifecycleCallbacks {
-    fun onActivityPause() {}
-    fun onActivityResume() {}
-}
-
-/**
  * Activity↔engine lifecycle bridge.
  *
  * Bridges the single-activity Compose architecture to the lifecycle-aware
@@ -21,6 +12,10 @@ interface PlayerLifecycleCallbacks {
  *
  * PiP state lives in [PipController]; this class is concerned only with the
  * engine lifecycle.
+ *
+ * [PlayerLifecycleCallbacks] itself (same package) moved to
+ * :shared:core:player-contract commonMain (Phase W.3) so MediaEngine's
+ * supertype is wasm-visible; this manager stayed behind in core:data.
  */
 class PlayerLifecycleManager(
     private val playbackStore: PlaybackStore

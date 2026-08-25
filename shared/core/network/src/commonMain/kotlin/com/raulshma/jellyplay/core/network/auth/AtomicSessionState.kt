@@ -16,13 +16,17 @@ import kotlinx.coroutines.flow.asStateFlow
  * intermediate that `combine(currentServer, currentUser)` produces across a
  * two-step publish.
  *
+ * Public since Phase W chunk 2: ONE instance is shared by the auth, library
+ * and playback wasm clients (the auth client publishes, the others derive
+ * per-request base URL + token), so the DI module constructs it and hands it
+ * to all three — internal would leak through their constructors.
+ *
  * Callers must guard writes with their own mutex critical sections (the
- * engine uses `authMutex`; [com.raulshma.jellyplay.core.network.api] wasm
- * client does too) — this class only owns the publish collapsing, mirroring
- * `JellyfinApiEngine.publishSession`: a missing side collapses the session
- * to null.
+ * engine uses `authMutex`; the wasm auth client does too) — this class only
+ * owns the publish collapsing, mirroring `JellyfinApiEngine.publishSession`:
+ * a missing side collapses the session to null.
  */
-internal class AtomicSessionState {
+class AtomicSessionState {
 
     private val _currentServer = MutableStateFlow<ServerInfo?>(null)
     val currentServer: StateFlow<ServerInfo?> = _currentServer.asStateFlow()

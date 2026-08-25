@@ -40,6 +40,16 @@ kotlin {
             api(project(":shared:core:network"))
             api(project(":shared:core:database"))
             api(project(":shared:core:datastore"))
+            // Phase W.3: PlayerLifecycleCallbacks (implemented by
+            // PlayerLifecycleManager) + RemotePlayableEngine (used by
+            // ActivePlayerController consumers / VideoMiniPlayerState) moved to
+            // player-contract commonMain in the SAME packages, so every
+            // reference — in this module and through the legacy :core:data
+            // api() re-export — resolves unchanged. api() because the
+            // interfaces appear in this module's public surface (e.g.
+            // VideoMiniPlayerState.engine). No cycle: player-contract's only
+            // project dep is core:model.
+            api(project(":shared:core:player-contract"))
             implementation(libs.kotlinx.serialization.json)
             // suspend/Flow surface of the repositories + polling managers.
             implementation(libs.kotlinx.coroutines.core)

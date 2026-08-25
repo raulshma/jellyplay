@@ -10,7 +10,6 @@ import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.network.auth.AuthenticateByNameRequestDto
 import com.raulshma.jellyplay.core.network.auth.AuthenticationResultDto
-import com.raulshma.jellyplay.core.network.auth.JellyfinAuthorizationHeader
 import com.raulshma.jellyplay.core.network.auth.PublicSystemInfoDto
 import com.raulshma.jellyplay.core.network.auth.QuickConnectAuthRequestDto
 import com.raulshma.jellyplay.core.network.auth.QuickConnectResultDto
@@ -18,20 +17,11 @@ import com.raulshma.jellyplay.core.network.auth.defaultClientCapabilities
 import com.raulshma.jellyplay.core.network.auth.toServerInfo
 import com.raulshma.jellyplay.core.network.auth.toUserInfo
 import com.raulshma.jellyplay.core.network.randomUuidV4
-import com.raulshma.jellyplay.core.network.wasmWireJson
 import io.ktor.client.HttpClient
-import io.ktor.client.plugins.HttpRequestTimeoutException
-import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
-import io.ktor.client.request.parameter
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.content.TextContent
 import io.ktor.http.isSuccess
-import io.ktor.utils.io.errors.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
@@ -56,6 +46,14 @@ import kotlinx.coroutines.withContext
  *    nothing newer published in between (under [authMutex], inside
  *    NonCancellable).
  *
+ * Since chunk 2 the request plumbing (URL join, Authorization header, JSON
+ * helpers, error mapping, apiResult/apiResultWithRetry) lives in the shared
+ * [WasmApiSupport] base together with the library/playback clients, and the
+ * session state is EXTERNALLY shareable: the auth client publishes into the
+ * [AtomicSessionState] the DI module hands to every wasm API client, which
+ * is how they derive per-request base URL + token without their own SDK
+ * client to swap on auth transitions.
+ *
  * wasm v1 deltas vs the JVM impl (all documented, none affect JVM):
  *  - No failover router: `getServerUrl` returns the server's primary address;
  *    `selectReachableAddress` probes primary then alternates sequentially and
@@ -74,24 +72,24 @@ import kotlinx.coroutines.withContext
  */
 class KtorWasmAuthApiClient(
     /** App API client ([com.raulshma.jellyplay.core.network.createWasmHttpClient]). */
-    private val httpClient: HttpClient,
+    httpClient: HttpClient,
     /**
      * Dedicated short-timeout probe client
      * ([com.raulshma.jellyplay.core.network.createWasmProbeHttpClient]) —
      * mirrors the jvmShared ServerAddressRouter's probe client rationale.
      */
     private val probeHttpClient: HttpClient,
-    private val clientName: String,
-    private val clientVersion: String,
-    private val deviceName: String,
-    private val deviceId: String,
-) : AuthApiClient {
+    identity: WasmClientIdentity,
+    /**
+     * Session state shared with the other wasm API clients (chunk 2);
+     * defaults to a private instance so standalone construction keeps the
+     * chunk-1 behavior. Accessible to this class via the inherited protected
+     * `sessionState` from [WasmApiSupport].
+     */
+    sharedSessionState: AtomicSessionState = AtomicSessionState(),
+) : WasmApiSupport(httpClient, sharedSessionState, identity), AuthApiClient {
 
-    private val sessionState = AtomicSessionState()
     private val authMutex = Mutex()
-
-    /** SDK-lenient wire decoding — the shared wasm instance (see [wasmWireJson]). */
-    private val wireJson = wasmWireJson
 
     override val currentServer: Flow<ServerInfo?> get() = sessionState.currentServer
     override val currentUser: Flow<UserInfo?> get() = sessionState.currentUser
@@ -345,7 +343,7 @@ class KtorWasmAuthApiClient(
         val result = getJson<QuickConnectResultDto>(
             url = apiUrl(server.address, "/QuickConnect/Connect"),
             accessToken = getAccessToken(),
-            query = mapOf("secret" to secret),
+            query = listOf("secret" to secret),
         )
         QuickConnectState(
             authenticated = result.authenticated,
@@ -371,7 +369,7 @@ class KtorWasmAuthApiClient(
         postForJson<Boolean>(
             url = apiUrl(server.address, "/QuickConnect/Authorize"),
             accessToken = getAccessToken(),
-            query = mapOf("code" to code),
+            query = listOf("code" to code),
         )
     }
 
@@ -399,147 +397,4 @@ class KtorWasmAuthApiClient(
     override fun getServerUrl(): String? = sessionState.currentServer.value?.address
 
     override fun getAccessToken(): String? = sessionState.currentUser.value?.accessToken
-
-    // ── HTTP plumbing ─────────────────────────────────────────────────────
-
-    /** `IllegalStateException("Not connected to server")`, the engine's requireApi() contract. */
-    private fun requireConnectedServer(): ServerInfo =
-        sessionState.currentServer.value ?: throw IllegalStateException("Not connected to server")
-
-    private fun apiUrl(serverAddress: String, path: String): String =
-        serverAddress.trimEnd('/') + path
-
-    /** The SDK-identical identity header (no `Token` parameter when null). */
-    private fun HttpRequestBuilder.attachAuthorization(accessToken: String?) {
-        headers.append(
-            JellyfinAuthorizationHeader.HEADER_NAME,
-            JellyfinAuthorizationHeader.build(
-                clientName = clientName,
-                clientVersion = clientVersion,
-                deviceId = deviceId,
-                deviceName = deviceName,
-                accessToken = accessToken,
-            ),
-        )
-    }
-
-    private suspend inline fun <reified T> getJson(
-        url: String,
-        accessToken: String?,
-        query: Map<String, String> = emptyMap(),
-    ): T = requestJson {
-        httpClient.get(url) {
-            attachAuthorization(accessToken)
-            query.forEach { (k, v) -> parameter(k, v) }
-        }
-    }
-
-    /**
-     * POST (optional pre-encoded JSON body, optional query params), decoding
-     * the JSON response as [T]. Bodies are encoded by the caller via
-     * [encodeBody] so the serializer is picked at the typed call site — a
-     * plain `Any` parameter would resolve against `Any`'s (nonexistent)
-     * serializer at runtime.
-     */
-    private suspend inline fun <reified T> postForJson(
-        url: String,
-        accessToken: String?,
-        bodyText: String? = null,
-        query: Map<String, String> = emptyMap(),
-    ): T = requestJson {
-        httpClient.post(url) {
-            attachAuthorization(accessToken)
-            query.forEach { (k, v) -> parameter(k, v) }
-            bodyText?.let { setBody(TextContent(it, ContentType.Application.Json)) }
-        }
-    }
-
-    /** POST whose success depends only on the status code (Logout, Full capabilities). */
-    private suspend fun postStatusOnly(
-        url: String,
-        accessToken: String?,
-        bodyText: String? = null,
-    ) {
-        val response: HttpResponse = httpClient.post(url) {
-            attachAuthorization(accessToken)
-            bodyText?.let { setBody(TextContent(it, ContentType.Application.Json)) }
-        }
-        throwIfFailed(response)
-    }
-
-    private inline fun <reified B> encodeBody(body: B): String = wireJson.encodeToString(body)
-
-    private suspend inline fun <reified T> requestJson(
-        execute: suspend () -> HttpResponse,
-    ): T {
-        val response = execute()
-        throwIfFailed(response)
-        return wireJson.decodeFromString<T>(response.bodyAsText())
-    }
-
-    private fun throwIfFailed(response: HttpResponse) {
-        if (!response.status.isSuccess()) throw response.toApiException()
-    }
-
-    /** HTTP-status failure → [ApiException], with Retry-After honored. */
-    private fun HttpResponse.toApiException(): ApiException = ApiException.fromHttpResponse(
-        httpCode = status.value,
-        message = friendlyHttpMessage(status.value),
-        retryAfterHeader = headers["Retry-After"],
-    )
-
-    /**
-     * The InvalidStatusException branch of the jvmShared JellyfinErrorMapper,
-     * verbatim — wasm callers see the same user-facing texts.
-     */
-    private fun friendlyHttpMessage(code: Int): String = when (code) {
-        401 -> "Authentication required. Please sign in again."
-        403 -> "You don't have permission to access this item."
-        404 -> "Item not found."
-        in 500..599 -> "Server error ($code). Please try again later."
-        else -> "Request failed ($code)."
-    }
-
-    /**
-     * Transport-failure classification, mirroring `ApiException.fromJellyfin`
-     * (jvmShared): timeouts and fetch IO errors → retryable with the same
-     * friendly texts as JellyfinErrorMapper; everything else non-retryable.
-     */
-    private fun Throwable.toApiException(): ApiException = when (this) {
-        is ApiException -> this
-        is HttpRequestTimeoutException -> ApiException(
-            isRetryable = true,
-            message = "Connection timed out. The server took too long to respond.",
-            cause = this,
-        )
-        is IOException -> ApiException(
-            isRetryable = true,
-            message = "Network error. Check your connection and try again.",
-            cause = this,
-        )
-        else -> ApiException(
-            isRetryable = false,
-            message = message ?: "Request failed.",
-            cause = this,
-        )
-    }
-
-    /**
-     * The engine's apiResult/apiResultWithRetry pair: failures map onto a
-     * typed, pre-classified ApiException. NOTE: recoverCatching swallows the
-     * CancellationException rethrow — cancellation surfaces as
-     * Result.failure(CancellationException) instead of propagating. That is
-     * byte-parity with the JVM engine (JellyfinApiEngine.apiResult has the
-     * same shape), so it is kept deliberately rather than "fixed" here.
-     */
-    private suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
-        runCatching { block() }.recoverCatching {
-            if (it is CancellationException) throw it
-            throw it.toApiException()
-        }
-
-    private suspend fun <T> apiResultWithRetry(
-        maxRetries: Int = RetryPolicy.DEFAULT_MAX_RETRIES,
-        block: suspend () -> T,
-    ): Result<T> = RetryPolicy.executeWithRetry(maxRetries = maxRetries) { apiResult(block) }
 }

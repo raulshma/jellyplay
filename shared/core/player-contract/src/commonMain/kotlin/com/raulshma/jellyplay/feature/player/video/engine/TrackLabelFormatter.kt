@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import androidx.compose.runtime.Immutable
-import java.util.Locale
 
 /**
  * Small inline badge rendered next to a track label in the picker. Surfaced to
@@ -109,7 +108,9 @@ object TrackLabelFormatter {
      */
     fun mimeToCodec(mime: String?): String? {
         if (mime.isNullOrBlank()) return null
-        val key = mime.trim().lowercase(Locale.ROOT)
+        // No-arg lowercase() = invariant locale — same semantics as the old
+        // lowercase(Locale.ROOT) and legal on wasmJs (W.3).
+        val key = mime.trim().lowercase()
         return when {
             // Media3 internal renderer-output mime — not a real container codec.
             key == "application/x-media3-cues" ||
@@ -158,13 +159,13 @@ object TrackLabelFormatter {
         }
     }
 
-    private fun displayLanguage(lang: String): String? = try {
-        Locale.forLanguageTag(lang.replace('_', '-')).displayLanguage
+    private fun displayLanguage(lang: String): String? =
+        // BCP-47 display-name resolution is platform-specific (W.3 wasmJs
+        // seam): JVM/Android use java.util.Locale; wasm falls back to the raw
+        // tag. Blank/unresolvable → show the raw language code.
+        platformLanguageDisplayName(lang.replace('_', '-'))
             ?.takeIf { it.isNotBlank() }
-    } catch (_: Exception) {
-        // Two/three-letter codes that aren't a valid BCP-47 tag.
-        lang.takeIf { it.isNotBlank() }
-    }
+            ?: lang.takeIf { it.isNotBlank() }
 
     private fun channelLabel(channels: Int): String? = when (channels) {
         1 -> "Mono"

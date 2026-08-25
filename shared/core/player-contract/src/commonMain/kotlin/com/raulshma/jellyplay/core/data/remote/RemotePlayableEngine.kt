@@ -18,6 +18,13 @@ import kotlinx.coroutines.flow.StateFlow
  * (typically the main thread) internally. This protects callers like the
  * [RemoteControlReceiver] that run on [kotlinx.coroutines.Dispatchers.Default]
  * from triggering [IllegalStateException]s in strict engines such as ExoPlayer.
+ *
+ * Home note (Phase W.3): this file moved verbatim from shared/core:data's
+ * commonMain (SAME package, so no consumer import changes) because `MediaEngine`
+ * extends it and this module needs a wasmJs target for `HtmlVideoEngine` —
+ * shared/core:data has no wasm build (Room). The core:data consumers
+ * (`ActivePlayerController`, `VideoMiniPlayerState`, remote-control
+ * dispatchers) now reach it through core:data's `api(player-contract)` edge.
  */
 interface RemotePlayableEngine {
     val currentPositionMs: Long
