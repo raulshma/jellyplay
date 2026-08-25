@@ -184,8 +184,14 @@ android-desugar-jdk = { group = "com.android.tools", name = "desugar_jdk_libs", 
 # Coil
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
-# Ktor-backed network fetcher for wasmJs (apps/web; Phase W.4)
-coil-network-ktor = { group = "io.coil-kt.coil3", name = "coil-network-ktor", version.ref = "coil" }
+# Ktor-backed network fetcher for wasmJs (apps/web; Phase W.4). NOTE: the
+# artifact is named coil-network-ktor3 — upstream split the old
+# coil-network-ktor (last published 3.0.0-alpha08) into -ktor2/-ktor3
+# flavors by Ktor major before 3.0.0 stable. Same coil version pin; the
+# ktor3 flavor matches our Ktor 3.5.x stack. Still unused: coil 3.5.0's
+# wasmJs klibs are Kotlin-2.4.0-ABI, unreadable by our 2.3.21 KLIB loader —
+# see the Phase W.4 blocker note in apps/web/build.gradle.kts.
+coil-network-ktor3 = { group = "io.coil-kt.coil3", name = "coil-network-ktor3", version.ref = "coil" }
 
 # Markdown renderer (GitHub-flavoured; used for release notes & plugin changelogs)
 multiplatform-markdown-renderer = { group = "com.mikepenz", name = "multiplatform-markdown-renderer", version.ref = "multiplatformMarkdownRenderer" }

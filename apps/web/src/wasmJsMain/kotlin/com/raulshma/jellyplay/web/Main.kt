@@ -40,6 +40,16 @@ fun main() {
     }
 
     ComposeViewport(document.body!!) {
+        // Phase W.4 (Coil wasm image engine) is BLOCKED at the pinned coil
+        // 3.5.0: its wasmJs klibs are built with Kotlin 2.4.0 ABI, which this
+        // repo's Kotlin 2.3.21 KLIB loader cannot read (klibs resolve but are
+        // skipped, leaving coil3 unresolved). When it unblocks (coil 3.4.0
+        // pin or Kotlin 2.4 toolchain), the wiring here is a
+        // setSingletonImageLoaderFactory { context -> ImageLoader.Builder(
+        // context).components { add(KtorNetworkFetcherFactory(httpClient =
+        // HttpClient(Js))) }.crossfade(true).build() } — see the dependency
+        // note in this module's build.gradle.kts.
+
         JellyPlayTheme(darkTheme = isSystemInDarkTheme(), dynamicColor = false) {
             // The one shared session state the three wasm API clients are
             // built around — passed in directly rather than via a compose

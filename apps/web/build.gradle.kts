@@ -11,8 +11,9 @@ plugins {
 kotlin {
     // Phase W web shell (docs/kmp-migration-plan.md §Phase W): single
     // wasmJs/browser target proving the shared DI stacks on wasm. The Ktor
-    // wasm network seam (W.1 chunks 1-3) is wired here; real screens are
-    // later slices.
+    // wasm network seam (W.1 chunks 1-3) is wired here; the Coil wasm image
+    // engine (W.4) is blocked on the pinned coil version (see the W.4
+    // dependency note in wasmJsMain below). Real screens are later slices.
     wasmJs {
         browser {
             commonWebpackConfig {
@@ -45,6 +46,26 @@ kotlin {
                 implementation(project(":shared:core:designsystem"))
                 implementation(project(":shared:core:datastore"))
                 implementation(project(":shared:core:network"))
+
+                // Phase W.4 (Coil wasm image engine) BLOCKED at the pinned
+                // coil 3.5.0 — NOT a resolution gap: coil-compose and
+                // coil-network-ktor3 both ship wasmJs variants at 3.5.0 and
+                // resolve cleanly onto wasmJsCompileClasspath. The blocker
+                // is klib ABI: 3.5.0's wasmJs klibs are built with Kotlin
+                // 2.4.0 ("KLIB loader: Incompatible ABI version 2.4.0"),
+                // which this repo's Kotlin 2.3.21 compiler silently skips —
+                // every coil3 reference stays unresolved. Desktop is
+                // unaffected (JVM classpath metadata tolerates +1 minor).
+                // NOT unblocked unilaterally (version pins are a maintainer
+                // call); the two ways out: pin coil 3.4.0 (last
+                // Kotlin-2.3-built line) or move the toolchain to 2.4.x.
+                // Wiring recipe for when it lands: coil-compose +
+                // coil-network-ktor3 (coordinate fixed in libs.versions.toml
+                // — the old coil-network-ktor name was renamed upstream
+                // before 3.0.0 stable) + ktor-client-js, then
+                // setSingletonImageLoaderFactory in Main.kt with
+                // KtorNetworkFetcherFactory(HttpClient(Js)) — see the
+                // comment placeholder in Main.kt.
 
                 implementation(libs.koin.core)
                 implementation(libs.kotlinx.coroutines.core)
