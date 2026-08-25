@@ -10,9 +10,9 @@ plugins {
 
 kotlin {
     // Phase W web shell (docs/kmp-migration-plan.md §Phase W): single
-    // wasmJs/browser target — a boot-proof skeleton proving the shared
-    // datastore DI stack on wasm. The Ktor wasm client (W.1) and Coil wasm
-    // image engine (W.4) land in later slices.
+    // wasmJs/browser target proving the shared DI stacks on wasm. The Ktor
+    // wasm network seam (W.1 chunks 1-3) is wired here; real screens are
+    // later slices.
     wasmJs {
         browser {
             commonWebpackConfig {
@@ -33,15 +33,18 @@ kotlin {
                 implementation(libs.jb.compose.foundation)
                 implementation(libs.jb.compose.material3)
 
-                // Phase W skeleton stack: model (shared value types),
+                // Phase W stack: model (shared value types),
                 // designsystem (JellyPlayTheme), datastore
-                // (datastoreCommonModule + webDatastoreModule DI).
+                // (datastoreCommonModule + webDatastoreModule DI), network
+                // (networkWasmModule — Phase W.1 chunk 3: AtomicSessionState
+                // + WasmClientIdentity + the three Ktor wasm clients +
+                // AuthApiClient/LibraryApiClient/PlaybackApiClient bindings).
                 // Deliberately absent: :shared:core:ui (nav3/paging wasm
-                // unverified), network/database/data (no Room on wasm v1;
-                // the Ktor seam lands with Phase W.1).
+                // unverified), database/data (no Room on wasm v1).
                 implementation(project(":shared:core:model"))
                 implementation(project(":shared:core:designsystem"))
                 implementation(project(":shared:core:datastore"))
+                implementation(project(":shared:core:network"))
 
                 implementation(libs.koin.core)
                 implementation(libs.kotlinx.coroutines.core)
