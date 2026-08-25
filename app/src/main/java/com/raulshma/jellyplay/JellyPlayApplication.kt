@@ -125,7 +125,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     @Inject lateinit var widgetWorkSchedulerProvider: javax.inject.Provider<com.raulshma.jellyplay.widget.WidgetWorkScheduler>
     @Inject lateinit var downloadRecoveryInitializerProvider: javax.inject.Provider<com.raulshma.jellyplay.startup.DownloadRecoveryInitializer>
     // javax.inject.Provider defers construction of AppUpdateRepository (which
-    // pulls GitHub + OkHttp) off the cold-start path. cleanupDownloadedApk is a
+    // pulls GitHub + OkHttp) off the cold-start path. cleanupDownloadedUpdate is a
     // cheap file delete, but construction is the cost worth deferring.
     @Inject lateinit var appUpdateRepositoryProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.update.AppUpdateRepository>
 
@@ -306,7 +306,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // old APK orphaned; a cancelled/failed install also leaves it behind.
         // Safe at startup: onCreate precedes any new download.
         applicationScope.launch(Dispatchers.IO) {
-            runCatching { appUpdateRepositoryProvider.get().cleanupDownloadedApk() }
+            runCatching { appUpdateRepositoryProvider.get().cleanupDownloadedUpdate() }
         }
     }
 

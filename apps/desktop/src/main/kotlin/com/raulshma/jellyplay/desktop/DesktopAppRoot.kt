@@ -54,6 +54,7 @@ import com.composables.icons.tabler.outline.Shield
 import com.composables.icons.tabler.outline.Stack
 import com.composables.icons.tabler.outline.Users
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
@@ -222,6 +223,27 @@ private fun DesktopNavScaffold() {
         }
     }
 
+    // AppUpdate split (Wave xB): the About screen's "Check for updates" row.
+    // Desktop has no self-update (the desktopDataModule version sentinel makes
+    // isUpdateAvailable permanently false, so selectAsset can never offer an
+    // Android APK), so a successful check always reads "up to date" — same
+    // wording as the Android update sheet. The row itself is pref-gated by
+    // selfUpdateCheckEnabled (default on).
+    val appUpdateRepository: AppUpdateRepository = koinInject()
+    val onCheckForUpdates: () -> Unit = {
+        scope.launch {
+            val result = appUpdateRepository.checkForUpdate()
+            val message = result.getOrNull()?.let { info ->
+                if (info.isUpdateAvailable) {
+                    "Version ${info.latestVersion} is available; self-update is not supported on desktop yet."
+                } else {
+                    "You're up to date"
+                }
+            } ?: "Update check failed: ${result.exceptionOrNull()?.message ?: "unknown error"}"
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+
     // Dead-end guard (runtime safety, not polish): NavDisplay with an
     // unregistered top-of-stack entry is a crash hazard, and the shared
     // screens freely push routes that have no desktop section (see class
@@ -268,13 +290,14 @@ private fun DesktopNavScaffold() {
             // (Wave wB) — every settings/admin VM ctor dep resolves on
             // desktop now (AdminRepository/AdminStatisticsRepository from
             // dataJvmModule, platform seams from desktopSettingsPlatform
-            // Module). Desktop update-check stays a no-op: self-update is an
-            // Android app concern, and the About row is pref-gated off.
+            // Module). The About update-check row is live since the AppUpdate
+            // split (Wave xB): it hits the real AppUpdateRepository single and
+            // surfaces the result via the snackbar above.
             settingsSection(
                 navigator = guardedNavigator,
                 onLogout = onLogout,
                 onSetupWizard = { guardedNavigator.navigate(Route.Onboarding) },
-                onCheckForUpdates = {},
+                onCheckForUpdates = onCheckForUpdates,
             )
             adminSection(
                 navigator = guardedNavigator,

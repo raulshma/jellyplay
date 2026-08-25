@@ -411,6 +411,25 @@ abstract class DataModule {
         @dagger.Provides
         @Singleton
         fun provideAdminStatisticsRepository(): AdminStatisticsRepository = koin().get()
+
+        // AppUpdate split (Wave xB): AppUpdateRepositoryImpl moved to
+        // :shared:core:data jvmShared (interface reshaped — no supportedAbis
+        // param, downloadUpdate/cleanupDownloadedUpdate renames, install
+        // intent extracted); Koin constructs it in the platform data modules
+        // (androidDataModule supplies filesDir/version/flavor/ABIs,
+        // desktopDataModule the no-self-update desktop actual). The former
+        // bindAppUpdateRepository @Binds became this bridge; the Android-only
+        // ApkInstallBuilder seam (the old buildInstallIntent body) rides the
+        // bridge below (UpdateCoordinator's Hilt ctor).
+        @dagger.Provides
+        @Singleton
+        fun provideAppUpdateRepository(): com.raulshma.jellyplay.core.data.update.AppUpdateRepository =
+            koin().get()
+
+        @dagger.Provides
+        @Singleton
+        fun provideApkInstallBuilder(): com.raulshma.jellyplay.core.data.update.ApkInstallBuilder =
+            koin().get()
     }
 
     // Phase X MediaRepository cluster flip: the former bindMediaRepository /
@@ -468,8 +487,4 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindPlaybackSyncScheduler(impl: PlaybackSyncSchedulerImpl): PlaybackSyncScheduler
-
-    @Binds
-    @Singleton
-    abstract fun bindAppUpdateRepository(impl: com.raulshma.jellyplay.core.data.update.AppUpdateRepositoryImpl): com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 }

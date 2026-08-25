@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
+import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
@@ -209,6 +210,14 @@ class DataKoinModulesTest {
             // desktopDataModule).
             assertResolves<AdminRepository>(koin)
             assertResolves<AdminStatisticsRepository>(koin)
+
+            // ── AppUpdate split (Wave xB) ──────────────────────────────────
+            // The update repository resolves on desktop (About's update-check
+            // row): GitHubReleasesApi from networkJvmModule, the download
+            // client from desktopNetworkModule's qualified single, and the
+            // no-self-update platform inputs (appdata updates dir, sentinel
+            // version, "desktop" flavor) from desktopDataModule.
+            assertResolves<AppUpdateRepository>(koin)
         } finally {
             database.close()
             stopKoin()

@@ -1,49 +1,44 @@
 package com.raulshma.jellyplay.core.data.update
 
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
 import io.mockk.mockk
+import kotlin.io.path.createTempDirectory
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.File
 
 /**
- * Robolectric tests for the sidecar + version-aware-sweep behaviour backing the
- * "keep downloaded APK until install, allow re-download" feature. Uses a real
- * filesDir (via ApplicationProvider) and a MockWebServer to exercise the actual
- * download path end-to-end. The installed version is faked by stubbing the
- * package manager's PackageInfo (Robolectric returns versionName="1.0" by
- * default for the test application).
+ * kotlin.test port of the legacy Robolectric AppUpdateRepositoryImplTest
+ * (AppUpdate split, Wave xB): the moved ctor made the PackageManager/filesDir
+ * Context stubs unnecessary — the updates dir is a temp directory and the
+ * installed version is a mutable lambda capture. Uses a MockWebServer to
+ * exercise the actual download path end-to-end; download/.part/sidecar logic
+ * is unchanged from the legacy impl.
  */
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
 class AppUpdateRepositoryImplTest {
 
     private lateinit var server: MockWebServer
     private lateinit var repo: AppUpdateRepositoryImpl
     private lateinit var updatesDir: File
 
-    // Under Robolectric the test app has no explicit versionName/versionCode, so
-    // currentVersionName() falls back to longVersionCode = "0". Any sidecar
-    // version strictly greater than 0 (e.g. "2.0") reads as "pending"; an equal
-    // version ("0") reads as "installed/orphan" — simulating a completed install
-    // where the process restarted in the new build.
-    private val orphanVersion = "0"
+    // The installed version is now injected: any sidecar version strictly
+    // greater than it (e.g. "2.0") reads as "pending"; an equal version reads
+    // as "installed/orphan" — simulating a completed install where the process
+    // restarted in the new build (the legacy test leaned on Robolectric's
+    // versionName=null → longVersionCode="0" for the same effect).
+    private var installedVersion = "1.0"
+    private val orphanVersion: String get() = installedVersion
 
     private fun updateInfo(version: String, url: String? = null) = AppUpdateInfo(
         latestVersion = version,
@@ -55,22 +50,24 @@ class AppUpdateRepositoryImplTest {
         releaseSize = 0L,
     )
 
-    @Before
+    @BeforeTest
     fun setUp() {
         server = MockWebServer()
         server.start()
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        updatesDir = File(context.filesDir, "updates")
+        updatesDir = createTempDirectory("jellyplay-update-test").toFile()
         // Start clean so tests don't see leftovers from one another.
         updatesDir.deleteRecursively()
         repo = AppUpdateRepositoryImpl(
-            context = context,
             gitHubReleasesApi = mockk<GitHubReleasesApi>(),
             downloadClient = OkHttpClient(),
+            updatesDir = updatesDir,
+            currentVersionName = { installedVersion },
+            flavor = "phone",
+            supportedAbis = arrayOf("arm64-v8a"),
         )
     }
 
-    @After
+    @AfterTest
     fun tearDown() {
         server.shutdown()
         updatesDir.deleteRecursively()
@@ -81,7 +78,7 @@ class AppUpdateRepositoryImplTest {
         server.enqueue(MockResponse().setBody("fake-apk-bytes"))
         val info = updateInfo("2.0", server.url("/apk").toString())
 
-        val result = repo.downloadApk(info)
+        val result = repo.downloadUpdate(info)
 
         assertTrue(result.isSuccess)
         val apk = File(updatesDir, "jellyplay-update.apk")
@@ -97,12 +94,12 @@ class AppUpdateRepositoryImplTest {
     fun `getPendingUpdate returns pending when sidecar newer than installed`() = runBlocking {
         server.enqueue(MockResponse().setBody("apk"))
         val info = updateInfo("2.0", server.url("/apk").toString())
-        repo.downloadApk(info)
+        repo.downloadUpdate(info)
 
         val pending = repo.getPendingUpdate()
 
         assertNotNull(pending)
-        assertEquals("2.0", pending!!.info.latestVersion)
+        assertEquals("2.0", pending.info.latestVersion)
         assertTrue(pending.apkFile.exists())
         assertTrue(pending.info.isUpdateAvailable)
     }
@@ -110,10 +107,10 @@ class AppUpdateRepositoryImplTest {
     @Test
     fun `getPendingUpdate returns null when sidecar version not newer`() = runBlocking {
         server.enqueue(MockResponse().setBody("apk"))
-        // Older than installed: simulates a completed install where the process
+        // Equal to installed: simulates a completed install where the process
         // restarted in the new build (sidecar version now <= installed).
         val info = updateInfo(orphanVersion, server.url("/apk").toString())
-        repo.downloadApk(info)
+        repo.downloadUpdate(info)
 
         val pending = repo.getPendingUpdate()
 
@@ -123,7 +120,7 @@ class AppUpdateRepositoryImplTest {
     @Test
     fun `getPendingUpdate returns null when apk missing`() = runBlocking {
         server.enqueue(MockResponse().setBody("apk"))
-        repo.downloadApk(updateInfo("2.0", server.url("/apk").toString()))
+        repo.downloadUpdate(updateInfo("2.0", server.url("/apk").toString()))
         // Delete the APK but leave the sidecar — must not surface a ghost state.
         File(updatesDir, "jellyplay-update.apk").delete()
 
@@ -133,9 +130,9 @@ class AppUpdateRepositoryImplTest {
     @Test
     fun `cleanup keeps genuinely pending apk`() = runBlocking {
         server.enqueue(MockResponse().setBody("apk"))
-        repo.downloadApk(updateInfo("2.0", server.url("/apk").toString()))
+        repo.downloadUpdate(updateInfo("2.0", server.url("/apk").toString()))
 
-        repo.cleanupDownloadedApk()
+        repo.cleanupDownloadedUpdate()
 
         assertTrue(File(updatesDir, "jellyplay-update.apk").exists())
         assertTrue(File(updatesDir, "jellyplay-update.meta.json").exists())
@@ -144,22 +141,22 @@ class AppUpdateRepositoryImplTest {
     @Test
     fun `cleanup deletes orphan when version is not newer`() = runBlocking {
         server.enqueue(MockResponse().setBody("apk"))
-        repo.downloadApk(updateInfo(orphanVersion, server.url("/apk").toString()))
+        repo.downloadUpdate(updateInfo(orphanVersion, server.url("/apk").toString()))
 
-        repo.cleanupDownloadedApk()
+        repo.cleanupDownloadedUpdate()
 
         assertFalse(File(updatesDir, "jellyplay-update.apk").exists())
         assertFalse(File(updatesDir, "jellyplay-update.meta.json").exists())
     }
 
     @Test
-    fun `cleanup deletes orphan apk without sidecar`() = runBlocking {
+    fun `cleanup deletes orphan apk without sidecar`() {
         // A leftover APK with no sidecar (e.g. from an older app version that
         // didn't write one) must be swept, not retained forever.
         updatesDir.mkdirs()
         File(updatesDir, "jellyplay-update.apk").writeText("stale")
 
-        repo.cleanupDownloadedApk()
+        repo.cleanupDownloadedUpdate()
 
         assertFalse(File(updatesDir, "jellyplay-update.apk").exists())
     }
@@ -168,10 +165,10 @@ class AppUpdateRepositoryImplTest {
     fun `redownload overwrites prior apk and sidecar`() = runBlocking {
         // First download: version 2.0.
         server.enqueue(MockResponse().setBody("apk-v2"))
-        repo.downloadApk(updateInfo("2.0", server.url("/apk").toString()))
+        repo.downloadUpdate(updateInfo("2.0", server.url("/apk").toString()))
         // Second download: version 3.0, reusing the same output path.
         server.enqueue(MockResponse().setBody("apk-v3"))
-        repo.downloadApk(updateInfo("3.0", server.url("/apk").toString()))
+        repo.downloadUpdate(updateInfo("3.0", server.url("/apk").toString()))
 
         val apk = File(updatesDir, "jellyplay-update.apk")
         assertEquals("apk-v3", apk.readText())
@@ -186,7 +183,7 @@ class AppUpdateRepositoryImplTest {
         server.enqueue(MockResponse().setResponseCode(500))
         val info = updateInfo("2.0", server.url("/apk").toString())
 
-        val result = repo.downloadApk(info)
+        val result = repo.downloadUpdate(info)
 
         assertTrue(result.isFailure)
         // No APK, no sidecar — nothing for the next launch to mistake as pending.

@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.data.update
 
-import android.content.Intent
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import java.io.File
 
@@ -12,21 +11,25 @@ import java.io.File
  * Downloaded APKs are persisted (under `filesDir`, not `cacheDir`) together
  * with a sidecar metadata file until they are installed: a successful install
  * restarts the process in the new version, and the launch-time
- * [cleanupDownloadedApk] then sees the sidecar version is no longer newer than
+ * [cleanupDownloadedUpdate] then sees the sidecar version is no longer newer than
  * the installed one and deletes it. This lets the user install (or re-download)
  * a previously-fetched update across app restarts.
+ *
+ * AppUpdate split (Wave xB): moved from the legacy `:core:data` shim to
+ * :shared:core:data jvmShared, reshaped for platform DI — the device identity
+ * the old `checkForUpdate(supportedAbis)` parameter carried (version / flavor
+ * / ABIs) is now ctor-injected into [AppUpdateRepositoryImpl] by the Koin
+ * platform modules, and the Android-only install intent became the
+ * androidMain `ApkInstallBuilder` seam.
  */
 interface AppUpdateRepository {
 
     /**
      * Fetches the latest release and resolves the matching APK asset for this
-     * device's flavor + ABI. Returns failure on network/parse errors.
-     *
-     * @param supportedAbis The device's preferred ABIs, from
-     *   `Build.SUPPORTED_ABIS` (the only value the application layer must
-     *   supply; the running product flavor is derived from the package name).
+     * device's flavor + ABI (both ctor-supplied by the platform DI). Returns
+     * failure on network/parse errors.
      */
-    suspend fun checkForUpdate(supportedAbis: Array<String>): Result<AppUpdateInfo>
+    suspend fun checkForUpdate(): Result<AppUpdateInfo>
 
     /**
      * Streams the APK for [info] into the app's files directory, reporting
@@ -36,7 +39,7 @@ interface AppUpdateRepository {
      *
      * A sidecar `.meta.json` is written next to the APK recording the update's
      * version + asset metadata so [getPendingUpdate] can restore an
-     * install-ready state across restarts and [cleanupDownloadedApk] can tell a
+     * install-ready state across restarts and [cleanupDownloadedUpdate] can tell a
      * genuinely pending update from an orphan. Any prior APK + sidecar in the
      * updates directory is wiped first, so calling this again re-downloads
      * cleanly over an existing file.
@@ -48,7 +51,7 @@ interface AppUpdateRepository {
      *   caller's coroutine context.
      * @return The downloaded [File], or failure.
      */
-    suspend fun downloadApk(
+    suspend fun downloadUpdate(
         info: AppUpdateInfo,
         onProgress: (Float, Long, Long) -> Unit = { _, _, _ -> },
     ): Result<File>
@@ -65,13 +68,6 @@ interface AppUpdateRepository {
     suspend fun getPendingUpdate(): PendingAppUpdate?
 
     /**
-     * Builds a launchable [Intent] that asks the system package installer to
-     * install [apkFile] via its FileProvider content URI. The caller
-     * `startActivity`s it.
-     */
-    fun buildInstallIntent(apkFile: File): Intent
-
-    /**
      * Sweeps the updates directory on app startup. **Keeps** any APK whose
      * sidecar records a version newer than the currently-installed build (a
      * genuinely pending update the user hasn't installed yet); **deletes**
@@ -81,5 +77,5 @@ interface AppUpdateRepository {
      * `ACTION_VIEW`, so this is the reliable place to reclaim space. Safe to
      * call before any download has started.
      */
-    fun cleanupDownloadedApk()
+    fun cleanupDownloadedUpdate()
 }

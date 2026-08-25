@@ -86,6 +86,9 @@ kotlin {
             // AndroidOfflineModeManager registers itself against
             // ProcessLifecycleOwner (C4 part 2 offline-mode seam).
             implementation(libs.lifecycle.process)
+            // ApkInstallBuilderImpl (FileProvider) + the AndroidDataModule
+            // version probe (PackageInfoCompat) — AppUpdate split (Wave xB).
+            implementation(libs.androidx.core.ktx)
         }
         getByName("jvmMain").dependencies {
             // Real org.json for the desktop target (SyncPlayEventHandler in

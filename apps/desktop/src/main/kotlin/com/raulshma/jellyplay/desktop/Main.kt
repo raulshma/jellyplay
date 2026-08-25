@@ -109,7 +109,8 @@ fun main() {
             // (SettingsViewModel/AboutViewModel's AdminRepository) resolve
             // from dataJvmModule, and nav v1+ renders settingsSection in the
             // rail (with the desktop platform actuals below). Desktop's
-            // update-check callback is a documented no-op.
+            // update-check row went live with the AppUpdate split (Wave xB;
+            // AppUpdateRepository resolves from desktopDataModule).
             settingsModule,
             desktopSettingsPlatformModule(),
             // …admin, eighth conveyor item — LIVE since the same flip:
