@@ -46,6 +46,11 @@ kotlin {
                 implementation(project(":shared:core:designsystem"))
                 implementation(project(":shared:core:datastore"))
                 implementation(project(":shared:core:network"))
+                // Wave wC (HtmlVideoEngine): the wasm-visible MediaEngine
+                // contract + EnginePositionTicker/WebPlaybackMappings the
+                // web video engine implements. Not wired into the shell UI
+                // yet — the engine class lands first.
+                implementation(project(":shared:core:player-contract"))
 
                 // Phase W.4 (Coil wasm image engine) BLOCKED at the pinned
                 // coil 3.5.0 — NOT a resolution gap: coil-compose and
