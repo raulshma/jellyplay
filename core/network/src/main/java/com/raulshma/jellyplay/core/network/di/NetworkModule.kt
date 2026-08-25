@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.core.network.di
 
-import android.content.Context
-import android.net.ConnectivityManager
 import com.raulshma.jellyplay.core.network.DiscoveryMulticastGuard
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.LrcLibApi
@@ -31,7 +29,6 @@ import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Named
 import javax.inject.Singleton
@@ -197,14 +194,5 @@ abstract class NetworkModule {
         @Named("download")
         fun provideDownloadOkHttpClient(): OkHttpClient =
             koin().get(NetworkQualifiers.downloadHttpClient)
-
-        // Android-only helper consumed by Hilt injectors elsewhere (e.g.
-        // AdaptiveBitrateManager); stays Hilt-owned, no Koin counterpart.
-        @Provides
-        @Singleton
-        fun provideConnectivityManager(
-            @ApplicationContext context: Context,
-        ): ConnectivityManager =
-            context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     }
 }

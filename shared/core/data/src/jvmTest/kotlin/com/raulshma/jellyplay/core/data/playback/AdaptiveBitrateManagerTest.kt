@@ -1,23 +1,40 @@
 package com.raulshma.jellyplay.core.data.playback
 
-import android.net.ConnectivityManager
+import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import io.mockk.every
 import io.mockk.mockk
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlinx.coroutines.flow.MutableStateFlow
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Test
+import kotlinx.coroutines.flow.StateFlow
 
+/**
+ * Moved from legacy `:core:data` JUnit4 to shared kotlin.test with the impl:
+ * the former mocked `ConnectivityManager` (relaxed → null activeNetwork →
+ * metered) became this hand [NetworkMonitor] fake, whose default
+ * `isMetered = true` mirrors exactly that scenario — the one where the
+ * metered cap matters most.
+ */
 class AdaptiveBitrateManagerTest {
 
-    // Relaxed mock: activeNetwork is null, so isUnmeteredConnection() reports a
-    // metered connection — exactly the scenario where the cap matters most.
-    private val connectivityManager: ConnectivityManager = mockk(relaxed = true)
+    /** Hand fake: StateFlow-driven metered flag, defaulting to metered. */
+    private class FakeNetworkMonitor(
+        initialIsMetered: Boolean = true,
+    ) : NetworkMonitor {
+        private val metered = MutableStateFlow(initialIsMetered)
+        override val networkStatus: StateFlow<NetworkStatus> =
+            MutableStateFlow(NetworkStatus.Online)
+        override val isMetered: StateFlow<Boolean> = metered
+    }
+
+    private val networkMonitor = FakeNetworkMonitor(initialIsMetered = true)
     private val networkOfflineStore: NetworkOfflineStore = mockk()
     private val playbackStore: PlaybackStore = mockk()
 
@@ -32,7 +49,7 @@ class AdaptiveBitrateManagerTest {
             ),
         )
         every { playbackStore.playback } returns MutableStateFlow(PlaybackSlice())
-        return AdaptiveBitrateManager(connectivityManager, networkOfflineStore, playbackStore)
+        return AdaptiveBitrateManager(networkMonitor, networkOfflineStore, playbackStore)
     }
 
     @Test

@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
+import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
@@ -26,6 +27,7 @@ import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.StoragePolicy
+import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.session.HomeSession
@@ -78,10 +80,9 @@ import org.koin.core.context.stopKoin
  * here — MediaRepository(+ its PlayedStateSync / cache-invalidation /
  * LyricsRepository views), UserDataMutator, MediaSearchEngine,
  * OfflineFirstItemResolver and OfflinePlaybackFacade all resolve on desktop.
- * MediaDetailProvider is the one deliberate exception: its
- * PlaybackSourceResolver ctor dep has no desktop definition (the impl is
- * Android-only, android.net.Uri) — asserting it here would fail by design
- * until a desktop actual lands with the detail screens.
+ * MediaDetailProvider was the one holdout until the playback-flips wave moved
+ * PlaybackSourceResolverImpl into this module Uri-free (`File.toURI()`), so
+ * the provider and its concrete impl resolve on desktop too.
  *
  * The admin flip (Wave wB) followed: AdminRepository and
  * AdminStatisticsRepository (label seam satisfied by the desktop
@@ -181,9 +182,9 @@ class DataKoinModulesTest {
 
             // ── Phase X MediaRepository cluster flip ─────────────────────────
             // The last Hilt-owned data cluster, now Koin-owned on BOTH
-            // platforms. MediaDetailProvider is deliberately NOT asserted —
-            // its PlaybackSourceResolver ctor dep has no desktop definition
-            // (Android-only impl; see the class KDoc).
+            // platforms. MediaDetailProvider and its concrete impl resolve
+            // since the playback-flips wave moved PlaybackSourceResolverImpl
+            // into dataJvmModule (Uri-free) — no longer latent on desktop.
             val mediaRepository = koin.get<MediaRepository>()
             assertTrue(
                 koin.get<MediaRepositoryCacheInvalidation>() === mediaRepository,
@@ -199,6 +200,8 @@ class DataKoinModulesTest {
             assertResolves<OfflineFirstItemResolver>(koin)
             assertResolves<OfflinePlaybackFacade>(koin)
             assertResolves<com.raulshma.jellyplay.core.data.playback.AudioLyricsManager>(koin)
+            assertResolves<MediaDetailProvider>(koin)
+            assertResolves<UnifiedMediaDetailProviderImpl>(koin)
 
             // ── Admin flip (Wave wB) ──────────────────────────────────────
             // Both admin repositories resolve on desktop: every ctor dep is

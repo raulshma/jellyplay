@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
-import android.os.SystemClock
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -11,11 +11,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class SleepTimerManager @Inject constructor() : AudioSleepTimerManager {
+/**
+ * Moved from the legacy `:core:data` shim (playback-flips wave): the sole
+ * Android coupling (`android.os.SystemClock.elapsedRealtime`) now goes through
+ * the injected [TimeSource] seam — on Android [SystemTimeSource][com.raulshma.jellyplay.core.data.util.SystemTimeSource]
+ * delegates to `SystemClock.elapsedRealtime` (the exact legacy source, via the
+ * model platform seam), so the countdown behaves identically. Koin-owned
+ * ([dataJvmModule][com.raulshma.jellyplay.core.data.di.dataJvmModule]
+ * constructs it; the legacy DataModule bridges Hilt injectors to the single).
+ */
+class SleepTimerManager(
+    private val timeSource: TimeSource,
+) : AudioSleepTimerManager {
 
     private val _isActive = MutableStateFlow(false)
     val isActive: StateFlow<Boolean> = _isActive.asStateFlow()
@@ -55,14 +63,14 @@ class SleepTimerManager @Inject constructor() : AudioSleepTimerManager {
         _isEndOfEpisodeMode.value = false
         _remainingMs.value = durationMs
 
-        val targetElapsedMs = SystemClock.elapsedRealtime() + durationMs
+        val targetElapsedMs = timeSource.nowElapsedRealtimeMillis() + durationMs
         val fadeOutStartMs = fadeOutDurationMs.coerceAtMost(durationMs / 2)
 
         timerJob = scope.launch {
             var inFadeOutPhase = false
 
-            while (isActive && SystemClock.elapsedRealtime() < targetElapsedMs) {
-                val remaining = (targetElapsedMs - SystemClock.elapsedRealtime()).coerceAtLeast(0)
+            while (isActive && timeSource.nowElapsedRealtimeMillis() < targetElapsedMs) {
+                val remaining = (targetElapsedMs - timeSource.nowElapsedRealtimeMillis()).coerceAtLeast(0)
                 _remainingMs.value = remaining
 
                 if (!inFadeOutPhase && remaining <= fadeOutStartMs && fadeOutStartMs > 0) {

@@ -1,17 +1,30 @@
 package com.raulshma.jellyplay.core.data.playback
 
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
+import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class AdaptiveBitrateManager @Inject constructor(
-    private val connectivityManager: ConnectivityManager,
+/**
+ * Moved from the legacy `:core:data` shim (playback-flips wave): the
+ * `ConnectivityManager` ctor dep became the common [NetworkMonitor] seam, so
+ * the manager is platform-free and Koin-owned
+ * ([dataJvmModule][com.raulshma.jellyplay.core.data.di.dataJvmModule]
+ * constructs it; the legacy DataModule bridges Hilt injectors to the single).
+ *
+ * ## Metered-parity with the legacy read
+ *
+ * The legacy `isUnmeteredConnection()` treated a null `activeNetwork` OR null
+ * capabilities as *metered* (returned false). The Android [NetworkMonitor]
+ * actual preserves exactly that: `currentMetered()` returns true (metered)
+ * when `activeNetwork == null` and `deriveMeteredFromCapabilities` returns
+ * true when capabilities are null — so `!isMetered.value` matches the legacy
+ * semantics case for case. The desktop actual reports unmetered always
+ * (no connectivity detection), which is the desktop assumption everywhere.
+ */
+class AdaptiveBitrateManager(
+    private val networkMonitor: NetworkMonitor,
     private val networkOfflineStore: NetworkOfflineStore,
     private val playbackStore: PlaybackStore,
 ) {
@@ -84,11 +97,7 @@ class AdaptiveBitrateManager @Inject constructor(
         }
     }
 
-    fun isUnmeteredConnection(): Boolean {
-        val network = connectivityManager.activeNetwork ?: return false
-        val caps = connectivityManager.getNetworkCapabilities(network) ?: return false
-        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
-    }
+    fun isUnmeteredConnection(): Boolean = !networkMonitor.isMetered.value
 
     companion object {
         private const val MAX_BITRATE_METERED = 2_500_000L

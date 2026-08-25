@@ -15,16 +15,13 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
-import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.nio.file.Files
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlinx.coroutines.test.runTest
 
 /**
  * Pins the [PlaybackSourceResolver] contract — the single owner of the
@@ -32,11 +29,11 @@ import java.nio.file.Files
  * checks are exercised via `Files.createTempFile`, mirroring the
  * `PlaybackSourceTest` pattern in `:feature:player:video`.
  *
- * Robolectric is required because the Local path builds a real
- * `Uri.fromFile(...)`; the core:data unit-test preset stubs Android framework
- * methods to return null (`isReturnDefaultValues = true`), which would NPE on
- * `Uri.toString()`. Same convention as `AudioStreamCacheTest` /
- * `MediaStreamVolumeTest` in this module.
+ * Moved from legacy `:core:data` JUnit4/Robolectric to shared kotlin.test
+ * with the impl: no Robolectric needed anymore — the local URI is built with
+ * `File.toURI()` (platform-free), which also retired the legacy module's
+ * stubbed-`Uri` workaround (the old core:data preset stubbed Android
+ * framework methods, which would NPE on `Uri.toString()`).
  *
  * Together these cases lock the five inlined predicates the resolver replaces
  * (MainViewModel external-player launch, the audio trio's local-url fallback,
@@ -44,8 +41,6 @@ import java.nio.file.Files
  * → Local, completed-but-deleted → Stream, non-completed → Stream, detail
  * failure → null.
  */
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
 class PlaybackSourceResolverTest {
 
     private val downloadRepository: DownloadRepository = mockk()
@@ -116,6 +111,9 @@ class PlaybackSourceResolverTest {
         assertEquals("item1", local.itemId)
         assertEquals(tempFile.absolutePath, local.filePath)
         assertEquals("Test Movie", local.title)
+        // File.toURI() emits the file:/ single-slash form (was file:/// with
+        // android.net.Uri.fromFile) — see the impl's URI-shape note.
+        assertEquals(tempFile.toURI().toString(), local.uri)
         assertTrue(local.uri.startsWith("file:"))
         coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
         coVerify(exactly = 0) { playbackRepository.getStreamUrl(any(), any(), any()) }
@@ -249,6 +247,7 @@ class PlaybackSourceResolverTest {
         assertNotNull(local)
         assertEquals("Offline Title", local!!.title)
         assertEquals("Series", local.offlineItem?.seriesName)
+        assertEquals(tempFile.toURI().toString(), local.uri)
         assertTrue(local.uri.startsWith("file:"))
         // No server round-trip on the local-only path.
         coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }

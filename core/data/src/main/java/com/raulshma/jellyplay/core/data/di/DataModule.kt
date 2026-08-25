@@ -351,7 +351,7 @@ abstract class DataModule {
         // Koin (dataJvmModule) constructs them. The former @Binds below became
         // these koin().get() bridges — every surviving Hilt injector (workers,
         // schedulers, legacy feature:home/details/player injectors, and the
-        // Hilt-owned PlaybackSourceResolverImpl/AdminRepositoryImpl graph)
+        // since-moved PlaybackSourceResolverImpl / AdminRepositoryImpl graph)
         // shares the Koin singles.
 
         @dagger.Provides
@@ -411,6 +411,29 @@ abstract class DataModule {
         @dagger.Provides
         @Singleton
         fun provideAdminStatisticsRepository(): AdminStatisticsRepository = koin().get()
+
+        // ── Playback-flips wave ──────────────────────────────────────────────
+        // PlaybackSourceResolverImpl, SleepTimerManager and
+        // AdaptiveBitrateManager moved to :shared:core:data jvmShared (Koin
+        // owns construction, @Inject/@Singleton stripped at the move —
+        // android.net.Uri → File.toURI, SystemClock → TimeSource,
+        // ConnectivityManager → NetworkMonitor). These bridges keep every
+        // surviving Hilt injector pointing at the Koin singles; the former
+        // bindPlaybackSourceResolver @Binds became the first bridge.
+
+        @dagger.Provides
+        @Singleton
+        fun providePlaybackSourceResolver(): com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver =
+            koin().get()
+
+        @dagger.Provides
+        @Singleton
+        fun provideSleepTimerManager(): com.raulshma.jellyplay.core.data.playback.SleepTimerManager = koin().get()
+
+        @dagger.Provides
+        @Singleton
+        fun provideAdaptiveBitrateManager(): com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager =
+            koin().get()
     }
 
     // Phase X MediaRepository cluster flip: the former bindMediaRepository /
@@ -424,22 +447,6 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindDownloadIntake(impl: DownloadIntakeImpl): DownloadIntake
-
-    // The deep "Playback Source Resolver" seam: the single owner of the
-    // download-vs-stream fork. The interface lives in :shared:core:data
-    // commonMain (C4 part 2); the impl stays here — it uses android.net.Uri
-    // (resolveLocalSource's file:// projection), so it remains Hilt-owned.
-    // Since the Phase X cluster flip every ctor dep it injects
-    // (DownloadRepository, MediaRepository, PlaybackRepository,
-    // OfflineRepository, OfflinePlaybackFacade) resolves through the Koin
-    // bridges — Hilt assembles it over Koin singles, and the app composition
-    // root exposes it back to Koin (UnifiedMediaDetailProviderImpl's ctor
-    // dep) via the HiltInteropModule single.
-    @Binds
-    @Singleton
-    abstract fun bindPlaybackSourceResolver(
-        impl: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolverImpl,
-    ): com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 
     // The narrow queue interface AudioPlaybackManager already implements
     // (playQueue/addToQueue/...). Bound so the audio queue facade (and its
