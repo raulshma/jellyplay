@@ -1,15 +1,8 @@
 package com.raulshma.jellyplay.core.data.update
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import androidx.core.content.FileProvider
-import androidx.core.content.pm.PackageInfoCompat
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.core.model.compareVersions
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -19,18 +12,31 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Named
-import javax.inject.Singleton
 
-@Singleton
-class AppUpdateRepositoryImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
+/**
+ * AppUpdate split (Wave xB): moved from the legacy `:core:data` shim (Hilt
+ * @Singleton @Inject, ctor `@ApplicationContext Context`) to :shared:core:data
+ * jvmShared as a plain Koin-constructed class. The Context became ctor seams
+ * supplied by the platform Koin modules (androidDataModule /
+ * desktopDataModule): the updates directory, the installed-version probe
+ * (kept a `() -> String` so the PackageManager read stays lazy per call, as
+ * in the legacy impl), the product flavor (a String — packageName, its source,
+ * is immutable in-process), and the device ABIs. The Android-only install
+ * intent moved to the androidMain `ApkInstallBuilder` seam. The download /
+ * `.part` / sidecar-JSON logic below is byte-identical to the legacy impl.
+ */
+class AppUpdateRepositoryImpl(
     private val gitHubReleasesApi: GitHubReleasesApi,
     // Pre-tuned download client (connect=30s, read=60s, write=30s). Cloned
     // with cache=null so a large APK isn't written through the HTTP disk
     // cache — mirroring how the image client is built in JellyPlayApplication.
-    @Named("download") private val downloadClient: OkHttpClient,
+    // The Koin twin of the legacy @Named("download") qualifier
+    // (NetworkQualifiers.downloadHttpClient).
+    private val downloadClient: OkHttpClient,
+    private val updatesDir: File,
+    private val currentVersionName: () -> String,
+    private val flavor: String,
+    private val supportedAbis: Array<String>,
 ) : AppUpdateRepository {
 
     private val json = Json {
@@ -38,27 +44,16 @@ class AppUpdateRepositoryImpl @Inject constructor(
         encodeDefaults = true
     }
 
-    override suspend fun checkForUpdate(supportedAbis: Array<String>): Result<AppUpdateInfo> {
+    override suspend fun checkForUpdate(): Result<AppUpdateInfo> {
         val current = currentVersionName()
         return gitHubReleasesApi.fetchLatestUpdate(
             currentVersionName = current,
-            flavor = currentFlavor(),
+            flavor = flavor,
             supportedAbis = supportedAbis,
         )
     }
 
-    /**
-     * Derives the running product flavor from the package name. Library modules
-     * cannot read `Build.FLAVOR` (it is empty outside the :app module's
-     * flavor), so this is the single source of truth shared by every caller.
-     * TV builds carry a `.tv` applicationId suffix (see app/build.gradle.kts).
-     */
-    private fun currentFlavor(): String {
-        val packageName = context.packageName
-        return if (packageName.endsWith(".tv")) "tv" else "phone"
-    }
-
-    override suspend fun downloadApk(
+    override suspend fun downloadUpdate(
         info: AppUpdateInfo,
         onProgress: (Float, Long, Long) -> Unit,
     ): Result<File> {
@@ -97,7 +92,7 @@ class AppUpdateRepositoryImpl @Inject constructor(
                 // is swept by CacheManager on ON_STOP (autoDeleteCache) and can
                 // be evicted by the OS at any time — both delete the APK mid
                 // install, producing "There was a problem parsing the package".
-                val updatesDir = File(context.filesDir, UPDATES_DIR).apply { mkdirs() }
+                updatesDir.apply { mkdirs() }
                 val finalFile = File(updatesDir, OUTPUT_APK_NAME)
                 // Stream into a .part file so a failed/cancelled re-download
                 // leaves the previously-installed APK + sidecar untouched. The
@@ -164,7 +159,6 @@ class AppUpdateRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getPendingUpdate(): PendingAppUpdate? = withContext(Dispatchers.IO) {
-        val updatesDir = File(context.filesDir, UPDATES_DIR)
         val apkFile = File(updatesDir, OUTPUT_APK_NAME)
         if (!apkFile.exists()) return@withContext null
         val meta = readSidecar(updatesDir) ?: return@withContext null
@@ -187,20 +181,7 @@ class AppUpdateRepositoryImpl @Inject constructor(
         PendingAppUpdate(info = info, apkFile = apkFile)
     }
 
-    override fun buildInstallIntent(apkFile: File): Intent {
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            apkFile,
-        )
-        return Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, MIME_APK)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-    }
-
-    override fun cleanupDownloadedApk() {
+    override fun cleanupDownloadedUpdate() {
         // The system installer is launched in a separate process; we get no
         // result callback for ACTION_VIEW. But a successful package replace
         // kills and restarts our process, so onCreate runs again in the newly
@@ -209,7 +190,6 @@ class AppUpdateRepositoryImpl @Inject constructor(
         // genuinely pending update; sweep everything else (orphan APK, stale
         // sidecar, and any abandoned .part from a failed download). Safe at
         // startup: onCreate precedes any new download.
-        val updatesDir = File(context.filesDir, UPDATES_DIR)
         val apkFile = File(updatesDir, OUTPUT_APK_NAME)
         runCatching {
             val meta = readSidecar(updatesDir)
@@ -232,7 +212,7 @@ class AppUpdateRepositoryImpl @Inject constructor(
      * True when [version] (from the sidecar) is strictly newer than the
      * currently-installed build — i.e. the on-disk APK is a genuinely pending
      * update the user hasn't installed yet. Centralised so [getPendingUpdate]
-     * and [cleanupDownloadedApk] share one definition of "pending".
+     * and [cleanupDownloadedUpdate] share one definition of "pending".
      */
     private fun isNewerThanInstalled(version: String): Boolean =
         compareVersions(version, currentVersionName()) > 0
@@ -272,31 +252,11 @@ class AppUpdateRepositoryImpl @Inject constructor(
             .getOrNull()
     }
 
-    private fun currentVersionName(): String {
-        val pm = context.packageManager
-        val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            pm.getPackageInfo(
-                context.packageName,
-                android.content.pm.PackageManager.PackageInfoFlags.of(0),
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            pm.getPackageInfo(context.packageName, 0)
-        }
-        // Prefer the long version code as the source of truth; fall back to
-        // versionName for the human-readable dotted string used by the
-        // comparator. versionName is what the build injects via -PversionName.
-        @Suppress("DEPRECATION")
-        return info.versionName ?: PackageInfoCompat.getLongVersionCode(info).toString()
-    }
-
     companion object {
-        private const val UPDATES_DIR = "updates"
         private const val OUTPUT_APK_NAME = "jellyplay-update.apk"
         private const val OUTPUT_PART_NAME = "jellyplay-update.apk.part"
         private const val META_NAME = "jellyplay-update.meta.json"
         private const val BUFFER_SIZE = 65536
         private const val PROGRESS_INTERVAL_MS = 500L
-        private const val MIME_APK = "application/vnd.android.package-archive"
     }
 }

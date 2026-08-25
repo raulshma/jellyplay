@@ -18,6 +18,8 @@ import com.raulshma.jellyplay.core.data.repository.DesktopLocalStreamProbe
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
+import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
+import com.raulshma.jellyplay.core.data.update.AppUpdateRepositoryImpl
 import com.raulshma.jellyplay.core.data.util.DesktopImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.DataBuildFlags
@@ -25,6 +27,7 @@ import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
+import java.io.File
 import java.nio.file.Path
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -131,5 +134,40 @@ fun desktopDataModule(dataDir: Path): Module {
                 scope = get(DatastoreQualifiers.applicationScope),
             )
         }
+
+        // ── AppUpdate split (Wave xB): the desktop update-check actual ──────
+        // The repository resolves (the About screen's "Check for updates" row
+        // calls it through DesktopAppRoot), but desktop has NO self-update: the
+        // version sentinel below beats every real release tag, so
+        // GitHubReleasesApiImpl.fetchLatestUpdate's
+        // compareVersions(tag, currentVersionName) can never report an update.
+        // ("dev" would FALSE-positive here: compareVersions reads non-numeric
+        // segments as 0, and selectAsset's last-resort branch — any asset
+        // ending in "-universal.apk" — would then attach an Android universal
+        // APK to the result.) downloadUpdate is unreachable (the UI gates on
+        // isUpdateAvailable), so the appdata updates dir stays empty and
+        // getPendingUpdate / cleanupDownloadedUpdate are no-ops.
+        single<AppUpdateRepository> {
+            AppUpdateRepositoryImpl(
+                gitHubReleasesApi = get(),
+                downloadClient = get(NetworkQualifiers.downloadHttpClient),
+                // Same "updates" subtree name as the Android filesDir layout.
+                updatesDir = File(dataDir.toFile(), UPDATES_DIR),
+                currentVersionName = { DESKTOP_SELF_UPDATE_VERSION },
+                flavor = "desktop",
+                supportedAbis = arrayOf("desktop"),
+            )
+        }
     }
 }
+
+/** Same directory name as the Android filesDir layout ("updates"). */
+private const val UPDATES_DIR = "updates"
+
+/**
+ * Sentinel current version, deliberately not the About screen's "dev": a
+ * "dev" that compareVersions folds to 0 would make every GitHub release look
+ * like an available desktop update (see the definition comment above). No
+ * realistic release tag beats 999999.
+ */
+private const val DESKTOP_SELF_UPDATE_VERSION = "999999.0.0"
