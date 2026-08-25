@@ -54,6 +54,8 @@ import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
 
 import com.raulshma.jellyplay.feature.insights.di.insightsModule
 import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
+import com.raulshma.jellyplay.feature.auth.di.androidAuthModule
+import com.raulshma.jellyplay.feature.auth.di.authModule
 
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
@@ -265,7 +267,16 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // application context here.
                 androidSubtitleTesterModule(this@JellyPlayApplication),
 
-
+                // Phase X auth cutover (feature-conveyor transform): both VM
+                // ctor deps (AuthRepository, ServerDiscoveryRepository) were
+                // already Koin-owned in dataJvmModule — zero Hilt interop
+                // (calendar/requests/shortcuts class). The LocalNetworkStatus
+                // gate is Android-only here: it bridges the legacy :core:ui
+                // LocalNetworkAccess object with the application context
+                // (androidAdminModule pattern); desktop registers its own
+                // non-blaming pick from the shared module's jvmMain.
+                authModule,
+                androidAuthModule(this@JellyPlayApplication),
 
             )
         }

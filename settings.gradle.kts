@@ -34,7 +34,6 @@ include(":core:data")
 include(":core:ui")
 include(":core:notification")
 include(":core:testing")
-include(":feature:auth")
 include(":feature:home")
 include(":feature:details")
 include(":feature:player:core")
@@ -95,6 +94,8 @@ include(":shared:feature:arrqueue")
 
 
 include(":shared:feature:subtitle-tester")
+
+include(":shared:feature:auth")
 
 
 // Desktop shell (plan §Phase V1b)
