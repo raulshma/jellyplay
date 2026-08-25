@@ -6,6 +6,10 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
+import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
+import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
+import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.details.DetailAudioPlayback
 import com.raulshma.jellyplay.feature.details.DetailThemeMusic
@@ -65,6 +69,10 @@ interface HiltInteropEntryPoint {
     fun fontProvider(): FontProvider
     fun audioPlaybackManager(): AudioPlaybackManager
     fun themeMusicPlayer(): ThemeMusicPlayer
+    fun playbackSyncScheduler(): PlaybackSyncScheduler
+    fun tvWatchNextScheduler(): TvWatchNextScheduler
+    fun continueWatchingBroadcaster(): ContinueWatchingBroadcaster
+    fun librarySyncHook(): LibrarySyncHook
 }
 
 private fun interopEntryPoint(application: Application): HiltInteropEntryPoint =
@@ -120,4 +128,14 @@ fun hiltInteropModule(application: Application): Module = module {
     // Details conveyor (Phase X cutover wave): see the adapter KDocs above.
     single<DetailAudioPlayback> { HiltDetailAudioPlayback(interopEntryPoint(application).audioPlaybackManager()) }
     single<DetailThemeMusic> { HiltDetailThemeMusic(interopEntryPoint(application).themeMusicPlayer()) }
+    // Home conveyor (Phase X cutover): HomeViewModel's four remaining
+    // Hilt-owned ctor deps — the WorkManager-backed schedulers (legacy
+    // :core:data DataModule @Binds) and the app widget broadcast receiver
+    // pair (:app WidgetModule @Binds). The interfaces moved to
+    // :shared:core:data commonMain with the feature; only these lazy interop
+    // singles remain, and they die with the Phase X Hilt removal.
+    single<PlaybackSyncScheduler> { interopEntryPoint(application).playbackSyncScheduler() }
+    single<TvWatchNextScheduler> { interopEntryPoint(application).tvWatchNextScheduler() }
+    single<ContinueWatchingBroadcaster> { interopEntryPoint(application).continueWatchingBroadcaster() }
+    single<LibrarySyncHook> { interopEntryPoint(application).librarySyncHook() }
 }

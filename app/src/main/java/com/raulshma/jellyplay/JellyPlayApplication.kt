@@ -53,6 +53,7 @@ import com.raulshma.jellyplay.feature.shortcuts.di.shortcutsModule
 import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
 
 import com.raulshma.jellyplay.feature.insights.di.insightsModule
+import com.raulshma.jellyplay.feature.home.di.homeModule
 import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
 import com.raulshma.jellyplay.feature.auth.di.androidAuthModule
 import com.raulshma.jellyplay.feature.auth.di.authModule
@@ -258,6 +259,16 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // through the ArrQueueMessenger seam instead of the legacy
                 // UserMessageBus ctor dep.
                 arrqueueModule,
+
+                // Home conveyor (Phase X cutover; desktop landing screen):
+                // 30 of HomeViewModel's 34 ctor deps are Koin-native in the
+                // shared graph; the remaining four (PlaybackSyncScheduler,
+                // TvWatchNextScheduler, ContinueWatchingBroadcaster,
+                // LibrarySyncHook — WorkManager/widget-backed) ride the
+                // hiltInteropModule singles above. SettingsSearchProvider
+                // resolves from settingsModule — the app-side Hilt bridge for
+                // it died with the legacy module (Koin constructs the VM now).
+                homeModule,
 
                 // V3 subtitle-tester conveyor (final feature): the whole
                 // feature is Android-only (androidMain-heavy module — the

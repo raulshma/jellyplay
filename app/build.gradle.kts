@@ -170,7 +170,7 @@ dependencies {
     implementation(project(":core:ui"))
     implementation(project(":core:notification"))
     implementation(project(":shared:feature:auth"))
-    implementation(project(":feature:home"))
+    implementation(project(":shared:feature:home"))
     implementation(project(":shared:feature:library"))
     implementation(project(":shared:feature:search"))
     implementation(project(":shared:feature:details"))

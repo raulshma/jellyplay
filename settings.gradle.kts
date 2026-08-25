@@ -34,7 +34,6 @@ include(":core:data")
 include(":core:ui")
 include(":core:notification")
 include(":core:testing")
-include(":feature:home")
 include(":feature:player:core")
 include(":feature:player:video")
 include(":feature:player:audio")
@@ -88,6 +87,8 @@ include(":shared:feature:insights")
 include(":shared:feature:onboarding")
 
 include(":shared:feature:arrqueue")
+
+include(":shared:feature:home")
 
 
 

@@ -53,6 +53,7 @@ import com.raulshma.jellyplay.feature.details.desktopDetailsPlatformModule
 import com.raulshma.jellyplay.feature.details.detailsModule
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
+import com.raulshma.jellyplay.feature.home.di.homeModule
 import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
 import com.raulshma.jellyplay.feature.auth.di.authModule
 import com.raulshma.jellyplay.feature.auth.di.desktopAuthPlatformModule
@@ -225,6 +226,17 @@ fun main() {
             // merge; until then no desktop route instantiates a details VM.
             detailsModule,
             desktopDetailsPlatformModule(paths.dataDirNio),
+            // Home conveyor: registered LATENT — four HomeViewModel ctor deps
+            // (PlaybackSyncScheduler, TvWatchNextScheduler,
+            // ContinueWatchingBroadcaster, LibrarySyncHook) are Android-only
+            // Hilt interop singles with no desktop defs yet, so resolving the
+            // VM here would throw NoDefinitionFound. Desktop nav does not wire
+            // a home entry (home/details/players are the remaining legacy
+            // features), so nothing constructs it today; flip when the nav
+            // lands (see the HomeLifecycleSeam jvm actual for the refresher
+            // start/stop decision that wiring will need).
+            homeModule,
+
 
 
 
