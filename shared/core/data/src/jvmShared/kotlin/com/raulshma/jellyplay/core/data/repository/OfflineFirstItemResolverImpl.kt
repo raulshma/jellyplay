@@ -4,17 +4,12 @@ import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.toMediaItem
-import javax.inject.Inject
-import javax.inject.Singleton
 
-// C4p2 note: the [OfflineFirstItemResolver] interface + [ResolvedMediaRef]
-// moved to :shared:core:data commonMain; this impl stays in the legacy module
-// because its constructor takes the Android-coupled [OfflineModeManager]
-// (ConnectivityManager/ProcessLifecycleOwner), which has no Koin definition
-// yet. It migrates with the OfflineModeManager/connectivity seam.
-
-@Singleton
-class OfflineFirstItemResolverImpl @Inject constructor(
+// Phase X MediaRepository cluster flip: moved verbatim from the legacy
+// :core:data shim (same package/name); `@Singleton` / `@Inject` stripped
+// (one framework per type — Koin's dataJvmModule constructs this single; the
+// legacy DataModule bridges the remaining Hilt injectors via koin().get()).
+class OfflineFirstItemResolverImpl(
     private val offlineRepository: OfflineRepository,
     private val mediaRepository: MediaRepository,
     private val offlineModeManager: OfflineModeManager,

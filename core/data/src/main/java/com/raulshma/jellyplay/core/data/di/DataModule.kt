@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
-import com.raulshma.jellyplay.core.data.repository.PlayedStateSyncImpl
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -319,21 +318,14 @@ abstract class DataModule {
         fun providePlaybackRepository(): PlaybackRepository = koin().get()
 
         // ── C4 part 2, batch 3: interim direct constructions ────────────────
-        // These impls MOVED to :shared:core:data but Koin cannot own them
-        // yet — a ctor dep is still Hilt-owned legacy (MediaRepository /
-        // AudioPlaybackManager / LyricsRepository / OfflinePlaybackFacade).
-        // (DownloadRepository left this list with the V3 downloads conveyor —
-        // it is Koin-owned; the bridges above point Hilt at the single.)
-        // Until the remaining deps flip, Hilt constructs the moved classes
-        // here directly. @Inject was stripped at the move, so Hilt resolves
-        // them through these providers (no parallel instances); the Koin
-        // definitions + koin().get() bridges land with the remaining
-        // repository flips.
-
-        @dagger.Provides
-        @Singleton
-        fun provideAudioLyricsManager(lyricsRepository: LyricsRepository): AudioLyricsManager =
-            AudioLyricsManager(lyricsRepository)
+        // DownloadRepository left this list with the V3 downloads conveyor and
+        // AudioLyricsManager + OfflineSyncManager left it with the Phase X
+        // MediaRepository cluster flip (Koin owns them; the bridges above/below
+        // point Hilt at the singles). Remaining: DefaultAudioQueueFacade only —
+        // its AudioQueueManager ctor dep is the media3 AudioPlaybackManager,
+        // which stays Android/Hilt-owned (see bindAudioQueueManager).
+        // @Inject was stripped at every move, so Hilt resolves the moved
+        // classes through these providers/bridges (no parallel instances).
 
         @dagger.Provides
         @Singleton
@@ -344,72 +336,94 @@ abstract class DataModule {
         ): com.raulshma.jellyplay.core.data.playback.AudioQueueFacade =
             DefaultAudioQueueFacade(queueManager, mediaRepository, imageUrlProvider)
 
-        // The deep "Playback Source Resolver" seam: the interface moved to
-        // :shared:core:data commonMain, but the impl stays Hilt-owned legacy
-        // (C4 part 2 bounce: its ctor takes OfflinePlaybackFacade, itself
-        // Hilt-coupled to DownloadRepository). See bindPlaybackSourceResolver.
-
         // V3 downloads conveyor: OfflineSyncManager flipped to a Koin single in
-        // dataJvmModule (every ctor dep now resolves — MediaRepository /
-        // DownloadRepository through the app's Hilt interop). This bridge keeps
+        // dataJvmModule (every ctor dep now resolves). This bridge keeps
         // the legacy Hilt injectors (feature:details ResyncActions) pointing at
         // the same instance the Koin graph builds; the direct-construction
         // provider above was the interim shape until this flip.
         @dagger.Provides
         @Singleton
         fun provideOfflineSyncManager(): com.raulshma.jellyplay.core.data.sync.OfflineSyncManager = koin().get()
+
+        // ── Phase X MediaRepository cluster flip ────────────────────────────
+        // The cluster's 7 impls (MediaRepositoryImpl, PlayedStateSyncImpl,
+        // UserDataMutatorImpl, MediaSearchEngineImpl,
+        // UnifiedMediaDetailProviderImpl, OfflineFirstItemResolverImpl,
+        // OfflinePlaybackFacade) moved to :shared:core:data jvmShared;
+        // Koin (dataJvmModule) constructs them. The former @Binds below became
+        // these koin().get() bridges — every surviving Hilt injector (workers,
+        // schedulers, legacy feature:home/details/player injectors, and the
+        // Hilt-owned PlaybackSourceResolverImpl/AdminRepositoryImpl graph)
+        // shares the Koin singles.
+
+        @dagger.Provides
+        @Singleton
+        fun provideMediaRepository(): MediaRepository = koin().get()
+
+        // Concrete-class bridge: UserDataSyncWorker injects MediaRepositoryImpl
+        // directly (it reaches the impl-only wholesale invalidateCaches, which
+        // the move widened to public for exactly this cross-module edge).
+        @dagger.Provides
+        @Singleton
+        fun provideMediaRepositoryImpl(): MediaRepositoryImpl = koin().get()
+
+        @dagger.Provides
+        @Singleton
+        fun providePlayedStateSync(): PlayedStateSync = koin().get()
+
+        @dagger.Provides
+        @Singleton
+        fun provideUserDataMutator(): com.raulshma.jellyplay.core.data.repository.UserDataMutator = koin().get()
+
+        @dagger.Provides
+        @Singleton
+        fun provideMediaDetailProvider(): com.raulshma.jellyplay.core.data.repository.MediaDetailProvider =
+            koin().get()
+
+        @dagger.Provides
+        @Singleton
+        fun provideMediaSearchEngine(): com.raulshma.jellyplay.core.data.search.MediaSearchEngine = koin().get()
+
+        @dagger.Provides
+        @Singleton
+        fun provideOfflineFirstItemResolver(): com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver =
+            koin().get()
+
+        @dagger.Provides
+        @Singleton
+        fun provideOfflinePlaybackFacade(): com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade =
+            koin().get()
+
+        // AudioLyricsManager left the interim direct-construction list with
+        // this flip: dataJvmModule owns it (its LyricsRepository dep is the
+        // Koin-owned view of MediaRepository).
+        @dagger.Provides
+        @Singleton
+        fun provideAudioLyricsManager(): AudioLyricsManager = koin().get()
     }
 
-    @Binds
-    @Singleton
-    abstract fun bindMediaRepository(impl: MediaRepositoryImpl): MediaRepository
-
-    // Plan 08: module-internal cache-maintenance view of the same
-    // MediaRepositoryImpl singleton. The per-type invalidation dispatch
-    // (MediaRepositoryCacheInvalidation.invalidateFor) lives behind this
-    // narrow seam so the detail provider never sees the repository's cache
-    // machinery — same instance, not a second set of caches.
-    @Binds
-    @Singleton
-    internal abstract fun bindMediaRepositoryCacheInvalidation(
-        impl: MediaRepositoryImpl,
-    ): com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
-
-    @Binds
-    @Singleton
-    abstract fun bindPlayedStateSync(impl: PlayedStateSyncImpl): PlayedStateSync
-
-    // The single seam for user-data mutations (watched / favorite): owns the
-    // serialize → write → optimistic-rewrite protocol so feature screens only
-    // supply a container adapter. Adapter over MediaRepository (the write) and
-    // MediaDetailProvider (the active-session rewrite), both Lazy — see
-    // UserDataMutatorImpl.
-    @Binds
-    @Singleton
-    abstract fun bindUserDataMutator(
-        impl: com.raulshma.jellyplay.core.data.repository.UserDataMutatorImpl,
-    ): com.raulshma.jellyplay.core.data.repository.UserDataMutator
+    // Phase X MediaRepository cluster flip: the former bindMediaRepository /
+    // bindMediaRepositoryCacheInvalidation / bindPlayedStateSync /
+    // bindUserDataMutator / bindMediaDetailProvider / bindMediaSearchEngine /
+    // bindOfflineFirstItemResolver @Binds moved to Koin (dataJvmModule) with
+    // their impls; the companion-object koin().get() bridges above replaced
+    // them. MediaRepositoryCacheInvalidation needs no bridge — its sole Hilt
+    // injector (UnifiedMediaDetailProviderImpl) moved with the cluster.
 
     @Binds
     @Singleton
     abstract fun bindDownloadIntake(impl: DownloadIntakeImpl): DownloadIntake
 
-    // The single external seam for media-detail resolution. Owns the remote/local
-    // source policy, the source-dependent read graph, and capability derivation.
-    // See the MediaDetailProvider kdoc for the source policy. Internal impl:
-    // it takes the module-internal cache-maintenance seam (plan 08), so only
-    // the MediaDetailProvider surface is public.
-    @Binds
-    @Singleton
-    internal abstract fun bindMediaDetailProvider(
-        impl: com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl,
-    ): com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
-
     // The deep "Playback Source Resolver" seam: the single owner of the
     // download-vs-stream fork. The interface lives in :shared:core:data
-    // commonMain (C4 part 2); the impl stays here — its ctor takes the
-    // Hilt-coupled OfflinePlaybackFacade (bounced; re-attempt when
-    // DownloadRepository flips to Koin).
+    // commonMain (C4 part 2); the impl stays here — it uses android.net.Uri
+    // (resolveLocalSource's file:// projection), so it remains Hilt-owned.
+    // Since the Phase X cluster flip every ctor dep it injects
+    // (DownloadRepository, MediaRepository, PlaybackRepository,
+    // OfflineRepository, OfflinePlaybackFacade) resolves through the Koin
+    // bridges — Hilt assembles it over Koin singles, and the app composition
+    // root exposes it back to Koin (UnifiedMediaDetailProviderImpl's ctor
+    // dep) via the HiltInteropModule single.
     @Binds
     @Singleton
     abstract fun bindPlaybackSourceResolver(
@@ -437,20 +451,6 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindAdminStatisticsRepository(impl: AdminStatisticsRepositoryImpl): AdminStatisticsRepository
-
-    @Binds
-    @Singleton
-    abstract fun bindMediaSearchEngine(
-        impl: com.raulshma.jellyplay.core.data.search.MediaSearchEngineImpl,
-    ): com.raulshma.jellyplay.core.data.search.MediaSearchEngine
-
-    // The narrow offline-first title+poster lookup seam. Leaf
-    // adapter over existing singletons — no scope or cycle risk.
-    @Binds
-    @Singleton
-    abstract fun bindOfflineFirstItemResolver(
-        impl: com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl,
-    ): com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 
     @Binds
     @Singleton

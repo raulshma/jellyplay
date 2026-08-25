@@ -8,7 +8,6 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import dagger.Lazy
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -41,13 +40,13 @@ class PlayedStateSyncImplTest {
 
     @Before
     fun setup() {
-        // dagger.Lazy is trivially faked — PlayedStateSyncImpl only calls get().
-        val lazyMedia: Lazy<MediaRepository> = mockk()
-        every { lazyMedia.get() } returns mediaRepository
-        val lazyStore: Lazy<DownloadsStore> = mockk()
-        every { lazyStore.get() } returns downloadsStore
-        val lazyDownloads: Lazy<DownloadRepository> = mockk()
-        every { lazyDownloads.get() } returns downloadRepository
+        // kotlin Lazy (dagger.Lazy at the time this suite was written — the
+        // Phase X cluster flip converted the ctor params) — mockk cannot mock
+        // kotlin.Lazy directly, so the real `lazy { }` wraps the mock; the
+        // impl only reads .value.
+        val lazyMedia: Lazy<MediaRepository> = lazy { mediaRepository }
+        val lazyStore: Lazy<DownloadsStore> = lazy { downloadsStore }
+        val lazyDownloads: Lazy<DownloadRepository> = lazy { downloadRepository }
         // Auto-delete-after-watch defaults OFF, so existing flip tests stay
         // unaffected: getDownloadByMediaItemId is never reached.
         every { downloadsStore.downloads } returns kotlinx.coroutines.flow.MutableStateFlow(DownloadsSlice())

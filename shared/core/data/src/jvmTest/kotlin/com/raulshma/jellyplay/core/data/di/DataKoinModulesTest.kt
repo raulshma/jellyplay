@@ -10,14 +10,22 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
+import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
+import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
+import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
+import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.StoragePolicy
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
+import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
@@ -61,7 +69,17 @@ import org.koin.core.context.stopKoin
  * DownloadRepository (and with the V3 downloads conveyor, the whole download
  * engine — delegate, transfer machinery, in-process manager, auto-download
  * loop) IS resolved since the conveyor moved it into this module; the
- * MediaRepository edge stays a documented throwing-lazy on desktop (Phase X).
+ * MediaRepository edge was a documented throwing-lazy on desktop until the
+ * Phase X cluster flip made it real.
+ *
+ * The Phase X MediaRepository cluster flip moved the last Hilt-owned cluster
+ * here — MediaRepository(+ its PlayedStateSync / cache-invalidation /
+ * LyricsRepository views), UserDataMutator, MediaSearchEngine,
+ * OfflineFirstItemResolver and OfflinePlaybackFacade all resolve on desktop.
+ * MediaDetailProvider is the one deliberate exception: its
+ * PlaybackSourceResolver ctor dep has no desktop definition (the impl is
+ * Android-only, android.net.Uri) — asserting it here would fail by design
+ * until a desktop actual lands with the detail screens.
  */
 class DataKoinModulesTest {
 
@@ -153,6 +171,27 @@ class DataKoinModulesTest {
             assertResolves<MediaRepositoryAccess>(koin)
             assertResolves<DesktopDownloadManager>(koin)
             assertResolves<DesktopAutoDownloadScheduler>(koin)
+
+            // ── Phase X MediaRepository cluster flip ─────────────────────────
+            // The last Hilt-owned data cluster, now Koin-owned on BOTH
+            // platforms. MediaDetailProvider is deliberately NOT asserted —
+            // its PlaybackSourceResolver ctor dep has no desktop definition
+            // (Android-only impl; see the class KDoc).
+            val mediaRepository = koin.get<MediaRepository>()
+            assertTrue(
+                koin.get<MediaRepositoryCacheInvalidation>() === mediaRepository,
+                "MediaRepositoryCacheInvalidation must alias the MediaRepository single (one cache set, not two)",
+            )
+            assertTrue(
+                koin.get<LyricsRepository>() === mediaRepository,
+                "LyricsRepository must alias the MediaRepository single (MediaRepository extends it)",
+            )
+            assertResolves<PlayedStateSync>(koin)
+            assertResolves<UserDataMutator>(koin)
+            assertResolves<MediaSearchEngine>(koin)
+            assertResolves<OfflineFirstItemResolver>(koin)
+            assertResolves<OfflinePlaybackFacade>(koin)
+            assertResolves<com.raulshma.jellyplay.core.data.playback.AudioLyricsManager>(koin)
         } finally {
             database.close()
             stopKoin()

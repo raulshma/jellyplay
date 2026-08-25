@@ -2,30 +2,29 @@ package com.raulshma.jellyplay.core.data.repository
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import javax.inject.Inject
-import javax.inject.Singleton
 
-// C4p2 note: the [UserDataMutator] interface + [UserDataContainer] +
-// [AppliedMutation] moved to :shared:core:data commonMain; this impl stays in
-// the legacy module because Koin cannot construct it yet — its
-// `dagger.Lazy<MediaRepository>` / `dagger.Lazy<MediaDetailProvider>` params
-// need Koin definitions for those interfaces, and their impls
-// (MediaRepositoryImpl, UnifiedMediaDetailProviderImpl) are still Hilt-owned
-// legacy (their ctors take Android-coupled NetworkMonitor / OfflineModeManager
-// / PlaybackSourceResolver). It migrates when those repository impls do.
+// Phase X MediaRepository cluster flip: moved verbatim from the legacy
+// :core:data shim (same package/name). Ctor-level transforms only, plus the
+// one mechanical body edit they force:
+//  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's
+//    dataJvmModule constructs this single; the legacy DataModule bridges the
+//    remaining Hilt injectors via koin().get()).
+//  - `dagger.Lazy<T>` ctor params → kotlin `Lazy<T>` (the module has no
+//    dagger dependency; memoizing single-evaluation semantics preserved).
+//    dagger.Lazy's `.get()` call sites became `.value` (kotlin.Lazy's
+//    accessor) — the only body-level change, one-for-one mechanical.
 
 /**
  * Production adapter over [MediaRepository] (the write — including
  * PlayedStateSync fan-out and repository self-invalidation) and
  * [MediaDetailProvider] (the active-session rewrite). Both are
- * [dagger.Lazy] for the same reason [PlayedStateSyncImpl] takes them: the
+ * `Lazy` for the same reason [PlayedStateSyncImpl] takes them: the
  * provider and repository reference each other's graphs, and deferring
  * construction keeps this module out of any DI cycle.
  */
-@Singleton
-class UserDataMutatorImpl @Inject constructor(
-    private val mediaRepository: dagger.Lazy<MediaRepository>,
-    private val mediaDetailProvider: dagger.Lazy<MediaDetailProvider>,
+class UserDataMutatorImpl(
+    private val mediaRepository: Lazy<MediaRepository>,
+    private val mediaDetailProvider: Lazy<MediaDetailProvider>,
 ) : UserDataMutator {
 
     /**
@@ -54,7 +53,7 @@ class UserDataMutatorImpl @Inject constructor(
         containers: List<UserDataContainer>,
         seriesId: String?,
     ): Result<AppliedMutation> = userDataMutationMutex.withLock {
-        mediaRepository.get().toggleFavorite(itemId)
+        mediaRepository.value.toggleFavorite(itemId)
             .map { target -> AppliedMutation(itemId = itemId, favorite = target) }
             .onSuccess { applied -> applyOptimistically(itemId, applied, mode, containers, seriesId) }
     }
@@ -73,7 +72,7 @@ class UserDataMutatorImpl @Inject constructor(
                 // episode of the season for the active series session (the
                 // reducer adopts the new generation and recomputes smart-play)
                 // and drops the series catalogue for re-entry itself.
-                mediaDetailProvider.get().applyOptimisticSeasonRewrite(seriesId, seasonId) { episodes ->
+                mediaDetailProvider.value.applyOptimisticSeasonRewrite(seriesId, seasonId) { episodes ->
                     episodes.map(applied::patch)
                 }
             }
@@ -81,13 +80,13 @@ class UserDataMutatorImpl @Inject constructor(
 
     /** Repository call for the played direction, shared by [setPlayed] and [setSeasonPlayed]. */
     private suspend fun writePlayed(itemId: String, played: Boolean): Result<Unit> =
-        if (played) mediaRepository.get().markPlayed(itemId)
-        else mediaRepository.get().markUnplayed(itemId)
+        if (played) mediaRepository.value.markPlayed(itemId)
+        else mediaRepository.value.markUnplayed(itemId)
 
     /** Season variant of [writePlayed] — the server recurses into the season's children. */
     private suspend fun writeSeasonPlayed(seriesId: String, seasonId: String, played: Boolean): Result<Unit> =
-        if (played) mediaRepository.get().markSeasonPlayed(seasonId, seriesId)
-        else mediaRepository.get().markSeasonUnplayed(seasonId, seriesId)
+        if (played) mediaRepository.value.markSeasonPlayed(seasonId, seriesId)
+        else mediaRepository.value.markSeasonUnplayed(seasonId, seriesId)
 
     /**
      * Post-success optimistic pass, in the order callers used to hand-assemble:
@@ -108,7 +107,7 @@ class UserDataMutatorImpl @Inject constructor(
         // Keep the provider's replayed snapshot aligned with the caller's
         // optimistic state so leaving and immediately re-entering detail does
         // not flash the pre-mutation state (no-op without an active session).
-        mediaDetailProvider.get().applyOptimisticItemState(
+        mediaDetailProvider.value.applyOptimisticItemState(
             itemId = itemId,
             isFavorite = applied.favorite,
             isPlayed = applied.played,
@@ -117,6 +116,6 @@ class UserDataMutatorImpl @Inject constructor(
         // seasons/episodes catalogue serving stale watched state on the next
         // screen entry. The repository dropped its own caches around the write
         // already; this is the provider-owned catalogue only.
-        if (seriesId != null) mediaDetailProvider.get().invalidate(seriesId)
+        if (seriesId != null) mediaDetailProvider.value.invalidate(seriesId)
     }
 }

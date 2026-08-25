@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync.ComputeResult
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
@@ -8,35 +9,39 @@ import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.flow.first
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import android.util.Log
-import javax.inject.Inject
-import javax.inject.Singleton
 
-// C4p2 note: the [PlayedStateSync] interface moved to :shared:core:data
-// jvmShared; this impl stays in the legacy module — its constructor takes the
-// Android-coupled `OfflineModeManager`, so it is not Koin-constructible until
-// the OfflineModeManager/connectivity seam lands.
-
-@Singleton
-class PlayedStateSyncImpl @Inject constructor(
+// Phase X MediaRepository cluster flip: moved verbatim from the legacy
+// :core:data shim (same package/name). Ctor-level transforms only, plus the
+// one mechanical body edit they force:
+//  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's
+//    dataJvmModule constructs this single; the legacy DataModule bridges the
+//    remaining Hilt injectors via koin().get()).
+//  - `dagger.Lazy<T>` ctor params → kotlin `Lazy<T>` (the module has no
+//    dagger dependency; memoizing single-evaluation semantics preserved —
+//    the dataJvmModule def feeds `lazy { get() }`). The deferral is the
+//    MediaRepositoryImpl ↔ PlayedStateSync construction-cycle breaker.
+//    dagger.Lazy's `.get()` call sites became `.value` (kotlin.Lazy's
+//    accessor) — the only body-level change, one-for-one mechanical.
+//  - `android.util.Log` → the module's Log facade.
+class PlayedStateSyncImpl(
     private val apiClient: JellyfinApiClient,
     private val offlineRepository: OfflineRepository,
     private val playbackOutboxRepository: PlaybackOutboxRepository,
     private val offlineModeManager: OfflineModeManager,
-    private val mediaRepository: dagger.Lazy<MediaRepository>,
+    private val mediaRepository: Lazy<MediaRepository>,
     /**
      * Auto-delete-after-watch: reads the download-lifetime pref.
      * Injected (not constructed) and lazy-deferred so the download stack
      * cannot form a construction cycle with this module.
      */
-    private val downloadsStore: dagger.Lazy<DownloadsStore>,
+    private val downloadsStore: Lazy<DownloadsStore>,
     /**
      * Same concern as [downloadsStore]: looks up + deletes a finished download
      * row when a watched flip lands. Lazy for the same cycle-safety reason
      * (`DownloadRepositoryImpl` references only the [PlayedStateSync] companion
      * helper, never the impl, so this edge is acyclic — Lazy keeps it defensive).
      */
-    private val downloadRepository: dagger.Lazy<DownloadRepository>,
+    private val downloadRepository: Lazy<DownloadRepository>,
 ) : PlayedStateSync {
 
     override suspend fun flip(itemId: String, played: Boolean): Result<Unit> {
@@ -129,10 +134,10 @@ class PlayedStateSyncImpl @Inject constructor(
      */
     private suspend fun maybeAutoDeleteAfterWatch(itemId: String) {
         try {
-            if (!downloadsStore.get().downloads.first().autoDeleteAfterWatch) return
-            val download = downloadRepository.get().getDownloadByMediaItemId(itemId) ?: return
+            if (!downloadsStore.value.downloads.first().autoDeleteAfterWatch) return
+            val download = downloadRepository.value.getDownloadByMediaItemId(itemId) ?: return
             if (download.status != DownloadStatus.COMPLETED) return
-            runCatching { downloadRepository.get().deleteDownload(download.id) }
+            runCatching { downloadRepository.value.deleteDownload(download.id) }
                 .onFailure { Log.w(TAG, "Auto-delete-after-watch failed for $itemId", it) }
         } catch (e: Exception) {
             Log.w(TAG, "Auto-delete-after-watch lookup failed for $itemId", e)
@@ -143,7 +148,7 @@ class PlayedStateSyncImpl @Inject constructor(
         val offline = offlineRepository.getOfflineItem(itemId) ?: return null
         // Pull a fresh server view (bypass any cached detail so a stale cache
         // cannot mask a newer played/position state).
-        val serverItem = mediaRepository.get().getMediaDetail(itemId, force = true).getOrNull()?.item ?: return null
+        val serverItem = mediaRepository.value.getMediaDetail(itemId, force = true).getOrNull()?.item ?: return null
 
         // Favorite is a user preference shared across devices, so the server is
         // authoritative: if it disagrees with the local row, adopt the server's

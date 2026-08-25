@@ -52,12 +52,10 @@ fun androidDataModule(context: Context): Module {
         single<LocalStreamProbe> { MediaExtractorLocalStreamProbe() }
 
         // V3 downloads conveyor: the deferred MediaRepository edge of the
-        // Koin-owned DownloadRepositoryImpl. Resolves through the app
-        // composition root's Hilt interop on first invocation (the desktop
-        // counterpart in desktopDataModule throws — no definition there until
-        // Phase X). Deferred because MediaRepository stays Hilt-constructed
-        // and eagerly pulling it here would re-enter the Hilt graph during
-        // Koin single construction.
+        // Koin-owned DownloadRepositoryImpl. Since the Phase X MediaRepository
+        // cluster flip this resolves Koin's own MediaRepositoryImpl single
+        // (dataJvmModule) — the former Hilt-interop hop is gone, and the
+        // desktop counterpart in desktopDataModule is now real too.
         single<MediaRepositoryAccess> { MediaRepositoryAccess { get<MediaRepository>() } }
     }
 }

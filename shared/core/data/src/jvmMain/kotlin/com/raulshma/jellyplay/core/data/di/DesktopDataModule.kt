@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
 import com.raulshma.jellyplay.core.data.repository.DesktopLocalStreamProbe
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
 import com.raulshma.jellyplay.core.data.util.DesktopImageUrlProvider
@@ -36,11 +37,10 @@ import org.koin.dsl.module
  * download engine's seams — the appdata storage layout, the in-process
  * DesktopDownloadManager (the DownloadEnqueueCoordinator actual: enqueue =
  * transfer-loop kick, cancelWork = cooperative stop), no-op notification /
- * image-preload surfaces, the desktop DownloadIntake, the 6 h auto-download
- * loop, and the documented throwing MediaRepositoryAccess (no desktop
- * MediaRepository definition until Phase X — series downloads fail loudly;
- * single-item downloads work end-to-end, with episode series-seeding
- * degrading to the minimal parent-row fallback).
+ * image-preload surfaces, the desktop DownloadIntake, and the 6 h
+ * auto-download loop. Since the Phase X MediaRepository cluster flip the
+ * MediaRepositoryAccess actual is REAL (Koin owns MediaRepositoryImpl on
+ * desktop too) — series downloads and auto-download work end-to-end.
  */
 fun desktopDataModule(dataDir: Path): Module {
     // Side effect, deliberately before the module definition: common code
@@ -78,21 +78,14 @@ fun desktopDataModule(dataDir: Path): Module {
 
         single<OfflineImagePreloader> { OfflineImagePreloader { /* no shared preload cache on desktop */ } }
 
-        // Documented throwing-lazy: MediaRepository has no desktop definition
-        // until Phase X. Every use inside DownloadRepositoryImpl sits on the
-        // series paths: downloadSeries (fails loudly, returned as
-        // Result.failure) and episode series-seeding (the runCatching in
-        // saveOfflineMediaItem degrades it to the minimal parent-row fallback,
-        // so a desktop single-item EPISODE download still seeds its series and
-        // season rows — the same shape as a failed detail fetch on Android).
-        single<MediaRepositoryAccess> {
-            MediaRepositoryAccess {
-                error(
-                    "MediaRepository has no desktop definition until Phase X — " +
-                        "series downloads are unsupported on desktop"
-                )
-            }
-        }
+        // Phase X MediaRepository cluster flip: MediaRepository is now
+        // Koin-owned on desktop too (dataJvmModule's MediaRepositoryImpl
+        // single), so this accessor is real — desktop SERIES downloads and
+        // the auto-download scheduler went live with the flip. Previously the
+        // documented throwing-lazy (no desktop definition): downloadSeries
+        // failed loudly and episode series-seeding degraded to the minimal
+        // parent-row fallback.
+        single<MediaRepositoryAccess> { MediaRepositoryAccess { get<MediaRepository>() } }
 
         // The in-process download manager: construction is side-effect free;
         // the composition root resolves + start()s it after startKoin.

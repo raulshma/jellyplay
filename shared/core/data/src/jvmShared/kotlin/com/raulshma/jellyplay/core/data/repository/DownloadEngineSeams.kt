@@ -68,13 +68,12 @@ fun interface OfflineImagePreloader {
  * of the download repository. Every use of MediaRepository inside
  * [DownloadRepositoryImpl] lives on the series paths (`downloadSeries` and the
  * episode series-seeding in `saveOfflineMediaItem`); a single-item
- * `startDownload` never touches it. Resolving the repository lazily lets the
- * desktop register a throwing provider (no MediaRepository definition exists
- * there until Phase X) while movie/audio downloads work end-to-end.
+ * `startDownload` never touches it. Resolving the repository lazily breaks the
+ * DownloadRepository ↔ MediaRepository construction cycle.
  *
- * The Android def (androidDataModule) resolves through the app composition
- * root's Hilt interop; the desktop def (desktopDataModule) throws a documented
- * error on invocation.
+ * Since the Phase X cluster flip both platform defs (androidDataModule,
+ * desktopDataModule) resolve the Koin `MediaRepositoryImpl` single directly —
+ * desktop series downloads and auto-download are live.
  */
 fun interface MediaRepositoryAccess {
 

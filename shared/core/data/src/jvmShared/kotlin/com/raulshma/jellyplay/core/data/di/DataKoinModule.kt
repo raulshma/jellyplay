@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.network.ServerHealthMonitor
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.playback.AudioCachePolicyGuard
+import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
 import com.raulshma.jellyplay.core.data.playback.DownloadConcurrencyLimiter
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
@@ -23,19 +24,28 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.LyricsRepository
+import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
+import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
+import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
+import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
+import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl
 import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
+import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
+import com.raulshma.jellyplay.core.data.repository.PlayedStateSyncImpl
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepositoryImpl
@@ -49,8 +59,13 @@ import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.StoragePolicy
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
+import com.raulshma.jellyplay.core.data.repository.UserDataMutatorImpl
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepositoryImpl
+import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
+import com.raulshma.jellyplay.core.data.search.MediaSearchEngineImpl
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.session.HomeSession
@@ -71,6 +86,7 @@ import com.raulshma.jellyplay.core.data.util.SystemTimeSource
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.worker.DownloadTransferClient
 import com.raulshma.jellyplay.core.data.worker.OkHttpDownloadTransferClient
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
@@ -95,30 +111,42 @@ import org.koin.dsl.module
  * `koin().get()` bridges; the impl classes' `@Inject`/`@Singleton` annotations
  * were stripped at the move, so Hilt cannot build a parallel instance.
  *
- * Deliberately still Hilt-owned (no Koin definition): the MediaRepository
- * cluster — `MediaRepositoryImpl` plus its Hilt-coupled dependents
- * `PlayedStateSyncImpl` (the `dagger.Lazy<DownloadRepository>` edge, now
- * bridged back to the Koin single), `OfflineFirstItemResolverImpl`,
- * `UserDataMutatorImpl`, `MediaSearchEngineImpl`,
- * `UnifiedMediaDetailProviderImpl` and `OfflinePlaybackFacade`. The legacy
- * DataModule constructs these directly; they reach the Koin-owned
- * DownloadRepository below through `koin().get()` bridges. The V3 downloads
- * conveyor (C4-part-2 notes, fifth conveyor item) moved the download engine
- * itself here — `DownloadRepositoryImpl`, `DownloadDelegate` and the transfer
- * machinery — with its Android-only surfaces (WorkManager enqueue/cancel,
- * notification summary, Coil preloading, storage layout) behind the
- * `DownloadEnqueueCoordinator` / `DownloadProgressNotifier` /
+ * Phase X MediaRepository cluster flip: the last Hilt-owned data-layer
+ * cluster moved here — `MediaRepositoryImpl` (+ its PlayedStateSync /
+ * MediaRepositoryCacheInvalidation / LyricsRepository views),
+ * `PlayedStateSyncImpl`, `UserDataMutatorImpl`, `MediaSearchEngineImpl`,
+ * `UnifiedMediaDetailProviderImpl`, `OfflineFirstItemResolverImpl` and
+ * `OfflinePlaybackFacade` (see the definitions below). The legacy DataModule
+ * constructs nothing from the cluster anymore; its @Binds became
+ * `koin().get()` bridges, and the app's HiltInteropModule dropped the
+ * reverse-direction MediaRepository / UserDataMutator / MediaSearchEngine
+ * singles (Koin builds them natively now). `PlaybackSourceResolver` — the one
+ * remaining ctor dep of UnifiedMediaDetailProviderImpl that is not defined
+ * here — stays Hilt-owned in the legacy module (its impl uses
+ * `android.net.Uri`): the app composition root exposes it to Koin through a
+ * Hilt interop single on Android; it is deliberately latent on desktop (no
+ * definition, so MediaDetailProvider resolves only on Android — the desktop
+ * detail screens arrive with a later phase).
+ *
+ * The V3 downloads conveyor (C4-part-2 notes, fifth conveyor item) moved the
+ * download engine here — `DownloadRepositoryImpl`, `DownloadDelegate` and the
+ * transfer machinery — with its Android-only surfaces (WorkManager
+ * enqueue/cancel, notification summary, Coil preloading, storage layout)
+ * behind the `DownloadEnqueueCoordinator` / `DownloadProgressNotifier` /
  * `OfflineImagePreloader` / `DownloadStorageLayoutContract` seams, whose
  * Android actuals the app composition root registers
  * (androidDownloadSeamsModule) and desktop actuals live in
- * [desktopDataModule].
+ * [desktopDataModule]. With the cluster flip above, the desktop
+ * `MediaRepositoryAccess` actual became real — desktop series downloads and
+ * the auto-download scheduler are live.
  *
  * Interim DataModule direct-construction providers (types moved here but
- * still Hilt-built pending the flips above): `AudioLyricsManager`
- * (LyricsRepository view of MediaRepository) and `DefaultAudioQueueFacade`
- * (AudioQueueManager impl is the media3 AudioPlaybackManager). The
- * `OfflineSyncManager` provider flipped to the standard `koin().get()`
- * bridge with the V3 downloads conveyor — see its definition below.
+ * still Hilt-built pending further flips): `DefaultAudioQueueFacade` only —
+ * its AudioQueueManager ctor dep is the media3 AudioPlaybackManager, which
+ * stays Android/Hilt-owned. `AudioLyricsManager` left that list with this
+ * flip (its sole dep, the LyricsRepository view of MediaRepository, is
+ * defined below); the `OfflineSyncManager` provider flipped with the V3
+ * downloads conveyor.
  *
  * Platform-bound definitions (Context / dataDir-shaped picks) live in
  * [androidDataModule] / [desktopDataModule].
@@ -278,17 +306,16 @@ val dataJvmModule: Module = module {
     // pattern) — every ctor dep is now Koin-resolvable: the DAOs via
     // databaseDaosModule, the comparator/PlaybackRepository via this module,
     // OfflineModeManager via the platform data modules, the application scope
-    // via DatastoreQualifiers, MediaRepository through the app composition
-    // root's Hilt interop on Android, and — since the downloads conveyor
-    // moved the engine — DownloadRepository from this module's own single
-    // (the legacy DataModule provider bridges back to it via koin().get(),
-    // so Hilt injectors like feature:details' ResyncActions share the
-    // instance).
+    // via DatastoreQualifiers, and — since the downloads conveyor moved the
+    // engine — DownloadRepository from this module's own single (the legacy
+    // DataModule provider bridges back to it via koin().get(), so Hilt
+    // injectors like feature:details' ResyncActions share the instance).
     // `writer` reuses the DownloadRepository single: the interface extends
-    // OfflineDownloadWriter, so no separate definition is needed. Desktop:
-    // latent — MediaRepository has no desktop definition yet, but the
-    // single is lazy, so nothing resolves (or fails) until the downloads
-    // feature opens there.
+    // OfflineDownloadWriter, so no separate definition is needed. The former
+    // Hilt→Koin→Hilt edge (interop MediaRepository) died with the Phase X
+    // MediaRepository cluster flip below — the mediaRepository dep is now
+    // this module's own MediaRepositoryImpl single on both platforms, so the
+    // graph is pure Koin from OfflineSyncManager down.
     single {
         OfflineSyncManager(
             mediaRepository = get(),
@@ -302,6 +329,121 @@ val dataJvmModule: Module = module {
             appScope = get(DatastoreQualifiers.applicationScope),
         )
     }
+
+    // ── Phase X MediaRepository cluster flip ───────────────────────────────
+    // The last Hilt-owned data-layer cluster (C4 part 2's "deliberately
+    // Hilt-retained" list, unblocked by the downloads seams). The impls moved
+    // here verbatim (see each file's move note); definitions mirror the
+    // constructors. The former Hilt-interop singles for MediaRepository /
+    // UserDataMutator / MediaSearchEngine were deleted from the app module —
+    // Koin builds them natively now, on both platforms.
+
+    single {
+        PlayedStateSyncImpl(
+            apiClient = get(),
+            offlineRepository = get(),
+            playbackOutboxRepository = get(),
+            offlineModeManager = get(),
+            // Lazy breaks the MediaRepositoryImpl ↔ PlayedStateSync
+            // construction cycle (the downloadDelegate pattern):
+            // MediaRepositoryImpl ctor-injects PlayedStateSync eagerly, this
+            // side defers MediaRepository until first use. The download
+            // stack params stay Lazy too (defensive, per the ctor kdoc).
+            mediaRepository = lazy { get<MediaRepository>() },
+            downloadsStore = lazy { get<DownloadsStore>() },
+            downloadRepository = lazy { get<DownloadRepository>() },
+        )
+    }
+    single<PlayedStateSync> { get<PlayedStateSyncImpl>() }
+
+    single {
+        MediaRepositoryImpl(
+            apiClient = get(),
+            lrcLibApi = get(),
+            lyricsCacheDao = get(),
+            homeSectionCacheDao = get(),
+            networkMonitor = get(),
+            playedStateSync = get(),
+            episodeCatalogue = get(),
+            userDataRealtimeChannel = get(),
+            timeSource = get(),
+            homeSession = get(),
+            sessionCacheRegistry = get(),
+        )
+    }
+    single<MediaRepository> { get<MediaRepositoryImpl>() }
+    // Plan 08's module-internal cache-maintenance view (the former DataModule
+    // bindMediaRepositoryCacheInvalidation @Binds): same single, narrow seam.
+    single<MediaRepositoryCacheInvalidation> { get<MediaRepositoryImpl>() }
+    // The narrow ISP view the legacy DataModule provided by delegation
+    // (MediaRepository extends LyricsRepository) — same single, no second
+    // set of caches.
+    single<LyricsRepository> { get<MediaRepository>() }
+
+    single {
+        UserDataMutatorImpl(
+            // Both deferred: the provider and repository reference each
+            // other's graphs (UnifiedMediaDetailProviderImpl ctor-injects
+            // MediaRepository; UserDataMutator reaches MediaDetailProvider),
+            // and deferring construction keeps this module out of any cycle.
+            mediaRepository = lazy { get<MediaRepository>() },
+            mediaDetailProvider = lazy { get<MediaDetailProvider>() },
+        )
+    }
+    single<UserDataMutator> { get<UserDataMutatorImpl>() }
+
+    single {
+        MediaSearchEngineImpl(
+            mediaRepository = get(),
+            seerrRepository = get(),
+            searchHistoryRepository = get(),
+            serverIdentityStore = get(),
+            experimentalStore = get(),
+            offlineModeManager = get(),
+        )
+    }
+    single<MediaSearchEngine> { get<MediaSearchEngineImpl>() }
+
+    // PlaybackSourceResolver (the ctor dep marked "Android interop" below) is
+    // NOT defined here: its impl stays Hilt-owned in the legacy module
+    // (android.net.Uri). On Android the app composition root exposes it to
+    // Koin via a Hilt interop single; on desktop it is latent — nothing
+    // resolves MediaDetailProvider there until the detail screens arrive
+    // with a desktop PlaybackSourceResolver actual.
+    single {
+        UnifiedMediaDetailProviderImpl(
+            mediaRepository = get(),
+            cacheInvalidation = get(),
+            offlineRepository = get(),
+            downloadRepository = get(),
+            episodeCatalogue = get(),
+            playbackSourceResolver = get(),
+            offlineModeManager = get(),
+            localStreamProbe = get(),
+            appScope = get(DatastoreQualifiers.applicationScope),
+        )
+    }
+    single<MediaDetailProvider> { get<UnifiedMediaDetailProviderImpl>() }
+
+    single {
+        OfflineFirstItemResolverImpl(
+            offlineRepository = get(),
+            mediaRepository = get(),
+            offlineModeManager = get(),
+            imageUrlProvider = get(),
+        )
+    }
+    single<OfflineFirstItemResolver> { get<OfflineFirstItemResolverImpl>() }
+
+    // Concrete class (no interface): the legacy Hilt injector is
+    // PlaybackSourceResolverImpl, which rides the DataModule koin().get()
+    // bridge onto this single.
+    single { OfflinePlaybackFacade(get(), get()) }
+
+    // AudioLyricsManager left the DataModule interim direct-construction
+    // list with this flip: its sole ctor dep (the LyricsRepository view of
+    // MediaRepository) is Koin-owned above.
+    single { AudioLyricsManager(get()) }
 
     single { TimeSyncManager(get()) }
     single { SyncPlayController(get()) }

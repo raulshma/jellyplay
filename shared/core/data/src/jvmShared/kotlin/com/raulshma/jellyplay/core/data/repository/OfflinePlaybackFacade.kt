@@ -1,8 +1,12 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.MediaSegment
-import javax.inject.Inject
-import javax.inject.Singleton
+
+// Phase X MediaRepository cluster flip: moved verbatim from the legacy
+// :core:data shim (same package/name); `@Singleton` / `@Inject` stripped
+// (one framework per type — Koin's dataJvmModule constructs this single; the
+// legacy DataModule bridges the remaining Hilt injectors — notably
+// PlaybackSourceResolverImpl, whose ctor takes this facade — via koin().get()).
 
 /**
  * Single face the video player surfaces use for everything that touches the
@@ -33,8 +37,7 @@ import javax.inject.Singleton
  * re-surface the routing decision at every call site — concentrates
  * complexity, so the module is deep rather than shallow.
  */
-@Singleton
-class OfflinePlaybackFacade @Inject constructor(
+class OfflinePlaybackFacade(
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
 ) {

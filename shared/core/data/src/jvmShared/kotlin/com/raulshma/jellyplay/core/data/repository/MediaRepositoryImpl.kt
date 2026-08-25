@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
-import android.util.Log
+import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
@@ -63,11 +63,18 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class MediaRepositoryImpl @Inject constructor(
+// Phase X MediaRepository cluster flip: moved verbatim from the legacy
+// :core:data shim (same package/name). Ctor-level transforms only — method
+// bodies are byte-identical:
+//  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's
+//    dataJvmModule constructs this single; the legacy DataModule bridges the
+//    remaining Hilt injectors via koin().get()).
+//  - `android.util.Log` → the module's Log facade.
+//  - `internal suspend fun invalidateCaches` widened to public: its only
+//    production caller (UserDataSyncWorker) lives in the legacy module, and
+//    `internal` no longer crosses the module boundary after this move.
+class MediaRepositoryImpl(
     private val apiClient: JellyfinApiClient,
     private val lrcLibApi: LrcLibApi,
     private val lyricsCacheDao: LyricsCacheDao,
@@ -293,7 +300,7 @@ class MediaRepositoryImpl @Inject constructor(
     private suspend fun clearHomeSectionsForIdentity(serverId: String, userId: String) {
         runCatching { homeSectionCacheDao.clearForIdentity(serverId, userId) }
             .onFailure { e ->
-                android.util.Log.w(
+                Log.w(
                     "MediaRepo",
                     "Failed to clear home-section SWR cache for server=$serverId user=$userId",
                     e,
@@ -1209,12 +1216,14 @@ class MediaRepositoryImpl @Inject constructor(
 
     /**
      * Wholesale in-memory cache drop (plan 08: demoted off the public
-     * interface). The only production caller is the background user-data
-     * sync worker — the `SessionCacheRegistry` identity path reacts via its
-     * own cache registration + action instead (see the init block). Reads
-     * that need freshness use the per-query force parameters instead.
+     * [MediaRepository] interface, kept on the impl). The only production
+     * caller is the background user-data sync worker (legacy module — public,
+     * not internal, since the move made the two separate Gradle modules) —
+     * the `SessionCacheRegistry` identity path reacts via its own cache
+     * registration + action instead (see the init block). Reads that need
+     * freshness use the per-query force parameters instead.
      */
-    internal suspend fun invalidateCaches() {
+    suspend fun invalidateCaches() {
         invalidateDetailCache()
         homeSectionsCache.clear()
         // Also clear the secondary caches — they hold user-scoped data (library folders,

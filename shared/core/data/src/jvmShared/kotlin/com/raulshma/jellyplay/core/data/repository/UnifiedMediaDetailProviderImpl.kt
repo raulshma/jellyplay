@@ -5,7 +5,6 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.catalogue.sortedByPlaybackOrder
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.model.DetailAssets
 import com.raulshma.jellyplay.core.model.DetailCapabilities
 import com.raulshma.jellyplay.core.model.DetailContext
@@ -52,8 +51,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Production adapter for [MediaDetailProvider]. Owns the remote/local source
@@ -75,8 +72,21 @@ import javax.inject.Singleton
  * resolution. `NetworkStatus.Local` still permits the remote attempt because
  * `OfflineModeManager` keeps [OfflineMode.ONLINE] on a LAN.
  */
-@Singleton
-internal class UnifiedMediaDetailProviderImpl @Inject constructor(
+// Phase X MediaRepository cluster flip: moved verbatim from the legacy
+// :core:data shim (same package/name). Ctor-level transforms only — method
+// bodies are byte-identical:
+//  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's
+//    dataJvmModule constructs this single; the legacy DataModule bridges the
+//    remaining Hilt injectors via koin().get()).
+//  - the `@ApplicationScope` qualifier dropped from the scope param (the
+//    javax qualifier lives in the legacy Hilt graph; the dataJvmModule def
+//    passes the same Koin `named("applicationScope")` single every other
+//    moved scope-taking type receives).
+//  - `internal` widened to public: its Robolectric suite stayed in the
+//    legacy module (like the other cluster impls' suites), and `internal`
+//    no longer crosses the module boundary after this move
+//    (MultiConnectionDownloadStrategy precedent).
+class UnifiedMediaDetailProviderImpl(
     private val mediaRepository: MediaRepository,
     // Plan 08: the per-type "which caches does this detail affect" dispatch is
     // owned by the repository; this internal seam (same module) is how the
@@ -88,7 +98,7 @@ internal class UnifiedMediaDetailProviderImpl @Inject constructor(
     private val playbackSourceResolver: PlaybackSourceResolver,
     private val offlineModeManager: OfflineModeManager,
     private val localStreamProbe: LocalStreamProbe,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) : MediaDetailProvider {
 
     private val sessions = ConcurrentHashMap<String, Session>()

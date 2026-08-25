@@ -40,11 +40,12 @@ class UserDataMutatorTest {
 
     @Before
     fun setup() {
-        // dagger.Lazy is trivially faked — the impl only calls get().
-        val lazyRepo: dagger.Lazy<MediaRepository> = mockk()
-        every { lazyRepo.get() } returns mediaRepository
-        val lazyProvider: dagger.Lazy<MediaDetailProvider> = mockk()
-        every { lazyProvider.get() } returns mediaDetailProvider
+        // kotlin Lazy (dagger.Lazy at the time this suite was written — the
+        // Phase X cluster flip converted the ctor params) — mockk cannot mock
+        // kotlin.Lazy directly, so the real `lazy { }` wraps the mock; the
+        // impl only reads .value.
+        val lazyRepo: Lazy<MediaRepository> = lazy { mediaRepository }
+        val lazyProvider: Lazy<MediaDetailProvider> = lazy { mediaDetailProvider }
         mutator = UserDataMutatorImpl(lazyRepo, lazyProvider)
     }
 

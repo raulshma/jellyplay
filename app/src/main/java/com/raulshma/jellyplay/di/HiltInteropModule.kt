@@ -5,10 +5,8 @@ import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
-import com.raulshma.jellyplay.core.data.repository.UserDataMutator
-import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
@@ -23,14 +21,15 @@ import org.koin.dsl.module
 /**
  * Hilt→Koin interop bridge (reverse of the legacy shim's `koin().get()`).
  *
- * SearchViewModel (first V3 conveyor feature) is Koin-owned, but three of its
- * ctor deps — MediaRepository, UserDataMutator, MediaSearchEngine — are still
- * Hilt-constructed in the legacy DataModule pending the Phase X
- * MediaRepository flip. These lazy definitions pull them from the Hilt
- * singleton component on first resolution (the search screen opening), so
- * Hilt stays the sole constructor and there is no cold-start cost.
+ * SearchViewModel (first V3 conveyor feature) originally reached this way for
+ * three ctor deps — MediaRepository, UserDataMutator, MediaSearchEngine —
+ * that were still Hilt-constructed pending the Phase X MediaRepository flip.
+ * That flip landed: the whole cluster is Koin-owned (dataJvmModule) on both
+ * platforms, so those three singles left this module (one framework per
+ * type). The Koin-owned ViewModels (search/library/music/livetv/newsletter/
+ * insights) now resolve the Koin-owned impls directly.
  *
- * The music conveyor item (third) reaches the same way for its Hilt-owned
+ * The music conveyor item (third) still reaches this way for its Hilt-owned
  * deps: DownloadIntake / AudioQueueFacade for the ViewModels, plus the
  * UserMessageBus behind the shared module's [MusicMessageBus] seam
  * (HiltMusicMessageBus below).
@@ -42,15 +41,19 @@ import org.koin.dsl.module
  * download engine moved to :shared:core:data and Koin (dataJvmModule) owns
  * the DownloadRepository single directly — a Koin def bridging back to Hilt
  * would be a second framework for the same type, so it was removed (one
- * framework per type). The engine's MediaRepository edge now resolves through
- * the androidDataModule's MediaRepositoryAccess def below.
+ * framework per type). The engine's MediaRepository edge now resolves the
+ * Koin-owned single through the androidDataModule's MediaRepositoryAccess def.
+ *
+ * The Phase X cluster flip added the single NEW reverse bridge:
+ * PlaybackSourceResolver stays Hilt-owned (its impl uses android.net.Uri),
+ * but the Koin-owned UnifiedMediaDetailProviderImpl ctor-injects the
+ * interface — on Android this single is how that dep resolves. Latent on
+ * desktop (no definition there yet; MediaDetailProvider resolves only when
+ * a desktop PlaybackSourceResolver actual arrives).
  */
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface HiltInteropEntryPoint {
-    fun mediaRepository(): MediaRepository
-    fun userDataMutator(): UserDataMutator
-    fun mediaSearchEngine(): MediaSearchEngine
     fun downloadIntake(): DownloadIntake
     fun audioQueueFacade(): AudioQueueFacade
     fun userMessageBus(): UserMessageBus
@@ -59,6 +62,7 @@ interface HiltInteropEntryPoint {
     fun streamingSubtitleStore(): StreamingSubtitleStore
     fun playerEngineFactory(): PlayerEngineFactory
     fun fontProvider(): FontProvider
+    fun playbackSourceResolver(): PlaybackSourceResolver
 }
 
 private fun interopEntryPoint(application: Application): HiltInteropEntryPoint =
@@ -72,9 +76,6 @@ private class HiltMusicMessageBus(
 }
 
 fun hiltInteropModule(application: Application): Module = module {
-    single<MediaRepository> { interopEntryPoint(application).mediaRepository() }
-    single<UserDataMutator> { interopEntryPoint(application).userDataMutator() }
-    single<MediaSearchEngine> { interopEntryPoint(application).mediaSearchEngine() }
     single<DownloadIntake> { interopEntryPoint(application).downloadIntake() }
     single<AudioQueueFacade> { interopEntryPoint(application).audioQueueFacade() }
     single<MusicMessageBus> { HiltMusicMessageBus(interopEntryPoint(application).userMessageBus()) }
@@ -97,4 +98,11 @@ fun hiltInteropModule(application: Application): Module = module {
     // be touched at startKoin time.
     single<PlayerEngineFactory> { interopEntryPoint(application).playerEngineFactory() }
     single<FontProvider> { interopEntryPoint(application).fontProvider() }
+    // Phase X MediaRepository cluster flip: UnifiedMediaDetailProviderImpl
+    // (Koin, dataJvmModule) ctor-injects PlaybackSourceResolver, whose impl
+    // stays Hilt-owned in legacy :core:data (android.net.Uri). This single —
+    // resolved only when MediaDetailProvider is first requested, long after
+    // Hilt's component exists — is the Android answer; desktop stays latent
+    // until a desktop PlaybackSourceResolver actual lands.
+    single<PlaybackSourceResolver> { interopEntryPoint(application).playbackSourceResolver() }
 }
