@@ -1,4 +1,15 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+// NOTE: java.awt/java.io must be IMPORTED here rather than written as inline
+// FQNs — this project applies the JVM plugin, so the identifier `java`
+// collides with the `java { }` extension accessor in script scope and every
+// `java.<pkg>…` chain fails script compilation ("Unresolved reference 'awt'").
+import java.awt.Color
+import java.awt.Polygon
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
+import java.io.File
+import javax.imageio.ImageIO
 
 plugins {
     id("org.jetbrains.kotlin.jvm") // version inherited from the plugin classpath
@@ -209,6 +220,135 @@ configurations.all {
     }
 }
 
+// ── Wave 10A release engineering ────────────────────────────────────────────
+// packageVersion is release-driven: pass -PjellyplayVersion=x.y.z on the
+// release lane (CI desktop-package job does exactly that). jpackage demands
+// a strictly numeric major.minor.build triple — Windows MSI's ProductVersion
+// rejects non-numeric segments outright ("1.2.3-rc1" fails msiexec validation;
+// deb/dmg are more lenient but we keep one version grammar), so a
+// git-describe-style fallback would poison every package, not just msi.
+// Anything non-conforming passed explicitly FAILS here rather than silently
+// falling back — a packaged 0.1.0 shipped while believing it was 2.0.0 is the
+// failure mode this guard exists for.
+val jellyplayPackageVersion = run {
+    val requested = project.findProperty("jellyplayVersion")?.toString()
+    val numericTriple = Regex("""\d+\.\d+\.\d+""")
+    when {
+        requested == null || requested.isBlank() -> "0.1.0" // dev-machine fallback
+        numericTriple.matches(requested) -> requested
+        else -> throw GradleException(
+            "-PjellyplayVersion='$requested' is not a numeric x.y.z; jpackage/msi " +
+                "requires digits-only major.minor.build (e.g. -PjellyplayVersion=1.2.3)"
+        )
+    }
+}
+
+/** The module-local icon/asset directory the generator task below writes. */
+val packagingIconsDir = layout.projectDirectory.dir("packaging/icons")
+
+// Draws the placeholder brand assets into packaging/icons/ — committed as real
+// files so ordinary builds never need to re-run this task. One draw routine,
+// three containers:
+//  * JellyPlay-linux.png   flat 512×512 PNG (freedesktop icon spec minimum)
+//  * JellyPlay.ico         multi-size ICO; every entry embeds a PNG (Vista+)
+//  * JellyPlay.icns        ic07/ic08/ic09/ic10 PNG sub-images (128..1024)
+// All bytes are assembled by hand (javax.imageio PNG encoder + plain header
+// writing) — no binary blobs checked in unread, no external downloads.
+// Declared as a proper task class because a script-level doLast lambda that
+// touches top-level vals captures the whole script object, which Gradle's
+// configuration cache (enabled repo-wide) refuses to serialize.
+abstract class GeneratePackagingIconsTask : DefaultTask() {
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val outDir = outputDir.get().asFile.apply { mkdirs() }
+
+        fun draw(size: Int): BufferedImage =
+            BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB).also { img ->
+                val g = img.createGraphics()
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                // Background: Jellyfin-dark navy #000B25.
+                g.color = Color(0x00, 0x0B, 0x25)
+                g.fillRect(0, 0, size, size)
+                // Play triangle in Jellyfin blue #00A4DC.
+                val x = { f: Double -> (size * f).toInt() }
+                val triangle = Polygon(
+                    intArrayOf(x(0.38), x(0.38), x(0.78)),
+                    intArrayOf(x(0.26), x(0.74), x(0.50)),
+                    3,
+                )
+                g.color = Color(0x00, 0xA4, 0xDC)
+                g.fillPolygon(triangle)
+                g.dispose()
+            }
+
+        fun pngBytes(size: Int): ByteArray =
+            ByteArrayOutputStream().use { buffer ->
+                ImageIO.write(draw(size), "png", buffer)
+                buffer.toByteArray()
+            }
+
+        fun Int.toLittleEndianBytes(width: Int): ByteArray =
+            ByteArray(width) { i -> ((this shr (8 * i)) and 0xFF).toByte() }
+        fun Int.toBigEndianBytes(width: Int): ByteArray =
+            ByteArray(width) { i -> ((this shr (8 * (width - 1 - i))) and 0xFF).toByte() }
+
+        // ICO container: 6-byte ICONDIR + one 16-byte ICONDIRENTRY per image,
+        // then raw embedded PNGs. widthByte 0 encodes 256 per the spec.
+        fun writeIco(file: File) {
+            val sizes = listOf(16, 24, 32, 48, 64, 128, 256)
+            val images = sizes.map { it to pngBytes(it) }
+            val data = ByteArrayOutputStream().use { out ->
+                out.write(byteArrayOf(0, 0)); out.write(byteArrayOf(1, 0)) // reserved=0, type=icon
+                out.write(sizes.size.toLittleEndianBytes(2))
+                var offset = 6 + 16 * sizes.size
+                for ((size, png) in images) {
+                    out.write(if (size >= 256) 0 else size)
+                    out.write(if (size >= 256) 0 else size)
+                    out.write(byteArrayOf(0, 0))                        // palette count, reserved
+                    out.write(1.toLittleEndianBytes(2))                 // color planes
+                    out.write(32.toLittleEndianBytes(2))                // bits per pixel
+                    out.write(png.size.toLittleEndianBytes(4))          // bytes of resource data
+                    out.write(offset.toLittleEndianBytes(4))
+                    offset += png.size
+                }
+                images.forEach { (_, png) -> out.write(png) }
+                out.toByteArray()
+            }
+            file.writeBytes(data)
+        }
+
+        // ICNS container: 'icns' magic + total length (big-endian), then
+        // entries of [type, entryLength(incl. 8-byte entry header), png].
+        fun writeIcns(file: File) {
+            val entries = listOf("ic07" to 128, "ic08" to 256, "ic09" to 512, "ic10" to 1024)
+                .map { (type, size) -> type to pngBytes(size) }
+            val totalLength = 8 + entries.sumOf { (_, png) -> 8 + png.size }
+            val data = ByteArrayOutputStream().use { out ->
+                out.write("icns".toByteArray(Charsets.US_ASCII))
+                out.write(totalLength.toBigEndianBytes(4))
+                entries.forEach { (type, png) ->
+                    out.write(type.toByteArray(Charsets.US_ASCII))
+                    out.write((8 + png.size).toBigEndianBytes(4))
+                    out.write(png)
+                }
+                out.toByteArray()
+            }
+            file.writeBytes(data)
+        }
+
+        ImageIO.write(draw(512), "png", outDir.resolve("JellyPlay-linux.png"))
+        writeIco(outDir.resolve("JellyPlay.ico"))
+        writeIcns(outDir.resolve("JellyPlay.icns"))
+    }
+}
+
+val generatePackagingIcons = tasks.register<GeneratePackagingIconsTask>("generatePackagingIcons") {
+    outputDir.set(packagingIconsDir)
+}
+
 compose.desktop {
     application {
         mainClass = "com.raulshma.jellyplay.desktop.MainKt"
@@ -218,14 +358,36 @@ compose.desktop {
             isEnabled = false
         }
         nativeDistributions {
-            targetFormats(TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Dmg)
+            targetFormats(TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.Dmg)
             packageName = "JellyPlay"
-            packageVersion = "1.0.0"
+            packageVersion = jellyplayPackageVersion
             description = "JellyPlay — Jellyfin client for desktop"
             vendor = "JellyPlay"
+
+            // includeAllModules WON over explicit modules(...) enumeration:
+            // this graph pulls ~25 shared feature/core modules plus reflection
+            // edges JNA cannot declare statically (com.sun.jna native loading),
+            // coil's ServiceLoader-registered OkHttp network fetcher and
+            // kotlinx.serialization polymorphic lookups — jlink auto-analysis
+            // misses those classes of wiring, and each missed hint costs a full
+            // package + boot-smoke cycle to discover. Merging everything into
+            // the single unified module keeps ServiceLoader and reflection
+            // intact. Measured cost (wave 10A, Windows, version 0.1.0):
+            // app image 276 MB, MSI installer 162,621,992 bytes (~155 MB) —
+            // accepted for v1.
+            includeAllModules = true
+
+            linux {
+                iconFile.set(packagingIconsDir.file("JellyPlay-linux.png"))
+            }
             windows {
                 menuGroup = packageName
                 upgradeUuid = "6ce4b9a2-5f4e-4b0f-9dc3-2f4b8a9b1c7d"
+                iconFile.set(packagingIconsDir.file("JellyPlay.ico"))
+            }
+            macOS {
+                iconFile.set(packagingIconsDir.file("JellyPlay.icns"))
+                bundleID = "com.raulshma.jellyplay.desktop"
             }
         }
     }
