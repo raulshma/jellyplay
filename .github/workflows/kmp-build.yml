@@ -64,6 +64,7 @@ jobs:
           :shared:core:data:jvmJar
           :shared:core:data:compileAndroidMain
           :shared:core:ui:jvmJar
+          :shared:core:ui:compileKotlinWasmJs
           :shared:core:ui:compileAndroidMain
           :shared:core:player-contract:jvmJar
           :shared:core:player-contract:compileKotlinWasmJs

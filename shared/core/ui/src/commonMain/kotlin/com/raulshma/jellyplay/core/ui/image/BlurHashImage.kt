@@ -7,6 +7,8 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import com.raulshma.jellyplay.core.ui.components.AccessOrderLruMap
+import com.raulshma.jellyplay.core.ui.components.withUiLock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -15,26 +17,27 @@ internal object BlurHashCache {
 
     private class Entry(val bitmap: ImageBitmap, val bytes: Int)
 
+    // Access-order LRU (reads promote to MRU, eldest evicted first) with a
+    // byte budget; both ride the cross-platform `AccessOrderLruMap` +
+    // `withUiLock` replacements for the JVM-only LinkedHashMap(accessOrder=true)
+    // + synchronized idiom this cache used before the wasmJs target.
     private val lock = Any()
-    private val cache = LinkedHashMap<String, Entry>(8, 0.75f, /* accessOrder = */ true)
+    private val cache = AccessOrderLruMap<String, Entry>()
     private var totalBytes = 0
 
-    fun get(key: String): ImageBitmap? = synchronized(lock) {
+    fun get(key: String): ImageBitmap? = withUiLock(lock) {
         cache[key]?.bitmap
     }
 
     fun put(key: String, bitmap: ImageBitmap, width: Int, height: Int) {
         val bytes = width * height * 4
-        synchronized(lock) {
-            cache[key] = Entry(bitmap, bytes)
+        withUiLock(lock) {
+            cache.put(key, Entry(bitmap, bytes))
             totalBytes += bytes
             while (totalBytes > MAX_BYTES) {
-                val eldest = cache.entries.iterator()
-                if (!eldest.hasNext()) break
-                val (k, v) = eldest.next()
-                eldest.remove()
-                totalBytes -= v.bytes
-                if (k == key) break
+                val eldest = cache.removeEldestOrNull() ?: break
+                totalBytes -= eldest.second.bytes
+                if (eldest.first == key) break
             }
         }
     }

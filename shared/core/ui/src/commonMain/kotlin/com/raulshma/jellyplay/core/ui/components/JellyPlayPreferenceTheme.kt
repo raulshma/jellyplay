@@ -14,8 +14,8 @@ import androidx.compose.ui.Modifier
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.model.MainPreferences
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.wallNowMillis
 import kotlinx.coroutines.delay
-import java.util.Calendar
 
 /**
  * Derives the effective dark-theme flag from [preferences] honouring the user's
@@ -37,7 +37,7 @@ fun rememberPreferenceDarkTheme(preferences: MainPreferences): Boolean {
         if (preferences.themeMode == ThemeMode.SCHEDULED) {
             while (true) {
                 delay(60_000L)
-                themeClockTick = System.currentTimeMillis()
+                themeClockTick = wallNowMillis()
             }
         }
     }
@@ -52,10 +52,9 @@ fun rememberPreferenceDarkTheme(preferences: MainPreferences): Boolean {
                     // on the 60s tick above, so an hour-boundary crossing flips
                     // the theme without a relaunch. Base the hour on the tick's
                     // captured time so the read is both tracked and used (and
-                    // non-scheduled modes don't recompute every tick).
-                    val hour = Calendar.getInstance()
-                        .apply { if (themeClockTick > 0) timeInMillis = themeClockTick }
-                        .get(Calendar.HOUR_OF_DAY)
+                    // non-scheduled modes don't recompute every tick). The null
+                    // branch reproduces Calendar's "now" default pre-seam.
+                    val hour = hourOfDayAt(if (themeClockTick > 0) themeClockTick else null)
                     val start = preferences.scheduledThemeStartHour
                     val end = preferences.scheduledThemeEndHour
                     if (start > end) {

@@ -1,17 +1,7 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import java.text.SimpleDateFormat
-import java.time.LocalDateTime
-import java.time.OffsetDateTime
-import java.time.ZoneId
-import java.util.Date
-import java.util.Locale
+import com.raulshma.jellyplay.core.model.wallNowMillis
 
 private const val TICKS_PER_SECOND = 10_000_000L
 private const val TICKS_PER_MINUTE = TICKS_PER_SECOND * 60
@@ -31,10 +21,10 @@ fun formatDurationFromTicks(ticks: Long): String {
 
 fun formatRemainingTimeFromTicks(runTimeTicks: Long, playbackPositionTicks: Long): String? {
     if (runTimeTicks <= 0) return null
-    
+
     val remainingTicks = runTimeTicks - playbackPositionTicks
     if (remainingTicks <= 0) return null
-    
+
     return formatDurationFromTicks(remainingTicks)
 }
 
@@ -65,28 +55,19 @@ fun formatDurationFromMinutes(totalMinutes: Long): String {
 }
 
 fun formatDurationApproxSeconds(seconds: Long): String = when {
-    seconds >= 3600 -> String.format("%.1fh", seconds / 3600.0)
+    seconds >= 3600 -> "${formatOneDecimal(seconds / 3600.0)}h"
     seconds >= 60 -> "${seconds / 60}m"
     else -> "${seconds}s"
 }
 
+/**
+ * A self-refreshing wall-clock display string, realigned to minute
+ * boundaries. Pre-wasm the body lived here atop `SimpleDateFormat` /
+ * `System.currentTimeMillis`; it moved verbatim into the jvmShared actual so
+ * android/desktop are unchanged, while wasm reads the browser's local time.
+ */
 @Composable
-fun rememberWallClockTimeString(): String {
-    val is24Hour = rememberIs24HourFormat()
-    val pattern = if (is24Hour) "HH:mm" else "h:mm a"
-    val formatter = remember(pattern) { SimpleDateFormat(pattern, Locale.getDefault()) }
-    var time by remember { mutableStateOf(formatter.format(Date())) }
-    LaunchedEffect(Unit) {
-        val initialDelay = 60_000 - (System.currentTimeMillis() % 60_000)
-        kotlinx.coroutines.delay(initialDelay)
-        time = formatter.format(Date())
-        while (true) {
-            kotlinx.coroutines.delay(60_000)
-            time = formatter.format(Date())
-        }
-    }
-    return time
-}
+expect fun rememberWallClockTimeString(): String
 
 /**
  * Formats an ISO-8601 timestamp (with or without offset, e.g.
@@ -102,8 +83,8 @@ fun rememberWallClockTimeString(): String {
  */
 fun formatRelativeTime(isoTimestamp: String?): String? {
     if (isoTimestamp.isNullOrBlank()) return null
-    val epochMillis = parseIsoToEpochMillis(isoTimestamp) ?: return null
-    val deltaMillis = System.currentTimeMillis() - epochMillis
+    val epochMillis = parseIsoTimestampToEpochMillis(isoTimestamp) ?: return null
+    val deltaMillis = wallNowMillis() - epochMillis
     if (deltaMillis < 60_000L) return "just now"
     val seconds = deltaMillis / 1000
     val minutes = seconds / 60
@@ -115,18 +96,6 @@ fun formatRelativeTime(isoTimestamp: String?): String? {
         minutes >= 1 -> "${minutes}m ago"
         else -> "just now"
     }
-}
-
-/** Parses the three ISO forms the offline/playback code produces into epoch-millis. */
-private fun parseIsoToEpochMillis(value: String): Long? {
-    // Offset-aware first (OfflineRepositoryImpl stamps OffsetDateTime.now().toString()).
-    runCatching {
-        return OffsetDateTime.parse(value).toInstant().toEpochMilli()
-    }
-    // Fall back to bare LocalDateTime (Jellyfin SDK mapper form) in system zone.
-    return runCatching {
-        LocalDateTime.parse(value).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-    }.getOrNull()
 }
 
 /**
