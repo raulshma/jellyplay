@@ -14,13 +14,9 @@ import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.notification.R
 import com.raulshma.jellyplay.core.notification.channel.NotificationChannelManager
 import com.raulshma.jellyplay.core.notification.receiver.NotificationActionReceiver
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class NotificationDispatcher @Inject constructor(
-    @ApplicationContext private val context: Context,
+class NotificationDispatcher(
+    private val context: Context,
     private val channelManager: NotificationChannelManager,
 ) {
 

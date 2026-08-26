@@ -1,7 +1,5 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.hilt)
 }
 
 android {
@@ -23,19 +21,19 @@ android {
 }
 
 dependencies {
-    implementation(project(":core:model"))
+    implementation(project(":shared:core:model"))
     implementation(project(":core:data"))
     // core:database intentionally NOT declared — the notification module
     // consumes SeenMediaRepository from core:data and must not reach into
     // Room DAOs/entities directly (schema changes in core:database shouldn't
     // ripple into sibling modules). core:datastore still declared because
     // the scheduler/worker read UserPreferencesStore.notificationPreferences.
-    implementation(project(":core:datastore"))
+    implementation(project(":shared:core:datastore"))
 
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.android.compiler)
-    implementation(libs.hilt.work)
-    ksp(libs.hilt.compiler)
+    // Wave 8A: Hilt left this module — Koin owns the singletons
+    // (androidNotificationModule) and NotificationWorkerFactory builds
+    // NewMediaCheckWorker for WorkManager.
+    implementation(libs.koin.core)
 
     implementation(libs.work.runtime.ktx)
     implementation(libs.kotlinx.serialization.json)
