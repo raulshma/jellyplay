@@ -3,11 +3,17 @@ package com.raulshma.jellyplay.web
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeViewport
+import coil3.ImageLoader
+import coil3.compose.setSingletonImageLoaderFactory
+import coil3.network.ktor3.KtorNetworkFetcherFactory
+import coil3.request.crossfade
 import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
 import com.raulshma.jellyplay.core.datastore.di.webDatastoreModule
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.network.di.networkWasmModule
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.js.Js
 import kotlinx.browser.document
 import org.koin.core.context.startKoin
 
@@ -21,6 +27,11 @@ import org.koin.core.context.startKoin
  * (auth/library/playback over ONE shared [AtomicSessionState]). No screen
  * drives them yet — the shell only OBSERVES the session state the auth
  * client publishes, proving the wiring is live end-to-end.
+ *
+ * W.4: boots the Coil image singleton (see main() below). Wired against the
+ * repo-wide coil 3.4.0 pin — the last release line whose wasmJs klibs are
+ * built with a Kotlin 2.3 compiler (see the version note in
+ * gradle/libs.versions.toml).
  *
  * `ComposeViewport` is the current CMP web entry (it replaced the deprecated
  * `CanvasBasedWindow`); it renders into the document body, taking the full
@@ -40,15 +51,46 @@ fun main() {
     }
 
     ComposeViewport(document.body!!) {
-        // Phase W.4 (Coil wasm image engine) is BLOCKED at the pinned coil
-        // 3.5.0: its wasmJs klibs are built with Kotlin 2.4.0 ABI, which this
-        // repo's Kotlin 2.3.21 KLIB loader cannot read (klibs resolve but are
-        // skipped, leaving coil3 unresolved). When it unblocks (coil 3.4.0
-        // pin or Kotlin 2.4 toolchain), the wiring here is a
-        // setSingletonImageLoaderFactory { context -> ImageLoader.Builder(
-        // context).components { add(KtorNetworkFetcherFactory(httpClient =
-        // HttpClient(Js))) }.crossfade(true).build() } — see the dependency
-        // note in this module's build.gradle.kts.
+        // Phase W.4 image engine: one app-wide Coil ImageLoader. This MUST be
+        // the first thing in the composition root — setSingletonImageLoader-
+        // Factory delegates to SingletonImageLoader.setSafe, which throws if
+        // the singleton was already resolved by an earlier AsyncImage call.
+        //
+        // The ktor3 fetcher is registered EXPLICITLY instead of relying on
+        // the desktop precedent (coil-network-okhttp resolving its fetcher
+        // purely via ServiceLoader): in coil-core 3.4.0 sources,
+        // ServiceLoaderComponentRegistry's jvmCommon actual is the only one
+        // reading java.util.ServiceLoader; the nonJvmCommon (js/wasm)
+        // actual starts EMPTY with a manual register() API fed solely by
+        // @EagerInitialization module init hooks such as coil-network-
+        // ktor3's internal `initHook`. Whether Kotlin/Wasm ever fires that
+        // eager hook without a direct reference into the ktor3 package can't
+        // be proven without a real-browser pass, so explicit registration is
+        // what keeps the pipeline deterministic. If the hook fires too,
+        // builder-added components win — RealImageLoader consults them
+        // before its service-loader targets.
+        //
+        // RUNTIME HONESTY (mirrors HtmlVideoEngine): this slice proves the
+        // pipeline COMPILES under wasmJs only (:apps:web:compileKotlinWasmJs;
+        // karma/browser testing is disabled by policy in this repo). No
+        // browser has yet rendered a real AsyncImage through this loader —
+        // a later real-server browser pass must verify actual artwork
+        // fetches work end-to-end (engine selection, CORS against the
+        // Jellyfin host, cache behaviour).
+        setSingletonImageLoaderFactory { context ->
+            ImageLoader.Builder(context)
+                .components {
+                    // KtorNetworkFetcherFactory is a public FACTORY FUNCTION
+                    // in coil-network-ktor3 returning a NetworkFetcher.Factory
+                    // component (not a class) — safe to add explicitly, unlike
+                    // desktop's okhttp flavor whose factory is internal.
+                    // The lazy () -> HttpClient overload keeps engine
+                    // construction out of composition until the first request.
+                    add(KtorNetworkFetcherFactory(httpClient = { HttpClient(Js) }))
+                }
+                .crossfade(true)
+                .build()
+        }
 
         JellyPlayTheme(darkTheme = isSystemInDarkTheme(), dynamicColor = false) {
             // The one shared session state the three wasm API clients are
