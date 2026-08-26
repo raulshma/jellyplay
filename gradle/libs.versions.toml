@@ -38,7 +38,16 @@ jellyfinSdk = "1.8.12"
 media3 = "1.10.1"
 media3FfmpegDecoder = "1.9.0+1"
 androidDesugarJdkLibs = "2.1.5"
-coil = "3.5.0"
+# Coil pinned BELOW latest deliberately: 3.4.0 is the last line whose KMP
+# artifacts were built with a Kotlin 2.3 compiler (Central's
+# coil-core-3.4.0-kotlin-tooling-metadata.json reports buildPluginVersion
+# 2.3.10), so its wasmJs klibs load under this repo's 2.3.21 toolchain.
+# 3.5.0 rebuilt them with Kotlin 2.4.0; those klibs are silently SKIPPED by
+# the 2.3.21 klib loader and every coil3 symbol stays unresolved under
+# :apps:web:compileKotlinWasmJs (JVM/Android class files are unaffected by
+# either side — the pin is only about the wasm target). Revisit on any
+# future Kotlin 2.4 toolchain move.
+coil = "3.4.0"
 multiplatformMarkdownRenderer = "0.43.0"
 room = "2.8.4"
 datastore = "1.2.1"
@@ -195,9 +204,11 @@ coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp"
 # artifact is named coil-network-ktor3 — upstream split the old
 # coil-network-ktor (last published 3.0.0-alpha08) into -ktor2/-ktor3
 # flavors by Ktor major before 3.0.0 stable. Same coil version pin; the
-# ktor3 flavor matches our Ktor 3.5.x stack. Still unused: coil 3.5.0's
-# wasmJs klibs are Kotlin-2.4.0-ABI, unreadable by our 2.3.21 KLIB loader —
-# see the Phase W.4 blocker note in apps/web/build.gradle.kts.
+# ktor3 flavor matches our Ktor 3.5.x stack (its own metadata declares
+# ktor-client-core 3.1.0; Gradle resolves to the repo-wide 3.5.2). Wired
+# into :apps:web's wasmJsMain image pipeline — the only consumer — since
+# the 3.4.0 pin made its wasmJs klib loadable again (see the version note
+# above).
 coil-network-ktor3 = { group = "io.coil-kt.coil3", name = "coil-network-ktor3", version.ref = "coil" }
 
 # Markdown renderer (GitHub-flavoured; used for release notes & plugin changelogs)
