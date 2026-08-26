@@ -17,6 +17,10 @@ import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
  * for the VOD player. Extracted from [VideoPlayerViewModel], continuing the
  * collaborator pattern established by [SubtitleManager] / [PlayerCastController].
  *
+ * (Wave 8C: renamed from `MediaSessionController` — the commonMain
+ * [MediaSessionController] seam interface took the old name; the ViewModel
+ * constructs this class through [AndroidMediaSessionFactory].)
+ *
  * Three entry points cover every prior call site:
  *  - [createForItem]: builds a session around a [ForwardingPlayer] that pins the
  *    caller-supplied title/artwork at the MediaSession layer. ExoPlayer's HLS
@@ -45,12 +49,12 @@ import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
  * longer holds a `videoMediaSession` field.
  */
 @OptIn(UnstableApi::class)
-internal class MediaSessionController(
+internal class AndroidMediaSessionController(
     private val context: Context,
     private val sessionManager: PlaybackSessionManager,
     private val getPlayer: () -> Player?,
     private val getImageUrl: (itemId: String, maxWidth: Int) -> String,
-) {
+) : MediaSessionController {
 
     private var session: MediaSession? = null
 
@@ -71,7 +75,7 @@ internal class MediaSessionController(
      * restrictions the service then cannot be restarted (see
      * [PlaybackSessionManager.startPlaybackService]).
      */
-    fun createForItem(itemId: String, title: String, subtitle: String) {
+    override fun createForItem(itemId: String, title: String, subtitle: String) {
         val player = getPlayer() ?: return
 
         releaseSupersededSession()
@@ -107,17 +111,18 @@ internal class MediaSessionController(
      * detach path omits it — that session's notification falls back to the app
      * launcher intent (browse UI), preserving prior behaviour.
      */
-    fun createForPlayer(player: Player, sessionId: String, videoItemId: String? = null) {
+    override fun createForPlayer(player: Any?, sessionId: String, videoItemId: String?) {
+        val platformPlayer = player as? Player ?: return
         releaseSupersededSession()
 
-        val builder = MediaLibrarySession.Builder(context, player, NO_OP_LIBRARY_CALLBACK)
+        val builder = MediaLibrarySession.Builder(context, platformPlayer, NO_OP_LIBRARY_CALLBACK)
             .setId(sessionId)
         videoItemId?.let { builder.setSessionActivity(buildPlayerSessionActivity(it)) }
         activate(builder.build())
     }
 
     /** Tear down the active session. Idempotent. */
-    fun release() {
+    override fun release() {
         val current = session ?: return
         if (sessionManager.currentSession === current) {
             sessionManager.clearSession(current)

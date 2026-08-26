@@ -91,7 +91,9 @@ class SubtitleTesterViewModel(
      */
     fun installUserFont(uri: android.net.Uri) {
         viewModelScope.launch {
-            val installed = fontProvider.installUserFont(uri) ?: return@launch
+            // Wave 8C: the player-video FontProvider seam stringifies the
+            // SAF uri at the API boundary.
+            val installed = fontProvider.installUserFont(uri.toString()) ?: return@launch
             _uiState.update {
                 SubtitleTesterStateReducer.applyInstalledFont(
                     it,

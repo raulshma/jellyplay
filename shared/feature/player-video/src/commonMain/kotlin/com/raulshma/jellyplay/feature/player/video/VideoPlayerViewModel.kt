@@ -1,28 +1,11 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import android.content.Context
-import android.graphics.Bitmap
-import android.net.Uri
-import android.util.Log
-import android.util.Rational
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.common.MimeTypes
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.session.MediaSession
-import com.raulshma.jellyplay.core.data.playback.PlayerAudioLifecycle
-import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
-import com.raulshma.jellyplay.core.data.playback.PipAction
-import com.raulshma.jellyplay.core.data.playback.PipController
-import com.raulshma.jellyplay.core.data.playback.PipTransport
+import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
-import com.raulshma.jellyplay.core.data.cast.CastManager
-import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -55,7 +38,6 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.isMusicTrack
-import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import org.jetbrains.compose.resources.getString
@@ -77,8 +59,6 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 
-import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
-import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.Channel
@@ -179,7 +159,13 @@ private data class SegmentProjection(
 }
 
 class VideoPlayerViewModel(
-    private val context: Context,
+    /**
+     * Aggregate platform seam (wave 8C): replaces the former
+     * `android.content.Context` slot — carries the low-RAM gate, subtitle
+     * content-URI IO, the offline-media probe and the factory methods for the
+     * androidMain trickplay/cast-controller/audio-lifecycle collaborators.
+     */
+    private val platform: VideoPlayerPlatform,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val subtitleProviderRepository: com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository,
@@ -217,11 +203,18 @@ class VideoPlayerViewModel(
     private val downloadsStore: com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore,
     private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
     private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
-    private val sessionManager: PlaybackSessionManager,
+    /**
+     * Media-session factory seam (wave 8C): replaces the former legacy
+     * `PlaybackSessionManager` slot — that type is now captured inside the
+     * androidMain factory alongside the Context the controller needs.
+     */
+    private val mediaSessionFactory: VideoMediaSessionFactory,
     // Public: the screen's cast UI (route button, disconnect handler) needs the
-    // manager directly; every playback-side use stays private above.
+    // manager directly; every playback-side use stays private above. Wave 8C:
+    // typed as the commonMain seam interface — the androidMain screen reaches
+    // the full legacy surface through the `androidCastManager` extension.
     val castManager: CastManager,
-    private val jellyfinRemotePlayCastStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy,
+    private val jellyfinRemotePlayCastStrategy: JellyfinRemotePlayCastStrategy,
     private val syncPlayManager: SyncPlayManager,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
     private val networkMonitor: NetworkMonitor,
@@ -230,7 +223,7 @@ class VideoPlayerViewModel(
     val pipController: PipController,
     val videoMiniPlayerState: VideoMiniPlayerState,
     private val sleepTimerManager: SleepTimerManager,
-    private val userMessageBus: UserMessageBus,
+    private val userMessageBus: PlayerVideoMessageBus,
     private val playerEngineFactory: com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory,
     // Public for the screen: the zoom-safe Compose overlay consumes the same
     // singleton (LRU typeface cache + startup prewarm) instead of building a
@@ -307,7 +300,6 @@ class VideoPlayerViewModel(
     val resumeReminder: kotlinx.coroutines.flow.SharedFlow<Long> = _resumeReminder
 
     private val playerSessionManager = PlayerSessionManager(
-        context = context,
         scope = scope,
         mediaRepository = mediaRepository,
         playbackRepository = playbackRepository,
@@ -320,6 +312,7 @@ class VideoPlayerViewModel(
         pipController = pipController,
         playbackSourceResolver = playbackSourceResolver,
         streamingSubtitleStore = streamingSubtitleStore,
+        offlineMediaProbe = platform.offlineMediaProbe,
     )
 
     // ── Engine-event orchestration ──────────────────────────────────────────
@@ -367,15 +360,9 @@ class VideoPlayerViewModel(
     // per-item video-effects persist gate) and clears it in
     // releaseInternalsVmPart at exactly its old slot.
 
-    private val trickplayManager = TrickplayManager(
-        playbackRepository = playbackRepository,
-        lowRamDevice = run {
-            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-            am?.let { it.isLowRamDevice || it.memoryClass <= 256 } ?: false
-        },
-    )
+    private val trickplayManager = platform.createTrickplayController(playbackRepository)
     internal val subtitles = SubtitleManager(
-        context = context,
+        contentGateway = platform,
         playbackRepository = playbackRepository,
         mediaRepository = mediaRepository,
         subtitleProviderRepository = subtitleProviderRepository,
@@ -400,8 +387,7 @@ class VideoPlayerViewModel(
         getEngine = { playerSessionManager.engine },
         positionFlow = currentPositionMs,
     ).also { it.start() }
-    internal val cast = PlayerCastController(
-        castManager = castManager,
+    internal val cast = platform.createCastController(
         playbackRepository = playbackRepository,
         adaptiveBitrateManager = adaptiveBitrateManager,
         syncPlayCastStore = syncPlayCastStore,
@@ -415,10 +401,8 @@ class VideoPlayerViewModel(
         getItemId = { playerSessionManager.sessionState.value.currentItemId },
         getMediaStreams = { _uiState.value.media.mediaStreams },
     )
-    private val mediaSessionController = MediaSessionController(
-        context = context,
-        sessionManager = sessionManager,
-        getPlayer = { playerSessionManager.engine?.underlyingPlayer as? Player },
+    private val mediaSessionController = mediaSessionFactory.create(
+        getPlayer = { playerSessionManager.engine?.underlyingPlayer },
         getImageUrl = { itemId, maxWidth -> playbackRepository.getImageUrl(itemId = itemId, maxWidth = maxWidth) },
     )
 
@@ -429,20 +413,8 @@ class VideoPlayerViewModel(
      * teardown stay correct. [onRegain] applies the `videoSkipBackOnResumeMs`
      * resume-skip the VOD path needs (live has no equivalent).
      */
-    private val playerAudioLifecycle = PlayerAudioLifecycle(
-        context = context,
-        control = {
-            playerSessionManager.engine?.let { engine ->
-                PlayerAudioLifecycle.PlaybackControl(
-                    isPlaying = { engine.isPlaying.value },
-                    volume = { engine.volume },
-                    pause = { engine.pause() },
-                    play = { engine.play() },
-                    setVolume = { engine.setVolume(it) },
-                    setMuted = { engine.setMuted(it) },
-                )
-            }
-        },
+    private val playerAudioLifecycle = platform.createAudioLifecycle(
+        getEngine = { playerSessionManager.engine },
         isMuted = { _uiState.value.isMuted },
         onRegain = {
             val skipMs = aggregateStore.aggregate.value.videoPlayer.videoSkipBackOnResumeMs
@@ -937,11 +909,7 @@ class VideoPlayerViewModel(
         if (_uiState.value.duration < MIN_DURATION_FOR_SMART_DELETE_MS) return
         launch {
             if (!offlinePlaybackFacade.deleteDownload(itemId)) return@launch
-            userMessageBus.info(
-                com.raulshma.jellyplay.core.ui.feedback.uiTextOf(
-                    com.raulshma.jellyplay.core.ui.R.string.msg_smart_download_deleted,
-                ),
-            )
+            userMessageBus.info(PlayerVideoMessage.SmartDownloadDeleted)
         }
     }
 
@@ -1762,27 +1730,31 @@ class VideoPlayerViewModel(
     }
 
     /**
-     * Pushes the server-reported video stream dimensions into [PipController] as
-     * a `Rational` so the PiP window matches the content (16:9, 4:3, 21:9, …)
-     * instead of always letterboxing to 16:9. Falls back to `null` (→ 16:9 in
-     * the Activity) when the stream or its dimensions are unknown.
+     * Pushes the server-reported video stream dimensions into [PipController]
+     * as a `width to height` pair so the PiP window matches the content
+     * (16:9, 4:3, 21:9, …) instead of always letterboxing to 16:9 (the
+     * androidMain adapter maps the pair onto android.util.Rational). Falls
+     * back to `null` (→ 16:9 in the Activity) when the stream or its
+     * dimensions are unknown.
      */
     private fun updatePipAspectRatio(streams: List<com.raulshma.jellyplay.core.model.MediaStream>) {
         val video = streams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
         val w = video?.width
         val h = video?.height
         pipController.setPipAspectRatio(
-            if (w != null && h != null && h != 0) Rational(w, h) else null
+            if (w != null && h != null && h != 0) w to h else null
         )
     }
 
     /**
      * Forwards the video surface's window bounds to [PipController] as the PiP
      * source-rect hint. Thin wrapper so the screen does not reach through the
-     * ViewModel into the controller.
+     * ViewModel into the controller. (Wave 8C seam: four window-bounds ints —
+     * the androidMain `updatePipSourceRect(Rect?)` extension keeps the
+     * screen's android.graphics.Rect call sites unchanged.)
      */
-    fun updatePipSourceRect(rect: android.graphics.Rect?) {
-        pipController.updatePipSourceRect(rect)
+    fun updatePipSourceRect(left: Int, top: Int, right: Int, bottom: Int) {
+        pipController.updatePipSourceRect(left, top, right, bottom)
     }
 
     /**
@@ -1804,16 +1776,18 @@ class VideoPlayerViewModel(
     }
 
     /**
-     * Installs a user-picked font (from a SAF `OpenDocument` uri) via
+     * Installs a user-picked font (from a SAF `OpenDocument` pick) via
      * [FontProvider.installUserFont], then updates + persists the resulting
      * family name/path on [SubtitleStyle] using the same pattern as
      * [setSubtitleStyle]: update in-memory state, push to the engine via
      * [updateConfigWithUiState], and persist to [preferencesStore].
      *
      * No-op if the copy/parse fails (FontProvider returns null), leaving the
-     * bundled fallback font in place.
+     * bundled fallback font in place. (Wave 8C seam: the uri stringifies at
+     * the API boundary — the androidMain `installUserFont(Uri)` extension
+     * keeps the screen's SAF call sites unchanged.)
      */
-    fun installUserFont(uri: android.net.Uri) {
+    fun installUserFont(uri: String) {
         launch {
             val installed = fontProvider.installUserFont(uri) ?: return@launch
             val newStyle = _uiState.value.subtitleStyle.copy(
@@ -2483,7 +2457,6 @@ class VideoPlayerViewModel(
      * cast player and the local engine. Real cross-controller flow — the cast
      * slice's own transport lives on [cast].
      */
-    @OptIn(UnstableApi::class)
     fun detachForBackgroundCast() {
         castManager.markBackgroundCasting(true)
         castManager.softRelease()
@@ -2494,7 +2467,6 @@ class VideoPlayerViewModel(
         }
     }
 
-    @OptIn(UnstableApi::class)
     fun reattachFromBackgroundCast() {
         if (!castManager.isBackgroundCasting) return
         castManager.markBackgroundCasting(false)
@@ -2503,8 +2475,9 @@ class VideoPlayerViewModel(
         if (engine != null) {
             val sessionState = playerSessionManager.sessionState.value
             val itemId = sessionState.currentItemId ?: return
-            val player = engine.underlyingPlayer as? Player ?: return
-            mediaSessionController.createForPlayer(player, "jellyplay_video_$itemId", itemId)
+            // The `as? Player ?: return` guard the body used to run moved into
+            // the androidMain controller impl (createForPlayer narrows + no-ops).
+            mediaSessionController.createForPlayer(engine.underlyingPlayer, "jellyplay_video_$itemId", itemId)
         }
     }
 
@@ -2540,7 +2513,12 @@ class VideoPlayerViewModel(
         launch { videoPlayerStore.setVideoAutoplayNext(enabled) }
     }
 
-    suspend fun getTrickplayThumbnail(positionMs: Long): Bitmap? {
+    /**
+     * Trickplay thumbnail as an opaque platform handle (wave 8C seam): the
+     * androidMain `getTrickplayThumbnail` ViewModel extension narrows it back
+     * to android.graphics.Bitmap for the screen.
+     */
+    suspend fun loadTrickplayThumbnail(positionMs: Long): Any? {
         val state = _uiState.value
         if (!state.uiPrefs.trickplayEnabled && !state.uiPrefs.trickplayOnSeekGesture) return null
         return trickplayManager.getThumbnail(positionMs)
@@ -2553,7 +2531,6 @@ class VideoPlayerViewModel(
     // with the split; the session calls MediaSessionController.release in its
     // own teardown half).
 
-    @OptIn(UnstableApi::class)
     private fun createVideoMediaSession(
         itemId: String,
         title: String,

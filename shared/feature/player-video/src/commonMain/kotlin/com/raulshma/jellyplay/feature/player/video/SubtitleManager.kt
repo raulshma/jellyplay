@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import android.content.Context
-import android.net.Uri
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
@@ -14,7 +12,6 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderIds
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleQuery
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
-import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.feature.player.video.state.SubtitleState
 import kotlinx.coroutines.CoroutineScope
@@ -58,15 +55,20 @@ import kotlinx.coroutines.withContext
  * access here is a narrow [getMediaStreams] read).
  *
  * File reads (`queryFileSizeBytes` / `readAndEncode`) live here because they
- * only need [context]; they are private to this class.
+ * only need the [SubtitleContentGateway] seam; they are private to this
+ * class. (Wave 8C: moved to commonMain — SAF Uri params are strings at the
+ * API boundary; the androidMain `addLocalSubtitle`/`uploadSubtitle` Uri
+ * overloads keep the screen's call sites unchanged.)
  */
 internal class SubtitleManager(
-    private val context: Context,
+    /** Content-URI IO seam (wave 8C): androidMain impl reads via ContentResolver. */
+    private val contentGateway: SubtitleContentGateway,
     private val playbackRepository: PlaybackRepository,
     private val mediaRepository: MediaRepository,
     private val subtitleProviderRepository: SubtitleProviderRepository,
     private val streamingSubtitleStore: StreamingSubtitleStore,
-    private val userMessageBus: UserMessageBus,
+    /** User-feedback seam (wave 8C): androidMain bridge posts to the legacy UserMessageBus. */
+    private val userMessageBus: PlayerVideoMessageBus,
     private val scope: CoroutineScope,
     private val addExternalSubtitle: (SubtitleSource) -> Unit,
     private val getMediaStreams: () -> List<MediaStream>,
@@ -260,7 +262,7 @@ internal class SubtitleManager(
         }
     }
 
-    fun addLocalSubtitle(uri: Uri, fileName: String) {
+    fun addLocalSubtitle(uri: String, fileName: String) {
         val ext = fileName.substringAfterLast('.', "").lowercase()
         val codec = when (ext) {
             "srt" -> "srt"
@@ -538,7 +540,7 @@ internal class SubtitleManager(
                             // local durable copy). Failure here is NOT fatal — the
                             // durable on-device copy still backs the side-load and
                             // survives replay via the streaming-subtitle store.
-                            val base64 = android.util.Base64.encodeToString(file.bytes, android.util.Base64.NO_WRAP)
+                            val base64 = java.util.Base64.getEncoder().encodeToString(file.bytes)
                             val uploadResult = playbackRepository.uploadSubtitle(
                                 itemId = itemId,
                                 data = base64,
@@ -642,7 +644,7 @@ internal class SubtitleManager(
      * file — and its ~1.33× Base64 expansion — are loaded into memory. This
      * matters on low-RAM TV devices where a stray large pick could OOM.
      */
-    fun uploadSubtitle(uri: Uri, fileName: String, language: String?, isForced: Boolean, isHearingImpaired: Boolean) {
+    fun uploadSubtitle(uri: String, fileName: String, language: String?, isForced: Boolean, isHearingImpaired: Boolean) {
         val itemId = getCurrentItemId() ?: return
         _state.update { it.copy(isUploadingSubtitle = true) }
         scope.launch {
@@ -663,7 +665,7 @@ internal class SubtitleManager(
                         if (bytes.isEmpty()) {
                             throw java.io.IOException("Selected subtitle file is empty")
                         }
-                        android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                        java.util.Base64.getEncoder().encodeToString(bytes)
                     }
                 }
             }.mapCatching { base64 ->
@@ -705,24 +707,14 @@ internal class SubtitleManager(
     private val SUBTITLE_APPEAR_POLL_DELAY_MS = 1500L
 
     /** Returns the byte size of [uri] via OpenableColumns.SIZE, or 0 if unknown. */
-    private fun queryFileSizeBytes(uri: Uri): Long {
-        val cursor = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)
-            ?: return 0
-        return cursor.use {
-            if (!it.moveToFirst()) return 0
-            val idx = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
-            if (idx < 0) 0 else it.getLong(idx)
-        }
-    }
+    private fun queryFileSizeBytes(uri: String): Long = contentGateway.queryFileSizeBytes(uri)
 
     /** Reads [uri] fully and Base64-encodes it (NO_WRAP). Throws on read failure. */
-    private fun readAndEncode(uri: Uri): String {
+    private fun readAndEncode(uri: String): String {
         val bytes = readBytes(uri)
-        return android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        return java.util.Base64.getEncoder().encodeToString(bytes)
     }
 
     /** Reads [uri] fully into a byte array. Throws on read failure. */
-    private fun readBytes(uri: Uri): ByteArray =
-        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: throw java.io.IOException("Cannot open input stream for selected subtitle")
+    private fun readBytes(uri: String): ByteArray = contentGateway.readBytes(uri)
 }

@@ -74,7 +74,7 @@ import com.raulshma.jellyplay.core.model.SubtitleRenderDefaults
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.subtitle.AssSupport
-import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
 import io.github.peerless2012.ass.media.AssHandler
@@ -117,7 +117,7 @@ class ExoPlayerEngine(
     private val context: Context,
     private val streamingOkHttpClient: OkHttpClient,
     bandwidthMeter: DefaultBandwidthMeter? = null,
-    private val fontProvider: FontProvider,
+    private val fontProvider: AndroidFontProvider,
     // Nullable + defaulted so non-Hilt constructions (contract tests) compile
     // unchanged; a null cache simply disables byte caching (passthrough).
     private val videoStreamCache: VideoStreamCache? = null,

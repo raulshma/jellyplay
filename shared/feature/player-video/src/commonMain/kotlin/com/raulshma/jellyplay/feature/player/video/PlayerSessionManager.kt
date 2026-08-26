@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import android.content.Context
-import android.net.Uri
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -78,7 +76,6 @@ data class PlayerSessionState(
 )
 
 class PlayerSessionManager(
-    private val context: Context,
     private val scope: CoroutineScope,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
@@ -86,11 +83,18 @@ class PlayerSessionManager(
     private val offlineRepository: OfflineRepository,
     private val aggregateStore: VideoPlayerAggregateStore,
     private val playerLifecycleManager: PlayerLifecycleManager,
-    private val pipController: com.raulshma.jellyplay.core.data.playback.PipController,
+    /** commonMain PiP seam (wave 8C): androidMain adapter wraps the legacy singleton. */
+    private val pipController: PipController,
     private val adaptiveBitrateManager: com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager,
     private val playerEngineFactory: PlayerEngineFactory,
     private val playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver,
     private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
+    /**
+     * Offline-media probe seam (wave 8C): duration extraction
+     * (MediaMetadataRetriever on Android) + container→MIME mapping — the
+     * androidMain actual owns the platform bits, the desktop actual no-ops.
+     */
+    private val offlineMediaProbe: OfflineMediaProbe,
 ) {
     private val _sessionState = MutableStateFlow(PlayerSessionState())
     val sessionState: StateFlow<PlayerSessionState> = _sessionState.asStateFlow()
@@ -274,20 +278,14 @@ class PlayerSessionManager(
             seasonNumber = offlineItem?.seasonNumber,
             episodeNumber = offlineItem?.episodeNumber,
         )
-        val url = Uri.fromFile(localFile).toString()
+        val url = fileUriString(localFile)
 
         var runTimeTicks = offlineItem?.runTimeTicks
         if (runTimeTicks == null || runTimeTicks <= 0L) {
+            // Wave 8C seam: the MediaMetadataRetriever extraction moved behind
+            // OfflineMediaProbe (androidMain actual runs it verbatim).
             val extractedDurationMs = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    val retriever = android.media.MediaMetadataRetriever()
-                    retriever.setDataSource(localFile.absolutePath)
-                    val durationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
-                    retriever.release()
-                    durationStr?.toLongOrNull()
-                } catch (e: Exception) {
-                    null
-                }
+                offlineMediaProbe.extractDurationMs(localFile.absolutePath)
             }
             if (extractedDurationMs != null && extractedDurationMs > 0) {
                 runTimeTicks = extractedDurationMs * 10_000
@@ -305,9 +303,7 @@ class PlayerSessionManager(
             ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 com.raulshma.jellyplay.feature.player.video.engine.ContainerSniffer.sniff(localFile)
             }
-        val mimeHint = containerHint?.let {
-            com.raulshma.jellyplay.feature.player.video.engine.ContainerMimeMapper.mapToMime(it)
-        }
+        val mimeHint = containerHint?.let { offlineMediaProbe.mapContainerToMime(it) }
 
         _sessionState.update {
             it.copy(
@@ -477,7 +473,7 @@ class PlayerSessionManager(
             if (!file.exists()) continue
             addExternalSubtitle(
                 SubtitleSource(
-                    url = Uri.fromFile(file).toString(),
+                    url = fileUriString(file),
                     label = entry.language ?: entry.fileName,
                     language = entry.language,
                     mimeType = null,
@@ -859,7 +855,7 @@ class PlayerSessionManager(
             if (!file.exists()) continue
             addExternalSubtitle(
                 SubtitleSource(
-                    url = Uri.fromFile(file).toString(),
+                    url = fileUriString(file),
                     label = entry.displayTitle ?: entry.title ?: entry.language ?: "Subtitle ${entry.index}",
                     language = entry.language,
                     mimeType = null,
@@ -886,3 +882,13 @@ class PlayerSessionManager(
     }
 }
 
+/**
+ * `file` URI string for a local path (wave 8C seam transform): replaces
+ * `android.net.Uri.fromFile(file).toString()`. `java.nio.file.Path.toUri()`
+ * emits the identical `file:///<abs-path>` form with matching percent-
+ * encoding on Android (Linux filesystem, UTF-8 — spaces and non-ASCII are
+ * percent-encoded exactly like `Uri.fromFile`) while being commonMain-legal
+ * for the android+jvm targets. (On a Windows JVM the encoder leaves
+ * non-ASCII raw — a platform with no playback path; see FileUriStringTest.)
+ */
+internal fun fileUriString(file: java.io.File): String = file.toPath().toUri().toString()

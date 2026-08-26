@@ -14,7 +14,11 @@ import java.io.File
 
 /**
  * Resolves and parses the active external subtitle track into a [TimedCue] list
- * for the subtitle-sync preview. Covers side-loaded text subs (user pick,
+ * for the subtitle-sync preview.
+ *
+ * (Wave 8C: renamed from `SubtitlePreviewRepository` — the commonMain
+ * [SubtitlePreviewRepository] seam interface took the old name; this class is
+ * its Android actual.) Covers side-loaded text subs (user pick,
  * provider download, Jellyfin/OpenSubtitles/Wyzie delivery) and the text subs
  * the app side-loads alongside transcoded playback.
  *
@@ -29,10 +33,10 @@ import java.io.File
  * evicted entry is simply re-parsed on next access (it's network/file-backed).
  */
 @UnstableApi
-class SubtitlePreviewRepository(
+class AndroidSubtitlePreviewRepository(
     private val context: Context,
     private val okHttpClient: OkHttpClient,
-) {
+) : SubtitlePreviewRepository {
     // Access-order LRU map: reads (get) re-order to MRU, and the factory's
     // removeEldestEntry evicts the LRU once the cap is exceeded. All access is
     // confined to withContext(Dispatchers.IO) / clearCache, matching the prior
@@ -48,7 +52,7 @@ class SubtitlePreviewRepository(
      * @param headers optional auth headers (e.g. Jellyfin `X-Emby-Token`) needed
      *  for HTTP(s) sources served by the media server.
      */
-    suspend fun loadCues(source: SubtitleSource, headers: Map<String, String> = emptyMap()): List<TimedCue>? =
+    override suspend fun loadCues(source: SubtitleSource, headers: Map<String, String>): List<TimedCue>? =
         withContext(Dispatchers.IO) {
             cache[source.url]?.let { return@withContext it }
             val mime = mimeFor(source) ?: run {
@@ -69,7 +73,7 @@ class SubtitlePreviewRepository(
         }
 
     /** Clears the memoized cue list for a source (call when the active track changes). */
-    fun clearCache(url: String? = null) {
+    override fun clearCache(url: String?) {
         if (url == null) cache.clear() else cache.remove(url)
     }
 

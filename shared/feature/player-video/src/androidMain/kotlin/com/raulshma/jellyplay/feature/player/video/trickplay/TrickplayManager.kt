@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap
 class TrickplayManager(
     private val playbackRepository: PlaybackRepository,
     lowRamDevice: Boolean = false,
-) {
+) : TrickplayController {
 
     private val maxThumbnailCacheBytes = if (lowRamDevice) LOW_RAM_THUMBNAIL_BYTES else MAX_THUMBNAIL_CACHE_BYTES
     private val maxSpriteSheetCacheBytes = if (lowRamDevice) LOW_RAM_SPRITE_SHEET_BYTES else MAX_SPRITE_SHEET_CACHE_BYTES
@@ -76,7 +76,7 @@ class TrickplayManager(
     private var localCacheDir: File? = null
     private var persistDir: File? = null
 
-    fun initialize(itemId: String, trickplayInfo: TrickplayInfo) {
+    override fun initialize(itemId: String, trickplayInfo: TrickplayInfo) {
         clear()
         this.itemId = itemId
         this.info = trickplayInfo
@@ -85,7 +85,7 @@ class TrickplayManager(
         prefetchInitial(trickplayInfo)
     }
 
-    fun initializeWithCache(itemId: String, trickplayInfo: TrickplayInfo, cacheDir: File) {
+    override fun initializeWithCache(itemId: String, trickplayInfo: TrickplayInfo, cacheDir: File) {
         clear()
         this.itemId = itemId
         this.info = trickplayInfo
@@ -94,7 +94,7 @@ class TrickplayManager(
         prefetchInitial(trickplayInfo)
     }
 
-    fun initializeLocal(itemId: String, trickplayInfo: TrickplayInfo, cacheDir: File) {
+    override fun initializeLocal(itemId: String, trickplayInfo: TrickplayInfo, cacheDir: File) {
         clear()
         this.itemId = itemId
         this.info = trickplayInfo
@@ -109,7 +109,7 @@ class TrickplayManager(
         }
     }
 
-    suspend fun getThumbnail(positionMs: Long): Bitmap? {
+    override suspend fun getThumbnail(positionMs: Long): Bitmap? {
         val currentInfo = info ?: return null
         val id = itemId ?: return null
 
@@ -368,7 +368,7 @@ class TrickplayManager(
         return true
     }
 
-    fun clear() {
+    override fun clear() {
         preloadJob?.cancel()
         preloadJob = null
 

@@ -909,7 +909,7 @@ fun VideoPlayerScreen(
             onSeekForward = doSeekForward,
             onSeekTo = doSeekTo,
             onVolumeChange = { vol -> viewModel.cast.setCastVolume(vol) },
-            onDisconnect = { viewModel.cast.onCastDisconnected(); viewModel.cast.disconnect(context) },
+            onDisconnect = { viewModel.cast.onCastDisconnected(); viewModel.androidCast.disconnect(context) },
             onSelectAudioTrack = { viewModel.selectAudioTrack(it) },
             onSelectSubtitleTrack = { viewModel.selectSubtitleTrack(it) },
             onPlayEpisode = { epId -> viewModel.initialize(epId, null, 0L) },
@@ -1295,7 +1295,7 @@ fun VideoPlayerScreen(
                                 MpvSubtitleOverlay(
                                     cue = liveCue,
                                     style = uiState.subtitleStyle,
-                                    fontProvider = viewModel.fontProvider,
+                                    fontProvider = viewModel.androidFontProvider,
                                 )
                             }
                         }
@@ -1820,7 +1820,7 @@ fun VideoPlayerScreen(
                 onLockClick = onLockClick,
                 onControlsFocusChange = onControlsFocusChange,
                 onOverflowMenuChange = onOverflowMenuChange,
-                castManager = viewModel.castManager,
+                castManager = viewModel.androidCastManager,
                 modifier = Modifier.fillMaxSize(),
             )
             } // end PlayerDarkTheme (control bars)
@@ -1944,7 +1944,7 @@ fun VideoPlayerScreen(
     LaunchedEffect(Unit) {
         kotlinx.coroutines.coroutineScope {
             launch {
-                viewModel.cast.castSessionEvents.collect { event ->
+                viewModel.androidCast.castSessionEvents.collect { event ->
                     when (event) {
                         is CastSessionEvent.Connected -> viewModel.cast.castToDevice()
                         is CastSessionEvent.Disconnected -> viewModel.cast.onCastDisconnected()

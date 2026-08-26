@@ -3,9 +3,26 @@ package com.raulshma.jellyplay.feature.player.video.di
 import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
+import com.raulshma.jellyplay.feature.player.video.ActivePlayerController
+import com.raulshma.jellyplay.feature.player.video.AndroidActivePlayerController
+import com.raulshma.jellyplay.feature.player.video.AndroidCastManager
+import com.raulshma.jellyplay.feature.player.video.AndroidJellyfinRemotePlayCastStrategy
+import com.raulshma.jellyplay.feature.player.video.AndroidMediaSessionFactory
+import com.raulshma.jellyplay.feature.player.video.AndroidPipController
+import com.raulshma.jellyplay.feature.player.video.AndroidUserMessageBridge
+import com.raulshma.jellyplay.feature.player.video.AndroidVideoPlayerPlatform
+import com.raulshma.jellyplay.feature.player.video.CastManager
+import com.raulshma.jellyplay.feature.player.video.JellyfinRemotePlayCastStrategy
+import com.raulshma.jellyplay.feature.player.video.PipController
+import com.raulshma.jellyplay.feature.player.video.PlayerVideoMessageBus
+import com.raulshma.jellyplay.feature.player.video.VideoMediaSessionFactory
+import com.raulshma.jellyplay.feature.player.video.VideoPlayerPlatform
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel
+import com.raulshma.jellyplay.feature.player.video.engine.AndroidPlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache
+import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
+import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidSubtitlePreviewRepository
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitlePreviewRepository
 import org.koin.compose.viewmodel.dsl.viewModel
@@ -34,42 +51,52 @@ import org.koin.dsl.module
  *    disk, fonts or media3 until first resolution, preserving the
  *    JellyPlayApplication cold-start prewarm contract.
  *
- * The ViewModel's six remaining legacy-Hilt ctor deps (PlaybackSessionManager,
+ * The ViewModel's six former legacy-Hilt ctor deps (PlaybackSessionManager,
  * CastManager, JellyfinRemotePlayCastStrategy, ActivePlayerController,
- * PipController, UserMessageBus) resolve through the app-side
- * hiltInteropModule lazy singles (the documented shared-androidMain →
- * legacy-:core:data edge; dies at Phase X). Every repository and DataStore
- * dep is Koin-native (dataJvmModule / datastoreCommonModule /
+ * PipController, UserMessageBus) are wave-8C seam slots now: the legacy
+ * singletons still resolve through the app-side hiltInteropModule lazy
+ * singles (the documented shared-androidMain → legacy-:core:data edge; dies
+ * at Phase X) but are wrapped by the Android* adapters registered below —
+ * the commonMain ViewModel never sees a legacy type. Every repository and
+ * DataStore dep is Koin-native (dataJvmModule / datastoreCommonModule /
  * androidDataModule).
  */
 fun androidPlayerVideoModule(context: Context): Module = module {
-    single {
-        FontProvider(
-            context = context,
-        )
-    }
+    // Wave 8C: the FontProvider/SubtitlePreviewRepository/PlayerEngineFactory
+    // singles now register their commonMain seam interface (the ViewModel's
+    // ctor slots are interface-typed) plus the concrete Android class for the
+    // androidMain call sites (engines, overlay) — one instance, two keys.
+    single { AndroidFontProvider(context) }
+    single<FontProvider> { get<AndroidFontProvider>() }
     single {
         VideoStreamCache(
             context = context,
         )
     }
+    single { AndroidSubtitlePreviewRepository(context = context, okHttpClient = get()) }
+    single<SubtitlePreviewRepository> { get<AndroidSubtitlePreviewRepository>() }
     single {
-        SubtitlePreviewRepository(
-            context = context,
-            okHttpClient = get(),
-        )
-    }
-    single {
-        PlayerEngineFactory(
+        AndroidPlayerEngineFactory(
             context = context,
             streamingOkHttpClient = get(NetworkQualifiers.streamingHttpClient),
             fontProvider = get(),
             videoStreamCache = get(),
         )
     }
+    single<PlayerEngineFactory> { get<AndroidPlayerEngineFactory>() }
+    // Wave 8C seam adapters around the Hilt-interop legacy singletons. All
+    // lazy: the underlying hiltInteropModule singles defer Hilt entry access
+    // until first resolution.
+    single<VideoPlayerPlatform> { AndroidVideoPlayerPlatform(context, get()) }
+    single<VideoMediaSessionFactory> { AndroidMediaSessionFactory(context, get()) }
+    single<CastManager> { AndroidCastManager(get()) }
+    single<JellyfinRemotePlayCastStrategy> { AndroidJellyfinRemotePlayCastStrategy(get()) }
+    single<ActivePlayerController> { AndroidActivePlayerController(get()) }
+    single<PipController> { AndroidPipController(get()) }
+    single<PlayerVideoMessageBus> { AndroidUserMessageBridge(get()) }
     viewModel { params ->
         VideoPlayerViewModel(
-            context = context,
+            platform = get(),
             mediaRepository = get(),
             playbackRepository = get(),
             subtitleProviderRepository = get(),
@@ -93,7 +120,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
             downloadsStore = get(),
             appearanceStore = get(),
             networkOfflineStore = get(),
-            sessionManager = get(),
+            mediaSessionFactory = get(),
             castManager = get(),
             jellyfinRemotePlayCastStrategy = get(),
             syncPlayManager = get(),

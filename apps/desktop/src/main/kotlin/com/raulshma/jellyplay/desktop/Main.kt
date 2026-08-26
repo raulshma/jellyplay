@@ -59,6 +59,7 @@ import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
 import com.raulshma.jellyplay.feature.auth.di.authModule
 import com.raulshma.jellyplay.feature.auth.di.desktopAuthPlatformModule
 import com.raulshma.jellyplay.feature.player.live.di.playerLiveModule
+import com.raulshma.jellyplay.feature.player.video.di.desktopPlayerVideoModule
 
 
 import org.koin.core.context.startKoin
@@ -79,6 +80,14 @@ fun main() {
             dataJvmModule,
             desktopDataModule(paths.dataDirNio),
             desktopPlayerModule,
+            // Video player (wave 8C): the VideoPlayerViewModel is commonMain
+            // and live-resolvable here — every seam binds to a jvmMain no-op.
+            // Route.VideoPlayer stays dead-end-guarded in DesktopAppRoot: no
+            // desktop screen host exists yet (the SwingPanel/HWND video
+            // surface is queued work), so nothing resolves the VM in
+            // practice; registering it keeps the module verifiable as the
+            // surface host lands.
+            desktopPlayerVideoModule,
             // V3 feature conveyor: search — LIVE since the Phase X desktop
             // nav v1 (DesktopAppRoot renders searchSection as the start
             // tab); all VM deps resolve since the MediaRepository cluster

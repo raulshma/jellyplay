@@ -98,6 +98,13 @@ kotlin {
         // surface (PlayerActivity) reaches this module's androidMain only.
         // Desktop is deliberately latent: no registration, no nav route —
         // the players stay guarded in DesktopAppRoot.
+        // Wave 8C: the desktop DI module (desktopPlayerVideoModule) registers
+        // the now-commonMain VideoPlayerViewModel plus the jvmMain seam stubs.
+        // No media3/legacy deps here — jvmMain sees only commonMain's deps.
+        getByName("jvmMain").dependencies {
+            implementation(libs.koin.core)
+            implementation(libs.koin.compose.viewmodel)
+        }
         getByName("androidMain").dependencies {
             // Documented shared→legacy edges (library/livetv/admin/settings/
             // subtitle-tester precedent; dies at Phase X): the Koin factory
