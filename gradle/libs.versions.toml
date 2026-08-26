@@ -23,9 +23,10 @@ composeMultiplatformMaterial3 = "1.11.0-alpha07"
 # (wasmJs stable since 4.0.0). Hand-written DSL modules — koin-annotations
 # deferred until its KSP line settles (kspWasmJs unverified).
 koin = "4.2.2"
-hilt = "2.60.1"
-hiltNavigationCompose = "1.4.0"
-hiltWork = "1.4.0"
+# Plain dagger artifact only — shared/core/network's JellyfinApiEngine ctor
+# takes dagger.Lazy (fed by a memoizing wrapper in NetworkKoinModules). All
+# Hilt artifacts left the repo with the wave-8 Hilt extinction.
+dagger = "2.60.1"
 navigation3 = "1.1.5"
 # JetBrains fork of navigation3-ui: google's -ui artifact ships Android plus
 # jvm/linux STUBS only (runtime throws "Implemented only in JetBrains fork");
@@ -156,16 +157,10 @@ koin-compose-viewmodel = { group = "io.insert-koin", name = "koin-compose-viewmo
 # javax.inject (Hilt constructor-injection annotations, usable from non-Hilt modules)
 javax-inject = { group = "javax.inject", name = "javax.inject", version = "1" }
 
-# Hilt
 # Plain dagger artifact: dagger.Lazy ctor params on shared-module classes
 # (JellyfinApiEngine) need the type on the KMP compile classpath without
-# pulling the Android-only hilt-android AAR into the jvm target.
-dagger = { group = "com.google.dagger", name = "dagger", version.ref = "hilt" }
-hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
-hilt-android-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "hiltWork" }
-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "hiltWork" }
+# pulling an Android-only AAR into the jvm target.
+dagger = { group = "com.google.dagger", name = "dagger", version.ref = "dagger" }
 
 # Jellyfin SDK
 jellyfin-core = { group = "org.jellyfin.sdk", name = "jellyfin-core", version.ref = "jellyfinSdk" }
@@ -326,6 +321,5 @@ kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref 
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 aboutLibraries = { id = "com.mikepenz.aboutlibraries.plugin", version.ref = "aboutLibraries" }

@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.core.data.worker
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -38,7 +37,7 @@ class DownloadReconnectListener(
     private val networkMonitor: NetworkMonitor,
     private val offlineModeManager: OfflineModeManager,
     private val downloadRepository: DownloadRepository,
-    @ApplicationScope private val scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) {
     private val trigger = ReconnectTrigger(
         networkMonitor = networkMonitor,

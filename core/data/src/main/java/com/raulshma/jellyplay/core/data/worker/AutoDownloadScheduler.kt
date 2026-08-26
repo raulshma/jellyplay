@@ -8,7 +8,6 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
@@ -25,7 +24,7 @@ import java.time.Duration
 class AutoDownloadScheduler(
     private val context: Context,
     private val downloadsStore: DownloadsStore,
-    @ApplicationScope private val applicationScope: CoroutineScope,
+    private val applicationScope: CoroutineScope,
 ) {
     companion object {
         private val CHECK_INTERVAL: Duration = Duration.ofHours(6)

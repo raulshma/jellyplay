@@ -8,7 +8,6 @@ plugins {
     alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.android.kotlin.multiplatform.library) apply false
     alias(libs.plugins.ksp) apply false
-    alias(libs.plugins.hilt) apply false
     // `apply false` (instead of the previous plain alias) so Kover is only put
     // on the build's plugin classpath — with its version from this catalog —
     // but never applied to the root project by default. Application itself is

@@ -1,7 +1,5 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.serialization)
 }
 
@@ -56,16 +54,8 @@ dependencies {
     implementation(project(":shared:core:database"))
     implementation(project(":shared:core:datastore"))
 
-    // Wave 8A: Koin owns construction (androidCoreDataModule); the Hilt
-    // plugin + compiler stay ONLY for the transitional di/LegacyHiltBridgesModule
-    // (deleted by the app Hilt extinction). hilt-work left with the last
-    // @HiltWorker (workers are plain CoroutineWorkers built by
-    // CoreDataWorkerFactory now).
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.android.compiler)
-
-    // Koin: androidCoreDataModule/CoreDataWorkerFactory + the transitional
-    // bridge module's koin() accessor.
+    // Wave 8A/8B: Koin owns construction (androidCoreDataModule +
+    // CoreDataWorkerFactory). No Hilt remains in this module.
     implementation(libs.koin.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)

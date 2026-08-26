@@ -5,7 +5,6 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -42,7 +41,7 @@ const val VIDEO_CACHE_DIR_NAME = "video_cache"
 class CacheManager(
     private val context: Context,
     private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) : DefaultLifecycleObserver {
 
     /**

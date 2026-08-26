@@ -22,9 +22,10 @@ import androidx.compose.ui.Modifier
  *   that used to live inline in [DetailViewModel.getAvailableStorageBytes].
  *
  * Android actuals for the first two live APP-side
- * (`HiltInteropModule`, EntryPointAccessors — the same lazy interop singles
- * as the subtitle-tester player engine) because constructing the singletons
- * here would mean a second framework per type. [DetailStorageProbe]'s Android
+ * (`AppKoinModule`'s interop adapters over the Koin-owned legacy
+ * AudioPlaybackManager/ThemeMusicPlayer singles — formerly the HiltInterop
+ * lazy singles) because constructing the singletons here would mean a
+ * second module boundary per type. [DetailStorageProbe]'s Android
  * impl is plain `android.os` API and lives in this module's androidMain;
  * desktop impls (no-op audio/theme, appdata usable-space probe) live in
  * jvmMain.

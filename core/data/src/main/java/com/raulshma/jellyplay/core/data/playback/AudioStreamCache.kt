@@ -13,7 +13,6 @@ import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -43,7 +42,7 @@ open class AudioStreamCache(
     private val context: Context,
     private val streamingOkHttpClient: OkHttpClient,
     private val audioCacheStore: com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore,
-    @ApplicationScope private val scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) {
     /** Override in tests to point at a temp dir. */
     protected open fun resolveCacheDir(): File = File(context.cacheDir, "audio_cache")

@@ -15,13 +15,10 @@ import org.koin.dsl.module
  *    Koin-native before this feature moved (AndroidDataModule +
  *    desktopDataModule / datastoreCommonModule / DataKoinModule), resolving
  *    on BOTH platforms;
- *  - mediaRepository resolves through the app-side hiltInteropModule lazy
- *    single (interface already lives in shared :core:data commonMain; impl
- *    stays Hilt-bound) and has NO desktop definition yet — the same
- *    documented-latent state as the search/library/music/livetv/syncplay
- *    registrations. Koin defers resolution, so the desktop startKoin stays
- *    safe until the data-layer defs land; the shell has no newsletter nav
- *    entry yet either.
+ *  - mediaRepository was the last Hilt-interop dep historically; since the
+ *    wave-8 Hilt extinction Koin owns MediaRepositoryImpl natively
+ *    (dataJvmModule), so this VM is fully live-resolvable on desktop too
+ *    (the shell nav entry remains the only gate).
  */
 val newsletterModule: Module = module {
     viewModel {

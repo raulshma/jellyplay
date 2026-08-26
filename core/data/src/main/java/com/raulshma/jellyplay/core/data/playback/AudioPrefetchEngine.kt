@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -32,7 +31,7 @@ class AudioPrefetchEngine(
     private val policyGuard: AudioCachePolicyGuard,
     private val playbackRepository: PlaybackRepository,
     private val audioCacheStore: com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore,
-    @ApplicationScope private val backgroundScope: CoroutineScope,
+    private val backgroundScope: CoroutineScope,
 ) {
     // Late-bound by AudioPlaybackManager.start()
     private var queueProvider: (() -> List<AudioQueueItem>)? = null

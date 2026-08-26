@@ -80,8 +80,8 @@ kotlin {
             // InlineTrailerPlayer (library/livetv/admin/calendar messenger
             // precedent — documented shared→legacy androidMain edge; dies at
             // Phase X). The AudioPlaybackManager/ThemeMusicPlayer adapters
-            // stay APP-side (HiltInteropModule) because those singletons are
-            // Hilt-owned in legacy :core:data — a shared-module androidMain
+            // stay APP-side (AppKoinModule interop adapters; formerly the
+            // HiltInteropModule singles) — a shared-module androidMain
             // actual would have to construct second instances. The share +
             // StatFs storage-probe actuals need no legacy types.
             implementation(project(":core:ui"))

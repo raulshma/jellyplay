@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.core.notification.scheduler
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.worker.ReconnectTrigger
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -19,7 +18,7 @@ class NotificationReconnectListener(
     private val networkMonitor: NetworkMonitor,
     private val offlineModeManager: OfflineModeManager,
     private val notificationScheduler: NotificationScheduler,
-    @ApplicationScope private val scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) {
     private val trigger = ReconnectTrigger(
         networkMonitor = networkMonitor,

@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.core.data.worker
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -26,7 +25,7 @@ class PlaybackSyncReconnectListener(
     private val offlineModeManager: OfflineModeManager,
     private val scheduler: PlaybackSyncScheduler,
     private val outbox: PlaybackOutboxRepository,
-    @ApplicationScope private val scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) {
     private val trigger = ReconnectTrigger(
         networkMonitor = networkMonitor,

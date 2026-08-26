@@ -128,16 +128,14 @@ import org.koin.dsl.module
  * `PlayedStateSyncImpl`, `UserDataMutatorImpl`, `MediaSearchEngineImpl`,
  * `UnifiedMediaDetailProviderImpl`, `OfflineFirstItemResolverImpl` and
  * `OfflinePlaybackFacade` (see the definitions below). The legacy DataModule
- * constructs nothing from the cluster anymore; its @Binds became
- * `koin().get()` bridges, and the app's HiltInteropModule dropped the
- * reverse-direction MediaRepository / UserDataMutator / MediaSearchEngine
- * singles (Koin builds them natively now). `PlaybackSourceResolver` left
+ * constructs nothing from the cluster anymore (the whole legacy DataModule
+ * left with the wave-8 Hilt extinction); Koin builds the cluster natively. `PlaybackSourceResolver` left
  * that latent-on-desktop state with the playback-flips wave: its impl moved
  * here Uri-free (`File.toURI()` instead of `android.net.Uri.fromFile`), so
  * UnifiedMediaDetailProviderImpl's ctor dep resolves from this module on
  * BOTH platforms and MediaDetailProvider is live on desktop too. The app's
  * HiltInteropModule reverse single for it was deleted (one framework per
- * type); the legacy DataModule @Binds became a `koin().get()` bridge.
+ * type).
  *
  * The V3 downloads conveyor (C4-part-2 notes, fifth conveyor item) moved the
  * download engine here — `DownloadRepositoryImpl`, `DownloadDelegate` and the
