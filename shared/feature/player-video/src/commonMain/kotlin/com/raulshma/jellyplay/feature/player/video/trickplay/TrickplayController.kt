@@ -8,9 +8,11 @@ import java.io.File
  * [VideoPlayerViewModel][com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel]
  * calls. The androidMain [TrickplayManager] implements it (the Bitmap LRU
  * tile caches stay Android); [getThumbnail] returns the platform bitmap as an
- * opaque [Any] because `android.graphics.Bitmap` must not leak into common
- * code — the androidMain `getTrickplayThumbnail` ViewModel extension narrows
- * it back. Constructed through [VideoPlayerPlatform.createTrickplayController]
+ * opaque [Any] because `android.graphics.Bitmap` / `java.awt.image
+ * .BufferedImage` must not leak into common code — the screen narrows it back
+ * to [PlatformBitmap][com.raulshma.jellyplay.feature.player.video.PlatformBitmap]
+ * at the call site. Constructed through
+ * [VideoPlayerPlatform.createTrickplayController]
  * (the Android actual passes the ActivityManager low-RAM gate the ViewModel
  * used to compute inline); the jvmMain actual is a no-op.
  */

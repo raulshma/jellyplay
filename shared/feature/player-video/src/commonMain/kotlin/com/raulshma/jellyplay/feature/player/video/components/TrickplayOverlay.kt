@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
-import android.graphics.Bitmap
+import com.raulshma.jellyplay.feature.player.video.PlatformBitmap
+import com.raulshma.jellyplay.feature.player.video.asPlatformImageBitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,7 +36,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -49,7 +49,7 @@ import com.composables.icons.tabler.outline.*
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun TrickplayOverlay(
-    bitmap: Bitmap?,
+    bitmap: PlatformBitmap?,
     positionMs: Long,
     deltaMs: Long = 0L,
     durationMs: Long = 0L,
@@ -80,7 +80,7 @@ fun TrickplayOverlay(
                     .background(playerScrimColor()),
                 contentAlignment = Alignment.Center,
             ) {
-                val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
+                val imageBitmap = remember(bitmap) { bitmap?.asPlatformImageBitmap() }
                 val scrimBase = playerScrimColor()
                 val thumbnailOverlayGradient = remember(scrimBase) {
                     Brush.verticalGradient(

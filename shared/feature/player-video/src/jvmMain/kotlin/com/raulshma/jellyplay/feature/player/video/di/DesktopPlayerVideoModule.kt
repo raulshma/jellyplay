@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.feature.player.video.NoOpFontProvider
 import com.raulshma.jellyplay.feature.player.video.NoOpJellyfinRemotePlayCastStrategy
 import com.raulshma.jellyplay.feature.player.video.NoOpMediaSessionFactory
 import com.raulshma.jellyplay.feature.player.video.NoOpPipController
-import com.raulshma.jellyplay.feature.player.video.NoOpPlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.NoOpPlayerVideoMessageBus
 import com.raulshma.jellyplay.feature.player.video.NoOpStreamingSubtitleStore
 import com.raulshma.jellyplay.feature.player.video.NoOpSubtitlePreviewRepository
@@ -29,15 +28,21 @@ import org.koin.dsl.module
 
 /**
  * Desktop wiring for the video player (wave 8C): the VideoPlayerViewModel is
- * commonMain and live-resolvable here — every wave-8C seam binds to a jvmMain
- * no-op because no desktop playback host exists yet (Route.VideoPlayer stays
- * dead-end-guarded in DesktopAppRoot; the SwingPanel/HWND surface host is
- * queued work). Every repository/DataStore dep resolves from the shared
- * modules the desktop root already loads (dataJvmModule /
- * datastoreCommonModule / desktopDataModule); the one exception is
- * [StreamingSubtitleStore], whose impl is still Android-Hilt-owned, so a
- * desktop empty-store stub binds here. The jvmTest suite never resolves
- * Koin — it builds its own fakes.
+ * commonMain and live-resolvable here. Every repository/DataStore dep
+ * resolves from the shared modules the desktop root already loads
+ * (dataJvmModule / datastoreCommonModule / desktopDataModule); the one
+ * exception is [StreamingSubtitleStore], whose impl is still
+ * Android-Hilt-owned, so a desktop empty-store stub binds here.
+ *
+ * Wave 9A: the desktop playback host is live (SwingPanel/HWND surface +
+ * Route.VideoPlayer unguarded on Windows), and the per-session engine
+ * factory is NOT bound here — [PlayerEngineFactory] must return an mpv
+ * engine carrying the composing surface's HWND, which only the app layer
+ * can build (MpvDesktopEngine lives in apps/desktop), so apps/desktop's
+ * DesktopPlayerModule owns that binding and delegates EXTERNAL picks to the
+ * public NoOpPlayerEngineFactory. Wave-8C no-op seam bindings stay here;
+ * they still cover non-Windows JVMs where the route stays guarded. The
+ * jvmTest suite never resolves Koin — it builds its own fakes.
  */
 val desktopPlayerVideoModule: Module = module {
     single<VideoPlayerPlatform> { DesktopVideoPlayerPlatform() }
@@ -47,7 +52,6 @@ val desktopPlayerVideoModule: Module = module {
     single<ActivePlayerController> { NoOpActivePlayerController }
     single<PipController> { NoOpPipController() }
     single<PlayerVideoMessageBus> { NoOpPlayerVideoMessageBus }
-    single<PlayerEngineFactory> { NoOpPlayerEngineFactory }
     single<FontProvider> { NoOpFontProvider }
     single<SubtitlePreviewRepository> { NoOpSubtitlePreviewRepository }
     single<StreamingSubtitleStore> { NoOpStreamingSubtitleStore }

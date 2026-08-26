@@ -132,16 +132,21 @@ dependencies {
     // stay guarded in DesktopAppRoot so nothing constructs the VM.
     implementation(project(":shared:feature:player-audio"))
 
-    // …player-video, wave 8C conveyor slice: the ViewModel/session cluster is
-    // commonMain and desktop-resolvable (desktopPlayerVideoModule registers
-    // the VM + no-op seam actuals, jvmMain). Route.VideoPlayer stays guarded
-    // in DesktopAppRoot — no desktop screen host exists yet (SwingPanel/HWND
-    // surface is queued work) — so nothing constructs the VM in practice.
+    // …player-video, wave 8C conveyor slice → wave 9A playback LIVE on
+    // Windows: the ViewModel/session cluster is commonMain and
+    // desktop-resolvable (desktopPlayerVideoModule registers the VM + no-op
+    // seam actuals, jvmMain), DesktopAppRoot registers Route.VideoPlayer for
+    // Windows with the commonMain screen's SwingPanel/HWND surface, and
+    // desktopPlayerModule binds PlayerEngineFactory to a per-session
+    // MpvDesktopEngine carrying that surface's HWND. Other OSes keep
+    // Route.VideoPlayer dead-end-guarded.
     implementation(project(":shared:feature:player-video"))
 
 
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
-    // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
+    // mpv-2.dll / libmpv.so / libmpv.dylib at runtime; wave 9A also resolves
+    // the surface HWND through Native.getComponentPointer (shared
+    // player-video's jvmMain declares its own implementation-scoped jna edge).
     implementation(libs.jna)
 
     // Swing Main dispatcher (SyncPlayPlaybackCore constructs on

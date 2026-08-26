@@ -56,9 +56,8 @@ import kotlinx.coroutines.withContext
  *
  * File reads (`queryFileSizeBytes` / `readAndEncode`) live here because they
  * only need the [SubtitleContentGateway] seam; they are private to this
- * class. (Wave 8C: moved to commonMain — SAF Uri params are strings at the
- * API boundary; the androidMain `addLocalSubtitle`/`uploadSubtitle` Uri
- * overloads keep the screen's call sites unchanged.)
+ * class. (Wave 8C: moved to commonMain — SAF/document Uri params are strings
+ * at the API boundary, so the screens keep the string forms end to end.)
  */
 internal class SubtitleManager(
     /** Content-URI IO seam (wave 8C): androidMain impl reads via ContentResolver. */

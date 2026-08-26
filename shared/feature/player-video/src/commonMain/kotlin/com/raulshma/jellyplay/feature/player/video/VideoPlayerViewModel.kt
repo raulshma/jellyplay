@@ -1749,9 +1749,8 @@ class VideoPlayerViewModel(
     /**
      * Forwards the video surface's window bounds to [PipController] as the PiP
      * source-rect hint. Thin wrapper so the screen does not reach through the
-     * ViewModel into the controller. (Wave 8C seam: four window-bounds ints —
-     * the androidMain `updatePipSourceRect(Rect?)` extension keeps the
-     * screen's android.graphics.Rect call sites unchanged.)
+     * ViewModel into the controller. (Four window-bounds ints rather than a
+     * Rect — the seam crosses into platform code on desktop too.)
      */
     fun updatePipSourceRect(left: Int, top: Int, right: Int, bottom: Int) {
         pipController.updatePipSourceRect(left, top, right, bottom)
@@ -1783,9 +1782,8 @@ class VideoPlayerViewModel(
      * [updateConfigWithUiState], and persist to [preferencesStore].
      *
      * No-op if the copy/parse fails (FontProvider returns null), leaving the
-     * bundled fallback font in place. (Wave 8C seam: the uri stringifies at
-     * the API boundary — the androidMain `installUserFont(Uri)` extension
-     * keeps the screen's SAF call sites unchanged.)
+     * bundled fallback font in place. (The uri stringifies at the API
+     * boundary — Android hands a SAF Uri's string form, desktop a file URI.)
      */
     fun installUserFont(uri: String) {
         launch {
@@ -2515,8 +2513,8 @@ class VideoPlayerViewModel(
 
     /**
      * Trickplay thumbnail as an opaque platform handle (wave 8C seam): the
-     * androidMain `getTrickplayThumbnail` ViewModel extension narrows it back
-     * to android.graphics.Bitmap for the screen.
+     * screen narrows it back to [PlatformBitmap] (Bitmap/BufferedImage) at the
+     * call site.
      */
     suspend fun loadTrickplayThumbnail(positionMs: Long): Any? {
         val state = _uiState.value

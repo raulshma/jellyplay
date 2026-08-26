@@ -108,7 +108,13 @@ internal class JvmNoOpEngine : MediaEngine {
     override fun setAspectRatio(ratio: AspectRatio) { /* no-op */ }
 }
 
-internal object NoOpPlayerEngineFactory : PlayerEngineFactory {
+/**
+ * Public (not internal) so the app-side desktop engine factory
+ * (apps/desktop DesktopMpvPlayerEngineFactory) can delegate the
+ * PlayerType.EXTERNAL pick to it — external playback is launched in a
+ * third-party app and reported out-of-band, which a no-op expresses exactly.
+ */
+object NoOpPlayerEngineFactory : PlayerEngineFactory {
     override fun create(playerType: PlayerType): MediaEngine = JvmNoOpEngine()
 }
 

@@ -22,8 +22,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalConfiguration
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -32,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.request.ImageRequest
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.feature.player.video.rememberIsPortraitOrientation
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
@@ -135,8 +134,7 @@ fun CompanionDashboard(
 ) {
     val artworkColors = LocalArtworkColors.current
     val coroutineScope = rememberCoroutineScope()
-    val configuration = LocalConfiguration.current
-    val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+    val isPortrait = rememberIsPortraitOrientation()
 
     // Smooth backdrop colors derived from artwork
     val dominantColor = artworkColors?.dominant ?: MaterialTheme.colorScheme.primaryContainer

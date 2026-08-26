@@ -47,7 +47,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.ui.player.FormattedTranscodeReason
+import com.raulshma.jellyplay.feature.player.video.PlatformTranscodeReason
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiR
 import com.raulshma.jellyplay.core.ui.generated.resources.transcode_reasons_title
 import com.composables.icons.tabler.Tabler
@@ -79,7 +79,7 @@ fun PlaybackErrorOverlay(
      *  transcode; naturally empty for direct-play errors — the session-side
      *  fetch only arms on transcode resolves, so the engine error stands
      *  alone there. */
-    transcodeReasons: List<FormattedTranscodeReason> = emptyList(),
+    transcodeReasons: List<PlatformTranscodeReason> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     val alternativeEngines = PlayerType.entries.filter {
@@ -212,7 +212,7 @@ fun PlaybackErrorDialog(
     onRetry: () -> Unit,
     onRetryWithEngine: (PlayerType) -> Unit,
     onDismiss: () -> Unit,
-    transcodeReasons: List<FormattedTranscodeReason> = emptyList(),
+    transcodeReasons: List<PlatformTranscodeReason> = emptyList(),
 ) {
     PlaybackErrorOverlay(
         errorMessage = errorMessage,

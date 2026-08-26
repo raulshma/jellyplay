@@ -11,12 +11,14 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.generated.resources.Res
+import com.raulshma.jellyplay.core.ui.generated.resources.player_speed_slider_label
+import com.raulshma.jellyplay.core.ui.generated.resources.player_speed_value
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider
-import com.raulshma.jellyplay.core.ui.R as CoreUiR
+import org.jetbrains.compose.resources.stringResource
 
 private val SPEED_RANGE = 0.25f..2.0f
 private const val SPEED_STEPS = 34 // ((2.0 - 0.25) / 0.05) - 1
@@ -36,8 +38,8 @@ fun SpeedSlider(
     var sliderValue by remember(currentSpeed) { mutableFloatStateOf(currentSpeed) }
     val isTv = LocalTvMode.current
     Text(
-        text = stringResource(CoreUiR.string.player_speed_slider_label) +
-            "  " + stringResource(CoreUiR.string.player_speed_value, sliderValue),
+        text = stringResource(Res.string.player_speed_slider_label) +
+            "  " + stringResource(Res.string.player_speed_value, sliderValue),
         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
         color = MaterialTheme.colorScheme.onSurface,
         modifier = modifier.padding(horizontal = 24.dp, vertical = 8.dp),
