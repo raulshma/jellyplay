@@ -34,19 +34,19 @@ import org.koin.dsl.module
  *    PreferencesEditor, AppearanceStore, HomeDiscoveryStore, ...) resolve from the
  *    C4 shared-datastore graph;
  *  - repository deps (AuthRepository/SeerrRepository/AdminRepository/MediaRepository/
- *    SearchHistoryRepository/...) resolve from shared :core:data — the impls still
- *    live behind the Hilt interop edge on Android until Phase X (documented-latent
- *    on desktop, syncplay pattern);
+ *    SearchHistoryRepository/...) resolve from shared :core:data — the Admin/
+ *    Media-repository cluster impls flipped to Koin singles in dataJvmModule
+ *    (wave wB + MediaRepository flip), so these resolve on BOTH platforms;
  *  - the platform seams (SettingsBackupIo, AppLocaleSetter, StorageAreas,
  *    StorageMountsProvider, AppMetaProvider, LogCollector, AboutLibrariesJsonSource)
  *    resolve from the androidMain/jvmMain platform modules
  *    (androidSettingsPlatformModule / desktopSettingsPlatformModule).
  *
- * Android APP-SIDE-REQUIRED defs (this module's androidMain cannot reach the
- * Hilt-owned legacy :core:data/:core:notification impls — the downloads-phase
- * AndroidDownloadSeamsModule / EntryPointAccessors interop precedent): the
- * composition root must register these four before the corresponding screens
- * open (resolution is lazy, so boot stays safe):
+ * Android APP-SIDE-REQUIRED defs (the wrapped types live in the legacy
+ * core:data/core:notification Android remainders and app-side scheduler
+ * classes — this module's androidMain cannot see them): the composition root
+ * must register these four before the corresponding screens open (resolution
+ * is lazy, so boot stays safe):
  *  - [com.raulshma.jellyplay.feature.settings.AutoDownloadSync] (wraps the
  *    legacy AutoDownloadScheduler WorkManager sync),
  *  - [com.raulshma.jellyplay.feature.settings.NotificationSync] (wraps the
@@ -59,10 +59,10 @@ import org.koin.dsl.module
  */
 val settingsModule: Module = module {
     // The catalog object is the single SettingsSearchProvider implementation
-    // (this module's own SettingsScreen uses direct object access; app-side
-    // consumers like feature/home reach it through the app composition
-    // root's SettingsSearchInteropModule Hilt bridge instead of the deleted
-    // legacy SettingsSearchModule @Provides).
+    // (this module's own SettingsScreen uses direct object access; shared
+    // consumers like feature/home resolve it from their own Koin module
+    // graphs — the interim app-side SettingsSearchInteropModule Hilt bridge
+    // died with wave 6B's HomeViewModel flip).
     single<SettingsSearchProvider> { SettingsSearchCatalog }
 
     viewModel {
