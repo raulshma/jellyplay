@@ -143,8 +143,8 @@ fun main() {
 
 
             // …editor, ninth conveyor item — documented-latent, syncplay
-            // pattern: the StreamingSubtitleStore dep (Hilt interop on
-            // Android) has no desktop definition yet, but resolution is
+            // pattern: the StreamingSubtitleStore dep (Android-only Koin
+            // single since wave 8A) has no desktop definition yet, but resolution is
             // lazy so boot stays safe, and the desktop shell has no editor
             // nav entry (grep confirms no route/screen reference), so the
             // module is registered but never instantiated. The desktop
@@ -259,8 +259,9 @@ fun main() {
             // …player-audio, wave 7A conveyor (legacy :feature:player:audio
             // deleted): registered LATENT, home/editor pattern — the four
             // playback/cast ctor deps (AudioQueueManager/AudioEffectsManager
-            // /AudioPlayerEngine/AudioPlayerCast) are Android Hilt-interop
-            // singles with no desktop definitions yet, so resolving the
+            // /AudioPlayerEngine/AudioPlayerCast) are Android-only Koin
+            // singles (app interop adapters over androidCoreDataModule) with
+            // no desktop definitions yet, so resolving the
             // ViewModel here would throw NoDefinitionFound. Desktop nav
             // keeps Route.AudioPlayer a dead-end route (Ambient is only
             // reachable from inside the player), so nothing instantiates
@@ -273,8 +274,9 @@ fun main() {
             // …subtitle-tester, the FINAL conveyor feature, deliberately has
             // NO registration here: the entire feature (ViewModel, screen,
             // preview engine host, raw-asset factory) lives in the shared
-            // module's androidMain — its engine factory and font provider are
-            // Android/Hilt types with no desktop halves — so there is no
+            // module's androidMain — its engine factory and font provider
+            // actuals are Android-only (Koin-owned since wave 8) with no
+            // desktop halves — so there is no
             // commonMain Koin module to register. The shared settings-search
             // row for Route.SubtitleTester stays unreachable on desktop
             // (LanguageSettings' push is intercepted by the guard); desktop's

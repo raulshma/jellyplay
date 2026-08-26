@@ -8,8 +8,8 @@ import org.koin.dsl.module
  * Wave 8A core-side Hilt extinction: Koin owns the legacy :core:ui
  * singletons. Currently just the app-wide [UserMessageBus] (a context-free
  * buffered channel — no platform seams needed, hence the context-less val).
- * The still-Hilt :app injectors ride the app-side transitional
- * LegacyHiltBridgesModule until the app Hilt extinction.
+ * The :app consumes this single directly from its startKoin module
+ * list (app Hilt went extinct with wave 8B).
  */
 val androidCoreUiModule: Module = module {
     single { UserMessageBus() }

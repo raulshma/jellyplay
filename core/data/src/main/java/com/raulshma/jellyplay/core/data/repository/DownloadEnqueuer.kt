@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
 // to :shared:core:data jvmShared with the portable DownloadRepositoryImpl).
 // The @Inject/@Singleton annotations were stripped — Koin owns construction
 // (the app composition root's androidDownloadSeamsModule), and the legacy
-// DataModule bridges the remaining Hilt injector (DownloadRecoveryInitializer)
+// DownloadRecoveryInitializer is a Koin single in the app module (androidAppModule)
 // via koin().get(). The WorkManager bodies are verbatim; the cancelWork
 // override carries the body the repository's private cancelWorkForDownload
 // previously owned.

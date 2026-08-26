@@ -17,8 +17,8 @@ import org.koin.dsl.module
  * NotificationModule.provideNotificationManagerCompat provider (zero
  * injectors) died with the module instead of gaining a Koin def.
  *
- * The still-Hilt :app injectors ride the app-side transitional
- * LegacyHiltBridgesModule until the app Hilt extinction.
+ * The :app consumes these singles directly from its startKoin module
+ * list (app Hilt went extinct with wave 8B).
  */
 fun androidNotificationModule(context: Context): Module = module {
 

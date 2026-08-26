@@ -118,9 +118,10 @@ import org.koin.dsl.module
  * is explicit (no reflection) and matches the constructor verbatim.
  *
  * Construction-owner rule: Koin owns every type defined here — one framework
- * per type. Hilt reaches these singles only through the legacy DataModule's
- * `koin().get()` bridges; the impl classes' `@Inject`/`@Singleton` annotations
- * were stripped at the move, so Hilt cannot build a parallel instance.
+ * per type. During the Hilt era these singles were reached from Hilt through
+ * the legacy DataModule's `koin().get()` bridges; the impl classes'
+ * `@Inject`/`@Singleton` annotations were stripped at the move, and the whole
+ * bridge layer left with the wave-8 Hilt extinction — Koin only.
  *
  * Phase X MediaRepository cluster flip: the last Hilt-owned data-layer
  * cluster moved here — `MediaRepositoryImpl` (+ its PlayedStateSync /
@@ -152,7 +153,7 @@ import org.koin.dsl.module
  * Interim DataModule direct-construction providers (types moved here but
  * still Hilt-built pending further flips): `DefaultAudioQueueFacade` only —
  * its AudioQueueManager ctor dep is the media3 AudioPlaybackManager, which
- * stays Android/Hilt-owned. `AudioLyricsManager` left that list with this
+ * is owned by the legacy core:data androidCoreDataModule since wave 8A. `AudioLyricsManager` left that list with this
  * flip (its sole dep, the LyricsRepository view of MediaRepository, is
  * defined below); the `OfflineSyncManager` provider flipped with the V3
  * downloads conveyor.
@@ -267,9 +268,9 @@ val dataJvmModule: Module = module {
 
     // ── C4 part 2, batch 3: session / playback / sync / syncplay / worker ──
     // Constructors mirrored verbatim from the moved impls. The types whose
-    // ctor deps are still Hilt-owned in the legacy shim (AudioPlaybackManager,
-    // the media3 audio graph) are deliberately NOT defined here — the legacy
-    // DataModule constructs them via interim @Provides until those flip:
+    // ctor deps live in the Android-only legacy core:data remainder
+    // (AudioPlaybackManager + the media3 audio graph, owned by
+    // androidCoreDataModule there) are deliberately NOT defined here:
     // DefaultAudioQueueFacade only. OfflineSyncManager, AudioLyricsManager and
     // (playback-flips wave) PlaybackSourceResolverImpl all moved off that
     // list as their ctor deps became Koin-resolvable.
@@ -305,17 +306,16 @@ val dataJvmModule: Module = module {
     // shim — SystemClock.elapsedRealtime became the TimeSource seam above
     // (the Android actual IS SystemClock.elapsedRealtime, so the countdown is
     // unchanged). The audio/live player VMs resolve this single through Koin
-    // directly since their wave-7 migrations; the one remaining legacy Hilt
-    // injector (core:data AudioPlaybackManager, on the concrete class) rides
-    // the DataModule koin().get() bridge onto this single. No Hilt injector
-    // needs the AudioSleepTimerManager interface, so only the Koin alias
-    // exists here.
+    // directly since their wave-7 migrations; legacy core:data's
+    // AudioPlaybackManager resolves this single from androidCoreDataModule.
+    // No other consumer needs the AudioSleepTimerManager interface, so only
+    // the Koin alias exists here.
     single { SleepTimerManager(get()) }
     single<AudioSleepTimerManager> { get<SleepTimerManager>() }
 
     // Playback-flips wave: AdaptiveBitrateManager moved from the legacy
     // :core:data shim — ConnectivityManager became the NetworkMonitor seam
-    // (null-network/metered parity documented on the class). Legacy Hilt
+    // (null-network/metered parity documented on the class). Former Hilt
     // injectors (feature:details DownloadLifecycleActions, feature:player:video
     // PlayerCastController / PlaybackSession / PlayerSessionManager /
     // VideoPlayerViewModel) ride the DataModule koin().get() bridge.
@@ -323,9 +323,9 @@ val dataJvmModule: Module = module {
 
     // V3 livetv conveyor: the mini-player holder moved from the legacy
     // :core:data shim (one framework per type — @Singleton/@Inject stripped at
-    // the move). Legacy Hilt injectors (app FloatingPlayerState,
-    // feature:player:video VideoPlayerViewModel) reach this single through the
-    // DataModule koin().get() bridge; livetv's ChannelsViewModel resolves it
+    // the move). Consumers (app FloatingPlayerState, feature:player:video
+    // VideoPlayerViewModel, livetv's ChannelsViewModel) resolve this single
+    // directly from Koin; ChannelsViewModel resolves it
     // directly from here.
     single { VideoMiniPlayerState() }
 
@@ -345,9 +345,8 @@ val dataJvmModule: Module = module {
     // databaseDaosModule, the comparator/PlaybackRepository via this module,
     // OfflineModeManager via the platform data modules, the application scope
     // via DatastoreQualifiers, and — since the downloads conveyor moved the
-    // engine — DownloadRepository from this module's own single (the legacy
-    // DataModule provider bridges back to it via koin().get(), so Hilt
-    // injectors like feature:details' ResyncActions share the instance).
+    // engine — DownloadRepository from this module's own single (feature:
+    // details' ResyncActions shares the same instance through Koin).
     // `writer` reuses the DownloadRepository single: the interface extends
     // OfflineDownloadWriter, so no separate definition is needed. The former
     // Hilt→Koin→Hilt edge (interop MediaRepository) died with the Phase X

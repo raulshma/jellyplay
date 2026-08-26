@@ -65,8 +65,9 @@ import org.koin.dsl.module
  * JellyfinRemotePlayCastStrategy directly) so the type stays constructable
  * the moment a consumer returns.
  *
- * The transitional [LegacyHiltBridgesModule] (deleted by the app Hilt
- * extinction) bridges the still-Hilt :app injectors onto these singles.
+ * A transitional Hilt bridge module briefly fed the still-Hilt :app
+ * injectors from these singles; it died with the app Hilt extinction
+ * (wave 8B) — :app now resolves these directly.
  */
 fun androidCoreDataModule(context: Context): Module = module {
 

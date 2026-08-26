@@ -18,7 +18,7 @@ import okhttp3.OkHttpClient
  * Wave 8A: the seven legacy :core:data workers lost their HiltWorker
  * annotations (Koin owns their deps via [androidCoreDataModule]); this
  * factory constructs them for WorkManager instead of HiltWorkerFactory.
- * Registered alongside the app's HiltWorkerFactory in a
+ * Registered in the app's DelegatingWorkerFactory chain in a
  * DelegatingWorkerFactory — the first factory that recognizes the class
  * name wins, unknown names fall through to the next delegate.
  */

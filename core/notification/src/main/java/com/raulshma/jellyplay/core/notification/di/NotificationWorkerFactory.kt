@@ -9,8 +9,8 @@ import com.raulshma.jellyplay.core.notification.worker.NewMediaCheckWorker
 /**
  * Wave 8A: NewMediaCheckWorker lost its HiltWorker annotation (Koin owns
  * its deps via [androidNotificationModule]); this factory constructs it for
- * WorkManager instead of HiltWorkerFactory. Registered alongside the app's
- * HiltWorkerFactory in a DelegatingWorkerFactory — unknown class names fall
+ * WorkManager instead of HiltWorkerFactory. Registered in the app's
+ * DelegatingWorkerFactory chain — unknown class names fall
  * through to the next delegate.
  */
 class NotificationWorkerFactory : WorkerFactory() {

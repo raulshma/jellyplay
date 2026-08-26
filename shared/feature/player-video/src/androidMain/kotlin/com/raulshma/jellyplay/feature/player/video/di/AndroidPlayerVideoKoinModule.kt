@@ -84,8 +84,9 @@ fun androidPlayerVideoModule(context: Context): Module = module {
         )
     }
     single<PlayerEngineFactory> { get<AndroidPlayerEngineFactory>() }
-    // Wave 8C seam adapters around the Hilt-interop legacy singletons. All
-    // lazy: the underlying hiltInteropModule singles defer Hilt entry access
+    // Wave 8C seam adapters around the legacy playback singletons
+    // (androidCoreDataModule since wave 8A). All lazy: deferral keeps the
+    // media3 graph off the startKoin path
     // until first resolution.
     single<VideoPlayerPlatform> { AndroidVideoPlayerPlatform(context, get()) }
     single<VideoMediaSessionFactory> { AndroidMediaSessionFactory(context, get()) }

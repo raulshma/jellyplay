@@ -12,7 +12,7 @@ import java.io.File
 // the Context/Environment/StatFs logic verbatim and now implements the shared
 // interface. The @Inject/@Singleton annotations were stripped — Koin owns
 // construction (the app composition root's androidDownloadSeamsModule), and
-// the legacy DataModule bridges the remaining Hilt injectors
+// DownloadRecoveryInitializer (Koin single, app androidAppModule) consumes this
 // (StorageSettingsViewModel) via koin().get().
 
 /**
