@@ -6,14 +6,11 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Name of the audio byte cache subdirectory under [Context.cacheDir]. */
 internal const val AUDIO_CACHE_DIR_NAME = "audio_cache"
@@ -42,9 +39,8 @@ const val VIDEO_CACHE_DIR_NAME = "video_cache"
  * **excluded** from the sweep because they hold in-flight data referenced by
  * ExoPlayer; sweeping them mid-playback would corrupt reads.
  */
-@Singleton
-class CacheManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class CacheManager(
+    private val context: Context,
     private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
     @ApplicationScope private val appScope: CoroutineScope,
 ) : DefaultLifecycleObserver {

@@ -2,22 +2,18 @@ package com.raulshma.jellyplay.core.data.worker
 
 import android.content.Context
 import android.util.Log
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
 import com.raulshma.jellyplay.core.model.MediaCleanupConfig
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import java.io.IOException
 
-@HiltWorker
-class WatchedMediaScanWorker @AssistedInject constructor(
-    @Assisted appContext: Context,
-    @Assisted workerParams: WorkerParameters,
+class WatchedMediaScanWorker(
+    appContext: Context,
+    workerParams: WorkerParameters,
     private val apiClient: JellyfinApiClient,
     private val scanStateDao: ScanStateDao,
 ) : CoroutineWorker(appContext, workerParams) {

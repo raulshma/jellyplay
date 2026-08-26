@@ -21,8 +21,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Subscribes to the Jellyfin [JellyfinWebSocketClient] event stream and
@@ -33,8 +31,7 @@ import javax.inject.Singleton
  * This is the bridge that makes JellyPlay a 1:1 "Play To" / remote-control
  * receiver compatible with the official Jellyfin web and Android clients.
  */
-@Singleton
-class RemoteControlReceiver @Inject constructor(
+class RemoteControlReceiver(
     private val webSocketClient: JellyfinWebSocketClient,
     private val authRepository: AuthRepository,
     private val mediaRepository: MediaRepository,

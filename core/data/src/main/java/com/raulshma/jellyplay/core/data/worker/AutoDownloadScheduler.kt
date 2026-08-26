@@ -10,13 +10,10 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Duration
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Schedules the periodic background auto-download worker that fetches new
@@ -25,9 +22,8 @@ import javax.inject.Singleton
  * [com.raulshma.jellyplay.core.model.legacy.UserPreferences.autoDownloadNewEpisodes]
  * preference is enabled; disabling it cancels the periodic work.
  */
-@Singleton
-class AutoDownloadScheduler @Inject constructor(
-    @ApplicationContext private val context: Context,
+class AutoDownloadScheduler(
+    private val context: Context,
     private val downloadsStore: DownloadsStore,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) {

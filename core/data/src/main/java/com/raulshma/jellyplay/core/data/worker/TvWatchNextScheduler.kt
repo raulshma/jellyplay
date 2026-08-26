@@ -7,9 +7,6 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * The [TvWatchNextScheduler] interface itself moved to `:shared:core:data`
@@ -17,9 +14,8 @@ import javax.inject.Singleton
  * precedent) so the shared feature can reference it; only the WorkManager
  * implementation lives here.
  */
-@Singleton
-class TvWatchNextSchedulerImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
+class TvWatchNextSchedulerImpl(
+    private val context: Context,
 ) : TvWatchNextScheduler {
     override fun scheduleRefresh() {
         try {

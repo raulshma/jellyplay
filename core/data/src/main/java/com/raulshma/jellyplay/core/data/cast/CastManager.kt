@@ -15,7 +15,6 @@ import com.raulshma.jellyplay.core.data.cast.dlna.DlnaCastStrategy
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.CastingStrategy
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -36,8 +35,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
-import javax.inject.Inject
-import javax.inject.Singleton
 
 sealed class CastSessionEvent {
     data object Connected : CastSessionEvent()
@@ -46,9 +43,8 @@ sealed class CastSessionEvent {
 
 @OptIn(UnstableApi::class)
 @Stable
-@Singleton
-class CastManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class CastManager(
+    private val context: Context,
     private val googleCastStrategy: GoogleCastStrategy,
     private val dlnaCastStrategy: DlnaCastStrategy,
     private val jellyfinRemotePlayCastStrategy: JellyfinRemotePlayCastStrategy,

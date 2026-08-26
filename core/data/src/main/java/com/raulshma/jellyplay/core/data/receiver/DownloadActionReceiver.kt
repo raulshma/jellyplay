@@ -3,15 +3,14 @@ package com.raulshma.jellyplay.core.data.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.raulshma.jellyplay.core.data.di.koin
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.worker.DownloadNotificationHelper
-import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * Routes the download notification actions back into the repository — the
@@ -24,10 +23,12 @@ import javax.inject.Inject
  * group-summary refresh on every state change, so this receiver never reaches
  * into the DAO or posts summary updates itself.
  */
-@AndroidEntryPoint
 class DownloadActionReceiver : BroadcastReceiver() {
 
-    @Inject lateinit var downloadRepository: DownloadRepository
+    // Wave 8A: Hilt left this module — the repository single resolves from
+    // the Koin container on first use (the app composition root starts it
+    // long before any broadcast can arrive).
+    private val downloadRepository: DownloadRepository by lazy { koin().get() }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

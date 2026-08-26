@@ -33,7 +33,7 @@ import kotlinx.coroutines.flow.StateFlow
  * would make the video player think it is casting and hijack it into companion
  * mode. Keeping a separate, independent connection here avoids that.
  */
-class PlayOnController @javax.inject.Inject constructor(
+class PlayOnController(
     private val strategy: JellyfinRemotePlayCastStrategy,
 ) {
 

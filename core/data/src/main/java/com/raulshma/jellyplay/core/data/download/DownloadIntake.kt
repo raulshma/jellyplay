@@ -6,17 +6,13 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.model.MediaDetail
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 // DownloadIntake (the interface) lives in shared/core/data commonMain — same
 // package, re-exported here via the module's api(...) dependency. This file
 // keeps only the Android implementation.
 
-@Singleton
-class DownloadIntakeImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
+class DownloadIntakeImpl(
+    private val context: Context,
     private val delegate: DownloadDelegate,
     private val downloadRepository: DownloadRepository,
 ) : DownloadIntake {

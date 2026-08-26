@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.network.api.AdminApiClient
 import com.raulshma.jellyplay.core.network.websocket.parseSessionsMessage
 import com.raulshma.jellyplay.core.network.websocket.toSessionInfo
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -26,13 +25,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import javax.inject.Inject
-import javax.inject.Singleton
 
 @Stable
-@Singleton
-class JellyfinRemotePlayCastStrategy @Inject constructor(
-    @ApplicationContext private val appContext: Context,
+class JellyfinRemotePlayCastStrategy(
+    private val appContext: Context,
     private val adminApiClient: AdminApiClient,
     private val serverIdentityStore: ServerIdentityStore,
     private val webSocketClient: com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient,

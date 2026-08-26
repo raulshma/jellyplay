@@ -10,7 +10,6 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.toBitmap
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,13 +18,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class AppShortcutManager @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val audioPlaybackManagerLazy: dagger.Lazy<AudioPlaybackManager>,
+class AppShortcutManager(
+    private val context: Context,
+    private val audioPlaybackManagerLazy: Lazy<AudioPlaybackManager>,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -34,7 +30,7 @@ class AppShortcutManager @Inject constructor(
 
     fun observePlaybackForDynamicShortcuts() {
         scope.launch {
-            val audioPlaybackManager = audioPlaybackManagerLazy.get()
+            val audioPlaybackManager = audioPlaybackManagerLazy.value
             combine(
                 audioPlaybackManager.currentPlayingItemId.filterNotNull(),
                 audioPlaybackManager.title,
@@ -84,7 +80,7 @@ class AppShortcutManager @Inject constructor(
     }
 
     private suspend fun createShortcutIcon(): IconCompat {
-        val artworkUrl = audioPlaybackManagerLazy.get().albumArtUrl.value
+        val artworkUrl = audioPlaybackManagerLazy.value.albumArtUrl.value
         if (artworkUrl.isNullOrBlank()) return createDefaultIcon()
 
         // ShortcutManagerCompat renders the icon at the system shortcut size

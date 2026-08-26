@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.core.data.worker
 
 import android.content.Context
 import android.util.Log
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -11,8 +10,6 @@ import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -41,10 +38,9 @@ import kotlinx.coroutines.sync.withPermit
  * "watched half offline → finished online → back offline shows stale 50%"
  * case.
  */
-@HiltWorker
-class PlaybackSyncWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted params: WorkerParameters,
+class PlaybackSyncWorker(
+    context: Context,
+    params: WorkerParameters,
     private val outbox: PlaybackOutboxRepository,
     private val playbackRepository: PlaybackRepository,
     private val offlineModeManager: OfflineModeManager,

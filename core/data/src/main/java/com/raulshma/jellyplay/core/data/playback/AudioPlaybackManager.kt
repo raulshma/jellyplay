@@ -31,7 +31,6 @@ import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.ReverbPreset
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,17 +51,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlin.math.pow
 
 // C4 part 2: AudioQueueItem moved verbatim to
 // :shared:core:data commonMain playback/AudioQueueItem.kt (same package).
 
 @Stable
-@Singleton
-class AudioPlaybackManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class AudioPlaybackManager(
+    private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val imageUrlProvider: ImageUrlProvider,

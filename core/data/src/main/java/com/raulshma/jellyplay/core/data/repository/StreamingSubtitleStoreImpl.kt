@@ -4,13 +4,10 @@ import android.content.Context
 import com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle
 import com.raulshma.jellyplay.core.model.subtitle.StreamingSubtitleManifest
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * File-backed [StreamingSubtitleStore]. Layout under `filesDir`:
@@ -22,9 +19,8 @@ import javax.inject.Singleton
  * `SubtitleManager` keeps for the immediate side-load is distinct. The store
  * owns this subtree, so callers never build these paths directly.
  */
-@Singleton
-class StreamingSubtitleStoreImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
+class StreamingSubtitleStoreImpl(
+    private val context: Context,
     private val json: Json,
 ) : StreamingSubtitleStore {
 

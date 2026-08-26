@@ -10,16 +10,12 @@ import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.CastState
 import com.google.android.gms.cast.framework.CastStateListener
 import com.google.android.gms.cast.framework.SessionManagerListener
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class GoogleCastStrategy @Inject constructor(
-    @ApplicationContext private val appContext: Context,
+class GoogleCastStrategy(
+    private val appContext: Context,
 ) : CastStrategy {
 
     companion object {

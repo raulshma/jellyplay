@@ -4,8 +4,6 @@ import android.util.Rational
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Deep module owning Picture-in-Picture state and the remote-action transport.
@@ -16,8 +14,7 @@ import javax.inject.Singleton
  * `pipDismissed` / `isPlaying` and dispatches `PipAction`s through `pipTransport`;
  * the ViewModel registers the transport and mirrors play state + hasNext.
  */
-@Singleton
-class PipController @Inject constructor() {
+class PipController() {
 
     private val _isInPipMode = MutableStateFlow(false)
     val isInPipMode: StateFlow<Boolean> = _isInPipMode.asStateFlow()
