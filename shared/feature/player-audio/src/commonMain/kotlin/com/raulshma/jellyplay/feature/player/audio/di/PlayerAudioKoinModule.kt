@@ -14,21 +14,24 @@ import org.koin.dsl.module
  *  - [com.raulshma.jellyplay.core.data.playback.AudioQueueManager] /
  *    [com.raulshma.jellyplay.core.data.playback.AudioEffectsManager] are the
  *    shared playback contracts the legacy Hilt AudioPlaybackManager single
- *    implements; they reach Koin through the app's Hilt interop module until
- *    the manager flips (Phase X);
+ *    implements; androidCoreDataModule aliases them onto that manager since
+ *    wave 8A (the former app Hilt-interop bridge died with wave 8B);
  *  - the module-local AudioPlayerEngine / AudioPlayerCast seams are bridged
- *    the same way (app-side lazy interop adapters over the Hilt-owned
- *    AudioPlaybackManager / CastManager — details DetailAudioPlayback
- *    precedent);
+ *    the same way (app-side `androidAppInteropAdaptersModule` delegate
+ *    adapters over the Koin-owned AudioPlaybackManager / CastManager —
+ *    details DetailAudioPlayback precedent);
  *  - SleepTimerManager (shared core:data single), MediaRepository /
  *    UserDataMutator / DownloadRepository / DownloadIntake (shared data
  *    cluster) and PreferenceProjections / AudioStore / AudioEffectsStore
  *    (shared datastore) resolve from the shared-module graph;
- *  - desktop: this registration is LATENT — the four playback/cast deps above
- *    have no desktop definitions yet, so resolving the ViewModel there would
- *    throw NoDefinitionFound; Route.AudioPlayer is dead-end-guarded in
- *    DesktopAppRoot and Route.Ambient has no push site outside the Android
- *    app nav, so nothing instantiates it (editor/home precedent).
+ *  - desktop: LIVE since wave 9B real audio — apps/desktop's
+ *    desktopPlayerModule binds all four playback/cast deps:
+ *    [com.raulshma.jellyplay.core.data.playback.AudioQueueManager] +
+ *    [AudioPlayerEngine] over the shared DesktopAudioQueueManager single
+ *    (audio-only MpvDesktopEngine behind it), state-only
+ *    DesktopAudioEffectsManager, never-connected DesktopAudioPlayerCast —
+ *    so this registration is live-resolvable there too and Route.AudioPlayer
+ *    opens the real now-playing screen.
  */
 val playerAudioModule: Module = module {
     viewModel {

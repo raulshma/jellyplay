@@ -77,6 +77,7 @@ import com.raulshma.jellyplay.feature.insights.navigation.insightsSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
 import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
 import com.raulshma.jellyplay.feature.music.navigation.musicSection
+import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
 import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
@@ -101,9 +102,17 @@ import org.koin.compose.koinInject
  * What is deliberately NOT wired yet (each omission is guarded by
  * [isDesktopDeadEndRoute] so a shared screen pushing the route shows a
  * snackbar instead of crashing NavDisplay with an unregistered entry):
- *  - players — legacy app-side screens with no shared sections;
+ *  - VideoPlayer/LiveTvChannelPlayer — the video/live player surfaces have
+ *    no desktop screen host yet (the SwingPanel/HWND surface is queued work;
+ *    Route.VideoPlayer is pushed by details, LiveTvChannelPlayer by livetv);
  *  - SubtitleTester — androidMain-only, no commonMain section at all;
  *  - editor — latent (StreamingSubtitleStore has no desktop Koin def).
+ *
+ * The AUDIO player went live with wave 9B real audio:
+ * [audioPlayerSection] registers Route.AudioPlayer + Route.Ambient, so music
+ * track clicks (every music screen pushes Route.AudioPlayer(trackId)) open
+ * the now-playing screen over the real desktop audio core —
+ * DesktopAudioQueueManager in desktopPlayerModule.
  *
  * Home went live with the wave 8B desktop wiring: the four WorkManager/
  * widget-backed HomeViewModel ctor deps (PlaybackSyncScheduler,
@@ -126,13 +135,14 @@ import org.koin.compose.koinInject
  * render below (the settings drill-ins SeerrSettings/ArrSettings included —
  * their Seerr/Arr/datastore ctor deps are all Koin-native).
  *
- * Music went live next (Wave wC) — browse-live, playback-degrades: the last
- * unresolved music ctor dep (AudioQueueFacade) gained a desktop definition
- * (StubAudioQueueFacade in desktopPlayerModule), so [musicSection] renders
- * below with its full browse/albums/artists/genres/playlists cluster. Play/
- * enqueue/instant-mix actions fail honestly through the stub (in-screen
- * error states, no fake success), and Route.AudioPlayer stays guarded — the
- * legacy now-playing screen has no desktop home.
+ * Music went live next (Wave wC) — browse-only at first, and fully playable
+ * since wave 9B: the last unresolved music ctor dep (AudioQueueFacade) binds
+ * to the shared DefaultAudioQueueFacade over the desktop
+ * DesktopAudioQueueManager (audio-only MpvDesktopEngine behind it), so
+ * [musicSection] renders below with its full browse/albums/artists/genres/
+ * playlists cluster AND play/enqueue/instant-mix actions drive real playback.
+ * Track clicks navigate to the live Route.AudioPlayer (registered by
+ * [audioPlayerSection] above).
  */
 @Composable
 internal fun DesktopAppRoot(showAbout: Boolean, onDismissAbout: () -> Unit) {
@@ -335,10 +345,12 @@ private fun DesktopNavScaffold() {
             librarySection(guardedNavigator)
             // Details, live since the details conveyor flip: every VM ctor
             // dep resolves on desktop (data layer Koin-native, platform seams
-            // from desktopDetailsPlatformModule, AudioQueueFacade stub).
-            // Details is drill-in only — no rail entry; shared screens push
+            // from desktopDetailsPlatformModule, AudioQueueFacade from the
+            // wave-9B DefaultAudioQueueFacade binding). Details is drill-in
+            // only — no rail entry; shared screens push
             // Route.MediaDetail/SeerrDetail/PersonDetail/etc. Play/edit pushes
-            // stay guarded below (VideoPlayer/AudioPlayer/MetadataEditor).
+            // stay guarded below (VideoPlayer/MetadataEditor; the audio play
+            // push now routes through the live audioPlayerSection).
             detailsSection(guardedNavigator)
             // Auth cluster drill-ins, live since the auth conveyor flip: the
             // settings Server/UserManagement screens push AddServer/ServerList
@@ -347,15 +359,22 @@ private fun DesktopNavScaffold() {
             // goBack, the Android wiring (JellyPlayApp).
             authSection(guardedNavigator) { guardedNavigator.goBack() }
             liveTvSection(guardedNavigator)
-            // Music, live since Wave wC — browse-live, playback-degrades: the
+            // Music, live since Wave wC and fully playable since wave 9B: the
             // full section (browse/albums/artists/genres/mood+smart
             // playlists/playlist details) renders; play/enqueue/instant-mix
-            // resolve AudioQueueFacade to the desktop StubAudioQueueFacade
-            // (desktopPlayerModule). Only instant-mix surfaces its failure
-            // in-screen; play/enqueue outcomes are discarded by the call
-            // sites (silent no-ops on desktop v1). Track clicks push
-            // Route.AudioPlayer — still guarded below.
+            // resolve AudioQueueFacade to the shared DefaultAudioQueueFacade
+            // over the desktop DesktopAudioQueueManager (real playback).
+            // Track clicks push Route.AudioPlayer — registered by the
+            // audioPlayerSection entries below (which also own Route.Ambient,
+            // the player's immersive overlay, and route ArtistDetail into the
+            // live music section).
             musicSection(guardedNavigator)
+            // Audio player, live since wave 9B real audio: Route.AudioPlayer
+            // (the music track-click target) + Route.Ambient. The VM's whole
+            // ctor graph resolves — queue/effects/engine over the
+            // DesktopAudioQueueManager single, cast over the never-connected
+            // desktop no-op, the rest from the shared data/datastore graph.
+            audioPlayerSection(guardedNavigator)
             downloadsSection(guardedNavigator)
             syncPlaySection(guardedNavigator)
             newsletterSection(guardedNavigator)
@@ -502,14 +521,13 @@ private fun DesktopRailItem(
  * either be registered itself or listed here.
  */
 private fun NavKey.isDesktopDeadEndRoute(): Boolean = when (this) {
-    // Players — legacy app-side screens, no shared sections. Of these,
-    // Route.AudioPlayer is the music section's track-click target and
-    // VideoPlayer/LiveTvChannelPlayer are pushed by details/livetv: the
-    // legacy player surfaces have no desktop home, so those clicks surface
-    // the snackbar instead (other play/enqueue paths degrade silently
-    // through StubAudioQueueFacade — only instant-mix shows an error).
-    is Route.VideoPlayer, is Route.AudioPlayer, is Route.LiveTvChannelPlayer,
-    -> true
+    // Video/live players — no shared desktop sections: VideoPlayer is pushed
+    // by details and LiveTvChannelPlayer by livetv, and neither surface has
+    // a desktop host yet (the SwingPanel/HWND video surface is queued work),
+    // so those clicks surface the snackbar instead. The AUDIO player left
+    // this list with wave 9B (audioPlayerSection registers it; audio needs
+    // no surface host — the audio-only engine runs with vo=null).
+    is Route.VideoPlayer, is Route.LiveTvChannelPlayer -> true
     // Pushed by MediaDetailScreen's edit action: the editor feature is
     // registered but latent on desktop (StreamingSubtitleStore has no
     // desktop Koin def) and has no desktop nav section.

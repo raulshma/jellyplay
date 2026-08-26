@@ -35,9 +35,9 @@ dependencies {
     // share buttons).
     implementation(project(":shared:feature:library"))
 
-    // …music, third conveyor item — PARTIAL, omitted from nav v1: the
-    // AudioQueueFacade cluster (instant-mix + now-playing screens) has no
-    // desktop defs until the desktop player slice.
+    // …music, third conveyor item — fully LIVE since wave 9B real audio:
+    // browse since Wave wC, and play/enqueue/instant-mix drive real playback
+    // through the DefaultAudioQueueFacade over DesktopAudioQueueManager.
     implementation(project(":shared:feature:music"))
 
     // …livetv, fourth conveyor item — LIVE since the MediaRepository
@@ -125,11 +125,13 @@ dependencies {
     implementation(project(":shared:feature:player-live"))
 
     // …player-audio, wave 7A conveyor (legacy :feature:player:audio deleted):
-    // module compiles and playerAudioModule is registered LATENT — the four
-    // playback/cast ViewModel ctor deps (AudioQueueManager/AudioEffectsManager
-    // /AudioPlayerEngine/AudioPlayerCast) are Android Hilt-interop singles
-    // with no desktop definitions yet, and Route.AudioPlayer/Route.Ambient
-    // stay guarded in DesktopAppRoot so nothing constructs the VM.
+    // LIVE since wave 9B real audio — desktopPlayerModule provides the four
+    // playback/cast ctor deps (DesktopAudioQueueManager implements
+    // AudioQueueManager + AudioPlayerEngine over an audio-only MpvDesktop
+    // Engine; state-only DesktopAudioEffectsManager; never-connected
+    // DesktopAudioPlayerCast), and DesktopAppRoot registers
+    // audioPlayerSection (Route.AudioPlayer + Route.Ambient) so music track
+    // clicks open the now-playing screen.
     implementation(project(":shared:feature:player-audio"))
 
     // …player-video, wave 8C conveyor slice: the ViewModel/session cluster is
@@ -167,6 +169,12 @@ dependencies {
     // Rail icons (same tabler set the shared feature screens use).
     implementation(libs.tabler.icons.outline)
 
+    // Desktop audio queue-semantics suite: deterministic virtual-time
+    // scheduling (UnconfinedTestDispatcher drives every manager effect to
+    // completion inline; the ticker/reporter delay() cadences become virtual
+    // time advanced explicitly per test). The real-engine WAV suite keeps
+    // wall clocks — mpv runs its own threads — but no polling races there.
+    testImplementation(libs.coroutines.test)
     testImplementation(kotlin("test"))
 }
 
