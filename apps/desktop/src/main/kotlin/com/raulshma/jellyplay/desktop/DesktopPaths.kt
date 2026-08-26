@@ -17,6 +17,13 @@ data class DesktopPaths(
 ) {
     val dataDirNio: NioPath get() = NioPathOf(dataDir.toString())
 
+    /**
+     * Crash-log directory (wave 10A release engineering): `<data>/logs`.
+     * Created lazily by [DesktopCrashHandler] on first write — no eager
+     * directory for users who never crash.
+     */
+    val logsDirNio: NioPath get() = NioPathOf("$dataDir/logs")
+
     companion object {
         fun resolve(): DesktopPaths {
             val os = System.getProperty("os.name").lowercase()

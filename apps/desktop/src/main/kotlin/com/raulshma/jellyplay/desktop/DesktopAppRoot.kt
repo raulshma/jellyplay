@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.desktop
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.SnackbarHost
@@ -148,9 +150,18 @@ import org.koin.compose.koinInject
  * playlists cluster AND play/enqueue/instant-mix actions drive real playback.
  * Track clicks navigate to the live Route.AudioPlayer (registered by
  * [audioPlayerSection] above).
+ *
+ * @param previousCrashLogPath non-null when the previous session wrote a crash
+ *   report (DesktopCrashHandler marker consumed at boot); surfaced as a
+ *   one-line note + log path in the About dialog — deliberately minimal, this
+ *   is a diagnostics pointer, not an error UI.
  */
 @Composable
-internal fun DesktopAppRoot(showAbout: Boolean, onDismissAbout: () -> Unit) {
+internal fun DesktopAppRoot(
+    showAbout: Boolean,
+    onDismissAbout: () -> Unit,
+    previousCrashLogPath: String? = null,
+) {
     val authRepository: AuthRepository = koinInject()
     val isAuthenticated by authRepository.isAuthenticated.collectAsState(initial = false)
 
@@ -176,7 +187,22 @@ internal fun DesktopAppRoot(showAbout: Boolean, onDismissAbout: () -> Unit) {
             onDismissRequest = onDismissAbout,
             confirmButton = { TextButton(onClick = onDismissAbout) { Text("Close") } },
             title = { Text("JellyPlay") },
-            text = { Text("KMP desktop shell (Phase X desktop nav v1). Android app unaffected.") },
+            text = {
+                Column {
+                    Text("KMP desktop shell (Phase X desktop nav v1). Android app unaffected.")
+                    // Wave 10A crash scaffold: the previous session's crash
+                    // marker, if any (Main.kt consumed it at boot). One line +
+                    // the log path — no link, no error styling; users copy the
+                    // path out of this text when filing a report.
+                    if (previousCrashLogPath != null) {
+                        Text(
+                            "Previous session ended unexpectedly.\nCrash log: $previousCrashLogPath",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
+            },
         )
     }
 }

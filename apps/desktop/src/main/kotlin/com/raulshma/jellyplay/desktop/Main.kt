@@ -69,6 +69,20 @@ fun main() {
     java.io.File(paths.dataDir.toString()).mkdirs()
     java.io.File(paths.configDir.toString()).mkdirs()
 
+    // Wave 10A crash scaffold: hooks the JVM-wide uncaught-exception handler
+    // BEFORE anything that can throw (Koin graph, player engines, compose
+    // window), then consumes the previous session's crash marker — if the
+    // last run recorded an uncaught throwable, log it here and surface a
+    // one-line note + log path in the About dialog via DesktopAppRoot.
+    val crashHandler = DesktopCrashHandler(logsDir = paths.logsDirNio).install()
+    val previousCrash = crashHandler.consumePreviousCrashMarker()
+    if (previousCrash != null) {
+        println(
+            "[JellyPlay] previous session ended unexpectedly; " +
+                "crash log: ${previousCrash.logFile} (${previousCrash.crashedAtUtc})",
+        )
+    }
+
     val koinApp = startKoin {
         modules(
             datastoreCommonModule,
@@ -343,7 +357,11 @@ fun main() {
             }
 
             JellyPlayTheme(darkTheme = isSystemInDarkTheme(), dynamicColor = false) {
-                DesktopAppRoot(showAbout = showAbout.value, onDismissAbout = { showAbout.value = false })
+                DesktopAppRoot(
+                    showAbout = showAbout.value,
+                    onDismissAbout = { showAbout.value = false },
+                    previousCrashLogPath = previousCrash?.logFile?.toString(),
+                )
             }
         }
     }
