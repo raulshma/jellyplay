@@ -6,7 +6,8 @@ import android.content.ContextWrapper
 
 /**
  * Walks the ContextWrapper chain to find the hosting Activity. Promoted from
- * :feature:player:video so both VOD and live players can use it.
+ * the player-video module (now shared/feature/player-video) so both VOD and
+ * live players can use it.
  */
 fun Context.findActivity(): Activity? {
     var context = this

@@ -306,12 +306,12 @@ val dataJvmModule: Module = module {
     // Playback-flips wave: SleepTimerManager moved from the legacy :core:data
     // shim — SystemClock.elapsedRealtime became the TimeSource seam above
     // (the Android actual IS SystemClock.elapsedRealtime, so the countdown is
-    // unchanged). Legacy Hilt injectors (core:data AudioPlaybackManager,
-    // feature:player:audio AudioPlayerViewModel, feature:player:video
-    // SleepTimerController / VideoPlayerViewModel — all on the concrete
-    // class) ride the DataModule koin().get() bridge onto this single. No
-    // Hilt injector needs the AudioSleepTimerManager interface, so only the
-    // Koin alias exists here.
+    // unchanged). The audio/live player VMs resolve this single through Koin
+    // directly since their wave-7 migrations; the one remaining legacy Hilt
+    // injector (core:data AudioPlaybackManager, on the concrete class) rides
+    // the DataModule koin().get() bridge onto this single. No Hilt injector
+    // needs the AudioSleepTimerManager interface, so only the Koin alias
+    // exists here.
     single { SleepTimerManager(get()) }
     single<AudioSleepTimerManager> { get<SleepTimerManager>() }
 

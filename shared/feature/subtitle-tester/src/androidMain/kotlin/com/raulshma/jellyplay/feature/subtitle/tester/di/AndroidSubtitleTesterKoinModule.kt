@@ -19,10 +19,10 @@ import org.koin.dsl.module
  * route).
  *
  * Ctor deps:
- *  - PlayerEngineFactory + FontProvider resolve through the app-side
- *    hiltInteropModule lazy singles (both stay Hilt @Singleton in
- *    :feature:player:video; lazy is load-bearing — eager resolution would
- *    pull media3 + font caches into startup);
+ *  - PlayerEngineFactory + FontProvider are Koin-owned in
+ *    shared/feature/player-video's androidPlayerVideoModule (moved there with
+ *    the wave-7C migration; Koin single laziness keeps media3 + font caches
+ *    out of startup);
  *  - SubtitleLanguageStore is Koin-native (datastoreCommonModule);
  *  - PlaybackRequestFactory is built here with the application context handed
  *    in by the app composition root — the ViewModel no longer touches

@@ -46,10 +46,10 @@ const val POSITION_PAUSED_RECHECK_MS = 2_500L
  * `trySend`, any engine-specific listener wiring such as ExoPlayer's
  * `Player.Listener` for discontinuities, and the `awaitClose` cancellation).
  *
- * Lives in `:feature:player:core` so both production engines
- * (`:feature:player:video` via `ReloadablePlayerEngine`) and the test-double
- * `FakeMediaEngine` (`:feature:player:core:testFixtures`) share one
- * implementation — see `CONTEXT.md` "feature/player/core (the engine-agnostic
+ * Lives in the player-contract module so both production engines
+ * (`shared/feature/player-video` via `ReloadablePlayerEngine`) and test
+ * doubles over the [MediaEngine] contract share one implementation — see
+ * `CONTEXT.md` "feature/player/core (the engine-agnostic
  * `MediaEngine` contract and engine-shared machinery)".
  */
 class EnginePositionTicker(

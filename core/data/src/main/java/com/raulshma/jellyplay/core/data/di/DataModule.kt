@@ -278,8 +278,8 @@ abstract class DataModule {
         fun provideQueuePersistenceHelper(): QueuePersistenceHelper = koin().get()
 
         // V3 livetv conveyor: VideoMiniPlayerState moved into :shared:core:data
-        // (Koin-owned); app FloatingPlayerState and feature:player:video
-        // VideoPlayerViewModel still Hilt-inject it.
+        // (Koin-owned); app FloatingPlayerState still Hilt-injects it (the
+        // video ViewModel resolves the Koin single directly since wave 7C).
         @dagger.Provides
         @Singleton
         fun provideVideoMiniPlayerState(): com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState =

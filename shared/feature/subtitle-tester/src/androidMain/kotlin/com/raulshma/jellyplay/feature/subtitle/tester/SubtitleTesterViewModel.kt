@@ -23,12 +23,12 @@ import kotlinx.coroutines.launch
 /**
  * Koin-owned (androidSubtitleTesterModule in this module's androidMain — the
  * V3 conveyor stripped the Hilt annotations; one framework per type). Ctor
- * deps: [PlayerEngineFactory] and [FontProvider] resolve through the app-side
- * hiltInteropModule lazy singles (both stay Hilt @Singleton in
- * :feature:player:video), [SubtitleLanguageStore] is Koin-native
- * (datastoreCommonModule), and [PlaybackRequestFactory] is constructed by the
- * Koin module with the application context — the ViewModel no longer touches
- * Context itself.
+ * deps: [PlayerEngineFactory] and [FontProvider] are Koin-owned definitions
+ * in shared/feature/player-video's androidPlayerVideoModule (they moved there
+ * with the wave-7C player-video migration), [SubtitleLanguageStore] is
+ * Koin-native (datastoreCommonModule), and [PlaybackRequestFactory] is
+ * constructed by the Koin module with the application context — the
+ * ViewModel no longer touches Context itself.
  *
  * State mutations delegate to [SubtitleTesterStateReducer] (commonMain) so
  * the state machine is JVM-unit-tested; this class keeps only the engine

@@ -26,8 +26,9 @@ import org.koin.dsl.module
  *    (shared datastore) resolve from the shared-module graph;
  *  - desktop: this registration is LATENT — the four playback/cast deps above
  *    have no desktop definitions yet, so resolving the ViewModel there would
- *    throw NoDefinitionFound; Route.AudioPlayer/Route.Ambient stay guarded in
- *    DesktopAppRoot so nothing instantiates it (editor/home precedent).
+ *    throw NoDefinitionFound; Route.AudioPlayer is dead-end-guarded in
+ *    DesktopAppRoot and Route.Ambient has no push site outside the Android
+ *    app nav, so nothing instantiates it (editor/home precedent).
  */
 val playerAudioModule: Module = module {
     viewModel {

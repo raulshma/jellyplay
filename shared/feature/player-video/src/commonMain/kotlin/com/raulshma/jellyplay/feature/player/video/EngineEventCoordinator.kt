@@ -78,8 +78,8 @@ sealed interface EngineDecision {
  * invokes engine *commands* — the only engine reads are state flows
  * (`isPlaying`, `playbackState`) and `currentPositionMs` captured while
  * emitting the fallback decision. That makes every policy assertable with a
- * plain `FakeMediaEngine` (in `:feature:player:core:testFixtures`) and an
- * injected [clock] — zero mocks.
+ * plain fake over the [MediaEngine] contract and an injected [clock] —
+ * zero mocks.
  *
  * Policy semantics are pinned verbatim from the pre-extraction ViewModel,
  * including the watchdog's per-engine-instance latch quirk (see

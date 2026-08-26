@@ -11,10 +11,10 @@ import org.koin.dsl.module
  * plan.md §Phase V3, player-live conveyor). The HiltViewModel/@Inject
  * annotations were stripped at the move — Koin is the single constructor
  * owner (one framework per type). Ctor deps split three ways:
- *  - MediaRepository resolves through the app composition root's Hilt
- *    interop module until the Phase X flip (livetv precedent);
- *    PlaybackRepository/ImageUrlProvider are Koin-native (dataJvmModule),
- *    the three stores are Koin-native in the shared datastore graph;
+ *  - MediaRepository/PlaybackRepository/ImageUrlProvider are Koin-native
+ *    (dataJvmModule, both platforms — the MediaRepository cluster flip
+ *    already landed); the three stores are Koin-native in the shared
+ *    datastore graph;
  *  - the three platform seams (LiveEngineFactory, LivePlayerAudio,
  *    TranscodeReasonsRenderer) are Android-only definitions in
  *    `androidPlayerLiveModule` (subtitle-tester's context-param pattern) —

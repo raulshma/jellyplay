@@ -231,9 +231,9 @@ fun hiltInteropModule(application: Application): Module = module {
     // SubtitleModule — same lazy interop single as above. The player's
     // Hilt injectors keep constructing the impl directly and are unaffected.
     single<StreamingSubtitleStore> { interopEntryPoint(application).streamingSubtitleStore() }
-    // Player-video conveyor (wave 7C): the four media3 playback singletons the
-    // migrated Koin ViewModels ctor-inject (subtitle-tester's two + the video
-    // player's) stay Hilt-bound in legacy :core:data. Lazy is load-bearing in
+    // Player-video conveyor (wave 7C): the five media3/cast singletons the
+    // migrated Koin VideoPlayerViewModel ctor-injects stay Hilt-bound in
+    // legacy :core:data. Lazy is load-bearing in
     // particular for PlaybackSessionManager/CastManager: both pull media3 +
     // cast-framework graphs that must not be touched at startKoin time.
     // (PlayerEngineFactory + FontProvider were the first two entries here and

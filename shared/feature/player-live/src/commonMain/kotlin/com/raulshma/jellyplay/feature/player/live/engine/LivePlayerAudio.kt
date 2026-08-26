@@ -10,7 +10,10 @@ import com.raulshma.jellyplay.feature.player.live.LiveTvPlayerViewModel
  * seam; the androidMain actual (`Media3LivePlayerAudio`) wraps the legacy
  * PlayerAudioLifecycle with the exact PlaybackControl adapter the VM used to
  * build inline. Desktop has no live engine, so no actual is registered there
- * — the ctor default is null and every seam call is a no-op.
+ * — the module wiring passes `audio = get()` explicitly, so a desktop VM
+ * resolution fails fast with NoDefinitionFound (Route.LiveTvChannelPlayer is
+ * dead-end-guarded, nothing reaches it); the null ctor default exists for
+ * jvmTest only.
  *
  * [bind] is invoked from the ViewModel's `init` (the platform impl reads the
  * engine + mute state lazily through the owner, so audio callbacks always

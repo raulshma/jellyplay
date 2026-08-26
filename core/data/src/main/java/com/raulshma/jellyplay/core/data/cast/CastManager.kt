@@ -58,7 +58,7 @@ class CastManager @Inject constructor(
         private const val TAG = "CastManager"
         // How often the cast ticker re-checks whether playback resumed while
         // paused. Mirrors the playback engines' POSITION_PAUSED_RECHECK_MS
-        // (internal to :feature:player:video, so redeclared here).
+        // (internal to shared/feature/player-video, so redeclared here).
         private const val CAST_PAUSED_RECHECK_MS = 2_500L
         const val STRATEGY_GOOGLE = "google"
         const val STRATEGY_LIBVLC = "libvlc"
