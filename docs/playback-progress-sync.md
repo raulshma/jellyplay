@@ -237,17 +237,17 @@ StateFlow<Int>` → collected in `MainHomeContent` → threaded to
 
 | File | Role |
 |---|---|
-| `core/data/.../repository/PlaybackRepositoryImpl.kt` | Chokepoint — online/offline decision per event |
-| `core/data/.../repository/PlaybackOutboxRepository.kt` | Outbox interface + coalescence |
-| `core/data/.../worker/PlaybackSyncWorker.kt` | Drain + reconcile |
-| `core/data/.../worker/PlaybackSyncScheduler.kt` | Periodic + reconnect enqueue |
-| `core/data/.../worker/PlaybackSyncReconnectListener.kt` | Offline→Online trigger |
-| `core/data/.../worker/PlaybackSyncNotificationHelper.kt` | Drain notification |
-| `core/data/.../repository/MediaRepositoryImpl.kt` | `markPlayed`/`markUnplayed` cascade |
-| `core/data/.../repository/OfflineRepositoryImpl.kt` | `applyPlayedState` wrapper |
-| `core/database/.../dao/PlaybackOutboxDao.kt` | Outbox queries + `countFlow` |
-| `core/database/.../dao/OfflineMediaDao.kt` | `applyPlayedStateToHierarchy` batch UPDATE |
-| `core/database/.../migration/Migrations.kt` | `MIGRATION_35_36` (outbox table) |
+| `shared/core/data/.../repository/PlaybackRepositoryImpl.kt` | Chokepoint — online/offline decision per event |
+| `shared/core/data/.../repository/PlaybackOutboxRepository.kt` | Outbox interface + coalescence |
+| `core/data/.../worker/PlaybackSyncWorker.kt` (Android remainder) | Drain + reconcile |
+| `shared/core/data/.../worker/PlaybackSyncScheduler.kt` | Periodic + reconnect enqueue (interface; Android impl in `core/data`) |
+| `core/data/.../worker/PlaybackSyncReconnectListener.kt` (Android remainder) | Offline→Online trigger |
+| `core/data/.../worker/PlaybackSyncNotificationHelper.kt` (Android remainder) | Drain notification |
+| `shared/core/data/.../repository/MediaRepositoryImpl.kt` | `markPlayed`/`markUnplayed` cascade |
+| `shared/core/data/.../repository/OfflineRepositoryImpl.kt` | `applyPlayedState` wrapper |
+| `shared/core/database/.../dao/PlaybackOutboxDao.kt` | Outbox queries + `countFlow` |
+| `shared/core/database/.../dao/OfflineMediaDao.kt` | `applyPlayedStateToHierarchy` batch UPDATE |
+| `shared/core/database/.../migration/Migrations.kt` | `MIGRATION_35_36` (outbox table) |
 
 ## Known limitations
 
