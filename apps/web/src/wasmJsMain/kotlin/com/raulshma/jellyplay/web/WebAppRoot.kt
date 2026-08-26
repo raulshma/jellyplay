@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -69,14 +70,15 @@ private data object WebStatus : NavKey
  * (DesktopAppRoot provisions MutableStateFlow(ServerHealth.Unknown)): no
  * real-server pass exists yet, and no fake states go on screen.
  *
- * BACK/HISTORY honesty (spike w-10C §8, kept as documented cut): back works
- * via NavDisplay's own mechanisms once pushed routes exist — pop happens
- * when [NavDisplay]'s onBack fires and via the explicit Back affordance in
- * [WebStatusPane]. Deeper integration with browser history stays deferred:
- * the wasm actual of core/ui's JellyPlayBackHandler is a documented inert
- * no-op because honest pushState/popState bookkeeping per stack entry needs
- * its own pass; nothing on this pane tree registers a hardware/back callback
- * today, so no dead registration hangs off the shell either.
+ * BACK/HISTORY honesty (spike w-10C §8, kept as documented cut): nothing on
+ * the browser dispatches platform back to this shell — predictive-back is
+ * Android-only and the wasm actual of core/ui's JellyPlayBackHandler is an
+ * inert documented no-op — so [NavDisplay]'s onBack is armed but never fed.
+ * The explicit Back affordance in [WebStatusPane] is therefore the ONLY pop
+ * path in v1; both it and any future onBack feed share [popBackStack], which
+ * refuses at root (an emptied stack crashes this nav3 line). Deeper
+ * integration with browser history stays deferred: honest pushState/popState
+ * bookkeeping per stack entry needs its own pass.
  *
  * RUNTIME HONESTY (same rule as Main.kt/HtmlVideoEngine): compile-level
  * proof only (:apps:web:compileKotlinWasmJs). No headless browser lane
@@ -92,6 +94,13 @@ fun WebAppRoot(sessionState: AtomicSessionState) {
     val serverHealth = remember { MutableStateFlow(ServerHealth.Unknown) }
     val backStack = remember { mutableStateListOf<NavKey>(WebLanding) }
 
+    // Refuses at root: removeLastOrNull() on a size-1 stack empties it and
+    // NavDisplay crashes on an empty backStack (desktop's Esc handler guards
+    // size <= 1 for the same reason).
+    val popBackStack: () -> Unit = {
+        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+    }
+
     val entryProvider = remember(sessionState) {
         entryProvider<NavKey> {
             entry<WebLanding> { _ ->
@@ -101,7 +110,7 @@ fun WebAppRoot(sessionState: AtomicSessionState) {
                 )
             }
             entry<WebStatus> { _ ->
-                WebStatusPane(onBack = { backStack.removeLastOrNull() })
+                WebStatusPane(onBack = popBackStack)
             }
         }
     }
@@ -112,7 +121,7 @@ fun WebAppRoot(sessionState: AtomicSessionState) {
     ) {
         NavDisplay(
             backStack = backStack,
-            onBack = { backStack.removeLastOrNull() },
+            onBack = popBackStack,
             entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator()),
             entryProvider = entryProvider,
         )
@@ -130,17 +139,24 @@ private fun currentBrowserNetworkStatus(): NetworkStatus =
  * API surface proven against the kotlinx-browser 0.5.0 wasm klib: Window
  * exposes `navigator: Navigator`, NavigatorOnLine carries `onLine: Boolean`
  * (org.w3c.dom package), and window/event-target addEventListener takes the
- * `(Event) -> Unit` lambda shape already used by HtmlVideoEngine. Listeners
- * are never removed — the web shell lives for the whole page lifetime, so
- * there is no disposal point to match.
+ * `(Event) -> Unit` lambda shape already used by HtmlVideoEngine. Listener
+ * removal rides DisposableEffect (DOM events fire on the single JS main
+ * thread; no isolate concern), so WebAppRoot stays correct if it ever gains
+ * a non-root caller — today it is the immortal page root.
  */
 @Composable
-private fun rememberBrowserConnectivityStatus() = remember {
-    val status = MutableStateFlow(currentBrowserNetworkStatus())
-    val onBrowserEvent: (Event) -> Unit = { status.value = currentBrowserNetworkStatus() }
-    window.addEventListener("online", onBrowserEvent)
-    window.addEventListener("offline", onBrowserEvent)
-    status
+private fun rememberBrowserConnectivityStatus(): MutableStateFlow<NetworkStatus> {
+    val status = remember { MutableStateFlow(currentBrowserNetworkStatus()) }
+    DisposableEffect(window) {
+        val onBrowserEvent: (Event) -> Unit = { status.value = currentBrowserNetworkStatus() }
+        window.addEventListener("online", onBrowserEvent)
+        window.addEventListener("offline", onBrowserEvent)
+        onDispose {
+            window.removeEventListener("online", onBrowserEvent)
+            window.removeEventListener("offline", onBrowserEvent)
+        }
+    }
+    return status
 }
 
 /**
