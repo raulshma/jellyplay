@@ -348,9 +348,11 @@ should remain visible throughout an active transfer.
 
 ## Under the hood
 
-A reference for contributors. The feature spans `core/database`,
-`core/model`, `core/data`, and the `feature/downloads` / `feature/home`
-/ `feature/details` / `feature/settings` modules, wired by Hilt.
+A reference for contributors. The feature spans `shared/core/database`,
+`shared/core/model`, `shared/core/data`, and the `shared/feature/downloads` /
+`shared/feature/home` / `shared/feature/details` / `shared/feature/settings`
+modules, wired by Koin (the WorkManager download workers stay in the
+Android-only `core/data` remainder).
 
 ### Engine: custom WorkManager + OkHttp (not ExoPlayer)
 
@@ -449,12 +451,12 @@ A single `JellyPlayDatabase` (v46) holds three relevant tables:
 
 A two-layer split keeps the freshness rules testable and the I/O isolated:
 
-- **`OfflineSyncComparator`** (`core/data/.../sync`) — the pure, side-effect-free
+- **`OfflineSyncComparator`** (`shared/core/data/.../sync`) — the pure, side-effect-free
   decision layer. It computes deterministic **content-hash signatures** for each
   resync axis (metadata, subtitles, trickplay, segments) from a `MediaDetail`,
   captures a `SyncBaseline`, and diffs a fresh fetch against it. No I/O here —
   network, DB, and disk live one layer up.
-- **`OfflineSyncManager`** (`core/data/.../sync`) — the orchestrator that moves
+- **`OfflineSyncManager`** (`shared/core/data/.../sync`) — the orchestrator that moves
   data between the network (`MediaRepository`, `PlaybackRepository`), the DAO
   (`OfflineMediaDao`), and the artifact writers (`OfflineDownloadWriter`). Owns
   the TTL gate, the offline short-circuit, batch progress, and the partial-sync
@@ -500,9 +502,9 @@ construction so a check interrupted by process death doesn't render as a stuck
 
 ### UI layer
 
-- **`feature/details`** — **one** `MediaDetailScreen` renders detail for
+- **`shared/feature/details`** — **one** `MediaDetailScreen` renders detail for
   online, remote-with-attached-download, and local/offline/fallback items.
-  `MediaDetailProvider` (in `core/data`) owns the remote/local source decision,
+  `MediaDetailProvider` (in `shared/core/data`) owns the remote/local source decision,
   the source-dependent read graph (detail, seasons/episodes via the shared
   `EpisodeCatalogue`, album children, local subtitles, local artwork), the
   reactive download/sync attachment, and a compact capability set. `DetailViewModel`
@@ -516,16 +518,16 @@ construction so a check interrupted by process death doesn't render as a stuck
   a completed download. The `DownloadConfirmationDialog` and `SeriesDownloadSheet`
   initiate downloads; `DetailViewModel` performs the cellular-warning check and
   calls `DownloadIntake`.
-- **`feature/downloads`** — reserved for download **queue** and **offline-library**
+- **`shared/feature/downloads`** — reserved for download **queue** and **offline-library**
   management: `DownloadsScreen` (queue + per-row actions, the freshness-resync
   appbar action with a batch check + `DownloadsResyncSheet`, and the granular
   per-item / per-category `ForceResyncSheet`) and `OfflineLibraryScreen`
   (grid with search/sort/filter + storage header). Both drill into
   `Route.MediaDetail(id)` — there is no longer a separate offline detail or series
   screen.
-- **`feature/home`** — the `SyncStatusIcon` + `SyncDetailsSheet` that
+- **`shared/feature/home`** — the `SyncStatusIcon` + `SyncDetailsSheet` that
   surface pending playback-sync events.
-- **`feature/settings`** — `StorageSettingsScreen` exposes every
+- **`shared/feature/settings`** — `StorageSettingsScreen` exposes every
   download, storage, and offline preference.
 
 ## Next steps
