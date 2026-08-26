@@ -17,13 +17,15 @@ import kotlinx.coroutines.flow.StateFlow
  * undo/A→B loop + crossfade/gapless setters.
  *
  * One-framework-per-type: the concrete manager is a 1650-line media3 class
- * that stays Hilt-owned in legacy `:core:data` until Phase X, so the shared
- * ViewModel ctor-types onto the two shared interfaces plus this seam. The
- * Android impl is the app-side lazy interop adapter
- * (`HiltInteropModule.HiltAudioPlayerEngine`, a pure delegate — same shape as
- * the details conveyor's DetailAudioPlayback); there is no desktop impl yet,
- * so the player-audio Koin registration is documented-latent there
- * (Route.AudioPlayer stays guarded in DesktopAppRoot).
+ * that stays the Android Koin single (androidCoreDataModule since wave 8A,
+ * which also aliases AudioQueueManager/AudioEffectsManager onto it); this
+ * seam binds Android-side through the app's `androidAppInteropAdaptersModule`
+ * (`AppAudioPlayerEngine(manager = get())`, a pure delegate — the former
+ * `HiltInteropModule.HiltAudioPlayerEngine` bridge died with wave 8B),
+ * while desktop binds it to
+ * DesktopAudioQueueManager (the same one-object-two-contracts shape over an
+ * audio-only mpv engine) in apps/desktop's desktopPlayerModule — wave 9B real
+ * audio, Route.AudioPlayer unguarded.
  */
 interface AudioPlayerEngine {
     val title: StateFlow<String>

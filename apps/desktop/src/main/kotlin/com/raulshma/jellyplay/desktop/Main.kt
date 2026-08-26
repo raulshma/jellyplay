@@ -100,14 +100,13 @@ fun main() {
             // supplies the photo-export actual (unsupported=no-op).
             libraryModule,
             desktopPhotoExportModule(),
-            // …music, third conveyor item — LIVE since Wave wC (browse-live,
-            // playback-degrades): every music VM ctor dep resolves now that
-            // desktopPlayerModule provides the StubAudioQueueFacade
-            // AudioQueueFacade actual (only instant-mix surfaces its failure
-            // in-screen; play/enqueue outcomes are discarded by the call
-            // sites, so those buttons are silent no-ops on desktop v1), and
-            // nav renders musicSection in the rail. The message-bus actual
-            // drops messages (no host yet).
+            // …music, third conveyor item — LIVE since Wave wC (browse) and
+            // fully playable since wave 9B: desktopPlayerModule provides the
+            // real desktop audio core (DesktopAudioQueueManager over an
+            // audio-only MpvDesktopEngine + DefaultAudioQueueFacade), so
+            // play/enqueue/instant-mix drive real playback and track clicks
+            // navigate to the now-live Route.AudioPlayer. The message-bus
+            // actual still drops messages (no host yet).
             musicModule,
             desktopMusicMessageBusModule(),
             // …livetv, fourth conveyor item — LIVE since the cluster flip
@@ -242,11 +241,12 @@ fun main() {
             // largest never-conveyor module): registration fully
             // live-resolvable — every data-layer ctor dep is Koin-native
             // (dataJvmModule/datastoreCommonModule), AudioQueueFacade comes
-            // from desktopPlayerModule's stub, and the module-local platform
-            // seams below supply no-op audio/theme playback + the appdata
-            // storage probe. Dormant only for lack of nav wiring — the
-            // coordinator wires the MediaDetail/SeerrDetail routes post-
-            // merge; until then no desktop route instantiates a details VM.
+            // from desktopPlayerModule's DefaultAudioQueueFacade binding
+            // (wave 9B), and the module-local platform seams below supply
+            // no-op audio/theme playback + the appdata storage probe.
+            // Dormant only for lack of nav wiring — the coordinator wires
+            // the MediaDetail/SeerrDetail routes post-merge; until then no
+            // desktop route instantiates a details VM.
             detailsModule,
             desktopDetailsPlatformModule(paths.dataDirNio),
             // Home conveyor: LIVE since the wave 8B desktop wiring — the
@@ -259,15 +259,13 @@ fun main() {
             // than a process start/stop signal).
             homeModule,
             // …player-audio, wave 7A conveyor (legacy :feature:player:audio
-            // deleted): registered LATENT, home/editor pattern — the four
-            // playback/cast ctor deps (AudioQueueManager/AudioEffectsManager
-            // /AudioPlayerEngine/AudioPlayerCast) are Android-only Koin
-            // singles (app interop adapters over androidCoreDataModule) with
-            // no desktop definitions yet, so resolving the
-            // ViewModel here would throw NoDefinitionFound. Desktop nav
-            // keeps Route.AudioPlayer a dead-end route (Ambient is only
-            // reachable from inside the player), so nothing instantiates
-            // it today.
+            // deleted): LIVE since wave 9B — desktopPlayerModule provides the
+            // four playback/cast ctor deps (AudioQueueManager/
+            // AudioEffectsManager/AudioPlayerEngine over the shared
+            // DesktopAudioQueueManager single, plus the never-connected
+            // DesktopAudioPlayerCast), DesktopAppRoot registers
+            // audioPlayerSection and music track clicks navigate to
+            // Route.AudioPlayer for real.
             playerAudioModule,
 
 
@@ -296,6 +294,12 @@ fun main() {
     // start() launches the loops on the application scope and is idempotent.
     koinApp.koin.get<DesktopDownloadManager>().start()
     koinApp.koin.get<DesktopAutoDownloadScheduler>().start()
+
+    // Wave 9B real audio: the desktop audio core's app-lifetime kickoff —
+    // restore the persisted queue/state and observe queue changes for Room
+    // persistence (the Android Application.onCreate `manager.start()` twin;
+    // equally safe off the cold-start critical path).
+    koinApp.koin.get<com.raulshma.jellyplay.desktop.player.DesktopAudioQueueManager>().start()
 
     // Desktop image engine: the OkHttp network fetcher self-registers via
     // ServiceLoader from the coil-network-okhttp dependency; crossfade is the
