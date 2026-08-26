@@ -11,9 +11,11 @@ plugins {
 kotlin {
     // Phase W web shell (docs/kmp-migration-plan.md §Phase W): single
     // wasmJs/browser target proving the shared DI stacks on wasm. The Ktor
-    // wasm network seam (W.1 chunks 1-3) is wired here; the Coil wasm image
-    // engine (W.4) is blocked on the pinned coil version (see the W.4
-    // dependency note in wasmJsMain below). Real screens are later slices.
+    // wasm network seam (W.1 chunks 1-3) is wired here and the Coil wasm
+    // image engine (W.4) is wired since the repo-wide coil 3.4.0 pin
+    // (libs.versions.toml version note): 3.5.0's wasmJs klibs are Kotlin-
+    // 2.4-ABI and silently skipped by our 2.3.21 loader. Real screens are
+    // later slices.
     wasmJs {
         browser {
             commonWebpackConfig {
@@ -52,25 +54,25 @@ kotlin {
                 // yet — the engine class lands first.
                 implementation(project(":shared:core:player-contract"))
 
-                // Phase W.4 (Coil wasm image engine) BLOCKED at the pinned
-                // coil 3.5.0 — NOT a resolution gap: coil-compose and
-                // coil-network-ktor3 both ship wasmJs variants at 3.5.0 and
-                // resolve cleanly onto wasmJsCompileClasspath. The blocker
-                // is klib ABI: 3.5.0's wasmJs klibs are built with Kotlin
-                // 2.4.0 ("KLIB loader: Incompatible ABI version 2.4.0"),
-                // which this repo's Kotlin 2.3.21 compiler silently skips —
-                // every coil3 reference stays unresolved. Desktop is
-                // unaffected (JVM classpath metadata tolerates +1 minor).
-                // NOT unblocked unilaterally (version pins are a maintainer
-                // call); the two ways out: pin coil 3.4.0 (last
-                // Kotlin-2.3-built line) or move the toolchain to 2.4.x.
-                // Wiring recipe for when it lands: coil-compose +
-                // coil-network-ktor3 (coordinate fixed in libs.versions.toml
-                // — the old coil-network-ktor name was renamed upstream
-                // before 3.0.0 stable) + ktor-client-js, then
-                // setSingletonImageLoaderFactory in Main.kt with
-                // KtorNetworkFetcherFactory(HttpClient(Js)) — see the
-                // comment placeholder in Main.kt.
+                // Phase W.4 DONE (was BLOCKED at coil 3.5.0 whose wasmJs
+                // klibs are Kotlin-2.4-ABI, unreadable by this repo's Kotlin
+                // 2.3.21 klib loader). The pins moved to 3.4.0 — the last
+                // Kotlin-2.3-built release line (Central's kotlin-tooling-
+                // metadata.json reports buildPluginVersion 2.3.10 there,
+                // 2.4.0 at 3.5.0) — so coil-compose resolves its real
+                // coil-compose-wasm-js klib and the images pipeline compiles:
+                //   https://repo1.maven.org/maven2/io/coil-kt/coil3/coil-compose-wasm-js/3.4.0/
+                //   https://repo1.maven.org/maven2/io/coil-kt/coil3/coil-network-ktor3-wasm-js/3.4.0/
+                // The ktor3 fetcher factory is registered EXPLICITLY inside
+                // Main.kt's singleton loader (see the comment there for why
+                // ServiceLoader does not cover us on wasmJs).
+                implementation(libs.coil.compose)
+                implementation(libs.coil.network.ktor3)
+                // The Js engine for Main.kt's fetcher HttpClient(Js) — a
+                // direct edge because ktor-client-js arrives here only as a
+                // TRANSITIVE implementation dep of shared/core/network, which
+                // does not leak onto our compile classpath.
+                implementation(libs.ktor.client.js)
 
                 implementation(libs.koin.core)
                 implementation(libs.kotlinx.coroutines.core)

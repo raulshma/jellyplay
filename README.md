@@ -472,7 +472,7 @@ Click any section to expand. The full feature list is preserved — collapsed on
 | Media Session    | Media3 Session, Media3 Cast                                       |
 | Casting          | Google Play Services Cast, DLNA/UPnP                              |
 | Networking       | OkHttp 5.4, Jellyfin SDK 1.8.12, kotlinx.serialization 1.11       |
-| Images           | Coil 3.5 (with BlurHash), Palette (color extraction)             |
+| Images           | Coil 3.4 (with BlurHash), Palette (color extraction)             |
 | Typography       | Google Fonts (Compose integration)                                |
 | Markdown         | multiplatform-markdown-renderer (release notes, plugin changelogs) |
 | Pagination       | Paging 3                                                          |
@@ -588,7 +588,7 @@ The codebase is mid-migration to Kotlin Multiplatform: features and core live in
 ```
 apps/
   desktop/                Windows desktop shell (Compose Multiplatform; libmpv engine via JNA) — preview
-  web/                    Experimental wasmJs browser shell (no image loading yet)
+  web/                    Experimental wasmJs browser shell (Coil images wired at compile level via coil-network-ktor3; real-render browser pass pending)
 app/                      Android application module (deep links, widgets, Cast, PiP host activity, shortcuts, TV)
 shared/
   core/
