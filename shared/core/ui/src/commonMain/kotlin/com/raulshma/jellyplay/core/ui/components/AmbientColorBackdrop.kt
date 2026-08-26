@@ -16,6 +16,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import com.raulshma.jellyplay.core.designsystem.theme.AmbientColors
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -83,10 +84,10 @@ fun AmbientColorBackdrop(
 
         blobStops.forEachIndexed { index, stops ->
             val progress = animatables[index].value
-            val x = width * (0.2f + 0.6f * sin(progress * 2f * Math.PI.toFloat() + index))
-            val y = height * (0.2f + 0.6f * cos(progress * 2f * Math.PI.toFloat() + index * 1.5f))
+            val x = width * (0.2f + 0.6f * sin(progress * 2f * PI.toFloat() + index))
+            val y = height * (0.2f + 0.6f * cos(progress * 2f * PI.toFloat() + index * 1.5f))
             val radius = (width.coerceAtMost(height) * 0.4f) *
-                (0.8f + 0.2f * sin(progress * Math.PI.toFloat()))
+                (0.8f + 0.2f * sin(progress * PI.toFloat()))
 
             drawCircle(
                 brush = Brush.radialGradient(

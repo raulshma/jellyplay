@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.core.ui.components
 
-import java.util.Calendar
-
 /**
  * A decade (or larger) preset for year filtering. The [id] is stable enough
  * to round-trip through saved-state storage ("YYYY-YYYY"); [years] is the
@@ -16,9 +14,11 @@ data class YearRangePreset(val id: String, val label: String, val years: IntRang
 /**
  * Returns the standard preset catalog. The final preset is anchored to the
  * current year so "2020s" always extends to "now" rather than a frozen 2029.
+ * The default `now` resolves through the [currentYear] platform seam (the
+ * pre-wasm body read `Calendar.YEAR` directly).
  */
 fun yearRangePresets(
-    now: Int = Calendar.getInstance().get(Calendar.YEAR),
+    now: Int = currentYear(),
 ): List<YearRangePreset> = buildList {
     add(YearRangePreset("1920-1949", "1920s–40s", 1920..1949))
     for (decadeStart in 1950..2020 step 10) {

@@ -1,4 +1,5 @@
 package com.raulshma.jellyplay.core.ui.preview
+import com.raulshma.jellyplay.core.ui.components.formatOneDecimal
 import com.raulshma.jellyplay.core.ui.generated.resources.Res
 import com.raulshma.jellyplay.core.ui.generated.resources.core_preview_new_format
 import com.raulshma.jellyplay.core.ui.generated.resources.core_preview_release_to_close
@@ -481,7 +482,7 @@ private fun InfoRow(item: com.raulshma.jellyplay.core.model.MediaItem) {
                 )
                 Spacer(Modifier.width(3.dp))
                 Text(
-                    text = remember(rating) { "%.1f".format(rating) },
+                    text = remember(rating) { formatOneDecimal(rating.toDouble()) },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                 )

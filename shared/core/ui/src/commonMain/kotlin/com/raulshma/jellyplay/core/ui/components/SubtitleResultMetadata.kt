@@ -60,7 +60,7 @@ fun SubtitleResultMetadata(
             ?.takeIf { it.isNotBlank() }?.uppercase()
         if (!lang.isNullOrEmpty()) add(lang)
         result.format?.takeIf { it.isNotBlank() }?.let { add(it.uppercase()) }
-        if (rating != null) add("\u2605 ${"%.1f".format(rating)}")
+        if (rating != null) add("\u2605 ${formatOneDecimal(rating.toDouble())}")
         if (includeDownloadCount && (result.downloadCount ?: 0) > 0) {
             add("${formatCompactCount(result.downloadCount!!)} \u2193")
         }
@@ -121,7 +121,7 @@ internal fun formatCompactCount(count: Int): String =
     } else {
         val thousands = count / 1000.0
         // One decimal, then drop a redundant ".0" (1.0k → 1k, 1.2k stays).
-        val formatted = "%.1f".format(thousands)
+        val formatted = formatOneDecimal(thousands)
         val trimmed = formatted.removeSuffix(".0")
         "${trimmed}k"
     }

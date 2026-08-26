@@ -98,4 +98,27 @@ class DurationFormatterTest {
     fun `formatDurationMs with large value`() {
         assertEquals("10:00:00", formatDurationMs(10 * 3600 * 1000L))
     }
+
+    @Test
+    fun `formatRelativeTime buckets real ISO stamps`() {
+        val now = java.time.OffsetDateTime.now()
+        assertNull(formatRelativeTime(null))
+        assertNull(formatRelativeTime(""))
+        assertEquals("just now", formatRelativeTime(now.minusSeconds(30).toString()))
+        assertEquals("5m ago", formatRelativeTime(now.minusMinutes(5).toString()))
+        assertEquals("3h ago", formatRelativeTime(now.minusHours(3).toString()))
+        assertEquals("2d ago", formatRelativeTime(now.minusDays(2).toString()))
+    }
+
+    @Test
+    fun `formatDurationApproxSeconds pins the one-decimal hour rounding`() {
+        // Pins the `%.1f` JVM contract ahead of the wasmJs commonMain split:
+        // the hour branch is the only String.format-dependent path.
+        assertEquals("1.0h", formatDurationApproxSeconds(3_660))   // 1.01666 -> 1.0
+        assertEquals("5.5h", formatDurationApproxSeconds(19_800))  // exact half -> HALF_UP stays .5
+        assertEquals("25.8h", formatDurationApproxSeconds(92_880)) // 25.8
+        assertEquals("59m", formatDurationApproxSeconds(3_599))    // minute branch, no decimal
+        assertEquals("45s", formatDurationApproxSeconds(45))       // seconds branch
+        assertEquals("0s", formatDurationApproxSeconds(0))
+    }
 }

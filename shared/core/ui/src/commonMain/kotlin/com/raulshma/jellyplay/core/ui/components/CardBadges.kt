@@ -79,7 +79,7 @@ fun RatingBadge(
     textColor: Color = Color.White,
 ) {
     if (rating == null) return
-    val ratingText = "%.1f".format(rating.toDouble())
+    val ratingText = formatOneDecimal(rating.toDouble())
     GlassBadge(modifier = modifier) {
         Icon(
             imageVector = Tabler.Filled.Star,

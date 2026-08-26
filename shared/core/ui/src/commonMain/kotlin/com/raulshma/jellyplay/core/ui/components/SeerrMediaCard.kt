@@ -36,7 +36,6 @@ import com.raulshma.jellyplay.core.ui.preview.toMediaPreview
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import java.time.LocalDate
 
 @Composable
 fun SeerrMediaCard(
@@ -55,13 +54,7 @@ fun SeerrMediaCard(
         val dateStr = item.releaseDate ?: item.firstAirDate
         if (dateStr.isNullOrBlank()) false
         else {
-            try {
-                val now = LocalDate.now()
-                val releaseDate = LocalDate.parse(dateStr)
-                releaseDate.isAfter(now)
-            } catch (e: Exception) {
-                false
-            }
+            isoDateIsAfterToday(dateStr)
         }
     }
 
