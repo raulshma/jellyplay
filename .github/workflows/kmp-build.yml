@@ -195,3 +195,46 @@ jobs:
         # and invisible to every compile gate (arrqueue/shortcuts lessons,
         # plan §Phase X), so it must run in CI, not just locally.
         run: ./gradlew :apps:desktop:test --stacktrace
+
+  desktop-package:
+    # Wave 10A release engineering: packaging dry-run per OS. Proves the
+    # nativeDistributions config stays buildable and produces real installers:
+    # :apps:desktop:packageDistributionForCurrentOS picks the targetFormats
+    # valid for the runner (ubuntu → deb+rpm, windows → msi with the CMP
+    # plugin's auto-downloaded WiX toolset, macos → dmg). Runs standalone —
+    # it depends only on the repo checkout, nothing fragile.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+
+      - name: Package desktop installers for current OS
+        # -PjellyplayVersion mirrors the release-lane contract documented in
+        # apps/desktop/build.gradle.kts (numeric x.y.z only; jpackage/msi
+        # constraint).
+        run: ./gradlew :apps:desktop:packageDistributionForCurrentOS -PjellyplayVersion=0.1.0 --stacktrace
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-installers-${{ matrix.os }}
+          # Default (non-proguard) build type lands under main/ —
+          # packageReleaseDistributionForCurrentOS would use main-release/.
+          path: apps/desktop/build/compose/binaries/main/*
+          retention-days: 7
+          if-no-files-found: error
