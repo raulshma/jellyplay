@@ -57,6 +57,7 @@ import com.raulshma.jellyplay.feature.home.di.homeModule
 import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
 import com.raulshma.jellyplay.feature.auth.di.authModule
 import com.raulshma.jellyplay.feature.auth.di.desktopAuthPlatformModule
+import com.raulshma.jellyplay.feature.player.live.di.playerLiveModule
 
 
 import org.koin.core.context.startKoin
@@ -212,6 +213,16 @@ fun main() {
             // on the shared sign-in flow) is Phase X nav work.
             authModule,
             desktopAuthPlatformModule,
+
+            // …player-live, conveyor feature (wave 7B): documented-latent.
+            // The shared live-player ViewModel + LastChannelStore resolve
+            // (data/datastore graph), but the three platform seams (engine
+            // factory, audio, transcode-reasons renderer) are
+            // Android-only definitions and the player screen lives in the
+            // module's androidMain — Route.LiveTvChannelPlayer stays
+            // guarded in DesktopAppRoot, so nothing instantiates the VM on
+            // desktop (same latent class as the player-adjacent features).
+            playerLiveModule,
 
 
 

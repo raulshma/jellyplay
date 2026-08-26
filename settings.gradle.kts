@@ -37,7 +37,6 @@ include(":core:testing")
 include(":feature:player:core")
 include(":feature:player:video")
 include(":feature:player:audio")
-include(":feature:player:live")
 
 
 
@@ -94,6 +93,7 @@ include(":shared:feature:home")
 
 
 include(":shared:feature:subtitle-tester")
+include(":shared:feature:player-live")
 include(":shared:feature:details")
 
 include(":shared:feature:auth")

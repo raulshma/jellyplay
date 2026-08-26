@@ -116,6 +116,15 @@ dependencies {
     implementation(project(":shared:feature:home"))
 
 
+    // …player-live, conveyor feature (wave 7B) — module compiles and
+    // playerLiveModule is registered LATENT: the player screen + engine
+    // factory/audio/renderer seams are Android-only (androidMain) and
+    // Route.LiveTvChannelPlayer stays guarded in DesktopAppRoot, so
+    // nothing constructs the live-player VM on desktop. The jvm target
+    // exists for the shared ViewModel's jvmTest suite.
+    implementation(project(":shared:feature:player-live"))
+
+
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
     implementation(libs.jna)
