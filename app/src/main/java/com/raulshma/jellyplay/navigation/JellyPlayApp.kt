@@ -241,8 +241,8 @@ fun JellyPlayApp(
                         // Resolved here — the authenticated branch only — so the
                         // playback engine stays unbuilt for auth/onboarding
                         // sessions; collecting it anywhere earlier would defeat
-                        // the dagger.Lazy.
-                        audioPlaybackManager = infra.audioPlaybackManagerLazy.get(),
+                        // the lazy provider.
+                        audioPlaybackManager = infra.audioPlaybackManagerLazy.value,
                     )
                 }
             }
@@ -1089,8 +1089,11 @@ private fun PhoneContent(
     var isBottomNavVisible by isBottomNavVisibleState
 
     // Play On (cast-to-Jellyfin-session) lives at the app shell so the mini
-    // transport persists across tabs. Owned by an activity-scoped VM.
-    val playOnViewModel: com.raulshma.jellyplay.PlayOnViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    // transport persists across tabs. Owned by an activity-scoped VM: both
+    // this site and PlayOnCompanionScreen's default resolve through the same
+    // LocalViewModelStoreOwner (MainActivity) with the same Koin store key,
+    // so they observe one instance.
+    val playOnViewModel: com.raulshma.jellyplay.PlayOnViewModel = org.koin.compose.viewmodel.koinViewModel()
     val playOnState by playOnViewModel.uiState.collectAsStateWithLifecycle()
     var showPlayOnSheet by remember { mutableStateOf(false) }
     val playOnContext = LocalContext.current
@@ -1537,9 +1540,15 @@ private fun MainNavDisplay(
     // Admin access-control state, collected once here (a @Composable context)
     // and threaded into the admin section as read lambdas so the navigation
     // entries — which are composed lazily — observe the latest value without
-    // re-building the entry graph. MainViewModel is activity-scoped, so this
-    // resolves to the same instance held by JellyPlayApp/MainActivity.
-    val mainViewModel: MainViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    // re-building the entry graph. MainViewModel is activity-scoped: this
+    // ViewModelProvider call resolves the SAME instance MainActivity's
+    // `by viewModels { KoinViewModelFactory }` delegate holds (same store,
+    // same default key) — see di/AppKoinModule.kt.
+    val mainViewModel: MainViewModel = com.raulshma.jellyplay.di.mainViewModelFromKoin(
+        checkNotNull(androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner.current) {
+            "MainNavDisplay composed without a ViewModelStoreOwner"
+        } as androidx.lifecycle.ViewModelStoreOwner,
+    )
     val isAdminState = mainViewModel.isAdmin.collectAsStateWithLifecycle()
     val isRefreshingAdminState = mainViewModel.isRefreshingAdmin.collectAsStateWithLifecycle()
 

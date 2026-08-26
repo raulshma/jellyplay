@@ -5,7 +5,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.graphics.Bitmap
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -16,8 +15,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Bridges [AudioPlaybackManager] state into the [NowPlayingWidget].
@@ -33,9 +30,8 @@ import javax.inject.Singleton
  * [onDisabled] / [onAppWidgetOptionsChanged] call [onWidgetPresenceChanged]
  * to (re)start or stop us.
  */
-@Singleton
-class NowPlayingWidgetUpdater @Inject constructor(
-    @param:ApplicationContext private val context: Context,
+class NowPlayingWidgetUpdater (
+    private val context: Context,
     private val audioPlaybackManager: AudioPlaybackManager,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

@@ -43,11 +43,10 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.navigation.playbackhost.PlayerActivityArgs
-import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import javax.inject.Inject
+import org.koin.mp.KoinPlatform
 
 /**
  * Dedicated host Activity for fullscreen video playback.
@@ -65,26 +64,23 @@ import javax.inject.Inject
  * on END/ERROR, source-rect hint, aspect-ratio clamp.
  *
  * The engine is created fresh by [VideoPlayerScreen]'s `VideoPlayerViewModel`
- * (now scoped to this Activity via Hilt) — there is no cross-Activity engine
- * handoff in the normal open-play-PiP flow.
+ * (scoped to this Activity) — there is no cross-Activity engine handoff in
+ * the normal open-play-PiP flow.
  */
-@AndroidEntryPoint
 class PlayerActivity : FragmentActivity() {
 
     // PlayerActivity is the SOLE driver of the shared PlayerLifecycleManager
-    // @Singleton (onPause/onResume/onTopResumed/onStop below). MainActivity
+    // single (onPause/onResume/onTopResumed/onStop below). MainActivity
     // deliberately stopped calling it: the singleton has one @Volatile
     // activeCallbacks slot with no owner identity, so a second host pausing
     // here would reach across Activities into this activity's engine. Keep it
     // that way until per-host engine scoping lands (see Plan 01/02).
-    @Inject
-    lateinit var playerLifecycleManager: PlayerLifecycleManager
+    // Resolved from the Koin container (wave 8B — Hilt removal).
+    private val playerLifecycleManager: PlayerLifecycleManager by lazy { KoinPlatform.getKoin()!!.get() }
 
-    @Inject
-    lateinit var pipController: PipController
+    private val pipController: PipController by lazy { KoinPlatform.getKoin()!!.get() }
 
-    @Inject
-    lateinit var preferenceProjections: PreferenceProjections
+    private val preferenceProjections: PreferenceProjections by lazy { KoinPlatform.getKoin()!!.get() }
 
     /**
      * Hoisted launch arguments read from the start/new Intent via

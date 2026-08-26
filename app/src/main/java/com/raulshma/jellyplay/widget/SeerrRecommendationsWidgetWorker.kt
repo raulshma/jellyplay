@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.widget
 
 import android.content.Context
 import android.util.Log
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
@@ -13,17 +12,19 @@ import com.raulshma.jellyplay.core.model.SeerrWidgetSource
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.buildBackdropUrl
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@HiltWorker
-class SeerrRecommendationsWidgetWorker @AssistedInject constructor(
-    @Assisted appContext: Context,
-    @Assisted params: WorkerParameters,
+/**
+ * Plain CoroutineWorker constructed by [AppWidgetWorkerFactory] (wave 8B —
+ * Hilt removal: the former Hilt worker assisted-injection ctor became this
+ * explicit constructor; deps resolve from the Koin container).
+ */
+class SeerrRecommendationsWidgetWorker(
+    appContext: Context,
+    params: WorkerParameters,
     private val widgetDataStore: WidgetDataStore,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val seerrRepository: SeerrRepository,

@@ -13,10 +13,7 @@ import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.SeerrWidgetSource
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
+import org.koin.mp.KoinPlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,15 +34,20 @@ import kotlinx.coroutines.launch
  *     [com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore.seerrWidgetItems] — no network in the widget
  *     process.
  */
-class SeerrRecommendationsWidget : AppWidgetProvider() {
+/**
+ * Koin accessors (wave 8B — Hilt removal): resolved straight from the
+ * application container, same try/catch shape the EntryPoint call used.
+ */
+private fun koinWidgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore =
+    KoinPlatform.getKoin()!!.get()
 
-    @EntryPoint
-    @InstallIn(SingletonComponent::class)
-    interface WidgetEntryPoint {
-        fun widgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
-        fun seerrPreferencesStore(): com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
-        fun widgetWorkScheduler(): WidgetWorkScheduler
-    }
+private fun koinSeerrPreferencesStore(): com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore =
+    KoinPlatform.getKoin()!!.get()
+
+private fun koinWidgetWorkScheduler(): WidgetWorkScheduler =
+    KoinPlatform.getKoin()!!.get()
+
+class SeerrRecommendationsWidget : AppWidgetProvider() {
 
     private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -114,8 +116,7 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
     }
 
     private fun widgetScheduler(context: Context): WidgetWorkScheduler =
-        EntryPointAccessors.fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
-            .widgetWorkScheduler()
+        koinWidgetWorkScheduler()
 
     companion object {
         const val ACTION_REFRESH = "com.raulshma.jellyplay.widget.ACTION_REFRESH_SEERR"
@@ -218,13 +219,9 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
         }
 
         private fun readSourceLabel(context: Context, appWidgetId: Int): String = runCatching {
-            val entryPoint = EntryPointAccessors.fromApplication(
-                context.applicationContext,
-                WidgetEntryPoint::class.java,
-            )
             // Sync snapshot accessor — `onUpdate`/`onAppWidgetOptionsChanged` run
             // on the main thread, so a blocking DataStore read is not acceptable.
-            entryPoint.widgetDataStore().getWidgetConfigForIdSync(appWidgetId).seerrSource.displayName
+            koinWidgetDataStore().getWidgetConfigForIdSync(appWidgetId).seerrSource.displayName
         }.getOrDefault(SeerrWidgetSource.TRENDING.displayName)
 
         // Widget-independent server-configured read (serverUrl pref is set) —
@@ -232,12 +229,8 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
         // `preferences` is an eagerly-started StateFlow, so `.value` is a
         // memory read safe for the main thread.
         private fun hasServerConfigured(context: Context): Boolean {
-            val entryPoint = EntryPointAccessors.fromApplication(
-                context.applicationContext,
-                WidgetEntryPoint::class.java,
-            )
             return runCatching {
-                entryPoint.seerrPreferencesStore().preferences.value.serverUrl.isNotBlank()
+                koinSeerrPreferencesStore().preferences.value.serverUrl.isNotBlank()
             }.getOrDefault(false)
         }
     }

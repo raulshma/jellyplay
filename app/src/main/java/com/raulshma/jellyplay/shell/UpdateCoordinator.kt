@@ -9,8 +9,6 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.update.AppUpdateDecision
 import com.raulshma.jellyplay.update.UpdateState
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,8 +23,7 @@ import kotlinx.coroutines.launch
  * commands the update sheet issues. Dismissal suppression, auto-download
  * policy, and the pending-APK restore on launch are private to this module.
  */
-@Singleton
-class UpdateCoordinator @Inject constructor(
+class UpdateCoordinator (
     private val appUpdateRepository: AppUpdateRepository,
     private val apkInstallBuilder: ApkInstallBuilder,
     private val experimentalStore: ExperimentalStore,

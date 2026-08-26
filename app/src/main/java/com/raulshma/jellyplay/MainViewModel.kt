@@ -21,7 +21,6 @@ import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
 import com.raulshma.jellyplay.shell.UpdateCoordinator
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
@@ -30,7 +29,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withTimeout
-import javax.inject.Inject
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -48,8 +46,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * navigation) are injected where they are consumed instead of exposed from
  * here.
  */
-@HiltViewModel
-class MainViewModel @Inject constructor(
+class MainViewModel(
     private val authRepository: AuthRepository,
     private val projections: PreferenceProjections,
     private val homeDiscoveryStore: HomeDiscoveryStore,

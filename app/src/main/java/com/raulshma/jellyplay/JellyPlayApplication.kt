@@ -10,11 +10,11 @@ import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import coil3.size.Size
-import com.raulshma.jellyplay.core.data.di.androidDataModule
-import com.raulshma.jellyplay.core.data.di.androidCoreDataModule
 import com.raulshma.jellyplay.core.data.di.CoreDataWorkerFactory
+import com.raulshma.jellyplay.core.data.di.androidCoreDataModule
+import com.raulshma.jellyplay.core.data.di.androidDataModule
 import com.raulshma.jellyplay.core.data.di.dataJvmModule
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.di.androidDatastoreModule
 import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
@@ -23,12 +23,14 @@ import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.model.ImageCache
 import com.raulshma.jellyplay.core.network.di.androidNetworkModule
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
-import com.raulshma.jellyplay.core.notification.di.androidNotificationModule
 import com.raulshma.jellyplay.core.notification.di.NotificationWorkerFactory
-import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
+import com.raulshma.jellyplay.core.notification.di.androidNotificationModule
 import com.raulshma.jellyplay.core.ui.di.androidCoreUiModule
-import com.raulshma.jellyplay.di.hiltInteropModule
+import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import com.raulshma.jellyplay.di.androidAdminSeamsModule
+import com.raulshma.jellyplay.di.androidAppInteropAdaptersModule
+import com.raulshma.jellyplay.di.androidAppModule
+import com.raulshma.jellyplay.di.androidAppViewModelsModule
 import com.raulshma.jellyplay.di.androidDownloadSeamsModule
 import com.raulshma.jellyplay.di.androidSettingsSeamsModule
 import com.raulshma.jellyplay.feature.search.di.searchModule
@@ -72,10 +74,9 @@ import com.raulshma.jellyplay.feature.player.audio.di.playerAudioModule
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
 
-import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.DelegatingWorkerFactory
-import dagger.hilt.android.HiltAndroidApp
+import com.raulshma.jellyplay.widget.AppWidgetWorkerFactory
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
 import kotlinx.coroutines.CoroutineScope
@@ -83,76 +84,83 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.core.context.startKoin
-import javax.inject.Inject
+import org.koin.mp.KoinPlatform
 
-@HiltAndroidApp
 class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
 
-    @Inject lateinit var workerFactory: HiltWorkerFactory
-
-    // Wave 8A interim: the legacy core:data/notification workers are plain
-    // CoroutineWorkers now (Koin-constructed via the two factories below);
-    // the delegating factory chains them after Hilt's, which still builds
-    // the app-owned @HiltWorker widget workers until the app Hilt extinction
-    // (builder 8B) collapses this back to a single Koin-side factory.
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(
                 DelegatingWorkerFactory().apply {
-                    addFactory(workerFactory)
+                    // App widget recommendation workers (plain CoroutineWorker
+                    // ctors — see AppWidgetWorkerFactory).
+                    addFactory(AppWidgetWorkerFactory())
+                    // Core-data legacy workers (plain CoroutineWorker ctors —
+                    // see CoreDataWorkerFactory/NotificationWorkerFactory).
                     addFactory(CoreDataWorkerFactory())
                     addFactory(NotificationWorkerFactory())
                 },
             )
             .build()
 
-    // javax.inject.Provider defers Hilt construction of OkHttpClient
-    // (whose provideOkHttpClient does a blocking DataStore read + disk IO)
-    // off the cold-start path until Coil's first image request, which only
-    // happens once setContent renders an image — well after onCreate returns.
-    @Inject lateinit var okHttpClientProvider: javax.inject.Provider<OkHttpClient>
-    @Inject lateinit var networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
+    // Deferred single access (wave 8B — Hilt removal): the former
+    // javax.inject.Provider fields deferred Hilt construction off the
+    // cold-start path; kotlin `by lazy` over the Koin container preserves that
+    // exactly (definitions are lazy, and each resolved single is the same
+    // memoized instance the rest of the graph sees).
+    private val okHttpClient: OkHttpClient by lazyFromKoin()
+    private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore by lazyFromKoin()
     // (Wave 7C: the FontProvider/VideoStreamCache prewarm Providers that used
     // to live here left with the player-video migration — both impls are
     // Koin-owned in shared/feature/player-video's androidPlayerVideoModule, so
-    // no Hilt binding remains; the IO block below resolves them from the
+    // no bridged binding remains; the IO block below resolves them from the
     // container directly, same deferred construction timing.)
-    // javax.inject.Provider defers Hilt construction of AudioPlaybackManager
-    // (and its transitive 14-dep graph: AudioLibraryBrowser,
-    // AudioProgressReporter, AudioCrossfader, QueueUndoStack, LruCache(25), …)
-    // off the main thread until the IO launch block below actually calls
-    // get(). The start() body already offloads its real work to Dispatchers.IO,
-    // so behavior is unchanged; only the construction cost moves off the
-    // cold-start critical path.
-    @Inject lateinit var audioPlaybackManagerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager>
-    // javax.inject.Provider defers Hilt construction of NowPlayingWidgetUpdater,
-    // whose constructor pulls in AudioPlaybackManager — the same 14-dep graph
-    // the Provider above defers. A direct field inject re-pulls that whole
-    // graph before onCreate returns; moving construction into the IO launch
-    // block below keeps it off the cold-start critical path. start() only
-    // launches observers on its own scope, so behavior is unchanged.
-    @Inject lateinit var nowPlayingWidgetUpdaterProvider: javax.inject.Provider<com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater>
-    // The remaining schedulers/listeners are likewise deferred via
-    // javax.inject.Provider. A direct @Inject lateinit var forces Hilt to
-    // construct each one (and its transitive graph — several pull Room, OkHttp,
-    // repository singletons) during super.onCreate() before the first frame.
-    // Each .start()/.enqueue…()/sync() body already runs on its own scope or
-    // dispatches to IO, so construction is the only cost on the critical path.
-    @Inject lateinit var notificationSchedulerProvider: javax.inject.Provider<NotificationScheduler>
-    @Inject lateinit var autoDownloadSchedulerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler>
-    @Inject lateinit var userDataSyncSchedulerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler>
-    @Inject lateinit var playbackSyncSchedulerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler>
-    @Inject lateinit var playbackSyncReconnectListenerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener>
-    @Inject lateinit var downloadReconnectListenerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener>
-    @Inject lateinit var notificationReconnectListenerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.notification.scheduler.NotificationReconnectListener>
-    @Inject lateinit var widgetWorkSchedulerProvider: javax.inject.Provider<com.raulshma.jellyplay.widget.WidgetWorkScheduler>
-    @Inject lateinit var downloadRecoveryInitializerProvider: javax.inject.Provider<com.raulshma.jellyplay.startup.DownloadRecoveryInitializer>
-    // javax.inject.Provider defers construction of AppUpdateRepository (which
-    // pulls GitHub + OkHttp) off the cold-start path. cleanupDownloadedUpdate is a
-    // cheap file delete, but construction is the cost worth deferring.
-    @Inject lateinit var appUpdateRepositoryProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.update.AppUpdateRepository>
+    // Lazy defers construction of AudioPlaybackManager (and its transitive
+    // 14-dep graph: AudioLibraryBrowser, AudioProgressReporter,
+    // AudioCrossfader, QueueUndoStack, LruCache(25), …) off the main thread
+    // until the IO launch block below actually resolves it. The start() body
+    // already offloads its real work to Dispatchers.IO, so behavior is
+    // unchanged; only the construction cost moves off the cold-start
+    // critical path.
+    private val audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager by lazyFromKoin()
+    // Lazy defers construction of NowPlayingWidgetUpdater, whose constructor
+    // pulls in AudioPlaybackManager — the same 14-dep graph above. A direct
+    // single access re-pulls that whole graph before onCreate returns;
+    // resolving it inside the IO launch block below keeps it off the
+    // cold-start critical path. start() only launches observers on its own
+    // scope, so behavior is unchanged.
+    private val nowPlayingWidgetUpdater: com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater by lazyFromKoin()
+    // The remaining schedulers/listeners are likewise deferred: resolving one
+    // constructs it (and its transitive graph — several pull Room, OkHttp,
+    // repository singletons) inside the IO launch blocks, not during
+    // onCreate before the first frame. Each .start()/.enqueue…()/sync() body
+    // already runs on its own scope or dispatches to IO, so construction is
+    // the only cost on the critical path.
+    private val notificationScheduler: NotificationScheduler by lazyFromKoin()
+    private val autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler by lazyFromKoin()
+    private val userDataSyncScheduler: com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler by lazyFromKoin()
+    private val playbackSyncScheduler: com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler by lazyFromKoin()
+    private val playbackSyncReconnectListener: com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener by lazyFromKoin()
+    private val downloadReconnectListener: com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener by lazyFromKoin()
+    private val notificationReconnectListener: com.raulshma.jellyplay.core.notification.scheduler.NotificationReconnectListener by lazyFromKoin()
+    private val widgetWorkScheduler: com.raulshma.jellyplay.widget.WidgetWorkScheduler by lazyFromKoin()
+    private val downloadRecoveryInitializer: com.raulshma.jellyplay.startup.DownloadRecoveryInitializer by lazyFromKoin()
+    // Lazy defers construction of AppUpdateRepository (which pulls GitHub +
+    // OkHttp) off the cold-start path. cleanupDownloadedUpdate is a cheap file
+    // delete, but construction is the cost worth deferring.
+    private val appUpdateRepository: com.raulshma.jellyplay.core.data.update.AppUpdateRepository by lazyFromKoin()
 
-    @Inject @ApplicationScope lateinit var applicationScope: CoroutineScope
+    private val applicationScope: CoroutineScope
+        by lazy { KoinPlatform.getKoin()!!.get(DatastoreQualifiers.applicationScope) }
+
+    /**
+     * Memoizing deferred access into the Koin container — the kotlin-lazy
+     * twin of the former javax.inject.Provider fields (a @Singleton-backed
+     * Hilt Provider returned the same instance per get(), which a memoizing
+     * lazy matches).
+     */
+    private inline fun <reified T : Any> lazyFromKoin() =
+        lazy { KoinPlatform.getKoin()!!.get<T>() }
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
@@ -164,11 +172,11 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     }
 
     override fun onCreate() {
-        // Koin owns construction for the shared modules (plan §Phase C4); the
-        // legacy Hilt shims bridge every binding to these definitions. MUST
-        // run before super.onCreate() — Hilt field-injects bridged types
-        // (e.g. networkOfflineStore) during super.onCreate(), and definitions
-        // are lazy, so this adds no cold-start construction cost.
+        // Koin owns construction for every module (plan §Phase C4 / wave 8B —
+        // Hilt is fully gone from :app). MUST run before anything resolves a
+        // dependency: the lazy fields and every Activity/Service/widget entry
+        // point reach into this container, and definitions are lazy, so this
+        // adds no cold-start construction cost.
         startKoin {
             modules(
                 datastoreCommonModule,
@@ -179,14 +187,9 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 androidNetworkModule(this@JellyPlayApplication),
                 dataJvmModule,
                 androidDataModule(this@JellyPlayApplication),
-                // Wave 8A (core-side Hilt extinction): Koin owns the legacy
-                // :core:data/:core:notification/:core:ui remainders — media3
-                // audio playback stack, cast strategies, WorkManager
-                // schedulers/reconnect listeners, notification dispatch and
-                // the UserMessageBus. The transitional Hilt bridge modules
-                // (core/data + app di/LegacyHiltBridgesModule) point the
-                // still-Hilt :app injectors at these singles; builder 8B
-                // deletes them with app Hilt itself.
+                // Legacy core:data remainder (wave 8A: Hilt-extinct — media3
+                // audio stack, cast, schedulers, remote control, workers) +
+                // core:notification and core:ui's UserMessageBus.
                 androidCoreDataModule(this@JellyPlayApplication),
                 androidNotificationModule(this@JellyPlayApplication),
                 androidCoreUiModule,
@@ -194,19 +197,27 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // download engine's seams (WorkManager enqueue/coordinator,
                 // Context/StatFs storage layout, notification summary, Coil
                 // preload). Koin owns these legacy-side impls so the
-                // DownloadRepository single in dataJvmModule resolves; the
-                // legacy DataModule bridges its remaining Hilt injectors to
-                // them via koin().get().
+                // DownloadRepository single in dataJvmModule resolves.
                 androidDownloadSeamsModule(this@JellyPlayApplication),
                 // Admin flip (Wave wB): Android actual of the admin-statistics
                 // label seam — legacy core:data R.string over the Koin-owned
                 // AdminStatisticsRepositoryImpl (dataJvmModule), byte-identical
                 // to the pre-move context.getString calls.
                 androidAdminSeamsModule(this@JellyPlayApplication),
-                // V3 feature conveyor: shared feature ViewModels. The interop
-                // bridge exposes the still-Hilt-owned data-layer types to the
-                // Koin graph until the Phase X MediaRepository flip.
-                hiltInteropModule(this@JellyPlayApplication),
+                // App Koin graph (wave 8B): the former Hilt-owned :app classes
+                // (shell coordinators, startup initializers, widget schedulers/
+                // updaters, DeepLinkHandler, FloatingPlayerState), the three
+                // former WidgetModule @Binds pairs, and the shared-feature seam
+                // adapters the deleted HiltInteropModule used to bridge
+                // (MusicMessageBus / DetailAudioPlayback / DetailThemeMusic /
+                // AudioPlayerEngine / AudioPlayerCast — direct Koin resolution
+                // now, no EntryPoint).
+                androidAppModule(this@JellyPlayApplication),
+                androidAppInteropAdaptersModule(this@JellyPlayApplication),
+                // App-shell ViewModels (Main/PlayOn/WidgetConfig): resolved
+                // through the AndroidX ViewModelStore via KoinViewModelFactory,
+                // so activity-scoped instance-sharing semantics are unchanged.
+                androidAppViewModelsModule,
                 searchModule,
                 libraryModule,
                 musicModule,
@@ -216,12 +227,12 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // V3 settings conveyor: the shared settings ViewModels plus the
                 // Android platform pick of their seams (SAF backup IO,
                 // LocaleManager, storage walkers, About/Licenses sources). The
-                // four Hilt-backed seams (auto-download sync, notification
-                // reschedule, TV watch-next, audio cache clear) wrap the legacy
-                // schedulers through the SettingsSeamsEntryPoint below.
+                // four seams (auto-download sync, notification reschedule, TV
+                // watch-next, audio cache clear) wrap the legacy schedulers,
+                // resolved straight from the core Koin graph.
                 settingsModule,
                 androidSettingsPlatformModule(this@JellyPlayApplication),
-                androidSettingsSeamsModule(this@JellyPlayApplication),
+                androidSettingsSeamsModule(),
                 // MediaStore/FileProvider photo-export actual for the library
                 // feature's PhotoExport seam (androidDataModule pattern).
                 androidPhotoExportModule(this@JellyPlayApplication),
@@ -237,8 +248,8 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // V3 editor conveyor (ninth feature): the shared metadata
                 // editor ViewModel. MetadataEditorRepository / AuthRepository /
                 // SubtitleProviderRepository are Koin-native; the
-                // StreamingSubtitleStore dep resolves through the
-                // hiltInteropModule single above (impl stays Hilt-bound).
+                // StreamingSubtitleStore dep resolves from the core Koin graph
+                // (the legacy :core:data remainder, wave 8A).
                 editorModule,
 
                 // V3 calendar conveyor: all three ctor deps (ArrRepository,
@@ -263,15 +274,13 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
 
 
                 // V3 newsletter conveyor: imageUrlProvider/notificationStore/
-                // authRepository were already Koin-native; mediaRepository
-                // resolves through the hiltInteropModule single above — no
-                // new interop definitions were needed for this feature.
+                // authRepository/mediaRepository were all already Koin-native —
+                // no interop definitions were needed for this feature.
                 newsletterModule,
 
-                // V3 insights conveyor: WatchHistoryRepository and
-                // PlaybackRepository are Koin-native (dataJvmModule); the
-                // MediaRepository dep resolves through the hiltInteropModule
-                // single above (impl stays Hilt-bound until Phase X).
+                // V3 insights conveyor: WatchHistoryRepository,
+                // PlaybackRepository and MediaRepository are all Koin-native
+                // (dataJvmModule).
                 insightsModule,
 
 
@@ -292,19 +301,18 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // Home conveyor (Phase X cutover; desktop landing screen):
                 // 26 of HomeViewModel's 30 ctor deps are Koin-native in the
                 // shared graph; the remaining four (PlaybackSyncScheduler,
-                // TvWatchNextScheduler, ContinueWatchingBroadcaster,
-                // LibrarySyncHook — WorkManager/widget-backed) ride the
-                // hiltInteropModule singles above. SettingsSearchProvider
-                // resolves from settingsModule — the app-side Hilt bridge for
-                // it died with the legacy module (Koin constructs the VM now).
+                // TvWatchNextScheduler from the core data graph, and
+                // ContinueWatchingBroadcaster + LibrarySyncHook from
+                // androidAppModule above) resolve from Koin too.
+                // SettingsSearchProvider resolves from settingsModule.
                 homeModule,
 
                 // V3 subtitle-tester conveyor (final feature): the whole
                 // feature is Android-only (androidMain-heavy module — the
                 // preview engines, surface host, SAF font picker and raw-asset
                 // factory have no desktop halves), so this is the only
-                // registration. PlayerEngineFactory and FontProvider resolve
-                // through the hiltInteropModule singles above; the
+                // registration. PlayerEngineFactory and FontProvider are
+                // Koin-owned by androidPlayerVideoModule below; the
                 // PlaybackRequestFactory single is constructed with the
                 // application context here.
                 androidSubtitleTesterModule(this@JellyPlayApplication),
@@ -313,10 +321,10 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // (:feature:player:video + the absorbed :feature:player:core
                 // remains). Koin owns the engine stack, the font/cache/
                 // preview singletons and the VideoPlayerViewModel; the six
-                // legacy Hilt playback deps resolve through the
-                // hiltInteropModule singles above. Sole entry point stays
-                // PlayerActivity — no desktop registration (latent feature,
-                // subtitle-tester precedent).
+                // legacy playback deps resolve from the core Koin graph
+                // (the legacy :core:data remainder, wave 8A). Sole entry
+                // point stays PlayerActivity — no desktop registration
+                // (latent feature, subtitle-tester precedent).
                 androidPlayerVideoModule(this@JellyPlayApplication),
 
                 // Phase X auth cutover (feature-conveyor transform): both VM
@@ -333,16 +341,17 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // ViewModels + helpers. Data-layer deps are all Koin-native
                 // (dataJvmModule/datastoreCommonModule); the two media3
                 // playback seams (per-item audio play, ambient theme music)
-                // resolve through the hiltInteropModule singles above; the
-                // storage probe is the StatFs androidMain actual below.
+                // resolve through the androidAppInteropAdaptersModule adapters
+                // above; the storage probe is the StatFs androidMain actual
+                // below.
                 detailsModule,
                 androidDetailsModule(this@JellyPlayApplication),
                 // Audio player conveyor (wave 7A, legacy :feature:player:audio
                 // deleted): the shared player ViewModels. Queue/effects/transport
-                // deps resolve through the hiltInteropModule singles above: the
-                // Hilt-owned AudioPlaybackManager implements both shared playback
-                // contracts, and the module-local engine/cast seams bridge the
-                // same single + CastManager (die at Phase X).
+                // deps resolve from the core Koin graph (AudioPlaybackManager
+                // implements both shared playback contracts), and the engine/
+                // cast seams are the androidAppInteropAdaptersModule adapters
+                // above over the same single + CastManager.
                 playerAudioModule,
 
                 // Player-live conveyor (wave 7B): the shared live-player
@@ -373,38 +382,38 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             val koin = org.koin.mp.KoinPlatform.getKoin()
             runCatching { koin?.get<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>()?.prewarm() }
             runCatching { koin?.get<com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache>()?.prewarm() }
-            audioPlaybackManagerProvider.get().start()
-            nowPlayingWidgetUpdaterProvider.get().start()
+            audioPlaybackManager.start()
+            nowPlayingWidgetUpdater.start()
         }
         // Background schedulers — independent enqueue calls, all KEEP-safe.
         // Run concurrently with the critical path so cold start isn't gated on
-        // audio init. Provider.get() constructs each scheduler here (off the
-        // main thread) instead of during super.onCreate().
+        // audio init. Each lazy resolution constructs its scheduler here (off
+        // the main thread) instead of during onCreate.
         applicationScope.launch(Dispatchers.IO) {
-            widgetWorkSchedulerProvider.get().enqueuePeriodic()
-            userDataSyncSchedulerProvider.get().enqueuePeriodic()
-            playbackSyncSchedulerProvider.get().enqueuePeriodic()
-            playbackSyncReconnectListenerProvider.get().start()
-            downloadReconnectListenerProvider.get().start()
-            notificationReconnectListenerProvider.get().start()
-            autoDownloadSchedulerProvider.get().sync()
-            notificationSchedulerProvider.get().scheduleOrUpdate()
+            widgetWorkScheduler.enqueuePeriodic()
+            userDataSyncScheduler.enqueuePeriodic()
+            playbackSyncScheduler.enqueuePeriodic()
+            playbackSyncReconnectListener.start()
+            downloadReconnectListener.start()
+            notificationReconnectListener.start()
+            autoDownloadScheduler.sync()
+            notificationScheduler.scheduleOrUpdate()
         }
         // Best-effort download recovery — independent of the above groups.
         applicationScope.launch(Dispatchers.IO) {
-            downloadRecoveryInitializerProvider.get().recover()
+            downloadRecoveryInitializer.recover()
         }
         // Sweep any APK left by a prior self-update. A successful install
         // restarts the process (so this runs in the new version) and leaves the
         // old APK orphaned; a cancelled/failed install also leaves it behind.
         // Safe at startup: onCreate precedes any new download.
         applicationScope.launch(Dispatchers.IO) {
-            runCatching { appUpdateRepositoryProvider.get().cleanupDownloadedUpdate() }
+            runCatching { appUpdateRepository.cleanupDownloadedUpdate() }
         }
     }
 
     private val imageClient by lazy {
-        okHttpClientProvider.get().newBuilder()
+        okHttpClient.newBuilder()
             // Drop the inherited OkHttp http_cache so image bytes aren't written
             // to disk twice. The base client's cache (`cacheDir/http_cache`,
             // sized for API JSON) is shared via newBuilder(); without this Coil

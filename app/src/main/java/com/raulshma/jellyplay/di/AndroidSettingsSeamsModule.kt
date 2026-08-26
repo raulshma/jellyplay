@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.di
 
-import android.app.Application
 import com.raulshma.jellyplay.core.data.playback.AudioStreamCache
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
@@ -14,24 +13,22 @@ import org.koin.dsl.module
 
 /**
  * App-authored Koin definitions for the Android actuals of the settings
- * feature's four Hilt-backed seams (V3 settings conveyor Wave 2).
+ * feature's four seams (V3 settings conveyor Wave 2; wave 8B — Hilt removal:
+ * the four legacy impls are Koin-owned now, so each seam resolves its
+ * dependency straight from the container instead of through the former
+ * SettingsSeamsEntryPoint).
  *
- * Wave 8A: the four legacy impls (AutoDownloadScheduler,
- * NotificationScheduler, TvWatchNextScheduler binding, AudioStreamCache)
- * are Koin-owned (:core:data androidCoreDataModule / :core:notification
- * androidNotificationModule), so the seams resolve them straight from the
- * container — the SettingsSeamsEntryPoint/Hilt reach-through died with the
- * core-side Hilt extinction. Each single stays lazy: the impls are only
- * touched when the corresponding settings screen resolves its ViewModel.
- *  - [AutoDownloadSync] delegates to [AutoDownloadScheduler.sync]'s
- *    WorkManager enqueue/cancel;
- *  - [NotificationSync] delegates to [NotificationScheduler]'s suspend
- *    scheduleOrUpdate (signature-matched);
- *  - [WatchNextRefresher] delegates to the [TvWatchNextScheduler] binding
- *    (androidCoreDataModule → TvWatchNextSchedulerImpl);
+ * Each single is lazy — the target is only resolved when the corresponding
+ * settings screen first resolves its ViewModel, so there is no cold-start
+ * cost and resolution failure surfaces only on that screen.
+ *  - [AutoDownloadSync] delegates to the legacy
+ *    [AutoDownloadScheduler.sync] WorkManager enqueue/cancel;
+ *  - [NotificationSync] delegates to the legacy [NotificationScheduler]'s
+ *    suspend scheduleOrUpdate (signature-matched);
+ *  - [WatchNextRefresher] delegates to the [TvWatchNextScheduler] binding;
  *  - [AudioCacheClearer] delegates to [AudioStreamCache.clear].
  */
-fun androidSettingsSeamsModule(application: Application): Module = module {
+fun androidSettingsSeamsModule(): Module = module {
     single<AutoDownloadSync> {
         AutoDownloadSync { get<AutoDownloadScheduler>().sync() }
     }

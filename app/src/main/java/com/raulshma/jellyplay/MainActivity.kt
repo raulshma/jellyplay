@@ -51,26 +51,30 @@ import com.raulshma.jellyplay.core.ui.components.HandModeProvider
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
 import com.raulshma.jellyplay.core.ui.components.colorBlindFilter
 import com.raulshma.jellyplay.core.ui.tv.isTv
+import com.raulshma.jellyplay.di.KoinViewModelFactory
 import com.raulshma.jellyplay.navigation.JellyPlayApp
-import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
-import javax.inject.Inject
+import org.koin.mp.KoinPlatform
 
-@AndroidEntryPoint
 class MainActivity : FragmentActivity() {
 
-    private val viewModel: MainViewModel by viewModels()
+    private val viewModel: MainViewModel by viewModels { KoinViewModelFactory }
 
-    // Cross-cutting shell infrastructure, injected here (the shell host)
-    // instead of re-exported through MainViewModel — the ViewModel exposes
-    // only the signals it owns plus the coordinator seam.
-    @Inject lateinit var userMessageBus: UserMessageBus
-    @Inject lateinit var pinRateLimiter: PinRateLimiter
-    @Inject lateinit var securityStore: SecurityStore
-    @Inject lateinit var networkMonitor: NetworkMonitor
-    @Inject lateinit var audioPlaybackManagerLazy: dagger.Lazy<AudioPlaybackManager>
-    @Inject lateinit var remoteNavigationBridge: RemoteNavigationBridge
-    @Inject lateinit var remoteControlReceiver: RemoteControlReceiver
+    // Cross-cutting shell infrastructure, resolved from the Koin container
+    // (wave 8B — Hilt removal) instead of re-exported through MainViewModel —
+    // the ViewModel exposes only the signals it owns plus the coordinator
+    // seam. Memoizing lazies preserve the old deferred field-inject timing.
+    private val userMessageBus: UserMessageBus by lazy { KoinPlatform.getKoin()!!.get() }
+    private val pinRateLimiter: PinRateLimiter by lazy { KoinPlatform.getKoin()!!.get() }
+    private val securityStore: SecurityStore by lazy { KoinPlatform.getKoin()!!.get() }
+    private val networkMonitor: NetworkMonitor by lazy { KoinPlatform.getKoin()!!.get() }
+    private val remoteNavigationBridge: RemoteNavigationBridge by lazy { KoinPlatform.getKoin()!!.get() }
+    private val remoteControlReceiver: RemoteControlReceiver by lazy { KoinPlatform.getKoin()!!.get() }
+    // Lazy deferral is load-bearing: the playback engine (AudioPlaybackManager
+    // and its 14-dep graph) stays unbuilt for auth/onboarding-only sessions —
+    // resolved only inside ShellInfra's authenticated branch (JellyPlayApp).
+    private val audioPlaybackManagerLazy: kotlin.Lazy<AudioPlaybackManager> =
+        lazy { KoinPlatform.getKoin()!!.get() }
 
     private var backgroundedAt = 0L
     private var isPinUnlocked = mutableStateOf(false)

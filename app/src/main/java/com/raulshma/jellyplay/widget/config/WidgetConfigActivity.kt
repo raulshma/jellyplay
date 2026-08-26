@@ -49,9 +49,9 @@ import com.raulshma.jellyplay.widget.LibraryRecommendationsWidget
 import com.raulshma.jellyplay.widget.NowPlayingWidget
 import com.raulshma.jellyplay.widget.SeerrRecommendationsWidget
 import com.raulshma.jellyplay.widget.WidgetWorkScheduler
-import dagger.hilt.android.AndroidEntryPoint
+import com.raulshma.jellyplay.di.KoinViewModelFactory
 import kotlinx.coroutines.launch
-import javax.inject.Inject
+import org.koin.mp.KoinPlatform
 
 /**
  * Shared scaffold for the per-kind widget configuration activities. The AOSP
@@ -64,7 +64,10 @@ import javax.inject.Inject
  */
 abstract class BaseWidgetConfigActivity : ComponentActivity() {
 
-    protected val viewModel: WidgetConfigViewModel by viewModels()
+    // Per-activity instance via the AndroidX ViewModelStore + Koin factory
+    // (wave 8B — Hilt removal): each config session owns its VM because
+    // initWidgetId wires the per-widget store lookup.
+    protected val viewModel: WidgetConfigViewModel by viewModels { KoinViewModelFactory }
     protected var widgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID
         private set
 
@@ -108,10 +111,9 @@ abstract class BaseWidgetConfigActivity : ComponentActivity() {
 /**
  * Configuration activity for the Library Recommendations widget.
  */
-@AndroidEntryPoint
 class LibraryWidgetConfigActivity : BaseWidgetConfigActivity() {
 
-    @Inject lateinit var widgetWorkScheduler: WidgetWorkScheduler
+    private val widgetWorkScheduler: WidgetWorkScheduler by lazy { KoinPlatform.getKoin()!!.get() }
 
     override val titleRes: Int = R.string.widget_library_recommendations_title
     override val kind: WidgetKind = WidgetKind.LIBRARY
@@ -128,10 +130,9 @@ class LibraryWidgetConfigActivity : BaseWidgetConfigActivity() {
 /**
  * Configuration activity for the Seerr Recommendations widget.
  */
-@AndroidEntryPoint
 class SeerrWidgetConfigActivity : BaseWidgetConfigActivity() {
 
-    @Inject lateinit var widgetWorkScheduler: WidgetWorkScheduler
+    private val widgetWorkScheduler: WidgetWorkScheduler by lazy { KoinPlatform.getKoin()!!.get() }
 
     override val titleRes: Int = R.string.widget_seerr_recommendations_title
     override val kind: WidgetKind = WidgetKind.SEERR
@@ -150,7 +151,6 @@ class SeerrWidgetConfigActivity : BaseWidgetConfigActivity() {
  * max item count; the shelf itself is fed by the playback shelf sync, so
  * no [WidgetWorkScheduler] refresh is triggered.
  */
-@AndroidEntryPoint
 class ContinueWatchingWidgetConfigActivity : BaseWidgetConfigActivity() {
 
     override val titleRes: Int = R.string.widget_continue_watching_label
@@ -169,7 +169,6 @@ class ContinueWatchingWidgetConfigActivity : BaseWidgetConfigActivity() {
  * progress visibility; [NowPlayingWidget.updateAppWidget] renders directly
  * via RemoteViews, so no grid notify or scheduler refresh is needed.
  */
-@AndroidEntryPoint
 class NowPlayingWidgetConfigActivity : BaseWidgetConfigActivity() {
 
     override val titleRes: Int = R.string.widget_now_playing_label

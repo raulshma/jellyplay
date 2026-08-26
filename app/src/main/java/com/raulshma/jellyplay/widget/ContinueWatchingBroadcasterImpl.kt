@@ -3,9 +3,6 @@ package com.raulshma.jellyplay.widget
 import android.content.Context
 import android.content.Intent
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Sends an explicit-component broadcast to [ContinueWatchingWidget] so it
@@ -18,9 +15,8 @@ import javax.inject.Singleton
  *
  * Action string + receiver class name are owned here, not by the home ViewModel.
  */
-@Singleton
-class ContinueWatchingBroadcasterImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
+class ContinueWatchingBroadcasterImpl (
+    private val context: Context,
 ) : ContinueWatchingBroadcaster {
 
     override fun refreshContinueWatching() {

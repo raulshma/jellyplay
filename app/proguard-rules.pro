@@ -11,10 +11,6 @@
 # kotlinx-serialization and the Jellyfin SDK ship consumer R8 rules covering
 # serializer lookup and org.jellyfin.sdk.model.api.** — no app-level keeps needed.
 
--keepclassmembers class * {
-    @dagger.hilt.android.lifecycle.HiltViewModel <init>(...);
-}
-
 # libmpv - JNI library, must keep all classes and methods
 -keep class is.xyz.mpv.** { *; }
 -keepclassmembers class is.xyz.mpv.** { *; }

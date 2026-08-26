@@ -14,14 +14,14 @@ import kotlinx.coroutines.flow.StateFlow
  * MainContent. Pure parameter aggregation — each service stays owned by its
  * provider; the ViewModel-owned signals stay on [com.raulshma.jellyplay.MainViewModel].
  *
- * [audioPlaybackManagerLazy] is deliberately a `dagger.Lazy`: callers resolve
+ * [audioPlaybackManagerLazy] is deliberately a lazy provider: callers resolve
  * it with `get()` only once the user is authenticated, so the playback engine
  * is never built for auth/onboarding-only sessions.
  */
 class ShellInfra(
     val userMessageBus: UserMessageBus,
     val networkStatus: StateFlow<NetworkStatus>,
-    val audioPlaybackManagerLazy: dagger.Lazy<AudioPlaybackManager>,
+    val audioPlaybackManagerLazy: Lazy<AudioPlaybackManager>,
     val remoteNavigationBridge: RemoteNavigationBridge,
     val remoteControlReceiver: RemoteControlReceiver,
 )

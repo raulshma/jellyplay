@@ -13,10 +13,7 @@ import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.LibraryRecommendationsSource
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
+import org.koin.mp.KoinPlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,14 +37,17 @@ import kotlinx.coroutines.launch
  *     [com.raulshma.jellyplay.deeplink.DeepLinkHandler] and routed to
  *     the media detail screen.
  */
-class LibraryRecommendationsWidget : AppWidgetProvider() {
+/**
+ * Koin accessors (wave 8B — Hilt removal): resolved straight from the
+ * application container, same try/catch shape the EntryPoint call used.
+ */
+private fun koinWidgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore =
+    KoinPlatform.getKoin()!!.get()
 
-    @EntryPoint
-    @InstallIn(SingletonComponent::class)
-    interface WidgetEntryPoint {
-        fun widgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
-        fun widgetWorkScheduler(): WidgetWorkScheduler
-    }
+private fun koinWidgetWorkScheduler(): WidgetWorkScheduler =
+    KoinPlatform.getKoin()!!.get()
+
+class LibraryRecommendationsWidget : AppWidgetProvider() {
 
     private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -113,8 +113,7 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
     }
 
     private fun widgetScheduler(context: Context): WidgetWorkScheduler =
-        EntryPointAccessors.fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
-            .widgetWorkScheduler()
+        koinWidgetWorkScheduler()
 
     companion object {
         const val ACTION_REFRESH = "com.raulshma.jellyplay.widget.ACTION_REFRESH_LIBRARY"
@@ -196,11 +195,7 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
         }
 
         private fun readSourceLabel(context: Context, appWidgetId: Int): String = runCatching {
-            val entryPoint = EntryPointAccessors.fromApplication(
-                context.applicationContext,
-                WidgetEntryPoint::class.java,
-            )
-            entryPoint.widgetDataStore().getWidgetConfigForIdSync(appWidgetId)
+            koinWidgetDataStore().getWidgetConfigForIdSync(appWidgetId)
                 .librarySource.displayName
         }.getOrDefault(LibraryRecommendationsSource.SIMILAR_TO_RECENT.displayName)
     }

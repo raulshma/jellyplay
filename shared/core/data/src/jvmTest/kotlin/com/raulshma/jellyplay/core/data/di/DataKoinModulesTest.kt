@@ -37,8 +37,12 @@ import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
+import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
+import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.database.di.desktopDatabaseModule
@@ -180,6 +184,16 @@ class DataKoinModulesTest {
             assertResolves<MediaRepositoryAccess>(koin)
             assertResolves<DesktopDownloadManager>(koin)
             assertResolves<DesktopAutoDownloadScheduler>(koin)
+
+            // ── Home conveyor desktop actuals (wave 8B) ────────────────────
+            // The four WorkManager/widget-backed HomeViewModel ctor deps are
+            // honest no-ops on desktop (see desktopDataModule); assert each
+            // resolves so the desktop home wiring never rides on a missing
+            // definition again.
+            assertResolves<PlaybackSyncScheduler>(koin)
+            assertResolves<TvWatchNextScheduler>(koin)
+            assertResolves<ContinueWatchingBroadcaster>(koin)
+            assertResolves<LibrarySyncHook>(koin)
 
             // ── Phase X MediaRepository cluster flip ─────────────────────────
             // The last Hilt-owned data cluster, now Koin-owned on BOTH
