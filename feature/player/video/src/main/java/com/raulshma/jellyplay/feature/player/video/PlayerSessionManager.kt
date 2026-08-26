@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -103,6 +104,14 @@ class PlayerSessionManager(
     val engine: MediaEngine? get() = _engine.value
 
     private var lastPlaybackRequest: PlaybackRequest? = null
+
+    /**
+     * Owns the in-flight offline sidecar-subtitle catch-up fetch; cancelled on
+     * every load and on release so a late landing can never attach into a
+     * session it no longer belongs to. The item-id guard inside the job stays
+     * as belt-and-braces (same-item reload).
+     */
+    private var sidecarCatchUpJob: Job? = null
 
     /** Owns the in-flight transcode-reason lookup; cancelled/replaced per resolution. */
     private val transcodeReasonsRefresher =
@@ -222,6 +231,7 @@ class PlayerSessionManager(
         // isCurrent guard pass and land the previous session's reasons in
         // the fresh session before the resolve path re-arms or clears them.
         transcodeReasonsRefresher.cancel()
+        sidecarCatchUpJob?.cancel()
         _sessionState.update { it.copy(currentItemId = itemId, isReady = false) }
 
         // The download lookup is needed both for Auto resolution and for
@@ -390,6 +400,29 @@ class PlayerSessionManager(
         // otherwise a subtitle downloaded once vanishes on reopen. No server
         // stream list exists offline, so no deletion reconciliation runs.
         loadStreamingSubtitles(itemId, currentStreams = null)
+
+        // Best-effort catch-up for sidecar subtitles added on the server AFTER
+        // the download was made (#144): the bundle is a download-time snapshot,
+        // so a newly added .srt never reached it, and offline sessions (empty
+        // server streams, engine-tracks-only picker) would never show it. When
+        // the server is reachable, re-fetch the detail in the background and
+        // side-load every external stream not already attached — bundled subs
+        // dedupe by their `offline:{index}` id inside attachNewSubtitleStreams.
+        // Deliberately background: offline playback must start instantly, and
+        // the tracks pop in when the fetch lands. This never publishes server
+        // streams into session state — the offline track-restore ladder depends
+        // on `mediaStreams` staying empty (see refreshMediaDetail).
+        if (!offlineModeManager.isOffline) {
+            sidecarCatchUpJob = scope.launch {
+                val detail = mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
+                // The session may have moved on (item switch, release) while the
+                // fetch was in flight — attachNewSubtitleStreams re-checks the
+                // item id, but skip the work entirely when it is no longer ours.
+                if (detail != null && _sessionState.value.currentItemId == itemId) {
+                    attachNewSubtitleStreams(detail)
+                }
+            }
+        }
 
         val trickplayDir = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
             .getLocalTrickplayDir(downloadPath, itemId)
@@ -1024,6 +1057,7 @@ class PlayerSessionManager(
 
     fun release() {
         transcodeReasonsRefresher.cancel()
+        sidecarCatchUpJob?.cancel()
         _engine.value?.release()
         _engine.value = null
         lastPlaybackRequest = null

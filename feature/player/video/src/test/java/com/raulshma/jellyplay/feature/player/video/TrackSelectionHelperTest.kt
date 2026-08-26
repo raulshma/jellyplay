@@ -166,6 +166,74 @@ class TrackSelectionHelperTest {
     }
 
     @Test
+    fun updateTracksFromEngine_directPlayEmptyEngineSubs_surfacesExternalServerStreams() {
+        // #144 direct-play safety net: the side-load chain failed silently and
+        // the engine published zero subtitle tracks, but the server lists an
+        // external sub. The picker must surface it as a synthetic server row
+        // (selecting one runs the selectServerTrack reload → re-side-load)
+        // instead of a dead "None".
+        mediaStreams = listOf(
+            MediaStream(index = 3, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English", isExternal = true),
+        )
+        availableTracks.value = emptyList()
+        helper = makeHelper(
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
+        )
+
+        helper.updateTracksFromEngine()
+
+        val subs = helper.state.value.subtitleTracks
+        assertEquals(2, subs.size)
+        assertEquals("Off", subs[0].label)
+        val synthetic = subs[1]
+        assertEquals(TrackSelectionHelper.SERVER_TRACK_INDEX_BASE + 3, synthetic.index)
+        assertEquals("English", synthetic.label)
+    }
+
+    @Test
+    fun updateTracksFromEngine_directPlayEmbeddedOnlyServerStreams_staysNone() {
+        // Embedded streams are excluded from the fallback: buildExternalSubtitles
+        // skips them on direct play (container demux owns them), so their rows
+        // would be dead ends. Empty engine subs + embedded-only server list →
+        // the "None" placeholder stays.
+        mediaStreams = listOf(
+            MediaStream(index = 3, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English", isExternal = false),
+        )
+        availableTracks.value = emptyList()
+        helper = makeHelper(
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
+        )
+
+        helper.updateTracksFromEngine()
+
+        val subs = helper.state.value.subtitleTracks
+        assertEquals(1, subs.size)
+        assertEquals("None", subs[0].label)
+    }
+
+    @Test
+    fun updateTracksFromEngine_directPlayWithEngineSubs_doesNotMergeServerStreams() {
+        // The fallback is only for a fully-empty engine list: with engine sub
+        // tracks present, direct play keeps the engine-tracks-only picker
+        // (merging would duplicate container-demuxed/side-loaded tracks).
+        mediaStreams = listOf(
+            MediaStream(index = 3, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English", isExternal = true),
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "Track 1", null, TrackType.SUBTITLE, isSelected = false),
+        )
+        helper = makeHelper(
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
+        )
+
+        helper.updateTracksFromEngine()
+
+        val subs = helper.state.value.subtitleTracks
+        assertEquals(2, subs.size) // Off + the engine track only
+        assertEquals("Track 1", subs[1].label)
+    }
+
+    @Test
     fun selectAudioTrack_positiveIndex_callsEngineSelectAndUpdatesState() {
         // Populate via the engine (Default unselected, English auto-selected by
         // the "eng" preference, Spanish unselected), then user-select Spanish.

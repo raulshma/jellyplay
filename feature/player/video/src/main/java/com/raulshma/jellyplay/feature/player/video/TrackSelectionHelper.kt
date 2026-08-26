@@ -437,10 +437,21 @@ internal class TrackSelectionHelper(
         // to resolve in mpv's track-list, and embedded subs aren't in the
         // transcode manifest at all. Surface all server subtitle streams so the
         // picker is populated immediately; selecting one side-loads it.
-        val mergedSubOptions = if (getPlayMethod() != PlayMethod.DIRECT_PLAY) {
-            mergeServerStreams(enrichedSubOptions, streams, StreamType.SUBTITLE)
-        } else {
-            enrichedSubOptions
+        val mergedSubOptions = when {
+            getPlayMethod() != PlayMethod.DIRECT_PLAY ->
+                mergeServerStreams(enrichedSubOptions, streams, StreamType.SUBTITLE)
+            // Direct-play safety net (#144): the picker is engine-tracks-only on
+            // direct play, so a silently-failed side-load chain (unmappable
+            // codec, dropped engine fetch) empties the sheet even though the
+            // server lists the subtitle. When the engine published NO subtitle
+            // tracks at all, surface the server's EXTERNAL subs as synthetic
+            // rows — selecting one runs the selectServerTrack reload, which
+            // re-resolves playback and re-side-loads. Embedded streams stay
+            // excluded: buildExternalSubtitles skips them on direct play
+            // (container demux owns them), so their rows would be dead.
+            enrichedSubOptions.isEmpty() && streams.any { it.type == StreamType.SUBTITLE && it.isExternal } ->
+                mergeServerStreams(emptyList(), streams.filter { it.isExternal }, StreamType.SUBTITLE)
+            else -> enrichedSubOptions
         }
 
         val subtitleTracks = if (mergedSubOptions.isEmpty()) {

@@ -414,6 +414,16 @@ class VideoPlayerViewModel @Inject constructor(
         getCurrentSourceId = { playerSessionManager.sessionState.value.currentMediaSource?.id },
         onMediaDetailRefreshed = { refresh -> applyMediaDetailAndSourceState(refresh) },
         getCurrentMediaDetail = { mediaDetail },
+        // allowSyntheticRow = true is deliberate here (it's the default, spelled
+        // out so the policy doesn't hinge on a distant parameter): for "is the
+        // downloaded row usable", a synthetic server row IS a usable answer —
+        // selecting it runs the selectServerTrack reload. This is the opposite
+        // of the auto-select path in TrackSelectionHelper, which excludes
+        // synthetic rows because it must never surprise-reload playback.
+        isSubtitleTrackAttached = { hint ->
+            trackSelectionHelper.findSubtitleOptionFor(hint, allowSyntheticRow = true) != null
+        },
+        isOffline = { offlineModeManager.isOffline },
     )
     internal val sleepTimer = SleepTimerController(
         sleepTimerManager = sleepTimerManager,

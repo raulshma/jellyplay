@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -24,6 +25,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.advanceUntilIdle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -51,7 +54,9 @@ import org.robolectric.RobolectricTestRunner
  * non-fatal — the durable on-device copy still backs the subtitle, so the id is
  * marked [SubtitleDownloadState.DOWNLOADED_DEVICE_ONLY] and a warning is surfaced
  * (no refresh, since no server stream surfaced). A download failure still marks
- * the id FAILED.
+ * the id FAILED. And per the #144 verify-then-mark contract shared with the
+ * Jellyfin remote path: when the engine silently drops the side-load, the row
+ * reports FAILED instead of a usable status backed by a dead "Use" button.
  */
 @RunWith(RobolectricTestRunner::class)
 class SubtitleManagerProviderDownloadTest {
@@ -105,7 +110,10 @@ class SubtitleManagerProviderDownloadTest {
         refreshedDetails = mutableListOf()
     }
 
-    private fun manager(): SubtitleManager = SubtitleManager(
+    private fun manager(
+        scope: CoroutineScope = this.scope,
+        isSubtitleTrackAttached: (ReadySubtitleHint) -> Boolean = { true },
+    ): SubtitleManager = SubtitleManager(
         context = context,
         playbackRepository = playbackRepository,
         mediaRepository = mediaRepository,
@@ -118,6 +126,9 @@ class SubtitleManagerProviderDownloadTest {
         getCurrentItemId = { "item-1" },
         onMediaDetailRefreshed = { refresh -> refreshedDetails += refresh.detail },
         getCurrentMediaDetail = { null },
+        // [isSubtitleTrackAttached] models the VM-side track-picker resolution
+        // the verify-then-mark flow observes.
+        isSubtitleTrackAttached = isSubtitleTrackAttached,
     )
 
     @Test
@@ -241,23 +252,32 @@ class SubtitleManagerProviderDownloadTest {
         // escaping the SupervisorJob scope as an uncaught leak that fails the
         // NEXT test class to enter runTest.
         coEvery { playbackRepository.downloadSubtitle("item-1", "jelly-1") } returns Result.success(Unit)
-        // The appear-poll reads the forced detail; one source carrying a new
-        // SUBTITLE stream satisfies it on the first attempt, so the delegated
-        // row settles DOWNLOADED without the ~9 s poll budget.
-        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
-            MediaDetail(
-                item = MediaItem(id = "item-1", name = "Movie", mediaType = MediaType.MOVIE),
-                mediaSources = listOf(
-                    MediaSource(
-                        id = "ms-1",
-                        name = "Movie",
-                        mediaStreams = listOf(
-                            MediaStream(index = 0, type = StreamType.SUBTITLE, language = "eng"),
-                        ),
-                    ),
+        // The appear-poll reads the forced detail. The first read is the
+        // pre-download snapshot seed (only the pre-existing sidecar at index 0);
+        // the polls then see the downloaded stream appended at index 2, which
+        // the seeded snapshot correctly distinguishes from the pre-existing
+        // index — so the delegated row settles DOWNLOADED without the ~9 s
+        // poll budget.
+        fun detailWithStreams(streams: List<MediaStream>) = MediaDetail(
+            item = MediaItem(id = "item-1", name = "Movie", mediaType = MediaType.MOVIE),
+            mediaSources = listOf(
+                MediaSource(
+                    id = "ms-1",
+                    name = "Movie",
+                    mediaStreams = streams,
                 ),
-                chapters = emptyList(),
-            )
+            ),
+            chapters = emptyList(),
+        )
+        mediaRepository.stubDetailReads(
+            "item-1",
+            detailWithStreams(listOf(MediaStream(index = 0, type = StreamType.SUBTITLE, language = "eng"))),
+            detailWithStreams(
+                listOf(
+                    MediaStream(index = 0, type = StreamType.SUBTITLE, language = "eng"),
+                    MediaStream(index = 2, type = StreamType.SUBTITLE, language = "eng"),
+                ),
+            ),
         )
 
         val m = manager()
@@ -275,5 +295,35 @@ class SubtitleManagerProviderDownloadTest {
         // plain RemoteSubtitleInfo id, not the composite provider key).
         assertEquals("item-1", refreshedDetails.single().item.id)
         assertEquals(SubtitleDownloadState.DOWNLOADED, m.state.value.downloadingSubtitles["jelly-1"]?.state)
+        assertEquals(2, m.state.value.readySubtitles["jelly-1"]?.serverStreamIndex)
+    }
+
+    @Test
+    fun downloadProviderSubtitle_attachNeverLands_marksFailedInsteadOfDeadUse() = runTest {
+        // Same #144 contract as the Jellyfin remote path: the engine silently
+        // dropped the side-load (unmappable codec, failed fetch), so neither
+        // DOWNLOADED nor DOWNLOADED_DEVICE_ONLY may present a dead "Use" — the
+        // row reports FAILED even though save + upload both succeeded.
+        coEvery { subtitleProviderRepository.downloadExternal(result) } returns Result.success(file)
+        coEvery { playbackRepository.uploadSubtitle(any(), any(), any(), any(), any(), any()) } returns Result.success(Unit)
+        // The post-upload refresh reads the detail; relaxed mocks mistype the
+        // Result payload (see the delegation test), so stub it explicitly.
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
+            MediaDetail(
+                item = MediaItem(id = "item-1", name = "Movie", mediaType = MediaType.MOVIE),
+                mediaSources = emptyList(),
+                chapters = emptyList(),
+            ),
+        )
+
+        val m = manager(scope = this, isSubtitleTrackAttached = { false })
+        m.downloadProviderSubtitle(result)
+        advanceUntilIdle()
+
+        assertTrue(addedSubtitles.isNotEmpty())
+        val status = m.state.value.downloadingSubtitles["OPENSUBTITLES:os-42"]
+        assertEquals(SubtitleDownloadState.FAILED, status?.state)
+        assertEquals("Subtitle could not be attached to playback", status?.errorMessage)
+        io.mockk.verify { userMessageBus.error(any<String>()) }
     }
 }

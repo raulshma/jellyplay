@@ -120,6 +120,27 @@ internal class SubtitleManager(
      * [searchAllProviders].
      */
     private val getCurrentMediaDetail: () -> MediaDetail?,
+    /**
+     * True when the side-loaded subtitle described by [hint] is resolvable in
+     * the live track picker (engine track published, or a synthetic server row
+     * for its stream index). The VM wires this to
+     * [TrackSelectionHelper.findSubtitleOptionFor] so "downloaded" can mean
+     * "usable", not merely "saved on the server" — every engine drops a
+     * side-load silently (unmappable codec, failed fetch), and marking the row
+     * usable before the track lands produced a "Use" button that did nothing
+     * (#144). Defaults to true so the row never blocks on the seam.
+     */
+    private val isSubtitleTrackAttached: (ReadySubtitleHint) -> Boolean = { true },
+    /**
+     * True while the app is in offline mode (manual or auto). The server-default
+     * remote-subtitle list is a pure server read: offline it can never succeed,
+     * and the retry chain's late failure surfaced as a global "Could not load
+     * subtitle list" toast long after the hub was closed — often only after the
+     * player itself (the track list the user actually saw is engine-local state
+     * and unaffected). Offline, [loadRemoteSubtitles] skips the fetch silently;
+     * the Get tab just has no server-default rows, like an empty result.
+     */
+    private val isOffline: () -> Boolean = { false },
 ) {
 
     private val _state = MutableStateFlow(SubtitleState())
@@ -132,6 +153,13 @@ internal class SubtitleManager(
      * starting a new one.
      */
     private var searchJob: Job? = null
+
+    /**
+     * In-flight [loadRemoteSubtitles] fetch. Tracked so a reset (sheet reopen /
+     * item switch / release) cancels it — otherwise the retry chain's late
+     * failure would toast after the hub or even the player was gone.
+     */
+    private var remoteSubtitlesJob: Job? = null
 
     /**
      * In-flight download jobs keyed by subtitle id. The former single global
@@ -148,8 +176,16 @@ internal class SubtitleManager(
 
     fun loadRemoteSubtitles() {
         val itemId = getCurrentItemId() ?: return
+        // Offline the server read can never succeed; skipping silently avoids
+        // the retry chain's delayed "Could not load subtitle list" toast (see
+        // [isOffline]).
+        if (isOffline()) {
+            _state.update { it.copy(remoteSubtitles = emptyList(), isLoadingRemoteSubtitles = false) }
+            return
+        }
+        remoteSubtitlesJob?.cancel()
         _state.update { it.copy(isLoadingRemoteSubtitles = true) }
-        scope.launch {
+        remoteSubtitlesJob = scope.launch {
             playbackRepository.getRemoteSubtitles(itemId).fold(
                 onSuccess = { subs ->
                     _state.update { it.copy(remoteSubtitles = subs, isLoadingRemoteSubtitles = false) }
@@ -175,6 +211,15 @@ internal class SubtitleManager(
         val preDownloadStreamIndices = currentSubtitleStreamIndices()
         markDownloadStatus(subtitleId, SubtitleDownloadState.DOWNLOADING)
         downloadJobs[subtitleId] = scope.launch {
+            // Seed the snapshot from the server when the live one is empty —
+            // offline (downloaded-media) sessions carry no server streams in UI
+            // state. Must happen BEFORE the POST: afterwards the new stream may
+            // already be visible and would be indistinguishable from a
+            // pre-existing one. The download itself requires the server, so
+            // this round-trip is always possible when it matters.
+            val effectiveSnapshot = preDownloadStreamIndices.ifEmpty {
+                seedPreDownloadStreamIndices(itemId)
+            }
             // NOTE: downloadSubtitle() returns Result<Unit>, so we fold that
             // directly — `runCatching { repo.x() }` would swallow a returned
             // Result.failure into onSuccess (the failure is wrapped as the
@@ -187,7 +232,7 @@ internal class SubtitleManager(
             ensureActive()
             result.fold(
                 onSuccess = {
-                    waitForSubtitleToAppear(itemId, subtitleInfo, preDownloadStreamIndices)
+                    waitForSubtitleToAppear(itemId, subtitleInfo, effectiveSnapshot)
                 },
                 onFailure = { e ->
                     val msg = e.message ?: "Download failed"
@@ -300,8 +345,19 @@ internal class SubtitleManager(
         // new stream the server has just attached.
         val detail = mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
         currentCoroutineContext().ensureActive()
-        val appeared = detail?.let { findAppearedSubtitleStream(it, subtitleInfo, preDownloadStreamIndices) }
+        // A retry of an id we already downloaded once: its stream index is in
+        // the snapshot now (the server already had it when the snapshot was
+        // taken), so the "genuinely new index" rule would never match it.
+        // Accept the recorded index as attributable too.
+        val priorStreamIndex = _state.value.readySubtitles[subtitleId]?.serverStreamIndex
+        val appeared = detail?.let {
+            findAppearedSubtitleStream(it, subtitleInfo, preDownloadStreamIndices, priorStreamIndex)
+        }
         if (detail == null || appeared == null) return null
+        val hint = ReadySubtitleHint(
+            trackId = externalSubtitleTrackId(appeared.index),
+            serverStreamIndex = appeared.index,
+        )
         onMediaDetailRefreshed(
             MediaDetailRefresh(
                 detail = detail,
@@ -309,15 +365,15 @@ internal class SubtitleManager(
                 newSubtitleStreamIndex = appeared.index,
             ),
         )
-        recordReadySubtitle(
-            subtitleId,
-            ReadySubtitleHint(
-                trackId = externalSubtitleTrackId(appeared.index),
-                serverStreamIndex = appeared.index,
-            ),
+        recordReadySubtitle(subtitleId, hint)
+        verifyThenMark(
+            statusKey = subtitleId,
+            hint = hint,
+            successMessage = "Subtitle downloaded",
+            // Distinct from the provider path's notice: here the subtitle is
+            // durably on the server; only the local attach failed.
+            failureNotice = "Subtitle saved to the server but could not be attached to playback",
         )
-        userMessageBus.info("Subtitle downloaded")
-        markDownloadStatus(subtitleId, SubtitleDownloadState.DOWNLOADED)
         return appeared.index
     }
 
@@ -332,14 +388,18 @@ internal class SubtitleManager(
      * [preDownloadStreamIndices] (i.e. genuinely new), to avoid a false
      * positive on an existing same-language subtitle; among candidates the
      * highest index wins (the server appends). Falls back to a plain language
-     * match when no snapshot was captured (defensive). The language is compared
-     * case-insensitively against the remote info's three-letter ISO name
-     * (server streams use the same form), then the human-readable name.
+     * match when no snapshot was captured (defensive). [priorStreamIndex] —
+     * when this is a retry of an id downloaded earlier in this session, its
+     * recorded stream index is attributable even though the snapshot now
+     * contains it. The language is compared case-insensitively against the
+     * remote info's three-letter ISO name (server streams use the same form),
+     * then the human-readable name.
      */
     private fun findAppearedSubtitleStream(
         detail: MediaDetail,
         subtitleInfo: RemoteSubtitleInfo,
         preDownloadStreamIndices: Set<Int>,
+        priorStreamIndex: Int? = null,
     ): MediaStream? {
         // Attribute the new stream to the PLAYING source when known —
         // flat-mapping every media source could match a same-language stream
@@ -364,26 +424,91 @@ internal class SubtitleManager(
         // If a snapshot of pre-download indices exists, require a genuinely new
         // index whose language matches — otherwise an existing same-language
         // subtitle would read as a false positive the instant the download call
-        // returns.
+        // returns. A retry's recorded index stays attributable (see above).
         val candidates = if (preDownloadStreamIndices.isNotEmpty()) {
-            byLanguage.filter { it.index !in preDownloadStreamIndices }
+            byLanguage.filter { it.index !in preDownloadStreamIndices || it.index == priorStreamIndex }
         } else {
-            // No snapshot (e.g. mediaStreams were empty at download time): a plain
+            // No snapshot (e.g. the pre-download seeding failed): a plain
             // language match is the best we can do.
             byLanguage
         }
         return candidates.maxByOrNull { it.index }
     }
 
+    /**
+     * Fetches the server's subtitle-stream indices for [itemId] so
+     * [downloadSubtitle] can snapshot the pre-download state on sessions whose
+     * UI-state stream list is empty (offline/downloaded media). The download
+     * itself requires the server, so this is only unreachable when the whole
+     * flow is; an empty set then degrades [findAppearedSubtitleStream] to the
+     * plain language match, as before.
+     */
+    private suspend fun seedPreDownloadStreamIndices(itemId: String): Set<Int> =
+        mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
+            ?.mediaSources
+            ?.flatMap { it.mediaStreams }
+            ?.filter { it.type == StreamType.SUBTITLE }
+            ?.map { it.index }
+            ?.toSet()
+            ?: emptySet()
+
+    /**
+     * Waits (bounded) for the side-loaded subtitle described by [hint] to
+     * become resolvable in the live track picker. The engine side-load is
+     * fire-and-forget and its track-list republish is asynchronous, so
+     * attachment is observed through [isSubtitleTrackAttached], not assumed.
+     */
+    private suspend fun waitForTrackAttachment(hint: ReadySubtitleHint): Boolean {
+        repeat(TRACK_ATTACH_MAX_ATTEMPTS) { attempt ->
+            if (attempt > 0) delay(TRACK_ATTACH_POLL_DELAY_MS)
+            currentCoroutineContext().ensureActive()
+            if (isSubtitleTrackAttached(hint)) return true
+        }
+        return false
+    }
+
+    /**
+     * Verify-then-mark tail shared by every side-load download path (#144):
+     * the engine side-load → track-list republish round-trip is asynchronous,
+     * and every engine drops a side-load silently when it fails (unmappable
+     * codec, engine-side fetch error), so marking a row usable before the
+     * track lands produced a "Use" button that did nothing. Waits (bounded)
+     * for [hint] to become resolvable via [isSubtitleTrackAttached]; on
+     * success surfaces [successMessage] and records [successState]
+     * ([successError]); on miss surfaces [failureNotice] and marks
+     * [statusKey] FAILED with [ATTACH_FAILED_MESSAGE].
+     */
+    private suspend fun verifyThenMark(
+        statusKey: String,
+        hint: ReadySubtitleHint,
+        successMessage: String,
+        failureNotice: String,
+        successState: SubtitleDownloadState = SubtitleDownloadState.DOWNLOADED,
+        successError: String? = null,
+    ) {
+        if (waitForTrackAttachment(hint)) {
+            userMessageBus.info(successMessage)
+            markDownloadStatus(statusKey, successState, successError)
+        } else {
+            userMessageBus.error(failureNotice)
+            markDownloadStatus(statusKey, SubtitleDownloadState.FAILED, ATTACH_FAILED_MESSAGE)
+        }
+    }
+
     /** Current subtitle-stream indices across all media sources, for the snapshot. */
     private fun currentSubtitleStreamIndices(): Set<Int> =
         getMediaStreams().filter { it.type == StreamType.SUBTITLE }.map { it.index }.toSet()
 
-    /** Sets [subtitleId]'s download status on the owned state. */
-    private fun markDownloadStatus(subtitleId: String, state: SubtitleDownloadState, errorMessage: String? = null) {
+    /**
+     * Sets a download status on the owned state. [statusKey] is the subtitle
+     * id for server downloads, or the composite "provider:id" key
+     * ([providerSubtitleRowKey]) for external-provider downloads — both live
+     * in [SubtitleState.downloadingSubtitles] under one key space.
+     */
+    private fun markDownloadStatus(statusKey: String, state: SubtitleDownloadState, errorMessage: String? = null) {
         _state.update {
             it.copy(
-                downloadingSubtitles = it.downloadingSubtitles + (subtitleId to SubtitleDownloadStatus(subtitleId, state, errorMessage)),
+                downloadingSubtitles = it.downloadingSubtitles + (statusKey to SubtitleDownloadStatus(statusKey, state, errorMessage)),
             )
         }
     }
@@ -433,6 +558,7 @@ internal class SubtitleManager(
         downloadJobs.clear()
         searchJob?.cancel()
         providerSearchJob?.cancel()
+        remoteSubtitlesJob?.cancel()
         _state.update {
             it.copy(
                 searchedSubtitles = emptyList(),
@@ -460,6 +586,7 @@ internal class SubtitleManager(
         downloadJobs.clear()
         searchJob?.cancel()
         providerSearchJob?.cancel()
+        remoteSubtitlesJob?.cancel()
         _state.value = SubtitleState()
     }
 
@@ -629,7 +756,7 @@ internal class SubtitleManager(
             }
             else -> {
                 downloadJobs.remove(statusKey)?.cancel()
-                markProviderDownloadStatus(statusKey, SubtitleDownloadState.DOWNLOADING)
+                markDownloadStatus(statusKey, SubtitleDownloadState.DOWNLOADING)
                 downloadJobs[statusKey] = scope.launch {
                     val fileResult = subtitleProviderRepository.downloadExternal(result)
                     ensureActive()
@@ -670,7 +797,15 @@ internal class SubtitleManager(
                             addExternalSubtitle(source)
                             // The side-loaded track carries source.id, so the
                             // sheet's "Use" action can resolve it exactly.
-                            recordReadySubtitle(statusKey, ReadySubtitleHint(trackId = source.id))
+                            val hint = ReadySubtitleHint(trackId = source.id)
+                            recordReadySubtitle(statusKey, hint)
+
+                            // Verify-then-mark via [verifyThenMark], same
+                            // contract as the Jellyfin remote path. The hint
+                            // is trackId-only, so it observes the engine's own
+                            // track — not a synthetic server row.
+                            val attachFailureNotice =
+                                "Subtitle downloaded but could not be attached to playback"
 
                             // Best-effort: upload to the Jellyfin server so the
                             // subtitle is also persisted as a MediaStream (and thus
@@ -714,19 +849,25 @@ internal class SubtitleManager(
                                             )
                                         }
                                     }
-                                    userMessageBus.info("Subtitle added")
-                                    markProviderDownloadStatus(statusKey, SubtitleDownloadState.DOWNLOADED)
+                                    verifyThenMark(
+                                        statusKey = statusKey,
+                                        hint = hint,
+                                        successMessage = "Subtitle added",
+                                        failureNotice = attachFailureNotice,
+                                    )
                                 },
                                 onFailure = { e ->
                                     // Server unreachable / upload failed — the subtitle
                                     // is still usable on-device. Surface a softer
                                     // device-only status rather than a hard failure.
                                     val msg = e.message ?: "Server unavailable"
-                                    userMessageBus.info("Saved to device only: $msg")
-                                    markProviderDownloadStatus(
-                                        statusKey,
-                                        SubtitleDownloadState.DOWNLOADED_DEVICE_ONLY,
-                                        msg,
+                                    verifyThenMark(
+                                        statusKey = statusKey,
+                                        hint = hint,
+                                        successMessage = "Saved to device only: $msg",
+                                        failureNotice = attachFailureNotice,
+                                        successState = SubtitleDownloadState.DOWNLOADED_DEVICE_ONLY,
+                                        successError = msg,
                                     )
                                 },
                             )
@@ -734,7 +875,7 @@ internal class SubtitleManager(
                         onFailure = { e ->
                             val msg = e.message ?: "Download failed"
                             userMessageBus.error("Subtitle download failed: $msg")
-                            markProviderDownloadStatus(statusKey, SubtitleDownloadState.FAILED, msg)
+                            markDownloadStatus(statusKey, SubtitleDownloadState.FAILED, msg)
                         },
                     )
                 }
@@ -767,19 +908,6 @@ internal class SubtitleManager(
     fun seedDefaultSearchLanguage(language: String) {
         if (_state.value.defaultSearchLanguage != language) {
             _state.update { it.copy(defaultSearchLanguage = language) }
-        }
-    }
-
-    /** Sets a provider-subtitle (composite-keyed) download status on the owned state. */
-    private fun markProviderDownloadStatus(
-        statusKey: String,
-        state: SubtitleDownloadState,
-        errorMessage: String? = null,
-    ) {
-        _state.update {
-            it.copy(
-                downloadingSubtitles = it.downloadingSubtitles + (statusKey to SubtitleDownloadStatus(statusKey, state, errorMessage)),
-            )
         }
     }
 
@@ -870,6 +998,25 @@ internal class SubtitleManager(
 
     /** Delay between slow-phase media-detail polls. See [waitForSubtitleToAppear]. */
     private val SUBTITLE_APPEAR_LATE_POLL_DELAY_MS = 5000L
+
+    /**
+     * Bounded wait for the engine to publish a just-side-loaded subtitle track
+     * before the row is marked usable. Covers the async side-load →
+     * track-list republish round-trip (ExoPlayer re-prepare, mpv's 500 ms
+     * delayed track refresh); a side-load that fails never lands, and the
+     * row reports FAILED instead of a dead "Use". See [waitForTrackAttachment].
+     */
+    private val TRACK_ATTACH_MAX_ATTEMPTS = 12
+
+    /** Delay between track-attachment polls. See [waitForTrackAttachment]. */
+    private val TRACK_ATTACH_POLL_DELAY_MS = 500L
+
+    /**
+     * Row-level FAILED message when a side-loaded track never became
+     * resolvable in the picker (#144 verify-then-mark). Shared by both
+     * download paths — see [verifyThenMark].
+     */
+    private val ATTACH_FAILED_MESSAGE = "Subtitle could not be attached to playback"
 
     /** Returns the byte size of [uri] via OpenableColumns.SIZE, or 0 if unknown. */
     private fun queryFileSizeBytes(uri: Uri): Long {

@@ -78,6 +78,12 @@ class SubtitleManagerTest {
         currentDetail = null
         mediaStreams = emptyList()
 
+        // Default detail stub: the offline snapshot seed reads this on every
+        // downloadSubtitle call, so an unstubbed relaxed mock would leak a
+        // failing coroutine into the next test. Individual tests override.
+        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns
+            Result.failure(RuntimeException("no detail seeded"))
+
         manager = SubtitleManager(
             context = mockk(relaxed = true),
             playbackRepository = playbackRepository,
@@ -126,6 +132,46 @@ class SubtitleManagerTest {
         manager.loadRemoteSubtitles()
 
         coVerify(exactly = 0) { playbackRepository.getRemoteSubtitles(any()) }
+    }
+
+    @Test
+    fun loadRemoteSubtitles_offline_skipsFetchAndToastsNothing() {
+        // Offline the server read can never succeed — and its retry chain's
+        // late failure used to surface as a global "Could not load subtitle
+        // list" toast long after the hub (or even the player) was closed. The
+        // fetch must be skipped silently: empty list, no loading flag, no repo
+        // call, no toast.
+        var offline = true
+        manager = managerWithItemId("item-1", isOffline = { offline })
+        coEvery { playbackRepository.getRemoteSubtitles("item-1") } returns Result.success(
+            listOf(RemoteSubtitleInfo(id = "s1")),
+        )
+
+        manager.loadRemoteSubtitles()
+
+        coVerify(exactly = 0) { playbackRepository.getRemoteSubtitles(any()) }
+        assertTrue(manager.state.value.remoteSubtitles.isEmpty())
+        assertFalse(manager.state.value.isLoadingRemoteSubtitles)
+        io.mockk.verify(exactly = 0) { userMessageBus.error(any<String>()) }
+    }
+
+    @Test
+    fun loadRemoteSubtitles_backOnlineAfterOfflineFetchesNormally() {
+        // The offline skip must not be sticky: leaving offline mode restores
+        // the normal fetch on the next hub open.
+        var offline = true
+        manager = managerWithItemId("item-1", isOffline = { offline })
+        val subs = listOf(RemoteSubtitleInfo(id = "s1", name = "English"))
+        coEvery { playbackRepository.getRemoteSubtitles("item-1") } returns Result.success(subs)
+
+        manager.loadRemoteSubtitles()
+        assertTrue(manager.state.value.remoteSubtitles.isEmpty())
+
+        offline = false
+        manager.loadRemoteSubtitles()
+
+        assertEquals(subs, manager.state.value.remoteSubtitles)
+        assertFalse(manager.state.value.isLoadingRemoteSubtitles)
     }
 
     @Test
@@ -287,10 +333,12 @@ class SubtitleManagerTest {
     fun downloadSubtitle_successMarksDownloadedAndRefreshesMediaDetail() =
         runTest(UnconfinedTestDispatcher()) {
             // The downloaded subtitle surfaces as a new SUBTITLE stream on the
-            // first cache-busted poll.
+            // first cache-busted poll. The FIRST detail read is the offline
+            // snapshot seed (pre-download state, no subtitle yet); the poll
+            // reads then return the post-download detail.
             val detail = mediaDetailWithSubtitle("item-1", streamIndex = 2, language = "eng")
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
-            coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(detail)
+            mediaRepository.stubDetailReads("item-1", mediaDetail("item-1"), detail)
 
             val m = managerInScope(this)
             m.downloadSubtitle(
@@ -410,6 +458,123 @@ class SubtitleManagerTest {
         }
 
     @Test
+    fun downloadSubtitle_offlineSeedsPreDownloadSnapshot_attributesNewStreamNotSidecar() =
+        runTest(UnconfinedTestDispatcher()) {
+            // #144 offline scenario: the session plays a download, so the live
+            // UI-state stream list is empty. The server already carries a
+            // same-language sidecar at index 7; the download lands at index 3
+            // (server re-indexed after a deletion — the new sub is NOT the
+            // highest index). Without the pre-download seed the poll's plain
+            // language match would attribute the SIDECAR (highest index wins);
+            // with it, only the genuinely new index qualifies.
+            mediaStreams = emptyList()
+            val preDownload = mediaDetailWithSubtitles(
+                "item-1",
+                listOf(stream(index = 7, language = "eng")),
+            )
+            val postDownload = mediaDetailWithSubtitles(
+                "item-1",
+                listOf(stream(index = 7, language = "eng"), stream(index = 3, language = "eng")),
+            )
+            coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
+            mediaRepository.stubDetailReads("item-1", preDownload, postDownload)
+
+            val m = managerInScope(this)
+            m.downloadSubtitle(RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"))
+            advanceUntilIdle()
+
+            assertEquals(
+                SubtitleDownloadState.DOWNLOADED,
+                m.state.value.downloadingSubtitles["s1"]?.state,
+            )
+            assertEquals(3, m.state.value.readySubtitles["s1"]?.serverStreamIndex)
+            assertEquals("external:3", m.state.value.readySubtitles["s1"]?.trackId)
+            assertEquals(listOf<Int?>(3), refreshedIndexes)
+        }
+
+    @Test
+    fun downloadSubtitle_attachNeverLands_marksFailedInsteadOfDeadUse() =
+        runTest(UnconfinedTestDispatcher()) {
+            // #144: the stream surfaces on the server and the side-load is
+            // fired, but the engine silently drops it (unmappable codec, failed
+            // fetch). The row must NOT flip to a "Use"-able DOWNLOADED — it
+            // reports FAILED so the dead button can never strand the user.
+            mediaStreams = emptyList()
+            val postDownload = mediaDetailWithSubtitle("item-1", streamIndex = 2, language = "eng")
+            coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
+            mediaRepository.stubDetailReads("item-1", mediaDetail("item-1"), postDownload)
+
+            val m = managerInScope(this, isSubtitleTrackAttached = { false })
+            m.downloadSubtitle(RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"))
+            // Burn the bounded attachment wait (virtual time).
+            advanceUntilIdle()
+
+            val status = m.state.value.downloadingSubtitles["s1"]
+            assertEquals(SubtitleDownloadState.FAILED, status?.state)
+            assertTrue(!status?.errorMessage.isNullOrBlank())
+            // The attach was still attempted and the hint recorded — a late
+            // landing track (or a reload) can still resolve "Use".
+            assertEquals(listOf<Int?>(2), refreshedIndexes)
+            assertEquals(2, m.state.value.readySubtitles["s1"]?.serverStreamIndex)
+            io.mockk.verify { userMessageBus.error(any<String>()) }
+        }
+
+    @Test
+    fun downloadSubtitle_attachLandsLate_marksDownloaded() =
+        runTest(UnconfinedTestDispatcher()) {
+            // The side-load → track-list republish round-trip is async: the
+            // first attachment polls miss, a later one hits. DOWNLOADED must
+            // wait for that landing, not fire on the server-side save.
+            mediaStreams = emptyList()
+            val postDownload = mediaDetailWithSubtitle("item-1", streamIndex = 2, language = "eng")
+            coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
+            mediaRepository.stubDetailReads("item-1", mediaDetail("item-1"), postDownload)
+            var attachPolls = 0
+            val m = managerInScope(this) {
+                attachPolls++
+                attachPolls > 3
+            }
+            m.downloadSubtitle(RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"))
+            advanceUntilIdle()
+
+            assertEquals(
+                SubtitleDownloadState.DOWNLOADED,
+                m.state.value.downloadingSubtitles["s1"]?.state,
+            )
+            io.mockk.verify { userMessageBus.info(any<String>()) }
+        }
+
+    @Test
+    fun downloadSubtitle_retryOfDownloadedId_matchesRecordedStreamIndex() =
+        runTest(UnconfinedTestDispatcher()) {
+            // Retrying an id downloaded earlier in this session: the stream is
+            // already on the server, so the snapshot contains its index and the
+            // "genuinely new index" rule can never fire. The recorded hint's
+            // index stays attributable — the retry re-completes instead of
+            // hanging in DELAYED forever.
+            mediaStreams = emptyList()
+            val detailWithSub = mediaDetailWithSubtitle("item-1", streamIndex = 2, language = "eng")
+            coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
+            mediaRepository.stubDetailReads("item-1", mediaDetail("item-1"), detailWithSub)
+
+            val m = managerInScope(this)
+            m.downloadSubtitle(RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"))
+            advanceUntilIdle()
+            assertEquals(SubtitleDownloadState.DOWNLOADED, m.state.value.downloadingSubtitles["s1"]?.state)
+
+            // Retry: the seed now returns the detail that already carries the
+            // stream (every read returns it), snapshot = {2}, prior hint = 2.
+            m.downloadSubtitle(RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"))
+            advanceUntilIdle()
+
+            assertEquals(
+                SubtitleDownloadState.DOWNLOADED,
+                m.state.value.downloadingSubtitles["s1"]?.state,
+            )
+            assertEquals(2, m.state.value.readySubtitles["s1"]?.serverStreamIndex)
+        }
+
+    @Test
     fun downloadSubtitle_marksStatusForId() =
         runTest(UnconfinedTestDispatcher()) {
             // The stream never appears, so the final state is DELAYED — but the
@@ -483,7 +648,10 @@ class SubtitleManagerTest {
     // Uri.toString(); verifying it requires an Android/Robolectric Uri, so it is
     // covered by instrumentation rather than these pure-JVM tests.
 
-    private fun managerWithItemId(id: String?): SubtitleManager = SubtitleManager(
+    private fun managerWithItemId(
+        id: String?,
+        isOffline: () -> Boolean = { false },
+    ): SubtitleManager = SubtitleManager(
         context = mockk(relaxed = true),
         playbackRepository = playbackRepository,
         mediaRepository = mediaRepository,
@@ -499,14 +667,20 @@ class SubtitleManagerTest {
             refreshedIndexes += refresh.newSubtitleStreamIndex
         },
         getCurrentMediaDetail = { currentDetail },
+        isOffline = isOffline,
     )
 
     /**
      * A [SubtitleManager] bound to [testScope] so the post-download poll's
      * [kotlinx.coroutines.delay] advances under the test scheduler's virtual
      * time. Shares the same mocked repos + state fixture as [manager].
+     * [isSubtitleTrackAttached] models the VM-side track-picker resolution the
+     * verify-then-mark flow observes.
      */
-    private fun managerInScope(testScope: CoroutineScope): SubtitleManager = SubtitleManager(
+    private fun managerInScope(
+        testScope: CoroutineScope,
+        isSubtitleTrackAttached: (com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint) -> Boolean = { true },
+    ): SubtitleManager = SubtitleManager(
         context = mockk(relaxed = true),
         playbackRepository = playbackRepository,
         mediaRepository = mediaRepository,
@@ -522,6 +696,7 @@ class SubtitleManagerTest {
             refreshedIndexes += refresh.newSubtitleStreamIndex
         },
         getCurrentMediaDetail = { currentDetail },
+        isSubtitleTrackAttached = isSubtitleTrackAttached,
     )
 
     private fun mediaDetail(id: String): MediaDetail = MediaDetail(
@@ -532,15 +707,20 @@ class SubtitleManagerTest {
 
     /** A [MediaDetail] carrying a single subtitle stream (the downloaded one). */
     private fun mediaDetailWithSubtitle(id: String, streamIndex: Int, language: String): MediaDetail =
+        mediaDetailWithSubtitles(id, listOf(stream(streamIndex, language)))
+
+    /** A [MediaDetail] carrying several subtitle streams on one source. */
+    private fun mediaDetailWithSubtitles(id: String, streams: List<MediaStream>): MediaDetail =
         mediaDetail(id).copy(
             mediaSources = listOf(
                 MediaSource(
                     id = "$id-source",
                     name = "Source",
-                    mediaStreams = listOf(
-                        MediaStream(index = streamIndex, type = StreamType.SUBTITLE, language = language),
-                    ),
+                    mediaStreams = streams,
                 ),
             ),
         )
+
+    private fun stream(index: Int, language: String): MediaStream =
+        MediaStream(index = index, type = StreamType.SUBTITLE, language = language)
 }
