@@ -30,7 +30,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.extendedColors
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.model.formatFixed
-import com.raulshma.jellyplay.core.ui.player.FormattedTranscodeReason
+import com.raulshma.jellyplay.feature.player.video.PlatformTranscodeReason
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_audio
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_av_sync
@@ -136,7 +136,7 @@ fun VideoStatsOverlay(
     audioSessionId: Int,
     /** Server-reported transcode reasons, pre-formatted; empty when direct
      *  playing so the "why transcoding" block is hidden entirely. */
-    transcodeReasons: List<FormattedTranscodeReason> = emptyList(),
+    transcodeReasons: List<PlatformTranscodeReason> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     val stats by statsFlow.collectAsStateWithLifecycle()

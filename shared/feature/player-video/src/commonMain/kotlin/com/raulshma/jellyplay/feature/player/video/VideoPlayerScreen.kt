@@ -2,13 +2,6 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.core_restart
-import android.app.Activity
-import android.content.Context
-import android.content.pm.ActivityInfo
-import android.os.Build
-import android.view.WindowManager
-import android.view.HapticFeedbackConstants
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -36,8 +29,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
-import com.raulshma.jellyplay.core.ui.player.FormattedTranscodeReason
-import com.raulshma.jellyplay.core.ui.player.TranscodeReasonsFormatter
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -76,15 +67,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.NativeKeyEvent
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalContext
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
@@ -97,17 +83,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
+import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
-import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -147,7 +126,6 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 
 import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
 import com.raulshma.jellyplay.feature.player.video.engine.styleChangedExcludingDelay
-import com.raulshma.jellyplay.feature.player.video.engine.AndroidSurfaceProvider
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
@@ -158,7 +136,6 @@ import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
 import com.raulshma.jellyplay.feature.player.video.engine.TrackBadge
 import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
-import com.raulshma.jellyplay.feature.player.video.components.MpvSubtitleOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SegmentSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
@@ -187,7 +164,6 @@ import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerShee
 import com.raulshma.jellyplay.feature.player.video.components.TrackPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
 import com.raulshma.jellyplay.feature.player.video.components.VideoFilterSheet
-import com.raulshma.jellyplay.core.ui.player.findActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.tween
@@ -234,16 +210,9 @@ private const val TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP = 120
  * hardware-keyboard shortcuts (arrows / volume keys on non-TV). Mirrors the
  * gesture volume path, which adjusts the stream volume rather than the engine
  * volume so the system volume UI and ringer behaviour stay consistent.
+ * Platform seam (wave 9A): the AudioManager calls live in the androidMain
+ * actual of [rememberStreamVolumeAdjuster]; desktop is a no-op.
  */
-private fun adjustStreamMusicVolume(context: Context, up: Boolean) {
-    val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager ?: return
-    val direction = if (up) android.media.AudioManager.ADJUST_RAISE else android.media.AudioManager.ADJUST_LOWER
-    am.adjustStreamVolume(
-        android.media.AudioManager.STREAM_MUSIC,
-        direction,
-        android.media.AudioManager.FLAG_SHOW_UI,
-    )
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -258,8 +227,11 @@ fun VideoPlayerScreen(
     onOpenSubtitleTester: () -> Unit = {},
     viewModel: VideoPlayerViewModel = koinViewModel(),
 ) {
-    val context = LocalContext.current
-    val activity = context.findActivity()
+    // Host-window + input seams (wave 9A): the Activity/Context system-surface
+    // work this screen used to do inline lives behind these now — androidMain
+    // actuals keep it verbatim, the desktop actuals are no-ops.
+    val windowOps = rememberPlayerWindowOps()
+    val streamVolumeAdjuster = rememberStreamVolumeAdjuster()
     val snackbarHostState = remember { SnackbarHostState() }
     // Dedicated host for the resume chip. Kept separate from [snackbarHostState]
     // so the chip can anchor under the top bar (TopCenter) while the shared
@@ -326,7 +298,7 @@ fun VideoPlayerScreen(
     var isSeeking by rememberSaveable { mutableStateOf(false) }
     var isOverflowMenuOpen by rememberSaveable { mutableStateOf(false) }
     var seekPositionMs by rememberSaveable { mutableLongStateOf(0L) }
-    var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
+    var playerViewRef by remember { mutableStateOf<Any?>(null) }
     var lastAppliedSubtitleStyle by remember { mutableStateOf<SubtitleStyle?>(null) }
     var videoZoom by rememberSaveable { mutableFloatStateOf(1f) }
 
@@ -335,10 +307,9 @@ fun VideoPlayerScreen(
     // DeX). Drives the non-TV keyboard-shortcut handler so phones/tablets with
     // a keyboard get space/arrows/F/M/Esc controls while touch-only devices
     // attach no extra key handler. TV keeps its dedicated D-pad scheme below.
-    val hasHardwareKeyboard = remember(context) {
-        context.resources.configuration.keyboard != android.content.res.Configuration.KEYBOARD_NOKEYS &&
-            context.resources.configuration.hardKeyboardHidden != android.content.res.Configuration.HARDKEYBOARDHIDDEN_YES
-    }
+    // Platform seam (wave 9A): the Configuration read lives in the androidMain
+    // actual; desktop always reports true.
+    val hasHardwareKeyboard = rememberHasHardwareKeyboard()
 
     val tvPlayerFocusRequester = remember { FocusRequester() }
     val tvSkipSegmentFocusRequester = remember { FocusRequester() }
@@ -359,25 +330,31 @@ fun VideoPlayerScreen(
         viewModel.pipController.setControlsLocked(isScreenLocked)
     }
 
-    val localSubtitleLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri: android.net.Uri? ->
-        if (uri != null) {
-            val fileName = uri.lastPathSegment?.substringAfterLast('/') ?: "subtitle.srt"
-            viewModel.subtitles.addLocalSubtitle(uri, fileName)
+    val localSubtitlePicker = rememberDocumentPicker(
+        mimeTypes = arrayOf(
+            "application/x-subrip",
+            "text/vtt",
+            "text/plain",
+            "text/x-ssa",
+            "application/ttml+xml",
+        ),
+    ) { uriString: String? ->
+        if (uriString != null) {
+            val fileName = uriString.substringAfterLast('/').ifEmpty { "subtitle.srt" }
+            viewModel.subtitles.addLocalSubtitle(uriString, fileName)
             currentSheet = PlayerSheet.None
         }
     }
 
     val fontInvalidFormatMessage = stringResource(Res.string.player_video_font_invalid_format)
-    val fontPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri: android.net.Uri? ->
-        if (uri != null) {
-            val name = uri.lastPathSegment.orEmpty().lowercase()
+    val fontPicker = rememberDocumentPicker(
+        mimeTypes = arrayOf("*/*"),
+    ) { uriString: String? ->
+        if (uriString != null) {
+            val name = uriString.substringAfterLast('/').lowercase()
             val isFont = name.endsWith(".ttf") || name.endsWith(".otf")
             if (isFont) {
-                viewModel.installUserFont(uri)
+                viewModel.installUserFont(uriString)
             } else {
                 scope.launch {
                     snackbarHostState.showSnackbar(
@@ -389,10 +366,10 @@ fun VideoPlayerScreen(
         }
     }
 
-    var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var seekTrickplayBitmap by remember { mutableStateOf<PlatformBitmap?>(null) }
+    var gestureTrickplayBitmap by remember { mutableStateOf<PlatformBitmap?>(null) }
     var gestureTrickplayVisible by remember { mutableStateOf(false) }
-    var tvTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var tvTrickplayBitmap by remember { mutableStateOf<PlatformBitmap?>(null) }
 
     LaunchedEffect(itemId) {
         if (viewModel.cast.isBackgroundCasting) {
@@ -430,36 +407,24 @@ fun VideoPlayerScreen(
     // Restore immersive mode when leaving PiP
     LaunchedEffect(isInPipMode) {
         if (!isInPipMode) {
-            activity?.let {
-                val window = it.window
-                val controller = WindowCompat.getInsetsController(window, window.decorView)
-                controller.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                controller.hide(WindowInsetsCompat.Type.systemBars())
-            }
+            windowOps.hideSystemBars()
         }
     }
 
     val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
     val isWindowFocused = rememberUpdatedState(windowInfo.isWindowFocused)
-    LaunchedEffect(activity) {
+    LaunchedEffect(windowOps) {
         snapshotFlow { isWindowFocused.value }.distinctUntilChanged().collect { focused ->
             // Skip the immersive re-hide while in PiP (or mid-transition into
             // it): PlayerActivity.onPipModeChanged shows the bars on PiP entry
             // to force the relayout that anchors the gesture-nav handle at the
             // bottom. Without this guard the window-focus flip during the PiP
             // transition re-hides them here, defeating that fix and leaving the
-            // handle floating mid-screen. Uses the Activity's authoritative
+            // handle floating mid-screen. Uses the host's authoritative
             // isInPictureInPictureMode flag (synchronously current, unlike the
             // collected isInPipMode state which lags a frame).
-            if (focused && activity?.isInPictureInPictureMode != true) {
-                activity?.let { act ->
-                    val window = act.window
-                    val controller = WindowCompat.getInsetsController(window, window.decorView)
-                    controller.systemBarsBehavior =
-                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                    controller.hide(WindowInsetsCompat.Type.systemBars())
-                }
+            if (focused && !windowOps.isInPipMode) {
+                windowOps.hideSystemBars()
             }
         }
     }
@@ -474,65 +439,25 @@ fun VideoPlayerScreen(
     // during a PiP transition. The engine must survive until PiP is dismissed.
 
     DisposableEffect(Unit) {
-        activity?.let {
-            val window = it.window
-            val controller = WindowCompat.getInsetsController(window, window.decorView)
-            controller.systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            controller.hide(WindowInsetsCompat.Type.systemBars())
-        }
+        windowOps.hideSystemBars()
 
         onDispose {
             val currentlyInPip = viewModel.pipController.isInPipMode.value
             val isBgCasting = viewModel.cast.isCastConnected && viewModel.cast.castIsPlaying.value &&
                 viewModel.cast.backgroundCastingEnabled
             val restoreOrientation = if (isTv)
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                PlayerOrientationLock.TV_LANDSCAPE
+            else PlayerOrientationLock.UNSPECIFIED
+            // restoreOnPlayerExit bundles the host-window teardown the screen
+            // used to do inline: unlock orientation, clear FLAG_KEEP_SCREEN_ON,
+            // restore OS-default brightness, re-show the system bars and hand
+            // the display mode back (all host-alive guarded on Android).
             if (isBgCasting && !currentlyInPip) {
-                activity?.let {
-                    if (!it.isDestroyed && !it.isFinishing) {
-                        it.requestedOrientation = restoreOrientation
-                        it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                        // Restore OS-default brightness when leaving the player; otherwise a
-                        // gesture-set level persists on the host window after the screen exits.
-                        val layout = it.window.attributes
-                        layout.screenBrightness =
-                            WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-                        it.window.attributes = layout
-                        val window = it.window
-                        val controller = WindowCompat.getInsetsController(window, window.decorView)
-                        controller.show(WindowInsetsCompat.Type.systemBars())
-                    }
-                }
-                activity?.let { act ->
-                    if (!act.isDestroyed && !act.isFinishing) {
-                        FrameRateMatcher.restoreOriginalMode(act)
-                    }
-                }
+                windowOps.restoreOnPlayerExit(restoreOrientation)
                 playerViewRef = null
                 viewModel.detachForBackgroundCast()
             } else if (!currentlyInPip) {
-                activity?.let {
-                    if (!it.isDestroyed && !it.isFinishing) {
-                        it.requestedOrientation = restoreOrientation
-                        it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                        // Restore OS-default brightness when leaving the player; otherwise a
-                        // gesture-set level persists on the host window after the screen exits.
-                        val layout = it.window.attributes
-                        layout.screenBrightness =
-                            WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-                        it.window.attributes = layout
-                        val window = it.window
-                        val controller = WindowCompat.getInsetsController(window, window.decorView)
-                        controller.show(WindowInsetsCompat.Type.systemBars())
-                    }
-                }
-                activity?.let { act ->
-                    if (!act.isDestroyed && !act.isFinishing) {
-                        FrameRateMatcher.restoreOriginalMode(act)
-                    }
-                }
+                windowOps.restoreOnPlayerExit(restoreOrientation)
                 playerViewRef = null
                 viewModel.release()
             }
@@ -540,15 +465,7 @@ fun VideoPlayerScreen(
     }
 
     LaunchedEffect(uiState.isPlaying, uiState.uiPrefs.keepScreenOnDuringVideo) {
-        activity?.let {
-            if (!it.isDestroyed && !it.isFinishing) {
-                if (uiState.isPlaying && uiState.uiPrefs.keepScreenOnDuringVideo) {
-                    it.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                } else {
-                    it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                }
-            }
-        }
+        windowOps.setKeepScreenOn(uiState.isPlaying && uiState.uiPrefs.keepScreenOnDuringVideo)
     }
 
 
@@ -556,17 +473,12 @@ fun VideoPlayerScreen(
     LaunchedEffect(uiState.gestures.frameRateMatching, uiState.gestures.refreshRateMode, uiState.videoFrameRate) {
         if (uiState.gestures.frameRateMatching && uiState.gestures.refreshRateMode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF && uiState.videoFrameRate != null) {
             val videoStream = uiState.media.mediaStreams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
-            activity?.let {
-                if (!it.isDestroyed && !it.isFinishing) {
-                    FrameRateMatcher.matchFrameRate(
-                        activity = it,
-                        frameRate = uiState.videoFrameRate,
-                        targetWidth = videoStream?.width,
-                        targetHeight = videoStream?.height,
-                        mode = uiState.gestures.refreshRateMode,
-                    )
-                }
-            }
+            windowOps.matchFrameRate(
+                frameRate = uiState.videoFrameRate,
+                targetWidth = videoStream?.width,
+                targetHeight = videoStream?.height,
+                mode = uiState.gestures.refreshRateMode,
+            )
         }
     }
 
@@ -575,13 +487,7 @@ fun VideoPlayerScreen(
         // 0.5f is a legitimate brightness a user can pick, so it must not be used
         // as the guard. Re-applies the saved level on recreate/resume.
         if (uiState.gestures.rememberBrightness && uiState.gestures.brightnessLevel >= 0f) {
-            activity?.let { act ->
-                if (!act.isDestroyed && !act.isFinishing) {
-                    val layout = act.window.attributes
-                    layout.screenBrightness = uiState.gestures.brightnessLevel
-                    act.window.attributes = layout
-                }
-            }
+            windowOps.applyWindowBrightness(uiState.gestures.brightnessLevel)
         }
     }
 
@@ -593,25 +499,21 @@ fun VideoPlayerScreen(
     val brightnessLevel = uiState.gestures.brightnessLevel
     val rememberBrightness = uiState.gestures.rememberBrightness
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    androidx.compose.runtime.DisposableEffect(activity, rememberBrightness, brightnessLevel, lifecycleOwner) {
+    androidx.compose.runtime.DisposableEffect(windowOps, rememberBrightness, brightnessLevel, lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME &&
                 rememberBrightness && brightnessLevel >= 0f
             ) {
-                activity?.let { act ->
-                    if (!act.isDestroyed && !act.isFinishing) {
-                        val layout = act.window.attributes
-                        layout.screenBrightness = brightnessLevel
-                        act.window.attributes = layout
-                    }
-                }
+                windowOps.applyWindowBrightness(brightnessLevel)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    BackHandler {
+    // Always-on back interception (the seam's Android actual wires the system
+    // back; the desktop actual is a no-op and Esc is the shell's concern).
+    JellyPlayBackHandler(enabled = true) {
         if (currentSheet != PlayerSheet.None) {
             currentSheet = PlayerSheet.None
         } else if (isTv && showControls) {
@@ -650,47 +552,35 @@ fun VideoPlayerScreen(
     val aspectRatio = uiState.videoFx.aspectRatio
     val detectedAspectRatio = uiState.videoFx.detectedAspectRatio
 
-    val toggleOrientation: () -> Unit = remember(activity, uiState.uiPrefs.defaultOrientation) {
+    val toggleOrientation: () -> Unit = remember(windowOps, uiState.uiPrefs.defaultOrientation) {
         {
-            activity?.let { act ->
-                val current = act.requestedOrientation
-                val isPortrait = current == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT ||
-                    current == ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-                // Resolve the configured default landscape mode so the toggle is symmetric:
-                // portrait ↔ default-landscape, always returning to the user's preferred
-                // landscape rather than drifting between LANDSCAPE and SENSOR_LANDSCAPE.
-                val defaultLandscape = when (uiState.uiPrefs.defaultOrientation) {
-                    OrientationMode.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                    else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                }
-                act.requestedOrientation = if (isPortrait) defaultLandscape
-                else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            }
+            // Symmetric toggle (portrait ↔ the user's configured default
+            // landscape) lives in the platform actual: it reads the host's
+            // current orientation to decide the direction.
+            windowOps.toggleOrientation(
+                preferLockedLandscape = uiState.uiPrefs.defaultOrientation == OrientationMode.LOCKED_LANDSCAPE,
+            )
         }
     }
 
     val syncPlayIgnoreWait by viewModel.syncPlay.ignoreWait.collectAsStateWithLifecycle()
 
     LaunchedEffect(isCastConnected, uiState.uiPrefs.defaultOrientation) {
-        activity?.let {
-            if (!it.isDestroyed && !it.isFinishing) {
-                if (isTv) {
-                    it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                } else if (isCastConnected) {
-                    it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER
-                } else {
-                    delay(400)
-                    if (!it.isDestroyed && !it.isFinishing) {
-                        it.requestedOrientation = when (uiState.uiPrefs.defaultOrientation) {
-                            OrientationMode.SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                            OrientationMode.SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-                            OrientationMode.SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
-                            OrientationMode.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                            OrientationMode.LOCKED_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                        }
-                    }
+        if (isTv) {
+            windowOps.lockOrientation(PlayerOrientationLock.TV_LANDSCAPE)
+        } else if (isCastConnected) {
+            windowOps.lockOrientation(PlayerOrientationLock.USER)
+        } else {
+            delay(400)
+            windowOps.lockOrientation(
+                when (uiState.uiPrefs.defaultOrientation) {
+                    OrientationMode.SENSOR_LANDSCAPE -> PlayerOrientationLock.SENSOR_LANDSCAPE
+                    OrientationMode.SENSOR_PORTRAIT -> PlayerOrientationLock.SENSOR_PORTRAIT
+                    OrientationMode.SENSOR -> PlayerOrientationLock.SENSOR
+                    OrientationMode.LOCKED_LANDSCAPE -> PlayerOrientationLock.LOCKED_LANDSCAPE
+                    OrientationMode.LOCKED_PORTRAIT -> PlayerOrientationLock.LOCKED_PORTRAIT
                 }
-            }
+            )
         }
     }
 
@@ -812,6 +702,7 @@ fun VideoPlayerScreen(
     val gestureController = remember(
         scope,
         engine,
+        windowOps,
         uiState.gestures.swipeSeekMaxMs,
         isCastConnected,
         castVolume,
@@ -823,35 +714,16 @@ fun VideoPlayerScreen(
             getSwipeSeekMaxMs = { uiState.gestures.swipeSeekMaxMs },
             isCastConnected = { isCastConnected },
             getCastVolume = { castVolume },
-            readWindowBrightness = { activity?.window?.attributes?.screenBrightness ?: -1f },
+            readWindowBrightness = { windowOps.readWindowBrightness() },
             writeWindowBrightness = { newBrightness ->
-                activity?.let { act ->
-                    val layout = act.window.attributes
-                    layout.screenBrightness = newBrightness
-                    act.window.attributes = layout
-                }
+                windowOps.writeWindowBrightness(newBrightness)
             },
             restoreWindowBrightness = { restored ->
-                activity?.let { act ->
-                    if (!act.isDestroyed && !act.isFinishing) {
-                        val layout = act.window.attributes
-                        layout.screenBrightness =
-                            if (restored >= 0f) restored
-                            else android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-                        act.window.attributes = layout
-                    }
-                }
+                windowOps.restoreWindowBrightness(restored)
             },
-            readStreamVolume = {
-                val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-                if (am != null) {
-                    am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) to
-                        am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
-                } else 0 to 0
-            },
+            readStreamVolume = { windowOps.readMusicStreamVolume() },
             writeStreamVolume = { newVol ->
-                val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-                am?.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
+                windowOps.setMusicStreamVolume(newVol)
             },
             doSeekTo = doSeekTo,
             saveBrightness = viewModel::saveBrightness,
@@ -866,24 +738,20 @@ fun VideoPlayerScreen(
     val dismissSheet: () -> Unit = remember { { currentSheet = PlayerSheet.None } }
 
     // Shared confirmation haptic for discrete player actions (seek commit,
-    // play/pause toggle, segment skip). Reuses the same View performHapticFeedback
-    // path and hapticsEnabled gate as the gesture-bound haptic below, so a single
+    // play/pause toggle, segment skip). Reuses the same host haptic path and
+    // hapticsEnabled gate as the gesture-bound haptic below, so a single
     // preference governs all player haptics.
-    val performConfirmHaptic: () -> Unit = remember(activity, viewModel) {
+    val performConfirmHaptic: () -> Unit = remember(windowOps, viewModel) {
         {
             if (viewModel.hapticsEnabled) {
-                activity?.let { act ->
-                    val view = act.window.decorView
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                    }
-                }
+                windowOps.performConfirmHaptic()
             }
         }
     }
+
+    // Cast-route teardown for the companion dashboard's disconnect action
+    // (platform seam: Android also stops the legacy cast transport).
+    val disconnectCast = rememberCastDisconnect(viewModel)
 
     if (isCastConnected) {
         // Track slice — collected here (the cast dashboard is the
@@ -909,7 +777,7 @@ fun VideoPlayerScreen(
             onSeekForward = doSeekForward,
             onSeekTo = doSeekTo,
             onVolumeChange = { vol -> viewModel.cast.setCastVolume(vol) },
-            onDisconnect = { viewModel.cast.onCastDisconnected(); viewModel.androidCast.disconnect(context) },
+            onDisconnect = { viewModel.cast.onCastDisconnected(); disconnectCast() },
             onSelectAudioTrack = { viewModel.selectAudioTrack(it) },
             onSelectSubtitleTrack = { viewModel.selectSubtitleTrack(it) },
             onPlayEpisode = { epId -> viewModel.initialize(epId, null, 0L) },
@@ -931,7 +799,7 @@ fun VideoPlayerScreen(
                                 userInteractionCount++
                                 viewModel.onUserInteraction()
                                 if (keyEvent.type == KeyEventType.KeyDown &&
-                                    keyEvent.nativeKeyEvent.keyCode == NativeKeyEvent.KEYCODE_SPACE
+                                    keyEvent.playerKeyCode == PlayerKeyCodes.KEYCODE_SPACE
                                 ) {
                                     doTogglePlayPause()
                                     performConfirmHaptic()
@@ -1018,61 +886,61 @@ fun VideoPlayerScreen(
                             .focusable()
                             .onKeyEvent { keyEvent ->
                                 if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
-                                val keyCode = keyEvent.nativeKeyEvent.keyCode
+                                val keyCode = keyEvent.playerKeyCode
                                 userInteractionCount++
                                 viewModel.onUserInteraction()
                                 when (keyCode) {
-                                    NativeKeyEvent.KEYCODE_SPACE,
-                                    NativeKeyEvent.KEYCODE_MEDIA_PLAY,
-                                    NativeKeyEvent.KEYCODE_MEDIA_PAUSE,
-                                    NativeKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                                    PlayerKeyCodes.KEYCODE_SPACE,
+                                    PlayerKeyCodes.KEYCODE_MEDIA_PLAY,
+                                    PlayerKeyCodes.KEYCODE_MEDIA_PAUSE,
+                                    PlayerKeyCodes.KEYCODE_MEDIA_PLAY_PAUSE -> {
                                         doTogglePlayPause()
                                         performConfirmHaptic()
                                         showControls = true
                                         true
                                     }
-                                    NativeKeyEvent.KEYCODE_DPAD_RIGHT,
-                                    NativeKeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
-                                    NativeKeyEvent.KEYCODE_L -> {
+                                    PlayerKeyCodes.KEYCODE_DPAD_RIGHT,
+                                    PlayerKeyCodes.KEYCODE_MEDIA_FAST_FORWARD,
+                                    PlayerKeyCodes.KEYCODE_L -> {
                                         doSeekForward()
                                         performConfirmHaptic()
                                         showControls = true
                                         true
                                     }
-                                    NativeKeyEvent.KEYCODE_DPAD_LEFT,
-                                    NativeKeyEvent.KEYCODE_MEDIA_REWIND,
-                                    NativeKeyEvent.KEYCODE_J -> {
+                                    PlayerKeyCodes.KEYCODE_DPAD_LEFT,
+                                    PlayerKeyCodes.KEYCODE_MEDIA_REWIND,
+                                    PlayerKeyCodes.KEYCODE_J -> {
                                         doSeekBack()
                                         performConfirmHaptic()
                                         showControls = true
                                         true
                                     }
-                                    NativeKeyEvent.KEYCODE_DPAD_UP,
-                                    NativeKeyEvent.KEYCODE_VOLUME_UP -> {
-                                        adjustStreamMusicVolume(context, up = true)
+                                    PlayerKeyCodes.KEYCODE_DPAD_UP,
+                                    PlayerKeyCodes.KEYCODE_VOLUME_UP -> {
+                                        streamVolumeAdjuster(true)
                                         showControls = true
                                         true
                                     }
-                                    NativeKeyEvent.KEYCODE_DPAD_DOWN,
-                                    NativeKeyEvent.KEYCODE_VOLUME_DOWN -> {
-                                        adjustStreamMusicVolume(context, up = false)
+                                    PlayerKeyCodes.KEYCODE_DPAD_DOWN,
+                                    PlayerKeyCodes.KEYCODE_VOLUME_DOWN -> {
+                                        streamVolumeAdjuster(false)
                                         showControls = true
                                         true
                                     }
-                                    NativeKeyEvent.KEYCODE_F,
-                                    NativeKeyEvent.KEYCODE_F1, NativeKeyEvent.KEYCODE_F2,
-                                    NativeKeyEvent.KEYCODE_F3, NativeKeyEvent.KEYCODE_F4 -> {
+                                    PlayerKeyCodes.KEYCODE_F,
+                                    PlayerKeyCodes.KEYCODE_F1, PlayerKeyCodes.KEYCODE_F2,
+                                    PlayerKeyCodes.KEYCODE_F3, PlayerKeyCodes.KEYCODE_F4 -> {
                                         toggleOrientation()
                                         showControls = true
                                         true
                                     }
-                                    NativeKeyEvent.KEYCODE_M -> {
+                                    PlayerKeyCodes.KEYCODE_M -> {
                                         viewModel.toggleMute()
                                         showControls = true
                                         true
                                     }
-                                    NativeKeyEvent.KEYCODE_ESCAPE,
-                                    NativeKeyEvent.KEYCODE_BACK -> {
+                                    PlayerKeyCodes.KEYCODE_ESCAPE,
+                                    PlayerKeyCodes.KEYCODE_BACK -> {
                                         if (showControls) {
                                             showControls = false
                                             true
@@ -1173,18 +1041,20 @@ fun VideoPlayerScreen(
                 val effectiveZoom = if (isInPipMode) 1f else videoZoom * tvBaselineZoom
                 val zoomed = effectiveZoom > 1f
                 key(currentEngine) {
-                    AndroidView(
-                        factory = { ctx ->
-                            val view = (currentEngine as? AndroidSurfaceProvider)?.createSurfaceView(ctx)
-                                // Non-View-surface engine (desktop-style, impossible on Android
-                                // today): empty surface, audio-only playback continues.
-                                ?: android.view.View(ctx)
+                    // Platform surface seam (wave 9A): Android hosts the engine's
+                    // SurfaceView (or the empty fallback view for non-View-surface
+                    // engines — the V2a degrade); desktop hosts the SwingPanel/HWND
+                    // child window mpv embeds into. Zoom transform + PiP bounds
+                    // tracking stay with the platform actuals.
+                    EngineVideoSurface(
+                        engine = currentEngine,
+                        effectiveZoom = effectiveZoom,
+                        onSurfaceCreated = { surface ->
                             lastAppliedSubtitleStyle = uiState.subtitleStyle
                             viewModel.applySubtitleStyle()
-                            playerViewRef = view
-                            view
+                            playerViewRef = surface
                         },
-                        update = { view ->
+                        onSurfaceUpdate = {
                             val currentStyle = uiState.subtitleStyle
                             // Only call applySubtitleStyle for visual style
                             // changes (font/color/margins). Delay changes are
@@ -1200,27 +1070,14 @@ fun VideoPlayerScreen(
                                 lastAppliedSubtitleStyle = currentStyle
                             }
                         },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                scaleX = effectiveZoom
-                                scaleY = effectiveZoom
+                        onBoundsChanged = { left, top, right, bottom ->
+                            // Stop tracking once in PiP (the system renders the
+                            // window then) — the PiP source-rect hint is only
+                            // needed for the pre-PiP layout.
+                            if (!isInPipMode) {
+                                viewModel.updatePipSourceRect(left, top, right, bottom)
                             }
-                            // Track the surface's window bounds so the Activity can
-                            // supply a source-rect hint for a seamless PiP enter
-                            // animation. Stop tracking once in PiP (the system
-                            // renders the window then).
-                            .onGloballyPositioned { coords ->
-                                if (!isInPipMode) {
-                                    val r = coords.boundsInWindow()
-                                    viewModel.updatePipSourceRect(
-                                        android.graphics.Rect(
-                                            r.left.toInt(), r.top.toInt(),
-                                            r.right.toInt(), r.bottom.toInt(),
-                                        )
-                                    )
-                                }
-                            },
+                        },
                     )
 
                     // Audio-only: keep the surface mounted (playback
@@ -1256,27 +1113,14 @@ fun VideoPlayerScreen(
                     // transform. DISABLED (libVLC/External) renders nothing here.
                     when (currentEngine.zoomSafeSubtitleStrategy) {
                         ZoomSafeSubtitleStrategy.NATIVE_PINNED -> {
-                            // ExoPlayer: a sibling FrameLayout host the engine
-                            // reparents its native SubtitleView / AssSubtitleView
-                            // into. Full styling/fidelity is preserved (native
-                            // rendering, just relocated). Lifetime follows
-                            // key(currentEngine): onRelease detaches the host
-                            // before the engine releases, so no subtitle view
-                            // orphans in a host the engine no longer feeds.
-                            AndroidView(
-                                factory = { ctx ->
-                                    android.widget.FrameLayout(ctx).apply {
-                                        layoutParams = android.view.ViewGroup.LayoutParams(
-                                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                                        )
-                                    }.also { host -> (currentEngine as? AndroidSurfaceProvider)?.setExternalSubtitleHost(host) }
-                                },
-                                onRelease = { (currentEngine as? AndroidSurfaceProvider)?.setExternalSubtitleHost(null) },
-                                // Sibling of the zoomed video — explicitly NOT in a
-                                // graphicsLayer, so it stays pinned to the screen.
-                                modifier = Modifier.fillMaxSize(),
-                            )
+                            // ExoPlayer: the engine reparents its native
+                            // SubtitleView / AssSubtitleView into a sibling host
+                            // (platform seam). Full styling/fidelity is preserved
+                            // (native rendering, just relocated). Lifetime follows
+                            // key(currentEngine): the host detaches before the
+                            // engine releases, so no subtitle view orphans in a
+                            // host the engine no longer feeds.
+                            NativePinnedSubtitleHost(engine = currentEngine)
                         }
 
                         ZoomSafeSubtitleStrategy.COMPOSE_CUE -> {
@@ -1292,10 +1136,10 @@ fun VideoPlayerScreen(
                             val liveCue by currentEngine.liveSubtitleCue
                                 .collectAsStateWithLifecycle()
                             if (zoomed) {
-                                MpvSubtitleOverlay(
+                                ZoomedSubtitleOverlayHost(
                                     cue = liveCue,
                                     style = uiState.subtitleStyle,
-                                    fontProvider = viewModel.androidFontProvider,
+                                    viewModel = viewModel,
                                 )
                             }
                         }
@@ -1332,18 +1176,10 @@ fun VideoPlayerScreen(
                         }
                     }
                 },
-                onHapticPulse = remember(activity, viewModel) {
+                onHapticPulse = remember(windowOps, viewModel) {
                     {
                         if (viewModel.hapticsEnabled) {
-                            activity?.let { act ->
-                                val view = act.window.decorView
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                                } else {
-                                    @Suppress("DEPRECATION")
-                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                                }
-                            }
+                            windowOps.performConfirmHaptic()
                         }
                     }
                 },
@@ -1648,28 +1484,22 @@ fun VideoPlayerScreen(
             val onChannelMixModeChange by remember { mutableStateOf({ mode: ChannelMixMode -> viewModel.effects.setChannelMixMode(mode) }) }
             val onSleepTimerClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SleepTimer }) }
             val onVideoFilterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.VideoFilter }) }
-            // Capture the current video frame via PixelCopy on the engine's
-            // surface view. Backend-agnostic: all three engines render to a
-            // SurfaceView, which only PixelCopy (not View.drawToBitmap) can read.
-            // The titleHint seeds the MediaStore filename. Result surfaces as a
-            // snackbar with the saved path, or a share intent is offered.
+            // Capture the current video frame from the engine's surface
+            // (platform seam: PixelCopy on Android's SurfaceView surfaces —
+            // only PixelCopy, not View.drawToBitmap, can read them). The
+            // titleHint seeds the MediaStore filename. Result surfaces as a
+            // snackbar with the saved path.
             val onScreenshotClick: () -> Unit = remember {
                 {
                     val view = playerViewRef
                     if (view != null) {
                         scope.launch { snackbarHostState.showSnackbar("Capturing frame…", duration = SnackbarDuration.Short) }
-                        com.raulshma.jellyplay.feature.player.video.ScreenshotSaver.capture(
+                        requestVideoFrameCapture(
                             surfaceView = view,
                             titleHint = uiState.title,
-                        ) { result ->
+                        ) { message ->
                             scope.launch {
-                                val msg = when (result) {
-                                    is com.raulshma.jellyplay.feature.player.video.ScreenshotSaver.Result.Saved ->
-                                        "Frame saved to Pictures/JellyPlay (${result.width}×${result.height})"
-                                    is com.raulshma.jellyplay.feature.player.video.ScreenshotSaver.Result.Failed ->
-                                        "Capture failed: ${result.reason}"
-                                }
-                                snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Long)
+                                snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Long)
                             }
                         }
                     } else {
@@ -1820,7 +1650,7 @@ fun VideoPlayerScreen(
                 onLockClick = onLockClick,
                 onControlsFocusChange = onControlsFocusChange,
                 onOverflowMenuChange = onOverflowMenuChange,
-                castManager = viewModel.androidCastManager,
+                castManager = viewModel.platformCastManager,
                 modifier = Modifier.fillMaxSize(),
             )
             } // end PlayerDarkTheme (control bars)
@@ -1884,7 +1714,7 @@ fun VideoPlayerScreen(
             .distinctUntilChanged()
             .collect { (pos, shouldFetch, _) ->
                 if (shouldFetch) {
-                    val bitmap = viewModel.getTrickplayThumbnail(pos)
+                    val bitmap = viewModel.loadTrickplayThumbnail(pos) as? PlatformBitmap
                     seekTrickplayBitmap = bitmap
                     if (isTv) {
                         tvTrickplayBitmap = bitmap
@@ -1914,7 +1744,7 @@ fun VideoPlayerScreen(
                 if (shouldFetch) {
                     gestureTrickplayVisible = true
                     gestureTrickplayBitmap = if (trickplayInfo != null) {
-                        viewModel.getTrickplayThumbnail(pos)
+                        viewModel.loadTrickplayThumbnail(pos) as? PlatformBitmap
                     } else {
                         null
                     }
@@ -1943,14 +1773,9 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(Unit) {
         kotlinx.coroutines.coroutineScope {
-            launch {
-                viewModel.androidCast.castSessionEvents.collect { event ->
-                    when (event) {
-                        is CastSessionEvent.Connected -> viewModel.cast.castToDevice()
-                        is CastSessionEvent.Disconnected -> viewModel.cast.onCastDisconnected()
-                    }
-                }
-            }
+            // Platform cast-session events (Connected → castToDevice,
+            // Disconnected → onCastDisconnected) — inert on desktop.
+            launchPlatformCastSessionEvents(viewModel)
             launch {
                 viewModel.syncPlay.notifications.collect { message ->
                     snackbarHostState.showSnackbar(
@@ -1982,18 +1807,10 @@ fun VideoPlayerScreen(
         itemId = itemId,
         syncPlayIgnoreWait = syncPlayIgnoreWait,
         onLoadLocalSubtitle = {
-            localSubtitleLauncher.launch(
-                arrayOf(
-                    "application/x-subrip",
-                    "text/vtt",
-                    "text/plain",
-                    "text/x-ssa",
-                    "application/ttml+xml",
-                )
-            )
+            localSubtitlePicker()
         },
         onPickFont = {
-            fontPickerLauncher.launch(arrayOf("*/*"))
+            fontPicker()
         },
         onOpenSubtitleTester = onOpenSubtitleTester,
         onOpenSubtitleDelayOverlay = {
@@ -2013,21 +1830,6 @@ fun VideoPlayerScreen(
             onDismiss = { viewModel.dismissPlaybackError() },
             transcodeReasons = rememberFormattedTranscodeReasons(uiState.media.transcodeReasons),
         )
-    }
-}
-
-/**
- * Localizes the session's raw transcode-reason tokens once per distinct list
- * (and per context, so a locale change re-formats), shared by the stats
- * overlay and the playback error dialog call sites.
- */
-@Composable
-private fun rememberFormattedTranscodeReasons(
-    rawReasons: List<String>,
-): List<FormattedTranscodeReason> {
-    val context = LocalContext.current
-    return remember(context, rawReasons) {
-        TranscodeReasonsFormatter.format(context, rawReasons)
     }
 }
 
@@ -2193,8 +1995,6 @@ private fun PlayerSheetRouter(
     onOpenSubtitleTester: () -> Unit,
     onOpenSubtitleDelayOverlay: () -> Unit,
 ) {
-    val context = LocalContext.current
-
     when (val sheet = currentSheet) {
         is PlayerSheet.Speed -> {
             SpeedPickerSheet(
@@ -2320,9 +2120,9 @@ private fun PlayerSheetRouter(
                 isUploading = subtitleState.isUploadingSubtitle,
                 onUpload = { uriStr, fileName, language, isForced, isHearingImpaired ->
                     // KMP seam (wave 7C): the sheets hand the picked SAF
-                    // document as its string form; re-parse for SubtitleManager.
+                    // document as its string form; SubtitleManager consumes it.
                     viewModel.subtitles.uploadSubtitle(
-                        android.net.Uri.parse(uriStr),
+                        uriStr,
                         fileName,
                         language,
                         isForced,

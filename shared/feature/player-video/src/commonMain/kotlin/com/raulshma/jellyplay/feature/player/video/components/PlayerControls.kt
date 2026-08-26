@@ -10,7 +10,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
-import android.graphics.Bitmap
+import com.raulshma.jellyplay.feature.player.video.PlatformBitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -66,7 +66,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
@@ -92,6 +91,9 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.feature.player.video.PlatformCastButton
+import com.raulshma.jellyplay.feature.player.video.rememberIs24HourFormat
+import com.raulshma.jellyplay.feature.player.video.rememberIsPortraitOrientation
 import com.raulshma.jellyplay.core.ui.animation.horizontalFadingEdges
 import com.raulshma.jellyplay.core.ui.player.PlayerIconButton
 import com.raulshma.jellyplay.core.ui.player.playerBottomControlsEnter
@@ -149,7 +151,6 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 
 import com.raulshma.jellyplay.feature.player.video.AbRepeatState
 import com.raulshma.jellyplay.feature.player.video.formatDuration
-import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import androidx.compose.foundation.layout.offset
@@ -160,7 +161,6 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapshot
 import com.raulshma.jellyplay.feature.player.video.TrackOption
 import com.raulshma.jellyplay.core.designsystem.theme.HdrColors
-import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -206,7 +206,7 @@ internal fun PlayerControls(
     hasNextEpisode: Boolean = false,
     onPreviousEpisode: () -> Unit = {},
     onNextEpisode: () -> Unit = {},
-    tvTrickplayBitmap: Bitmap? = null,
+    tvTrickplayBitmap: PlatformBitmap? = null,
     onBack: () -> Unit,
     onSpeedClick: () -> Unit,
     onAudioClick: () -> Unit,
@@ -268,7 +268,10 @@ internal fun PlayerControls(
     onLockClick: () -> Unit = {},
     onControlsFocusChange: (Boolean) -> Unit = {},
     onOverflowMenuChange: (Boolean) -> Unit = {},
-    castManager: CastManager? = null,
+    // Opaque cast-manager handle (wave 9A seam): the Android host passes the
+    // legacy discovery/connect CastManager; desktop passes null and the cast
+    // button hides. See VideoPlayerViewModel.platformCastManager.
+    castManager: Any? = null,
     playMethod: String = "Direct Play",
     isDirectPlayForced: Boolean = false,
     hdrType: String? = null,
@@ -316,8 +319,7 @@ internal fun PlayerControls(
     }
 
     val isTv = LocalTvMode.current
-    val isPortrait = LocalConfiguration.current.orientation ==
-        android.content.res.Configuration.ORIENTATION_PORTRAIT
+    val isPortrait = rememberIsPortraitOrientation()
     // In portrait every control lives in one horizontally scrollable row, with
     // PiP, Rotate and the More (⋮) menu pinned at the right edge. Landscape/TV
     // keep the asymmetric layout: a scrolling primary row + fixed right cluster.
@@ -472,7 +474,7 @@ internal fun PlayerControls(
                     }
                     if (castManager != null) {
                         Spacer(Modifier.width(8.dp))
-                        CastButton(castManager = castManager)
+                        PlatformCastButton(castManager = castManager)
                     }
                 }
             }
@@ -1021,7 +1023,7 @@ private fun TvControllableSeekBar(
     chapters: List<ChapterInfo>,
     segments: List<MediaSegment> = emptyList(),
     bufferedPositionFlow: StateFlow<Long> = MutableStateFlow(0L),
-    trickplayBitmap: Bitmap? = null,
+    trickplayBitmap: PlatformBitmap? = null,
     playbackSpeed: Float = 1.0f,
     showTimeRemaining: Boolean = false,
     resumePositionMs: Long = 0L,
@@ -1470,8 +1472,7 @@ private fun EndsAtLabel(
 
 @Composable
 private fun rememberEndsAtTime(remainingMs: Long, controlsVisible: Boolean): String {
-    val context = LocalContext.current
-    val is24Hour = remember(context) { android.text.format.DateFormat.is24HourFormat(context) }
+    val is24Hour = rememberIs24HourFormat()
     val pattern = if (is24Hour) "HH:mm" else "h:mm a"
     val formatter = remember(pattern) { SimpleDateFormat(pattern, Locale.getDefault()) }
     var currentSystemTime by remember { mutableStateOf(System.currentTimeMillis()) }

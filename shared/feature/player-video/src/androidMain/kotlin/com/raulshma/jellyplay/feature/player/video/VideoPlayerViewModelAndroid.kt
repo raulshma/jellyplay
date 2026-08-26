@@ -1,34 +1,18 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import android.graphics.Bitmap
-import android.graphics.Rect
-import android.net.Uri
 import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 
 /**
- * Android-typed API adapters over the commonMain [VideoPlayerViewModel]
- * surface (wave 8C): the screen's call sites keep their android.net.Uri /
- * android.graphics signatures unchanged — each adapter stringifies or
- * re-packs the argument and forwards to the common member. Declared as
- * extensions (same package) so overload resolution picks them without any
- * import at the call sites.
+ * Android-typed view over the commonMain [VideoPlayerViewModel] surface
+ * (wave 8C). Wave 9A moved the player screen to commonMain behind the
+ * platform seams, so the former android.net.Uri / android.graphics adapter
+ * extensions (updatePipSourceRect(Rect?), getTrickplayThumbnail,
+ * installUserFont(Uri), SubtitleManager.addLocalSubtitle/uploadSubtitle Uri
+ * overloads) lost their last callers and were folded away — the screen now
+ * consumes the stringified/Int-typed common members directly. What remains
+ * are the legacy-singleton views the VideoPlayerScreenSeams android actuals
+ * (cast chrome, mpv subtitle overlay) still need.
  */
-
-/**
- * PiP source-rect hint: a null rect previously nulled the stored hint; the
- * screen always passes a real rect, so null is a no-op here (documented
- * divergence — nothing calls it with null).
- */
-fun VideoPlayerViewModel.updatePipSourceRect(rect: Rect?) {
-    rect?.let { updatePipSourceRect(it.left, it.top, it.right, it.bottom) }
-}
-
-/** Trickplay thumbnail narrowed back to the platform bitmap. */
-suspend fun VideoPlayerViewModel.getTrickplayThumbnail(positionMs: Long): Bitmap? =
-    loadTrickplayThumbnail(positionMs) as? Bitmap
-
-/** SAF-picked font install: the Uri is stringified at the seam boundary. */
-fun VideoPlayerViewModel.installUserFont(uri: Uri) = installUserFont(uri.toString())
 
 /**
  * The legacy cast surface (discovery/connect, Context-bound transport) the
@@ -48,16 +32,3 @@ val VideoPlayerViewModel.androidFontProvider: AndroidFontProvider
  */
 internal val VideoPlayerViewModel.androidCast: AndroidPlayerCastController
     get() = cast as AndroidPlayerCastController
-
-/** SAF-picked side-load: the Uri is stringified at the seam boundary. */
-internal fun SubtitleManager.addLocalSubtitle(uri: Uri, fileName: String) =
-    addLocalSubtitle(uri.toString(), fileName)
-
-/** SAF-picked upload: the Uri is stringified at the seam boundary. */
-internal fun SubtitleManager.uploadSubtitle(
-    uri: Uri,
-    fileName: String,
-    language: String?,
-    isForced: Boolean,
-    isHearingImpaired: Boolean,
-) = uploadSubtitle(uri.toString(), fileName, language, isForced, isHearingImpaired)

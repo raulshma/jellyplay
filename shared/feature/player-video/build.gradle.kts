@@ -101,9 +101,21 @@ kotlin {
         // Wave 8C: the desktop DI module (desktopPlayerVideoModule) registers
         // the now-commonMain VideoPlayerViewModel plus the jvmMain seam stubs.
         // No media3/legacy deps here — jvmMain sees only commonMain's deps.
+        // Wave 9A: + JNA for the desktop EngineVideoSurface actual, which
+        // resolves the embedded child window's HWND (Native.getComponentPointer,
+        // core artifact — no jna-platform). The Android target never sees this
+        // edge; apps/desktop already ships libs.jna at runtime for libmpv, so
+        // it carries no new runtime weight. Kept in this module because the
+        // surface host is the co-module actual of an internal expect — moving
+        // it app-side would force the seam public or add an indirection layer.
         getByName("jvmMain").dependencies {
             implementation(libs.koin.core)
             implementation(libs.koin.compose.viewmodel)
+            implementation(libs.jna)
+            // SwingPanel host for the EngineVideoSurface desktop actual — the common
+            // window package reaches jvmMain through jb-compose-ui, but SwingPanel is
+            // desktop-only and needs this explicit edge.
+            implementation(libs.jb.compose.ui.desktop)
         }
         getByName("androidMain").dependencies {
             // Documented shared→legacy edges (library/livetv/admin/settings/
