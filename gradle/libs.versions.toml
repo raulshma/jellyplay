@@ -108,6 +108,10 @@ androidx-activity-compose = { group = "androidx.activity", name = "activity-comp
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 jb-compose-runtime = { group = "org.jetbrains.compose.runtime", name = "runtime", version.ref = "composeMultiplatform" }
 jb-compose-ui = { group = "org.jetbrains.compose.ui", name = "ui", version.ref = "composeMultiplatform" }
+# Desktop-only compose ui surface (SwingPanel & friends) for shared modules'
+# jvmMain actuals (wave 9A player-video surface host). Same version family
+# as the jb-compose-* set; runtime resolves via apps/desktop currentOs.
+jb-compose-ui-desktop = { group = "org.jetbrains.compose.ui", name = "ui-desktop", version.ref = "composeMultiplatform" }
 jb-compose-foundation = { group = "org.jetbrains.compose.foundation", name = "foundation", version.ref = "composeMultiplatform" }
 jb-compose-animation = { group = "org.jetbrains.compose.animation", name = "animation", version.ref = "composeMultiplatform" }
 jb-compose-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version.ref = "composeMultiplatformMaterial3" }

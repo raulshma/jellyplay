@@ -80,13 +80,15 @@ fun main() {
             dataJvmModule,
             desktopDataModule(paths.dataDirNio),
             desktopPlayerModule,
-            // Video player (wave 8C): the VideoPlayerViewModel is commonMain
-            // and live-resolvable here — every seam binds to a jvmMain no-op.
-            // Route.VideoPlayer stays dead-end-guarded in DesktopAppRoot: no
-            // desktop screen host exists yet (the SwingPanel/HWND video
-            // surface is queued work), so nothing resolves the VM in
-            // practice; registering it keeps the module verifiable as the
-            // surface host lands.
+            // Video player (wave 8C registration, wave 9A playback): the
+            // VideoPlayerViewModel is commonMain and live-resolvable here, the
+            // SwingPanel/HWND video surface composes inside Route.VideoPlayer,
+            // and desktopPlayerModule supplies the per-session mpv
+            // PlayerEngineFactory binding (this module deliberately does not —
+            // MpvDesktopEngine is an app-layer type). Windows only:
+            // DesktopAppRoot keeps Route.VideoPlayer dead-end-guarded on other
+            // OSes where no embedded surface exists. The no-op seam bindings in
+            // the module still cover those guarded OSes.
             desktopPlayerVideoModule,
             // V3 feature conveyor: search — LIVE since the Phase X desktop
             // nav v1 (DesktopAppRoot renders searchSection as the start

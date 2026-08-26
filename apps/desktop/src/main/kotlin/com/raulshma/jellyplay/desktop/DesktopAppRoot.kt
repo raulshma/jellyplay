@@ -80,6 +80,8 @@ import com.raulshma.jellyplay.feature.music.navigation.musicSection
 import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
+import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
+import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
 import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
@@ -338,8 +340,28 @@ private fun DesktopNavScaffold() {
             // from desktopDetailsPlatformModule, AudioQueueFacade stub).
             // Details is drill-in only — no rail entry; shared screens push
             // Route.MediaDetail/SeerrDetail/PersonDetail/etc. Play/edit pushes
-            // stay guarded below (VideoPlayer/AudioPlayer/MetadataEditor).
+            // stay guarded below (AudioPlayer/MetadataEditor); VideoPlayer is
+            // live on Windows now.
             detailsSection(guardedNavigator)
+            // …player-video, wave 9A conveyor — live on WINDOWS only: the
+            // commonMain VideoPlayerScreen renders its SwingPanel/HWND mpv
+            // surface and the per-session MpvDesktopEngine resolves through
+            // PlayerEngineFactory (desktopPlayerModule). Other OSes keep the
+            // dead-end guard below (no libmpv embedding story there yet).
+            // The subtitle-tester overlay stays Android-only: its push target
+            // remains in the dead-end list.
+            if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported) {
+                entry<Route.VideoPlayer> { key ->
+                    VideoPlayerScreen(
+                        itemId = key.itemId,
+                        mediaSourceId = key.mediaSourceId,
+                        startPositionTicks = key.startPositionTicks,
+                        subtitleStreamIndex = key.subtitleStreamIndex,
+                        audioStreamIndex = key.audioStreamIndex,
+                        onBack = { guardedNavigator.goBack() },
+                    )
+                }
+            }
             // Auth cluster drill-ins, live since the auth conveyor flip: the
             // settings Server/UserManagement screens push AddServer/ServerList
             // into these entries. Signed-OUT users still get DesktopSignInPane
@@ -405,38 +427,44 @@ private fun DesktopNavScaffold() {
                 }
             },
     ) {
-        NavigationRail(
-            header = {
-                Text(
-                    "JellyPlay",
-                    Modifier.padding(vertical = 16.dp),
-                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                )
-            },
-        ) {
-            DesktopRailItem(Route.Home, "Home", Tabler.Outline.Home, currentTopLevel, guardedNavigator)
-            DesktopRailItem(Route.Search, "Search", Tabler.Outline.Search, currentTopLevel, guardedNavigator)
-            DesktopRailItem(Route.Library, "Library", Tabler.Outline.Library, currentTopLevel, guardedNavigator)
-            DesktopRailItem(Route.LiveTv, "Live TV", Tabler.Outline.DeviceTv, currentTopLevel, guardedNavigator)
-            // Same icon the Android app's nav uses for Route.MusicBrowse
-            // (JellyPlayApp.routeToIcon): Tabler.Outline.Disc.
-            DesktopRailItem(Route.MusicBrowse, "Music", Tabler.Outline.Disc, currentTopLevel, guardedNavigator)
-            DesktopRailItem(Route.Downloads, "Downloads", Tabler.Outline.Download, currentTopLevel, guardedNavigator)
-            DesktopRailItem(Route.Newsletter, "Newsletter", Tabler.Outline.Mail, currentTopLevel, guardedNavigator)
-            DesktopRailItem(Route.WatchProgressHeatmap, "Insights", Tabler.Outline.Flame, currentTopLevel, guardedNavigator)
-            DesktopRailItem(Route.SyncPlay, "SyncPlay", Tabler.Outline.Users, currentTopLevel, guardedNavigator)
+        // Fullscreen routes (the video player) take the whole content area:
+        // hide the rail while one is on top; Esc/back pops out of it.
+        // nav3 keys are the base type; only our Route subclasses carry isFullScreen.
+        val topRouteIsFullscreen = (backStack.lastOrNull() as? Route)?.isFullScreen == true
+        if (!topRouteIsFullscreen) {
+            NavigationRail(
+                header = {
+                    Text(
+                        "JellyPlay",
+                        Modifier.padding(vertical = 16.dp),
+                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                    )
+                },
+            ) {
+                DesktopRailItem(Route.Home, "Home", Tabler.Outline.Home, currentTopLevel, guardedNavigator)
+                DesktopRailItem(Route.Search, "Search", Tabler.Outline.Search, currentTopLevel, guardedNavigator)
+                DesktopRailItem(Route.Library, "Library", Tabler.Outline.Library, currentTopLevel, guardedNavigator)
+                DesktopRailItem(Route.LiveTv, "Live TV", Tabler.Outline.DeviceTv, currentTopLevel, guardedNavigator)
+                // Same icon the Android app's nav uses for Route.MusicBrowse
+                // (JellyPlayApp.routeToIcon): Tabler.Outline.Disc.
+                DesktopRailItem(Route.MusicBrowse, "Music", Tabler.Outline.Disc, currentTopLevel, guardedNavigator)
+                DesktopRailItem(Route.Downloads, "Downloads", Tabler.Outline.Download, currentTopLevel, guardedNavigator)
+                DesktopRailItem(Route.Newsletter, "Newsletter", Tabler.Outline.Mail, currentTopLevel, guardedNavigator)
+                DesktopRailItem(Route.WatchProgressHeatmap, "Insights", Tabler.Outline.Flame, currentTopLevel, guardedNavigator)
+                DesktopRailItem(Route.SyncPlay, "SyncPlay", Tabler.Outline.Users, currentTopLevel, guardedNavigator)
 
-            Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(12.dp))
 
-            DesktopRailItem(Route.Requests, "Requests", Tabler.Outline.Movie, currentTopLevel, guardedNavigator)
-            DesktopRailItem(Route.UpcomingCalendar, "Calendar", Tabler.Outline.Calendar, currentTopLevel, guardedNavigator)
-            DesktopRailItem(Route.ArrQueue, "Arr Queue", Tabler.Outline.Stack, currentTopLevel, guardedNavigator)
-            DesktopRailItem(Route.Shortcuts, "Shortcuts", Tabler.Outline.Bolt, currentTopLevel, guardedNavigator)
+                DesktopRailItem(Route.Requests, "Requests", Tabler.Outline.Movie, currentTopLevel, guardedNavigator)
+                DesktopRailItem(Route.UpcomingCalendar, "Calendar", Tabler.Outline.Calendar, currentTopLevel, guardedNavigator)
+                DesktopRailItem(Route.ArrQueue, "Arr Queue", Tabler.Outline.Stack, currentTopLevel, guardedNavigator)
+                DesktopRailItem(Route.Shortcuts, "Shortcuts", Tabler.Outline.Bolt, currentTopLevel, guardedNavigator)
 
-            Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(12.dp))
 
-            DesktopRailItem(Route.Settings, "Settings", Tabler.Outline.Settings, currentTopLevel, guardedNavigator)
-            DesktopRailItem(Route.AdminDashboard, "Admin", Tabler.Outline.Shield, currentTopLevel, guardedNavigator)
+                DesktopRailItem(Route.Settings, "Settings", Tabler.Outline.Settings, currentTopLevel, guardedNavigator)
+                DesktopRailItem(Route.AdminDashboard, "Admin", Tabler.Outline.Shield, currentTopLevel, guardedNavigator)
+            }
         }
 
         CompositionLocalProvider(
@@ -499,17 +527,24 @@ private fun DesktopRailItem(
  * entry — navigation must swallow these instead of letting them reach
  * NavDisplay (unregistered top-of-stack = crash). Keep in sync with the
  * entryProvider block above: everything a registered section pushes must
- * either be registered itself or listed here.
+ * either be registered itself or listed here. Route.VideoPlayer is
+ * conditionally registered (Windows only) and guarded on the other OSes;
+ * every branch of that when must mirror the entryProvider's conditions.
  */
 private fun NavKey.isDesktopDeadEndRoute(): Boolean = when (this) {
-    // Players — legacy app-side screens, no shared sections. Of these,
-    // Route.AudioPlayer is the music section's track-click target and
-    // VideoPlayer/LiveTvChannelPlayer are pushed by details/livetv: the
-    // legacy player surfaces have no desktop home, so those clicks surface
-    // the snackbar instead (other play/enqueue paths degrade silently
-    // through StubAudioQueueFacade — only instant-mix shows an error).
-    is Route.VideoPlayer, is Route.AudioPlayer, is Route.LiveTvChannelPlayer,
-    -> true
+    // Players — the only one with a desktop home is VideoPlayer, live since
+    // wave 9A on WINDOWS: its entry composes the commonMain screen with the
+    // SwingPanel/HWND mpv surface and is registered exactly under this same
+    // bridge predicate the entry above registers under, so non-Windows OSes
+    // dead-end it.
+    // Of the rest, Route.AudioPlayer is the music section's track-click
+    // target and LiveTvChannelPlayer is pushed by livetv: those player
+    // surfaces have no desktop home, so their clicks surface the snackbar
+    // instead (other play/enqueue paths degrade silently through
+    // StubAudioQueueFacade — only instant-mix shows an error).
+    is Route.VideoPlayer ->
+                    !DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported
+    is Route.AudioPlayer, is Route.LiveTvChannelPlayer -> true
     // Pushed by MediaDetailScreen's edit action: the editor feature is
     // registered but latent on desktop (StreamingSubtitleStore has no
     // desktop Koin def) and has no desktop nav section.
@@ -519,6 +554,7 @@ private fun NavKey.isDesktopDeadEndRoute(): Boolean = when (this) {
     Route.SubtitleTester -> true
     else -> false
 }
+
 
 /** Admin-status re-validation window, matching MainViewModel's 30 s dedup. */
 private const val ADMIN_REFRESH_INTERVAL_MS = 30_000L
