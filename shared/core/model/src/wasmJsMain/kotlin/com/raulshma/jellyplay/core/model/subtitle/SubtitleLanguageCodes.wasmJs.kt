@@ -14,7 +14,9 @@ package com.raulshma.jellyplay.core.model.subtitle
  *    codes outside it fall through to the passthrough both implementations
  *    use for unknown codes,
  *  - display names are fixed English names from the table rather than
- *    locale-data lookups (same casing style: "English", "German", ...), and
+ *    locale-data lookups (same casing style: "English", "German", ...),
+ *  - JDK legacy subtags (`iw`/`in`/`ji`) are normalized to their modern forms
+ *    (`he`/`id`/`yi`) before lookup instead of relying on host legacy tables, and
  *  - exotic multi-subtag originals bypass the JVM's secondary
  *    `forLanguageTag` re-parse and resolve against their normalized primary
  *    subtag instead.
@@ -76,7 +78,7 @@ object SubtitleLanguageCodes {
             "mn:mon:Mongolian;mr:mar:Marathi;ms:msa:Malay;mt:mlt:Maltese;" +
             "my:mya:Burmese;na:nau:Nauru;nb:nob:Norwegian Bokmål;nd:nde:North Ndebele;" +
             "ne:nep:Nepali;ng:ndo:Ndonga;nl:nld:Dutch;nn:nno:Norwegian Nynorsk;" +
-            "nr:nbl:South Ndebele;nv:nav:Navajo;ny:nya:Chichewa;oc:oci:Occitan;" +
+            "no:nor:Norwegian;nr:nbl:South Ndebele;nv:nav:Navajo;ny:nya:Chichewa;oc:oci:Occitan;" +
             "oj:oji:Ojibwa;om:orm:Oromo;or:ori:Oriya;os:oss:Ossetian;" +
             "pa:pan:Panjabi;pi:pli:Pali;pl:pol:Polish;ps:pus:Pushto;" +
             "pt:por:Portuguese;qu:que:Quechua;rm:roh:Romansh;rn:run:Rundi;" +
@@ -117,7 +119,14 @@ object SubtitleLanguageCodes {
     fun toIso3(code: String?): String? {
         if (code.isNullOrBlank()) return null
         val cleaned = code.trim().replace('_', '-').substringBefore('-')
-        val lower = cleaned.lowercase()
+        val lower = when (cleaned.lowercase()) {
+            // JDK grandfetched tag equivalents (iw→he, in→id, ji→yi): the JVM
+            // original resolves them via host legacy tables; wasm normalizes.
+            "iw" -> "he"
+            "in" -> "id"
+            "ji" -> "yi"
+            else -> cleaned.lowercase()
+        }
         // Short (639-1 or unregistered BCP-47 prefix) input: table lookup, then
         // alphabetic passthrough (the JVM fallback's net behavior).
         if (cleaned.length <= 2) {

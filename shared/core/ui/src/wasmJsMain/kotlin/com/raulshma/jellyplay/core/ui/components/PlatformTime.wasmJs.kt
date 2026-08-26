@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import com.raulshma.jellyplay.core.model.wallNowMillis
+import kotlin.math.abs
 import kotlin.math.round
 
 /** `new Date(ms)` local-time field probes (browser timezone stands in for the JVM system zone). */
@@ -12,13 +13,23 @@ private fun jsMinutes(ms: Long): Int = js("new Date(ms).getMinutes()")
 private fun jsLocale(): String = js("(Intl.DateTimeFormat().resolvedOptions().locale || '')")
 private fun jsParseMillis(iso: String): Double = js("Date.parse(iso)")
 
+/** Gregorian month length with the leap-year rule (java.time parity). */
+private fun maxDayInMonth(year: Int, month: Int): Int = when (month) {
+    1, 3, 5, 7, 8, 10, 12 -> 31
+    4, 6, 9, 11 -> 30
+    else -> if ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0) 29 else 28
+}
+
 internal actual fun formatOneDecimal(value: Double): String {
     // HALF_UP at the first decimal through integer math ("%.1f" replacement,
-    // mission note in spike w-10C class A). Ties inside binary-representation
+    // mission note in spike w-10C class A), sign applied symmetrically so a
+    // stray negative matches "%.1f"'s away-from-zero output instead of the
+    // "-1.-5" an unguarded path would render. Ties inside binary-representation
     // noise can differ by one ulp from the JVM Formatter — invisible at UI
-    // stat precision. Call sites only pass non-negative values.
-    val tenths = round(value * 10).toLong()
-    return "${tenths / 10}.${tenths % 10}"
+    // stat precision.
+    val magnitude = round(abs(value) * 10).toLong()
+    val rendered = "${magnitude / 10}.${magnitude % 10}"
+    return if (value < 0) "-$rendered" else rendered
 }
 
 internal actual fun currentYear(): Int = jsFullYear(wallNowMillis())
@@ -37,9 +48,12 @@ private const val YMD_REGIONS = "JP|KR|KP|CN|TW|HU|MN|LT"
 
 internal actual fun isoDateIsAfterToday(dateStr: String): Boolean {
     // Strictly-shaped yyyy-MM-dd only (the Seerr wire form); anything else
-    // fails like the old try/catch around LocalDate.parse did.
+    // fails like the old try/catch around LocalDate.parse did. The field-range
+    // check rejects impossible dates the shape regex alone would admit
+    // ("2099-02-31") — java.time accepted no such input either.
     if (!Regex("""^\d{4}-\d{2}-\d{2}$""").matches(dateStr)) return false
     val (year, month, day) = dateStr.split('-').map { it.toInt() }
+    if (month !in 1..12 || day !in 1..maxDayInMonth(year, month)) return false
     val nowMs = wallNowMillis()
     val nowY = jsFullYear(nowMs)
     val nowM = jsMonth(nowMs) + 1 // JS months are zero-based

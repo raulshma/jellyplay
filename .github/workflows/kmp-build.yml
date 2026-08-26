@@ -39,7 +39,7 @@ jobs:
       - name: Build shared targets (JVM + wasm + Android)
         # The AGP KMP library plugin exposes no per-variant assembleDebug;
         # android target verifies via its single androidMain compilation.
-        # wasmJs target exists on model/datastore/designsystem/network/
+        # wasmJs target exists on model/datastore/designsystem/ui/network/
         # player-contract plus the apps:web shell (§Phase W) — database and
         # data ship without it (no Room on wasm v1, plan §Phase W).
         # player-contract gained wasm in W.3 when MediaEngine's supertypes

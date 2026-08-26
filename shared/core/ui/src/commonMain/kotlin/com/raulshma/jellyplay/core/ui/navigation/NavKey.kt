@@ -552,13 +552,11 @@ val MUSIC_TOP_LEVEL_ROUTES: Map<Route, String> = linkedMapOf(
 
 val TOP_LEVEL_ROUTES = VIDEO_TOP_LEVEL_ROUTES
 
-// Explicit type argument: without it the wasmJs frontend unified both
-// LinkedHashMap key views up to Set<Any> (spike w-10C class E persisted past
-// the class A/B fixes; JVM/android inference was unaffected).
-// NOTE: the two maps above carry explicit Map<Route, String> annotations —
-// without them the wasmJs frontend unifies the vararg Pair keys up to
-// `out Any`, and every downstream Set<Route> use breaks (JVM/android are
-// unaffected). Spike w-10C class E.
+// The two maps above carry explicit Map<Route, String> annotations — without
+// them the wasmJs frontend unifies the vararg Pair keys up to `out Any` (a
+// first attempt at an explicit union type argument failed differently) and
+// every downstream Set<Route> use breaks. JVM/android inference is
+// unaffected. Spike w-10C class E.
 val ALL_TOP_LEVEL_ROUTE_KEYS: Set<Route> =
     VIDEO_TOP_LEVEL_ROUTES.keys.union(MUSIC_TOP_LEVEL_ROUTES.keys)
 

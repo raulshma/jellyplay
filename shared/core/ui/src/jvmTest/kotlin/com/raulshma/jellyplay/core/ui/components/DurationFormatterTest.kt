@@ -1,10 +1,27 @@
 package com.raulshma.jellyplay.core.ui.components
 
+import java.util.Locale
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.Test
 
 class DurationFormatterTest {
+
+    private val originalLocale: Locale = Locale.getDefault()
+
+    @BeforeTest
+    fun pinUsLocale() {
+        // The hour branch routes through the "%.1f"-shaped formatOneDecimal
+        // seam, whose JVM actual is default-locale-sensitive.
+        Locale.setDefault(Locale.US)
+    }
+
+    @AfterTest
+    fun restoreLocale() {
+        Locale.setDefault(originalLocale)
+    }
 
     @Test
     fun `formatDurationFromTicks with zero`() {
@@ -115,7 +132,10 @@ class DurationFormatterTest {
         // Pins the `%.1f` JVM contract ahead of the wasmJs commonMain split:
         // the hour branch is the only String.format-dependent path.
         assertEquals("1.0h", formatDurationApproxSeconds(3_660))   // 1.01666 -> 1.0
-        assertEquals("5.5h", formatDurationApproxSeconds(19_800))  // exact half -> HALF_UP stays .5
+        // 8100 s = 2.25 h, a binary-exact true tie: HALF_UP prints 2.3 where
+        // HALF_EVEN would print 2.2 — this line actually discriminates modes.
+        assertEquals("2.3h", formatDurationApproxSeconds(8_100))
+        assertEquals("5.5h", formatDurationApproxSeconds(19_800))  // ordinary .5 bucket coverage
         assertEquals("25.8h", formatDurationApproxSeconds(92_880)) // 25.8
         assertEquals("59m", formatDurationApproxSeconds(3_599))    // minute branch, no decimal
         assertEquals("45s", formatDurationApproxSeconds(45))       // seconds branch

@@ -234,3 +234,28 @@ typography)` + fully-named-param `markdownTypography(h1…inlineCode)`):
   entirely with the downgrade.
 - Long view: holding pin only — ride forward to ≥0.43 when the toolchain reaches
   Kotlin 2.4 (0.44.0 is 2.4.10-built and adds nothing we need today).
+
+## 8. Wave-11A landing notes — wasm runtime degrades (documented cuts)
+
+All landed in `shared/core/ui` `wasmJsMain` actuals; compile gates only, no
+real-browser pass yet (same honesty rule as HtmlVideoEngine/10B):
+
+- **Markdown**: wasm renders styled monospace plain text (the commonMain
+  seam moved mikepenz to android/jvm-scoped deps). Fidelity upgrade path =
+  flip the catalog pin to the §7 coordinate (0.41.0) and swap the wasm
+  actual; deferred for v1.
+- **SYSTEM date order**: region table is a mapped subset (MDY list incl.
+  KE/GH by ICU convention); an UNMAPPED region degrades to DMY, and a
+  REGION-LESS browser locale (`en`, `fr`) falls back to MDY — diverging from
+  real ICU for some EU users. Display-only, SYSTEM preference only.
+- **Date inputs**: bare-local ISO stamps resolve in browser-tz via
+  `Date.parse` under a strict shape regex (+ field-range validation);
+  long month names and AM/PM letters are fixed English.
+- **BackHandler**: inert on web — naive popstate binding would fight
+  NavDisplay's stack management; browser-history integration deferred until
+  the web shell navigates for real.
+- **Language tables**: coverage bounded by the compiled-in matrix instead of
+  host CLDR (`no:nor` + JDK legacy aliases iw/in/ji included post-review);
+  unregistered short codes return null instead of passthrough on the
+  2-letter path only.
+- **Logs**: `println` reaches the JS console; no levels beyond W/D shapes.

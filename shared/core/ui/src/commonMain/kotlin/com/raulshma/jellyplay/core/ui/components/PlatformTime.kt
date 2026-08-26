@@ -9,9 +9,12 @@ package com.raulshma.jellyplay.core.ui.components
  */
 
 /**
- * One-decimal fixed notation ("%.1f" formatting contract: positive values,
- * HALF_UP rounding, dot separator). Every former `"%.1f".format(x)` site in
- * this module routes through here.
+ * One-decimal fixed notation ("%.1f" formatting contract: HALF_UP rounding at
+ * the first decimal, sign rendered symmetrically for stray negatives). The
+ * decimal separator follows each platform's %.1f behavior — the JVM default
+ * locale (decimal comma under e.g. de-DE hosts) on android/desktop, always a
+ * dot on wasm. Every former `"%.1f".format(x)` site in this module routes
+ * through here.
  */
 internal expect fun formatOneDecimal(value: Double): String
 
