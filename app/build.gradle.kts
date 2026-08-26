@@ -176,7 +176,7 @@ dependencies {
     implementation(project(":shared:feature:details"))
     implementation(project(":feature:player:video"))
     implementation(project(":feature:player:core"))
-    implementation(project(":feature:player:audio"))
+    implementation(project(":shared:feature:player-audio"))
     implementation(project(":shared:feature:player-live"))
     implementation(project(":shared:feature:settings"))
     implementation(project(":shared:feature:music"))

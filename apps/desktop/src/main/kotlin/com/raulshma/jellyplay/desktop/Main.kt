@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.feature.insights.di.insightsModule
 
 import com.raulshma.jellyplay.feature.details.desktopDetailsPlatformModule
 import com.raulshma.jellyplay.feature.details.detailsModule
+import com.raulshma.jellyplay.feature.player.audio.di.playerAudioModule
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
 import com.raulshma.jellyplay.feature.home.di.homeModule
@@ -248,6 +249,16 @@ fun main() {
             // lands (see the HomeLifecycleSeam jvm actual for the refresher
             // start/stop decision that wiring will need).
             homeModule,
+            // …player-audio, wave 7A conveyor (legacy :feature:player:audio
+            // deleted): registered LATENT, home/editor pattern — the four
+            // playback/cast ctor deps (AudioQueueManager/AudioEffectsManager
+            // /AudioPlayerEngine/AudioPlayerCast) are Android Hilt-interop
+            // singles with no desktop definitions yet, so resolving the
+            // ViewModel here would throw NoDefinitionFound. Desktop nav
+            // keeps Route.AudioPlayer a dead-end route (Ambient is only
+            // reachable from inside the player), so nothing instantiates
+            // it today.
+            playerAudioModule,
 
 
 
