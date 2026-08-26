@@ -40,6 +40,7 @@ import com.raulshma.jellyplay.feature.admin.di.androidAdminModule
 import com.raulshma.jellyplay.feature.subtitle.tester.di.androidSubtitleTesterModule
 import com.raulshma.jellyplay.feature.player.live.di.androidPlayerLiveModule
 import com.raulshma.jellyplay.feature.player.live.di.playerLiveModule
+import com.raulshma.jellyplay.feature.player.video.di.androidPlayerVideoModule
 
 
 import com.raulshma.jellyplay.feature.editor.di.editorModule
@@ -94,14 +95,11 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     // happens once setContent renders an image — well after onCreate returns.
     @Inject lateinit var okHttpClientProvider: javax.inject.Provider<OkHttpClient>
     @Inject lateinit var networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
-    // Defers the subtitle-font asset copy + byte-cache pre-warm (multi-MB .ttf
-    // reads) to the IO block below, so the player's Main-thread font handoff to
-    // libass hits a warm cache instead of reading disk.
-    @Inject lateinit var fontProviderProvider: javax.inject.Provider<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>
-    // Defers the video byte cache's SQLite index open + span directory scan to
-    // the IO block below, so the first cacheable playback doesn't pay that
-    // disk work on the player thread.
-    @Inject lateinit var videoStreamCacheProvider: javax.inject.Provider<com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache>
+    // (Wave 7C: the FontProvider/VideoStreamCache prewarm Providers that used
+    // to live here left with the player-video migration — both impls are
+    // Koin-owned in shared/feature/player-video's androidPlayerVideoModule, so
+    // no Hilt binding remains; the IO block below resolves them from the
+    // container directly, same deferred construction timing.)
     // javax.inject.Provider defers Hilt construction of AudioPlaybackManager
     // (and its transitive 14-dep graph: AudioLibraryBrowser,
     // AudioProgressReporter, AudioCrossfader, QueueUndoStack, LruCache(25), …)
@@ -283,6 +281,16 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // application context here.
                 androidSubtitleTesterModule(this@JellyPlayApplication),
 
+                // Player-video conveyor (wave 7C): the migrated video player
+                // (:feature:player:video + the absorbed :feature:player:core
+                // remains). Koin owns the engine stack, the font/cache/
+                // preview singletons and the VideoPlayerViewModel; the six
+                // legacy Hilt playback deps resolve through the
+                // hiltInteropModule singles above. Sole entry point stays
+                // PlayerActivity — no desktop registration (latent feature,
+                // subtitle-tester precedent).
+                androidPlayerVideoModule(this@JellyPlayApplication),
+
                 // Phase X auth cutover (feature-conveyor transform): both VM
                 // ctor deps (AuthRepository, ServerDiscoveryRepository) were
                 // already Koin-owned in dataJvmModule — zero Hilt interop
@@ -330,8 +338,13 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // read fonts on Main.
         applicationScope.launch(Dispatchers.IO) {
             runCatching { networkOfflineStore.networkOffline.first() }
-            runCatching { fontProviderProvider.get().prewarm() }
-            runCatching { videoStreamCacheProvider.get().prewarm() }
+            // Wave 7C: Koin-owned since the player-video migration (the Hilt
+            // javax.inject.Provider fields died with the module flip); still
+            // resolved here, inside the IO launcher, so the font-asset copy +
+            // cache-index open stay off the cold-start critical path.
+            val koin = org.koin.mp.KoinPlatform.getKoin()
+            runCatching { koin?.get<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>()?.prewarm() }
+            runCatching { koin?.get<com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache>()?.prewarm() }
             audioPlaybackManagerProvider.get().start()
             nowPlayingWidgetUpdaterProvider.get().start()
         }

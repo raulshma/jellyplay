@@ -34,8 +34,6 @@ include(":core:data")
 include(":core:ui")
 include(":core:notification")
 include(":core:testing")
-include(":feature:player:core")
-include(":feature:player:video")
 
 
 
@@ -93,6 +91,7 @@ include(":shared:feature:home")
 
 include(":shared:feature:subtitle-tester")
 include(":shared:feature:player-live")
+include(":shared:feature:player-video")
 include(":shared:feature:details")
 
 include(":shared:feature:auth")

@@ -174,10 +174,9 @@ dependencies {
     implementation(project(":shared:feature:library"))
     implementation(project(":shared:feature:search"))
     implementation(project(":shared:feature:details"))
-    implementation(project(":feature:player:video"))
-    implementation(project(":feature:player:core"))
     implementation(project(":shared:feature:player-audio"))
     implementation(project(":shared:feature:player-live"))
+    implementation(project(":shared:feature:player-video"))
     implementation(project(":shared:feature:settings"))
     implementation(project(":shared:feature:music"))
     implementation(project(":shared:feature:livetv"))
@@ -233,7 +232,8 @@ dependencies {
     implementation(libs.play.services.cast.framework)
 
     // Required by the media3-ffmpeg-decoder native extension (pulled in via
-    // :feature:player:video). Must also be enabled at the app dex entry point.
+    // :shared:feature:player-video). Must also be enabled at the app dex
+    // entry point.
     coreLibraryDesugaring(libs.android.desugar.jdk)
 
     implementation(libs.media3.session)
