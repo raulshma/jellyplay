@@ -27,6 +27,14 @@ data class SyncBaseline(
     val backdropTag: String?,
     val metadataSignature: String,
     val subtitleSignature: String,
+    /**
+     * True when the subtitle sidecar bundle failed and was never fetched (the
+     * persisted `sync_baseline.syncSubtitlesPending` flag). Forces the subtitle
+     * axis to flag as changed regardless of signature equality — the retry
+     * driver for a bundle that never landed. Lives beside (not inside)
+     * [subtitleSignature] so that column remains a pure server snapshot.
+     */
+    val subtitlesPending: Boolean = false,
     val trickplaySignature: String,
     val segmentsSignature: String,
     val mediaSourceId: String?,
@@ -214,8 +222,7 @@ class OfflineSyncComparator @Inject constructor() {
         val imagesChanged = imageChanged(baseline.posterTag, fresh.posterImageTag) ||
             imageChanged(baseline.backdropTag, fresh.backdropImageTag)
         val mediaFileChanged = mediaSourceChanged(baseline, source)
-        // First-contact guard: an axis with no recorded baseline never flags.
-        val subtitlesChanged = hasChanged(baseline.subtitleSignature, freshSubtitleSig)
+        val subtitlesChanged = subtitleAxisChanged(baseline, freshSubtitleSig)
         val trickplayChanged = hasChanged(baseline.trickplaySignature, freshTrickplaySig)
         val segmentsChanged = hasChanged(baseline.segmentsSignature, freshSegmentsSig)
 
@@ -252,16 +259,26 @@ class OfflineSyncComparator @Inject constructor() {
         imageChanged(baselineTag, freshTag)
 
     /**
-     * True when the fresh subtitle inventory signature differs from the baseline
-     * (empty baseline treated as no-change — first contact seeds rather than
-     * flags). Exposed so a resync can decide whether to re-fetch subtitles.
+     * True when the subtitle axis needs a re-fetch: the bundle is pending
+     * (failed and never fetched), or the fresh inventory signature differs from
+     * the baseline. Exposed so a resync can decide whether to re-fetch.
      */
-    fun isSubtitleChanged(baselineSubtitleSignature: String, fresh: MediaDetail): Boolean =
-        hasChanged(baselineSubtitleSignature, subtitleSignature(fresh))
+    fun isSubtitleChanged(baseline: SyncBaseline, fresh: MediaDetail): Boolean =
+        subtitleAxisChanged(baseline, subtitleSignature(fresh))
 
     /** True when the fresh trickplay signature differs from the baseline. */
-    fun isTrickplayChanged(baselineTrickplaySignature: String, fresh: MediaDetail): Boolean =
-        hasChanged(baselineTrickplaySignature, trickplaySignature(fresh))
+    fun isTrickplayChanged(baseline: SyncBaseline, fresh: MediaDetail): Boolean =
+        hasChanged(baseline.trickplaySignature, trickplaySignature(fresh))
+
+    /**
+     * The subtitle axis's single flag rule, shared by [diff] and
+     * [isSubtitleChanged]: a pending bundle (failed and never fetched) flags
+     * regardless of signature equality — that is the retry driver — otherwise
+     * [hasChanged]'s first-contact guard applies.
+     */
+    private fun subtitleAxisChanged(baseline: SyncBaseline, freshSubtitleSignature: String?): Boolean =
+        baseline.subtitlesPending ||
+            hasChanged(baseline.subtitleSignature, freshSubtitleSignature)
 
     private fun deliverableSubtitles(detail: MediaDetail): List<MediaStream> =
         detail.mediaSources.firstOrNull()?.mediaStreams

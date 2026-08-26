@@ -388,7 +388,40 @@ class OfflineSyncComparatorTest {
     @Test
     fun `isSubtitleChanged and isTrickplayChanged return false for empty baseline`() {
         val fresh = detail(mediaStreams = listOf(subtitle()))
-        assertFalse(comparator.isSubtitleChanged("", fresh))
-        assertFalse(comparator.isTrickplayChanged("", fresh))
+        assertFalse(comparator.isSubtitleChanged(emptyBaseline(), fresh))
+        assertFalse(comparator.isTrickplayChanged(emptyBaseline(), fresh))
     }
+
+    @Test
+    fun `pending subtitle bundle flags subtitles changed even against a matching signature`() {
+        // A failed-and-never-fetched bundle must drive a retry regardless of
+        // what the server's inventory looks like now.
+        val fresh = detail(mediaStreams = listOf(subtitle()))
+        val baseline = comparator.baseline(fresh).copy(subtitlesPending = true)
+        assertTrue(comparator.isSubtitleChanged(baseline, fresh))
+        val result = comparator.diff(baseline, fresh, itemId)
+        assertTrue(result.state.subtitlesChanged)
+        assertEquals(SyncStatus.UPDATE_AVAILABLE, result.state.status)
+    }
+
+    @Test
+    fun `non-pending baseline does not flag subtitles on identical signatures`() {
+        val fresh = detail(mediaStreams = listOf(subtitle()))
+        val result = comparator.diff(comparator.baseline(fresh), fresh, itemId)
+        assertFalse(result.state.subtitlesChanged)
+    }
+
+    // Hand-rolled on purpose: comparator.baseline(fresh) derives NON-empty
+    // signatures from a detail, and these tests need the "never recorded"
+    // first-contact shape (empty strings) that only a pre-feature row has.
+    private fun emptyBaseline(): SyncBaseline = SyncBaseline(
+        posterTag = null,
+        backdropTag = null,
+        metadataSignature = "",
+        subtitleSignature = "",
+        trickplaySignature = "",
+        segmentsSignature = "",
+        mediaSourceId = null,
+        mediaSizeBytes = null,
+    )
 }

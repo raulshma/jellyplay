@@ -826,6 +826,7 @@ class MigrationTest {
         assertNotNull(baseline)
         assertEquals(null, baseline!!.syncedMetadataSignature)
         assertEquals(0, baseline.syncUpdateAvailable)
+        assertEquals(0, baseline.syncSubtitlesPending)
         // The migration backfills a playback_state row with default values.
         val playback = db.playbackStateDao().getById("item-1")
         assertNotNull(playback)
@@ -839,14 +840,14 @@ class MigrationTest {
     fun allMigrations_coversContiguousRange() {
         val tokenCipher = TokenCipher.forTestingWithPersistentKey()
         val migrations = allMigrations(tokenCipher)
-        // One migration per step from v1 up to the current schema version (49),
+        // One migration per step from v1 up to the current schema version (50),
         // each handing off to the next with no gaps or duplicate starts.
         // androidx.room.Database has CLASS retention, so getAnnotation() returns
         // null at runtime — the hardcoded fallback is the authoritative value
         // and must be bumped alongside JellyPlayDatabase's version.
         val expected = JellyPlayDatabase::class.java
             .getAnnotation(androidx.room.Database::class.java)?.version
-            ?: 49
+            ?: 50
         val startVersions = migrations.map { it.startVersion }
         assertEquals(
             "every version 1..<current must start exactly one migration",

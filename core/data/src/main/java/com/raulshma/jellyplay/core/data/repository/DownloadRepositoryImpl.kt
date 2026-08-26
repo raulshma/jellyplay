@@ -671,7 +671,7 @@ class DownloadRepositoryImpl @Inject constructor(
 
                     val fileName = "${stream.index}.${subtitleFileExtension(stream.codec)}"
                     val target = File(subtitlesDir, fileName)
-                    if (!downloadToFile(subUrl, target)) continue
+                    if (!downloadSubtitleFile(subUrl, target)) continue
 
                     entries.add(
                         OfflineSubtitleEntry(
@@ -707,6 +707,12 @@ class DownloadRepositoryImpl @Inject constructor(
             Log.d(TAG, "Failed to download external subtitles for $itemId", e)
             false
         }
+    }
+
+    override suspend fun markSubtitlesPending(itemId: String) {
+        // Atomicity and the stub/raise pairing live on the @Transaction DAO
+        // method — the canonical description of this flag's lifecycle.
+        syncBaselineDao.markSubtitlesPending(itemId)
     }
 
     override suspend fun downloadMediaSegments(itemId: String, downloadPath: String): Boolean =
@@ -849,10 +855,35 @@ class DownloadRepositoryImpl @Inject constructor(
         else -> "srt"
     }
 
-    private suspend fun downloadToFile(url: String, target: File): Boolean {
+    /**
+     * Fetches one subtitle sidecar to [target]. Subtitle-specific policy lives
+     * here on purpose: the auth-header fallback and the HTML/JSON rejection
+     * below apply only to subtitle fetches (the video transfer in
+     * DownloadTransferClient has its own), so this is deliberately not a
+     * generic file-download helper.
+     */
+    private suspend fun downloadSubtitleFile(url: String, target: File): Boolean {
         return try {
-            httpClient.newCall(Request.Builder().url(url).build()).awaitResponse().use { resp ->
+            // Auth rides on the baked-in api_key query param, with the
+            // X-Emby-Token header as a fallback for servers/reverse proxies
+            // that reject or strip query-token auth (the same pairing
+            // DownloadTransferClient uses for the video itself).
+            val requestBuilder = Request.Builder().url(url)
+            playbackRepository.getAccessToken()?.takeIf { it.isNotBlank() }?.let {
+                requestBuilder.header("X-Emby-Token", it)
+            }
+            httpClient.newCall(requestBuilder.build()).awaitResponse().use { resp ->
                 if (!resp.isSuccessful) return@use false
+                // An auth/proxy failure can arrive as HTTP 200 with an HTML
+                // login page (or a JSON error body); persisting either yields a
+                // sidecar the player can't parse — indistinguishable offline
+                // from "subtitle missing". No subtitle format is ever served
+                // as HTML/JSON, so both are rejected outright.
+                val contentType = resp.header("Content-Type")?.lowercase().orEmpty()
+                if (REJECTED_SUBTITLE_CONTENT_TYPES.any { contentType.contains(it) }) {
+                    Log.d(TAG, "Rejected subtitle response from $url: Content-Type $contentType")
+                    return@use false
+                }
                 resp.body?.byteStream()?.use { input ->
                     target.outputStream().use { output -> input.copyTo(output) }
                 }
@@ -1137,5 +1168,10 @@ class DownloadRepositoryImpl @Inject constructor(
         // Mirrored by DownloadRecoveryInitializer so cold-start re-enqueues
         // back off identically. WorkManager caps each retry delay at 5h.
         const val DOWNLOAD_BACKOFF_DELAY_MS = 30_000L
+
+        // Content types that can never be a subtitle file. An HTTP 200 body of
+        // one of these is an auth/proxy error page, not sidecar content.
+        private val REJECTED_SUBTITLE_CONTENT_TYPES =
+            listOf("text/html", "application/json")
     }
 }

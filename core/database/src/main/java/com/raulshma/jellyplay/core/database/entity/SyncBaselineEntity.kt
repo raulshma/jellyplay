@@ -73,4 +73,14 @@ data class SyncBaselineEntity(
     val syncTrickplayChanged: Int = 0,
     @ColumnInfo(defaultValue = "0")
     val syncSegmentsChanged: Int = 0,
+    /**
+     * The subtitle sidecar bundle failed and was never fetched. Set by the
+     * download recipe (core:data) after its subtitle bundle reports failure;
+     * cleared only by a successful re-fetch. A dedicated flag rather than a
+     * sentinel inside [syncedSubtitleSignature] because that column's meaning
+     * is "the synced server snapshot" — overloading it made every writer a
+     * potential way to silently lose the retry state.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val syncSubtitlesPending: Int = 0,
 )

@@ -970,8 +970,20 @@ val MIGRATION_48_49 = object : Migration(48, 49) {
     }
 }
 
+// The subtitle sidecar bundle's "failed and never fetched" retry state moves
+// from a sentinel value inside `syncedSubtitleSignature` to its own flag
+// column (`syncSubtitlesPending`), so the signature column stays a pure server
+// snapshot. Schema-additive only: the flag feature shipped alongside this
+// migration, so no existing row carries the retired sentinel and 0 (not
+// pending) is the correct backfill for every pre-existing baseline.
+val MIGRATION_49_50 = object : Migration(49, 50) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE sync_baseline ADD COLUMN syncSubtitlesPending INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v49 migration chain, with the
+ * The complete, correctly-ordered v1→v50 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -1028,4 +1040,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_46_47,
         MIGRATION_47_48,
         MIGRATION_48_49,
+        MIGRATION_49_50,
     )

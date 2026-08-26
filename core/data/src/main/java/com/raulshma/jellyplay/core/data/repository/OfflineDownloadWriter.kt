@@ -125,5 +125,16 @@ interface OfflineDownloadWriter {
      */
     suspend fun downloadMediaSegments(itemId: String, downloadPath: String): Boolean
 
+    /**
+     * Flags [itemId]'s freshness baseline so the next freshness check and the
+     * next resync both retry the subtitle bundle. Call this whenever a subtitle
+     * bundle fails; see the call site in
+     * `DownloadDelegate.executeDownload` for why a failure would otherwise go
+     * unnoticed, and `SyncBaselineDao.markSubtitlesPending` for the flag's
+     * canonical lifecycle (immediate badge lighting, TTL interaction,
+     * cleared only by a successful fetch).
+     */
+    suspend fun markSubtitlesPending(itemId: String)
+
     fun enqueueDownload(downloadId: String)
 }
