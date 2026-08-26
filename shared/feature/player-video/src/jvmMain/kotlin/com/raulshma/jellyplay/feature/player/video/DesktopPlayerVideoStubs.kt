@@ -115,7 +115,7 @@ internal class JvmNoOpEngine : MediaEngine {
  * third-party app and reported out-of-band, which a no-op expresses exactly.
  */
 object NoOpPlayerEngineFactory : PlayerEngineFactory {
-    override fun create(playerType: PlayerType): MediaEngine = JvmNoOpEngine()
+    override suspend fun create(playerType: PlayerType): MediaEngine = JvmNoOpEngine()
 }
 
 internal object NoOpMediaSessionController : MediaSessionController {

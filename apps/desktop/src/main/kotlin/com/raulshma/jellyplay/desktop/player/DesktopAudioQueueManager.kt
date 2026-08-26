@@ -632,6 +632,12 @@ class DesktopAudioQueueManager(
             if (original.isNotEmpty()) {
                 _queue.value = original
                 val restoreIndex = original.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
+                // Known micro-divergence from Android: when the CURRENT item
+                // was appended while shuffled (currentId absent from the
+                // original order), legacy rebuilds the player playlist and
+                // audibly switches to row 0 of the restored order, while this
+                // impl keeps the appended item playing under a cursor that
+                // points at index 0. Index/data parity holds either way.
                 _currentIndex.value = restoreIndex
                 unshuffledQueue = emptyList()
             }

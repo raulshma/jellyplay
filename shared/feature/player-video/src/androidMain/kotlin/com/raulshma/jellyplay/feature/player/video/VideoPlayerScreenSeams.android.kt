@@ -309,6 +309,13 @@ internal actual fun rememberDocumentPicker(
     return remember(launcher) { { launcher.launch(mimeTypes) } }
 }
 
+internal actual fun pickedDocumentDisplayName(uriString: String): String? =
+    // Decoded last segment — HEAD's `Uri.lastPathSegment` semantics, preserved
+    // so percent-encoded SAF names never reach the subtitle track label.
+    runCatching { android.net.Uri.parse(uriString).lastPathSegment }
+        .getOrNull()
+        ?.substringAfterLast('/')
+
 // ── Bitmaps ────────────────────────────────────────────────────────────────
 
 actual typealias PlatformBitmap = android.graphics.Bitmap

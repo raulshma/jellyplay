@@ -486,7 +486,7 @@ class PlayerSessionManager(
         }
     }
 
-    private fun initializeEngine(
+    private suspend fun initializeEngine(
         playerType: PlayerType,
         detail: MediaDetail,
         source: MediaSource?,

@@ -104,11 +104,14 @@ import org.koin.compose.koinInject
  * What is deliberately NOT wired yet (each omission is guarded by
  * [isDesktopDeadEndRoute] so a shared screen pushing the route shows a
  * snackbar instead of crashing NavDisplay with an unregistered entry):
- *  - VideoPlayer/LiveTvChannelPlayer — the video/live player surfaces have
- *    no desktop screen host yet (the SwingPanel/HWND surface is queued work;
- *    Route.VideoPlayer is pushed by details, LiveTvChannelPlayer by livetv);
+ *  - LiveTvChannelPlayer — the live-TV surface has no desktop engine host;
  *  - SubtitleTester — androidMain-only, no commonMain section at all;
  *  - editor — latent (StreamingSubtitleStore has no desktop Koin def).
+ *
+ * VIDEO went live with wave 9A on WINDOWS: the commonMain VideoPlayerScreen
+ * composes the SwingPanel/HWND mpv surface and the per-session engine resolves
+ * through PlayerEngineFactory (desktopPlayerModule); non-Windows OSes keep the
+ * dead-end guard until they have an embedding story.
  *
  * The AUDIO player went live with wave 9B real audio:
  * [audioPlayerSection] registers Route.AudioPlayer + Route.Ambient, so music

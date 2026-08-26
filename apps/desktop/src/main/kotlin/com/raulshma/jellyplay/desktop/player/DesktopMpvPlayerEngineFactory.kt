@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.NoOpPlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
+import kotlinx.coroutines.delay
 
 /**
  * Desktop [PlayerEngineFactory] (wave 9A): builds a per-session
@@ -31,7 +32,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
  */
 class DesktopMpvPlayerEngineFactory : PlayerEngineFactory {
 
-    override fun create(playerType: PlayerType): MediaEngine = when (playerType) {
+    override suspend fun create(playerType: PlayerType): MediaEngine = when (playerType) {
         PlayerType.EXTERNAL -> NoOpPlayerEngineFactory.create(playerType)
         PlayerType.MPV,
         // mpv is the desktop stand-in until a media3/libVLC backend exists.
@@ -47,12 +48,19 @@ class DesktopMpvPlayerEngineFactory : PlayerEngineFactory {
         )
     }
 
-    /** Polls the bridge for the realized surface handle. */
-    private fun awaitSurfaceHandle(): Long? {
+    /**
+     * Polls the bridge for the realized surface handle. `delay` (not
+     * `Thread.sleep`): the session pipeline calls create() from the
+     * main-adjacent dispatcher that drives the UI, and a blocking wait there
+     * would freeze the very event pump AWT needs to realize the child window;
+     * delay also makes a cancelled session unwind instead of holding its
+     * dispatcher hostage for the full timeout.
+     */
+    private suspend fun awaitSurfaceHandle(): Long? {
         val deadline = System.currentTimeMillis() + HANDLE_WAIT_TIMEOUT_MS
         while (System.currentTimeMillis() < deadline) {
             DesktopVideoSurfaceBridge.activeHandle()?.let { return it }
-            Thread.sleep(HANDLE_POLL_INTERVAL_MS)
+            delay(HANDLE_POLL_INTERVAL_MS)
         }
         return null
     }

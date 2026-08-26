@@ -135,6 +135,11 @@ internal actual fun rememberDocumentPicker(
         }
     }
 
+internal actual fun pickedDocumentDisplayName(uriString: String): String? =
+    runCatching { java.net.URI(uriString).path }
+        .getOrNull()
+        ?.substringAfterLast('/')
+
 // ── Bitmaps ────────────────────────────────────────────────────────────────
 
 actual typealias PlatformBitmap = java.awt.image.BufferedImage

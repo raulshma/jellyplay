@@ -9,8 +9,9 @@ import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
  * platform `android.app.AlertDialog` on Android (the verbatim legacy picker,
  * now driven through the [AudioPlayerCast] seam instead of the concrete
  * CastManager); the desktop actual renders nothing — Route.AudioPlayer is
- * guarded in DesktopAppRoot, so the player (and this button) never mounts
- * there today.
+ * live on desktop since wave 9B, but no cast backend exists there (the
+ * desktop [AudioPlayerCast] def is a never-connected no-op), so the button
+ * hides its entry point.
  */
 @Composable
 expect fun CastButton(castController: AudioPlayerCast)

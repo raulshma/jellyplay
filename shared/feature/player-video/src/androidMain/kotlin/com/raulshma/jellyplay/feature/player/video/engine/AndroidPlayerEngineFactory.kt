@@ -65,7 +65,7 @@ class AndroidPlayerEngineFactory(
         }
     }
 
-    override fun create(playerType: PlayerType): MediaEngine {
+    override suspend fun create(playerType: PlayerType): MediaEngine {
         return when (playerType) {
             PlayerType.EXO_PLAYER -> ExoPlayerEngine(context, streamingOkHttpClient, getSharedBandwidthMeter(), fontProvider, videoStreamCache)
             PlayerType.MPV -> MpvPlayerEngine(context, fontProvider)

@@ -30,7 +30,7 @@
 
 One app for every screen: **phones, tablets, foldables, Android TV, and Amazon Fire TV**. Stream movies and shows, play music with synced lyrics, request content via **Jellyseerr/Overseerr**, manage your **Radarr/Sonarr** queues, download for offline, and run your server from a built-in **admin dashboard** — with three switchable video engines (**ExoPlayer, libmpv, LibVLC**), in-app **self-update** via GitHub Releases, no accounts, and no tracking.
 
-**Also growing beyond Android:** the codebase is now Kotlin Multiplatform — an early **Windows desktop** build (Compose Multiplatform + libmpv) runs browsing, search, details, home, and the full settings suite today, and an experimental **web (wasm)** shell is underway. Desktop in-player video/audio UI, and macOS/Linux (build-from-source, untested) are still landing — treat the desktop build as a preview, not a release.
+**Also growing beyond Android:** the codebase is now Kotlin Multiplatform — an early **Windows desktop** build (Compose Multiplatform + libmpv) runs browsing, search, details, home, settings, music with real audio playback, and in-player video today, and an experimental **web (wasm)** shell is underway. Player polish, and macOS/Linux (build-from-source, untested), are still landing — treat the desktop build as a preview, not a release.
 
 If you self-host Jellyfin and want a truly native, beautiful, capable client — or a **Plex/Kodi alternative** — give JellyPlay a try.
 

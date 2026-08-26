@@ -6,7 +6,7 @@ import androidx.compose.runtime.Composable
  * Transcode-reason value seam (wave 9A): the localized "why is this
  * transcoding" rows the stats overlay and playback-error dialog render. The
  * androidMain actual is a typealias to the legacy core:ui
- `FormattedTranscodeReason` (localized by [rememberFormattedTranscodeReasons]'
+ * `FormattedTranscodeReason` (localized by [rememberFormattedTranscodeReasons]'s
  * android actual through TranscodeReasonsFormatter); the jvmMain actual is a
  * same-shape local class whose formatter echoes the raw server token — the
  * same fallback text Android shows for unknown tokens — until the legacy

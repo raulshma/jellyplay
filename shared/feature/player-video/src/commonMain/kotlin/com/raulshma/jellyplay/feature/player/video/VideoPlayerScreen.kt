@@ -206,14 +206,12 @@ private const val HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP = 180
 private const val TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP = 120
 
 /**
- * Nudge the system media (STREAM_MUSIC) volume one step up or down for the
- * hardware-keyboard shortcuts (arrows / volume keys on non-TV). Mirrors the
- * gesture volume path, which adjusts the stream volume rather than the engine
- * volume so the system volume UI and ringer behaviour stay consistent.
- * Platform seam (wave 9A): the AudioManager calls live in the androidMain
- * actual of [rememberStreamVolumeAdjuster]; desktop is a no-op.
+ * Platform seam (wave 9A): nudging the system media (STREAM_MUSIC) volume for
+ * the hardware-keyboard shortcuts (arrows / volume keys on non-TV) needs
+ * AudioManager on Android; desktop is a no-op. Mirrors the gesture volume
+ * path, which adjusts the stream volume rather than the engine volume so the
+ * system volume UI and ringer behaviour stay consistent.
  */
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VideoPlayerScreen(
@@ -340,7 +338,7 @@ fun VideoPlayerScreen(
         ),
     ) { uriString: String? ->
         if (uriString != null) {
-            val fileName = uriString.substringAfterLast('/').ifEmpty { "subtitle.srt" }
+            val fileName = pickedDocumentDisplayName(uriString) ?: "subtitle.srt"
             viewModel.subtitles.addLocalSubtitle(uriString, fileName)
             currentSheet = PlayerSheet.None
         }
@@ -351,7 +349,7 @@ fun VideoPlayerScreen(
         mimeTypes = arrayOf("*/*"),
     ) { uriString: String? ->
         if (uriString != null) {
-            val name = uriString.substringAfterLast('/').lowercase()
+            val name = pickedDocumentDisplayName(uriString)?.lowercase().orEmpty()
             val isFont = name.endsWith(".ttf") || name.endsWith(".otf")
             if (isFont) {
                 viewModel.installUserFont(uriString)

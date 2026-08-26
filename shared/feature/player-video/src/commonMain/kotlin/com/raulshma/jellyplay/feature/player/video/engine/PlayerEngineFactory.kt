@@ -13,5 +13,12 @@ import com.raulshma.jellyplay.core.model.PlayerType
  */
 interface PlayerEngineFactory {
 
-    fun create(playerType: PlayerType): MediaEngine
+    /**
+     * Suspend so implementors may await preconditions before construction
+     * (the desktop factory polls for the surface HWND; mpv's `wid` is
+     * ctor-time) without blocking the caller's dispatcher — the session
+     * pipeline calls this on the main-adjacent context that also drives the
+     * UI.
+     */
+    suspend fun create(playerType: PlayerType): MediaEngine
 }
