@@ -178,3 +178,59 @@ D-pad components on desktop-class web layouts.
 - Not verified from this machine: whether google plans web variants of
   navigation3-ui beyond 1.1.5 (no such variants probed beyond the pinned line);
   iOS/tvOS claims untouched; Chrome-dependent wasm test lanes out of scope.
+
+## 7. Followup: last-Kotlin-≤2.3-built mikepenz release (post-spike archaeology)
+
+Answer (probed 2026-08-27): **`com.mikepenz:multiplatform-markdown-renderer(-m3):0.41.0`** —
+newest publication whose wasm-js klibs are Kotlin-2.3-built. Closes M2 as a plain
+catalog pin flip; no seam/fork needed for the renderer itself.
+
+Method delta vs the coil/10B hunt: mikepenz jars carry **no**
+`META-INF/kotlin-tooling-metadata.json` at all (verified absent in the 0.42.0 jvm
+jar), so ground truth came from two other surfaces: each release's Gradle `.module`
+declares the exact compiled-against `kotlin-stdlib` version, and the wasm `.klib`
+(a zip) self-reports in `default/manifest` via `compiler_version=` / `abi_version=` —
+the latter read directly on both sides of the boundary.
+
+| Version | `.module` kotlin-stdlib | wasm-klib `compiler_version` / abi | published |
+|---|---|---|---|
+| 0.44.0 | 2.4.10 | (not dissected) | 2026-08-18 |
+| 0.43.0 | 2.4.0 | **2.4.0 / abi 2.4.0** | 2026-06-22 |
+| 0.42.0 (b01 06-07, b02 06-16, stable 06-20) | 2.4.0 (all three) | 2.4.0 / abi 2.4.0 | 2026-06-20 |
+| **0.41.0** (b01 05-12) | **2.3.21** | **2.3.21 / abi 2.3.0**, `builtins_platform=WASM`, `wasm_targets=wasm-js` | **2026-05-17** |
+| 0.40.0/.1/.2 | 2.3.20 | not dissected | — |
+| 0.39.0/.1/.2 | 2.3.0 | not dissected | — |
+| 0.38.0-b01/0.38.0/0.38.1 | 2.2.20 / 2.2.21 / 2.2.21 | not dissected | — |
+| 0.37.0 | 2.2.20 | not dissected | — |
+| 0.35.0 | 2.1.21 | not dissected | — |
+
+Coverage note: every entry in maven-metadata.xml from 0.37.0 through 0.44.0 was
+probed via `.module` (all betas/rc lines included); no gaps between 0.41.0 and
+0.42.0, so 0.41.0 is proven maximal. `-m3` flavor cross-checked at 0.41.0 (same
+stdlib declaration 2.3.21; both `-wasm-js` klibs exist at ~17:02–17:05 UTC 2026-05-17).
+
+Evidence URLs:
+- https://repo1.maven.org/maven2/com/mikepenz/multiplatform-markdown-renderer-m3/maven-metadata.xml (version inventory)
+- https://repo1.maven.org/maven2/com/mikepenz/multiplatform-markdown-renderer/<v>/multiplatform-markdown-renderer-<v>.module (kotlin-stdlib per version)
+- https://repo1.maven.org/maven2/com/mikepenz/multiplatform-markdown-renderer-m3-wasm-js/0.41.0/multiplatform-markdown-renderer-m3-wasm-js-0.41.0.klib → `unzip -p … default/manifest` reads `compiler_version=2.3.21`, `abi_version=2.3.0`
+- same probe on 0.42.0/0.43.0 klibs reads `compiler_version=2.4.0`, `abi_version=2.4.0`
+- publication dates: HTTP Last-Modified per artifact file on repo1 (above)
+
+Compat notes stepping down 0.43.0 → 0.41.0 (our usage: `m3.Markdown(content, modifier,
+typography)` + fully-named-param `markdownTypography(h1…inlineCode)`):
+- No break at our call site. v0.42/v0.43 changelogs flag no breaking changes, and
+  `markdownTypography` incl. the `inlineCode` param verifiably exists inside the
+  0.41.0 klib (IR strings/linkdata).
+- Given up (nothing used by JellyPlay's MarkdownText): streaming APIs
+  (`StreamingMarkdownState`, `Flow.asMarkdownState()` — 0.42) and synchronous
+  `parseMarkdown` (0.43); render fixes TalkBack paragraph-with-link skip (#570),
+  inline-code hardcoded size removal (#578), em/unspecified TextUnit crash (#582);
+  plus whatever landed in 0.44.
+- Dependency graph falls back onto the toolchain: 0.41.0 declares kotlin-stdlib
+  2.3.21 (== pin), kotlinx-collections-immutable 0.4.0, org.jetbrains:markdown 0.7.3;
+  the kotlinx-coroutines edge first appears at 0.42.0 (streaming feature). No coil
+  coordinate in either version's root Gradle metadata, so the wave-10B coil 3.4.0
+  pin stays orthogonal — and the R3 stdlib-eviction-to-2.4 ICE trap disappears
+  entirely with the downgrade.
+- Long view: holding pin only — ride forward to ≥0.43 when the toolchain reaches
+  Kotlin 2.4 (0.44.0 is 2.4.10-built and adds nothing we need today).
