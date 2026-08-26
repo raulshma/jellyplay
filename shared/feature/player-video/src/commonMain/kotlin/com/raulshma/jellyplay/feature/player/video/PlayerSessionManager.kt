@@ -885,7 +885,10 @@ class PlayerSessionManager(
 /**
  * `file` URI string for a local path (wave 8C seam transform): replaces
  * `android.net.Uri.fromFile(file).toString()`. `java.nio.file.Path.toUri()`
- * emits the identical `file:///<abs-path>` form (same percent-encoding of
- * spaces/non-ASCII) while being commonMain-legal for the android+jvm targets.
+ * emits the identical `file:///<abs-path>` form with matching percent-
+ * encoding on Android (Linux filesystem, UTF-8 — spaces and non-ASCII are
+ * percent-encoded exactly like `Uri.fromFile`) while being commonMain-legal
+ * for the android+jvm targets. (On a Windows JVM the encoder leaves
+ * non-ASCII raw — a platform with no playback path; see FileUriStringTest.)
  */
 internal fun fileUriString(file: java.io.File): String = file.toPath().toUri().toString()
