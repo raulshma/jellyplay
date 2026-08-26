@@ -17,8 +17,8 @@ object StateManagementConventions {
         val error: String? = null,
     )
     
-    @HiltViewModel
-    class MyViewModel @Inject constructor(...) : JellyPlayViewModel() {
+    // (pre-KMP shape: HiltViewModel + Inject constructor)
+    class MyViewModel(...) : JellyPlayViewModel() {
         private val _uiState = stateFlow(MyUiState())
         val uiState: StateFlow<MyUiState> = _uiState
         

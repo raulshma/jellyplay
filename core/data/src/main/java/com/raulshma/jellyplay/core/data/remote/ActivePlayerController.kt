@@ -3,8 +3,6 @@ package com.raulshma.jellyplay.core.data.remote
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Singleton registry that holds a reference to the currently-bound video
@@ -15,8 +13,7 @@ import javax.inject.Singleton
  * Audio playback is intentionally not tracked here — the audio engine is
  * already a [Singleton] managed by the AudioPlaybackManager.
  */
-@Singleton
-class ActivePlayerController @Inject constructor() {
+class ActivePlayerController() {
 
     private val _activeEngine = MutableStateFlow<RemotePlayableEngine?>(null)
     val activeEngine: StateFlow<RemotePlayableEngine?> = _activeEngine.asStateFlow()

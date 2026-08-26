@@ -161,11 +161,11 @@ dependencies {
     // Explicitly add libmpv first so pickFirsts grabs its newer libc++_shared.so
     implementation(libs.libmpv)
     
-    implementation(project(":core:model"))
-    implementation(project(":core:designsystem"))
-    implementation(project(":core:network"))
-    implementation(project(":core:database"))
-    implementation(project(":core:datastore"))
+    implementation(project(":shared:core:model"))
+    implementation(project(":shared:core:designsystem"))
+    implementation(project(":shared:core:network"))
+    implementation(project(":shared:core:database"))
+    implementation(project(":shared:core:datastore"))
     implementation(project(":core:data"))
     implementation(project(":core:ui"))
     implementation(project(":core:notification"))

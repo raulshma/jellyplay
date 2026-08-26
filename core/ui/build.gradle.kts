@@ -44,10 +44,12 @@ kotlin {
 // com.raulshma.jellyplay.core.ui.R; dies at cutover §Phase X).
 dependencies {
     api(project(":shared:core:ui"))
-    implementation(project(":core:model"))
-    implementation(project(":core:designsystem"))
+    implementation(project(":shared:core:model"))
+    implementation(project(":shared:core:designsystem"))
 
-    implementation(libs.javax.inject)
+    // Wave 8A: Koin owns UserMessageBus (di/CoreUiKoinModule.kt); the
+    // javax.inject dependency left with the @Inject/@Singleton annotations.
+    implementation(libs.koin.core)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)

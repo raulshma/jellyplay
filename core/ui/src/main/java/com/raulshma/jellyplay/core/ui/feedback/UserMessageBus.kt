@@ -5,8 +5,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * A one-shot, user-facing message emitted through [UserMessageBus] and
@@ -47,8 +45,7 @@ sealed interface UserMessage {
  * is delivered to a single collector and never replayed (one-shot semantics),
  * matching the convention documented in `StateManagementConventions`.
  */
-@Singleton
-class UserMessageBus @Inject constructor() {
+class UserMessageBus {
     private val channel = Channel<UserMessage>(Channel.BUFFERED)
 
     val messages: Flow<UserMessage> = channel.receiveAsFlow()

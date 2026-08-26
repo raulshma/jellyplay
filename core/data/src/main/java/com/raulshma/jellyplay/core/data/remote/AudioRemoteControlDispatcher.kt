@@ -13,8 +13,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Routes remote "Play" / "Playstate" / "GeneralCommand" messages to
@@ -25,8 +23,7 @@ import javax.inject.Singleton
  * application looper and the receiver delivers these events on
  * [Dispatchers.Default].
  */
-@Singleton
-class AudioRemoteControlDispatcher @Inject constructor(
+class AudioRemoteControlDispatcher(
     private val audioPlaybackManager: AudioPlaybackManager,
     private val mediaRepository: MediaRepository,
     private val remoteNavigationBridge: RemoteNavigationBridge,

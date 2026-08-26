@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.core.data.worker
 import android.app.ForegroundServiceStartNotAllowedException
 import android.content.Context
 import android.os.Build
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.playback.DownloadConcurrencyLimiter
@@ -16,13 +15,10 @@ import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.data.repository.DownloadFailurePolicy
 import com.raulshma.jellyplay.core.data.repository.applyTo
 import com.raulshma.jellyplay.core.model.DownloadStatus
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.firstOrNull
 import okhttp3.OkHttpClient
 import java.io.File
-import javax.inject.Named
 
 /**
  * Downloads a single item identified by `KEY_DOWNLOAD_ID`. Resolves the runtime
@@ -44,10 +40,9 @@ import javax.inject.Named
  * is owned by `DownloadFailurePolicy` (thrown) / `decideForStatus` (HTTP status);
  * this worker's outer `catch (Throwable)` routes there too.
  */
-@HiltWorker
-class DownloadWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted params: WorkerParameters,
+class DownloadWorker(
+    context: Context,
+    params: WorkerParameters,
     private val dao: DownloadDao,
     private val userDao: UserDao,
     private val downloadsStore: DownloadsStore,
@@ -59,7 +54,7 @@ class DownloadWorker @AssistedInject constructor(
     // concrete OkHttpClient directly — migrating it onto DownloadTransferClient
     // is a follow-up. Kept here so the single/multi branching decision stays in
     // the worker; the single-connection path goes through transferClient.
-    @Named("download") private val okHttpClient: OkHttpClient,
+    private val okHttpClient: OkHttpClient,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {

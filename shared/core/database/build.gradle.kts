@@ -65,13 +65,14 @@ kotlin {
 }
 
 // Room KSP runs per target; schema JSONs continue accumulating in the
-// repo-tracked core/database/schemas directory (identity of the
-// JellyPlayDatabase schema history is what MigrationTest verifies against).
+// repo-tracked shared/core/database/schemas directory (identity of the
+// JellyPlayDatabase schema history is what MigrationTest verifies against;
+// moved from the deleted core/database shim in wave 8A).
 dependencies {
     add("kspAndroid", libs.room.compiler)
     add("kspJvm", libs.room.compiler)
 }
 
 ksp {
-    arg("room.schemaLocation", "$rootDir/core/database/schemas")
+    arg("room.schemaLocation", "$rootDir/shared/core/database/schemas")
 }

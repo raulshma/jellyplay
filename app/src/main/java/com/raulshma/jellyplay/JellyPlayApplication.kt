@@ -11,6 +11,8 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import coil3.size.Size
 import com.raulshma.jellyplay.core.data.di.androidDataModule
+import com.raulshma.jellyplay.core.data.di.androidCoreDataModule
+import com.raulshma.jellyplay.core.data.di.CoreDataWorkerFactory
 import com.raulshma.jellyplay.core.data.di.dataJvmModule
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.androidDatastoreModule
@@ -21,7 +23,10 @@ import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.model.ImageCache
 import com.raulshma.jellyplay.core.network.di.androidNetworkModule
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
+import com.raulshma.jellyplay.core.notification.di.androidNotificationModule
+import com.raulshma.jellyplay.core.notification.di.NotificationWorkerFactory
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
+import com.raulshma.jellyplay.core.ui.di.androidCoreUiModule
 import com.raulshma.jellyplay.di.hiltInteropModule
 import com.raulshma.jellyplay.di.androidAdminSeamsModule
 import com.raulshma.jellyplay.di.androidDownloadSeamsModule
@@ -69,6 +74,7 @@ import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import androidx.work.DelegatingWorkerFactory
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
@@ -84,9 +90,20 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
 
+    // Wave 8A interim: the legacy core:data/notification workers are plain
+    // CoroutineWorkers now (Koin-constructed via the two factories below);
+    // the delegating factory chains them after Hilt's, which still builds
+    // the app-owned @HiltWorker widget workers until the app Hilt extinction
+    // (builder 8B) collapses this back to a single Koin-side factory.
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
-            .setWorkerFactory(workerFactory)
+            .setWorkerFactory(
+                DelegatingWorkerFactory().apply {
+                    addFactory(workerFactory)
+                    addFactory(CoreDataWorkerFactory())
+                    addFactory(NotificationWorkerFactory())
+                },
+            )
             .build()
 
     // javax.inject.Provider defers Hilt construction of OkHttpClient
@@ -162,6 +179,17 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 androidNetworkModule(this@JellyPlayApplication),
                 dataJvmModule,
                 androidDataModule(this@JellyPlayApplication),
+                // Wave 8A (core-side Hilt extinction): Koin owns the legacy
+                // :core:data/:core:notification/:core:ui remainders — media3
+                // audio playback stack, cast strategies, WorkManager
+                // schedulers/reconnect listeners, notification dispatch and
+                // the UserMessageBus. The transitional Hilt bridge modules
+                // (core/data + app di/LegacyHiltBridgesModule) point the
+                // still-Hilt :app injectors at these singles; builder 8B
+                // deletes them with app Hilt itself.
+                androidCoreDataModule(this@JellyPlayApplication),
+                androidNotificationModule(this@JellyPlayApplication),
+                androidCoreUiModule,
                 // V3 downloads conveyor: Android actuals of the portable
                 // download engine's seams (WorkManager enqueue/coordinator,
                 // Context/StatFs storage layout, notification summary, Coil

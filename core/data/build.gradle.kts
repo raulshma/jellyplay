@@ -51,19 +51,22 @@ dependencies {
     // wiring moves to Koin at §Phase C4/X.
     api(project(":shared:core:data"))
 
-    implementation(project(":core:model"))
-    implementation(project(":core:network"))
-    implementation(project(":core:database"))
-    implementation(project(":core:datastore"))
+    implementation(project(":shared:core:model"))
+    implementation(project(":shared:core:network"))
+    implementation(project(":shared:core:database"))
+    implementation(project(":shared:core:datastore"))
 
+    // Wave 8A: Koin owns construction (androidCoreDataModule); the Hilt
+    // plugin + compiler stay ONLY for the transitional di/LegacyHiltBridgesModule
+    // (deleted by the app Hilt extinction). hilt-work left with the last
+    // @HiltWorker (workers are plain CoroutineWorkers built by
+    // CoreDataWorkerFactory now).
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
 
-    // Koin bridge accessor (di/KoinBridge.kt): the OkHttpConfigProvider
-    // Hilt binding delegates to the Koin-owned definition (Phase C4).
+    // Koin: androidCoreDataModule/CoreDataWorkerFactory + the transitional
+    // bridge module's koin() accessor.
     implementation(libs.koin.core)
-    implementation(libs.hilt.work)
-    ksp(libs.hilt.compiler)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.paging.runtime)

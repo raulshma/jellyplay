@@ -13,8 +13,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlin.math.max
 
 /**
@@ -29,8 +27,7 @@ import kotlin.math.max
  * Back-fill is implicit: recently-played tracks remain in the LRU cache and
  * are evicted by [LeastRecentlyUsedCacheEvictor] under pressure.
  */
-@Singleton
-class AudioPrefetchEngine @Inject constructor(
+class AudioPrefetchEngine(
     private val audioStreamCache: AudioStreamCache,
     private val policyGuard: AudioCachePolicyGuard,
     private val playbackRepository: PlaybackRepository,

@@ -1,15 +1,12 @@
 package com.raulshma.jellyplay.core.data.worker
 
 import android.content.Context
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.tv.TvWatchNextPublisher
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.firstOrNull
 
 /**
@@ -27,10 +24,9 @@ import kotlinx.coroutines.flow.firstOrNull
  * Adding a dedicated periodic schedule would duplicate that freshness signal
  * and add TV-specific background work for no user-visible benefit.
  */
-@HiltWorker
-class TvWatchNextWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted params: WorkerParameters,
+class TvWatchNextWorker(
+    context: Context,
+    params: WorkerParameters,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val playbackStore: PlaybackStore,

@@ -5,7 +5,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRecord
@@ -16,8 +15,6 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.notification.dispatcher.NotificationDispatcher
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -29,10 +26,9 @@ import java.net.SocketTimeoutException
 import java.util.Calendar
 import java.util.concurrent.ConcurrentHashMap
 
-@HiltWorker
-class NewMediaCheckWorker @AssistedInject constructor(
-    @Assisted appContext: Context,
-    @Assisted workerParams: WorkerParameters,
+class NewMediaCheckWorker(
+    appContext: Context,
+    workerParams: WorkerParameters,
     private val mediaRepository: MediaRepository,
     private val seenMediaRepository: SeenMediaRepository,
     private val notificationStore: NotificationStore,

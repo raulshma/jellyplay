@@ -7,7 +7,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the search feature (docs/kmp-migration-plan.md
- * §Phase V3, first conveyor item). The @HiltViewModel/@Inject annotations were
+ * §Phase V3, first conveyor item). The HiltViewModel/@Inject annotations were
  * stripped at the move — Koin is the single constructor owner (one framework
  * per type). The three ctor deps whose impls are still Hilt-owned in the
  * legacy data shim (MediaRepository, UserDataMutator, MediaSearchEngine,
