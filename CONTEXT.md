@@ -285,9 +285,12 @@ going-online kick and the fetch-flavour triggers (`Manual`, `PullToRefresh`,
 the online→offline content drop (`dropOnlineContent`) stays a private method
 the offline-mode observer calls directly. The refresher reacts to ALL
 offline-mode emissions (app-start
-and external/auto flips included) but runs the drain+fetch handshake only
-when a `GoingOnline` request is in flight — a spontaneous offline→online
-flip mirrors the field only. It is the SOLE writer of `sections`: the VM's
+and external/auto flips included) and runs the drain+fetch handshake on EVERY
+offline→online transition — a `GoingOnline` request additionally raises the
+busy flag the Go Online spinners render from; external flips (the nav ⋮
+toggle, which writes the preference straight from `MainViewModel`) and
+auto-detect reconnects run the same handshake without it. It is the SOLE
+writer of `sections`: the VM's
 optimistic played/unplayed container forwards through `patchItems`, which
 maps the patch over every section (the same item can appear in several, and
 every visible card must flip together).

@@ -503,6 +503,49 @@ class HomeRefresherTest {
     }
 
     @Test
+    fun wentOnlineSpontaneously_drainsOutboxBeforeFetch_andRepopulatesSections() = runTest {
+        // Regression pin: an external/auto offline→online flip (the nav ⋮
+        // "Go Online" toggles the manager directly from the app shell;
+        // auto-detect flips OFFLINE_AUTO→ONLINE on network return) lands in
+        // the observer WITHOUT a GoingOnline request. That transition used to
+        // mirror the field only — after the offline content drop the home sat
+        // on "No content available" until a manual refresh or the next
+        // periodic tick. Every reconnect must run the same drain+fetch
+        // handshake as the user-initiated one.
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1")))),
+            ),
+        )
+        val refresher = buildRefresher()
+        runCurrent()
+
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent() // ONLINE→offline: content dropped
+        assertTrue(refresher.state.value.sections.isEmpty())
+
+        drainGate = CompletableDeferred()
+        offlineModeFlow.value = OfflineMode.ONLINE // spontaneous — NO GoingOnline request
+        runCurrent()
+
+        // Mid-handshake: full-screen loader up, outbox draining, fetch
+        // strictly not started (same ordering contract as the user-initiated
+        // handshake so Continue Watching reflects the server's post-sync state).
+        assertTrue(refresher.state.value.isLoading)
+        assertEquals(1, drainCalls)
+        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+
+        drainGate!!.complete(Unit)
+        runCurrent()
+
+        assertFalse(refresher.state.value.isLoading)
+        assertFalse(refresher.state.value.isGoingOnline)
+        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), any()) }
+        assertTrue(refresher.state.value.sections.isNotEmpty())
+        refresher.stop()
+    }
+
+    @Test
     fun wentOffline_dropsCachedOnlineContent() = runTest {
         coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
             HomeSectionsResult(
@@ -517,21 +560,14 @@ class HomeRefresherTest {
 
         // Production path: the manager flips the mode and the refresher's own
         // observer reacts — cached online sections + discover rows dropped,
-        // going-online spinner (if any) cleared.
+        // going-online spinner (if any) cleared. The offline→online side of
+        // this transition (including the spontaneous flavour) is pinned by
+        // wentOnlineSpontaneously_drainsOutboxBeforeFetch_andRepopulatesSections.
         offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
         runCurrent()
         assertTrue(refresher.state.value.sections.isEmpty())
         assertTrue(refresher.state.value.discoverSections.isEmpty())
         assertFalse(refresher.state.value.isGoingOnline)
-
-        // Spontaneous offline→online mirror-only semantics: re-flipping
-        // online WITHOUT a GoingOnline request must not run the handshake
-        // (no extra fetch) — the content drop only ever comes from the
-        // offline-mode observer above.
-        offlineModeFlow.value = OfflineMode.ONLINE
-        runCurrent()
-        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), any()) }
-        assertTrue(refresher.state.value.sections.isEmpty())
         refresher.stop()
     }
 

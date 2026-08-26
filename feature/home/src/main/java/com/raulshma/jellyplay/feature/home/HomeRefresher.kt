@@ -67,8 +67,8 @@ import java.time.ZoneOffset
  *    the refresh clock (one clock, one owner — failed/offline attempts
  *    still count as fresh), job choreography, cadence + jitter, discover
  *    TTL, the user-data-push debounce/throttle/deferral chain, and the
- *    offline transitions (the offline-mode mirror plus the user-initiated
- *    going-online handshake: busy flag, full-screen loader, outbox drain,
+ *    offline transitions (the offline-mode mirror plus the offline→online
+ *    reconnect handshake: busy flag, full-screen loader, outbox drain,
  *    capped fetch).
  *  * [HomeViewModel] is a flows + `onEvent` facade: it folds [state] into
  *    its single UiState object, resets the scroll anchor on identity
@@ -397,11 +397,11 @@ internal class HomeRefresher(
                 // Going online is async (preference write → mode flip →
                 // drain + fetch) and previously gave zero feedback. Flip the
                 // busy flag the UI can show a spinner on BEFORE the toggle,
-                // so [observeOfflineMode] can tell this user-initiated
-                // transition apart from an external/auto online flip (only
-                // this one runs the handshake). The flag clears when the
-                // transition resolves — or immediately if the mode flips
-                // back offline first.
+                // so [observeOfflineMode]'s reconnect handshake clears it
+                // when the ONLINE emission lands (external/auto flips never
+                // raise it — their handshake just doesn't touch spinners).
+                // The flag also tells [observeOfflineMode] to clear it if
+                // the mode flips back offline first.
                 _state.update { it.copy(isGoingOnline = true) }
                 offlineModeManager.toggleManualOffline()
                 // Fallback: the toggle is a preference write on the
@@ -595,11 +595,13 @@ internal class HomeRefresher(
      *    any pending going-online spinner (the user or an auto-detect flip
      *    took us back offline while the prior online fetch was still parked
      *    on the refresh mutex).
-     *  * offline → ONLINE: mirror the field only, UNLESS a
-     *    [RefreshTrigger.GoingOnline] request is in flight — the
-     *    user-initiated transition additionally runs the handshake
-     *    (full-screen loader, outbox drain, capped fetch) the VM used to
-     *    orchestrate itself.
+     *  * offline → ONLINE (any flavour): run the reconnect handshake —
+     *    full-screen loader, outbox drain, capped fetch. The user-initiated
+     *    [RefreshTrigger.GoingOnline] path additionally has the busy flag up
+     *    (its spinners clear here); external flips (nav ⋮ toggle from the
+     *    app shell) and auto-detect reconnects used to mirror the field only,
+     *    which left the home sitting on dropped-empty sections until a manual
+     *    refresh or the next periodic tick.
      */
     private fun observeOfflineMode() {
         scope.launch {
@@ -614,15 +616,16 @@ internal class HomeRefresher(
                         dropOnlineContent()
                         _state.update { it.copy(isGoingOnline = false) }
                     }
-                    previousMode != OfflineMode.ONLINE && mode == OfflineMode.ONLINE && _state.value.isGoingOnline -> {
-                        // Offline → online (user-initiated): show the
-                        // full-screen loader during the post-toggle fetch so
-                        // the online branch doesn't flash blank between the
-                        // mode flip and sections arriving. isGoingOnline MUST
-                        // clear in finally — a bare after-the-fetch clear
-                        // would leave it stuck on forever (and the user
-                        // restarting the app to recover) whenever the
-                        // handshake throws or is cancelled.
+                    previousMode != OfflineMode.ONLINE && mode == OfflineMode.ONLINE -> {
+                        // Offline → online: show the full-screen loader
+                        // during the post-toggle fetch so the online branch
+                        // doesn't flash blank between the mode flip and
+                        // sections arriving. isGoingOnline MUST clear in
+                        // finally — a bare after-the-fetch clear would leave
+                        // it stuck on forever (and the user restarting the
+                        // app to recover) whenever the handshake throws or is
+                        // cancelled. The write is a no-op for external/auto
+                        // reconnects, which never raised it.
                         showFullScreenLoader()
                         try {
                             // Let the playback outbox drain before fetching so
