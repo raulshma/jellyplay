@@ -1,8 +1,13 @@
 package com.raulshma.jellyplay.di
 
 import android.app.Application
+import com.raulshma.jellyplay.core.data.cast.CastManager
+import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.PipController
+import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
+import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
@@ -14,8 +19,6 @@ import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.details.DetailAudioPlayback
 import com.raulshma.jellyplay.feature.details.DetailThemeMusic
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
-import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
-import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -65,8 +68,16 @@ interface HiltInteropEntryPoint {
     fun audioQueueFacade(): AudioQueueFacade
     fun userMessageBus(): UserMessageBus
     fun streamingSubtitleStore(): StreamingSubtitleStore
-    fun playerEngineFactory(): PlayerEngineFactory
-    fun fontProvider(): FontProvider
+    // Wave 7C (player-video migration): PlayerEngineFactory + FontProvider left
+    // this EntryPoint — both are Koin-owned definitions in the migrated
+    // shared/feature/player-video androidPlayerVideoModule now (impls moved).
+    // The six legacy playback singletons the Koin VideoPlayerViewModel factory
+    // resolves are exposed instead (same lazy-interop-single direction below).
+    fun playbackSessionManager(): PlaybackSessionManager
+    fun castManager(): CastManager
+    fun jellyfinRemotePlayCastStrategy(): JellyfinRemotePlayCastStrategy
+    fun activePlayerController(): ActivePlayerController
+    fun pipController(): PipController
     fun audioPlaybackManager(): AudioPlaybackManager
     fun themeMusicPlayer(): ThemeMusicPlayer
     fun playbackSyncScheduler(): PlaybackSyncScheduler
@@ -117,14 +128,22 @@ fun hiltInteropModule(application: Application): Module = module {
     // SubtitleModule — same lazy interop single as above. The player's
     // Hilt injectors keep constructing the impl directly and are unaffected.
     single<StreamingSubtitleStore> { interopEntryPoint(application).streamingSubtitleStore() }
-    // Subtitle-tester conveyor (final feature): the tester's Koin-owned
-    // ViewModel ctor-injects the two playback singletons that stay Hilt-bound
-    // in :feature:player:video. Lazy is load-bearing here in particular:
-    // PlayerEngineFactory owns a process-wide media3 DefaultBandwidthMeter,
-    // and FontProvider materializes a font cache on first use — neither may
-    // be touched at startKoin time.
-    single<PlayerEngineFactory> { interopEntryPoint(application).playerEngineFactory() }
-    single<FontProvider> { interopEntryPoint(application).fontProvider() }
+    // Player-video conveyor (wave 7C): the four media3 playback singletons the
+    // migrated Koin ViewModels ctor-inject (subtitle-tester's two + the video
+    // player's) stay Hilt-bound in legacy :core:data. Lazy is load-bearing in
+    // particular for PlaybackSessionManager/CastManager: both pull media3 +
+    // cast-framework graphs that must not be touched at startKoin time.
+    // (PlayerEngineFactory + FontProvider were the first two entries here and
+    // left with the wave 7C flip — the impls moved to
+    // shared/feature/player-video, where androidPlayerVideoModule owns them.)
+    single<PlaybackSessionManager> { interopEntryPoint(application).playbackSessionManager() }
+    single<CastManager> { interopEntryPoint(application).castManager() }
+    single<JellyfinRemotePlayCastStrategy> { interopEntryPoint(application).jellyfinRemotePlayCastStrategy() }
+    single<ActivePlayerController> { interopEntryPoint(application).activePlayerController() }
+    single<PipController> { interopEntryPoint(application).pipController() }
+    // UserMessageBus: previously only the MusicMessageBus adapter single rode
+    // the EntryPoint; the migrated video VM (Koin) injects the bus itself.
+    single<UserMessageBus> { interopEntryPoint(application).userMessageBus() }
     // Details conveyor (Phase X cutover wave): see the adapter KDocs above.
     single<DetailAudioPlayback> { HiltDetailAudioPlayback(interopEntryPoint(application).audioPlaybackManager()) }
     single<DetailThemeMusic> { HiltDetailThemeMusic(interopEntryPoint(application).themeMusicPlayer()) }

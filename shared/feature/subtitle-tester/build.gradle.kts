@@ -88,13 +88,13 @@ kotlin {
         // settings-search row for Route.SubtitleTester dead-clicks, same
         // dormant state as every un-wired desktop route).
         getByName("androidMain").dependencies {
-            // Largest documented shared→legacy edge so far
-            // (library/livetv/admin/settings precedent): the tester shares
-            // the player sheet's SubtitleStyleControls (799 LOC) and needs
-            // PlayerEngineFactory + FontProvider (both Hilt @Singleton in
-            // :feature:player:video, bridged app-side via hiltInteropModule).
+            // Largest documented shared→shared edge (was shared→legacy until
+            // the wave 7C player-video migration): the tester shares the
+            // player sheet's SubtitleStyleControls (799 LOC) and needs
+            // PlayerEngineFactory + FontProvider — both Koin-owned singles in
+            // shared/feature/player-video's androidPlayerVideoModule now.
             // The jvm target NEVER sees this edge.
-            implementation(project(":feature:player:video"))
+            implementation(project(":shared:feature:player-video"))
             // PlayerEngineFactory's Context/media3 ctor args and the ViewModel
             // base class.
             implementation(libs.lifecycle.viewmodel)

@@ -122,6 +122,9 @@ jobs:
           :shared:feature:home:jvmJar
           :shared:feature:home:compileAndroidMain
 
+          :shared:feature:player-video:jvmJar
+          :shared:feature:player-video:compileAndroidMain
+
           :apps:web:compileKotlinWasmJs
 
           --stacktrace
@@ -169,9 +172,16 @@ jobs:
 
           :shared:feature:auth:jvmTest
           :shared:feature:home:jvmTest
+          :shared:feature:player-video:jvmTest
 
 
           --stacktrace
+
+      - name: Android app androidTest assembly (relocated player-video UI tests)
+        # Wave 7C: the legacy :feature:player:video androidTest set moved to
+        # :app (AGP KMP library plugins expose no androidTest compilation —
+        # syncplay relocation precedent); compile-gate it here.
+        run: ./gradlew :app:assemblePhoneDebugAndroidTest --stacktrace
 
       - name: Shell tests (Koin registration guard)
         # :apps:desktop:test hosts the Koin-registration ratchet
