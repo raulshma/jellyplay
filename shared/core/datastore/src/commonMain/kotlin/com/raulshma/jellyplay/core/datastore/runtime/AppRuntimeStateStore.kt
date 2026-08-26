@@ -70,7 +70,7 @@ class AppRuntimeStateStore constructor(
         .stateIn(scope, SharingStarted.Eagerly, AppRuntimeState())
 
     /**
-     * Last-watched live-TV channel id, used by `:feature:player:live` to reopen
+     * Last-watched live-TV channel id, used by the live player (shared `feature/player-live`) to reopen
      * the player on the same channel across launches. `null` when no channel
      * has been watched yet (or after [setLiveTvLastChannelId] is called with
      * `null`).

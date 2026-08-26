@@ -38,6 +38,8 @@ import com.raulshma.jellyplay.feature.settings.di.androidSettingsPlatformModule
 import com.raulshma.jellyplay.feature.admin.di.adminModule
 import com.raulshma.jellyplay.feature.admin.di.androidAdminModule
 import com.raulshma.jellyplay.feature.subtitle.tester.di.androidSubtitleTesterModule
+import com.raulshma.jellyplay.feature.player.live.di.androidPlayerLiveModule
+import com.raulshma.jellyplay.feature.player.live.di.playerLiveModule
 
 
 import com.raulshma.jellyplay.feature.editor.di.editorModule
@@ -298,6 +300,16 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // storage probe is the StatFs androidMain actual below.
                 detailsModule,
                 androidDetailsModule(this@JellyPlayApplication),
+
+                // Player-live conveyor (wave 7B): the shared live-player
+                // ViewModel (Koin-native deps + the three platform seams
+                // below) replacing the legacy :feature:player:live module.
+                // The engine factory resolves the shared
+                // NetworkQualifiers.streamingHttpClient; the audio seam wraps
+                // the legacy PlayerAudioLifecycle; the transcode-reasons
+                // renderer delegates to the legacy core:ui formatter.
+                playerLiveModule,
+                androidPlayerLiveModule(this@JellyPlayApplication),
 
             )
         }
