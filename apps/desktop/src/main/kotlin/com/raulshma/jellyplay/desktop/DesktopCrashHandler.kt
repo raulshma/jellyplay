@@ -2,8 +2,10 @@ package com.raulshma.jellyplay.desktop
 
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.time.Instant
 import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteIfExists
@@ -29,8 +31,10 @@ import kotlin.io.path.writeText
  *    scope already propagates to the default handler; this exists so future
  *    scopes can opt in explicitly).
  *
- * On disk: one `crash-<epochMillis>.log` per event (millis both sorts
- * lexicographically and never collides within a process), rotation keeps the
+ * On disk: one `crash-<epochMillis>.log` per event (`CREATE_NEW` reserves the
+ * name; a same-millisecond second crash retries as `-<seq>` instead of
+ * truncating the first report — millis both sorts lexicographically and is
+ * collision-disambiguated in-process), rotation keeps the
  * newest [maxFiles] reports deleting older ones at crash time (no background
  * sweeper), and each report is hard-capped at [maxReportBytes] by appending
  * line-granular content until the budget is spent — the tail is cut and marked
@@ -97,7 +101,13 @@ class DesktopCrashHandler(
         } catch (_: Exception) {
             null // corrupt/unreadable marker degrades to "no known previous crash"
         } ?: return null
-        marker.deleteIfExists()
+        try {
+            marker.deleteIfExists()
+        } catch (e: Exception) {
+            // A locked/undeletable marker must not crash the boot; leaving it
+            // only means the next boot surfaces the same previous-crash note.
+            System.err.println("[JellyPlay] previous-crash marker cleanup failed: $e")
+        }
 
         val parts = payload.split(' ', limit = 2)
         val millis = parts.firstOrNull()?.toLongOrNull() ?: return null
@@ -117,8 +127,15 @@ class DesktopCrashHandler(
             }
             try {
                 val epochMillis = System.currentTimeMillis()
-                val reportFile = logsDir.resolve("crash-$epochMillis.log")
-                Files.writeString(reportFile, renderReport(epochMillis, throwable, threadName))
+                val content = try {
+                    renderReport(epochMillis, throwable, threadName)
+                } catch (t: Throwable) {
+                    // OOM/StackOverflowError land here precisely when the UEH
+                    // fires hardest — degrade to a header-only report instead
+                    // of losing everything to a failed render.
+                    minimalReport(epochMillis, throwable, threadName)
+                }
+                val reportFile = writeNewReportFile(epochMillis, content)
                 logsDir.resolve(MARKER_FILE).writeText("$epochMillis ${reportFile.name}")
             } catch (e: Exception) {
                 // Disk-full or locked dir: nothing sensible left to do from a
@@ -127,6 +144,39 @@ class DesktopCrashHandler(
                 System.err.println("[JellyPlay] crash-report write failed: $e")
             }
         }
+    }
+
+    /**
+     * Reserves a report name no other writer holds: the plain millis name
+     * first, then `-<seq>` disambiguators. `CREATE_NEW` makes a losing racer
+     * retry instead of truncating the winner's file (the old CREATE/TRUNCATE
+     * default silently destroyed same-millisecond reports).
+     */
+    private fun writeNewReportFile(epochMillis: Long, content: String): Path {
+        var seq = 0
+        while (true) {
+            val name = if (seq == 0) "crash-$epochMillis.log" else "crash-$epochMillis-$seq.log"
+            val candidate = logsDir.resolve(name)
+            try {
+                Files.writeString(candidate, content, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)
+                return candidate
+            } catch (_: FileAlreadyExistsException) {
+                seq++
+            }
+        }
+    }
+
+    /**
+     * Last-resort report for when [renderReport] itself throws — sized to
+     * stay far under any sane cap and to avoid anything heavier than string
+     * concatenation (no PrintWriter walk, no stack-trace expansion).
+     */
+    private fun minimalReport(epochMillis: Long, throwable: Throwable, threadName: String): String = buildString {
+        appendLine("JellyPlay desktop crash report")
+        appendLine("time_utc: ${Instant.ofEpochMilli(epochMillis)}")
+        appendLine("thread: $threadName")
+        appendLine("(full report render failed)")
+        appendLine(throwable.toString())
     }
 
     /**
@@ -144,7 +194,11 @@ class DesktopCrashHandler(
         val excess = existing.size - keepRoom
         existing.sortedBy { it.name } // ascending → oldest first
             .take(excess)
-            .forEach { runCatching { it.deleteIfExists() } }
+            .forEach { path ->
+                runCatching { path.deleteIfExists() }.onFailure { e ->
+                    System.err.println("[JellyPlay] crash-report rotation delete failed for ${path.name}: $e")
+                }
+            }
     }
 
     private fun renderReport(epochMillis: Long, throwable: Throwable, threadName: String): String {
@@ -161,8 +215,10 @@ class DesktopCrashHandler(
         if (fullBody.toByteArray().size <= maxReportBytes) return fullBody
 
         // Line-granular truncation: keep whole lines while they fit, then mark
-        // the cut instead of writing a mid-character byte blob.
-        var budget = maxReportBytes - TRUNCATION_NOTE.length
+        // the cut instead of writing a mid-character byte blob. The reserve is
+        // BYTE-counted (the note contains an em dash = 3 UTF-8 bytes) or the
+        // finished file can exceed the cap by the char/byte delta.
+        var budget = maxReportBytes - TRUNCATION_NOTE.toByteArray(Charsets.UTF_8).size
         return buildString {
             for (line in fullBody.lineSequence()) {
                 val encoded = (line + "\n").toByteArray(Charsets.UTF_8).size

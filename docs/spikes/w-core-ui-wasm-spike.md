@@ -20,7 +20,7 @@ this branch carries only this report.
 |---|---|---|---|
 | `androidx.navigation3:navigation3-ui:1.1.5` (google) | NavDisplay in commonMain | **NO WEB TARGETS AT ALL** — module metadata offers android aar, `jvmStubs`, `linuxx64Stubs` only | https://dl.google.com/android/maven2/androidx/navigation3/navigation3-ui/1.1.5/navigation3-ui-1.1.5.module |
 | `org.jetbrains.androidx.navigation3:navigation3-ui:1.1.1` (JB fork) | same, on web | **GO** — root `.module` advertises a wasmJs variant (`available-at` redirect); real klib bytes exist at the pinned version | https://repo1.maven.org/maven2/org/jetbrains/androidx/navigation3/navigation3-ui-wasm-js/1.1.1/navigation3-ui-wasm-js-1.1.1.klib |
-| `androidx.navigation3:navigation3-runtime:1.1.5` (google) | NavBackStack/rememberNavBackStack/NavKey | GO — full KMP publication incl. sibling `navigation3-runtime-wasm-js`; note its wasm module *transitively requires google `-ui`* (R1 failure chain) so runtime-only web consumers still hit the substitution need | `…/navigation3-runtime/1.1.5/navigation3-runtime-1.1.5.module` → available-at `navigation3-runtime-wasm-js` |
+| `androidx.navigation3:navigation3-runtime:1.1.5` (google) | NavBackStack/rememberNavBackStack/NavKey | GO — full KMP publication incl. sibling `navigation3-runtime-wasm-js`; note its wasm module *publishes Gradle dependencyConstraints on google `-ui`* (metadata, not a hard edge — but every real consumer of core/ui has `-ui` in-graph, so the substitution need stands) | `…/navigation3-runtime/1.1.5/navigation3-runtime-1.1.5.module` → available-at `navigation3-runtime-wasm-js` |
 | `androidx.paging:paging-common:3.5.0` | paging state layer | GO — declares wasmJs variant, klib bytes verified (200) | https://dl.google.com/android/maven2/androidx/paging/paging-common-wasm-js/3.5.0/paging-common-wasm-js-3.5.0.klib |
 | `androidx.paging:paging-compose:3.5.0` | `LazyPagingItems` in core/ui commonMain | GO — same shape | https://dl.google.com/android/maven2/androidx/paging/paging-compose-wasm-js/3.5.0/paging-compose-wasm-js-3.5.0.klib |
 | `androidx.paging:paging-testing:3.5.0` | tests | GO — same shape | `…/paging-testing-wasm-js/3.5.0/paging-testing-wasm-js-3.5.0.klib` |
@@ -60,10 +60,10 @@ pinned 1.1.1 included, so no bump of `jbNavigation3Ui` is needed for wasm.
   too — the missing stdlib is what crashes FIR. Same ICE. ⚙
 - **R4** — additionally `force("org.jetbrains.kotlin:kotlin-stdlib(:-wasm-js):2.3.21")`
   (TEMPORARY ONLY): frontend survives, yielding the complete diagnostic
-  inventory below (106 errors). Confirms the ICE was purely stdlib-eviction
+  inventory below (109 errors). Confirms the ICE was purely stdlib-eviction
   fallout, not a code defect in NavKey.kt. ⚙
 
-## 3. Failure inventory grouped by fix class (R4, 106 diagnostics)
+## 3. Failure inventory grouped by fix class (R4, 109 diagnostics)
 
 **A. JVM-platform APIs used directly in commonMain (~84 errors) — extract or rewrite**
 - `DateFormatHelper.kt` (27): `java.text.SimpleDateFormat`, `java.util.Locale/Date`, `ThreadLocal`.
@@ -132,7 +132,7 @@ NavKey hierarchy, window-size-class derivation off `LocalWindowInfo`,
 |---|---|---|
 | S1 — nav3-ui substitution recipe for web | S | mirror apps/desktop's graph-wide substitution in apps/web (and any ui-consuming wasm module until convention-level config); no version bump needed |
 | S2 — expect/actual wasmJsMain set | S–M | ~10 small actuals; Skia raster bitmap path is the only non-trivial one |
-| M1 — JVM-API extraction (class A) | M | two heavy files (DateFormatHelper, DurationFormatter) plus six light ones; kotlin-datetime or pattern-localized formatting decision needed |
+| M1 — JVM-API extraction (class A) | M | two heavy files (DateFormatHelper, DurationFormatter) plus eight light ones (the String.format row spans 4 files); kotlin-datetime or pattern-localized formatting decision needed |
 | S3 — LRU/synchronized seams (class B) | S | BlurHash + DominantColor caches |
 | M2 — markdown renderer 2.3-built pin hunt (class C) | M | same archaeology as coil/10B; mind the kotlin-stdlib eviction trap; if none exists: defer MarkdownText behind seam or await toolchain 2.4 move |
 | S4 — model language tables to wasm reach (class D) | S | model-module change, unblocks SubtitleResultMetadata |

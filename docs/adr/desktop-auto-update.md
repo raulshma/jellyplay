@@ -61,7 +61,8 @@ is published, unblocking is a one-line change to the version supplier plus an
   release exists but never runs one.
 - Unsigned installers remain exposed to SmartScreen/Gatekeeper warnings; that
   is an accepted v1 reality documented here rather than hidden.
-- No delta updates: each release is a full installer (~100 MB scale).
+- No delta updates: each release is a full installer (~155 MB on Windows;
+  MSIs embed timestamps so exact bytes do not reproduce).
 - `AppUpdateRepository.downloadUpdate`/`getPendingUpdate` remain
   Android-only-reachable on desktop; the appdata `updates` dir stays empty.
 

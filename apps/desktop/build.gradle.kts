@@ -365,15 +365,16 @@ compose.desktop {
             vendor = "JellyPlay"
 
             // includeAllModules WON over explicit modules(...) enumeration:
-            // this graph pulls ~25 shared feature/core modules plus reflection
-            // edges JNA cannot declare statically (com.sun.jna native loading),
-            // coil's ServiceLoader-registered OkHttp network fetcher and
-            // kotlinx.serialization polymorphic lookups — jlink auto-analysis
-            // misses those classes of wiring, and each missed hint costs a full
-            // package + boot-smoke cycle to discover. Merging everything into
-            // the single unified module keeps ServiceLoader and reflection
-            // intact. Measured cost (wave 10A, Windows, version 0.1.0):
-            // app image 276 MB, MSI installer 162,621,992 bytes (~155 MB) —
+            // this graph pulls 30 shared feature/core implementation edges plus
+            // reflection edges JNA cannot declare statically (com.sun.jna
+            // native loading), coil's ServiceLoader-registered OkHttp network
+            // fetcher and kotlinx.serialization polymorphic lookups — jlink
+            // auto-analysis misses those classes of wiring, and each missed
+            // hint costs a full package + boot-smoke cycle to discover.
+            // Merging everything into the single unified module keeps
+            // ServiceLoader and reflection intact. Measured cost (wave 10A,
+            // Windows, version 0.1.0): app image ~276 MB, MSI installer
+            // ~155 MB (MSIs embed timestamps — exact bytes do not reproduce) —
             // accepted for v1.
             includeAllModules = true
 

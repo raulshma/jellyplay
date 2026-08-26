@@ -56,19 +56,16 @@ fun main() {
         // Factory delegates to SingletonImageLoader.setSafe, which throws if
         // the singleton was already resolved by an earlier AsyncImage call.
         //
-        // The ktor3 fetcher is registered EXPLICITLY instead of relying on
-        // the desktop precedent (coil-network-okhttp resolving its fetcher
-        // purely via ServiceLoader): in coil-core 3.4.0 sources,
+        // The ktor3 fetcher is registered EXPLICITLY because on wasmJs there
+        // is no alternative: in coil-core 3.4.0 sources,
         // ServiceLoaderComponentRegistry's jvmCommon actual is the only one
-        // reading java.util.ServiceLoader; the nonJvmCommon (js/wasm)
-        // actual starts EMPTY with a manual register() API fed solely by
-        // @EagerInitialization module init hooks such as coil-network-
-        // ktor3's internal `initHook`. Whether Kotlin/Wasm ever fires that
-        // eager hook without a direct reference into the ktor3 package can't
-        // be proven without a real-browser pass, so explicit registration is
-        // what keeps the pipeline deterministic. If the hook fires too,
-        // builder-added components win — RealImageLoader consults them
-        // before its service-loader targets.
+        // reading java.util.ServiceLoader, and the nonJvmCommon (js/wasm)
+        // actual starts EMPTY with a manual register() API. The desktop
+        // okhttp flavor self-populates through META-INF/services on the JVM;
+        // coil-network-ktor3 3.4.0 ships its @EagerInitialization initHook in
+        // nativeMain ONLY — the wasm artifact contains no initHook at all —
+        // so the registry can never be populated on this target and explicit
+        // registration is mandatory, not merely deterministic.
         //
         // RUNTIME HONESTY (mirrors HtmlVideoEngine): this slice proves the
         // pipeline COMPILES under wasmJs only (:apps:web:compileKotlinWasmJs;
@@ -80,12 +77,11 @@ fun main() {
         setSingletonImageLoaderFactory { context ->
             ImageLoader.Builder(context)
                 .components {
-                    // KtorNetworkFetcherFactory is a public FACTORY FUNCTION
-                    // in coil-network-ktor3 returning a NetworkFetcher.Factory
-                    // component (not a class) — safe to add explicitly, unlike
-                    // desktop's okhttp flavor whose factory is internal.
-                    // The lazy () -> HttpClient overload keeps engine
-                    // construction out of composition until the first request.
+                    // KtorNetworkFetcherFactory is a public FACTORY FUNCTION in
+                    // coil-network-ktor3 returning a NetworkFetcher.Factory
+                    // component. The lazy () -> HttpClient overload keeps
+                    // engine construction out of composition until the first
+                    // request.
                     add(KtorNetworkFetcherFactory(httpClient = { HttpClient(Js) }))
                 }
                 .crossfade(true)

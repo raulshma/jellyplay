@@ -189,11 +189,13 @@ jobs:
         # syncplay relocation precedent); compile-gate it here.
         run: ./gradlew :app:assemblePhoneDebugAndroidTest --stacktrace
 
-      - name: Shell tests (Koin registration guard)
+      - name: Shell tests (Koin registration guard + packaging asset suites)
         # :apps:desktop:test hosts the Koin-registration ratchet
         # (KoinModuleRegistrationGuardTest) — startKoin wiring is runtime-only
         # and invisible to every compile gate (arrqueue/shortcuts lessons,
-        # plan §Phase X), so it must run in CI, not just locally.
+        # plan §Phase X) — plus the wave-10A DesktopCrashHandlerTest and
+        # PackagingIconAssetsTest suites, so it must run in CI, not just
+        # locally.
         run: ./gradlew :apps:desktop:test --stacktrace
 
   desktop-package:

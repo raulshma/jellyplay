@@ -14,6 +14,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
@@ -85,6 +86,69 @@ class DesktopCrashHandlerTest {
     }
 
     @Test
+    fun `install twice keeps a single handler and one report per crash`() {
+        val logsDir = newLogsDir()
+        val handler = DesktopCrashHandler(logsDir).install()
+        val first = Thread.getDefaultUncaughtExceptionHandler()
+        handler.install() // double-install would chain this handler to itself
+
+        assertSame(first, Thread.getDefaultUncaughtExceptionHandler(), "second install must be a no-op")
+        crashThroughInstalledHandler(throwableWithFrames(1))
+        assertEquals(1, logsDir.listDirectoryEntries("crash-*.log").size, "exactly one report per crash")
+    }
+
+    @Test
+    fun `two crashes in the same millisecond keep both reports intact`() {
+        val logsDir = newLogsDir()
+        val handler = DesktopCrashHandler(logsDir)
+
+        // No sleeps: on coarse Windows clocks these often land on the same
+        // epoch-milli, which used to silently truncate the first report under
+        // CREATE/TRUNCATE defaults. CREATE_NEW + seq suffix must preserve both.
+        handler.coroutineExceptionHandler.handleException(
+            kotlin.coroutines.EmptyCoroutineContext,
+            Boom("collision-a"),
+        )
+        handler.coroutineExceptionHandler.handleException(
+            kotlin.coroutines.EmptyCoroutineContext,
+            Boom("collision-b"),
+        )
+
+        val reports = logsDir.listDirectoryEntries("crash-*.log")
+        assertEquals(2, reports.size, "both crashes recorded as distinct files")
+        assertTrue(reports.any { it.readText().contains("collision-a") }, "first report's body survived")
+        assertTrue(reports.any { it.readText().contains("collision-b") }, "second report's body survived")
+
+        // Marker must reference an EXISTING report (never the truncated one).
+        val crash = assertNotNull(handler.consumePreviousCrashMarker())
+        assertTrue(crash.logFile.exists(), "marker's referenced file exists")
+    }
+
+    @Test
+    fun `cap holds byte-exactly across every budget alignment`() {
+        // Sampled cap sweep so truncation tight-packing cases (where the old
+        // char-vs-byte note reserve could overflow the file by 2 bytes) are
+        // exercised at varied byte remainders — a stride of 13 keeps all
+        // residue classes covered against the ~70-byte frame lines without
+        // paying ~1000 tmpdir cycles per run (Windows file churn + AV made
+        // the dense sweep take tens of minutes). Rendered body (~8 KB)
+        // exceeds EVERY cap here, so each report must be truncated yet still
+        // land byte-exactly under its cap.
+        val bulky = throwableWithFrames(120)
+        for (cap in 512..1536 step 13) {
+            val dir = newLogsDir()
+            val handler = DesktopCrashHandler(dir, maxReportBytes = cap).install()
+            crashThroughInstalledHandler(bulky)
+            val report = dir.listDirectoryEntries("crash-*.log").single()
+            assertTrue(
+                report.fileSize() <= cap,
+                "file ${report.fileSize()} exceeds cap $cap (name=${report.name})",
+            )
+            assertTrue(report.readText().contains("(truncated"), "cut declared inside the report")
+        }
+    }
+
+    @Test
     fun `marker is consumed exactly once and points at the crash log`() {
         val logsDir = newLogsDir()
         val handler = DesktopCrashHandler(logsDir).install()
@@ -97,7 +161,7 @@ class DesktopCrashHandlerTest {
         assertTrue(crash.epochMillis in before..after, "marker timestamp is the crash time")
         assertTrue(crash.logFile.exists(), "referenced log file exists")
         assertTrue(crash.logFile.name.endsWith(".log"))
-        assertFalse(crash.crashedAtUtc.toString().isEmpty())
+        assertEquals(crash.epochMillis, crash.crashedAtUtc.toEpochMilli(), "Instant round-trips from millis")
 
         assertNull(handler.consumePreviousCrashMarker(), "marker deleted after first consume")
         assertFalse(logsDir.resolve("last-crash.txt").exists(), "no marker residue")
