@@ -116,6 +116,15 @@ dependencies {
     implementation(project(":shared:feature:home"))
 
 
+    // …player-audio, wave 7A conveyor (legacy :feature:player:audio deleted):
+    // module compiles and playerAudioModule is registered LATENT — the four
+    // playback/cast ViewModel ctor deps (AudioQueueManager/AudioEffectsManager
+    // /AudioPlayerEngine/AudioPlayerCast) are Android Hilt-interop singles
+    // with no desktop definitions yet, and Route.AudioPlayer/Route.Ambient
+    // stay guarded in DesktopAppRoot so nothing constructs the VM.
+    implementation(project(":shared:feature:player-audio"))
+
+
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
     implementation(libs.jna)

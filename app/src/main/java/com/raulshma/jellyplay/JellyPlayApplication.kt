@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.feature.auth.di.authModule
 
 import com.raulshma.jellyplay.feature.details.androidDetailsModule
 import com.raulshma.jellyplay.feature.details.detailsModule
+import com.raulshma.jellyplay.feature.player.audio.di.playerAudioModule
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
 
@@ -298,6 +299,13 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // storage probe is the StatFs androidMain actual below.
                 detailsModule,
                 androidDetailsModule(this@JellyPlayApplication),
+                // Audio player conveyor (wave 7A, legacy :feature:player:audio
+                // deleted): the shared player ViewModels. Queue/effects/transport
+                // deps resolve through the hiltInteropModule singles above: the
+                // Hilt-owned AudioPlaybackManager implements both shared playback
+                // contracts, and the module-local engine/cast seams bridge the
+                // same single + CastManager (die at Phase X).
+                playerAudioModule,
 
             )
         }

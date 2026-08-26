@@ -121,6 +121,8 @@ jobs:
           :shared:feature:details:compileAndroidMain
           :shared:feature:home:jvmJar
           :shared:feature:home:compileAndroidMain
+          :shared:feature:player-audio:jvmJar
+          :shared:feature:player-audio:compileAndroidMain
 
           :apps:web:compileKotlinWasmJs
 
@@ -169,6 +171,7 @@ jobs:
 
           :shared:feature:auth:jvmTest
           :shared:feature:home:jvmTest
+          :shared:feature:player-audio:jvmTest
 
 
           --stacktrace

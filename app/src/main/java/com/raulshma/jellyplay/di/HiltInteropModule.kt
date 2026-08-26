@@ -2,7 +2,13 @@ package com.raulshma.jellyplay.di
 
 import android.app.Application
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import com.raulshma.jellyplay.core.data.cast.CastManager
+import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
+import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
@@ -14,6 +20,8 @@ import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.details.DetailAudioPlayback
 import com.raulshma.jellyplay.feature.details.DetailThemeMusic
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
+import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
+import com.raulshma.jellyplay.feature.player.audio.AudioPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import dagger.hilt.EntryPoint
@@ -21,6 +29,12 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import org.koin.core.module.Module
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import org.koin.dsl.module
 
 /**
@@ -68,6 +82,7 @@ interface HiltInteropEntryPoint {
     fun playerEngineFactory(): PlayerEngineFactory
     fun fontProvider(): FontProvider
     fun audioPlaybackManager(): AudioPlaybackManager
+    fun castManager(): CastManager
     fun themeMusicPlayer(): ThemeMusicPlayer
     fun playbackSyncScheduler(): PlaybackSyncScheduler
     fun tvWatchNextScheduler(): TvWatchNextScheduler
@@ -107,6 +122,96 @@ private class HiltDetailThemeMusic(
     override fun stop() = player.stop()
 }
 
+/**
+ * Audio-player conveyor (wave 7A): the transport/metadata/lyrics half of
+ * the legacy AudioPlaybackManager that is not on the shared AudioQueueManager
+ * / AudioEffectsManager contracts - a pure delegate, same shape as
+ * HiltDetailAudioPlayback above.
+ */
+private class HiltAudioPlayerEngine(
+    private val manager: AudioPlaybackManager,
+) : AudioPlayerEngine {
+    override val title get() = manager.title
+    override val artist get() = manager.artist
+    override val artistId get() = manager.artistId
+    override val album get() = manager.album
+    override val albumArtUrl get() = manager.albumArtUrl
+    override val isPlaying get() = manager.isPlaying
+    override val currentPosition get() = manager.currentPosition
+    override val duration get() = manager.duration
+    override val speed get() = manager.speed
+    override val playbackError get() = manager.playbackError
+    override val isLoadingItem get() = manager.isLoadingItem
+    override val crossfadeDurationMs get() = manager.crossfadeDurationMs
+    override val undoEvents get() = manager.undoEvents
+    override val abLoopStartMs get() = manager.abLoopStartMs
+    override val abLoopEndMs get() = manager.abLoopEndMs
+    override val lyrics get() = manager.lyrics
+    override val currentLyricIndex get() = manager.currentLyricIndex
+    override val lyricsSource get() = manager.lyricsSource
+    override val isFetchingLyrics get() = manager.isFetchingLyrics
+    override val lyricsOffsetMs get() = manager.lyricsOffsetMs
+    override fun play(itemId: String) = manager.play(itemId)
+    override fun seekTo(positionMs: Long) = manager.seekTo(positionMs)
+    override fun togglePlayPause() = manager.togglePlayPause()
+    override fun pause() = manager.pause()
+    override fun changePlaybackSpeed(value: Float) = manager.changePlaybackSpeed(value)
+    override fun setSkipPreviousThreshold(ms: Long) = manager.setSkipPreviousThreshold(ms)
+    override fun setCrossfadeDurationMs(ms: Long) = manager.setCrossfadeDurationMs(ms)
+    override fun setGaplessEnabled(enabled: Boolean) = manager.setGaplessEnabled(enabled)
+    override fun getImageUrl(itemId: String): String = manager.getImageUrl(itemId)
+    override fun searchLyrics(query: String, callback: (Result<List<com.raulshma.jellyplay.core.model.LrcLibTrack>>) -> Unit) =
+        manager.searchLyrics(query, callback)
+    override fun applyLyrics(lrcLibId: Long) = manager.applyLyrics(lrcLibId)
+    override fun setLyricsOffset(offsetMs: Long) = manager.setLyricsOffset(offsetMs)
+    override fun stopAndRelease() = manager.stopAndRelease()
+    override fun undoLastQueueOperation(): Boolean = manager.undoLastQueueOperation()
+    override fun cycleAbLoop() = manager.cycleAbLoop()
+}
+
+/**
+ * Audio-player conveyor (wave 7A): the cast half over the Hilt-owned
+ * CastManager. Holds the application context the legacy discovery/connect
+ * calls need and hides the media3 MediaItem/Player.Listener construction
+ * the player VM used to build inline (audio casts carry no subtitle/quality
+ * variants, so CastMediaOptions stays the empty default). Devices surface
+ * as display names - the picker shows names only, exactly like the legacy
+ * dialog's devices[which].
+ */
+private class HiltAudioPlayerCast(
+    private val castManager: CastManager,
+    context: Application,
+) : AudioPlayerCast {
+    private val appContext = context
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    override val isConnected get() = castManager.isConnectedFlow
+    override val discoveredDeviceNames = castManager.discoveredDevices
+        .map { devices -> devices.map { it.name } }
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
+    override fun startDiscovery() = castManager.startDiscovery(appContext)
+    override fun stopDiscovery() = castManager.stopDiscovery()
+    override fun connect(deviceName: String) {
+        castManager.discoveredDevices.value
+            .firstOrNull { it.name == deviceName }
+            ?.let { castManager.connect(appContext, it) }
+    }
+    override fun disconnect() = castManager.disconnect(appContext)
+    override fun acquireConsumer() = castManager.acquireConsumer()
+    override fun releaseConsumer() = castManager.releaseConsumer()
+    override fun loadMedia(itemId: String, startPositionMs: Long) {
+        castManager.loadMedia(
+            mediaItem = MediaItem.Builder().setMediaId(itemId).build(),
+            startPositionMs = startPositionMs,
+            listener = object : Player.Listener {},
+            options = CastMediaOptions(),
+        )
+    }
+    override fun play() = castManager.play()
+    override fun pause() = castManager.pause()
+    override fun seekTo(positionMs: Long) = castManager.seekTo(positionMs)
+    override fun setVolume(volume: Float) = castManager.setVolume(volume)
+}
+
 fun hiltInteropModule(application: Application): Module = module {
     single<DownloadIntake> { interopEntryPoint(application).downloadIntake() }
     single<AudioQueueFacade> { interopEntryPoint(application).audioQueueFacade() }
@@ -128,6 +233,14 @@ fun hiltInteropModule(application: Application): Module = module {
     // Details conveyor (Phase X cutover wave): see the adapter KDocs above.
     single<DetailAudioPlayback> { HiltDetailAudioPlayback(interopEntryPoint(application).audioPlaybackManager()) }
     single<DetailThemeMusic> { HiltDetailThemeMusic(interopEntryPoint(application).themeMusicPlayer()) }
+    // Audio player conveyor (wave 7A): the Hilt-owned AudioPlaybackManager
+    // implements both shared playback contracts, so both Koin defs bridge to
+    // the same single; the module-local engine/cast seams adapt the same
+    // single + CastManager (adapters above).
+    single<AudioQueueManager> { interopEntryPoint(application).audioPlaybackManager() }
+    single<AudioEffectsManager> { interopEntryPoint(application).audioPlaybackManager() }
+    single<AudioPlayerEngine> { HiltAudioPlayerEngine(interopEntryPoint(application).audioPlaybackManager()) }
+    single<AudioPlayerCast> { HiltAudioPlayerCast(interopEntryPoint(application).castManager(), application) }
     // Home conveyor (Phase X cutover): HomeViewModel's four remaining
     // Hilt-owned ctor deps — the WorkManager-backed schedulers (legacy
     // :core:data DataModule @Binds) and the app widget broadcast receiver
