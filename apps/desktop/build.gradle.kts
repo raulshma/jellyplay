@@ -132,6 +132,13 @@ dependencies {
     // stay guarded in DesktopAppRoot so nothing constructs the VM.
     implementation(project(":shared:feature:player-audio"))
 
+    // …player-video, wave 8C conveyor slice: the ViewModel/session cluster is
+    // commonMain and desktop-resolvable (desktopPlayerVideoModule registers
+    // the VM + no-op seam actuals, jvmMain). Route.VideoPlayer stays guarded
+    // in DesktopAppRoot — no desktop screen host exists yet (SwingPanel/HWND
+    // surface is queued work) — so nothing constructs the VM in practice.
+    implementation(project(":shared:feature:player-video"))
+
 
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime.
