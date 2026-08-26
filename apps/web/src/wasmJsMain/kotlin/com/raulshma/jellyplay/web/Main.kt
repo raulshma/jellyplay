@@ -19,9 +19,10 @@ import org.koin.core.context.startKoin
 
 /**
  * Phase W web shell entry (docs/kmp-migration-plan.md §Phase W): boots the
- * shared datastore + wasm network DI stacks and renders a minimal
- * placeholder — this is a boot-proof skeleton, not a UI. Real screens land
- * with the later W slices.
+ * shared datastore + wasm network DI stacks and renders the navigation
+ * shell. The W.1/W.4 boot-proof placeholder grew up with wave 11B:
+ * [WebAppRoot] renders real shared UI through core/ui's wasm-visible
+ * primitives over the JB fork's NavDisplay.
  *
  * W.1 chunk 3: `networkWasmModule` registers the Ktor wasm clients
  * (auth/library/playback over ONE shared [AtomicSessionState]). No screen
@@ -91,8 +92,10 @@ fun main() {
         JellyPlayTheme(darkTheme = isSystemInDarkTheme(), dynamicColor = false) {
             // The one shared session state the three wasm API clients are
             // built around — passed in directly rather than via a compose
-            // Koin scope (koin-compose is not a web-shell dep yet).
-            WebShellScreen(sessionState = koinApp.koin.get())
+            // Koin scope (koin-compose is not a web-shell dep yet). WebAppRoot
+            // provisions the core/ui composition locals around its NavDisplay
+            // and renders the web-only landing/status panes.
+            WebAppRoot(sessionState = koinApp.koin.get())
         }
     }
 }
