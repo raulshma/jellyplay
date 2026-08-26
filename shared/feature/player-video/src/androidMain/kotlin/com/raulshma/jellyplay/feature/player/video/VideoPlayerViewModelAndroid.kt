@@ -27,10 +27,18 @@ fun VideoPlayerViewModel.updatePipSourceRect(rect: Rect?) {
 suspend fun VideoPlayerViewModel.getTrickplayThumbnail(positionMs: Long): Bitmap? =
     loadTrickplayThumbnail(positionMs) as? Bitmap
 
+/** SAF-picked font install: the Uri is stringified at the seam boundary. */
+fun VideoPlayerViewModel.installUserFont(uri: Uri) = installUserFont(uri.toString())
+
 /**
- * The Android-only font surface (Typeface cache, libass dir) for the overlay.
- * (The androidCastManager extension joins this file when the ViewModel's
- * castManager slot flips to the seam interface.) */
+ * The legacy cast surface (discovery/connect, Context-bound transport) the
+ * screen's chrome needs; the commonMain VM property is the narrow seam
+ * interface. Same singleton the adapter wraps.
+ */
+val VideoPlayerViewModel.androidCastManager: com.raulshma.jellyplay.core.data.cast.CastManager
+    get() = (castManager as AndroidCastManager).delegate
+
+/** The Android-only font surface (Typeface cache, libass dir) for the overlay. */
 val VideoPlayerViewModel.androidFontProvider: AndroidFontProvider
     get() = fontProvider as AndroidFontProvider
 

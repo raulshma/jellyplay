@@ -10,7 +10,7 @@ package com.raulshma.jellyplay.feature.player.video
  * code.
  */
 internal class AndroidCastManager(
-    private val delegate: com.raulshma.jellyplay.core.data.cast.CastManager,
+    val delegate: com.raulshma.jellyplay.core.data.cast.CastManager,
 ) : CastManager {
 
     override fun acquireConsumer() = delegate.acquireConsumer()
