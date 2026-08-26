@@ -14,8 +14,9 @@ kotlin {
     // wasm network seam (W.1 chunks 1-3) is wired here and the Coil wasm
     // image engine (W.4) is wired since the repo-wide coil 3.4.0 pin
     // (libs.versions.toml version note): 3.5.0's wasmJs klibs are Kotlin-
-    // 2.4-ABI and silently skipped by our 2.3.21 loader. Real screens are
-    // later slices.
+    // 2.4-ABI and silently skipped by our 2.3.21 loader. Wave 11B adds the
+    // real navigation shell (WebAppRoot over the JB fork's NavDisplay);
+    // feature screens are still later slices.
     wasmJs {
         browser {
             commonWebpackConfig {
@@ -37,15 +38,20 @@ kotlin {
                 implementation(libs.jb.compose.material3)
 
                 // Phase W stack: model (shared value types),
-                // designsystem (JellyPlayTheme), datastore
+                // designsystem (JellyPlayTheme), ui (wave 11B: shared
+                // composition locals + nav wiring; the wasm target is
+                // machine-verified green since wave 11A), datastore
                 // (datastoreCommonModule + webDatastoreModule DI), network
                 // (networkWasmModule — Phase W.1 chunk 3: AtomicSessionState
                 // + WasmClientIdentity + the three Ktor wasm clients +
                 // AuthApiClient/LibraryApiClient/PlaybackApiClient bindings).
-                // Deliberately absent: :shared:core:ui (nav3/paging wasm
-                // unverified), database/data (no Room on wasm v1).
+                // Deliberately absent: paging-compose (spike w-10C §1 proves
+                // its 3.5.0 wasm klibs exist, but no consuming web module
+                // needs LazyPagingItems yet), database/data (no Room on
+                // wasm v1).
                 implementation(project(":shared:core:model"))
                 implementation(project(":shared:core:designsystem"))
+                implementation(project(":shared:core:ui"))
                 implementation(project(":shared:core:datastore"))
                 implementation(project(":shared:core:network"))
                 // Wave wC (HtmlVideoEngine): the wasm-visible MediaEngine
@@ -76,10 +82,36 @@ kotlin {
 
                 implementation(libs.koin.core)
                 implementation(libs.kotlinx.coroutines.core)
+                // Web nav root (WebAppRoot, DesktopAppRoot's pattern): NavKey
+                // is public API surface of shared/core/ui's navigation
+                // helpers; NavDisplay + entryDecorator wiring need the -ui
+                // artifact alongside. Both edges resolve against google's
+                // coordinates — the substitution below swaps only -ui onto
+                // the JetBrains fork.
+                implementation(libs.navigation3.runtime)
+                implementation(libs.navigation3.ui)
                 // ComposeViewport(document.body) + localStorage-backed
                 // storage interop.
                 implementation(libs.kotlinx.browser)
             }
         }
+    }
+}
+
+// google's androidx.navigation3:navigation3-ui ships NO web targets at all
+// (android AAR + jvm/linux stubs only — spike w-10C §1), so every wasmJs
+// configuration of this module — including ones that only pull
+// :shared:core:ui and its transitive google -ui leaf — fails dependency
+// resolution unless it points at JetBrains' fork of the same release line:
+// same package, ABI-stable surface, real wasm klibs at the pinned 1.1.1.
+// The fork's POM depends on google's runtime artifact, so only -ui is
+// swapped. Graph-wide shape mirrored from apps/desktop/build.gradle.kts
+// (its configurations.all block); :shared:core:ui keeps the same swap scoped
+// to its own wasmJs-named configurations (spike w-10C S1/R2).
+configurations.all {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("androidx.navigation3:navigation3-ui"))
+            .using(module(libs.jb.navigation3.ui.get().toString()))
+            .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
     }
 }
