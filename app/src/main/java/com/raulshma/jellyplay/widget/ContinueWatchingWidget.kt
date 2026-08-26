@@ -12,22 +12,20 @@ import android.widget.RemoteViews
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
+import org.koin.mp.KoinPlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-class ContinueWatchingWidget : AppWidgetProvider() {
+/**
+ * Koin accessor (wave 8B — Hilt removal): resolved straight from the
+ * application container, same try/catch shape the EntryPoint call used.
+ */
+private fun koinWidgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore =
+    KoinPlatform.getKoin()!!.get()
 
-    @EntryPoint
-    @InstallIn(SingletonComponent::class)
-    interface WidgetEntryPoint {
-        fun widgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
-    }
+class ContinueWatchingWidget : AppWidgetProvider() {
 
     /**
      * Runs [onDeleted] config cleanup off the main thread — mirrors the
@@ -39,10 +37,7 @@ class ContinueWatchingWidget : AppWidgetProvider() {
         super.onDeleted(context, appWidgetIds)
         if (context == null || appWidgetIds == null) return
         val store = try {
-            EntryPointAccessors.fromApplication(
-                context.applicationContext,
-                WidgetEntryPoint::class.java,
-            ).widgetDataStore()
+            koinWidgetDataStore()
         } catch (_: Exception) {
             return
         }

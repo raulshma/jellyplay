@@ -40,8 +40,7 @@ import androidx.core.app.NotificationCompat
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
-import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
+import org.koin.mp.KoinPlatform
 import kotlin.math.abs
 
 /**
@@ -61,11 +60,11 @@ import kotlin.math.abs
  * caller must verify with [OverlayPermissionChecker.canDrawOverlays] before
  * starting the service.
  */
-@AndroidEntryPoint
 class FloatingPlayerService : Service() {
 
-    @Inject
-    lateinit var floatingPlayerState: FloatingPlayerState
+    // Koin single (wave 8B — Hilt removal); lazy keeps construction off the
+    // service's creation path until the overlay actually reads state.
+    private val floatingPlayerState: FloatingPlayerState by lazy { KoinPlatform.getKoin()!!.get() }
 
     private lateinit var windowManager: WindowManager
     private var overlayView: ComposeView? = null

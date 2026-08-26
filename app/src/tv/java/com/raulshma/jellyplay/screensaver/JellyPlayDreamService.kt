@@ -21,10 +21,6 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverSlice
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.model.DreamImage
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -50,22 +46,14 @@ private class DreamLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner {
 
 class JellyPlayDreamService : DreamService() {
 
-    @EntryPoint
-    @InstallIn(SingletonComponent::class)
-    interface DreamServiceEntryPoint {
-        fun authRepository(): AuthRepository
-        fun mediaRepository(): MediaRepository
-        fun imageUrlProvider(): ImageUrlProvider
-        fun screensaverStore(): com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
-    }
-
-    private val entryPoint by lazy {
-        EntryPointAccessors.fromApplication(applicationContext, DreamServiceEntryPoint::class.java)
-    }
-    private val authRepository by lazy { entryPoint.authRepository() }
-    private val mediaRepository by lazy { entryPoint.mediaRepository() }
-    private val imageUrlProvider by lazy { entryPoint.imageUrlProvider() }
-    private val preferencesStore by lazy { entryPoint.screensaverStore() }
+    // Koin singles (wave 8B — Hilt removal): resolved lazily straight from
+    // the application container, same deferred timing the EntryPoint-backed
+    // fields had.
+    private val koin by lazy { org.koin.mp.KoinPlatform.getKoin()!! }
+    private val authRepository: AuthRepository by lazy { koin.get() }
+    private val mediaRepository: MediaRepository by lazy { koin.get() }
+    private val imageUrlProvider: ImageUrlProvider by lazy { koin.get() }
+    private val preferencesStore: ScreensaverStore by lazy { koin.get() }
     private val imageProvider by lazy {
         DreamImageProvider(mediaRepository, imageUrlProvider, applicationContext)
     }

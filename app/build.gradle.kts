@@ -2,8 +2,6 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.hilt)
     alias(libs.plugins.androidx.baselineprofile)
     alias(libs.plugins.aboutLibraries)
 }
@@ -219,15 +217,13 @@ dependencies {
     implementation(libs.work.runtime.ktx)
     implementation(libs.datastore.preferences)
 
-    implementation(libs.hilt.android)
-
-    // Koin composition root (Phase C4): startKoin in JellyPlayApplication
-    // loads the shared-module definitions; Hilt shims bridge to them.
+    // Koin composition root (Phase C4 / wave 8B): startKoin in
+    // JellyPlayApplication owns every definition — shared modules, the core
+    // graphs, and the app-side androidAppModule set.
     implementation(libs.koin.core)
-    ksp(libs.hilt.android.compiler)
-    implementation(libs.hilt.work)
-    ksp(libs.hilt.compiler)
-    implementation(libs.hilt.navigation.compose)
+    // koinViewModel()/viewModel DSL for the app-shell ViewModels (same
+    // artifact the shared feature modules use).
+    implementation(libs.koin.compose.viewmodel)
 
     implementation(libs.play.services.cast.framework)
 

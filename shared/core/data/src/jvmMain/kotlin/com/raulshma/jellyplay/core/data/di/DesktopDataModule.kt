@@ -23,8 +23,12 @@ import com.raulshma.jellyplay.core.data.update.AppUpdateRepositoryImpl
 import com.raulshma.jellyplay.core.data.util.DesktopImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.DataBuildFlags
+import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
+import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
+import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import java.io.File
@@ -133,6 +137,43 @@ fun desktopDataModule(dataDir: Path): Module {
                 episodeCatalogue = get(),
                 scope = get(DatastoreQualifiers.applicationScope),
             )
+        }
+
+        // ── Home conveyor desktop actuals (wave 8B): the four WorkManager/ ──
+        // widget-backed HomeViewModel ctor deps have no desktop machinery
+        // behind them, so these are honest no-ops mirroring the Android impls'
+        // shapes (Android: PlaybackSyncScheduler/TvWatchNextScheduler live in
+        // androidCoreDataModule, ContinueWatchingBroadcaster/LibrarySyncHook
+        // in the app's androidAppModule).
+        //  - PlaybackSyncScheduler: Android drains the playback-progress
+        //    offline outbox via WorkManager; the desktop client is assumed
+        //    online (DesktopNetworkMonitor), so there is no outbox to drain.
+        //  - TvWatchNextScheduler: the Android TV "Watch Next" OS row has no
+        //    desktop equivalent.
+        //  - ContinueWatchingBroadcaster: refreshes the Android app widget's
+        //    RemoteViews service; no widgets on desktop.
+        //  - LibrarySyncHook: fans a library scan out to Android's
+        //    auto-download drain + widget refresh; both are no-ops here.
+        single<PlaybackSyncScheduler> {
+            object : PlaybackSyncScheduler {
+                override fun enqueuePeriodic() {}
+                override fun enqueueNow() {}
+            }
+        }
+        single<TvWatchNextScheduler> {
+            object : TvWatchNextScheduler {
+                override fun scheduleRefresh() {}
+            }
+        }
+        single<ContinueWatchingBroadcaster> {
+            object : ContinueWatchingBroadcaster {
+                override fun refreshContinueWatching() {}
+            }
+        }
+        single<LibrarySyncHook> {
+            object : LibrarySyncHook {
+                override suspend fun onLibraryScanComplete() {}
+            }
         }
 
         // ── AppUpdate split (Wave xB): the desktop update-check actual ──────

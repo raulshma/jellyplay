@@ -3,11 +3,8 @@ package com.raulshma.jellyplay.deeplink
 import android.content.Intent
 import android.net.Uri
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class DeepLinkHandler @Inject constructor() {
+class DeepLinkHandler {
 
     private val supportedHosts = setOf(
         "media", "newsletter", "seerr",

@@ -46,6 +46,7 @@ import com.composables.icons.tabler.outline.DeviceTv
 import com.composables.icons.tabler.outline.Disc
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Flame
+import com.composables.icons.tabler.outline.Home
 import com.composables.icons.tabler.outline.Library
 import com.composables.icons.tabler.outline.Mail
 import com.composables.icons.tabler.outline.Movie
@@ -56,6 +57,8 @@ import com.composables.icons.tabler.outline.Stack
 import com.composables.icons.tabler.outline.Users
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
+import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
@@ -69,6 +72,7 @@ import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.calendar.navigation.calendarSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
+import com.raulshma.jellyplay.feature.home.navigation.homeSection
 import com.raulshma.jellyplay.feature.insights.navigation.insightsSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
 import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
@@ -97,11 +101,16 @@ import org.koin.compose.koinInject
  * What is deliberately NOT wired yet (each omission is guarded by
  * [isDesktopDeadEndRoute] so a shared screen pushing the route shows a
  * snackbar instead of crashing NavDisplay with an unregistered entry):
- *  - home/players — home is registered LATENT (four HomeViewModel ctor deps
- *    are Android-only interop singles with no desktop defs), players are
- *    legacy app-side screens with no shared sections;
+ *  - players — legacy app-side screens with no shared sections;
  *  - SubtitleTester — androidMain-only, no commonMain section at all;
- *  - editor — latent (StreamingSubtitleStore is still Hilt-owned).
+ *  - editor — latent (StreamingSubtitleStore has no desktop Koin def).
+ *
+ * Home went live with the wave 8B desktop wiring: the four WorkManager/
+ * widget-backed HomeViewModel ctor deps (PlaybackSyncScheduler,
+ * TvWatchNextScheduler, ContinueWatchingBroadcaster, LibrarySyncHook) gained
+ * honest no-op desktop definitions in desktopDataModule, so [homeSection]
+ * renders in the rail below (Video/Music mode persisted through
+ * HomeDiscoveryStore like the Android shell).
  *
  * Details + the auth drill-ins went live with the details/auth conveyor
  * flips: [detailsSection] renders behind every shared screen that pushes a
@@ -206,6 +215,20 @@ private fun DesktopNavScaffold() {
     val networkStatus = remember { MutableStateFlow(NetworkStatus.Online) }
     val serverHealth = remember { MutableStateFlow(ServerHealth.Unknown) }
 
+    // Home Video/Music mode — the Android shell persists this through
+    // MainViewModel.setHomeMode; desktop writes the same HomeDiscoveryStore
+    // slice so the pick survives restarts and matches the server-synced
+    // default (VIDEO).
+    val homeDiscoveryStore: HomeDiscoveryStore = koinInject()
+    var homeMode by remember { mutableStateOf(HomeMode.VIDEO) }
+    LaunchedEffect(homeDiscoveryStore) {
+        homeDiscoveryStore.homeDiscovery.collect { slice -> homeMode = slice.homeMode }
+    }
+    val onHomeModeChange: (HomeMode) -> Unit = { mode ->
+        homeMode = mode
+        scope.launch { homeDiscoveryStore.setHomeMode(mode) }
+    }
+
     // Admin gate + logout — the Android shell's MainViewModel duties,
     // inlined for desktop (no desktop MainViewModel exists). isAdmin maps
     // the shared currentUser flow; refreshAdminStatus de-dupes to one
@@ -290,8 +313,24 @@ private fun DesktopNavScaffold() {
     // re-invoked (allocating fresh lambdas + entry objects) on every
     // recomposition of this scaffold (same memoization the Android shell
     // applies to its sharedEntryProvider).
-    val entryProvider = remember(guardedNavigator) {
+    val entryProvider = remember(guardedNavigator, homeMode) {
         entryProvider {
+            // Home, live since the wave 8B desktop wiring: every HomeViewModel
+            // ctor dep resolves (the four WorkManager/widget seams are no-op
+            // desktop defs in desktopDataModule; the data layer is Koin-native).
+            // The music pane composes empty on desktop v1 — music browsing
+            // lives in the Music rail section; the Play On redirect stays
+            // null (Android shell cast surface). Home's process-lifecycle
+            // refresher seam is a jvm no-op, so sections refresh on their own
+            // flows (resumes, downloads, watch progress) rather than on a
+            // process start/stop signal.
+            homeSection(
+                navigator = guardedNavigator,
+                homeMode = homeMode,
+                onModeChange = onHomeModeChange,
+                onPlayOnClick = {},
+                musicContent = {},
+            )
             searchSection(guardedNavigator)
             librarySection(guardedNavigator)
             // Details, live since the details conveyor flip: every VM ctor
@@ -375,6 +414,7 @@ private fun DesktopNavScaffold() {
                 )
             },
         ) {
+            DesktopRailItem(Route.Home, "Home", Tabler.Outline.Home, currentTopLevel, guardedNavigator)
             DesktopRailItem(Route.Search, "Search", Tabler.Outline.Search, currentTopLevel, guardedNavigator)
             DesktopRailItem(Route.Library, "Library", Tabler.Outline.Library, currentTopLevel, guardedNavigator)
             DesktopRailItem(Route.LiveTv, "Live TV", Tabler.Outline.DeviceTv, currentTopLevel, guardedNavigator)
@@ -419,8 +459,9 @@ private fun DesktopNavScaffold() {
     }
 }
 
-/** Rail + tab-switch destinations; the start tab is Search (no shared Home exists). */
+/** Rail + tab-switch destinations; the start tab stays Search (Home is one click away). */
 private val DESKTOP_TOP_LEVEL_ROUTES: Set<Route> = setOf(
+    Route.Home,
     Route.Search,
     Route.Library,
     Route.LiveTv,
@@ -461,9 +502,6 @@ private fun DesktopRailItem(
  * either be registered itself or listed here.
  */
 private fun NavKey.isDesktopDeadEndRoute(): Boolean = when (this) {
-    // No shared home feature; nothing should push Home but belt-and-braces
-    // (a saved-state restore could resurrect one).
-    Route.Home -> true
     // Players — legacy app-side screens, no shared sections. Of these,
     // Route.AudioPlayer is the music section's track-click target and
     // VideoPlayer/LiveTvChannelPlayer are pushed by details/livetv: the

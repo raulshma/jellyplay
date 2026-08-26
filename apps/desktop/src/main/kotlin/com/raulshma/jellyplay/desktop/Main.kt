@@ -238,16 +238,14 @@ fun main() {
             // merge; until then no desktop route instantiates a details VM.
             detailsModule,
             desktopDetailsPlatformModule(paths.dataDirNio),
-            // Home conveyor: registered LATENT — four HomeViewModel ctor deps
+            // Home conveyor: LIVE since the wave 8B desktop wiring — the
+            // four WorkManager/widget-backed HomeViewModel ctor deps
             // (PlaybackSyncScheduler, TvWatchNextScheduler,
-            // ContinueWatchingBroadcaster, LibrarySyncHook) are Android-only
-            // Hilt interop singles with no desktop defs yet, so resolving the
-            // VM here would throw NoDefinitionFound. Desktop nav does not wire
-            // a home entry (the players are the remaining legacy features;
-            // details/auth went live in this wave), so nothing constructs it
-            // today; flip when the nav
-            // lands (see the HomeLifecycleSeam jvm actual for the refresher
-            // start/stop decision that wiring will need).
+            // ContinueWatchingBroadcaster, LibrarySyncHook) resolve to the
+            // no-op desktop defs in desktopDataModule, and DesktopAppRoot
+            // wires homeSection in the rail (HomeLifecycleSeam's jvm actual
+            // stays a no-op, so sections refresh on their own flows rather
+            // than a process start/stop signal).
             homeModule,
             // …player-audio, wave 7A conveyor (legacy :feature:player:audio
             // deleted): registered LATENT, home/editor pattern — the four

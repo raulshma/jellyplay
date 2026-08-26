@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.widget
 
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Wires the post-library-scan side effects that live in different modules:
@@ -14,8 +12,7 @@ import javax.inject.Singleton
  * the home refresh that triggered this hook. Both targets are themselves
  * no-op-safe when their pref is off or no widget is bound.
  */
-@Singleton
-class LibrarySyncHookImpl @Inject constructor(
+class LibrarySyncHookImpl (
     private val autoDownloadScheduler: AutoDownloadScheduler,
     private val widgetWorkScheduler: WidgetWorkScheduler,
 ) : LibrarySyncHook {

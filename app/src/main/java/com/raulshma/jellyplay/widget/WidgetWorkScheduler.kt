@@ -8,10 +8,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.Duration
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Enqueue helpers for the home-screen recommendations widget workers.
@@ -38,9 +35,8 @@ interface WidgetWorkScheduler {
     suspend fun refreshSeerrNow(): Boolean
 }
 
-@Singleton
-class WidgetWorkSchedulerImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
+class WidgetWorkSchedulerImpl (
+    private val context: Context,
 ) : WidgetWorkScheduler {
 
     // In-process cooldown timestamps for the manual refresh entry points.

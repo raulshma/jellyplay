@@ -8,20 +8,20 @@ import androidx.annotation.RequiresApi
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import javax.inject.Inject
+import org.koin.mp.KoinPlatform
 
 @RequiresApi(Build.VERSION_CODES.N)
-@AndroidEntryPoint
 class JellyPlayTileService : TileService() {
 
-    @Inject lateinit var audioPlaybackManager: AudioPlaybackManager
+    // Koin single (wave 8B — Hilt removal); lazy defers the playback graph's
+    // construction until the tile is actually bound/listened to.
+    private val audioPlaybackManager: AudioPlaybackManager by lazy { KoinPlatform.getKoin()!!.get() }
 
     private val tileScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var job: Job? = null

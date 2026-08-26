@@ -13,26 +13,30 @@ import android.widget.RemoteViews
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import org.koin.mp.KoinPlatform
+
+/**
+ * Koin accessors (wave 8B — Hilt removal): each call site resolves its
+ * dependency straight from the application container, wrapped in the same
+ * try/catch the former EntryPointAccessors call used (process-start race →
+ * the caller's empty/fallback state, never a crash from the broadcast).
+ */
+private fun koinAudioPlaybackManager(): AudioPlaybackManager =
+    KoinPlatform.getKoin()!!.get()
+
+private fun koinWidgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore =
+    KoinPlatform.getKoin()!!.get()
+
+private fun koinNowPlayingWidgetUpdater(): NowPlayingWidgetUpdater =
+    KoinPlatform.getKoin()!!.get()
 
 class NowPlayingWidget : AppWidgetProvider() {
-
-    @EntryPoint
-    @InstallIn(SingletonComponent::class)
-    interface WidgetEntryPoint {
-        fun audioPlaybackManager(): AudioPlaybackManager
-        fun widgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
-        fun nowPlayingWidgetUpdater(): NowPlayingWidgetUpdater
-    }
 
     /**
      * Hoisted out of [onAppWidgetOptionsChanged] so the orphaned `SupervisorJob`
@@ -74,10 +78,7 @@ class NowPlayingWidget : AppWidgetProvider() {
         notifyUpdaterPresenceChanged(context)
         if (context == null || appWidgetIds == null) return
         val store = try {
-            EntryPointAccessors.fromApplication(
-                context.applicationContext,
-                WidgetEntryPoint::class.java,
-            ).widgetDataStore()
+            koinWidgetDataStore()
         } catch (_: Exception) {
             return
         }
@@ -96,10 +97,7 @@ class NowPlayingWidget : AppWidgetProvider() {
     private fun notifyUpdaterPresenceChanged(context: Context?) {
         if (context == null) return
         try {
-            EntryPointAccessors.fromApplication(
-                context.applicationContext,
-                WidgetEntryPoint::class.java,
-            ).nowPlayingWidgetUpdater().onWidgetPresenceChanged()
+            koinNowPlayingWidgetUpdater().onWidgetPresenceChanged()
         } catch (_: Exception) {
             // Updater not constructed yet (process start race) — Application's
             // start() call will pick the widget list up anyway.
@@ -116,11 +114,7 @@ class NowPlayingWidget : AppWidgetProvider() {
         // A resize can arrive while the updater is dormant (e.g. after a
         // restore where no onEnabled followed) — spec's named restart point.
         notifyUpdaterPresenceChanged(context)
-        val entryPoint = EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            WidgetEntryPoint::class.java,
-        )
-        val manager = entryPoint.audioPlaybackManager()
+        val manager = koinAudioPlaybackManager()
         val title = manager.title.value
         val artist = manager.artist.value
         val isPlaying = manager.isPlaying.value
@@ -218,11 +212,7 @@ class NowPlayingWidget : AppWidgetProvider() {
     }
 
     private fun resolveAudioManager(context: Context): AudioPlaybackManager? = try {
-        val entryPoint = EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            WidgetEntryPoint::class.java,
-        )
-        entryPoint.audioPlaybackManager()
+        koinAudioPlaybackManager()
     } catch (e: Exception) {
         Log.w(TAG, "Failed to resolve AudioPlaybackManager", e)
         null
@@ -251,19 +241,12 @@ class NowPlayingWidget : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
             wireClickIntents(context, views)
             val config = try {
-                EntryPointAccessors.fromApplication(
-                    context.applicationContext,
-                    WidgetEntryPoint::class.java,
-                ).widgetDataStore().getWidgetConfigForIdSync(appWidgetId)
+                koinWidgetDataStore().getWidgetConfigForIdSync(appWidgetId)
             } catch (_: Exception) {
                 com.raulshma.jellyplay.core.model.WidgetConfig()
             }
             try {
-                val entryPoint = EntryPointAccessors.fromApplication(
-                    context.applicationContext,
-                    WidgetEntryPoint::class.java,
-                )
-                val manager = entryPoint.audioPlaybackManager()
+                val manager = koinAudioPlaybackManager()
                 val title = manager.title.value
                 val artist = manager.artist.value
                 val isPlaying = manager.isPlaying.value

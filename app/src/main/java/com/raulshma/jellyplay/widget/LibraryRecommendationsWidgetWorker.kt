@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.widget
 
 import android.content.Context
 import android.util.Log
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
@@ -15,14 +14,16 @@ import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
 
-@HiltWorker
-class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
-    @Assisted appContext: Context,
-    @Assisted params: WorkerParameters,
+/**
+ * Plain CoroutineWorker constructed by [AppWidgetWorkerFactory] (wave 8B —
+ * Hilt removal: the former Hilt worker assisted-injection ctor became this
+ * explicit constructor; deps resolve from the Koin container).
+ */
+class LibraryRecommendationsWidgetWorker(
+    appContext: Context,
+    params: WorkerParameters,
     private val widgetDataStore: WidgetDataStore,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
