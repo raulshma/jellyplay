@@ -17,7 +17,7 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.parseLanguageFromLabel
-import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,7 +39,7 @@ import org.videolan.libvlc.util.VLCVideoLayout
 
 class LibVlcPlayerEngine(
     private val context: Context,
-    private val fontProvider: FontProvider,
+    private val fontProvider: AndroidFontProvider,
 ) : ReloadablePlayerEngine(context), AndroidSurfaceProvider {
 
     companion object {

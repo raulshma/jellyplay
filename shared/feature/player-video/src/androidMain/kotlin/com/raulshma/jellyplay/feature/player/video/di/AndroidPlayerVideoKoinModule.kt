@@ -4,8 +4,11 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel
+import com.raulshma.jellyplay.feature.player.video.engine.AndroidPlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache
+import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
+import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidSubtitlePreviewRepository
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitlePreviewRepository
 import org.koin.compose.viewmodel.dsl.viewModel
@@ -43,30 +46,28 @@ import org.koin.dsl.module
  * androidDataModule).
  */
 fun androidPlayerVideoModule(context: Context): Module = module {
-    single {
-        FontProvider(
-            context = context,
-        )
-    }
+    // Wave 8C: the FontProvider/SubtitlePreviewRepository/PlayerEngineFactory
+    // singles now register their commonMain seam interface (the ViewModel's
+    // ctor slots are interface-typed) plus the concrete Android class for the
+    // androidMain call sites (engines, overlay) — one instance, two keys.
+    single { AndroidFontProvider(context) }
+    single<FontProvider> { get<AndroidFontProvider>() }
     single {
         VideoStreamCache(
             context = context,
         )
     }
+    single { AndroidSubtitlePreviewRepository(context = context, okHttpClient = get()) }
+    single<SubtitlePreviewRepository> { get<AndroidSubtitlePreviewRepository>() }
     single {
-        SubtitlePreviewRepository(
-            context = context,
-            okHttpClient = get(),
-        )
-    }
-    single {
-        PlayerEngineFactory(
+        AndroidPlayerEngineFactory(
             context = context,
             streamingOkHttpClient = get(NetworkQualifiers.streamingHttpClient),
             fontProvider = get(),
             videoStreamCache = get(),
         )
     }
+    single<PlayerEngineFactory> { get<AndroidPlayerEngineFactory>() }
     viewModel { params ->
         VideoPlayerViewModel(
             context = context,

@@ -306,8 +306,11 @@ class VideoPlayerViewModel(
     )
     val resumeReminder: kotlinx.coroutines.flow.SharedFlow<Long> = _resumeReminder
 
+    // Wave 8C stage-A adapter wiring (replaced by the `platform` ctor seam
+    // when the ViewModel moves to commonMain).
+    private val androidPlatform = AndroidVideoPlayerPlatform(context, castManager)
+
     private val playerSessionManager = PlayerSessionManager(
-        context = context,
         scope = scope,
         mediaRepository = mediaRepository,
         playbackRepository = playbackRepository,
@@ -317,9 +320,10 @@ class VideoPlayerViewModel(
         playerLifecycleManager = playerLifecycleManager,
         adaptiveBitrateManager = adaptiveBitrateManager,
         playerEngineFactory = playerEngineFactory,
-        pipController = pipController,
+        pipController = AndroidPipController(pipController),
         playbackSourceResolver = playbackSourceResolver,
         streamingSubtitleStore = streamingSubtitleStore,
+        offlineMediaProbe = androidPlatform.offlineMediaProbe,
     )
 
     // ── Engine-event orchestration ──────────────────────────────────────────
@@ -375,12 +379,12 @@ class VideoPlayerViewModel(
         },
     )
     internal val subtitles = SubtitleManager(
-        context = context,
+        contentGateway = androidPlatform,
         playbackRepository = playbackRepository,
         mediaRepository = mediaRepository,
         subtitleProviderRepository = subtitleProviderRepository,
         streamingSubtitleStore = streamingSubtitleStore,
-        userMessageBus = userMessageBus,
+        userMessageBus = AndroidUserMessageBridge(userMessageBus),
         scope = scope,
         addExternalSubtitle = { playerSessionManager.addExternalSubtitle(it) },
         getMediaStreams = { _uiState.value.media.mediaStreams },
@@ -400,7 +404,7 @@ class VideoPlayerViewModel(
         getEngine = { playerSessionManager.engine },
         positionFlow = currentPositionMs,
     ).also { it.start() }
-    internal val cast = PlayerCastController(
+    internal val cast = AndroidPlayerCastController(
         castManager = castManager,
         playbackRepository = playbackRepository,
         adaptiveBitrateManager = adaptiveBitrateManager,
@@ -415,7 +419,7 @@ class VideoPlayerViewModel(
         getItemId = { playerSessionManager.sessionState.value.currentItemId },
         getMediaStreams = { _uiState.value.media.mediaStreams },
     )
-    private val mediaSessionController = MediaSessionController(
+    private val mediaSessionController = AndroidMediaSessionController(
         context = context,
         sessionManager = sessionManager,
         getPlayer = { playerSessionManager.engine?.underlyingPlayer as? Player },
@@ -1786,6 +1790,14 @@ class VideoPlayerViewModel(
     }
 
     /**
+     * Common-typed PiP source-rect hint (wave 8C seam): four window bounds
+     * ints instead of android.graphics.Rect.
+     */
+    fun updatePipSourceRect(left: Int, top: Int, right: Int, bottom: Int) {
+        pipController.updatePipSourceRect(android.graphics.Rect(left, top, right, bottom))
+    }
+
+    /**
      * Persists [style] to the subtitle store while preserving the persisted
      * global "Subtitle sync offset" default. The in-memory
      * [SubtitleStyle.offsetMs] is the resolved per-item delay, not a global
@@ -1815,7 +1827,7 @@ class VideoPlayerViewModel(
      */
     fun installUserFont(uri: android.net.Uri) {
         launch {
-            val installed = fontProvider.installUserFont(uri) ?: return@launch
+            val installed = fontProvider.installUserFont(uri.toString()) ?: return@launch
             val newStyle = _uiState.value.subtitleStyle.copy(
                 fontFamilyPath = installed.file.absolutePath,
                 fontFamilyName = installed.familyName,
@@ -2541,6 +2553,17 @@ class VideoPlayerViewModel(
     }
 
     suspend fun getTrickplayThumbnail(positionMs: Long): Bitmap? {
+        val state = _uiState.value
+        if (!state.uiPrefs.trickplayEnabled && !state.uiPrefs.trickplayOnSeekGesture) return null
+        return trickplayManager.getThumbnail(positionMs)
+    }
+
+    /**
+     * Common-typed thumbnail accessor (wave 8C seam): the platform bitmap as
+     * an opaque handle — the androidMain getTrickplayThumbnail extension
+     * narrows it back to android.graphics.Bitmap for the screen.
+     */
+    suspend fun loadTrickplayThumbnail(positionMs: Long): Any? {
         val state = _uiState.value
         if (!state.uiPrefs.trickplayEnabled && !state.uiPrefs.trickplayOnSeekGesture) return null
         return trickplayManager.getThumbnail(positionMs)

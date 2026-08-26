@@ -12,7 +12,11 @@ import kotlinx.coroutines.withContext
 
 /**
  * Shared font infrastructure for libass-based subtitle rendering on both the
- * ExoPlayer (ass-media) and mpv backends. Ensures a fonts directory containing
+ * ExoPlayer (ass-media) and mpv backends.
+ *
+ * (Wave 8C: renamed from `FontProvider` — the commonMain [FontProvider] seam
+ * interface took the old name; this class is its Android actual and keeps the
+ * Android-only surface: Typeface cache, libass fonts dir, TTF parsing.) Ensures a fonts directory containing
  * the bundled fallback [subfont.ttf] exists, and optionally installs a
  * user-picked font (copied from a SAF uri) so ASS files referencing a specific
  * font family can resolve it.
@@ -23,9 +27,9 @@ import kotlinx.coroutines.withContext
  * init on some builds (every subtitle then rasterizes to an empty bitmap). A
  * stale `fonts.conf` left by older app versions is removed on sight.
  */
-class FontProvider(
+class AndroidFontProvider(
     private val context: Context,
-) {
+) : FontProvider {
     private val fontsDir: File by lazy {
         File(context.cacheDir, "subtitle-fonts").apply { mkdirs() }
     }
@@ -57,7 +61,7 @@ class FontProvider(
      * `.ttf`'s bytes into the cache, off the caller's dispatcher. Idempotent;
      * safe to call repeatedly (cached stamps short-circuit unchanged files).
      */
-    suspend fun prewarm() {
+    override suspend fun prewarm() {
         withContext(Dispatchers.IO) {
             loadFontBytesInternal()
         }
@@ -181,10 +185,10 @@ class FontProvider(
      * bundled fallback). The copied file is named deterministically from the
      * family name so repeated installs overwrite rather than accumulate.
      */
-    suspend fun installUserFont(uri: Uri): InstalledFont? = withContext(Dispatchers.IO) {
+    override suspend fun installUserFont(uri: String): InstalledFont? = withContext(Dispatchers.IO) {
         try {
             val tempFile = File(fontsDir, "user-${System.currentTimeMillis()}.ttf")
-            context.contentResolver.openInputStream(uri)?.use { inp ->
+            context.contentResolver.openInputStream(Uri.parse(uri))?.use { inp ->
                 tempFile.outputStream().use { out -> inp.copyTo(out) }
             } ?: return@withContext null
             val family = parseFontFamily(tempFile)
@@ -232,5 +236,3 @@ class FontProvider(
         }.getOrNull()
     }
 }
-
-data class InstalledFont(val file: File, val familyName: String)

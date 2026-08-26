@@ -51,11 +51,17 @@ import kotlinx.coroutines.flow.StateFlow
  * the cast / local player through the media-session controller; they stay in
  * the VM until media-session ownership is itself extracted.
  *
+ * (Wave 8C: renamed from `PlayerCastController` — the commonMain
+ * [PlayerCastController] seam interface took the old name; this class is its
+ * Android actual. `disconnect(context)` and `castSessionEvents` carry
+ * Android/legacy types and stay class-local — the screen reaches them
+ * through the androidMain `androidCast` ViewModel extension.)
+ *
  * Engine + session + uiState access is via lambdas so this class reads the
  * *current* engine (the VM swaps engines on retry) without a hard ViewModel
  * reference.
  */
-internal class PlayerCastController(
+internal class AndroidPlayerCastController(
     private val castManager: CastManager,
     private val playbackRepository: PlaybackRepository,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
@@ -63,29 +69,29 @@ internal class PlayerCastController(
     private val getEngine: () -> MediaEngine?,
     private val getCurrentPlaybackMode: () -> PlaybackMode,
     private val getSessionState: () -> PlayerSessionState,
-) {
+) : PlayerCastController {
 
     // ----- Cast state pass-through (screen reads these directly) -----
 
-    val isCastAvailable: Boolean get() = castManager.isCastAvailable
-    val isCastConnected: Boolean get() = castManager.isConnected
-    val castPositionMs: StateFlow<Long> get() = castManager.castPositionMs
-    val castDurationMs: StateFlow<Long> get() = castManager.castDurationMs
-    val castIsPlaying: StateFlow<Boolean> get() = castManager.castIsPlaying
-    val castVolumeFlow: StateFlow<Float> get() = castManager.castVolume
-    val isConnectedFlow: StateFlow<Boolean> get() = castManager.isConnectedFlow
-    val isConnectingFlow: StateFlow<Boolean> get() = castManager.isConnectingFlow
+    override     val isCastAvailable: Boolean get() = castManager.isCastAvailable
+    override     val isCastConnected: Boolean get() = castManager.isConnected
+    override     val castPositionMs: StateFlow<Long> get() = castManager.castPositionMs
+    override     val castDurationMs: StateFlow<Long> get() = castManager.castDurationMs
+    override     val castIsPlaying: StateFlow<Boolean> get() = castManager.castIsPlaying
+    override     val castVolumeFlow: StateFlow<Float> get() = castManager.castVolume
+    override     val isConnectedFlow: StateFlow<Boolean> get() = castManager.isConnectedFlow
+    override     val isConnectingFlow: StateFlow<Boolean> get() = castManager.isConnectingFlow
     val castSessionEvents: SharedFlow<CastSessionEvent> get() = castManager.sessionEvents
-    val isBackgroundCasting: Boolean get() = castManager.isBackgroundCasting
-    val backgroundCastingEnabled: Boolean
+    override     val isBackgroundCasting: Boolean get() = castManager.isBackgroundCasting
+    override val backgroundCastingEnabled: Boolean
         get() = syncPlayCastStore.syncPlayCast.value.backgroundCastingEnabled
 
     // ----- Transport delegators -----
 
-    fun castPlay() = castManager.play()
-    fun castPause() = castManager.pause()
-    fun castSeekTo(positionMs: Long) = castManager.seekTo(positionMs)
-    fun setCastVolume(volume: Float) = castManager.setVolume(volume)
+    override     fun castPlay() = castManager.play()
+    override     fun castPause() = castManager.pause()
+    override     fun castSeekTo(positionMs: Long) = castManager.seekTo(positionMs)
+    override     fun setCastVolume(volume: Float) = castManager.setVolume(volume)
     fun disconnect(context: android.content.Context) = castManager.disconnect(context)
 
     /**
@@ -93,7 +99,7 @@ internal class PlayerCastController(
      * the local engine is currently paused (the handoff paused it in
      * [castToDevice]). No-op if the engine is already playing or gone.
      */
-    fun onCastDisconnected() {
+    override     fun onCastDisconnected() {
         val engine = getEngine() ?: return
         if (!engine.isPlaying.value) engine.play()
     }
@@ -103,7 +109,7 @@ internal class PlayerCastController(
      * chose DLNA keeps it across engine swaps); otherwise default to Google
      * Cast for the freshly-bound engine.
      */
-    fun updateCastStrategyForEngine(engine: MediaEngine) {
+    override     fun updateCastStrategyForEngine(engine: MediaEngine) {
         if (castManager.currentStrategyName != CastManager.STRATEGY_DLNA) {
             castManager.setActiveStrategy(CastManager.STRATEGY_GOOGLE)
         }
@@ -118,7 +124,7 @@ internal class PlayerCastController(
      * then pause the local engine. No-op if no engine / no item / blank URL.
      */
     @OptIn(UnstableApi::class)
-    fun castToDevice() {
+    override     fun castToDevice() {
         val engine = getEngine() ?: return
         val sessionState = getSessionState()
         val currentItemId = sessionState.currentItemId ?: return

@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.engine.MpvStyleMapping
-import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 
 /**
@@ -54,7 +54,7 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 internal fun MpvSubtitleOverlay(
     cue: CharSequence?,
     style: SubtitleStyle,
-    fontProvider: FontProvider,
+    fontProvider: AndroidFontProvider,
     modifier: Modifier = Modifier,
 ) {
     if (cue.isNullOrBlank()) return

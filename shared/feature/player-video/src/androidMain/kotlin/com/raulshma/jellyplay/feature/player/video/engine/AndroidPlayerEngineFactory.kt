@@ -3,11 +3,15 @@ package com.raulshma.jellyplay.feature.player.video.engine
 import android.content.Context
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 import okhttp3.OkHttpClient
 
 /**
  * Maps a [PlayerType] to a concrete [MediaEngine].
+ *
+ * (Wave 8C: renamed from `PlayerEngineFactory` — the commonMain
+ * [PlayerEngineFactory] seam interface took the old name; this class is its
+ * Android actual.)
  *
  * Process-wide single (Koin-owned since the wave 7C KMP move; was a
  * Hilt @Singleton): owns the shared [DefaultBandwidthMeter] so adaptive
@@ -16,17 +20,17 @@ import okhttp3.OkHttpClient
  * [resetBandwidthMeter] escape hatch is retained for test
  * isolation and an optional user-triggered "reset playback diagnostics" action.
  */
-class PlayerEngineFactory(
+class AndroidPlayerEngineFactory(
     private val context: Context,
     // The Koin twin of the legacy @Named("streaming") Hilt qualifier
     // (NetworkQualifiers.streamingHttpClient at the factory site).
     private val streamingOkHttpClient: OkHttpClient,
-    private val fontProvider: FontProvider,
+    private val fontProvider: AndroidFontProvider,
     // Nullable + defaulted so direct constructions (tests) compile unchanged;
     // the Koin factory injects the real singleton (it passes every constructor
     // parameter, so the default only applies to Kotlin callers that omit it).
     private val videoStreamCache: VideoStreamCache? = null,
-) {
+) : PlayerEngineFactory {
 
     @Volatile
     private var sharedBandwidthMeter: DefaultBandwidthMeter? = null
@@ -61,7 +65,7 @@ class PlayerEngineFactory(
         }
     }
 
-    fun create(playerType: PlayerType): MediaEngine {
+    override fun create(playerType: PlayerType): MediaEngine {
         return when (playerType) {
             PlayerType.EXO_PLAYER -> ExoPlayerEngine(context, streamingOkHttpClient, getSharedBandwidthMeter(), fontProvider, videoStreamCache)
             PlayerType.MPV -> MpvPlayerEngine(context, fontProvider)
