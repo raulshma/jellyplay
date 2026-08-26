@@ -7,7 +7,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the home feature (V3 conveyor transform — one
- * framework per type: the @HiltViewModel/@Inject annotations were stripped at
+ * framework per type: the Hilt ViewModel annotations were stripped at
  * the move, Koin is the single constructor owner).
  *
  * Dep resolution:

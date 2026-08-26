@@ -8,7 +8,7 @@ import org.koin.dsl.module
 /**
  * Koin construction owner for the audio player (wave 7A conveyor move from
  * `:feature:player:audio`; docs/kmp-migration-plan.md §Phase V3). The
- * @HiltViewModel/@Inject annotations were stripped at the move — Koin is the
+ * HiltViewModel/@Inject annotations were stripped at the move — Koin is the
  * single constructor owner (one framework per type). Ctor deps split four
  * ways:
  *  - [com.raulshma.jellyplay.core.data.playback.AudioQueueManager] /

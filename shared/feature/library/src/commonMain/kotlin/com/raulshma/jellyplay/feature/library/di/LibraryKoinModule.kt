@@ -12,7 +12,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the library feature (docs/kmp-migration-plan.md
- * §Phase V3, second conveyor item after search). The @HiltViewModel/@Inject
+ * §Phase V3, second conveyor item after search). The HiltViewModel/@Inject
  * annotations were stripped at the move — Koin is the single constructor owner
  * (one framework per type). Ctor deps split three ways:
  *  - MediaRepository / UserDataMutator / PhotoFolderPrefetcher are still

@@ -2,30 +2,19 @@ package com.raulshma.jellyplay.di
 
 import android.app.Application
 import com.raulshma.jellyplay.core.data.cast.CastManager
-import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
-import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
-import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
-import com.raulshma.jellyplay.core.data.playback.PipController
-import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
-import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
-import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
-import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
-import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
-import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.details.DetailAudioPlayback
 import com.raulshma.jellyplay.feature.details.DetailThemeMusic
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
 import com.raulshma.jellyplay.feature.player.audio.AudioPlayerEngine
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -40,61 +29,22 @@ import kotlinx.coroutines.flow.stateIn
 import org.koin.dsl.module
 
 /**
- * Hilt→Koin interop bridge (reverse of the legacy shim's `koin().get()`).
+ * Wave 8A rewrite: core-side Hilt is extinct — every type this module used
+ * to pull through the Hilt EntryPoint (playback/cast singletons, schedulers,
+ * DownloadIntake, StreamingSubtitleStore, UserMessageBus, AudioQueueFacade)
+ * is Koin-owned now (:core:data androidCoreDataModule, :core:ui
+ * androidCoreUiModule), so the singles below resolve the container directly.
+ * The adapter classes stay: they adapt Koin-owned media3 singletons onto the
+ * shared feature seams.
  *
- * SearchViewModel (first V3 conveyor feature) originally reached this way for
- * three ctor deps — MediaRepository, UserDataMutator, MediaSearchEngine —
- * that were still Hilt-constructed pending the Phase X MediaRepository flip.
- * That flip landed: the whole cluster is Koin-owned (dataJvmModule) on both
- * platforms, so those three singles left this module (one framework per
- * type). The Koin-owned ViewModels (search/library/music/livetv/newsletter/
- * insights) now resolve the Koin-owned impls directly.
- *
- * The music conveyor item (third) still reaches this way for its Hilt-owned
- * deps: DownloadIntake / AudioQueueFacade for the ViewModels, plus the
- * UserMessageBus behind the shared module's [MusicMessageBus] seam
- * (HiltMusicMessageBus below).
- *
- * The settings conveyor (Wave 2) originally reached this way for the
- * Hilt-bound AdminRepository too — that single (and its
- * AdminStatisticsRepository sibling) left with the admin flip (Wave wB):
- * both repositories are Koin-owned in dataJvmModule on both platforms now,
- * so the shared settings/admin ViewModels resolve them directly.
- *
- * DownloadRepository left this module with the V3 downloads conveyor: the
- * download engine moved to :shared:core:data and Koin (dataJvmModule) owns
- * the DownloadRepository single directly — a Koin def bridging back to Hilt
- * would be a second framework for the same type, so it was removed (one
- * framework per type). The engine's MediaRepository edge now resolves the
- * Koin-owned single through the androidDataModule's MediaRepositoryAccess def.
- *
- * The PlaybackSourceResolver reverse bridge (added by the Phase X cluster
- * flip, when the impl still used android.net.Uri) left with the
- * playback-flips wave: the impl moved to :shared:core:data Uri-free, so Koin
- * (dataJvmModule) owns it on both platforms and the legacy DataModule
- * bridges Hilt injectors to the single — no reverse direction remains here.
+ * The EntryPoint shrank to the two app-internal Hilt-owned widget types
+ * (WidgetModule @Binds) the home conveyor still needs. LAZY remains
+ * load-bearing for those: startKoin runs before Hilt's component exists, so
+ * the single's lambda must not touch Hilt at definition time.
  */
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface HiltInteropEntryPoint {
-    fun downloadIntake(): DownloadIntake
-    fun audioQueueFacade(): AudioQueueFacade
-    fun userMessageBus(): UserMessageBus
-    fun streamingSubtitleStore(): StreamingSubtitleStore
-    // Wave 7C (player-video migration): PlayerEngineFactory + FontProvider left
-    // this EntryPoint — both are Koin-owned definitions in the migrated
-    // shared/feature/player-video androidPlayerVideoModule now (impls moved).
-    // The six legacy playback singletons the Koin VideoPlayerViewModel factory
-    // resolves are exposed instead (same lazy-interop-single direction below).
-    fun playbackSessionManager(): PlaybackSessionManager
-    fun castManager(): CastManager
-    fun jellyfinRemotePlayCastStrategy(): JellyfinRemotePlayCastStrategy
-    fun activePlayerController(): ActivePlayerController
-    fun pipController(): PipController
-    fun audioPlaybackManager(): AudioPlaybackManager
-    fun themeMusicPlayer(): ThemeMusicPlayer
-    fun playbackSyncScheduler(): PlaybackSyncScheduler
-    fun tvWatchNextScheduler(): TvWatchNextScheduler
     fun continueWatchingBroadcaster(): ContinueWatchingBroadcaster
     fun librarySyncHook(): LibrarySyncHook
 }
@@ -102,7 +52,7 @@ interface HiltInteropEntryPoint {
 private fun interopEntryPoint(application: Application): HiltInteropEntryPoint =
     EntryPointAccessors.fromApplication(application, HiltInteropEntryPoint::class.java)
 
-/** Bridges the shared music module's [MusicMessageBus] seam to the Hilt-owned bus. */
+/** Bridges the shared music module's [MusicMessageBus] seam to the app bus. */
 private class HiltMusicMessageBus(
     private val bus: UserMessageBus,
 ) : MusicMessageBus {
@@ -112,11 +62,8 @@ private class HiltMusicMessageBus(
 /**
  * Details conveyor (Phase X cutover wave): the shared details module's
  * per-item audio-playback and ambient-theme-music seams over the two
- * Hilt-owned media3 singletons in legacy :core:data. LAZY is load-bearing
- * (same as every interop single: startKoin runs before Hilt's component).
- * Desktop halves are the no-op defs in the module's jvmMain; these adapters
- * die when AudioPlaybackManager/ThemeMusicPlayer flip or stay app-side at
- * Phase X.
+ * media3 singletons in :core:data (Koin-owned since wave 8A).
+ * Desktop halves are the no-op defs in the module's jvmMain.
  */
 private class HiltDetailAudioPlayback(
     private val manager: AudioPlaybackManager,
@@ -179,7 +126,7 @@ private class HiltAudioPlayerEngine(
 }
 
 /**
- * Audio-player conveyor (wave 7A): the cast half over the Hilt-owned
+ * Audio-player conveyor (wave 7A): the cast half over the Koin-owned
  * CastManager. Holds the application context the legacy discovery/connect
  * calls need and hides the media3 MediaItem/Player.Listener construction
  * the player VM used to build inline (audio casts carry no subtitle/quality
@@ -222,50 +169,22 @@ private class HiltAudioPlayerCast(
 }
 
 fun hiltInteropModule(application: Application): Module = module {
-    single<DownloadIntake> { interopEntryPoint(application).downloadIntake() }
-    single<AudioQueueFacade> { interopEntryPoint(application).audioQueueFacade() }
-    single<MusicMessageBus> { HiltMusicMessageBus(interopEntryPoint(application).userMessageBus()) }
-    // Editor conveyor (ninth feature): the StreamingSubtitleStore interface
-    // lives in shared :core:data commonMain but its impl
-    // (StreamingSubtitleStoreImpl) stays Hilt-bound in legacy :core:data's
-    // SubtitleModule — same lazy interop single as above. The player's
-    // Hilt injectors keep constructing the impl directly and are unaffected.
-    single<StreamingSubtitleStore> { interopEntryPoint(application).streamingSubtitleStore() }
-    // Player-video conveyor (wave 7C): the five media3/cast singletons the
-    // migrated Koin VideoPlayerViewModel ctor-injects stay Hilt-bound in
-    // legacy :core:data. Lazy is load-bearing in
-    // particular for PlaybackSessionManager/CastManager: both pull media3 +
-    // cast-framework graphs that must not be touched at startKoin time.
-    // (PlayerEngineFactory + FontProvider were the first two entries here and
-    // left with the wave 7C flip — the impls moved to
-    // shared/feature/player-video, where androidPlayerVideoModule owns them.)
-    single<PlaybackSessionManager> { interopEntryPoint(application).playbackSessionManager() }
-    single<CastManager> { interopEntryPoint(application).castManager() }
-    single<JellyfinRemotePlayCastStrategy> { interopEntryPoint(application).jellyfinRemotePlayCastStrategy() }
-    single<ActivePlayerController> { interopEntryPoint(application).activePlayerController() }
-    single<PipController> { interopEntryPoint(application).pipController() }
-    // UserMessageBus: previously only the MusicMessageBus adapter single rode
-    // the EntryPoint; the migrated video VM (Koin) injects the bus itself.
-    single<UserMessageBus> { interopEntryPoint(application).userMessageBus() }
-    // Details conveyor (Phase X cutover wave): see the adapter KDocs above.
-    single<DetailAudioPlayback> { HiltDetailAudioPlayback(interopEntryPoint(application).audioPlaybackManager()) }
-    single<DetailThemeMusic> { HiltDetailThemeMusic(interopEntryPoint(application).themeMusicPlayer()) }
-    // Audio player conveyor (wave 7A): the Hilt-owned AudioPlaybackManager
-    // implements both shared playback contracts, so both Koin defs bridge to
-    // the same single; the module-local engine/cast seams adapt the same
-    // single + CastManager (adapters above).
-    single<AudioQueueManager> { interopEntryPoint(application).audioPlaybackManager() }
-    single<AudioEffectsManager> { interopEntryPoint(application).audioPlaybackManager() }
-    single<AudioPlayerEngine> { HiltAudioPlayerEngine(interopEntryPoint(application).audioPlaybackManager()) }
-    single<AudioPlayerCast> { HiltAudioPlayerCast(interopEntryPoint(application).castManager(), application) }
-    // Home conveyor (Phase X cutover): HomeViewModel's four remaining
-    // Hilt-owned ctor deps — the WorkManager-backed schedulers (legacy
-    // :core:data DataModule @Binds) and the app widget broadcast receiver
-    // pair (:app WidgetModule @Binds). The interfaces moved to
-    // :shared:core:data commonMain with the feature; only these lazy interop
-    // singles remain, and they die with the Phase X Hilt removal.
-    single<PlaybackSyncScheduler> { interopEntryPoint(application).playbackSyncScheduler() }
-    single<TvWatchNextScheduler> { interopEntryPoint(application).tvWatchNextScheduler() }
+    // Adapter singles: each wraps a Koin-owned media3/cast singleton onto a
+    // shared feature seam. The underlying types resolve from the container
+    // (androidCoreDataModule/androidCoreUiModule own them since wave 8A) —
+    // no Hilt reach-through remains except the two app-internal widget
+    // bindings below.
+    single<MusicMessageBus> { HiltMusicMessageBus(get()) }
+    single<DetailAudioPlayback> { HiltDetailAudioPlayback(get()) }
+    single<DetailThemeMusic> { HiltDetailThemeMusic(get()) }
+    single<AudioPlayerEngine> { HiltAudioPlayerEngine(get()) }
+    single<AudioPlayerCast> { HiltAudioPlayerCast(get(), application) }
+
+    // Home conveyor (Phase X cutover): the WorkManager-backed schedulers
+    // (PlaybackSyncScheduler/TvWatchNextScheduler) are Koin-owned since wave
+    // 8A and resolve from androidCoreDataModule. The two app-internal widget
+    // broadcast types stay Hilt-owned (app WidgetModule @Binds) — LAZY is
+    // load-bearing for them: startKoin runs before Hilt's component exists.
     single<ContinueWatchingBroadcaster> { interopEntryPoint(application).continueWatchingBroadcaster() }
     single<LibrarySyncHook> { interopEntryPoint(application).librarySyncHook() }
 }
