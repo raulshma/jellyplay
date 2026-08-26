@@ -25,11 +25,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "JellyPlay"
 include(":app")
-include(":core:model")
-include(":core:designsystem")
-include(":core:network")
-include(":core:database")
-include(":core:datastore")
 include(":core:data")
 include(":core:ui")
 include(":core:notification")
