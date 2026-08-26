@@ -66,13 +66,16 @@ class KoinModuleRegistrationGuardTest {
     private val koinOwnModules = setOf("defaultModule", "loggerModule")
 
     /**
-     * Ratchet floor: the count of commonMain feature modules at guard-landing
-     * time (16 — subtitle-tester contributes none; it is androidMain-only).
+     * Ratchet floor: the count of commonMain feature modules, re-measured at
+     * each housekeeping pass. 21 as of the wave-9C re-count (23 features;
+     * subtitle-tester contributes none — androidMain-only — and player-video's
+     * defs live in its platform modules androidPlayerVideoModule/
+     * desktopPlayerVideoModule, so its commonMain declares no Module val).
      * Bump when features land. A discovery-rot regression (regex stops
      * matching, dirs move) would otherwise make the forward check vacuously
      * green on an empty list.
      */
-    private val minFeatureModuleCount = 16
+    private val minFeatureModuleCount = 21
 
     @Test
     fun everyCommonMainFeatureModule_isRegisteredInBothStartKoinBlocks() {
