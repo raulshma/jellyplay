@@ -266,6 +266,14 @@ internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = false
 /** Silent no-op — the focus diagnostic only ever speaks on a harness-armed desktop. */
 internal actual fun harnessFocusDiag(message: String) {}
 
+/**
+ * Silent no-op — the deterministic desktop key bridge is desktop-only (the
+ * install call site is behind [grabsKeyboardFocusWithControlsVisible], false
+ * here), so Android never publishes a key sink and phone/TV behavior is
+ * byte-identical to HEAD.
+ */
+internal actual fun installPlayerKeySink(sink: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {}
+
 @Composable
 internal actual fun rememberIsPortraitOrientation(): Boolean =
     LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT

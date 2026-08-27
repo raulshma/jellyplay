@@ -58,8 +58,21 @@ internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = true
  */
 internal actual fun harnessFocusDiag(message: String) {
     if (System.getProperty("jellyplay.harness.enabled")?.equals("true", ignoreCase = true) == true) {
-        println("[JellyPlay][harness][focus-diag] $message")
+        // Wave 14E: wall-clock stamp on every line so the Compose-side story
+        // correlates exactly with the harness's `t=+…ms` AWT focus lines
+        // (harness prints its own epoch ms too).
+        println(
+            "[JellyPlay][harness][focus-diag] now=${System.currentTimeMillis()} $message",
+        )
     }
+}
+
+/**
+ * Wave 14E deterministic key delivery: delegate to the desktop shell bridge
+ * (same module, see [DesktopPlayerKeyBridge] for the full rationale).
+ */
+internal actual fun installPlayerKeySink(sink: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {
+    DesktopPlayerKeyBridge.install(sink)
 }
 
 /** Resizable desktop player window — treated as the landscape-style layout. */

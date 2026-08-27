@@ -84,6 +84,7 @@ import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
 import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
+import com.raulshma.jellyplay.feature.player.video.DesktopPlayerKeyBridge
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.desktop.player.MpvSoftwareSurfaceSupport
@@ -513,15 +514,35 @@ private fun DesktopNavScaffold() {
             // Back handling: Esc and Alt+Left pop the current stack when
             // there is anything to pop (nav3's predictive back is
             // Android-only; this is the whole desktop story).
+            //
+            // Wave 14E deterministic media-key delivery: this preview is the
+            // TOPMOST key-input chain, so it receives EVERY key with or
+            // without any Compose focus owner (the null-focus fallback; ESC
+            // has worked here since wave 13B). When the video player route is
+            // current, every non-back key is offered to the player screen's
+            // OWN handler through DesktopPlayerKeyBridge — the screen stays
+            // the single interpreter of media-key semantics (this shell never
+            // decodes a media key), and the sink declines when the focused
+            // dispatch chain owns the key or a sheet is open, so a key is
+            // interpreted exactly once either way. This closes the wave-14D
+            // flap gap: a SPACE/arrow/M/F/J/L pressed (or injected) while the
+            // AWT/Compose focus shuffle left the player Box focus-less used
+            // to die in this Row's fallback; now it reaches the player
+            // deterministically.
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 val isBack = event.key == Key.Escape ||
                     (event.key == Key.DirectionLeft && event.isAltPressed)
-                if (!isBack || backStack.size <= 1) {
-                    false
+                if (isBack) {
+                    if (backStack.size <= 1) {
+                        false
+                    } else {
+                        guardedNavigator.goBack()
+                        true
+                    }
                 } else {
-                    guardedNavigator.goBack()
-                    true
+                    backStack.lastOrNull() is Route.VideoPlayer &&
+                        DesktopPlayerKeyBridge.deliver(event)
                 }
             },
     ) {

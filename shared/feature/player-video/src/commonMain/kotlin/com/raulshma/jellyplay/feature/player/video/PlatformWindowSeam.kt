@@ -257,3 +257,23 @@ internal fun PlayerKeyboardFocusGrabEffect(
  * behavior) are byte-identical.
  */
 internal expect fun harnessFocusDiag(message: String)
+
+/**
+ * Wave 14E deterministic desktop key delivery: publish the composing player
+ * screen's media-key handler to the desktop shell ([DesktopPlayerKeyBridge],
+ * jvmMain) so `DesktopNavScaffold.onPreviewKeyEvent` can forward raw key
+ * events into [VideoPlayerScreen]'s own handler even while the player Box
+ * holds no Compose focus (the AWT/Compose focus flap leaves continuous
+ * focus-less gaps in which Compose's null-focus fallback dispatch stops at
+ * the shell's Row and the key dies). Passing `null` uninstalls (screen
+ * disposal).
+ *
+ * The screen is the ONLY interpreter of media-key semantics: the sink lambda
+ * it installs re-runs the screen's own key `when`-block, and declines when
+ * the keyboard Box subtree holds focus (the normal focused dispatch chain
+ * owns the key) or a sheet is open — so the shell's forward can never double
+ * or misinterpret. The Android actual is a no-op and the install call site
+ * sits behind [grabsKeyboardFocusWithControlsVisible] (false on Android), so
+ * Android behavior is byte-identical.
+ */
+internal expect fun installPlayerKeySink(sink: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?)
