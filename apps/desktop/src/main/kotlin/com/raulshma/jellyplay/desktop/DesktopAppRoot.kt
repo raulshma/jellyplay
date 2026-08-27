@@ -36,6 +36,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.awt.ComposeWindow
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
@@ -98,6 +99,7 @@ import kotlinx.serialization.serializer
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
 import org.koin.compose.koinInject
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Desktop nav root (Phase X "desktop nav v1"): session-gated shell over the
@@ -157,15 +159,33 @@ import org.koin.compose.koinInject
  *   report (DesktopCrashHandler marker consumed at boot); surfaced as a
  *   one-line note + log path in the About dialog — deliberately minimal, this
  *   is a diagnostics pointer, not an error UI.
+ * @param windowRef the ComposeWindow handle (Main.kt's AWT ref), consumed
+ *   ONLY by the wave-13B session harness (screenshots + key injection).
+ *   Null on every non-harness composition path.
  */
 @Composable
 internal fun DesktopAppRoot(
     showAbout: Boolean,
     onDismissAbout: () -> Unit,
     previousCrashLogPath: String? = null,
+    windowRef: AtomicReference<ComposeWindow?>? = null,
 ) {
     val authRepository: AuthRepository = koinInject()
     val isAuthenticated by authRepository.isAuthenticated.collectAsState(initial = false)
+
+    // Wave 13B real-server E2E session harness (DesktopSessionHarness KDoc):
+    // composes NOTHING unless jellyplay.harness.enabled=true — the host is a
+    // bare LaunchedEffect, and it lives HERE (not in DesktopNavScaffold)
+    // because the harness performs the login itself and must keep running
+    // across the sign-in → scaffold composition swap.
+    if (DesktopSessionHarness.requested()) {
+        val engineRecorder: com.raulshma.jellyplay.desktop.player.EngineActivityRecorder = koinInject()
+        DesktopSessionHarnessHost(
+            authRepository = authRepository,
+            windowRef = windowRef,
+            engineRecorder = engineRecorder,
+        )
+    }
 
     // Session-restore probe: until it completes we cannot know whether a
     // persisted (server, user) pair exists, so hold on a neutral splash
@@ -248,6 +268,17 @@ private fun DesktopNavScaffold() {
     )
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // Wave 13B session harness: publish the live back stack (nav3 is the
+    // source of truth) so DesktopSessionHarness can push the player route and
+    // assert pops after Esc injection. Provider form reads the CURRENT tab's
+    // stack; attaching here is a lambda store, no behavior for normal boots.
+    remember(navigation) {
+        DesktopSessionHarness.attachBackStackProvider {
+            navigation.backStacks[navigation.topLevelRoute.value]
+        }
+        true
+    }
 
     // Wave 12B: wire the software-surface prober before any route guard reads
     // it (the Route.VideoPlayer entry registration + isDesktopDeadEndRoute both
