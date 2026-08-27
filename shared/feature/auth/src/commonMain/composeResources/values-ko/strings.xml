@@ -6,8 +6,6 @@
     <string name="auth_signing_in">로그인 중…</string>
     <string name="auth_username">사용자 이름</string>
     <string name="auth_password">비밀번호</string>
-    <string name="auth_show_password">비밀번호 표시</string>
-    <string name="auth_hide_password">비밀번호 숨기기</string>
     <string name="auth_error_username_required">사용자 이름을 입력하세요</string>
     <string name="auth_login_failed">로그인 실패</string>
     <string name="auth_back_to_sign_in">로그인으로 돌아가기</string>

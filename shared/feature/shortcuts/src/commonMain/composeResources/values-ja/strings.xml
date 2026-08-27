@@ -8,12 +8,6 @@
     <string name="shortcuts_empty_title">ショートカットはありません</string>
     <string name="shortcuts_empty_description">アプリ内を探索して機能やコンテンツを見つけましょう</string>
     <string name="shortcuts_empty_action">ライブラリを見る</string>
-    <string name="shortcuts_hero_eyebrow">クイックアクセス</string>
-    <string name="shortcuts_hero_title">ショートカット</string>
-    <string name="shortcuts_hero_subtitle">ダウンロード、リクエスト、設定、管理ツール</string>
-    <string name="shortcuts_stat_total">%1$d 件のショートカット</string>
-    <string name="shortcuts_stat_category">%1$d 件の %2$s</string>
-    <string name="shortcuts_featured_label">おすすめ</string>
     <string name="shortcuts_item_downloads_title">ダウンロード</string>
     <string name="shortcuts_item_downloads_description">オフラインコンテンツとダウンロード管理。</string>
     <string name="shortcuts_item_favorites_title">お気に入り</string>

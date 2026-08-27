@@ -11,7 +11,6 @@
     <string name="settings_preset_deleted">\"%1$s\" を削除しました</string>
     <string name="settings_share_preset">\"%1$s\" を共有</string>
     <string name="settings_home_layout_subject">JellyPlay ホームレイアウト: %1$s</string>
-    <string name="settings_share_with">アプリで開く\u2026</string>
 
     <!-- Common shared strings -->
     <string name="settings_cancel">キャンセル</string>
@@ -32,7 +31,6 @@
     <string name="settings_search_hint">入力して設定を検索</string>
     <string name="settings_recents_title">最近</string>
     <string name="settings_clear_recents">クリア</string>
-    <string name="settings_signed_in_as_label">サインイン中</string>
     <string name="settings_account">アカウント</string>
     <string name="settings_signed_in_as_name">%1$s としてサインイン中</string>
     <string name="settings_sign_out">サインアウト</string>
@@ -154,9 +152,6 @@
     <string name="settings_send_logs_chooser">ログを送信</string>
     <string name="settings_check_updates_automatically">更新を自動で確認</string>
     <string name="settings_check_updates_subtitle">GitHubで新しいリリースを定期的に確認</string>
-    <string name="settings_checking_for_updates">更新を確認中\u2026</string>
-    <string name="settings_update_available">更新があります: v%1$s</string>
-    <string name="settings_up_to_date">最新です (v%1$s)</string>
     <string name="settings_check_for_updates">更新を確認</string>
     <string name="settings_acknowledgements">謝辞</string>
 
@@ -187,7 +182,6 @@
     <string name="settings_libraries_subtitle">%2$d 件中 %1$d 件のライブラリーを監視中</string>
     <string name="settings_quiet_hours_start">おやすみ時間帯の開始</string>
     <string name="settings_quiet_hours_end">おやすみ時間帯の終了</string>
-    <string name="settings_max_items_per_check">1回あたりの最大アイテム数</string>
     <string name="settings_monitored_libraries">監視中のライブラリー</string>
     <string name="settings_no_libraries_found">ライブラリーが見つかりません</string>
     <string name="settings_items_count">%1$d 件のアイテム</string>
@@ -253,8 +247,6 @@
     <string name="settings_factory_reset_category_message">このカテゴリーのすべての設定を工場出荷時のデフォルトにリセットしますか? この操作は元に戻せません。</string>
     <string name="settings_factory_reset_changed_count">%2$d 件中 %1$d 件が変更済み</string>
     <string name="settings_factory_reset_up_to_date">最新です</string>
-    <string name="settings_factory_reset_current_value">現在</string>
-    <string name="settings_factory_reset_factory_value">工場出荷時</string>
     <string name="settings_factory_reset_summary_card">%2$d 件中 %1$d 件の設定が工場出荷時のデフォルトと異なります</string>
     <string name="settings_factory_reset_category_done">カテゴリーを工場出荷時のデフォルトにリセットしました</string>
     <string name="settings_factory_reset_all_done">すべての設定を工場出荷時のデフォルトにリセットしました</string>
@@ -297,7 +289,6 @@
     <!-- ArrSettingsScreen.kt -->
     <string name="settings_arr_test">テスト</string>
     <string name="settings_arr_test_all">すべてテスト</string>
-    <string name="settings_arr_connected">接続済み</string>
     <string name="settings_seerr_sign_in">サインイン</string>
     <string name="settings_disconnect">切断</string>
     <string name="settings_integration_features">連携機能</string>
@@ -323,8 +314,6 @@
     <string name="settings_discover_region_subtitle">リリース日とコンテンツの発見に使用する地域</string>
     <string name="settings_username_label">ユーザー名</string>
     <string name="settings_password_label">パスワード</string>
-    <string name="settings_hide_password">パスワードを隠す</string>
-    <string name="settings_show_password">パスワードを表示</string>
     <string name="settings_email_label">メール</string>
     <string name="settings_connected">接続済み</string>
     <string name="settings_server_reached_version">サーバーに到達 (v%1$s)</string>
@@ -482,7 +471,6 @@
 
     <!-- LanguageSettingsScreen.kt -->
     <string name="settings_lang_system_default">システムのデフォルト</string>
-    <string name="settings_lang_english">英語</string>
     <string name="settings_lang_default">デフォルト</string>
     <string name="settings_language_subs_title">言語 &amp; 字幕</string>
     <string name="settings_language">言語</string>
@@ -606,11 +594,6 @@
     <string name="settings_save">保存</string>
     <string name="settings_import_paste_description">下に共有されたJellyPlayのホームレイアウトJSONを貼り付けて適用してください。</string>
     <string name="settings_apply">適用</string>
-    <string name="settings_action_load">読み込み</string>
-    <string name="settings_action_load_desc">このプリセットをホームに適用</string>
-    <string name="settings_action_share_desc">プリセットのJSONをコピー / 送信</string>
-    <string name="settings_action_delete">削除</string>
-    <string name="settings_action_delete_desc">このプリセットを削除</string>
 
     <!-- PinnedHomeSectionsScreen.kt -->
     <string name="settings_pinned_home_sections">ピン留めしたホームセクション</string>
@@ -621,7 +604,6 @@
     <string name="settings_configure_libraries_desc">ホームに「最新のメディア」と「最近追加」を表示するライブラリーを選択</string>
     <string name="settings_library_sections">ホームのライブラリー</string>
     <string name="settings_library_no_libraries">ライブラリーが見つかりません</string>
-    <string name="settings_library_load_error">ライブラリーを読み込めませんでした</string>
     <string name="settings_subsection_latest_media">最新のメディア</string>
     <string name="settings_subsection_recently_added">最近追加</string>
     <string name="settings_subsection_latest_media_desc">このライブラリーの「最新」行を表示</string>
@@ -764,7 +746,6 @@
     <!-- StorageSettingsScreen.kt: real storage mounts -->
     <string name="storage_internal">内部ストレージ</string>
     <string name="storage_sd_card">SDカード</string>
-    <string name="storage_usb">USBストレージ</string>
     <string name="storage_external">外部ストレージ</string>
 
     <!-- AudioSettingsScreen.kt -->
@@ -1103,8 +1084,6 @@
     <string name="settings_popular_series_subtitle">TMDB の人気シリーズ</string>
     <string name="settings_seerr_request_hub">Seerr リクエストハブ</string>
     <string name="settings_seerr_header_description">Jellyseerr または Overseerr に接続して、JellyPlay 内から直接コンテンツを検索、発見、リクエストできます。</string>
-    <string name="settings_hide_api_key">API キーを非表示</string>
-    <string name="settings_show_api_key">API キーを表示</string>
     <string name="settings_jellyfin_username_placeholder">Jellyfin ユーザー名</string>
     <string name="settings_jellyfin_password_placeholder">Jellyfin パスワード</string>
     <string name="settings_seerr_email_placeholder">Seerr アカウントのメール</string>

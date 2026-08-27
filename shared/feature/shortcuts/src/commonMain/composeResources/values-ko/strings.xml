@@ -8,12 +8,6 @@
     <string name="shortcuts_empty_title">사용 가능한 바로가기가 없습니다</string>
     <string name="shortcuts_empty_description">앱을 탐색하여 기능과 콘텐츠를 발견하세요</string>
     <string name="shortcuts_empty_action">라이브러리 탐색</string>
-    <string name="shortcuts_hero_eyebrow">빠른 액세스</string>
-    <string name="shortcuts_hero_title">바로가기</string>
-    <string name="shortcuts_hero_subtitle">다운로드, 요청, 설정 및 관리 도구</string>
-    <string name="shortcuts_stat_total">바로가기 %1$d개</string>
-    <string name="shortcuts_stat_category">%1$d %2$s</string>
-    <string name="shortcuts_featured_label">추천</string>
     <string name="shortcuts_item_downloads_title">다운로드</string>
     <string name="shortcuts_item_downloads_description">오프라인 콘텐츠 및 다운로드 관리.</string>
     <string name="shortcuts_item_favorites_title">즐겨찾기</string>

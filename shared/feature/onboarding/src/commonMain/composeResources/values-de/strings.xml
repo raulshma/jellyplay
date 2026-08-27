@@ -74,8 +74,6 @@
     <string name="onboarding_security_lock_30s">30s</string>
     <string name="onboarding_security_lock_1m">1m</string>
     <string name="onboarding_security_lock_5m">5m</string>
-    <string name="onboarding_show_password">Passwort anzeigen</string>
-    <string name="onboarding_hide_password">Passwort ausblenden</string>
 
     <!-- HomeLayoutStep -->
     <string name="onboarding_home_layout_title">Startlayout</string>

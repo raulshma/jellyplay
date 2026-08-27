@@ -6,8 +6,6 @@
     <string name="auth_signing_in">Anmeldung läuft…</string>
     <string name="auth_username">Benutzername</string>
     <string name="auth_password">Passwort</string>
-    <string name="auth_show_password">Passwort anzeigen</string>
-    <string name="auth_hide_password">Passwort verbergen</string>
     <string name="auth_error_username_required">Bitte geben Sie einen Benutzernamen ein</string>
     <string name="auth_login_failed">Anmeldung fehlgeschlagen</string>
     <string name="auth_back_to_sign_in">Zurück zur Anmeldung</string>

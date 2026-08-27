@@ -5,8 +5,6 @@
     <!-- Screen titles / scaffolds -->
     <string name="downloads_screen_title">Téléchargements</string>
     <string name="downloads_library_title">Téléchargé</string>
-    <string name="downloads_not_found">Introuvable</string>
-    <string name="downloads_download_unavailable">Ce téléchargement n\'est plus disponible</string>
 
     <!-- Empty states -->
     <string name="downloads_empty_title">Aucun téléchargement</string>
@@ -14,7 +12,6 @@
     <string name="downloads_no_downloaded_content">Aucun contenu téléchargé</string>
     <string name="downloads_no_matches">Aucun résultat</string>
     <string name="downloads_no_items_in_category">Aucun élément téléchargé dans cette catégorie</string>
-    <string name="downloads_no_episodes_season">Aucun épisode téléchargé pour cette saison</string>
 
     <!-- Storage / counts -->
     <string name="downloads_storage_used">Espace utilisé : %1$s</string>
@@ -50,7 +47,6 @@
 
     <!-- Delete dialogs -->
     <string name="downloads_delete_download_title">Supprimer le téléchargement</string>
-    <string name="downloads_delete_download_cd">Supprimer le téléchargement</string>
     <string name="downloads_delete_download_message">Supprimer \"%1$s\" de votre appareil ? Cela libère %2$s.</string>
     <string name="downloads_delete_downloads_title">Supprimer les téléchargements</string>
     <plurals name="downloads_delete_downloads_message">
@@ -59,9 +55,6 @@
         <item quantity="other">Supprimer %1$d téléchargements sélectionnés de votre appareil ?</item>
     </plurals>
     <string name="downloads_frees_up_sentence"> Cela libère %1$s.</string>
-    <string name="downloads_delete_episode_title">Supprimer l\'épisode</string>
-    <string name="downloads_delete_episode_cd">Supprimer l\'épisode</string>
-    <string name="downloads_delete_episode_message">Supprimer \"%1$s\" de votre appareil ?</string>
     <string name="downloads_deleted">Supprimé</string>
     <string name="downloads_deleted_message">Téléchargement supprimé</string>
 
@@ -73,33 +66,9 @@
     <string name="downloads_status_cancelled">Annulé</string>
 
     <!-- Offline detail -->
-    <string name="downloads_series_default">Série</string>
-    <string name="downloads_play_resume">Reprendre</string>
-    <string name="downloads_play_again">Lire à nouveau</string>
-    <string name="downloads_show_less">Afficher moins</string>
-    <string name="downloads_show_more">Afficher plus</string>
-    <string name="downloads_tracks">Pistes</string>
-    <string name="downloads_cast_crew">Distribution &amp; équipe</string>
-    <string name="downloads_download_info">Infos sur le téléchargement</string>
-    <string name="downloads_file_size">Taille du fichier</string>
-    <string name="downloads_downloaded">Téléchargé</string>
     <string name="downloads_status">Statut</string>
-    <string name="downloads_progress">Progression</string>
-    <string name="downloads_watch_status">Statut de visionnage</string>
-    <string name="downloads_cd_switch_to_list">Passer à la liste d\'épisodes verticale</string>
-    <string name="downloads_cd_switch_to_cards">Passer aux cartes d\'épisodes horizontales</string>
-    <string name="downloads_in_progress">En cours</string>
-    <string name="downloads_started">Commencé</string>
-    <string name="downloads_position">Position</string>
-    <string name="downloads_position_of">%1$s sur %2$s</string>
-    <string name="downloads_last_watched">Dernier visionnage</string>
-    <string name="downloads_time_left">%1$s restant</string>
 
     <!-- Seasons / episodes -->
-    <string name="downloads_seasons">Saisons</string>
-    <string name="downloads_mark_season_cd">Marquer la saison comme visionnée ou non</string>
-    <string name="downloads_mark_season_watched">Marquer la saison comme visionnée</string>
-    <string name="downloads_mark_season_unwatched">Marquer la saison comme non visionnée</string>
 
     <!-- Library sort / filter -->
     <string name="downloads_sort_recent">Récent</string>
@@ -111,22 +80,8 @@
     <string name="downloads_filter_music">Musique</string>
     <!-- Offline download resync -->
     <string name="downloads_resync">Synchroniser</string>
-    <string name="downloads_resync_cd">Rechercher métadonnées et images mises à jour</string>
-    <string name="downloads_resync_title">Synchroniser le téléchargement</string>
-    <string name="downloads_resync_checking">Recherche des mises à jour…</string>
-    <string name="downloads_resync_update_available">Nouvelles informations disponibles</string>
     <string name="downloads_resync_media_changed">Le fichier média a changé — re-téléchargement requis</string>
-    <string name="downloads_resync_in_progress">Synchronisation des derniers détails…</string>
-    <string name="downloads_resync_complete">Téléchargement synchronisé avec les derniers détails</string>
-    <string name="downloads_resync_failed">Échec de la synchronisation</string>
-    <string name="downloads_resync_up_to_date">Ce téléchargement est à jour.</string>
-    <string name="downloads_resync_description">Des informations plus récentes sont disponibles sur le serveur. Synchronisez pour actualiser les métadonnées et les images.</string>
-    <string name="downloads_resync_change_metadata">Métadonnées mises à jour (résumé, distribution, notes)</string>
-    <string name="downloads_resync_change_images">Visuels mis à jour (affiche/fond)</string>
-    <string name="downloads_resync_change_media">Le fichier média lui-même a changé</string>
-    <string name="downloads_resync_media_explanation">Une synchronisation des métadonnées ne peut pas mettre à jour le fichier média. Supprimez puis re-téléchargez cet élément pour obtenir le nouveau fichier.</string>
     <string name="downloads_resync_action">Synchroniser maintenant</string>
-    <string name="downloads_resync_redownload">Re-télécharger les médias</string>
     <string name="downloads_resync_check_all">Tout vérifier</string>
     <string name="downloads_resync_check_all_cd">Vérifier les mises à jour de chaque téléchargement</string>
     <string name="downloads_resync_batch_title">Mises à jour disponibles</string>

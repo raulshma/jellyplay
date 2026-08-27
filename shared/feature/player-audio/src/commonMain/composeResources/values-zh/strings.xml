@@ -13,7 +13,6 @@
     <string name="audio_ab_set_point_b">设置 B 点</string>
     <string name="audio_ab_clear">清除 A–B</string>
     <string name="audio_ab_point_a_label">A</string>
-    <string name="audio_ab_point_b_label">B</string>
     <string name="audio_ab_loop_active_label">A-B</string>
 
     <!-- Common -->
@@ -101,7 +100,6 @@
 
     <!-- Add to playlist picker -->
     <string name="audio_playlist_picker_title">添加到播放列表</string>
-    <string name="audio_added_to_playlist">已添加到“%1$s”</string>
     <string name="audio_no_playlists">暂无播放列表</string>
     <string name="audio_playlist_items_count">%1$d 项</string>
 

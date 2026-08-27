@@ -8,12 +8,6 @@
     <string name="shortcuts_empty_title">Nessuna scorciatoia disponibile</string>
     <string name="shortcuts_empty_description">Sfoglia l\'app per scoprire funzioni e contenuti</string>
     <string name="shortcuts_empty_action">Sfoglia libreria</string>
-    <string name="shortcuts_hero_eyebrow">ACCESSO RAPIDO</string>
-    <string name="shortcuts_hero_title">Scorciatoie</string>
-    <string name="shortcuts_hero_subtitle">Download, richieste, impostazioni e strumenti di amministrazione</string>
-    <string name="shortcuts_stat_total">%1$d scorciatoie</string>
-    <string name="shortcuts_stat_category">%1$d %2$s</string>
-    <string name="shortcuts_featured_label">In evidenza</string>
     <string name="shortcuts_item_downloads_title">Download</string>
     <string name="shortcuts_item_downloads_description">Contenuti offline e gestione dei download.</string>
     <string name="shortcuts_item_favorites_title">Preferiti</string>

@@ -10,7 +10,6 @@
     <string name="settings_preset_deleted">Deleted \"%1$s\"</string>
     <string name="settings_share_preset">Share \"%1$s\"</string>
     <string name="settings_home_layout_subject">JellyPlay Home Layout: %1$s</string>
-    <string name="settings_share_with">Open with\u2026</string>
 
     <!-- Common shared strings -->
     <string name="settings_cancel">Cancel</string>
@@ -35,7 +34,6 @@
     <string name="settings_search_hint">Type to search settings</string>
     <string name="settings_recents_title">Recent</string>
     <string name="settings_clear_recents">Clear</string>
-    <string name="settings_signed_in_as_label">Signed in as</string>
     <string name="settings_account">Account</string>
     <string name="settings_signed_in_as_name">Signed in as %1$s</string>
     <string name="settings_sign_out">Sign Out</string>
@@ -180,9 +178,6 @@
     <string name="settings_check_updates_subtitle">Periodically check GitHub for new releases</string>
     <string name="settings_download_updates_automatically">Download Updates Automatically</string>
     <string name="settings_download_updates_subtitle">New updates download right away instead of waiting for you to tap Download</string>
-    <string name="settings_checking_for_updates">Checking for updates\u2026</string>
-    <string name="settings_update_available">Update available: v%1$s</string>
-    <string name="settings_up_to_date">Up to date (v%1$s)</string>
     <string name="settings_check_for_updates">Check for Updates</string>
     <string name="settings_acknowledgements">Acknowledgements</string>
     <string name="settings_built_with_jellyfin">Built with Jellyfin SDK</string>
@@ -214,7 +209,6 @@
     <string name="settings_libraries_subtitle">%1$d of %2$d libraries monitored</string>
     <string name="settings_quiet_hours_start">Quiet Hours Start</string>
     <string name="settings_quiet_hours_end">Quiet Hours End</string>
-    <string name="settings_max_items_per_check">Max Items Per Check</string>
     <string name="settings_monitored_libraries">Monitored Libraries</string>
     <string name="settings_no_libraries_found">No libraries found</string>
     <string name="settings_items_count">%1$d items</string>
@@ -280,8 +274,6 @@
     <string name="settings_factory_reset_category_message">Reset all settings in this category to their factory defaults? This action cannot be undone.</string>
     <string name="settings_factory_reset_changed_count">%1$d of %2$d changed</string>
     <string name="settings_factory_reset_up_to_date">Up to date</string>
-    <string name="settings_factory_reset_current_value">Current</string>
-    <string name="settings_factory_reset_factory_value">Factory</string>
     <string name="settings_factory_reset_summary_card">%1$d of %2$d settings differ from factory defaults</string>
     <string name="settings_factory_reset_category_done">Category reset to factory defaults</string>
     <string name="settings_factory_reset_all_done">All settings reset to factory defaults</string>
@@ -332,7 +324,6 @@
     <!-- ArrSettingsScreen.kt -->
     <string name="settings_arr_test">Test</string>
     <string name="settings_arr_test_all">Test all</string>
-    <string name="settings_arr_connected">Connected</string>
     <string name="settings_arr_no_servers_hint">No servers detected. Enable Auto-discover via Seerr (and make sure Seerr is connected), or add a manual server below.</string>
     <string name="settings_arr_no_admin_hint">Auto-discover needs a Seerr account with Admin permission (the server list comes from Seerr\'s admin-only settings). Use an API key from an admin user, then retry — or add a manual server below.</string>
     <string name="settings_seerr_sign_in">Sign In</string>
@@ -367,14 +358,10 @@
     <string name="settings_seerr_header_description">Connect Jellyseerr or Overseerr to search, discover, and request content directly from within JellyPlay.</string>
     <string name="settings_api_key_label" translatable="false">API Key</string>
     <string name="settings_api_key_placeholder" translatable="false">Enter your Seerr API key</string>
-    <string name="settings_hide_api_key">Hide API key</string>
-    <string name="settings_show_api_key">Show API key</string>
     <string name="settings_username_label">Username</string>
     <string name="settings_jellyfin_username_placeholder">Jellyfin username</string>
     <string name="settings_password_label">Password</string>
     <string name="settings_jellyfin_password_placeholder">Jellyfin password</string>
-    <string name="settings_hide_password">Hide password</string>
-    <string name="settings_show_password">Show password</string>
     <string name="settings_email_label">Email</string>
     <string name="settings_seerr_email_placeholder">Seerr account email</string>
     <string name="settings_seerr_password_placeholder">Seerr account password</string>
@@ -537,7 +524,6 @@
 
     <!-- LanguageSettingsScreen.kt -->
     <string name="settings_lang_system_default">System Default</string>
-    <string name="settings_lang_english">English</string>
     <string name="settings_lang_default">Default</string>
     <string name="settings_language_subs_title">Language &amp; Subtitles</string>
     <string name="settings_language">Language</string>
@@ -666,11 +652,6 @@
     <string name="settings_preset_json">Preset JSON</string>
     <string name="settings_import_paste_description">Paste a shared JellyPlay home layout JSON below, then apply it.</string>
     <string name="settings_apply">Apply</string>
-    <string name="settings_action_load">Load</string>
-    <string name="settings_action_load_desc">Apply this preset to your home</string>
-    <string name="settings_action_share_desc">Copy / send the preset JSON</string>
-    <string name="settings_action_delete">Delete</string>
-    <string name="settings_action_delete_desc">Remove this preset</string>
 
     <!-- PinnedHomeSectionsScreen.kt -->
     <string name="settings_pinned_home_sections">Pinned Home Sections</string>
@@ -681,7 +662,6 @@
     <string name="settings_configure_libraries_desc">Choose which libraries show Latest Media and Recently Added on home</string>
     <string name="settings_library_sections">Libraries on Home</string>
     <string name="settings_library_no_libraries">No libraries found</string>
-    <string name="settings_library_load_error">Couldn\'t load libraries</string>
     <string name="settings_subsection_latest_media">Latest Media</string>
     <string name="settings_subsection_recently_added">Recently Added</string>
     <string name="settings_subsection_latest_media_desc">Show a \"Latest\" row for this library</string>
@@ -837,7 +817,6 @@
     <!-- StorageSettingsScreen.kt: real storage mounts -->
     <string name="storage_internal">Internal storage</string>
     <string name="storage_sd_card">SD card</string>
-    <string name="storage_usb">USB storage</string>
     <string name="storage_external">External storage</string>
 
     <!-- AudioSettingsScreen.kt -->

@@ -28,7 +28,6 @@
     <string name="live_cancel_series">シリーズをキャンセル</string>
     <string name="live_record_success">録画を予定しました</string>
     <string name="live_record_canceled">録画をキャンセルしました</string>
-    <string name="live_record_failed">録画を設定できませんでした</string>
     <string name="live_record_no_program">番組情報がありません</string>
     <string name="live_play_from_start">最初から再生</string>
     <string name="live_error_playback">再生エラー</string>

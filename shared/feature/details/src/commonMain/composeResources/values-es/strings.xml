@@ -52,7 +52,6 @@
     <string name="detail_cd_options">Opciones</string>
     <string name="detail_cd_episode_play">Reproducir</string>
     <string name="detail_cd_track_play">Reproducir</string>
-    <string name="detail_cd_close">Cerrar</string>
     <string name="detail_cd_collapse">Contraer</string>
     <string name="detail_cd_expand">Expandir</string>
     <string name="detail_cd_sort_oldest_first">Ordenar por los más antiguos primero</string>
@@ -70,7 +69,6 @@
     <!-- ── Overflow / options menu ──────────────────────────────────────── -->
     <string name="detail_option_edit">Editar</string>
     <string name="detail_option_share">Compartir</string>
-    <string name="detail_option_downloaded">Descargado</string>
     <string name="detail_option_downloading">Descargando…</string>
     <string name="detail_option_downloading_percent">Descargando (%1$d%%)</string>
     <string name="detail_option_download">Descargar</string>
@@ -211,7 +209,6 @@
     <string name="detail_error_access_denied">No tienes acceso a este elemento.</string>
     <string name="detail_error_details_not_loaded">No se cargaron los detalles del contenido</string>
     <string name="detail_error_no_source">No hay ninguna fuente multimedia disponible para descargar</string>
-    <string name="detail_error_no_stream_url">No se pudo obtener la URL de reproducción</string>
     <string name="detail_error_download_failed">Error en la descarga</string>
     <string name="detail_error_not_a_series">Esto no es una serie</string>
     <string name="detail_error_queue_failed">No se pudieron poner las descargas en cola</string>
@@ -344,7 +341,6 @@
     <string name="detail_close">Cerrar</string>
     <string name="detail_delete">Eliminar</string>
     <string name="detail_delete_download_title">Eliminar descarga</string>
-    <string name="detail_delete_download_cd">Eliminar descarga</string>
     <string name="detail_delete_download_message">¿Quitar \"%1$s\" de tu dispositivo? Esto libera %2$s.</string>
     <string name="detail_delete_episode_title">Eliminar episodio</string>
     <string name="detail_delete_episode_cd">Eliminar episodio</string>
@@ -404,9 +400,7 @@
     <string name="detail_original_title">Título original</string>
     <string name="detail_year">Año</string>
     <string name="detail_runtime">Duración</string>
-    <string name="detail_file_name">Archivo</string>
     <string name="detail_episode_label">Episodio</string>
-    <string name="detail_no_downloaded_subtitles">Sin subtítulos descargados</string>
     <string name="detail_view_download_details">Ver detalles de descarga</string>
     <string name="detail_download_tab_overview">Resumen</string>
     <string name="detail_download_tab_media_info">Información de medios</string>
@@ -416,7 +410,6 @@
     <string name="detail_download_files_total">Total en disco</string>
     <string name="detail_download_files_loading">Calculando tamaños de archivo…</string>
     <string name="detail_download_files_empty">No se encontraron archivos descargados</string>
-    <string name="detail_download_files_location">Ubicación</string>
     <plurals name="detail_files_count">
         <item quantity="one">%1$d archivo</item>
         <item quantity="many">%1$d archivos</item>

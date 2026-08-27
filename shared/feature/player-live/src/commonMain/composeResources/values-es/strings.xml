@@ -28,7 +28,6 @@
     <string name="live_cancel_series">Cancelar serie</string>
     <string name="live_record_success">Grabación programada</string>
     <string name="live_record_canceled">Grabación cancelada</string>
-    <string name="live_record_failed">No se pudo programar la grabación</string>
     <string name="live_record_no_program">Sin información del programa</string>
     <string name="live_play_from_start">Reproducir desde el inicio</string>
     <string name="live_error_playback">Error de reproducción</string>

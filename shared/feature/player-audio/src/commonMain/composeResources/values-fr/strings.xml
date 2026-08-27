@@ -13,7 +13,6 @@
     <string name="audio_ab_set_point_b">Définir le point B</string>
     <string name="audio_ab_clear">Effacer A–B</string>
     <string name="audio_ab_point_a_label">A</string>
-    <string name="audio_ab_point_b_label">B</string>
     <string name="audio_ab_loop_active_label">A-B</string>
 
     <!-- Common -->
@@ -101,7 +100,6 @@
 
     <!-- Add to playlist picker -->
     <string name="audio_playlist_picker_title">Ajouter à la playlist</string>
-    <string name="audio_added_to_playlist">Ajouté à « %1$s »</string>
     <string name="audio_no_playlists">Aucune playlist pour le moment</string>
     <string name="audio_playlist_items_count">%1$d titres</string>
 

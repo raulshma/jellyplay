@@ -5,7 +5,6 @@
     <string name="player_resumed_message">Ripreso da dove avevi interrotto</string>
     <string name="player_reset_to_auto">Reimposta su automatico</string>
     <string name="player_track_default">Predefinito</string>
-    <string name="player_track_off">Off</string>
     <string name="player_track_none">Nessuno</string>
 
     <string name="track_badge_forced">Forzati</string>
@@ -100,12 +99,10 @@
     <string name="player_video_play">Riproduci</string>
     <string name="player_video_stop">Ferma</string>
     <string name="player_video_synced">Sincronizzato</string>
-    <string name="player_video_syncing">Sincronizzazione</string>
     <string name="player_video_buffering">Buffering</string>
     <string name="player_video_group">Gruppo</string>
 
     <!-- Subtitle manager sheet -->
-    <string name="player_video_get_subtitles">Ottieni sottotitoli</string>
     <string name="player_video_download">Scarica</string>
     <string name="player_video_search">Cerca</string>
     <string name="player_video_upload">Carica</string>
@@ -149,7 +146,6 @@
     <string name="player_video_ends_at">Termina alle %1$s</string>
 
     <!-- Player overflow menu -->
-    <string name="player_video_subtitle_style">Stile sottotitoli</string>
     <string name="player_video_dialogue_boost">Esalta dialoghi</string>
     <string name="player_video_dialogue_boost_on">Esalta dialoghi \u00B7 %1$s</string>
     <string name="player_video_night_mode">Modalità notturna</string>
@@ -319,9 +315,6 @@
     <string name="player_video_font_invalid_format">Il file selezionato non è un font .ttf o .otf.</string>
 
     <string name="player_video_subtitle_provider_all">Tutti</string>
-    <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
-    <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
-    <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
 
     <!-- Accessibilità: semantica per lettore di schermo del pannello gesti luminosità/volume (P5 §3.1) -->
     <string name="a11y_gesture_controls">Controlli luminosità e volume</string>

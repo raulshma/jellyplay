@@ -10,12 +10,6 @@
     <string name="livetv_tab_schedule">Schedule</string>
     <string name="livetv_tab_series">Series</string>
 
-    <string name="livetv_row_on_now">On Now</string>
-    <string name="livetv_row_shows">Shows</string>
-    <string name="livetv_row_movies">Movies</string>
-    <string name="livetv_row_sports">Sports</string>
-    <string name="livetv_row_kids">Kids</string>
-    <string name="livetv_row_news">News</string>
 
     <string name="livetv_no_programs_available">No programs available</string>
     <string name="livetv_no_recordings_available">No recordings available</string>

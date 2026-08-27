@@ -52,7 +52,6 @@
     <string name="detail_cd_options">옵션</string>
     <string name="detail_cd_episode_play">재생</string>
     <string name="detail_cd_track_play">재생</string>
-    <string name="detail_cd_close">닫기</string>
     <string name="detail_cd_collapse">접기</string>
     <string name="detail_cd_expand">펼치기</string>
     <string name="detail_cd_sort_oldest_first">오래된 순 정렬</string>
@@ -70,7 +69,6 @@
     <!-- ── Overflow / options menu ──────────────────────────────────────── -->
     <string name="detail_option_edit">편집</string>
     <string name="detail_option_share">공유</string>
-    <string name="detail_option_downloaded">다운로드됨</string>
     <string name="detail_option_downloading">다운로드 중…</string>
     <string name="detail_option_downloading_percent">다운로드 중 (%1$d%%)</string>
     <string name="detail_option_download">다운로드</string>
@@ -207,7 +205,6 @@
     <string name="detail_error_access_denied">이 항목에 접근 권한이 없습니다.</string>
     <string name="detail_error_details_not_loaded">미디어 상세 정보가 로드되지 않았습니다</string>
     <string name="detail_error_no_source">다운로드할 수 있는 미디어 소스가 없습니다</string>
-    <string name="detail_error_no_stream_url">스트림 URL을 가져올 수 없습니다</string>
     <string name="detail_error_download_failed">다운로드 실패</string>
     <string name="detail_error_not_a_series">시리즈가 아닙니다</string>
     <string name="detail_error_queue_failed">다운로드 대기열 추가 실패</string>
@@ -340,7 +337,6 @@
     <string name="detail_close">닫기</string>
     <string name="detail_delete">삭제</string>
     <string name="detail_delete_download_title">다운로드 삭제</string>
-    <string name="detail_delete_download_cd">다운로드 삭제</string>
     <string name="detail_delete_download_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까? %2$s이(가) 확보됩니다.</string>
     <string name="detail_delete_episode_title">에피소드 삭제</string>
     <string name="detail_delete_episode_cd">에피소드 삭제</string>
@@ -398,9 +394,7 @@
     <string name="detail_original_title">원제</string>
     <string name="detail_year">연도</string>
     <string name="detail_runtime">재생 시간</string>
-    <string name="detail_file_name">파일</string>
     <string name="detail_episode_label">에피소드</string>
-    <string name="detail_no_downloaded_subtitles">다운로드된 자막 없음</string>
     <string name="detail_view_download_details">다운로드 세부정보 보기</string>
     <string name="detail_download_tab_overview">개요</string>
     <string name="detail_download_tab_media_info">미디어 정보</string>
@@ -410,7 +404,6 @@
     <string name="detail_download_files_total">디스크 총 용량</string>
     <string name="detail_download_files_loading">파일 크기 계산 중…</string>
     <string name="detail_download_files_empty">다운로드된 파일을 찾을 수 없습니다</string>
-    <string name="detail_download_files_location">위치</string>
     <plurals name="detail_files_count">
         <item quantity="other">%1$d개 파일</item>
     </plurals>

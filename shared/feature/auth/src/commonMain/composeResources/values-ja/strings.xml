@@ -6,8 +6,6 @@
     <string name="auth_signing_in">サインイン中…</string>
     <string name="auth_username">ユーザー名</string>
     <string name="auth_password">パスワード</string>
-    <string name="auth_show_password">パスワードを表示</string>
-    <string name="auth_hide_password">パスワードを非表示</string>
     <string name="auth_error_username_required">ユーザー名を入力してください</string>
     <string name="auth_login_failed">サインインに失敗しました</string>
     <string name="auth_back_to_sign_in">サインインに戻る</string>

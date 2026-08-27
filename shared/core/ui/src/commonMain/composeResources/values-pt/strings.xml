@@ -11,23 +11,16 @@
     <!-- Additional shared action literals -->
     <string name="core_confirm">Confirmar</string>
     <string name="core_ok">OK</string>
-    <string name="core_apply">Aplicar</string>
     <string name="core_delete">Eliminar</string>
     <string name="core_clear">Limpar</string>
     <string name="core_undo">Desfazer</string>
     <string name="core_clear_filters">Limpar filtros</string>
     <string name="core_copy">Copiar</string>
     <string name="core_copied_to_clipboard">Copiado para a área de transferência</string>
-    <string name="core_play_from_start">Reproduzir do início</string>
     <string name="core_restart">Recomeçar</string>
-    <string name="core_send_now">Enviar agora</string>
     <string name="core_search">Pesquisar</string>
-    <string name="core_stop_playback">Parar reprodução</string>
-    <string name="core_select_all">Selecionar tudo</string>
-    <string name="core_mark_all_seen">Marcar tudo como visto</string>
     <string name="core_loading">A carregar…</string>
     <!-- Media quick-action sheet labels -->
-    <string name="core_action_quick_actions">Ações rápidas</string>
     <string name="core_action_play">Reproduzir</string>
     <string name="core_action_mark_watched">Marcar como visto</string>
     <string name="core_action_mark_unwatched">Marcar como não visto</string>
@@ -82,7 +75,6 @@
     <string name="core_report">Reportar</string>
     <string name="core_ui_back">Voltar</string>
     <string name="core_ui_select">Selecionar…</string>
-    <string name="core_ui_selected">Selecionado</string>
 
     <!-- core/ui auth challenge -->
     <string name="core_ui_auth_title">Autenticar</string>
@@ -180,7 +172,6 @@
     <string name="core_preview_new_format">%1$d novo</string>
 
     <!-- Shared player speed-picker custom-value labels (§2.3). -->
-    <string name="player_speed_custom">Velocidade personalizada</string>
     <string name="player_speed_value">%.2fx</string>
     <string name="player_speed_slider_label">Ajustar velocidade de reprodução</string>
 

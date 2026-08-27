@@ -11,23 +11,16 @@
     <!-- Additional shared action literals -->
     <string name="core_confirm">Bestätigen</string>
     <string name="core_ok">OK</string>
-    <string name="core_apply">Anwenden</string>
     <string name="core_delete">Löschen</string>
     <string name="core_clear">Leeren</string>
     <string name="core_undo">Rückgängig</string>
     <string name="core_clear_filters">Filter zurücksetzen</string>
     <string name="core_copy">Kopieren</string>
     <string name="core_copied_to_clipboard">In Zwischenablage kopiert</string>
-    <string name="core_play_from_start">Von Anfang an wiedergeben</string>
     <string name="core_restart">Neu starten</string>
-    <string name="core_send_now">Jetzt senden</string>
     <string name="core_search">Suchen</string>
-    <string name="core_stop_playback">Wiedergabe stoppen</string>
-    <string name="core_select_all">Alle auswählen</string>
-    <string name="core_mark_all_seen">Alle als gesehen markieren</string>
     <string name="core_loading">Wird geladen…</string>
     <!-- Media quick-action sheet labels -->
-    <string name="core_action_quick_actions">Schnellaktionen</string>
     <string name="core_action_play">Wiedergeben</string>
     <string name="core_action_mark_watched">Als gesehen markieren</string>
     <string name="core_action_mark_unwatched">Als ungesehen markieren</string>
@@ -82,7 +75,6 @@
     <string name="core_report">Melden</string>
     <string name="core_ui_back">Zurück</string>
     <string name="core_ui_select">Auswählen…</string>
-    <string name="core_ui_selected">Ausgewählt</string>
 
     <!-- core/ui auth challenge -->
     <string name="core_ui_auth_title">Authentifizieren</string>
@@ -180,7 +172,6 @@
     <string name="core_preview_new_format">%1$d neu</string>
 
     <!-- Shared player speed-picker custom-value labels (§2.3). -->
-    <string name="player_speed_custom">Eigene Geschwindigkeit</string>
     <string name="player_speed_value">%.2fx</string>
     <string name="player_speed_slider_label">Wiedergabegeschwindigkeit anpassen</string>
 

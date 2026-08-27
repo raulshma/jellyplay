@@ -5,7 +5,6 @@
     <string name="player_resumed_message">前回の位置から再開しました</string>
     <string name="player_reset_to_auto">自動にリセット</string>
     <string name="player_track_default">デフォルト</string>
-    <string name="player_track_off">オフ</string>
     <string name="player_track_none">なし</string>
 
     <string name="track_badge_forced">強制</string>
@@ -100,12 +99,10 @@
     <string name="player_video_play">再生</string>
     <string name="player_video_stop">停止</string>
     <string name="player_video_synced">同期済み</string>
-    <string name="player_video_syncing">同期中</string>
     <string name="player_video_buffering">バッファリング中</string>
     <string name="player_video_group">グループ</string>
 
     <!-- Subtitle manager sheet -->
-    <string name="player_video_get_subtitles">字幕を取得</string>
     <string name="player_video_download">ダウンロード</string>
     <string name="player_video_search">検索</string>
     <string name="player_video_upload">アップロード</string>
@@ -149,7 +146,6 @@
     <string name="player_video_ends_at">%1$s に終了</string>
 
     <!-- Player overflow menu -->
-    <string name="player_video_subtitle_style">字幕スタイル</string>
     <string name="player_video_dialogue_boost">ダイアログブースト</string>
     <string name="player_video_dialogue_boost_on">ダイアログブースト \u00B7 %1$s</string>
     <string name="player_video_night_mode">ナイトモード</string>
@@ -318,9 +314,6 @@
     <string name="player_video_font_invalid_format">選択したファイルは.ttfまたは.otfフォントではありません。</string>
 
     <string name="player_video_subtitle_provider_all">すべて</string>
-    <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
-    <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
-    <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
 
     <!-- アクセシビリティ: 明るさ/音量ジェスチャー領域のスクリーンリーダーセマンティクス (P5 §3.1) -->
     <string name="a11y_gesture_controls">明るさと音量のコントロール</string>

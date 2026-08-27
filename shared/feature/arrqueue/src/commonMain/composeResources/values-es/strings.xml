@@ -6,8 +6,6 @@
 
     <!-- Common buttons -->
     <string name="arrqueue_unknown_error">Error desconocido</string>
-    <string name="arrqueue_dismiss">Descartar</string>
-    <string name="arrqueue_ok">Aceptar</string>
     <string name="arrqueue_retry">Reintentar</string>
     <string name="arrqueue_cancel">Cancelar</string>
     <string name="arrqueue_delete">Eliminar</string>

@@ -5,7 +5,6 @@
     <string name="player_resumed_message">An der letzten Position fortgesetzt</string>
     <string name="player_reset_to_auto">Auf Auto zurücksetzen</string>
     <string name="player_track_default">Standard</string>
-    <string name="player_track_off">Aus</string>
     <string name="player_track_none">Keine</string>
 
     <string name="track_badge_forced">Erzwungen</string>
@@ -100,12 +99,10 @@
     <string name="player_video_play">Wiedergabe</string>
     <string name="player_video_stop">Stopp</string>
     <string name="player_video_synced">Synchron</string>
-    <string name="player_video_syncing">Synchronisieren</string>
     <string name="player_video_buffering">Puffern</string>
     <string name="player_video_group">Gruppe</string>
 
     <!-- Subtitle manager sheet -->
-    <string name="player_video_get_subtitles">Untertitel abrufen</string>
     <string name="player_video_download">Herunterladen</string>
     <string name="player_video_search">Suchen</string>
     <string name="player_video_upload">Hochladen</string>
@@ -149,7 +146,6 @@
     <string name="player_video_ends_at">Endet um %1$s</string>
 
     <!-- Player overflow menu -->
-    <string name="player_video_subtitle_style">Untertitelstil</string>
     <string name="player_video_dialogue_boost">Dialog-Verstärkung</string>
     <string name="player_video_dialogue_boost_on">Dialog-Verstärkung \u00B7 %1$s</string>
     <string name="player_video_night_mode">Nachtmodus</string>
@@ -319,9 +315,6 @@
     <string name="player_video_font_invalid_format">Ausgewählte Datei ist keine .ttf- oder .otf-Schriftart.</string>
 
     <string name="player_video_subtitle_provider_all">Alle</string>
-    <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
-    <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
-    <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
 
     <!-- Barrierefreiheit: Screen-Reader-Semantik für das Helligkeits-/Lautstärke-Gestenfeld (P5 §3.1) -->
     <string name="a11y_gesture_controls">Helligkeits- und Lautstärkeregelung</string>

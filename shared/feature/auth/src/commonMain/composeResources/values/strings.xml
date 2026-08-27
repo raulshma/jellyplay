@@ -11,8 +11,6 @@
     <string name="auth_signing_in">Signing in…</string>
     <string name="auth_username">Username</string>
     <string name="auth_password">Password</string>
-    <string name="auth_show_password">Show password</string>
-    <string name="auth_hide_password">Hide password</string>
     <string name="auth_error_username_required">Please enter a username</string>
     <string name="auth_login_failed">Login failed</string>
     <string name="auth_back_to_sign_in">Back to Sign In</string>

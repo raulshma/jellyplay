@@ -11,12 +11,6 @@
     <string name="livetv_tab_schedule">予約</string>
     <string name="livetv_tab_series">シリーズ</string>
 
-    <string name="livetv_row_on_now">放送中</string>
-    <string name="livetv_row_shows">番組</string>
-    <string name="livetv_row_movies">映画</string>
-    <string name="livetv_row_sports">スポーツ</string>
-    <string name="livetv_row_kids">キッズ</string>
-    <string name="livetv_row_news">ニュース</string>
 
     <string name="livetv_no_programs_available">利用可能な番組がありません</string>
     <string name="livetv_no_recordings_available">利用可能な録画がありません</string>

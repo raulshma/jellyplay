@@ -149,16 +149,12 @@
     <string name="admin_no_users">无用户</string>
     <string name="admin_new_user_title">新用户</string>
     <string name="admin_password_optional">密码（可选）</string>
-    <string name="admin_show_password">显示密码</string>
-    <string name="admin_hide_password">隐藏密码</string>
     <string name="admin_create">创建</string>
     <string name="admin_delete_user_title">删除用户</string>
     <string name="admin_delete_user_body">删除“%1$s”？此操作无法撤销。</string>
     <string name="admin_new_password">新密码</string>
     <string name="admin_discard">放弃</string>
     <string name="admin_save_changes">保存更改</string>
-    <string name="admin_changes_saved">更改已保存</string>
-    <string name="admin_saved_reload_failed">已保存 — 无法重新加载；点击刷新以验证</string>
     <string name="admin_could_not_reload">无法重新加载已更新的用户</string>
 
     <!-- User detail: tabs / sections -->

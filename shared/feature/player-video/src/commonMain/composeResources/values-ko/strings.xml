@@ -5,7 +5,6 @@
     <string name="player_resumed_message">이전 시청 위치부터 이어 재생합니다</string>
     <string name="player_reset_to_auto">자동으로 재설정</string>
     <string name="player_track_default">기본</string>
-    <string name="player_track_off">끄기</string>
     <string name="player_track_none">없음</string>
 
     <string name="track_badge_forced">강제</string>
@@ -100,12 +99,10 @@
     <string name="player_video_play">재생</string>
     <string name="player_video_stop">정지</string>
     <string name="player_video_synced">동기화됨</string>
-    <string name="player_video_syncing">동기화 중</string>
     <string name="player_video_buffering">버퍼링 중</string>
     <string name="player_video_group">그룹</string>
 
     <!-- Subtitle manager sheet -->
-    <string name="player_video_get_subtitles">자막 가져오기</string>
     <string name="player_video_download">다운로드</string>
     <string name="player_video_search">검색</string>
     <string name="player_video_upload">업로드</string>
@@ -149,7 +146,6 @@
     <string name="player_video_ends_at">%1$s에 종료</string>
 
     <!-- Player overflow menu -->
-    <string name="player_video_subtitle_style">자막 스타일</string>
     <string name="player_video_dialogue_boost">대화 부스트</string>
     <string name="player_video_dialogue_boost_on">대화 부스트 \u00B7 %1$s</string>
     <string name="player_video_night_mode">야간 모드</string>
@@ -318,9 +314,6 @@
     <string name="player_video_font_invalid_format">선택한 파일이 .ttf 또는 .otf 글꼴이 아닙니다.</string>
 
     <string name="player_video_subtitle_provider_all">전체</string>
-    <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
-    <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
-    <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
 
     <!-- 접근성: 밝기/볼륨 제스처 영역의 화면 읽기 의미 (P5 §3.1) -->
     <string name="a11y_gesture_controls">밝기 및 볼륨 컨트롤</string>

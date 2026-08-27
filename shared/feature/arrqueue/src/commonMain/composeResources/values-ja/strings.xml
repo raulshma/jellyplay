@@ -6,8 +6,6 @@
 
     <!-- Common buttons -->
     <string name="arrqueue_unknown_error">不明なエラー</string>
-    <string name="arrqueue_dismiss">閉じる</string>
-    <string name="arrqueue_ok">OK</string>
     <string name="arrqueue_retry">再試行</string>
     <string name="arrqueue_cancel">キャンセル</string>
     <string name="arrqueue_delete">削除</string>

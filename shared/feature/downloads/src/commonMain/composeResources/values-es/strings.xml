@@ -5,8 +5,6 @@
     <!-- Screen titles / scaffolds -->
     <string name="downloads_screen_title">Descargas</string>
     <string name="downloads_library_title">Descargado</string>
-    <string name="downloads_not_found">No encontrado</string>
-    <string name="downloads_download_unavailable">Esta descarga ya no está disponible</string>
 
     <!-- Empty states -->
     <string name="downloads_empty_title">Aún no hay descargas</string>
@@ -14,7 +12,6 @@
     <string name="downloads_no_downloaded_content">Aún no hay contenido descargado</string>
     <string name="downloads_no_matches">Sin coincidencias</string>
     <string name="downloads_no_items_in_category">No hay elementos descargados en esta categoría</string>
-    <string name="downloads_no_episodes_season">No hay episodios descargados para esta temporada</string>
 
     <!-- Storage / counts -->
     <string name="downloads_storage_used">Almacenamiento usado: %1$s</string>
@@ -50,7 +47,6 @@
 
     <!-- Delete dialogs -->
     <string name="downloads_delete_download_title">Eliminar descarga</string>
-    <string name="downloads_delete_download_cd">Eliminar descarga</string>
     <string name="downloads_delete_download_message">¿Quitar \"%1$s\" de tu dispositivo? Esto libera %2$s.</string>
     <string name="downloads_delete_downloads_title">Eliminar descargas</string>
     <plurals name="downloads_delete_downloads_message">
@@ -59,9 +55,6 @@
         <item quantity="other">¿Quitar %1$d descargas seleccionadas de tu dispositivo?</item>
     </plurals>
     <string name="downloads_frees_up_sentence"> Esto libera %1$s.</string>
-    <string name="downloads_delete_episode_title">Eliminar episodio</string>
-    <string name="downloads_delete_episode_cd">Eliminar episodio</string>
-    <string name="downloads_delete_episode_message">¿Quitar \"%1$s\" de tu dispositivo?</string>
     <string name="downloads_deleted">Eliminado</string>
     <string name="downloads_deleted_message">Descarga eliminada</string>
 
@@ -73,33 +66,9 @@
     <string name="downloads_status_cancelled">Cancelado</string>
 
     <!-- Offline detail -->
-    <string name="downloads_series_default">Serie</string>
-    <string name="downloads_play_resume">Reanudar</string>
-    <string name="downloads_play_again">Reproducir de nuevo</string>
-    <string name="downloads_show_less">Mostrar menos</string>
-    <string name="downloads_show_more">Mostrar más</string>
-    <string name="downloads_tracks">Pistas</string>
-    <string name="downloads_cast_crew">Reparto &amp; equipo</string>
-    <string name="downloads_download_info">Información de descarga</string>
-    <string name="downloads_file_size">Tamaño del archivo</string>
-    <string name="downloads_downloaded">Descargado</string>
     <string name="downloads_status">Estado</string>
-    <string name="downloads_progress">Progreso</string>
-    <string name="downloads_watch_status">Estado de visualización</string>
-    <string name="downloads_cd_switch_to_list">Cambiar a lista de episodios vertical</string>
-    <string name="downloads_cd_switch_to_cards">Cambiar a tarjetas de episodios horizontales</string>
-    <string name="downloads_in_progress">En curso</string>
-    <string name="downloads_started">Iniciado</string>
-    <string name="downloads_position">Posición</string>
-    <string name="downloads_position_of">%1$s de %2$s</string>
-    <string name="downloads_last_watched">Visto por última vez</string>
-    <string name="downloads_time_left">%1$s restante</string>
 
     <!-- Seasons / episodes -->
-    <string name="downloads_seasons">Temporadas</string>
-    <string name="downloads_mark_season_cd">Marcar temporada como vista o no vista</string>
-    <string name="downloads_mark_season_watched">Marcar temporada como vista</string>
-    <string name="downloads_mark_season_unwatched">Marcar temporada como no vista</string>
 
     <!-- Library sort / filter -->
     <string name="downloads_sort_recent">Reciente</string>
@@ -111,22 +80,8 @@
     <string name="downloads_filter_music">Música</string>
     <!-- Offline download resync -->
     <string name="downloads_resync">Sincronizar</string>
-    <string name="downloads_resync_cd">Buscar metadatos e imágenes actualizados</string>
-    <string name="downloads_resync_title">Sincronizar descarga</string>
-    <string name="downloads_resync_checking">Buscando actualizaciones…</string>
-    <string name="downloads_resync_update_available">Nueva información disponible</string>
     <string name="downloads_resync_media_changed">El archivo multimedia cambió — es necesario volver a descargar</string>
-    <string name="downloads_resync_in_progress">Sincronizando los últimos detalles…</string>
-    <string name="downloads_resync_complete">Descarga sincronizada con los últimos detalles</string>
-    <string name="downloads_resync_failed">La sincronización falló</string>
-    <string name="downloads_resync_up_to_date">Esta descarga está actualizada.</string>
-    <string name="downloads_resync_description">Hay información más reciente en el servidor. Sincroniza para actualizar metadatos e imágenes.</string>
-    <string name="downloads_resync_change_metadata">Metadatos actualizados (resumen, reparto, valoraciones)</string>
-    <string name="downloads_resync_change_images">Imágenes actualizadas (póster/fondo)</string>
-    <string name="downloads_resync_change_media">El propio archivo multimedia cambió</string>
-    <string name="downloads_resync_media_explanation">Una sincronización de metadatos no puede actualizar el archivo multimedia. Elimina y vuelve a descargar este elemento para obtener el nuevo archivo.</string>
     <string name="downloads_resync_action">Sincronizar ahora</string>
-    <string name="downloads_resync_redownload">Volver a descargar medios</string>
     <string name="downloads_resync_check_all">Comprobar todas las actualizaciones</string>
     <string name="downloads_resync_check_all_cd">Comprobar todas las descargas en busca de actualizaciones</string>
     <string name="downloads_resync_batch_title">Actualizaciones disponibles</string>

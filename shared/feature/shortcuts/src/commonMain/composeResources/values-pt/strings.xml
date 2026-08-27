@@ -8,12 +8,6 @@
     <string name="shortcuts_empty_title">Nenhum atalho disponível</string>
     <string name="shortcuts_empty_description">Navegue pelo app para descobrir recursos e conteúdos</string>
     <string name="shortcuts_empty_action">Explorar biblioteca</string>
-    <string name="shortcuts_hero_eyebrow">ACESSO RÁPIDO</string>
-    <string name="shortcuts_hero_title">Atalhos</string>
-    <string name="shortcuts_hero_subtitle">Downloads, pedidos, ajustes e ferramentas de administração</string>
-    <string name="shortcuts_stat_total">%1$d atalhos</string>
-    <string name="shortcuts_stat_category">%1$d %2$s</string>
-    <string name="shortcuts_featured_label">Destaque</string>
     <string name="shortcuts_item_downloads_title">Downloads</string>
     <string name="shortcuts_item_downloads_description">Conteúdo offline e gerenciamento de downloads.</string>
     <string name="shortcuts_item_favorites_title">Favoritos</string>

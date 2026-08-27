@@ -10,23 +10,16 @@
     <!-- Additional shared action literals -->
     <string name="core_confirm">Confirm</string>
     <string name="core_ok">OK</string>
-    <string name="core_apply">Apply</string>
     <string name="core_delete">Delete</string>
     <string name="core_clear">Clear</string>
     <string name="core_undo">Undo</string>
     <string name="core_clear_filters">Clear filters</string>
     <string name="core_copy">Copy</string>
     <string name="core_copied_to_clipboard">Copied to clipboard</string>
-    <string name="core_play_from_start">Play from start</string>
     <string name="core_restart">Restart</string>
-    <string name="core_send_now">Send now</string>
     <string name="core_search">Search</string>
-    <string name="core_stop_playback">Stop playback</string>
-    <string name="core_select_all">Select all</string>
-    <string name="core_mark_all_seen">Mark all as seen</string>
     <string name="core_loading">Loading…</string>
     <!-- Media quick-action sheet labels -->
-    <string name="core_action_quick_actions">Quick actions</string>
     <string name="core_action_play">Play</string>
     <string name="core_action_mark_watched">Mark as watched</string>
     <string name="core_action_mark_unwatched">Mark as unwatched</string>
@@ -89,7 +82,6 @@
     <string name="core_report">Report</string>
     <string name="core_ui_back">Back</string>
     <string name="core_ui_select">Select…</string>
-    <string name="core_ui_selected">Selected</string>
 
     <!-- core/ui auth challenge -->
     <string name="core_ui_auth_title">Authenticate</string>
@@ -191,7 +183,6 @@
 
     <!-- Shared player speed-picker custom-value labels (§2.3). Referenced by
          both the video and audio SpeedPickerSheet composables. -->
-    <string name="player_speed_custom">Custom speed</string>
     <string name="player_speed_value">%.2fx</string>
     <string name="player_speed_slider_label">Adjust playback speed</string>
 

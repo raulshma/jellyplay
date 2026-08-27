@@ -11,23 +11,16 @@
     <!-- Additional shared action literals -->
     <string name="core_confirm">Conferma</string>
     <string name="core_ok">OK</string>
-    <string name="core_apply">Applica</string>
     <string name="core_delete">Elimina</string>
     <string name="core_clear">Cancella</string>
     <string name="core_undo">Annulla</string>
     <string name="core_clear_filters">Rimuovi filtri</string>
     <string name="core_copy">Copia</string>
     <string name="core_copied_to_clipboard">Copiato negli appunti</string>
-    <string name="core_play_from_start">Riproduci dall\'inizio</string>
     <string name="core_restart">Ricomincia</string>
-    <string name="core_send_now">Invia ora</string>
     <string name="core_search">Cerca</string>
-    <string name="core_stop_playback">Ferma riproduzione</string>
-    <string name="core_select_all">Seleziona tutto</string>
-    <string name="core_mark_all_seen">Segna tutto come visto</string>
     <string name="core_loading">Caricamento…</string>
     <!-- Media quick-action sheet labels -->
-    <string name="core_action_quick_actions">Azioni rapide</string>
     <string name="core_action_play">Riproduci</string>
     <string name="core_action_mark_watched">Segna come visto</string>
     <string name="core_action_mark_unwatched">Segna come non visto</string>
@@ -82,7 +75,6 @@
     <string name="core_report">Segnala</string>
     <string name="core_ui_back">Indietro</string>
     <string name="core_ui_select">Seleziona…</string>
-    <string name="core_ui_selected">Selezionato</string>
 
     <!-- core/ui auth challenge -->
     <string name="core_ui_auth_title">Autentica</string>
@@ -180,7 +172,6 @@
     <string name="core_preview_new_format">%1$d nuovo</string>
 
     <!-- Shared player speed-picker custom-value labels (§2.3). -->
-    <string name="player_speed_custom">Velocità personalizzata</string>
     <string name="player_speed_value">%.2fx</string>
     <string name="player_speed_slider_label">Regola la velocità di riproduzione</string>
 

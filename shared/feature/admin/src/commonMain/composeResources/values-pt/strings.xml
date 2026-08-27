@@ -149,16 +149,12 @@
     <string name="admin_no_users">Nenhum usuário</string>
     <string name="admin_new_user_title">Novo usuário</string>
     <string name="admin_password_optional">Senha (opcional)</string>
-    <string name="admin_show_password">Mostrar palavra-passe</string>
-    <string name="admin_hide_password">Ocultar palavra-passe</string>
     <string name="admin_create">Criar</string>
     <string name="admin_delete_user_title">Excluir usuário</string>
     <string name="admin_delete_user_body">Excluir \"%1$s\"? Isso não pode ser desfeito.</string>
     <string name="admin_new_password">Nova senha</string>
     <string name="admin_discard">Descartar</string>
     <string name="admin_save_changes">Salvar alterações</string>
-    <string name="admin_changes_saved">Alterações salvas</string>
-    <string name="admin_saved_reload_failed">Salvo — não foi possível recarregar; toque em atualizar para verificar</string>
     <string name="admin_could_not_reload">Não foi possível recarregar o usuário atualizado</string>
 
     <!-- User detail: tabs / sections -->

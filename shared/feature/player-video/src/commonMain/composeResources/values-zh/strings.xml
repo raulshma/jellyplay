@@ -5,7 +5,6 @@
     <string name="player_resumed_message">已从您上次离开的位置继续</string>
     <string name="player_reset_to_auto">重置为自动</string>
     <string name="player_track_default">默认</string>
-    <string name="player_track_off">关闭</string>
     <string name="player_track_none">无</string>
 
     <string name="track_badge_forced">强制</string>
@@ -100,12 +99,10 @@
     <string name="player_video_play">播放</string>
     <string name="player_video_stop">停止</string>
     <string name="player_video_synced">已同步</string>
-    <string name="player_video_syncing">同步中</string>
     <string name="player_video_buffering">缓冲中</string>
     <string name="player_video_group">群组</string>
 
     <!-- Subtitle manager sheet -->
-    <string name="player_video_get_subtitles">获取字幕</string>
     <string name="player_video_download">下载</string>
     <string name="player_video_search">搜索</string>
     <string name="player_video_upload">上传</string>
@@ -149,7 +146,6 @@
     <string name="player_video_ends_at">在 %1$s 结束</string>
 
     <!-- Player overflow menu -->
-    <string name="player_video_subtitle_style">字幕样式</string>
     <string name="player_video_dialogue_boost">对白增强</string>
     <string name="player_video_dialogue_boost_on">对白增强 \u00B7 %1$s</string>
     <string name="player_video_night_mode">夜间模式</string>
@@ -318,9 +314,6 @@
     <string name="player_video_font_invalid_format">所选文件不是 .ttf 或 .otf 字体。</string>
 
     <string name="player_video_subtitle_provider_all">全部</string>
-    <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
-    <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
-    <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
 
     <!-- 无障碍：亮度/音量手势区域的屏幕阅读器语义 (P5 §3.1) -->
     <string name="a11y_gesture_controls">亮度和音量控制</string>

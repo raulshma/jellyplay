@@ -11,7 +11,6 @@
     <string name="settings_preset_deleted">„%1$s\" gelöscht</string>
     <string name="settings_share_preset">„%1$s\" teilen</string>
     <string name="settings_home_layout_subject">JellyPlay Start-Layout: %1$s</string>
-    <string name="settings_share_with">Öffnen mit\u2026</string>
 
     <!-- Common shared strings -->
     <string name="settings_cancel">Abbrechen</string>
@@ -32,7 +31,6 @@
     <string name="settings_search_hint">Tippen, um Einstellungen zu durchsuchen</string>
     <string name="settings_recents_title">Zuletzt</string>
     <string name="settings_clear_recents">Leeren</string>
-    <string name="settings_signed_in_as_label">Angemeldet als</string>
     <string name="settings_account">Konto</string>
     <string name="settings_signed_in_as_name">Angemeldet als %1$s</string>
     <string name="settings_sign_out">Abmelden</string>
@@ -154,9 +152,6 @@
     <string name="settings_send_logs_chooser">Protokolle senden</string>
     <string name="settings_check_updates_automatically">Automatisch nach Updates suchen</string>
     <string name="settings_check_updates_subtitle">Regelmäßig auf GitHub nach neuen Versionen suchen</string>
-    <string name="settings_checking_for_updates">Nach Updates suchen\u2026</string>
-    <string name="settings_update_available">Update verfügbar: v%1$s</string>
-    <string name="settings_up_to_date">Auf dem neuesten Stand (v%1$s)</string>
     <string name="settings_check_for_updates">Nach Updates suchen</string>
     <string name="settings_acknowledgements">Danksagung</string>
 
@@ -187,7 +182,6 @@
     <string name="settings_libraries_subtitle">%1$d von %2$d Mediatheken überwacht</string>
     <string name="settings_quiet_hours_start">Ruhezeiten-Beginn</string>
     <string name="settings_quiet_hours_end">Ruhezeiten-Ende</string>
-    <string name="settings_max_items_per_check">Max. Einträge pro Prüfung</string>
     <string name="settings_monitored_libraries">Überwachte Mediatheken</string>
     <string name="settings_no_libraries_found">Keine Mediatheken gefunden</string>
     <string name="settings_items_count">%1$d Einträge</string>
@@ -253,8 +247,6 @@
     <string name="settings_factory_reset_category_message">Alle Einstellungen in dieser Kategorie auf Werkseinstellungen zurücksetzen? Diese Aktion kann nicht rückgängig gemacht werden.</string>
     <string name="settings_factory_reset_changed_count">%1$d von %2$d geändert</string>
     <string name="settings_factory_reset_up_to_date">Auf dem neuesten Stand</string>
-    <string name="settings_factory_reset_current_value">Aktuell</string>
-    <string name="settings_factory_reset_factory_value">Werk</string>
     <string name="settings_factory_reset_summary_card">%1$d von %2$d Einstellungen weichen vom Werkdefault ab</string>
     <string name="settings_factory_reset_category_done">Kategorie auf Werkseinstellungen zurückgesetzt</string>
     <string name="settings_factory_reset_all_done">Alle Einstellungen auf Werkseinstellungen zurückgesetzt</string>
@@ -297,7 +289,6 @@
     <!-- ArrSettingsScreen.kt -->
     <string name="settings_arr_test">Testen</string>
     <string name="settings_arr_test_all">Alle testen</string>
-    <string name="settings_arr_connected">Verbunden</string>
     <string name="settings_seerr_sign_in">Anmelden</string>
     <string name="settings_disconnect">Trennen</string>
     <string name="settings_integration_features">Integrationsfunktionen</string>
@@ -323,8 +314,6 @@
     <string name="settings_discover_region_subtitle">Region für Veröffentlichungsdaten und Inhaltsentdeckung</string>
     <string name="settings_username_label">Benutzername</string>
     <string name="settings_password_label">Passwort</string>
-    <string name="settings_hide_password">Passwort ausblenden</string>
-    <string name="settings_show_password">Passwort anzeigen</string>
     <string name="settings_email_label">E-Mail</string>
     <string name="settings_connected">Verbunden</string>
     <string name="settings_server_reached_version">Server erreicht (v%1$s)</string>
@@ -482,7 +471,6 @@
 
     <!-- LanguageSettingsScreen.kt -->
     <string name="settings_lang_system_default">Systemstandard</string>
-    <string name="settings_lang_english">Englisch</string>
     <string name="settings_lang_default">Standard</string>
     <string name="settings_language_subs_title">Sprache &amp; Untertitel</string>
     <string name="settings_language">Sprache</string>
@@ -608,11 +596,6 @@
     <string name="settings_save">Speichern</string>
     <string name="settings_import_paste_description">Füge unten ein geteiltes JellyPlay-Start-Layout-JSON ein und wende es an.</string>
     <string name="settings_apply">Anwenden</string>
-    <string name="settings_action_load">Laden</string>
-    <string name="settings_action_load_desc">Dieses Preset auf deinen Startbildschirm anwenden</string>
-    <string name="settings_action_share_desc">Preset-JSON kopieren / senden</string>
-    <string name="settings_action_delete">Löschen</string>
-    <string name="settings_action_delete_desc">Dieses Preset entfernen</string>
 
     <!-- PinnedHomeSectionsScreen.kt -->
     <string name="settings_pinned_home_sections">Angeheftete Start-Bereiche</string>
@@ -623,7 +606,6 @@
     <string name="settings_configure_libraries_desc">Wähle, welche Mediatheken „Neueste Medien\" und „Kürzlich hinzugefügt\" auf dem Startbildschirm zeigen</string>
     <string name="settings_library_sections">Mediatheken auf dem Startbildschirm</string>
     <string name="settings_library_no_libraries">Keine Mediatheken gefunden</string>
-    <string name="settings_library_load_error">Mediatheken konnten nicht geladen werden</string>
     <string name="settings_subsection_latest_media">Neueste Medien</string>
     <string name="settings_subsection_recently_added">Kürzlich hinzugefügt</string>
     <string name="settings_subsection_latest_media_desc">Eine „Neueste\"-Reihe für diese Mediathek zeigen</string>
@@ -766,7 +748,6 @@
     <!-- StorageSettingsScreen.kt: real storage mounts -->
     <string name="storage_internal">Interner Speicher</string>
     <string name="storage_sd_card">SD-Karte</string>
-    <string name="storage_usb">USB-Speicher</string>
     <string name="storage_external">Externer Speicher</string>
 
     <!-- AudioSettingsScreen.kt -->
@@ -1103,8 +1084,6 @@
     <string name="settings_popular_series_subtitle">Beliebte Serien auf TMDB</string>
     <string name="settings_seerr_request_hub">Seerr-Anfragezentrum</string>
     <string name="settings_seerr_header_description">Verbinde Jellyseerr oder Overseerr, um direkt aus JellyPlay heraus Inhalte zu suchen, zu entdecken und anzufordern.</string>
-    <string name="settings_hide_api_key">API-Schlüssel ausblenden</string>
-    <string name="settings_show_api_key">API-Schlüssel anzeigen</string>
     <string name="settings_jellyfin_username_placeholder">Jellyfin-Benutzername</string>
     <string name="settings_jellyfin_password_placeholder">Jellyfin-Passwort</string>
     <string name="settings_seerr_email_placeholder">Seerr-Konto-E-Mail</string>

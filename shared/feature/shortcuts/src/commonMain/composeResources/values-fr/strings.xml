@@ -8,12 +8,6 @@
     <string name="shortcuts_empty_title">Aucun raccourci disponible</string>
     <string name="shortcuts_empty_description">Parcourez l\'app pour découvrir des fonctions et du contenu</string>
     <string name="shortcuts_empty_action">Parcourir la bibliothèque</string>
-    <string name="shortcuts_hero_eyebrow">ACCÈS RAPIDE</string>
-    <string name="shortcuts_hero_title">Raccourcis</string>
-    <string name="shortcuts_hero_subtitle">Téléchargements, demandes, réglages et outils d\'administration</string>
-    <string name="shortcuts_stat_total">%1$d raccourcis</string>
-    <string name="shortcuts_stat_category">%1$d %2$s</string>
-    <string name="shortcuts_featured_label">En vedette</string>
     <string name="shortcuts_item_downloads_title">Téléchargements</string>
     <string name="shortcuts_item_downloads_description">Contenu hors ligne et gestion des téléchargements.</string>
     <string name="shortcuts_item_favorites_title">Favoris</string>

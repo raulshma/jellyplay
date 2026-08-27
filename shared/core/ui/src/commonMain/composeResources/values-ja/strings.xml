@@ -11,23 +11,16 @@
     <!-- Additional shared action literals -->
     <string name="core_confirm">確認</string>
     <string name="core_ok">OK</string>
-    <string name="core_apply">適用</string>
     <string name="core_delete">削除</string>
     <string name="core_clear">クリア</string>
     <string name="core_undo">元に戻す</string>
     <string name="core_clear_filters">フィルターをクリア</string>
     <string name="core_copy">コピー</string>
     <string name="core_copied_to_clipboard">クリップボードにコピーしました</string>
-    <string name="core_play_from_start">最初から再生</string>
     <string name="core_restart">最初から再生</string>
-    <string name="core_send_now">今すぐ送信</string>
     <string name="core_search">検索</string>
-    <string name="core_stop_playback">再生を停止</string>
-    <string name="core_select_all">すべて選択</string>
-    <string name="core_mark_all_seen">すべて視聴済みにする</string>
     <string name="core_loading">読み込んでいます…</string>
     <!-- Media quick-action sheet labels -->
-    <string name="core_action_quick_actions">クイック操作</string>
     <string name="core_action_play">再生</string>
     <string name="core_action_mark_watched">視聴済みにする</string>
     <string name="core_action_mark_unwatched">未視聴にする</string>
@@ -82,7 +75,6 @@
     <string name="core_report">報告</string>
     <string name="core_ui_back">戻る</string>
     <string name="core_ui_select">選択…</string>
-    <string name="core_ui_selected">選択済み</string>
 
     <!-- core/ui auth challenge -->
     <string name="core_ui_auth_title">認証</string>
@@ -180,7 +172,6 @@
     <string name="core_preview_new_format">新着 %1$d 件</string>
 
     <!-- Shared player speed-picker custom-value labels (§2.3). -->
-    <string name="player_speed_custom">再生速度を指定</string>
     <string name="player_speed_value">%.2fx</string>
     <string name="player_speed_slider_label">再生速度を調整</string>
 
