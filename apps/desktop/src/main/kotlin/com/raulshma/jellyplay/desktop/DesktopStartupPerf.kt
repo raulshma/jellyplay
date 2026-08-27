@@ -63,16 +63,37 @@ class DesktopStartupPerf(
         koinStarted.set(System.nanoTime())
     }
 
-    /** Called from the AWT event thread when the ComposeWindow becomes visible. */
+    /**
+     * Called from the AWT event thread when the ComposeWindow becomes visible.
+     *
+     * Persistence ordering (review round 1): whichever of window-shown /
+     * first-frame lands LAST triggers the single flush. Flushing from only one
+     * site would CAS-lock a partial JSON whenever that mark ran first — e.g.
+     * first-frame before AWT visibility would latch `windowShownMs: null`
+     * forever on a plain `jellyplay.perf.persist=true` run, which has no
+     * auto-exit force-flush to rewrite it later.
+     */
     fun markWindowShown() {
         windowShown.set(System.nanoTime())
+        maybeFlushWhenComplete()
     }
 
     /** Called after the frame clock produces the first real frame. */
     fun markFirstFrame(atNanos: Long) {
         firstFrame.set(atNanos)
-        // First frame is the last startup mark to land — persist once, here.
-        if (persistRequested) flushStartupJson()
+        maybeFlushWhenComplete()
+    }
+
+    /**
+     * Persist once BOTH late-arriving marks exist. Known limitation, by
+     * design: a boot where either never arrives stays UNWRITTEN until an
+     * auto-exit force-flush — jellyplay.perf.persist=true alone intentionally
+     * writes nothing incomplete.
+     */
+    private fun maybeFlushWhenComplete() {
+        if (!persistRequested) return
+        if (windowShown.get() == MISSING_MARK || firstFrame.get() == MISSING_MARK) return
+        flushStartupJson()
     }
 
     /**

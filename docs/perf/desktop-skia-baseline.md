@@ -48,15 +48,16 @@ Output contract (one compact JSON line each):
 | Profile isolation | Fresh `<LOCALAPPDATA>/JellyPlayPerfBaseline/profile-run-N/data+config+db` per run, deleted after collection |
 | Warmup policy | 1 discarded warmup run, then 5 measured runs |
 | Auto-exit | `exitProcess(0)` at t=12 s of app uptime (bypasses graceful teardown by design, see above) |
-| Working-set sampling | PowerShell `Get-Process -Name JellyPlay` every ~0.75 s wall clock until process death; idle sample = median over ticks ≈8–13 s (covers spawn-latency skew vs app uptime honestly instead of pretending 1 Hz alignment); deadline hard-kill uses `taskkill //PID <pid> //F` with only PIDs this run observed — never title matching |
+| Working-set sampling | PowerShell `Get-Process -Name JellyPlay` every ~0.75 s wall clock until process death; idle sample = median over WALL-CLOCK TICKS 8–13 after launch — a tick is sleep+PS overhead ≈ ~1 s, so the window is roughly 6–10 s POST-LAUNCH. The app-side heap sample fires at exactly 8 s of APP uptime; the two are close but not equal (~±2 s worst-case skew), which every "~"-labeled output marks rather than hides. Deadline hard-kill uses `taskkill //PID <pid> //F` with only PIDs this run observed — never title matching |
 | Concurrency guard | Harness refuses to start while ANY `JellyPlay.exe` already lives, so numbers can never include a stranger's session |
 
-Windows quirk recorded for reproducers: the jpackage launcher EXE is a
-short-lived parent — `(Start-Process -PassThru).Id` returns a stub that exits
-within ~1 s while the real JVM continues elsewhere. That is why the harness
-launches directly from bash (verified env inheritance + redirectable output)
-and samples ALL live `JellyPlay.exe` instances; the ~8 MB stub survives the
-whole run alongside the JVM, hence the combined-vs-single working set labels.
+Windows quirk recorded for reproducers — launcher behavior DEPENDS on spawn
+path: via PowerShell `Start-Process`, `(Start-Process -PassThru).Id` returns a
+~8 MB stub parent that exits within ~1 s while another process carries on;
+under this harness's DIRECT BASH EXEC that same launcher shell stays alive
+beside the JVM until both exit together. Either way up to TWO processes can be
+live (shell + JVM), hence sampling ALL live `JellyPlay.exe` instances and the
+combined-vs-single working set labels below.
 
 ## Machine
 
@@ -72,7 +73,7 @@ whole run alongside the JVM, hence the combined-vs-single working set labels.
 Per-run table (warmup row shown but excluded from aggregates). Canonical run
 executed the exact committed-tree binary:
 
-| run | koinStartMs | windowShownMs | firstFrameMs | idleWS_MB(~8s) | maxWS_MB | usedHeap_MB |
+| run | koinStartMs | windowShownMs | firstFrameMs | idleWS_MB(post-launch-WS-window) | maxWS_MB | usedHeap_MB |
 |---|---|---|---|---|---|---|
 | warmup | 1410.460 | 9250.938 | 9251.168 | 299.9 | 310.8 | 31.7 |
 | 1 | 540.441 | 2779.853 | 2779.905 | 324.0 | 334.5 | 56.1 |
@@ -81,16 +82,19 @@ executed the exact committed-tree binary:
 | 4 | 761.359 | 4734.667 | 4734.808 | 309.0 | 301.2 | 36.0 |
 | 5 | 535.700 | 2713.816 | 2713.866 | 330.3 | 341.9 | 50.0 |
 
-**Aggregates over 5 measured runs** (min / median / max; warmup excluded)
+**Aggregates over 5 measured runs** (min / median / max; warmup excluded).
+Regenerated after review round 1: the previous aggregation pipeline dropped
+measured run #1 and published 4-sample stats — every cell below was recomputed
+as a true 5-sample statistic; the per-run rows above are unchanged.
 
 | field | min / median / max |
 |---|---|
-| koinStart (ms) | 535.700 / 620.101 / 761.359 |
-| windowShown (ms) | 2546.917 / 3284.559 / 4734.667 |
-| firstFrame (ms) | 2546.967 / 3284.689 / 4734.808 |
-| idle combined working set @~8s (MB, launcher+app) | 309.0 / 327.600 / 330.3 |
-| largest single-process working set to exit (MB) | 301.2 / 330.950 / 341.9 |
-| JVM used heap @8s (MB) | 36.0 / 53.000 / 56.1 |
+| koinStart (ms) | 535.700 / 540.441 / 761.359 |
+| windowShown (ms) | 2546.917 / 2779.853 / 4734.667 |
+| firstFrame (ms) | 2546.967 / 2779.905 / 4734.808 |
+| idle combined working set (MB, launcher+app; WS ticks ≈ 8–13 post-launch — NOT app-t=8s) | 309.0 / 325.300 / 330.3 |
+| largest single-process working set to exit (MB) | 301.2 / 334.500 / 341.9 |
+| JVM used heap @8s of app uptime (MB) | 36.0 / 56.000 / 56.1 |
 
 ### Read-through (description, not prescription)
 
@@ -112,11 +116,13 @@ executed the exact committed-tree binary:
 Read these before quoting any number above:
 
 1. **Single machine, consumer Windows laptop, wall-clock measurement.**
-   Median `windowShown` ranged 3285 ms – 4397 ms – 5777 ms across three
-   same-day harness invocations minutes apart as background desktop load
-   changed. Treat the ms medians as ballpark, not contract; only same-session
-   A/B comparisons (before/after a specific change on the same machine,
-   interleaved) are meaningful when re-measuring.
+   `windowShown` aggregates landed anywhere from ~2.8 s to ~5.8 s across three
+   same-day harness executions minutes apart as background desktop load
+   changed (two of those three ran via the pre-review aggregator that dropped
+   measured run #1, i.e. their medians describe a 4-run subset — direction of
+   the noise conclusion is unaffected). Treat ms numbers as ballpark, not
+   contract; only same-session A/B comparisons (before/after one specific
+   change, interleaved on the same machine) are meaningful when re-measuring.
 2. **Distribution build has proguard/R8 disabled** (`buildTypes.release.proguard
    isEnabled = false`). Startup numbers therefore describe an UNMINIFIED
    classpath — i.e. they are ceiling-favorable (pessimistic for startup);
@@ -125,8 +131,9 @@ Read these before quoting any number above:
 3. **Memory semantics**: "idle combined WS" sums the ~8 MB launcher stub plus
    the app JVM (two processes, see methodology); "largest single-process" is
    one process. They are different quantities on purpose — do not subtract them.
-   JVM heap-at-rest (~37 MB median) is what managed allocations actually hold;
-   the rest of the working set is mapped runtime/Skia/JIT machinery.
+   JVM heap-at-rest is what managed allocations actually hold (a few tens of
+   MB — 36–56 MB used across this session's runs); the rest of the working set
+   is mapped runtime/Skia/JIT machinery.
 4. **firstFrame granularity**: recorded when the frame clock delivers its first
    frame after root-content initial composition (which includes
    `DesktopAppRoot`) — not from inside `DesktopAppRoot`. Empirically identical

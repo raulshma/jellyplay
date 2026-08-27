@@ -18,14 +18,17 @@
 #   3. parses <profile>/logs/startup-latest.json + memory-latest.json and
 #      prints a markdown results table (min/median/max over measured runs).
 #
-# Spawn-path note (empirical, Windows): the jpackage launcher EXE is a
-# SHORT-LIVED parent — `(Start-Process -PassThru).Id` hands back a stub that
-# exits within ~1 s while the real JVM carries on in another process. Direct
-# bash exec was verified end-to-end (env inherited, output redirectable), so
-# this harness launches that way and samples ALL live JellyPlay.exe processes.
-# It refuses to start while any JellyPlay.exe already runs so sampling can
-# never capture someone else's session; kills are keyed strictly by PIDs we
-# observed for our own window.
+# Spawn-path notes (empirical, Windows) — behavior DIFFERS by spawn path:
+#   * Via PowerShell Start-Process: `(Start-Process -PassThru).Id` returns a
+#     short-lived parent (~8 MB stub) that exits within ~1 s while another
+#     process carries on — that path cannot be PID-tracked for liveness.
+#   * Under this script's DIRECT BASH EXEC (what we actually use, verified
+#     env-inheritance + redirectable output): the launcher shell stays alive
+#     beside the JVM until process death and both exit together, so sampling
+#     ALL live JellyPlay.exe instances is the safe invariant either way.
+# The harness refuses to start while any JellyPlay.exe already runs so
+# sampling can never capture someone else's session; kills are keyed strictly
+# by PIDs observed in our own window.
 #
 # Policy: WARMUP_RUNS discarded (default 1), then N measured runs (default 5).
 #
@@ -160,9 +163,13 @@ run_one() { # $1 = run index label; results land in EMIT_* globals
 $OBSERVED_PIDS" in *"$pid_cur"*) ;; *) OBSERVED_PIDS="$OBSERVED_PIDS$pid_cur"$'\n' ;; esac
             done <<< "$snap"
             TICK=$(( TICK + 1 ))
-            # Idle-window ≈ ticks HEAP_SAMPLE_SECONDS..+5 wall-clock (~0.75 s
-            # each); spawn latency shifts it ~1 s vs app uptime — medians over
-            # the window keep that shift honest instead of hiding it.
+            # Idle-WS window = WALL-CLOCK TICKS 8..13 after launch, where a
+            # tick is 0.75 s sleep + PowerShell overhead ≈ ~1 s ⇒ the window
+            # is roughly 6–10 s post-LAUNCH. The APP-side heap sample fires at
+            # exactly HEAP_SAMPLE_SECONDS of app uptime; the two are close but
+            # NOT equal (spawn latency + tick drift, ~±2 s worst case). The
+            # "~" labels in output mark that skew; medians absorb it instead
+            # of hiding it.
             if (( TICK >= HEAP_SAMPLE_SECONDS && TICK <= HEAP_SAMPLE_SECONDS + 5 )); then
                 ws_at_sample+="$(awk -F',' '{s+=$1} END {print int(s)}' <<< "$snap")"$'\n'
             fi
@@ -210,7 +217,7 @@ echo "== JellyPlay desktop Skia startup/memory baseline =="
 echo "out dir: $OUTDIR"
 say_machine_specs
 
-HDR="| run | koinStartMs | windowShownMs | firstFrameMs | idleWS_MB(~${HEAP_SAMPLE_SECONDS}s) | maxWS_MB | usedHeap_MB |"
+HDR="| run | koinStartMs | windowShownMs | firstFrameMs | idleWS_MB(post-launch-WS-window) | maxWS_MB | usedHeap_MB |"
 ROWS_FILE="$OUTDIR/rows.txt"; : > "$ROWS_FILE"
 CSV="$OUTDIR/raw.csv"; echo "run,koinStartMs,windowShownMs,firstFrameMs,idleWSMB,maxWSMB,usedHeapMB" > "$CSV"
 
@@ -225,7 +232,11 @@ for i in $(seq 0 $(( total_runs - 1 ))); do
 done
 
 # Summary over MEASURED runs only (warmups dropped): min / median / max per field.
-measured_rows="$(tail -n "$MEASURED_RUNS" "$CSV" | tail -n +2)"
+# Rows = header + warmup + N measured lines, so the last N+1 lines are
+# warmup..runN — drop exactly one leading line. The previous `tail -n N |
+# tail -n +2` sliced off MEASURED RUN #1 instead and produced 4-sample
+# aggregates mislabeled as 5-run stats (review round 1).
+measured_rows="$(tail -n $(( MEASURED_RUNS + 1 )) "$CSV" | tail -n +2)"
 summarize_field() { # $1 col index(1-based) → "min / median / max", missing '-' rows excluded
     local vals mn mx md
     vals="$(cut -d',' -f"$1" <<< "$measured_rows" | grep -Ev '^(-|$)')"
@@ -247,7 +258,7 @@ summarize_field() { # $1 col index(1-based) → "min / median / max", missing '-
     echo "| koinStart (ms) | $(summarize_field 2) |"
     echo "| windowShown (ms) | $(summarize_field 3) |"
     echo "| firstFrame (ms) | $(summarize_field 4) |"
-    echo "| idle combined working set @~${HEAP_SAMPLE_SECONDS}s (MB, launcher+app) | $(summarize_field 5) |"
+    echo "| idle combined working set (MB, launcher+app; WS ticks ≈ ${HEAP_SAMPLE_SECONDS}–$((HEAP_SAMPLE_SECONDS + 5)) post-launch — NOT app-t=${HEAP_SAMPLE_SECONDS}s) | $(summarize_field 5) |"
     echo "| largest single-process working set to exit (MB) | $(summarize_field 6) |"
     echo "| JVM used heap @${HEAP_SAMPLE_SECONDS}s (MB) | $(summarize_field 7) |"
 } | tee "$OUTDIR/summary.md"
