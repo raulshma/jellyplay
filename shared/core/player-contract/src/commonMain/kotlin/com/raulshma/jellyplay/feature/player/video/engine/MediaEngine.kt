@@ -115,6 +115,28 @@ data class AudioEffectsConfig(
     val reverbPreset: com.raulshma.jellyplay.core.model.ReverbPreset = com.raulshma.jellyplay.core.model.ReverbPreset.NONE,
     val volumeBoostEnabled: Boolean = false,
     val volumeBoostGain: Int = 0,
+    /**
+     * L/R steering balance in `[-1, 1]` (mirrors Android's in-sink
+     * [BalanceAudioProcessor] semantics: `+` attenuates the LEFT side).
+     * Applied by engines with a native balance surface (desktop mpv: a
+     * layout-gated `pan` stage in the `af` chain). `0f` = centered.
+     */
+    val lrBalance: Float = 0f,
+    /**
+     * Pitch shift in semitones (Android: media3 `PlaybackParameters.pitch`
+     * multiplier). Engines map this onto their native pitch surface
+     * (desktop mpv: the runtime `pitch` property). `0f` = unity.
+     */
+    val pitchSemitones: Float = 0f,
+    /**
+     * FINAL per-track ReplayGain gain in dB, pre-computed by the host
+     * manager (track gain + user pre-amp, with the Android
+     * ALBUM+shuffled → 0 rule already folded in — mirrors
+     * `AudioEffectsProcessor.applyReplayGain`). TRACK/ALBUM engines apply
+     * it as a static gain stage; `null` = no per-track gain (DYNAMIC uses
+     * the compressor stage instead; NONE disables both).
+     */
+    val replayGainEffectiveDb: Float? = null,
 )
 
 @Immutable

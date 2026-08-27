@@ -82,8 +82,14 @@ import kotlinx.coroutines.launch
  * [extraOptions] with `vo=null`/`ao=null`.
  *
  * Deliberate V2 cuts (revisit when the player feature migrates in V3):
- * audio-effects/video-effects filter chains, ReplayGain normalization,
- * screenshot capture, live-cue history in [currentCues].
+ * video-effects (`vf`) filter chains, screenshot capture, live-cue history in
+ * [currentCues]. Wave 14C closed the audio-effects cut: `EngineConfig.audioEffects`
+ * is now applied as a live mpv `af` chain + `audio-channels`/`pitch` properties
+ * ([DesktopAudioEffectChain] builds the strings — see its Android→mpv parity
+ * table). `PlaybackRequest.normalizationGain` stays unused here: the desktop
+ * audio path carries the manager-computed final ReplayGain dB in the config
+ * (`replayGainEffectiveDb`), mirroring where Android's `AudioPlaybackManager`
+ * applies the gain.
  *
  * Open (wave 12B) so [MpvSoftwareRenderEngine] can subclass it for the
  * render-API software-render path with three small hooks ([liveMpvHandle],
@@ -285,6 +291,9 @@ open class MpvDesktopEngine(
         observe("demuxer-cache-time", FORMAT_INT64)
         observe("sub-text", FORMAT_STRING)
         observe("track-list", FORMAT_NODE)
+        // Live output channel layout — the balance (`pan`) af stage must know
+        // it because `pan` pins the output layout (see DesktopAudioEffectChain).
+        observe("audio-params/channel-count", FORMAT_INT64)
     }
 
     // ── Event dispatch ──────────────────────────────────────────────────────
@@ -292,6 +301,19 @@ open class MpvDesktopEngine(
     @Volatile private var fileLoaded = false
     @Volatile private var pendingSubtitles: List<SubtitleSource> = emptyList()
     @Volatile private var currentConfig: EngineConfig = EngineConfig()
+    /** Last observed `audio-params/channel-count`; null until mpv reports one. */
+    @Volatile private var observedChannelCount: Int? = null
+
+    // Last-applied audio-effect property values. mpv re-inits its audio chain
+    // when `af`/`audio-channels`/`pitch` are written — re-writing the SAME
+    // value at every FILE_LOADED breaks the ao=null/real-ao pacing clock
+    // (observed: 3 s fixture ended before the manager's first 2.5 s ticker
+    // wake). Only actual CHANGES may hit mpv. The caches start at mpv's own
+    // defaults (auto-safe ≈ auto, pitch 1.0) so an all-defaults config
+    // performs ZERO writes at load — the pre-effects pacing behavior.
+    @Volatile private var lastAppliedAudioChannels: String? = AUTO_CHANNELS
+    @Volatile private var lastAppliedPitch: Double? = 1.0
+    @Volatile private var lastAppliedAfChain: String? = null
 
     /**
      * The live mpv handle for member calls, or null after [release] — every
@@ -410,6 +432,16 @@ open class MpvDesktopEngine(
                 data?.getString(0)?.takeIf { it.isNotBlank() }
             "speed" -> data?.let { speedValue = it.getDouble(0).toFloat() }
             "track-list" -> refreshTracks()
+            "audio-params/channel-count" -> {
+                val count = data?.getLong(0)?.toInt()
+                if (count != null && count != observedChannelCount) {
+                    observedChannelCount = count
+                    // The layout changed (new item / channel-mix edit): the
+                    // stereo-gated balance stage must be rebuilt against the
+                    // new layout.
+                    applyAudioEffects(currentConfig)
+                }
+            }
         }
     }
 
@@ -733,9 +765,11 @@ open class MpvDesktopEngine(
         if (oldConfig.engineSpecific != newConfig.engineSpecific && newConfig.engineSpecific != null) {
             applyConfigToMpv(newConfig)
         }
-        // audioEffects/videoEffects (af/vf chains) land with the player feature
-        // migration (§V3) — the desktop matrix advertises them ahead of the
-        // implementation, same as the Android engine did pre-effects.
+        if (oldConfig.audioEffects != newConfig.audioEffects) {
+            // Live re-apply — mpv re-inits the af chain / audio-channels /
+            // pitch on property writes (verified against the bundled libmpv).
+            applyAudioEffects(newConfig)
+        }
     }
 
     private fun applyConfigToMpv(config: EngineConfig) {
@@ -744,6 +778,39 @@ open class MpvDesktopEngine(
         MpvLib.setPropertyDouble(context, "sub-delay", config.subtitleDelayMs / 1000.0)
         MpvLib.setPropertyString(context, "hwdec", hwdecFor(config.decoderMode))
         applySubtitleStyle(config.subtitleStyle)
+        applyAudioEffects(config)
+    }
+
+    /**
+     * Wave 14C: push the audio-effects config onto mpv — the `af` chain
+     * ([DesktopAudioEffectChain.buildAfChain]), the channel-mix
+     * `audio-channels` property, and the `pitch` property. All three are
+     * runtime-settable; mpv rebuilds the audio chain on write — which is why
+     * unchanged values are never re-written (see the pacing note on the
+     * last-applied fields).
+     */
+    private fun applyAudioEffects(config: EngineConfig) {
+        val context = aliveCtx() ?: return
+        val fx = config.audioEffects
+        val channels = DesktopAudioEffectChain.channelMixToAudioChannels(fx.channelMixMode, fx.channelMixEnabled)
+        if (channels != lastAppliedAudioChannels) {
+            MpvLib.setPropertyString(context, "audio-channels", channels)
+            lastAppliedAudioChannels = channels
+        }
+        val pitch = DesktopAudioEffectChain.pitchRatio(fx.pitchSemitones)
+        if (pitch != lastAppliedPitch) {
+            MpvLib.setPropertyDouble(context, "pitch", pitch)
+            lastAppliedPitch = pitch
+        }
+        val chain = DesktopAudioEffectChain.buildAfChain(fx, observedChannelCount)
+        if (chain != lastAppliedAfChain) {
+            if (chain != null) {
+                MpvLib.setPropertyString(context, "af", chain)
+            } else {
+                MpvLib.command(context, "af", "clr", "")
+            }
+            lastAppliedAfChain = chain
+        }
     }
 
     /** Open for [MpvSoftwareRenderEngine], which must pin sw decode (no interop in the sw path). */
@@ -854,5 +921,7 @@ open class MpvDesktopEngine(
         private const val VIDEO_STATS_POLL_MS = 1000L
         private const val RELEASE_JOIN_TIMEOUT_MS = 2_000L
         private const val RELEASE_JOIN_ATTEMPTS = 3
+        /** mpv's untouched default for `audio-channels`. */
+        private const val AUTO_CHANNELS = "auto"
     }
 }

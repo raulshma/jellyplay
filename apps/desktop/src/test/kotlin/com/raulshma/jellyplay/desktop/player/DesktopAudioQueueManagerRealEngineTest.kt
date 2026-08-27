@@ -4,13 +4,22 @@ import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
+import com.raulshma.jellyplay.core.model.EqualizerPreset
+import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib
+import com.sun.jna.Pointer
 import java.io.File
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.math.abs
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -49,6 +58,126 @@ class DesktopAudioQueueManagerRealEngineTest {
     @AfterTest
     fun tearDown() {
         cleanupDir?.deleteRecursively()
+    }
+
+    @Test
+    fun realEngineAppliesTheEffectsStackOntoTheMpvAfChain() {
+        assumeTrue(libmpvAvailable(), { "libmpv not available on this machine" })
+        val dir = File(System.getProperty("java.io.tmpdir"), "jellyplay-audio-fx-${System.nanoTime()}")
+            .apply { mkdirs() }
+            .also { cleanupDir = it }
+        val wavA = writeTestWav(File(dir, "a.wav"), seconds = 6.0)
+        val wavB = writeTestWav(File(dir, "b.wav"), seconds = 3.0)
+
+        val executor = Executors.newSingleThreadExecutor()
+        val scope = CoroutineScope(SupervisorJob() + executor.asCoroutineDispatcher())
+        val engineRef = AtomicReference<MpvDesktopEngine>()
+        val effects = DesktopAudioEffectsManager()
+        val manager = DesktopAudioQueueManager(
+            trackResolver = FakeResolver().apply {
+                tracks["a"] = resolvedTrack("a", uri = wavA.absolutePath)
+                tracks["b"] = resolvedTrack("b", uri = wavB.absolutePath, normalizationGain = 2.0f)
+            },
+            playbackRepository = FakePlaybackRepository(),
+            imageUrlProvider = FakeImages(),
+            queuePersistenceHelper = QueuePersistenceHelper(InMemoryQueueDao()),
+            lyricsManager = AudioLyricsManager(FakeLyricsRepository()),
+            sleepTimerManager = SleepTimerManager(TestTimeSource()),
+            scope = scope,
+            engineFactory = {
+                MpvDesktopEngine(extraOptions = mapOf("vo" to "null", "ao" to "null"))
+                    .also { engineRef.set(it) }
+            },
+            mainThreadGuard = false,
+            effectsManager = effects,
+        )
+        try {
+            // Pre-set the stack BEFORE the first play(): engine creation must
+            // snapshot it so the very first loadfile already runs through the
+            // full af chain (Android attachAudioEffects-on-session parity).
+            effects.toggleEqualizer()
+            effects.setEqualizerPreset(EqualizerPreset.ROCK)
+            effects.toggleDialogueBoost()
+            effects.toggleNightMode() // MODERATE: volume=-4.96dB stage
+            effects.setReplayGainMode(AudioNormalizationMode.TRACK) // per-item gain 2.0 dB
+            effects.toggleBassBoost()
+            effects.toggleVirtualizer()
+            effects.setReverbPreset(ReverbPreset.SMALL_ROOM)
+            effects.setChannelMix(ChannelMixMode.MONO, enabled = true)
+            effects.setPitchSemitones(2f)
+
+            manager.start()
+            manager.playQueue(
+                listOf(
+                    AudioQueueItem(
+                        id = "a", name = "Track a", artist = "Artist a", album = null, imageUrl = null,
+                        mediaSourceId = "ms-a", durationMs = 6_000L, normalizationGain = 2.0f,
+                    ),
+                    AudioQueueItem(
+                        id = "b", name = "Track b", artist = "Artist b", album = null, imageUrl = null,
+                        mediaSourceId = "ms-b", durationMs = 3_000L, normalizationGain = 2.0f,
+                    ),
+                ),
+                startIndex = 0,
+            )
+            pollUntil("track a playing", timeoutMs = 20_000) { manager.isPlaying.value }
+
+            val ctx = assertNotNull(engineRef.get()).underlyingPlayer as Pointer
+            fun prop(name: String): String? = MpvLib.getPropertyString(ctx, name)
+
+            // The full chain reaches mpv's live `af` property. Substring (not
+            // exact) assertions: mpv re-serializes lavfi graphs as
+            // `lavfi=graph=%NN%<spec>` and escapes some separators. Band
+            // gains are the ROCK preset's millibel levels (/100 → dB).
+            pollUntil("af chain live on the engine", timeoutMs = 15_000) {
+                prop("af")?.contains("equalizer=f=60:t=q:w=1:g=4.00") == true
+            }
+            val af = prop("af") ?: ""
+            assertTrue(af.contains("equalizer=f=170:t=q:w=1:g=3.00"), "EQ band stages present: $af")
+            assertTrue(af.contains("highpass=f=80"), "dialogue rumble cut present: $af")
+            assertTrue(af.contains("volume=-4.96dB"), "night-mode net gain present: $af")
+            assertTrue(af.contains("volume=2.00dB"), "per-track ReplayGain gain present: $af")
+            assertTrue(af.contains("bass=g=6.3"), "bass low-shelf present: $af")
+            assertTrue(af.contains("extrastereo"), "virtualizer width present: $af")
+            assertTrue(af.contains("aecho="), "reverb approximation present: $af")
+            assertFalse(
+                af.contains("pan="),
+                "balance must stay layout-gated (mono WAV output → skipped): $af",
+            )
+            assertEquals("mono", prop("audio-channels"), "channel mix rides audio-channels")
+            val pitch = prop("pitch")?.toDoubleOrNull()
+            assertNotNull(pitch)
+            assertTrue(abs(pitch - 1.122462) < 0.001, "pitch property = 2^(2/12), got $pitch")
+
+            // Audible-path proxy: playback still ADVANCES through the full
+            // chain (ao=null consumes audio, so a rejected/stalled chain would
+            // stall time-pos).
+            val posBefore = manager.currentPosition.value
+            pollUntil("position advances through the full chain", timeoutMs = 10_000) {
+                manager.currentPosition.value > posBefore
+            }
+
+            // Live mutation: drop everything at runtime — the chain must clear
+            // (the manager repushes; the engine runs `af clr`).
+            effects.resetEqualizer()
+            effects.toggleDialogueBoost()
+            effects.toggleNightMode()
+            effects.setReplayGainMode(AudioNormalizationMode.NONE)
+            effects.toggleBassBoost()
+            effects.toggleVirtualizer()
+            effects.setReverbPreset(ReverbPreset.NONE)
+            pollUntil("af chain cleared live", timeoutMs = 15_000) {
+                val cleared = prop("af")
+                cleared.isNullOrEmpty() || (!cleared.contains("equalizer") && !cleared.contains("aecho"))
+            }
+            pollUntil("still playing after the live clear", timeoutMs = 10_000) {
+                manager.isPlaying.value
+            }
+        } finally {
+            manager.stopAndRelease()
+            scope.cancel()
+            executor.shutdownNow()
+        }
     }
 
     @Test
