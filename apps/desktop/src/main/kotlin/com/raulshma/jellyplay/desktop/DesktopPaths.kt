@@ -26,6 +26,18 @@ data class DesktopPaths(
 
     companion object {
         fun resolve(): DesktopPaths {
+            // Wave 12A measurement hook: the perf harness overrides the whole
+            // tree so baseline runs never touch real appdata. Only set by
+            // tools/perf/desktop-baseline.sh (see DesktopStartupPerf KDoc).
+            System.getProperty(DesktopStartupPerf.PROP_DATA_DIR)
+                ?.takeIf { it.isNotBlank() }
+                ?.let { dir ->
+                    return DesktopPaths(
+                        dataDir = "$dir/data".toPath(),
+                        configDir = "$dir/config".toPath(),
+                        databaseFile = "$dir/data/jellyplay.db".toPath(),
+                    )
+                }
             val os = System.getProperty("os.name").lowercase()
             val home = System.getProperty("user.home")
             val dir = when {

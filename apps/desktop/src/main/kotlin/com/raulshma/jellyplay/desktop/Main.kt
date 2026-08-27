@@ -1,10 +1,16 @@
 package com.raulshma.jellyplay.desktop
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyShortcut
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.MenuBar
+import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
@@ -65,6 +71,12 @@ import com.raulshma.jellyplay.feature.player.video.di.desktopPlayerVideoModule
 import org.koin.core.context.startKoin
 
 fun main() {
+    // Wave 12A startup baseline: t0 is the literal first statement so every
+    // mark below measures against true process start. Marks themselves are
+    // AtomicLong writes (~zero cost); everything heavier (JSON emission,
+    // auto-exit timer) only arms when a jellyplay.perf.* property is set —
+    // see DesktopStartupPerf.
+    val bootT0Nanos = System.nanoTime()
     val paths = DesktopPaths.resolve()
     java.io.File(paths.dataDir.toString()).mkdirs()
     java.io.File(paths.configDir.toString()).mkdirs()
@@ -82,6 +94,12 @@ fun main() {
                 "crash log: ${previousCrash.logFile} (${previousCrash.crashedAtUtc})",
         )
     }
+
+    val startupPerf = DesktopStartupPerf(
+        logsDirNio = paths.logsDirNio,
+        bootT0Nanos = bootT0Nanos,
+    )
+    startupPerf.scheduleMeasurementHooksIfRequested()
 
     val koinApp = startKoin {
         modules(
@@ -302,6 +320,10 @@ fun main() {
         )
     }
 
+    // Wave 12A startup mark: Koin graph construction is the first heavy
+    // milestone of boot (module list above is untouched — no reordering).
+    startupPerf.markKoinStarted()
+
     // V3 downloads conveyor: the desktop download engine — in-process
     // supervisor observing PENDING rows (resume + reconnect edge handled
     // inside), plus the auto-download loop. Construction is side-effect free;
@@ -326,11 +348,49 @@ fun main() {
         val windowState = rememberWindowState(width = 1280.dp, height = 800.dp)
         val showAbout = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
+        // Wave 12A: runtime icon for the title bar + tray (packaging icons are
+        // NOT on the runtime classpath — see DesktopAppIcon). Null means the
+        // resource was unreadable; the window then simply stays icon-less.
+        val appIcon = remember { desktopAppIconOrNull() }
+        // AWT-side window handle so the tray's Show action can restore/focus
+        // the ComposeWindow from outside the Window content lambda.
+        val windowRef = remember {
+            java.util.concurrent.atomic.AtomicReference<ComposeWindow?>(null)
+        }
+
+        // Startup marks, wave 12A. windowShownNanos is the AWT-authoritative
+        // visibility event. firstFrameNanos resumes when the frame clock
+        // delivers the first frame after this root content applies its initial
+        // composition — DesktopAppRoot composes inside this same pass, so it is
+        // the same frame boundary without threading a callback through
+        // DesktopAppRoot (≤1-frame slop vs a true "painted" hook; documented).
+        LaunchedEffect(startupPerf) {
+            withFrameNanos { /* resume at first produced frame */ }
+            startupPerf.markFirstFrame(System.nanoTime())
+        }
+
         Window(
             state = windowState,
             title = "JellyPlay",
+            icon = appIcon,
             onCloseRequest = ::exitApplication,
         ) {
+            DisposableEffect(startupPerf) {
+                val composeWindow = window
+                windowRef.set(composeWindow)
+                val shownListener = object : java.awt.event.WindowAdapter() {
+                    override fun windowOpened(e: java.awt.event.WindowEvent?) {
+                        startupPerf.markWindowShown()
+                        composeWindow.removeWindowListener(this)
+                    }
+                }
+                composeWindow.addWindowListener(shownListener)
+                onDispose {
+                    composeWindow.removeWindowListener(shownListener)
+                    windowRef.compareAndSet(composeWindow, null)
+                }
+            }
+
             MenuBar {
                 Menu("File") {
                     Item("Refresh", shortcut = KeyShortcut(Key.R, ctrl = true)) {
@@ -363,6 +423,39 @@ fun main() {
                     previousCrashLogPath = previousCrash?.logFile?.toString(),
                 )
             }
+        }
+
+        // Wave 12A tray affordance. STRICTLY ADDITIVE semantics: closing the
+        // window still quits (onCloseRequest above is unchanged) — there is no
+        // hide-to-tray behavior here. Skipped entirely when the runtime icon
+        // failed to load or AWT exposes no system tray (headless/locked-down
+        // sessions; CMP's isTraySupported() is metadata-internal at 1.11.1, so
+        // availability is probed via systemTrayAvailable(), see DesktopAppIcon).
+        if (appIcon != null && systemTrayAvailable()) {
+            Tray(
+                icon = appIcon,
+                tooltip = "JellyPlay",
+                menu = {
+                    Item("Show JellyPlay") {
+                        // Tray item clicks come back through AWT menu
+                        // machinery; compose desktop's own composition runs on
+                        // that same AWT event thread, and this hop costs one
+                        // loop turn while guaranteeing every future listener
+                        // variant stays on-thread.
+                        // NOTE (honesty): restore/focus path not manually
+                        // click-tested yet — see docs/perf notes + gate report.
+                        java.awt.EventQueue.invokeLater {
+                            windowState.isMinimized = false
+                            val w = windowRef.get()
+                            if (w != null) {
+                                w.extendedState = java.awt.Frame.NORMAL
+                                w.requestFocus()
+                            }
+                        }
+                    }
+                    Item("Quit") { exitApplication() }
+                },
+            )
         }
     }
 }
