@@ -104,14 +104,21 @@ and must be preserved through any future refactor.
   inconsistently, expect bad playback"; a fixed-cadence poller cannot promise
   per-swap calls, so we never start using it at all.
 
-The pane ticks at ~30 fps cap (33 ms) **only while playing** (`playingFlow`);
-on pause one final pull publishes the exact stop frame, then the ticker
-suspends until playback resumes — zero idle burn. Inside each pull,
-`mpv_render_context_render` self-throttles toward frame display time
-(BLOCK_FOR_TARGET_TIME default enabled = the natural pacer), so effective rate
-is content-fps ≤ 30. Single-flight enforced via tryLock: a tick arriving while
-a render is still in flight is DROPPED (never queued behind itself;
-render.h L62-64 allows only one concurrent mpv_render_* call per context).
+The pane ticks at ~30 fps cap (33 ms) **while playing** (`playingFlow`), and
+runs a 250 ms watchdog tick while the session is LOADED but NOT playing
+(paused / keep-open ENDED) so seek-while-paused repaints within a quarter
+second — a full-payload compare dedups unchanged frames, so an untouched pause
+costs ~4 memcmps/sec, not raster rebuilds. When the session is fully IDLE and
+not playing, zero polling: the loop suspends until load or play resumes.
+(Decision table extracted as `SwPaneTicker`, unit-tested in
+`SwPaneTickerTest`.) Both cadences do ALL heavy work — native render AND the
+native→JVM copy — on Dispatchers.Default, never the compose dispatcher: the sw
+backend scales/composites on the calling thread and self-throttles toward
+frame-display time (BLOCK_FOR_TARGET_TIME default enabled = the natural
+pacer), so an inline call would jank the UI at HD sizes. render.h L62-64
+allows renders from any thread given the one-call-at-a-time rule, which the
+engine enforces with a tryLock. Single-flight also means a tick arriving while
+a render is still in flight is DROPPED (never queued behind itself).
 
 ## Other quirks observed on the Windows dev build
 
@@ -166,7 +173,9 @@ render.h L62-64 allows only one concurrent mpv_render_* call per context).
   risk when both paths are active is untested pixel-level; expect the commonMain
   screen's existing single-subtitle-source logic to govern, verify visually.
 - Performance on real content (720p60/1080p24+) is unmeasured anywhere; zimg vs
-  swscale builds differ measurably.
+  swscale builds differ measurably. Threading: the pull runs off-UI-thread
+  (Dispatchers.Default) as of the review round, so any remaining jank would be
+  CPU saturation, not dispatcher blocking.
 - The EOF-keep-open replay path WAS exercised against the real sw engine; the
   multi-session reuse case (factory reusing engines across navigation) follows
   the HWND engine's release discipline and was not separately stress-tested.

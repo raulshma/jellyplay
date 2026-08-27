@@ -18,12 +18,14 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.sun.jna.Memory
 import com.sun.jna.Pointer
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
@@ -69,23 +71,33 @@ interface SoftwareFrameVideoSurface {
  * hosts the newest pulled mpv frame in a Compose [Canvas] — platform
  * independent, no GL context, no heavyweight child window.
  *
- * Redraw driver: a [LaunchedEffect] ticker pulls at PULL_INTERVAL_MS (~30 fps)
- * ONLY while the session reports playing (through [playingFlow]); on pause it
- * publishes one final frame (the exact stop frame becomes the frozen poster)
- * and then suspends until playback resumes — zero idle-tick burn. Inside a
- * pull, `mpv_render_context_render` self-throttles toward the frame's display
- * time (BLOCK_FOR_TARGET_TIME default on), so the effective rate is content fps
- * ≤ 30.
+ * Redraw trigger model ([SwPaneTicker.plan] is the extracted, unit-tested form):
+ *  - PLAYING: pull ticker at PULL_INTERVAL_MS (~30 fps cap). Inside each pull,
+ *    `mpv_render_context_render` self-throttles toward the frame's display
+ *    time (BLOCK_FOR_TARGET_TIME default on), so the effective rate is content
+ *    fps ≤ 30.
+ *  - LOADED, NOT PLAYING (paused / keep-open ENDED): a 250 ms watchdog tick
+ *    still pulls — this is what makes seekTo-while-paused repaint (the decoded
+ *    frame lands in the VO even with a frozen clock) instead of leaving a
+ *    stale frozen poster under a moving progress bar. A full-payload compare
+ *    dedups unchanged frames, so an untouched pause costs one memcmp per tick,
+ *    not a raster rebuild.
+ *  - UNLOADED and NOT PLAYING: no video work exists — zero polling; the loop
+ *    suspends until the session loads or playback starts. (Last pulled frame
+ *    stays as the poster through idle.)
+ *
+ * Both ticks do ALL heavy work on Dispatchers.Default — native render AND the
+ * native→JVM copy — never on the compose dispatcher (see [publishFrame]).
  *
  * Pixel path (zero format conversion): the sink allocates one JNA [Memory]
  * with 64-byte-aligned stride (render.h recommends pointer/stride multiples of
- * 64 for the SIMD path); mpv writes bgr0 into it; each successful pull copies
- * native→byte[] ONCE (JNA bulk read) and wraps it as a fresh Skia raster with
- * ColorType.BGRA_8888 + OPAQUE alpha (skia ignores mpv's uninitialized 4th
- * channel) + sRGB — the same deterministic non-N32 pattern the BlurHash
- * jvmShared actual established. Per-frame image allocation is deliberate v1
- * simplicity (~8 MB/frame at 1080p, native-backed); double-buffering via
- * Bitmap.installPixels is the identified future optimization.
+ * 64 for the SIMD path); mpv writes bgr0 into it; each CHANGED payload is
+ * wrapped as a fresh Skia raster with ColorType.BGRA_8888 + OPAQUE alpha
+ * (skia ignores mpv's uninitialized 4th channel) + sRGB — the same
+ * deterministic non-N32 pattern the BlurHash jvmShared actual established.
+ * Per-frame image allocation is deliberate v1 simplicity (~8 MB/frame at
+ * 1080p, native-backed); double-buffering via Bitmap.installPixels is the
+ * identified future optimization.
  *
  * Geometry: the sink is sized to the MEASURED PIXEL size of this pane
  * (onSizeChanged) and rebuilt on change; mpv itself scales + letterboxes the
@@ -103,6 +115,8 @@ interface SoftwareFrameVideoSurface {
 internal fun DesktopSoftwareVideoPane(
     surface: SoftwareFrameVideoSurface,
     playingFlow: StateFlow<Boolean>,
+    /** The session state machine; IDLE here means "nothing loaded" and stops all polling. */
+    playbackStateFlow: StateFlow<EnginePlaybackState>,
     effectiveZoom: Float,
     onSurfaceCreated: (Any?) -> Unit,
     onSurfaceUpdate: () -> Unit,
@@ -131,21 +145,27 @@ internal fun DesktopSoftwareVideoPane(
         }
     }
 
-    LaunchedEffect(surface, playingFlow, sink) {
+    LaunchedEffect(surface, playingFlow, playbackStateFlow, sink) {
         if (sink == null) return@LaunchedEffect
-        var prevWasPlaying = false
         while (isActive) {
-            if (playingFlow.value) {
-                publishFrame(surface, sink) { frameBitmap = it }
-                prevWasPlaying = true
-                delay(PULL_INTERVAL_MS)
-            } else {
-                if (prevWasPlaying) {
-                    // Final refresh on pause: freeze on the exact stop frame.
+            when (
+                val plan = SwPaneTicker.plan(
+                    isPlaying = playingFlow.value,
+                    unloaded = playbackStateFlow.value == EnginePlaybackState.IDLE,
+                )
+            ) {
+                is SwPaneTicker.Poll -> {
                     publishFrame(surface, sink) { frameBitmap = it }
-                    prevWasPlaying = false
+                    delay(plan.intervalMs)
                 }
-                playingFlow.first { it }   // suspend until playback resumes
+
+                SwPaneTicker.Suspend -> {
+                    // Fully idle AND paused-stopped: suspend until either the
+                    // session loads something or playback starts again.
+                    combine(playingFlow, playbackStateFlow) { playing, state ->
+                        playing || state != EnginePlaybackState.IDLE
+                    }.first { it }
+                }
             }
         }
     }
@@ -174,35 +194,89 @@ internal fun DesktopSoftwareVideoPane(
     }
 }
 
-/** Publishes one pulled frame, or leaves [into] untouched when the pull dropped. */
+/**
+ * Pulls and, when the payload CHANGED, publishes one frame. Everything heavy
+ * runs on Dispatchers.Default — never the compose dispatcher: the native
+ * `mpv_render_context_render` performs the whole software scale/composite on
+ * the calling thread (render.h L139 is blunt that the sw renderer is "very
+ * slow") and self-throttles toward frame-display time while playing, so an
+ * inline call would jank the UI at HD sizes. render.h L62-64 permits renders
+ * from any thread as long as only one mpv_render_* call runs per context —
+ * the engine's single-flight tryLock provides exactly that, which is what
+ * makes this hoist safe.
+ *
+ * The [into] write targets compose snapshot state, which supports writers from
+ * background threads; recomposition observes the apply off-thread.
+ */
 private suspend fun publishFrame(
     surface: SoftwareFrameVideoSurface,
     sink: FrameSink,
     into: (ImageBitmap?) -> Unit,
 ) {
-    val pulled = try {
-        surface.pullFrame(sink.nativeMemory, sink.widthPx, sink.heightPx, sink.strideBytes)
-    } catch (_: Throwable) {
-        false   // released engine mid-flight: next tick finds another world
+    val pulled = withContext(Dispatchers.Default) {
+        try {
+            surface.pullFrame(sink.nativeMemory, sink.widthPx, sink.heightPx, sink.strideBytes)
+        } catch (_: Throwable) {
+            false   // released engine mid-flight: next tick finds another world
+        }
     }
     if (!pulled) return
-    // Heavy part (native bulk read + raster allocation) stays off the UI thread;
-    // the single state write hops back for the recomposition.
-    val bitmap = withContext(Dispatchers.Default) {
+    withContext(Dispatchers.Default) {
         sink.nativeMemory.read(0, sink.stageBytes, 0, sink.stageBytes.size)
-        Image.makeRaster(
-            ImageInfo(
-                width = sink.widthPx,
-                height = sink.heightPx,
-                colorType = ColorType.BGRA_8888,
-                alphaType = ColorAlphaType.OPAQUE,
-                colorSpace = ColorSpace.sRGB,
-            ),
-            sink.stageBytes,
-            sink.strideBytes.toInt(),
-        ).toComposeImageBitmap()
+        // Dedup guard for the paused watchdog cadence: rebuild the Skia raster
+        // only when the composited payload actually changed (seek step while
+        // paused), not on every unchanged tick. Conservative by construction —
+        // if it ever over-fires (the bgr0 4th channel is documented
+        // uninitialized garbage), the cost is a redundant raster, NEVER a
+        // missed update.
+        if (!sink.stageBytes.contentEquals(sink.lastPublished)) {
+            System.arraycopy(sink.stageBytes, 0, sink.lastPublished, 0, sink.stageBytes.size)
+            into(
+                Image.makeRaster(
+                    ImageInfo(
+                        width = sink.widthPx,
+                        height = sink.heightPx,
+                        colorType = ColorType.BGRA_8888,
+                        alphaType = ColorAlphaType.OPAQUE,
+                        colorSpace = ColorSpace.sRGB,
+                    ),
+                    sink.stageBytes,
+                    sink.strideBytes.toInt(),
+                ).toComposeImageBitmap(),
+            )
+        }
     }
-    into(bitmap)
+}
+
+/**
+ * Trigger-model decision table for the redraw loop, extracted so the pause/
+ * idle policy stays unit-testable without Compose (SwPaneTickerTest).
+ */
+internal object SwPaneTicker {
+
+    /** Poll now and wait [intervalMs] before the next pull attempt. */
+    data class Poll(val intervalMs: Long) : Plan
+
+    /** No video work exists; suspend until load or play resumes. */
+    data object Suspend : Plan
+
+    sealed interface Plan
+
+    fun plan(isPlaying: Boolean, unloaded: Boolean): Plan = when {
+        isPlaying -> Poll(PULL_INTERVAL_MS)
+        !unloaded -> Poll(PAUSED_POLL_INTERVAL_MS)
+        else -> Suspend
+    }
+
+    /** Playing-pull cadence cap; mpv paces real rendering below this. */
+    const val PULL_INTERVAL_MS = 33L
+
+    /**
+     * Paused-watchdog cadence: slow enough to be free (~4 deduped memcmps/sec
+     * on an untouched pause), fast enough that a seek-while-paused repaints
+     * within a quarter second.
+     */
+    const val PAUSED_POLL_INTERVAL_MS = 250L
 }
 
 /**
@@ -220,10 +294,10 @@ private class FrameSink(widthPx: Int, heightPx: Int) {
     /** Staging array consumed by Skia makeRaster (BGRA_8888, opaque). */
     val stageBytes: ByteArray = ByteArray((strideBytes * heightPx).toInt())
 
+    /** Snapshot of the last RASTERIZED payload — the dedup baseline. */
+    val lastPublished: ByteArray = ByteArray((strideBytes * heightPx).toInt())
+
     companion object {
         private const val STRIDE_ALIGN = 64L
     }
 }
-
-/** Pull cadence cap; mpv paces real rendering below this (see class KDoc). */
-private const val PULL_INTERVAL_MS = 33L

@@ -68,6 +68,11 @@ internal actual fun EngineVideoSurface(
         DesktopSoftwareVideoPane(
             surface = softwareSurface,
             playingFlow = engine.isPlaying,
+            // Drives the pane's paused-vs-idle tick policy: while ANYTHING is
+            // loaded (non-IDLE, incl. ENDED keep-open) the pane keeps a 250 ms
+            // watchdog so seek-while-paused repaints; when fully IDLE it stops
+            // polling entirely.
+            playbackStateFlow = engine.playbackState,
             effectiveZoom = effectiveZoom,
             onSurfaceCreated = onSurfaceCreated,
             onSurfaceUpdate = onSurfaceUpdate,
