@@ -105,7 +105,11 @@ object MpvLibRender {
          */
         fun mpv_render_context_create(resOut: PointerByReference, mpv: Pointer, params: Array<MpvRenderParam>): Int
 
-        /** render.h L709: renders/pulls a frame into the target described by [params]. */
+        /**
+         * render.h L709: renders/pulls a frame into the target described by
+         * [params]. Exercised per pull tick by [com
+         .raulshma.jellyplay.desktop.player.MpvSoftwareRenderEngine.pullFrame].
+         */
         fun mpv_render_context_render(ctx: Pointer, params: Array<MpvRenderParam>): Int
 
         /** render.h L591 (mapped for completeness/future use; currently unused). */
@@ -138,13 +142,32 @@ object MpvLibRender {
     // array for the duration of the synchronous native call; use immediately.
 
     /** `[{type=API_TYPE,data="sw"}, terminator]` for context creation. */
-    fun apiTypeCreateParams(): Array<MpvRenderParam> =
-        arrayOf(param(PARAM_API_TYPE, cString(API_TYPE_SW)), terminator())
+    fun apiTypeCreateParams(): Array<MpvRenderParam> {
+        val params = newParamArray(2)
+        params[0].type = PARAM_API_TYPE
+        params[0].data = cString(API_TYPE_SW)
+        return params
+    }
 
     /**
      * SW render target params required by render.h L135-138: SIZE, FORMAT,
      * STRIDE, POINTER (+ terminator). Stride multiples of 64 are recommended
      * for the SIMD fast path (L395-398); callers own that sizing decision.
+     *
+     * INDIRECTION LEVELS — the load-bearing detail of this whole mapping
+     * (verified against mpv's own sw backend, `video/out/libmpv_sw.c`, which
+     * does `void *ptr = get_mpv_render_param(params, MPV_RENDER_PARAM_SW_POINTER,
+     * NULL); wrap_img.planes[0] = ptr;`):
+     *  - SW_SIZE/SW_STRIDE/BLOCK_FOR_TARGET_TIME: data = &value (int-array or size_t pointer)
+     *  - SW_FORMAT/API_TYPE:                     data = the char* itself
+     *  - SW_POINTER:                             data = the pixel buffer ITSELF
+     *
+     * Getting SW_POINTER wrong is catastrophic and SILENT-later: when `data`
+     * holds the ADDRESS OF a pointer variable instead of the buffer, mpv
+     * writes stride*height bytes into that 8-byte slot, smashing the native
+     * heap — the JVM keeps running and then dies somewhere unrelated
+     * (observed: EXCEPTION_ACCESS_VIOLATION inside jvm.dll during JUnit class
+     * filtering / class defining, minutes-of-distance from the actual call).
      */
     fun swRenderParams(widthPx: Int, heightPx: Int, strideBytes: Long, target: Pointer): Array<MpvRenderParam> {
         val sizeMem = Memory(8).apply {
@@ -152,25 +175,31 @@ object MpvLibRender {
             setInt(4, heightPx)
         }
         val strideMem = Memory(8).apply { setLong(0, strideBytes) }
-        val pointerHolder = Memory(Native.POINTER_SIZE.toLong()).apply { setPointer(0, target) }
-        return arrayOf(
-            param(PARAM_SW_SIZE, sizeMem),
-            param(PARAM_SW_FORMAT, cString(SW_FORMAT_BGRA)),
-            param(PARAM_SW_STRIDE, strideMem),
-            param(PARAM_SW_POINTER, pointerHolder),
-            terminator(),
-        )
+        val params = newParamArray(5)
+        params[0].type = PARAM_SW_SIZE
+        params[0].data = sizeMem
+        params[1].type = PARAM_SW_FORMAT
+        params[1].data = cString(SW_FORMAT_BGRA)
+        params[2].type = PARAM_SW_STRIDE
+        params[2].data = strideMem
+        // Single indirection: mpv reads param.data AS the pixel pointer.
+        params[3].type = PARAM_SW_POINTER
+        params[3].data = target
+        // params[4]: {type=PARAM_INVALID(0), data=null} terminator.
+        return params
     }
 
     fun errorString(code: Int): String = MpvLib.mpv.mpv_error_string(code)
 
-    private fun param(type: Int, data: Pointer?): MpvRenderParam =
-        MpvRenderParam().apply {
-            this.type = type
-            this.data = data
-        }
-
-    private fun terminator(): MpvRenderParam = param(PARAM_INVALID, null)
+    /**
+     * Allocates [size] contiguous mpv_render_param elements. JNA demands the
+     * array share ONE backing allocation ("Structure array elements must use
+     * contiguous memory") — individually constructed structs would not.
+     * Elements beyond those filled stay {0, null} (valid terminators).
+     */
+    private fun newParamArray(size: Int): Array<MpvRenderParam> =
+        @Suppress("UNCHECKED_CAST")
+        (MpvRenderParam().toArray(size) as Array<MpvRenderParam>)
 
     private fun cString(s: String): Memory {
         val bytes = s.toByteArray(Charsets.US_ASCII) + 0

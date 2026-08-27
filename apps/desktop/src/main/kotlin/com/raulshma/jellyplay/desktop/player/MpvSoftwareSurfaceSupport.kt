@@ -28,14 +28,27 @@ object MpvSoftwareSurfaceSupport {
     val isSupported: Boolean by lazy {
         try {
             probe()
-        } catch (_: Throwable) {
-            false   // no libmpv / load-time JNI failure / anything else: no sw surface
+        } catch (t: Throwable) {
+            lastProbeFailure = "exception: $t"
+            false
         }
     }
 
+    /**
+     * Why [isSupported] is false (null when supported/not yet probed) —
+     * surfaces the actual create return code so a machine where the sw backend
+     * is missing can be told apart from a bad dll at a glance.
+     */
+    @Volatile
+    var lastProbeFailure: String? = null
+        private set
+
     private fun probe(): Boolean {
         val api = MpvLib.mpv
-        val core = api.mpv_create() ?: return false
+        val core = api.mpv_create() ?: run {
+            lastProbeFailure = "mpv_create returned null"
+            return false
+        }
         try {
             // Same base options the real engine sets before initialize — the
             // probe must exercise the configuration playback will actually use.
@@ -43,7 +56,10 @@ object MpvSoftwareSurfaceSupport {
             MpvLib.mpv.mpv_set_option_string(core, "idle", "yes")
             MpvLib.mpv.mpv_set_option_string(core, "vo", "libmpv")
             MpvLib.mpv.mpv_set_option_string(core, "ao", "null")
-            if (api.mpv_initialize(core) < 0) return false
+            if (api.mpv_initialize(core) < 0) {
+                lastProbeFailure = "mpv_initialize failed"
+                return false
+            }
 
             val ctxOut = PointerByReference()
             val rc = MpvLibRender.render.mpv_render_context_create(
@@ -52,6 +68,9 @@ object MpvSoftwareSurfaceSupport {
                 MpvLibRender.apiTypeCreateParams(),
             )
             val created = rc >= 0 && ctxOut.value != null
+            if (!created) {
+                lastProbeFailure = "render_context_create rc=$rc (${MpvLibRender.errorString(rc)})"
+            }
             if (created) MpvLibRender.render.mpv_render_context_free(ctxOut.value)
             return created
         } finally {

@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.desktop.player.mpv.MpvLib
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLibRender
 import com.raulshma.jellyplay.feature.player.video.SoftwareFrameVideoSurface
 import com.raulshma.jellyplay.feature.player.video.engine.EngineError
+import com.sun.jna.Memory
 import com.sun.jna.Pointer
 import com.sun.jna.ptr.PointerByReference
 
@@ -120,9 +121,17 @@ class MpvSoftwareRenderEngine(
         // native work behind itself (single-flight rule), just catch up later.
         if (!pullLock.tryLock()) return false
         try {
-            val ctx = swContext ?: return false
+            val renderCtx = swContext ?: return false
+            val core = liveMpvHandle() ?: return false
+            // Until mpv has decoded+configured video output for the session at
+            // least once ("vo-configured"), the sw backend has no frame to pull;
+            // early calls either error or no-op. Skipping keeps poller ticks
+            // inert instead of churning libmpv through pointless render calls.
+            // Property read MUST go to the CORE handle — a render context is
+            // not an mpv_handle, and treating it as one access-violates.
+            if (!voConfigured(core)) return false
             val rc = MpvLibRender.render.mpv_render_context_render(
-                ctx,
+                renderCtx,
                 MpvLibRender.swRenderParams(widthPx, heightPx, strideBytes, target),
             )
             return if (rc >= 0) {
@@ -136,6 +145,12 @@ class MpvSoftwareRenderEngine(
         } finally {
             pullLock.unlock()
         }
+    }
+
+    private fun voConfigured(ctx: Pointer): Boolean {
+        val mem = Memory(4)
+        val rc = MpvLib.mpv.mpv_get_property(ctx, "vo-configured", MpvLib.FORMAT_FLAG, mem)
+        return rc >= 0 && mem.getInt(0) != 0
     }
 
     // ── Variant deltas over the HWND engine ─────────────────────────────────
