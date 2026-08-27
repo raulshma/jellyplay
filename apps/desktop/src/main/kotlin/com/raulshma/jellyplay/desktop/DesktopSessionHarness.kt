@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.desktop.player.EngineActivityRecorder
 import com.raulshma.jellyplay.desktop.player.EngineActivitySnapshot
+import com.raulshma.jellyplay.feature.player.video.DesktopPlayerKeyBridge
 import java.awt.Rectangle
 import java.awt.Robot
 import java.awt.event.KeyEvent
@@ -91,6 +92,15 @@ object DesktopSessionHarness {
     const val PROP_ITEM_ID = "jellyplay.harness.itemId"
     const val PROP_AUTO_EXIT_SECONDS = "jellyplay.harness.autoExitSeconds"
     const val PROP_SCREENSHOT_DIR = "jellyplay.harness.screenshotDir"
+
+    /**
+     * Wave 14E thief-experiment knob: `true` makes every screenshot/injection
+     * skip toFront()+requestFocus() entirely, so a run's AWT flap cycles can
+     * be attributed (all cycles persisting without any bringWindowToFront
+     * mark are externally driven). Default off — normal runs use the
+     * conditional requestFocus churn guard instead.
+     */
+    const val PROP_NO_WINDOW_TO_FRONT = "jellyplay.harness.noWindowToFront"
 
     /** True only when `jellyplay.harness.enabled=true` — the zero-cost gate. */
     fun requested(): Boolean =
@@ -269,28 +279,82 @@ object DesktopSessionHarness {
 
             var spaceReachedPlayer = false
             val overlayOk = !fatalStop && step("OVERLAY_SPACE") {
-                // Pre-condition: the engine must have sampled as PLAYING
-                // before the key lands, so a flip is attributable to SPACE.
-                deps.engineRecorder.latestVideoEngine().positionSamples.any { it.isPlaying } ||
-                    fail("no playing sample recorded before SPACE — playback liveness unproven")
-                val spaceAtMs = System.currentTimeMillis()
-                injectKey(KeyEvent.VK_SPACE) || fail("SPACE injection failed (Robot)")
-                val toggled = awaitUntil(SPACE_TOGGLE_TIMEOUT_MS) {
-                    deps.engineRecorder.latestVideoEngine().pausedSince(spaceAtMs)
+                // Wave 14E: the 12 s harness clip can hit EOF while login /
+                // screenshots burn wall time under machine load; the screen
+                // then auto-pops the route (closePlayer → onBack) BEFORE the
+                // SPACE probe — the failed merged-tree run injected SPACE and
+                // ESC against a player that was gone or going. Re-push first
+                // so this step always probes the REAL mechanism (key → player
+                // handler) and never a popped stack.
+                ensurePlayerRouteTop()
+                // Pre-condition: the CURRENT engine must have sampled as
+                // PLAYING before the key lands, so a flip is attributable to
+                // SPACE (a re-push above created a fresh engine).
+                awaitUntil(45_000) {
+                    deps.engineRecorder.latestVideoEngine().positionSamples.any { it.isPlaying }
+                } || fail("no playing sample recorded before SPACE — playback liveness unproven")
+                var spaceAtMs = 0L
+                var toggled = false
+                val attemptNotes = ArrayList<String>()
+                var attempts = 0
+                while (true) {
+                    attempts += 1
+                    // Wave 14E retry: snapshot the bridge's delivery counter
+                    // around each injection. An unchanged count after the
+                    // probe window PROVES the key never reached the player's
+                    // handler (a flap gap swallowed it) — retry. A moved count
+                    // with no playback toggle is a genuine handler-ran-did-
+                    // not-toggle failure and stops immediately.
+                    val beforeCount = DesktopPlayerKeyBridge.deliveryCount()
+                    spaceAtMs = System.currentTimeMillis()
+                    injectKey(KeyEvent.VK_SPACE, "OVERLAY_SPACE attempt $attempts") ||
+                        fail("SPACE injection failed (Robot)")
+                    toggled = awaitUntil(SPACE_TOGGLE_PROBE_MS) {
+                        deps.engineRecorder.latestVideoEngine().pausedSince(spaceAtMs)
+                    }
+                    val reached = DesktopPlayerKeyBridge.deliveryCount() > beforeCount
+                    attemptNotes += "attempt=$attempts reached=$reached toggled=$toggled"
+                    println(
+                        "[JellyPlay][harness] OVERLAY_SPACE ${attemptNotes.last()} " +
+                            "(deliveryCount=$beforeCount→${DesktopPlayerKeyBridge.deliveryCount()})",
+                    )
+                    if (toggled) break
+                    if (reached) {
+                        fail(
+                            "SPACE reached the player's key handler (after $attempts injection(s)) " +
+                                "but playback did not toggle within ${SPACE_TOGGLE_PROBE_MS / 1000}s " +
+                                "(playheadAdvanceSinceSpaceMs=" +
+                                "${deps.engineRecorder.latestVideoEngine().advanceSinceMs(spaceAtMs)})",
+                            mapOf("injections" to attemptNotes.joinToString("; ")),
+                        )
+                    }
+                    if (attempts >= SPACE_MAX_INJECTION_ATTEMPTS) {
+                        fail(
+                            "SPACE never reached the player's key handler " +
+                                "(delivery count unchanged after $attempts injections)",
+                            mapOf("injections" to attemptNotes.joinToString("; ")),
+                        )
+                    }
+                    delay(SPACE_RETRY_SPACING_MS)
                 }
                 spaceReachedPlayer = toggled
                 delay(900) // let the controls overlay settle, as before the screenshot
-                screenshot("player-controls-overlay")
+                screenshot("player-controls-overlay", "overlay-space")
                 val advance = deps.engineRecorder.latestVideoEngine().advanceSinceMs(spaceAtMs)
                 val details = mapOf(
                     "spaceReachedPlayer" to toggled.toString(),
+                    "injectionAttempts" to attempts.toString(),
+                    "injections" to attemptNotes.joinToString("; "),
                     "playheadAdvanceSinceSpaceMs" to advance.toString(),
                     "note" to "SPACE pauses + shows controls when the player key handler gets it " +
-                        "(wave 14A regression gate: a run whose playback does not toggle FAILS)",
+                        "(wave 14A regression gate: a run whose playback does not toggle FAILS). " +
+                        "Wave 14E: keys reach the handler through the shell's deterministic " +
+                        "DesktopPlayerKeyBridge forward even in focus gaps; the delivery " +
+                        "counter gates the per-attempt retry.",
                 )
                 if (!toggled) {
                     fail(
-                        "SPACE did not toggle playback within ${SPACE_TOGGLE_TIMEOUT_MS / 1000}s " +
+                        "SPACE did not toggle playback within ${SPACE_TOGGLE_PROBE_MS / 1000}s " +
                             "of injection (playheadAdvanceSinceSpaceMs=$advance) — the key never " +
                             "reached VideoPlayerScreen's key handler (focus gap regression)",
                         details,
@@ -301,9 +365,16 @@ object DesktopSessionHarness {
             }
 
             step("ESC_SEQUENCE") {
+                // Wave 14E: tolerate the 12 s clip's EOF auto-pop (the screen's
+                // closePlayer flow pops the route without any injected key).
+                // Without this the step's regression assertion could compare
+                // against a stack that had ALREADY returned to 1 (the failed
+                // merged-tree run), reporting ESC as not-popping when the ESC
+                // machinery was never actually exercised.
+                val repush = ensurePlayerRouteTop()
                 val stack = currentBackStack() ?: fail("no back stack")
                 val before = stack.size
-                injectKey(KeyEvent.VK_ESCAPE) || fail("ESC injection failed (Robot)")
+                injectKey(KeyEvent.VK_ESCAPE, "ESC_SEQUENCE") || fail("ESC injection failed (Robot)")
                 val popped = awaitUntil(10_000) { stack.size < before }
                 val overlayNote = if (spaceReachedPlayer) {
                     "with the SPACE-shown controls overlay on screen — the shell's back " +
@@ -321,6 +392,7 @@ object DesktopSessionHarness {
                     "backStackSizeAfter" to stack.size.toString(),
                     "playerPopped" to popped.toString(),
                     "escCount" to "1",
+                    "playerRouteRepushed" to (repush["repushed"] ?: "?"),
                     "overlayVisibleWhenEscInjected" to spaceReachedPlayer.toString(),
                     "finding" to if (popped) {
                         "Single ESC popped the player route (stack $before → ${stack.size}); $overlayNote"
@@ -352,9 +424,17 @@ object DesktopSessionHarness {
                         when (evt.propertyName) {
                             "focusOwner", "permanentFocusOwner", "focusedWindow" ->
                                 println(
-                                    "[JellyPlay][harness][awt-focus] ${evt.propertyName}: " +
-                                        "${evt.oldValue?.awtDescribe(ourWindow)} -> " +
-                                        "${evt.newValue?.awtDescribe(ourWindow)}",
+                                    // Wave 14E: every line is stamped with the
+                                    // elapsed-ms since the run started, so flap
+                                    // cycles correlate against the step timeline
+                                    // and the bringWindowToFront marks below
+                                    // (the wave-14D log had no timestamps, so
+                                    // the flap's driver could only be guessed).
+                                    "[JellyPlay][harness][awt-focus] t=+" +
+                                        (System.currentTimeMillis() - startedAtMs) + "ms " +
+                                        "${evt.propertyName}: " +
+                                        "${evt.oldValue.awtDescribe(ourWindow)} -> " +
+                                        "${evt.newValue.awtDescribe(ourWindow)}",
                                 )
                         }
                     }
@@ -471,6 +551,31 @@ object DesktopSessionHarness {
 
         private fun currentBackStack(): MutableList<NavKey>? = backStackProvider?.invoke()
 
+        /**
+         * Wave 14E: guarantee the video player route is the top of the current
+         * tab's back stack, re-pushing Route.VideoPlayer when it is not. The
+         * 12 s harness clip auto-pops the route at EOF (the screen's
+         * closePlayer flow → onBack), so a step that runs late under machine
+         * load would otherwise inject keys at a popped stack and report a
+         * fake regression. Returns the step detail entry recording whether a
+         * re-push happened.
+         */
+        private suspend fun ensurePlayerRouteTop(): Map<String, String> {
+            val stack = currentBackStack() ?: throw StepFailure("no back stack")
+            if (stack.lastOrNull() is Route.VideoPlayer) {
+                return mapOf("repushed" to "false")
+            }
+            val sizeAfterAutoPop = stack.size
+            stack.add(Route.VideoPlayer(itemId = itemId))
+            awaitUntil(5_000) { currentBackStack()?.lastOrNull() is Route.VideoPlayer } ||
+                throw StepFailure("re-pushed VideoPlayer route never reached the top of the back stack")
+            println(
+                "[JellyPlay][harness] player route re-pushed (EOF auto-pop had already " +
+                    "returned the stack to $sizeAfterAutoPop)",
+            )
+            return mapOf("repushed" to "true", "stackSizeAfterAutoPop" to sizeAfterAutoPop.toString())
+        }
+
         // ── evidence helpers (Robot; every failure is a step FAIL, not a crash) ──
 
         private fun robotOrNull(): Robot? {
@@ -482,18 +587,20 @@ object DesktopSessionHarness {
             return r
         }
 
-        private suspend fun injectKey(keyCode: Int): Boolean {
+        private suspend fun injectKey(keyCode: Int, reason: String): Boolean {
             val r = robotOrNull() ?: return false
             val window = deps.windowRef?.get() ?: return false
             return runCatching {
-                bringWindowToFront(window)
+                bringWindowToFront(window, "injectKey($keyCode) $reason")
                 // Wave 14D: snapshot the AWT focus state at injection time —
                 // Robot delivers to the OS-focused window whose AWT focus owner
                 // receives the key; this line pairs with the [awt-key] events
                 // that follow.
                 val kfm = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
                 println(
-                    "[JellyPlay][harness][awt-focus] injectKey=$keyCode focusOwner=" +
+                    "[JellyPlay][harness][awt-focus] t=+" +
+                        (System.currentTimeMillis() - startedAtMs) + "ms " +
+                        "injectKey=$keyCode focusOwner=" +
                         "${kfm.focusOwner.awtDescribe(window)} focusedWindow=" +
                         "${kfm.focusedWindow.awtDescribe(window)}",
                 )
@@ -508,14 +615,14 @@ object DesktopSessionHarness {
         }
 
         /** Captures the window's screen rect to `<screenshotDir>/<name>.png`. */
-        private suspend fun screenshot(name: String): Map<String, String> {
+        private suspend fun screenshot(name: String, reason: String = name): Map<String, String> {
             val r = robotOrNull() ?: throw StepFailure("Robot unavailable")
-            val window = deps.windowRef?.get() ?: throw StepFailure("window not available")
+            val window = deps.windowRef?.get() ?: throw StepFailure("window unavailable")
             try {
-                bringWindowToFront(window)
+                bringWindowToFront(window, "screenshot($reason)")
                 delay(250)
-                val bounds: Rectangle = window.bounds
-                val image: BufferedImage = r.createScreenCapture(bounds)
+                val bounds = window.bounds
+                val image = r.createScreenCapture(bounds)
                 Files.createDirectories(screenshotDir)
                 val file = File(screenshotDir.toFile(), "$name.png")
                 ImageIO.write(image, "png", file)
@@ -528,10 +635,55 @@ object DesktopSessionHarness {
             }
         }
 
-        private suspend fun bringWindowToFront(window: ComposeWindow) {
-            runCatching {
-                window.toFront()
-                window.requestFocus()
+        /**
+         * Wave 14E focus-thief fix: the old version called
+         * `window.requestFocus()` on EVERY screenshot and key injection, and
+         * each call produced exactly the AWT flap cycle the 14D diagnostics
+         * caught (`SkiaLayer → null → ComposeWindow → null → SkiaLayer` — a
+         * window-level focus request clears the owner, briefly promotes the
+         * window itself, then settles back on the SkiaLayer). The harness was
+         * thus CHURNING the app's focus on every evidence step and every
+         * injection, widening the focus-less gaps that killed injected keys.
+         * Now `requestFocus()` fires only when the AWT actually reports our
+         * window unfocused (an external theft — restoring focus is then the
+         * point), and the already-focused case is a no-op. A run's remaining
+         * flap cycles that carry no `bringWindowToFront` mark within ~300 ms
+         * are therefore externally driven (OS/mpv), which the `t=+…ms` stamps
+         * make checkable.
+         *
+         * `jellyplay.harness.noWindowToFront=true` skips both calls entirely
+         * (the wave-14E thief experiment knob; default off — a genuinely
+         * buried window still needs toFront for clean screenshots).
+         */
+        private suspend fun bringWindowToFront(window: ComposeWindow, reason: String) {
+            if (System.getProperty(PROP_NO_WINDOW_TO_FRONT)?.equals("true", ignoreCase = true) == true) {
+                println(
+                    "[JellyPlay][harness][awt-focus] t=+" +
+                        (System.currentTimeMillis() - startedAtMs) +
+                        "ms bringWindowToFront($reason): SKIPPED (noWindowToFront experiment)",
+                )
+            } else {
+                runCatching {
+                    window.toFront()
+                    val kfm = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                    if (kfm.focusedWindow === window && kfm.focusOwner != null) {
+                        println(
+                            "[JellyPlay][harness][awt-focus] t=+" +
+                                (System.currentTimeMillis() - startedAtMs) +
+                                "ms bringWindowToFront($reason): window already focused — " +
+                                "requestFocus skipped (flap churn guard)",
+                        )
+                    } else {
+                        println(
+                            "[JellyPlay][harness][awt-focus] t=+" +
+                                (System.currentTimeMillis() - startedAtMs) +
+                                "ms bringWindowToFront($reason): window lacks focus " +
+                                "(focusedWindow=${kfm.focusedWindow.awtDescribe(window)} " +
+                                "focusOwner=${kfm.focusOwner.awtDescribe(window)}) — requesting focus",
+                        )
+                        window.requestFocus()
+                    }
+                }
             }
             delay(200)
         }
@@ -578,12 +730,23 @@ object DesktopSessionHarness {
     private const val REPORT_FILE_NAME = "session-harness.json"
 
     /**
-     * How long OVERLAY_SPACE waits for the sampled isPlaying flip after
-     * injecting SPACE. The recorder samples on a ~500 ms cadence, so a real
-     * toggle clears within ~1 s; 8 s leaves margin for a busy UI thread
-     * without eating into the auto-exit deadline.
+     * Wave 14E: how long each SPACE injection attempt waits for the sampled
+     * isPlaying flip. The recorder samples on a ~500 ms cadence, so a real
+     * toggle clears within ~1 s; 3 s leaves margin for a busy UI thread while
+     * keeping the whole retry ladder (up to [SPACE_MAX_INJECTION_ATTEMPTS]
+     * attempts + spacing) well inside the auto-exit deadline.
      */
-    private const val SPACE_TOGGLE_TIMEOUT_MS = 8_000L
+    private const val SPACE_TOGGLE_PROBE_MS = 3_000L
+
+    /**
+     * Wave 14E: maximum SPACE injection attempts per OVERLAY_SPACE step. A
+     * single unlucky focus flap must not fail the gate (the retry ladder);
+     * a key that provably REACHED the handler still fails immediately.
+     */
+    private const val SPACE_MAX_INJECTION_ATTEMPTS = 3
+
+    /** Wave 14E: spacing between SPACE injection attempts. */
+    private const val SPACE_RETRY_SPACING_MS = 1_000L
 }
 
 /** One recorded harness step. */

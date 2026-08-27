@@ -119,7 +119,10 @@ esac
 
 LOG_OUT="$PROFILE_NIX/app.out"; LOG_ERR="$PROFILE_NIX/app.err"
 echo "== launching $APP_NAME (profile: $PROFILE_NIX)"
-export JAVA_TOOL_OPTIONS="-Djellyplay.harness.enabled=true -Djellyplay.harness.serverUrl=$SERVER_URL -Djellyplay.harness.username=$USERNAME -Djellyplay.harness.password=$PASSWORD -Djellyplay.harness.itemId=$ITEM_ID -Djellyplay.harness.autoExitSeconds=$AUTO_EXIT_SECONDS -Djellyplay.harness.screenshotDir=$PROFILE_MIXED/harness-shots -Djellyplay.perf.dataDir=$PROFILE_MIXED/profile -Djna.library.path=$MPV_MIXED"
+# HARNESS_EXTRA_PROPS (optional, wave 14E): extra jellyplay.harness.* -D props
+# for targeted experiments (e.g. -Djellyplay.harness.noWindowToFront=true, the
+# focus-thief experiment knob). Never set in CI - default run is unmodified.
+export JAVA_TOOL_OPTIONS="-Djellyplay.harness.enabled=true -Djellyplay.harness.serverUrl=$SERVER_URL -Djellyplay.harness.username=$USERNAME -Djellyplay.harness.password=$PASSWORD -Djellyplay.harness.itemId=$ITEM_ID -Djellyplay.harness.autoExitSeconds=$AUTO_EXIT_SECONDS -Djellyplay.harness.screenshotDir=$PROFILE_MIXED/harness-shots -Djellyplay.perf.dataDir=$PROFILE_MIXED/profile -Djna.library.path=$MPV_MIXED ${HARNESS_EXTRA_PROPS:-}"
 "$EXE" > "$LOG_OUT" 2> "$LOG_ERR" &
 BASH_PID=$!
 unset JAVA_TOOL_OPTIONS

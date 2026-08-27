@@ -68,6 +68,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -780,6 +781,114 @@ fun VideoPlayerScreen(
         }
     }
 
+    // Wave 14E: the hardware-keyboard layer's media-key interpretation,
+    // extracted VERBATIM from the Box's onKeyEvent below so both delivery
+    // paths run this exact when-block: (a) the normal focused dispatch chain
+    // (the Box's onKeyEvent, when the layer or a descendant holds Compose
+    // focus) and (b) the desktop shell's deterministic forward (the sink
+    // installed below, called from DesktopNavScaffold.onPreviewKeyEvent when
+    // Route.VideoPlayer is current and the layer holds no focus — the AWT
+    // focus flap leaves focus-less gaps in which the null-focus fallback
+    // dispatch dies at the shell's Row). The screen stays the single
+    // interpreter of media-key semantics; the shell forwards raw events.
+    val handleMediaKeyDown: (KeyEvent) -> Boolean = { keyEvent ->
+        val keyCode = keyEvent.playerKeyCode
+        userInteractionCount++
+        viewModel.onUserInteraction()
+        when (keyCode) {
+            PlayerKeyCodes.KEYCODE_SPACE,
+            PlayerKeyCodes.KEYCODE_MEDIA_PLAY,
+            PlayerKeyCodes.KEYCODE_MEDIA_PAUSE,
+            PlayerKeyCodes.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                doTogglePlayPause()
+                performConfirmHaptic()
+                showControls = true
+                true
+            }
+            PlayerKeyCodes.KEYCODE_DPAD_RIGHT,
+            PlayerKeyCodes.KEYCODE_MEDIA_FAST_FORWARD,
+            PlayerKeyCodes.KEYCODE_L -> {
+                doSeekForward()
+                performConfirmHaptic()
+                showControls = true
+                true
+            }
+            PlayerKeyCodes.KEYCODE_DPAD_LEFT,
+            PlayerKeyCodes.KEYCODE_MEDIA_REWIND,
+            PlayerKeyCodes.KEYCODE_J -> {
+                doSeekBack()
+                performConfirmHaptic()
+                showControls = true
+                true
+            }
+            PlayerKeyCodes.KEYCODE_DPAD_UP,
+            PlayerKeyCodes.KEYCODE_VOLUME_UP -> {
+                streamVolumeAdjuster(true)
+                showControls = true
+                true
+            }
+            PlayerKeyCodes.KEYCODE_DPAD_DOWN,
+            PlayerKeyCodes.KEYCODE_VOLUME_DOWN -> {
+                streamVolumeAdjuster(false)
+                showControls = true
+                true
+            }
+            PlayerKeyCodes.KEYCODE_F,
+            PlayerKeyCodes.KEYCODE_F1, PlayerKeyCodes.KEYCODE_F2,
+            PlayerKeyCodes.KEYCODE_F3, PlayerKeyCodes.KEYCODE_F4 -> {
+                toggleOrientation()
+                showControls = true
+                true
+            }
+            PlayerKeyCodes.KEYCODE_M -> {
+                viewModel.toggleMute()
+                showControls = true
+                true
+            }
+            PlayerKeyCodes.KEYCODE_ESCAPE,
+            PlayerKeyCodes.KEYCODE_BACK -> {
+                if (showControls) {
+                    showControls = false
+                    true
+                } else {
+                    onBack()
+                    true
+                }
+            }
+            else -> false
+        }
+    }
+
+    // Wave 14E deterministic desktop delivery (desktop only — the seam is
+    // Android-inert, see [grabsKeyboardFocusWithControlsVisible]): publish the
+    // handler above to the shell's bridge while this screen composes. The
+    // sink declines (returns false) when the normal focused dispatch chain
+    // owns the key ([keyboardLayerHoldsFocus]) or a sheet is open
+    // ([currentSheet] — the keyboard layer's modifier branch, grab and sink
+    // all disarm together), so the shell's forward can never double-handle a
+    // key. Disposed with the screen (or the TV/desktop branch swap).
+    if (!isTv && hasHardwareKeyboard && grabsKeyboardFocusWithControlsVisible()) {
+        val latestKeySink by rememberUpdatedState<(KeyEvent) -> Boolean> { keyEvent ->
+            when {
+                currentSheet != PlayerSheet.None -> false
+                keyboardLayerHoldsFocus -> false
+                keyEvent.type != KeyEventType.KeyDown -> false
+                else -> {
+                    harnessFocusDiag("player-keyboard-box sink: key=${keyEvent.key}")
+                    handleMediaKeyDown(keyEvent)
+                }
+            }
+        }
+        DisposableEffect(isTv, hasHardwareKeyboard) {
+            installPlayerKeySink { keyEvent -> latestKeySink(keyEvent) }
+            harnessFocusDiag("player-key sink installed")
+            onDispose {
+                installPlayerKeySink(null)
+                harnessFocusDiag("player-key sink uninstalled")
+            }
+        }
+    }
+
     // Cast-route teardown for the companion dashboard's disconnect action
     // (platform seam: Android also stops the legacy cast transport).
     val disconnectCast = rememberCastDisconnect(viewModel)
@@ -959,71 +1068,11 @@ fun VideoPlayerScreen(
                                         "player-keyboard-box onKeyEvent: key=${keyEvent.key}",
                                     )
                                 }
-                                val keyCode = keyEvent.playerKeyCode
-                                userInteractionCount++
-                                viewModel.onUserInteraction()
-                                when (keyCode) {
-                                    PlayerKeyCodes.KEYCODE_SPACE,
-                                    PlayerKeyCodes.KEYCODE_MEDIA_PLAY,
-                                    PlayerKeyCodes.KEYCODE_MEDIA_PAUSE,
-                                    PlayerKeyCodes.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                                        doTogglePlayPause()
-                                        performConfirmHaptic()
-                                        showControls = true
-                                        true
-                                    }
-                                    PlayerKeyCodes.KEYCODE_DPAD_RIGHT,
-                                    PlayerKeyCodes.KEYCODE_MEDIA_FAST_FORWARD,
-                                    PlayerKeyCodes.KEYCODE_L -> {
-                                        doSeekForward()
-                                        performConfirmHaptic()
-                                        showControls = true
-                                        true
-                                    }
-                                    PlayerKeyCodes.KEYCODE_DPAD_LEFT,
-                                    PlayerKeyCodes.KEYCODE_MEDIA_REWIND,
-                                    PlayerKeyCodes.KEYCODE_J -> {
-                                        doSeekBack()
-                                        performConfirmHaptic()
-                                        showControls = true
-                                        true
-                                    }
-                                    PlayerKeyCodes.KEYCODE_DPAD_UP,
-                                    PlayerKeyCodes.KEYCODE_VOLUME_UP -> {
-                                        streamVolumeAdjuster(true)
-                                        showControls = true
-                                        true
-                                    }
-                                    PlayerKeyCodes.KEYCODE_DPAD_DOWN,
-                                    PlayerKeyCodes.KEYCODE_VOLUME_DOWN -> {
-                                        streamVolumeAdjuster(false)
-                                        showControls = true
-                                        true
-                                    }
-                                    PlayerKeyCodes.KEYCODE_F,
-                                    PlayerKeyCodes.KEYCODE_F1, PlayerKeyCodes.KEYCODE_F2,
-                                    PlayerKeyCodes.KEYCODE_F3, PlayerKeyCodes.KEYCODE_F4 -> {
-                                        toggleOrientation()
-                                        showControls = true
-                                        true
-                                    }
-                                    PlayerKeyCodes.KEYCODE_M -> {
-                                        viewModel.toggleMute()
-                                        showControls = true
-                                        true
-                                    }
-                                    PlayerKeyCodes.KEYCODE_ESCAPE,
-                                    PlayerKeyCodes.KEYCODE_BACK -> {
-                                        if (showControls) {
-                                            showControls = false
-                                            true
-                                        } else {
-                                            onBack()
-                                            true
-                                        }
-                                    }
-                                    else -> false
-                                }
+                                // Wave 14E: the interpretation moved into
+                                // [handleMediaKeyDown] above so the shell's
+                                // deterministic forward (the bridge sink) runs
+                                // the exact same when-block.
+                                handleMediaKeyDown(keyEvent)
                             }
                     } else Modifier
                 )
