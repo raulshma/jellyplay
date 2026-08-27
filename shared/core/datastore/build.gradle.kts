@@ -71,6 +71,17 @@ kotlin {
             // webDatastoreModule (§Phase W spike: datastore 1.2.1 ships a
             // public Storage/StorageConnection API on wasmJs).
             implementation(libs.kotlinx.browser)
+            // RUNTIME FIX (coordinator web browser pass): datastore 1.2.1's
+            // wasmJs actual of DataStoreFactory.create / PreferenceDataStore-
+            // Factory.create is a literal TODO("Not yet implemented") — every
+            // Koin single in webDatastoreModule threw at first resolution, so
+            // the web shell rendered a blank canvas (klib-string-proven; the
+            // W.0 spike verified exports, never execution). 1.3.0-alpha10
+            // (Kotlin 2.3.20 / ABI 2.3.0 — compatible with the repo's 2.3.21)
+            // implements the factory over DataStore.Builder. Target-scoped
+            // override: only the wasm variant resolves upward; android/jvm
+            // keep the repo-wide 1.2.1 pin.
+            implementation("androidx.datastore:datastore-preferences-core:1.3.0-alpha10")
         }
         getByName("commonTest").dependencies {
             implementation(kotlin("test"))
