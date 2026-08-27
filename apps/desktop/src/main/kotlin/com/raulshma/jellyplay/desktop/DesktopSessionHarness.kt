@@ -52,12 +52,14 @@ import kotlinx.coroutines.delay
  *     onPreviewKeyEvent. The run verifies the ordering empirically through
  *     the one keyboard-reachable overlay: SPACE (pause + show controls, the
  *     playhead freeze proves the key reached the player), then a single ESC
- *     — if the route pops, the scaffold's back handling won over the
- *     screen's own Esc branch (which would only hide the controls); if it
- *     did not pop, that is recorded instead and answers the question the
- *     other way. (If SPACE itself never reaches the player's key handler,
- *     that is recorded as a focus finding — the ESC result stands on its
- *     own either way.)
+ *     — the verified ordering on this platform is that the scaffold's back
+ *     handling wins (the route pops; the screen's own Esc branch would only
+ *     hide the controls). ESC_SEQUENCE is a REGRESSION GATE on that ordering:
+ *     a not-popping run records the finding (it would answer wave-9's
+ *     question the other way) and FAILS the step, so the tool goes red
+ *     rather than silently re-baselining. (If SPACE itself never reaches
+ *     the player's key handler, that is recorded as a focus finding — the
+ *     ESC result stands on its own either way.)
  *  6. Report — `<logs>/session-harness.json` (steps, pass/fail, machine
  *     facts incl. the surface branch the factory used), then exitProcess(0).
  *

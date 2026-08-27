@@ -33,14 +33,11 @@ kotlin {
         browser()
         // Headless commonTest lane: wasmJsNodeTest runs under Kotlin's
         // downloaded Node.js distribution — no Karma, no Chrome (the browser
-        // lane demanded Chrome, see plan history). PREREQUISITE (wave 12D
-        // probe): running this task requires dependencyResolutionManagement
-        // repositoriesMode PREFER_PROJECT; under FAIL_ON_PROJECT_REPOS KGP's
-        // kotlinWasmNodeJsSetup hard-fails with "'Distributions at
-        // https://nodejs.org/dist' was added by unknown code". The flip was
-        // deliberately NOT kept in this wave (repo-wide governance call);
-        // until an owner bakes it in, drive the lane ad hoc via that temp
-        // flip. Suite verified green on Node this way.
+        // lane demanded Chrome, see plan history). The wave-12D note about a
+        // PREFER_PROJECT flip being required is OBSOLETE: wave 13C's
+        // settings.gradle.kts node/yarn governance owns the tool
+        // repositories, so this lane runs under FAIL_ON_PROJECT_REPOS with
+        // no flips. Suite verified green on Node that way.
         nodejs()
     }
 

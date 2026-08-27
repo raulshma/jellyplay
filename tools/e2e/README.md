@@ -121,12 +121,16 @@ Report steps (from `DesktopSessionHarness`): `CONFIG`, `LOGIN`, `NAV_READY`,
 the `EngineActivityRecorder`), `SCREENSHOT_MID_PLAY`, `SHEET_TRIGGER_SCAN`,
 `OVERLAY_SPACE` (injects SPACE and records whether it reached the player —
 on the reference machine it did NOT: a player-Box focus gap, honestly
-recorded rather than asserted), `ESC_SEQUENCE` (single Esc pops the player
-route or not — the recorded `finding` answers the ordering question).
+recorded rather than asserted), `ESC_SEQUENCE` (asserts the verified
+ordering — the scaffold's back handling pops the player route; a
+not-popping run records its finding and FAILS the pass, keeping the tool a
+regression gate on the wave-9 answer rather than an open question).
 
 Requires Git Bash on Windows with `cygpath`, `powershell` and `taskkill`
 available, and an interactive session (the harness takes real screenshots via
-`java.awt.Robot`).
+`java.awt.Robot`). Evidence retention: the FAIL path keeps the profile dir
+and prints its path; the PASS path keeps it too (temp dir, auto-cleaned by
+the OS eventually) — the report JSON path is always printed.
 
 ## Running web-verify (wave 13C)
 

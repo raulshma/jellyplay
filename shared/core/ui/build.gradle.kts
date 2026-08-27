@@ -46,9 +46,8 @@ kotlin {
         // links skiko.mjs and Node cannot fetch/prepare its wasm ("both async
         // and sync fetching of the wasm failed"). Execution is proven green
         // only for skiko-free modules (:shared:core:model). Kept as a compile
-        // gate plus future hook; same PREFER_PROJECT prerequisite as
-        // :shared:core:model (FAIL_ON_PROJECT_REPOS trips
-        // kotlinWasmNodeJsSetup's 'nodejs.org/dist' repo add).
+        // gate plus future hook; runs under FAIL_ON_PROJECT_REPOS since wave
+        // 13C's settings.gradle.kts node/yarn governance (no flips needed).
         nodejs()
     }
 

@@ -111,6 +111,11 @@ PROFILE_MIXED="$(cygpath -m "$PROFILE_NIX")"
 MPV_MIXED="$(cygpath -m "$MPV_DIR")"
 case "$PROFILE_MIXED" in *" "*) fail "profile dir contains spaces ($PROFILE_MIXED); JAVA_TOOL_OPTIONS cannot carry it."; ;; esac
 case "$MPV_MIXED" in *" "*) fail "tools/mpv path contains spaces ($MPV_MIXED)."; ;; esac
+# JVM splits JAVA_TOOL_OPTIONS on whitespace: a space-bearing credential or
+# item name would truncate this -D value (and every prop after it).
+case "$USERNAME$PASSWORD$ITEM_ID" in
+    *" "*) fail "USERNAME / E2E_PASSWORD / resolved item id must not contain spaces."; ;;
+esac
 
 LOG_OUT="$PROFILE_NIX/app.out"; LOG_ERR="$PROFILE_NIX/app.err"
 echo "== launching $APP_NAME (profile: $PROFILE_NIX)"
@@ -127,11 +132,15 @@ report_seen=0
 while (( SECONDS <= deadline )); do
     if [[ -f "$REPORT_NIX" ]]; then report_seen=1; break; fi
     # Sample live JellyPlay PIDs (our own window only) for the kill fallback.
+    # Note: this window is not hermetic — an instance a USER launches mid-run
+    # would also be sampled and thus killed on timeout. The pre-launch
+    # refuse-guard above covers the common case.
     snap="$(powershell -NoProfile -Command "Get-Process -Name $APP_NAME -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id" | tr -d '\r')"
     while IFS= read -r pid_cur; do
         [[ -z "$pid_cur" ]] && continue
-        case "
-$observed_pids" in *"$pid_cur"*) ;; *) observed_pids="$observed_pids$pid_cur"$'\n' ;; esac
+        # newline-delimited exact-field compare (a substring match would drop
+        # PID 23 just because 123 was already recorded)
+        case $'\n'"$observed_pids"$'\n' in *$'\n'"$pid_cur"$'\n'*) ;; *) observed_pids="$observed_pids$pid_cur"$'\n' ;; esac
     done <<< "$snap"
     if [[ -z "${snap//[[:space:]]/}" ]] && ! kill -0 "$BASH_PID" 2>/dev/null; then
         break # process gone and no report

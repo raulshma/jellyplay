@@ -17,10 +17,10 @@ package com.raulshma.jellyplay.core.network.library
  *    appends the access token (auth travels on the request layer), so image
  *    URLs are bearer-less exactly like the JVM/desktop ones.
  *
- * wasm v1 note: the Coil wasm engine landed (wave 10B) but no browser has
- * fetched a real image through it yet — whether images need a credential-
- * bearing variant stays open until that pass; until then this stays
- * byte-identical to the JVM builder output.
+ * wasm v1 note: the Coil wasm engine landed (wave 10B) and the wave 13C
+ * browser pass VERIFIED these bearer-less URLs decode end-to-end — no
+ * credential-bearing variant is needed (the wave-12 open question is
+ * closed; see the harness notes in apps/web and tools/e2e/web-verify).
  */
 
 /** The SDK `ImageType` serial names (`ImageType.fromNameOrNull` table). */

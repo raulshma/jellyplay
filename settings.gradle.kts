@@ -41,8 +41,10 @@ dependencyResolutionManagement {
         //   com.yarnpkg:yarn:<ver>@tar.gz from
         //   https://github.com/yarnpkg/yarn/releases/download
         //     "v[revision]/[artifact](-v[revision]).[ext]"
-        // (both artifact-metadata-only ivy repos, mirroring KGP's own
-        // registration byte-for-byte). Group-scoped content filters keep the
+        // (both artifact-metadata-only ivy repos; patternLayout and
+        // metadataSources mirror KGP's own registration exactly, with a
+        // deliberately broader includeGroup filter where KGP uses
+        // includeModule). Group-scoped content filters keep the
         // repositories from serving anything but tool distributions. Net
         // effect: FAIL_ON_PROJECT_REPOS keeps failing real ungoverned repos,
         // while webpack and the wasmJsNodeTest lanes run with no

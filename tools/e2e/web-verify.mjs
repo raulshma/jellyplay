@@ -269,6 +269,9 @@ async function main() {
       '--autoplay-policy=no-user-gesture-required',
       'about:blank',
     ], { stdio: 'ignore' });
+    // An invalid EDGE path would otherwise raise an unhandled 'error' event
+    // that crashes before finally and leaks serverProc.
+    edgeProc.on('error', (e) => { throw new Error(`failed to spawn Edge at ${EDGE}: ${e.message}`); });
     let targets = null;
     for (let i = 0; i < 40; i++) {
       await sleep(500);

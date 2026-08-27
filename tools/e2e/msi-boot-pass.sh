@@ -195,8 +195,9 @@ while :; do
     fi
     while IFS= read -r pid_cur; do
         [[ -z "$pid_cur" ]] && continue
-        case "
-$OBSERVED_PIDS" in *"$pid_cur"*) ;; *) OBSERVED_PIDS="$OBSERVED_PIDS$pid_cur"$'\n' ;; esac
+        # newline-delimited exact-field compare (a substring match would drop
+        # PID 23 just because 123 was already recorded)
+        case $'\n'"$OBSERVED_PIDS"$'\n' in *$'\n'"$pid_cur"$'\n'*) ;; *) OBSERVED_PIDS="$OBSERVED_PIDS$pid_cur"$'\n' ;; esac
     done <<< "$SNAP"
     if (( SECONDS > DEADLINE )); then
         echo "[harness] TIMEOUT after ${AUTO_EXIT_SECONDS}s+20s grace; killing OUR observed PIDs only (PID-only kill): $(echo "$OBSERVED_PIDS" | tr '\n' ' ')" >&2

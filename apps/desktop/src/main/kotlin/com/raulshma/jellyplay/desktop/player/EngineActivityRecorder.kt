@@ -23,6 +23,10 @@ import java.util.concurrent.CopyOnWriteArrayList
  * classification helpers the harness asserts with and the unit tests cover).
  *
  * Koin single (DesktopPlayerModule); app-lifetime, like the factory it serves.
+ * Per-engine observers are NOT cancelled on engine release — reads stay safe
+ * (volatile fields / StateFlow, `aliveCtx()` guards JNA) and sample caps bound
+ * memory, but records accumulate across sessions; if the factory ever gains a
+ * dispose path, cancel the observers there too.
  */
 class EngineActivityRecorder {
 

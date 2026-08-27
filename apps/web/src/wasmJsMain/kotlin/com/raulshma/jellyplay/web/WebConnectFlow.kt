@@ -230,7 +230,8 @@ internal class WebConnectController(
  * RUNTIME HONESTY: verified in a real browser (2026-08-27, wave 13C) — the
  * headless-Edge CDP lane (tools/e2e/web-verify.mjs) clicked through this
  * exact flow against a live Jellyfin 10.11.11 server: URL typed via CDP
- * Input.insertText, probe (Connect) → sign-in fields, credentials entered,
+ * (Input.insertText, with a per-char key-event fallback in the driver),
+ * probe (Connect) → sign-in fields, credentials entered,
  * Sign in → ConnectedCard, with zero console errors. Autoplay-muted
  * HtmlVideoEngine playback from the connected session was verified one level
  * deeper in WebDiagnosticsPane the same run.

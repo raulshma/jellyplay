@@ -161,7 +161,8 @@ import java.util.concurrent.atomic.AtomicReference
  *   is a diagnostics pointer, not an error UI.
  * @param windowRef the ComposeWindow handle (Main.kt's AWT ref), consumed
  *   ONLY by the wave-13B session harness (screenshots + key injection).
- *   Null on every non-harness composition path.
+ *   The parameter is always supplied; the ref's CONTENT is null until the
+ *   window is composed.
  */
 @Composable
 internal fun DesktopAppRoot(
