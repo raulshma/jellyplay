@@ -166,9 +166,9 @@ class UpcomingCalendarViewModel(
             _state.value = _state.value.copy(isLoading = true, error = null)
             val month = _state.value.visibleMonth
             arrRepository.refreshCalendar(
-                    month.atDay(1).toKotlinLocalDate(),
-                    month.atEndOfMonth().toKotlinLocalDate(),
-                )
+                month.atDay(1).toKotlinLocalDate(),
+                month.atEndOfMonth().toKotlinLocalDate(),
+            )
                 .onFailure { _state.value = _state.value.copy(error = it.message) }
             _state.value = _state.value.copy(isLoading = false)
         }

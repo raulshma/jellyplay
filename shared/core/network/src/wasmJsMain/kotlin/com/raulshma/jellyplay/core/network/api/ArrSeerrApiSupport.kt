@@ -69,10 +69,14 @@ import kotlinx.serialization.json.Json
  *    `Result` (a bare `SerializationException`); here they are wrapped by
  *    [apiResult]'s mapping into a non-retryable [ApiException] carrying the
  *    same message. Callers only read `.message`, so the user-visible string
- *    is unchanged.
- *  - POST/PUT bodies go out as `application/json; charset=UTF-8` (Ktor
- *    `TextContent`) where OkHttp wrote a bare `application/json`; servers
- *    treat the two identically.
+ *    is unchanged. For the same reason JVM's empty-2xx-body branches
+ *    ("Empty response body (HTTP n)") are unreachable here: an empty body
+ *    fails the JSON decode (or succeeds silently for the raw-text
+ *    executions).
+ *  - POST/PUT bodies go out via Ktor `TextContent` (`application/json`;
+ *    whether a `; charset=UTF-8` parameter is appended is Ktor-version
+ *    dependent — OkHttp wrote a bare `application/json`; servers treat all
+ *    the forms identically).
  *  - Retry is folded into the clients ([apiResultWithRetry], default
  *    maxRetries = 4 = the Resilient* wrappers' `MAX_RETRIES`), replacing the
  *    DI-level `Resilient*` wrappers the JVM graph binds the interfaces to
@@ -102,7 +106,14 @@ open class ArrSeerrApiSupport(
         headers.forEach { (k, v) -> header(k, v) }
     }
 
-    /** Ktor `parameter()` — the `HttpUrl.Builder.addQueryParameter` counterpart (space → `%20` both). */
+    /**
+     * Ktor `parameter()` — the `HttpUrl.Builder.addQueryParameter`
+     * counterpart. Encoding is not byte-identical to OkHttp's QUERY_COMPONENT
+     * set (e.g. `'` stays raw here, OkHttp emits %27; space handling is
+     * encoder-dependent) — every known server (Seerr, Sonarr/.NET,
+     * Radarr/Go) percent-decodes both forms to the same value. Only
+     * reachable with apostrophes/junk in `search()`/`filter` arguments.
+     */
     protected fun HttpRequestBuilder.attachQuery(query: List<Pair<String, String>>) {
         query.forEach { (k, v) -> parameter(k, v) }
     }
@@ -232,16 +243,20 @@ open class ArrSeerrApiSupport(
     }
 
     /**
-     * The engine's apiResult shape (see [WasmApiSupport.apiResult] — the same
-     * recoverCatching/cancellation parity note applies: cancellation surfaces
-     * as `Result.failure(CancellationException)`, byte-parity with the JVM
-     * engine's wrapper).
+     * CancellationException propagates (JVM Resilient-wrapper/OkHttp parity
+     * — the JVM seams these clients replace rethrow CE, unlike the Jellyfin
+     * engine's recoverCatching wrapper whose failure-value parity note does
+     * NOT apply here); transport failures map to [ApiException].
      */
-    protected suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
-        runCatching { block() }.recoverCatching {
-            if (it is CancellationException) throw it
-            throw it.toTransportApiException()
+    protected suspend fun <T> apiResult(block: suspend () -> T): Result<T> {
+        try {
+            return Result.success(block())
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (t: Throwable) {
+            return Result.failure(t.toTransportApiException())
         }
+    }
 
     /** [apiResult] under [RetryPolicy] — the wasm stand-in for the DI-level Resilient* wrappers. */
     protected suspend fun <T> apiResultWithRetry(

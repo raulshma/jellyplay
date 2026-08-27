@@ -23,15 +23,11 @@ import org.koin.dsl.module
  *  - [SessionCacheRegistry], [SeerrRepository] and [ArrRepository] are the
  *    promoted commonMain singletons; ctor deps resolve from
  *    `datastoreCommonModule` (stores + application scope) and
- *    `networkWasmModule`.
- *
- * OPEN DEPENDENCY (15A follow-up): the wasm graph needs
- * `SeerrApiClient`/`TmdbApiClient`/`RadarrApiClient`/`SonarrApiClient`
- * registered somewhere reachable from the web shell's startKoin — today
- * network's wasm module registers only the auth/library/playback/user
- * clients; the Seerr/TMDB/Radarr/Sonarr client impls still live in network's
- * jvmShared. Until that lands, `requestsModule`'s ViewModels cannot resolve
- * at RUNTIME on web (everything here COMPILES and the wiring shape is final).
+ *    `networkWasmModule` — which (since wave 15A) registers all four
+ *    Seerr/TMDB/Radarr/Sonarr wasm clients. The requests graph resolves at
+ *    RUNTIME on web once apps/web's startKoin includes `networkWasmModule +
+ *    datastoreCommonModule + webDatastoreModule + dataWasmModule +
+ *    requestsModule` (wave 15C's wiring).
  */
 val dataWasmModule: Module = module {
 

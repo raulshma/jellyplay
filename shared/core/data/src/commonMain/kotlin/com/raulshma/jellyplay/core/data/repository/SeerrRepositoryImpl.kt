@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.seerr.*
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
@@ -43,13 +44,13 @@ class SeerrRepositoryImpl(
     private val cacheScope: CoroutineScope,
 ) : SeerrRepository {
 
-    // Both fields carried @Volatile on the pre-15B JVM sources; the annotation
-    // has no wasmJs actual, so promotion drops it. Staleness here is benign:
-    // the hash check only short-circuits an idempotent re-read/recompute of
-    // the same credentials (worst case one extra DataStore + secure-store
-    // read), and coroutine hand-offs between threads already provide
-    // happens-before edges through their dispatcher queues.
+    // Both fields carried @Volatile on the pre-15B JVM sources; the promotion
+    // keeps it via kotlin.concurrent.Volatile (common — has a wasmJs actual;
+    // the same annotation this repo already uses in commonMain,
+    // e.g. WidgetDataStore).
+    @Volatile
     private var cachedCredentials: SeerrCredentials? = null
+    @Volatile
     private var lastCredsHash: Int = 0
 
     private val _currentUser = MutableStateFlow<SeerrCurrentUser?>(null)
