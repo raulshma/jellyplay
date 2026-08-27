@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.sync
 
+import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSegment
@@ -38,6 +39,7 @@ class OfflineSyncComparatorTest {
         criticRating: Float? = null,
         mediaStreams: List<MediaStream> = emptyList(),
         trickplayInfo: TrickplayInfo? = null,
+        chapters: List<ChapterInfo> = emptyList(),
     ): MediaDetail {
         val item = MediaItem(
             id = itemId,
@@ -55,6 +57,7 @@ class OfflineSyncComparatorTest {
             taglines = taglines,
             people = people,
             criticRating = criticRating,
+            chapters = chapters,
             mediaSources = listOfNotNull(
                 if (mediaSourceId != null) {
                     MediaSource(
@@ -212,6 +215,40 @@ class OfflineSyncComparatorTest {
         assertTrue(result.state.metadataChanged)
     }
 
+    // ── Chapters in the metadata signature ─────────────────────────────────
+
+    private fun chapter(name: String, startTicks: Long, imageTag: String? = null) =
+        ChapterInfo(name = name, startPositionTicks = startTicks, imageTag = imageTag)
+
+    @Test
+    fun `chapter name tick and imageTag changes flip the metadata signature`() {
+        val base = detail(chapters = listOf(chapter("Cold Open", 0L)))
+        assertNotEquals(
+            comparator.metadataSignature(base),
+            comparator.metadataSignature(detail(chapters = listOf(chapter("Cold Open", 0L, imageTag = "tag-1")))),
+        )
+        assertNotEquals(
+            comparator.metadataSignature(base),
+            comparator.metadataSignature(detail(chapters = listOf(chapter("Cold Open", 1_000_000L)))),
+        )
+        assertNotEquals(
+            comparator.metadataSignature(base),
+            comparator.metadataSignature(detail(chapters = listOf(
+                chapter("Cold Open", 0L),
+                chapter("Credits", 90_000_000L),
+            ))),
+        )
+    }
+
+    @Test
+    fun `metadata signature ignores a pure chapter reorder`() {
+        // Ordered by start ticks (not by the serialized string, which starts
+        // with the name), so any permutation of the same chapters hashes equal.
+        val a = detail(chapters = listOf(chapter("Zeta", 0L), chapter("Alpha", 10_000_000L)))
+        val b = detail(chapters = listOf(chapter("Alpha", 10_000_000L), chapter("Zeta", 0L)))
+        assertEquals(comparator.metadataSignature(a), comparator.metadataSignature(b))
+    }
+
     @Test
     fun `baseline extraction captures tags signature and media source`() {
         val fresh = detail()
@@ -339,6 +376,24 @@ class OfflineSyncComparatorTest {
         // Fresh segments that differ -> flag.
         val withSegments = comparator.diff(baseline, fresh, itemId, listOf(segment(endTicks = 99_999_999L)))
         assertTrue(withSegments.state.segmentsChanged)
+    }
+
+    @Test
+    fun `retired metadata signature seeds silently instead of flagging`() {
+        // Post-MIGRATION_50_51 row shape: image tags + media source survive,
+        // but syncedMetadataSignature was nulled because the signature payload
+        // format changed when chapters joined it. The first fresh fetch must
+        // re-seed the axis, not flag every download as update-available.
+        val fresh = detail()
+        val baseline = emptyBaseline().copy(
+            posterTag = "poster-1",
+            backdropTag = "backdrop-1",
+            mediaSourceId = "src-1",
+            mediaSizeBytes = 1_000_000L,
+        )
+        val result = comparator.diff(baseline, fresh, itemId)
+        assertFalse(result.state.metadataChanged)
+        assertFalse(result.state.needsResync)
     }
 
     @Test

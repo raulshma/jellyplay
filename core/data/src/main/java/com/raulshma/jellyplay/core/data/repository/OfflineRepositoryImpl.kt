@@ -17,6 +17,8 @@ import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.ExternalUrl
+import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -34,7 +36,9 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.serializer
 import androidx.collection.LruCache
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -919,66 +923,82 @@ class OfflineRepositoryImpl @Inject constructor(
             cast = decodeCast(m.peopleJson),
             providerIds = decodeProviderIds(m.providerIdsJson),
             externalUrls = decodeExternalUrls(m.externalUrlsJson),
+            chapters = decodeChapters(m.chaptersJson),
             createdAt = m.createdAt,
         )
     }
 }
 
-/** Reusable lenient Json for (de)serializing the offline cast JSON column. */
+/** Reusable lenient Json for (de)serializing the offline JSON-blob columns. */
 internal val offlineJson: Json = Json {
     ignoreUnknownKeys = true
     encodeDefaults = true
 }
 
 /**
- * Memo caches for the pure JSON-column decodes below: the library/episodes/
- * season flows re-map every row on each Room re-emission (2 s progress ticks
- * during transfers), and the decodes are deterministic, so equal inputs always
- * yield equal outputs.
+ * Memoized encode/decode codec for one offline_media JSON-blob column.
+ *
+ * Single home for the null/garbage-tolerant decode + memo-cache shape every
+ * blob column shares (cast, provider ids, external urls, chapters): the
+ * library/episodes/season flows re-map every row on each Room re-emission
+ * (2 s progress ticks during transfers), and the decodes are deterministic,
+ * so equal inputs always yield equal outputs.
  */
-private val castDecodeCache = LruCache<String, List<OfflinePersonInfo>>(256)
-private val providerIdsDecodeCache = LruCache<String, Map<String, String>>(256)
-private val externalUrlsDecodeCache = LruCache<String, List<com.raulshma.jellyplay.core.model.ExternalUrl>>(256)
+internal class JsonBlobCodec<T : Any>(
+    private val serializer: KSerializer<T>,
+    private val fallback: T,
+) {
+    private val cache = LruCache<String, T>(256)
+    /** Encodes [value] into the persisted JSON column form. */
+    fun encode(value: T): String = offlineJson.encodeToString(serializer, value)
 
-private inline fun <T : Any> memoizedDecode(cache: LruCache<String, T>, json: String, fallback: T, decode: () -> T): T {
-    cache.get(json)?.let { return it }
-    val value = runCatching(decode).getOrDefault(fallback)
-    cache.put(json, value)
-    return value
-}
-
-/** Decodes a [peopleJson] blob into a cast list, tolerating null/garbage rows. */
-internal fun decodeCast(peopleJson: String?): List<OfflinePersonInfo> {
-    if (peopleJson.isNullOrBlank()) return emptyList()
-    return memoizedDecode(castDecodeCache, peopleJson, emptyList()) {
-        offlineJson.decodeFromString(peopleJson)
+    /** Decodes [blob], tolerating null/blank/garbage by yielding [fallback]. */
+    fun decode(blob: String?): T {
+        if (blob.isNullOrBlank()) return fallback
+        cache.get(blob)?.let { return it }
+        val value = runCatching { offlineJson.decodeFromString(serializer, blob) }
+            .getOrDefault(fallback)
+        cache.put(blob, value)
+        return value
     }
 }
+
+private inline fun <reified T : Any> jsonBlobCodec(fallback: T): JsonBlobCodec<T> =
+    JsonBlobCodec(serializer(), fallback)
+
+private val castCodec = jsonBlobCodec<List<OfflinePersonInfo>>(emptyList())
+private val providerIdsCodec = jsonBlobCodec<Map<String, String>>(emptyMap())
+private val externalUrlsCodec = jsonBlobCodec<List<ExternalUrl>>(emptyList())
+private val chaptersCodec = jsonBlobCodec<List<ChapterInfo>>(emptyList())
+
+/** Decodes a [peopleJson] blob into a cast list, tolerating null/garbage rows. */
+internal fun decodeCast(peopleJson: String?): List<OfflinePersonInfo> =
+    castCodec.decode(peopleJson)
 
 /** Encodes a cast list into the persisted JSON column form. */
 internal fun encodeCast(people: List<OfflinePersonInfo>): String =
-    offlineJson.encodeToString(people)
+    castCodec.encode(people)
 
 /** Encodes provider ids into the persisted JSON column form. */
 internal fun encodeProviderIds(providerIds: Map<String, String>): String =
-    offlineJson.encodeToString(providerIds)
-
-/** Encodes external URLs into the persisted JSON column form. */
-internal fun encodeExternalUrls(urls: List<com.raulshma.jellyplay.core.model.ExternalUrl>): String =
-    offlineJson.encodeToString(urls)
+    providerIdsCodec.encode(providerIds)
 
 /** Decodes a [providerIdsJson] blob into a map, tolerating null/garbage. */
-private fun decodeProviderIds(providerIdsJson: String?): Map<String, String> {
-    if (providerIdsJson.isNullOrBlank()) return emptyMap()
-    return memoizedDecode(providerIdsDecodeCache, providerIdsJson, emptyMap()) {
-        offlineJson.decodeFromString(providerIdsJson)
-    }
-}
+private fun decodeProviderIds(providerIdsJson: String?): Map<String, String> =
+    providerIdsCodec.decode(providerIdsJson)
+
+/** Encodes external URLs into the persisted JSON column form. */
+internal fun encodeExternalUrls(urls: List<ExternalUrl>): String =
+    externalUrlsCodec.encode(urls)
 
 /** Decodes a [externalUrlsJson] blob into a URL list, tolerating null/garbage. */
-private fun decodeExternalUrls(externalUrlsJson: String?): List<com.raulshma.jellyplay.core.model.ExternalUrl> {
-    if (externalUrlsJson.isNullOrBlank()) return emptyList()
-    return memoizedDecode(externalUrlsDecodeCache, externalUrlsJson, emptyList()) {
-        offlineJson.decodeFromString(externalUrlsJson)
-    }
-}
+private fun decodeExternalUrls(externalUrlsJson: String?): List<ExternalUrl> =
+    externalUrlsCodec.decode(externalUrlsJson)
+
+/** Encodes a chapter list into the persisted JSON column form. */
+internal fun encodeChapters(chapters: List<ChapterInfo>): String =
+    chaptersCodec.encode(chapters)
+
+/** Decodes a [chaptersJson] blob into a chapter list, tolerating null/garbage. */
+internal fun decodeChapters(chaptersJson: String?): List<ChapterInfo> =
+    chaptersCodec.decode(chaptersJson)

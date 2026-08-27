@@ -12,11 +12,14 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.isSideLoadableEmbeddedSubtitle
+import com.raulshma.jellyplay.core.model.toMediaDetail
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -357,31 +360,25 @@ class PlayerSessionManager(
         val agg = aggregateStore.aggregateRaw.first()
         val playerType = agg.playback.preferredPlayer
 
-        // Preserve the offline item's rich metadata (seriesId, seasonId,
-        // season/episode numbers, seriesName, …) via the canonical adapter so
-        // downstream next-episode discovery, autoplay, and the "up next" overlay
-        // work offline. Falls back to a minimal MediaItem when only the download
-        // row (no offline_media metadata) is present. runTimeTicks is overridden
-        // with the locally-extracted value so seek/duration math matches the
-        // actual file, not whatever was persisted at download time.
-        val detail = com.raulshma.jellyplay.core.model.MediaDetail(
-            item = (offlineItem?.toMediaItem() ?: com.raulshma.jellyplay.core.model.MediaItem(
+        // Build the session detail through the canonical offline adapter
+        // (toMediaDetail) so every persisted field — chapters, provider ids,
+        // external urls, cast, taglines, critic rating — flows exactly as it
+        // does online. Falls back to a bare-detail MediaDetail when only the
+        // download row (no offline_media metadata) is present. runTimeTicks is
+        // overridden with the locally-extracted value so seek/duration math
+        // matches the actual file. mediaSources stays empty on both paths
+        // (toMediaDetail maps it null and the bare default is emptyList)
+        // because the offline track-restore ladder depends on it (see
+        // refreshMediaDetail).
+        val detail = (offlineItem?.toMediaDetail() ?: MediaDetail(
+            item = MediaItem(
                 id = itemId,
                 name = title,
-                mediaType = download?.mediaType ?: com.raulshma.jellyplay.core.model.MediaType.UNKNOWN,
-            )).copy(
-                runTimeTicks = runTimeTicks,
+                mediaType = download?.mediaType ?: MediaType.UNKNOWN,
             ),
-            mediaSources = emptyList(),
-            chapters = emptyList(),
-            // Carry the provider ids / external URLs persisted at download time
-            // so SubtitleProviderIds can resolve a TMDB/IMDb id for Wyzie /
-            // OpenSubtitles even when the Jellyfin server is unreachable. Empty
-            // for legacy downloads (pre-v44) — the subtitle providers then fall
-            // back to a title search.
-            providerIds = offlineItem?.providerIds ?: emptyMap(),
-            externalUrls = offlineItem?.externalUrls ?: emptyList(),
-        )
+        )).let { base ->
+            base.copy(item = base.item.copy(runTimeTicks = runTimeTicks))
+        }
 
         if (playerType == PlayerType.EXTERNAL) {
             _sessionState.update { it.copy(isReady = true, mediaDetail = detail, isOffline = true) }

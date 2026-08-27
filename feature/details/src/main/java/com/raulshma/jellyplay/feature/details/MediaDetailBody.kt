@@ -624,11 +624,12 @@ internal fun DetailContentBody(
         }
 
         // ── Chapters ──
-        // MediaDetail.chapters is loaded for every item but was never surfaced
-        // on the detail screen (only the player's ChapterPickerSheet used it).
-        // Render it as a tappable thumbnail row that resumes the player at the
-        // chapter's start position. Gated by capabilities.chapters (remote +
-        // non-empty) so a local origin never offers a drill-in it can't fulfill.
+        // Rendered as a tappable thumbnail row that resumes the player at the
+        // chapter's start position. Gated by capabilities.chapters (non-empty,
+        // remote OR persisted on the offline row) so an item without chapter
+        // data never offers a drill-in it can't fulfill. Offline, the tile
+        // thumbnails fall back to the placeholder icon; names, timestamps and
+        // resume-on-tap are local.
         StaggeredDetailSection(visible = showContent && state.capabilities.chapters, delayIndex = 4) {
             val chapters = state.detail.chapters
             if (chapters.isNotEmpty()) {

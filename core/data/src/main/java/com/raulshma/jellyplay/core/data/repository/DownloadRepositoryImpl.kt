@@ -369,62 +369,82 @@ class DownloadRepositoryImpl @Inject constructor(
     override suspend fun getTotalDownloadedBytes(): Long =
         downloadDao.getTotalDownloadedBytes()
 
+    /**
+     * Persists the lightweight [MediaItem] form for an offline row (no chapters,
+     * cast, or other [MediaDetail]-only fields). Item-only downloads therefore
+     * remain chapter-less by design — callers that have a full [MediaDetail]
+     * (download worker, resync) must use [saveOfflineMediaDetail] so
+     * `chaptersJson` and other rich blobs are encoded.
+     */
     override suspend fun saveOfflineMediaItem(item: MediaItem, imageUrl: String?, backdropUrl: String?, downloadPath: String?) {
         saveOfflineMetadataForItem(item, imageUrl, backdropUrl)
+        seedEpisodeParents(item, artworkDir = downloadPath?.let { File(it).parentFile })
+    }
 
-        if (item.mediaType == MediaType.EPISODE) {
-            val seriesId = item.seriesId
-            val seasonId = item.seasonId
-            val parentDir = downloadPath?.let { File(it).parentFile }
+    /**
+     * Seeds the parent series/season rows for an episode download so a lone
+     * episode still has its hierarchy. Deliberately does NOT touch the episode
+     * row itself: callers that already persisted the rich [MediaDetail] entity
+     * must not have it REPLACE-wiped by a bare-item re-upsert (which nulls
+     * peopleJson/providerIdsJson/externalUrlsJson/chaptersJson).
+     *
+     * [artworkDir] is the directory series artwork is pre-downloaded into;
+     * pass null when no media directory exists yet (artwork then falls back
+     * to remote URLs).
+     */
+    private suspend fun seedEpisodeParents(item: MediaItem, artworkDir: File?) {
+        if (item.mediaType != MediaType.EPISODE) return
+        val seriesId = item.seriesId
+        val seasonId = item.seasonId
 
-            if (seriesId != null && offlineMediaDao.getById(seriesId) == null) {
-                val seriesDetail = mediaRepository.getMediaDetail(seriesId).getOrNull()
-                if (seriesDetail != null) {
-                    val localSeriesPoster = parentDir?.let {
-                        downloadImageToDisk(seriesId, "Primary", 300, it, "${seriesId}_poster.jpg")
-                    }
-                    val localSeriesBackdrop = parentDir?.let {
-                        downloadImageToDisk(seriesId, "Backdrop", 1280, it, "${seriesId}_backdrop.jpg")
-                    }
-                    val seriesImageUrl = localSeriesPoster
-                        ?: playbackRepository.getImageUrl(seriesId, maxWidth = 300)
-                    val seriesBackdropUrl = localSeriesBackdrop
-                        ?: playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
-                    saveOfflineMetadataForItem(seriesDetail.item, seriesImageUrl, seriesBackdropUrl)
-                } else {
-                    offlineMediaDao.upsert(
-                        OfflineMediaEntity(
-                            id = seriesId,
-                            name = item.seriesName ?: "Unknown Series",
-                            mediaType = MediaType.SERIES.name,
-                        )
-                    )
+        if (seriesId != null && offlineMediaDao.getById(seriesId) == null) {
+            val seriesDetail = mediaRepository.getMediaDetail(seriesId).getOrNull()
+            if (seriesDetail != null) {
+                val localSeriesPoster = artworkDir?.let {
+                    downloadImageToDisk(seriesId, "Primary", 300, it, "${seriesId}_poster.jpg")
                 }
-            }
-
-            if (seasonId != null && offlineMediaDao.getById(seasonId) == null) {
+                val localSeriesBackdrop = artworkDir?.let {
+                    downloadImageToDisk(seriesId, "Backdrop", 1280, it, "${seriesId}_backdrop.jpg")
+                }
+                val seriesImageUrl = localSeriesPoster
+                    ?: playbackRepository.getImageUrl(seriesId, maxWidth = 300)
+                val seriesBackdropUrl = localSeriesBackdrop
+                    ?: playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
+                saveOfflineMetadataForItem(seriesDetail.item, seriesImageUrl, seriesBackdropUrl)
+            } else {
                 offlineMediaDao.upsert(
                     OfflineMediaEntity(
-                        id = seasonId,
-                        name = item.seasonName ?: "Season ${item.seasonNumber}",
-                        mediaType = MediaType.SEASON.name,
-                        seriesId = seriesId,
-                        seasonNumber = item.seasonNumber,
+                        id = seriesId,
+                        name = item.seriesName ?: "Unknown Series",
+                        mediaType = MediaType.SERIES.name,
                     )
                 )
             }
+        }
+
+        if (seasonId != null && offlineMediaDao.getById(seasonId) == null) {
+            offlineMediaDao.upsert(
+                OfflineMediaEntity(
+                    id = seasonId,
+                    name = item.seasonName ?: "Season ${item.seasonNumber}",
+                    mediaType = MediaType.SEASON.name,
+                    seriesId = seriesId,
+                    seasonNumber = item.seasonNumber,
+                )
+            )
         }
     }
 
     override suspend fun saveOfflineMediaDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?) {
         saveOfflineMetadataForDetail(detail, imageUrl, backdropUrl)
 
-        // For episodes, fall back to the series/season seeding logic so a
-        // lone episode download still has its parent rows.
-        val item = detail.item
-        if (item.mediaType == MediaType.EPISODE) {
-            saveOfflineMediaItem(item, imageUrl, backdropUrl)
-        }
+        // For episodes, seed the series/season rows so a lone episode download
+        // still has its parent rows. Routes through seedEpisodeParents — NOT
+        // saveOfflineMediaItem — so the just-persisted rich entity (cast,
+        // providers, urls, chapters) is not wiped by a bare-item re-upsert.
+        // No artworkDir: this call historically had none, so series artwork
+        // keeps falling back to remote URLs here.
+        seedEpisodeParents(detail.item, artworkDir = null)
     }
 
     override suspend fun getDownloadedEpisodeIdsForSeries(seriesId: String): Set<String> =
@@ -1071,8 +1091,10 @@ class DownloadRepositoryImpl @Inject constructor(
     /**
      * Maps a [MediaDetail] (the rich server response) to an [OfflineMediaEntity],
      * additionally persisting original title, critic rating, studios, tagline,
-     * and the cast as a JSON blob. Falls back to the item-level values for the
-     * base fields so this stays consistent with [MediaItem.toOfflineMediaEntity].
+     * the cast as a JSON blob, and the chapter list as a JSON blob (so chapter
+     * markers and the chapter sheet work offline). Falls back to the item-level
+     * values for the base fields so this stays consistent with
+     * [MediaItem.toOfflineMediaEntity].
      */
     private fun MediaDetail.toOfflineMediaEntity(imageUrl: String?, backdropUrl: String?): OfflineMediaEntity {
         val base = item.toOfflineMediaEntity(imageUrl, backdropUrl)
@@ -1096,6 +1118,7 @@ class DownloadRepositoryImpl @Inject constructor(
             peopleJson = if (cast.isEmpty()) null else encodeCast(cast),
             providerIdsJson = if (providerIds.isEmpty()) null else encodeProviderIds(providerIds),
             externalUrlsJson = if (externalUrls.isEmpty()) null else encodeExternalUrls(externalUrls),
+            chaptersJson = if (chapters.isEmpty()) null else encodeChapters(chapters),
         )
     }
 

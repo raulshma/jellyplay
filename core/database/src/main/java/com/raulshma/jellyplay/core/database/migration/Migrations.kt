@@ -983,7 +983,45 @@ val MIGRATION_49_50 = object : Migration(49, 50) {
 }
 
 /**
- * The complete, correctly-ordered v1→v50 migration chain, with the
+ * Persists the item's chapter list as a nullable JSON blob on offline_media
+ * (contract: [com.raulshma.jellyplay.core.model.OfflineMediaItem.chapters]).
+ * Existing rows stay null and simply render without chapters until
+ * re-download. Mirrors the `peopleJson` blob pattern from 29→30.
+ *
+ * Chapters also join the metadata resync signature payload, which changes the
+ * digest for every item — including those without chapters — so stored v50
+ * signatures are hashes of the retired payload format and can never match a
+ * freshly computed one. Nulling them here hands every baseline to the
+ * comparator's empty-baseline rule ("never recorded" never flags), making the
+ * format change a one-time silent re-seed on each row's next freshness check
+ * instead of a fleet-wide false "update available".
+ *
+ * And because that next check is TTL-gated by `lastSyncedAt`, anything the
+ * retired-format comparison left persisted would stay visible until it fires:
+ * the migration therefore also clears the metadata axis's own change flag and
+ * recomputes the composite `syncUpdateAvailable` badge from the surviving
+ * axes, so a pre-upgrade false flag goes dark at upgrade time while genuine
+ * other-axis badges survive.
+ */
+val MIGRATION_50_51 = object : Migration(50, 51) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN chaptersJson TEXT")
+        db.execSQL("UPDATE sync_baseline SET syncedMetadataSignature = NULL")
+        db.execSQL(
+            "UPDATE sync_baseline SET syncMetadataChanged = 0, " +
+                // The subtitle axis counts a pending retry bundle as changed
+                // (comparator's subtitleAxisChanged rule), so its flag joins
+                // the survivor set alongside the four signature axes.
+                "syncUpdateAvailable = CASE WHEN syncImagesChanged = 1 " +
+                "OR syncSubtitlesChanged = 1 OR syncSubtitlesPending = 1 " +
+                "OR syncTrickplayChanged = 1 OR syncSegmentsChanged = 1 " +
+                "THEN 1 ELSE 0 END"
+        )
+    }
+}
+
+/**
+ * The complete, correctly-ordered v1→v51 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -1041,4 +1079,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_47_48,
         MIGRATION_48_49,
         MIGRATION_49_50,
+        MIGRATION_50_51,
     )

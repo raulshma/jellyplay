@@ -147,7 +147,9 @@ Once a download is complete:
   ratings, cast, posters, genres) mirrored from your server
 - Tap to play — JellyPlay uses the local copy, no network needed
 - All player features work: subtitles, audio tracks, trickplay seeking,
-  sync, speed control, chapters
+  sync, speed control, chapters (chapter names and timings come from the
+  download-time snapshot; chapter thumbnail tiles need network and fall
+  back to a placeholder image when offline)
 - Resume position and played state are tracked locally and synced back
   to your server later (see [Watch-progress sync](#watch-progress-sync))
 
@@ -173,8 +175,9 @@ When you open a downloaded item (or tap **Check all for updates** from the
 Downloads screen), JellyPlay compares the server's current state against the
 baseline captured at download time, across these axes:
 
-- **Metadata** — overview, cast, ratings, genres, studios, runtime (watched /
-  favorite flips are deliberately excluded so they don't trigger a resync)
+- **Metadata** — overview, cast, ratings, genres, studios, runtime, chapter
+  list (watched / favorite flips are deliberately excluded so they don't
+  trigger a resync)
 - **Artwork** — poster and backdrop (Jellyfin issues a new image tag whenever
   an image is replaced)
 - **Subtitles** — the set of deliverable external subtitle tracks
@@ -410,23 +413,33 @@ multi-connection chunking, and concurrency than the ExoPlayer helper.
 
 ### Persistence (Room)
 
-A single `JellyPlayDatabase` (v46) holds three relevant tables:
+A single `JellyPlayDatabase` (v51) holds five relevant tables:
 
 - **`downloads`** — live transfer state (path, url, sizes, status,
   speed, priority, error, container, series/season linkage). Indexed
   `(status, priority, createdAt)` for queue ordering. Includes a
   cold-start recovery projection and a fast auto-download episode query.
-- **`offline_media`** — browsable offline metadata (overview, ratings,
-  cast JSON, genres, studios, posters, blurHash) plus playback-progress
-  columns (`playbackPositionTicks`, `playedPercentage`, `isPlayed`,
-  `lastPlayedDate`) and the **freshness-resync baseline + result flags**
-  (`syncedPosterTag`, `syncedBackdropTag`, `syncedMetadataSignature`,
-  `syncedSubtitleSignature`, `syncedTrickplaySignature`,
-  `syncedSegmentsSignature`, `syncedMediaSourceId`, `syncedMediaSizeBytes`,
-  `lastSyncedAt`, `syncUpdateAvailable`, `syncMediaChanged`, `syncChecking`,
-  `syncError`). `applyPlayedStateToHierarchy` cascades a played /
-  unplayed flip across an item and its whole series/season hierarchy in
-  one UPDATE, mirroring Jellyfin's server-side behavior.
+- **`offline_media`** — identity plus the browsable offline metadata
+  mirror (overview, ratings, genres, studios, tagline, posters, blurHash)
+  and rich-metadata JSON blobs persisted at download time (cast,
+  provider ids, external urls, chapter list). Rich columns are nullable so
+  rows downloaded before a column existed degrade gracefully until
+  re-download.
+- **`playback_state`** — playback progress and watched/favorite state per
+  item (`playbackPositionTicks`, `playedPercentage`, `isPlayed`,
+  `isFavorite`, `lastPlayedDate`), read through the
+  `OfflineMediaWithPlayback` LEFT JOIN. `applyPlayedStateToHierarchy`
+  cascades a played / unplayed flip across an item and its whole
+  series/season hierarchy in one UPDATE, mirroring Jellyfin's server-side
+  behavior.
+- **`sync_baseline`** — the **freshness-resync baseline + result flags**,
+  split out of the historical `offline_media` row so a metadata re-persist
+  can't clobber them (`syncedPosterTag`, `syncedBackdropTag`,
+  `syncedMetadataSignature`, `syncedSubtitleSignature`,
+  `syncedTrickplaySignature`, `syncedSegmentsSignature`,
+  `syncedMediaSourceId`, `syncedMediaSizeBytes`, `lastSyncedAt`,
+  `syncUpdateAvailable`, `syncMediaChanged`, `syncChecking`, `syncError`,
+  plus per-axis change flags and a failed-subtitle pending-retry flag).
 - **`playback_outbox`** — the offline telemetry queue drained by
   `PlaybackSyncWorker`.
 
@@ -471,12 +484,19 @@ doesn't invalidate the tiles); segments hash the typed `(start, end)` list.
 within `SYNC_TTL_MS` (1 hour) or the device is offline, so the on-entry check
 an offline detail screen fires is effectively free most of the time.
 
-**Baseline seeding + first-contact guard.** Subtitles and trickplay signatures
-are seeded at download time (derived free from `MediaDetail`); the segments
-signature seeds on the first segments resync (segments aren't part of
-`MediaDetail`). An empty signature means "never recorded" and never flags a
-spurious change — so a pre-feature row or a not-yet-synced axis degrades to
-first-contact seeding rather than a false "update available".
+**Baseline seeding + first-contact guard.** The poster/backdrop tags and the
+metadata/subtitle/trickplay signatures are seeded at download time (all
+derived free from `MediaDetail`; the whole baseline seeds once, when no row
+exists yet or its metadata signature is missing); the segments signature
+seeds on the first segments resync (segments aren't part of `MediaDetail`).
+An empty signature means "never recorded" and never flags a spurious change —
+so a pre-feature row or a not-yet-synced axis degrades to first-contact
+seeding rather than a false "update available". The same rule absorbs
+signature-payload format changes: when a release changes a signature's inputs
+(v51 added chapters to the metadata hash), its migration retires the stored
+values and resets what the retired comparison left behind, so the format
+change reads as a one-time silent re-seed instead of a stale badge. The full
+rationale lives with `MIGRATION_50_51` in `core/database`.
 
 **Composite badge.** The DB stores one coarse `syncUpdateAvailable` flag for the
 metadata/images/subtitles/trickplay/segments axes (the per-axis split lives

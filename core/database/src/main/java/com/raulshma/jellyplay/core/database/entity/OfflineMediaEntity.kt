@@ -80,4 +80,8 @@ data class OfflineMediaEntity(
     // gracefully until re-download.
     val providerIdsJson: String? = null,
     val externalUrlsJson: String? = null,
+    // Download-time snapshot of the item's chapter list, as a JSON blob.
+    // Feature-level contract lives on [com.raulshma.jellyplay.core.model.OfflineMediaItem.chapters].
+    // Nullable so existing rows degrade gracefully until re-download.
+    val chaptersJson: String? = null,
 )
