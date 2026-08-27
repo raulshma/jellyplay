@@ -6,8 +6,6 @@
     <string name="auth_signing_in">正在登录…</string>
     <string name="auth_username">用户名</string>
     <string name="auth_password">密码</string>
-    <string name="auth_show_password">显示密码</string>
-    <string name="auth_hide_password">隐藏密码</string>
     <string name="auth_error_username_required">请输入用户名</string>
     <string name="auth_login_failed">登录失败</string>
     <string name="auth_back_to_sign_in">返回登录</string>

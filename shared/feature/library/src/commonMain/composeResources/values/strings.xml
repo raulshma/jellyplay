@@ -14,7 +14,6 @@
         <item quantity="other">%1$d items</item>
     </plurals>
     <string name="library_no_items_found">No items found</string>
-    <string name="library_try_adjusting_filters">Try adjusting your filters</string>
     <string name="library_list_view">List view</string>
     <string name="library_grid_view">Grid view</string>
     <string name="library_thumb_view">Thumbnail view</string>
@@ -23,9 +22,6 @@
     <string name="library_mood_playlists">Mood Playlists</string>
     <string name="library_playlists">Playlists</string>
     <string name="library_shuffle">Shuffle</string>
-    <string name="library_jump_to_letter">Jump to letter</string>
-    <string name="library_see_all">See All</string>
-    <string name="library_back">Back</string>
 
     <!-- Filter chip row -->
     <string name="library_all_filters">All Filters</string>
@@ -45,7 +41,6 @@
     <string name="library_poster_size">Poster size</string>
 
     <!-- Action chip row (labeled toolbar replacements) -->
-    <string name="library_action_view">View</string>
     <string name="library_action_size">Size</string>
     <string name="library_action_group">Group</string>
 
@@ -59,7 +54,6 @@
     <string name="library_sort_by">Sort By</string>
     <string name="library_media_type">Filter by Type</string>
     <string name="library_status">Status</string>
-    <string name="library_sort_in_progress">In Progress</string>
     <string name="library_filter_resumable">In Progress</string>
     <string name="library_genres">Genres</string>
     <string name="library_year_range">Year Range</string>

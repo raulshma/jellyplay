@@ -69,8 +69,6 @@
     <string name="onboarding_security_lock_30s">30秒</string>
     <string name="onboarding_security_lock_1m">1分钟</string>
     <string name="onboarding_security_lock_5m">5分钟</string>
-    <string name="onboarding_show_password">显示密码</string>
-    <string name="onboarding_hide_password">隐藏密码</string>
 
     <!-- HomeLayoutStep -->
     <string name="onboarding_home_layout_title">主屏幕布局</string>

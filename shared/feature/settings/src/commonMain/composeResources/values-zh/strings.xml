@@ -11,7 +11,6 @@
     <string name="settings_preset_deleted">已删除“%1$s”</string>
     <string name="settings_share_preset">分享“%1$s”</string>
     <string name="settings_home_layout_subject">JellyPlay 主页布局：%1$s</string>
-    <string name="settings_share_with">打开方式\u2026</string>
 
     <!-- Common shared strings -->
     <string name="settings_cancel">取消</string>
@@ -32,7 +31,6 @@
     <string name="settings_search_hint">输入以搜索设置</string>
     <string name="settings_recents_title">最近</string>
     <string name="settings_clear_recents">清除</string>
-    <string name="settings_signed_in_as_label">已登录账号</string>
     <string name="settings_account">账号</string>
     <string name="settings_signed_in_as_name">已登录为 %1$s</string>
     <string name="settings_sign_out">退出登录</string>
@@ -154,9 +152,6 @@
     <string name="settings_send_logs_chooser">发送日志</string>
     <string name="settings_check_updates_automatically">自动检查更新</string>
     <string name="settings_check_updates_subtitle">定期检查 GitHub 上的新版本</string>
-    <string name="settings_checking_for_updates">正在检查更新\u2026</string>
-    <string name="settings_update_available">有可用更新：v%1$s</string>
-    <string name="settings_up_to_date">已是最新版本 (v%1$s)</string>
     <string name="settings_check_for_updates">检查更新</string>
     <string name="settings_acknowledgements">鸣谢</string>
 
@@ -187,7 +182,6 @@
     <string name="settings_libraries_subtitle">已监控 %2$d 个媒体库中的 %1$d 个</string>
     <string name="settings_quiet_hours_start">勿扰时段开始</string>
     <string name="settings_quiet_hours_end">勿扰时段结束</string>
-    <string name="settings_max_items_per_check">单次检查上限</string>
     <string name="settings_monitored_libraries">已监控的媒体库</string>
     <string name="settings_no_libraries_found">未找到媒体库</string>
     <string name="settings_items_count">%1$d 个项目</string>
@@ -253,8 +247,6 @@
     <string name="settings_factory_reset_category_message">将该分类下的所有设置重置为出厂默认值？此操作无法撤销。</string>
     <string name="settings_factory_reset_changed_count">%2$d 项中已更改 %1$d 项</string>
     <string name="settings_factory_reset_up_to_date">已是最新</string>
-    <string name="settings_factory_reset_current_value">当前</string>
-    <string name="settings_factory_reset_factory_value">出厂</string>
     <string name="settings_factory_reset_summary_card">%2$d 项设置中有 %1$d 项与出厂默认值不同</string>
     <string name="settings_factory_reset_category_done">该分类已重置为出厂默认值</string>
     <string name="settings_factory_reset_all_done">所有设置已重置为出厂默认值</string>
@@ -297,7 +289,6 @@
     <!-- ArrSettingsScreen.kt -->
     <string name="settings_arr_test">测试</string>
     <string name="settings_arr_test_all">测试全部</string>
-    <string name="settings_arr_connected">已连接</string>
     <string name="settings_seerr_sign_in">登录</string>
     <string name="settings_disconnect">断开连接</string>
     <string name="settings_integration_features">集成功能</string>
@@ -323,8 +314,6 @@
     <string name="settings_discover_region_subtitle">用于发布日期和内容发现的地区</string>
     <string name="settings_username_label">用户名</string>
     <string name="settings_password_label">密码</string>
-    <string name="settings_hide_password">隐藏密码</string>
-    <string name="settings_show_password">显示密码</string>
     <string name="settings_email_label">邮箱</string>
     <string name="settings_connected">已连接</string>
     <string name="settings_server_reached_version">已连接到服务器 (v%1$s)</string>
@@ -482,7 +471,6 @@
 
     <!-- LanguageSettingsScreen.kt -->
     <string name="settings_lang_system_default">系统默认</string>
-    <string name="settings_lang_english">英语</string>
     <string name="settings_lang_default">默认</string>
     <string name="settings_language_subs_title">语言 &amp; 字幕</string>
     <string name="settings_language">语言</string>
@@ -606,11 +594,6 @@
     <string name="settings_save">保存</string>
     <string name="settings_import_paste_description">在下方粘贴分享的 JellyPlay 主页布局 JSON，然后应用它。</string>
     <string name="settings_apply">应用</string>
-    <string name="settings_action_load">加载</string>
-    <string name="settings_action_load_desc">将该预设应用到你的主页</string>
-    <string name="settings_action_share_desc">复制 / 发送预设 JSON</string>
-    <string name="settings_action_delete">删除</string>
-    <string name="settings_action_delete_desc">移除该预设</string>
 
     <!-- PinnedHomeSectionsScreen.kt -->
     <string name="settings_pinned_home_sections">已固定的主页分区</string>
@@ -621,7 +604,6 @@
     <string name="settings_configure_libraries_desc">选择哪些媒体库在主页显示「最新媒体」和「最近添加」</string>
     <string name="settings_library_sections">主页上的媒体库</string>
     <string name="settings_library_no_libraries">未找到媒体库</string>
-    <string name="settings_library_load_error">无法加载媒体库</string>
     <string name="settings_subsection_latest_media">最新媒体</string>
     <string name="settings_subsection_recently_added">最近添加</string>
     <string name="settings_subsection_latest_media_desc">为该媒体库显示「最新」行</string>
@@ -766,7 +748,6 @@
     <!-- StorageSettingsScreen.kt: real storage mounts -->
     <string name="storage_internal">内部存储</string>
     <string name="storage_sd_card">SD 卡</string>
-    <string name="storage_usb">USB 存储</string>
     <string name="storage_external">外部存储</string>
 
     <!-- AudioSettingsScreen.kt -->
@@ -1105,8 +1086,6 @@
     <string name="settings_popular_series_subtitle">TMDB 上的热门剧集</string>
     <string name="settings_seerr_request_hub">Seerr 请求中心</string>
     <string name="settings_seerr_header_description">连接 Jellyseerr 或 Overseerr，直接从 JellyPlay 中搜索、发现和请求内容。</string>
-    <string name="settings_hide_api_key">隐藏 API 密钥</string>
-    <string name="settings_show_api_key">显示 API 密钥</string>
     <string name="settings_jellyfin_username_placeholder">Jellyfin 用户名</string>
     <string name="settings_jellyfin_password_placeholder">Jellyfin 密码</string>
     <string name="settings_seerr_email_placeholder">Seerr 账户邮箱</string>

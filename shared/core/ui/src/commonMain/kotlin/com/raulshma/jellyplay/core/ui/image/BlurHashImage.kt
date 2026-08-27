@@ -32,8 +32,12 @@ internal object BlurHashCache {
     fun put(key: String, bitmap: ImageBitmap, width: Int, height: Int) {
         val bytes = width * height * 4
         withUiLock(lock) {
+            // Replacing an existing key retires its previous bytes first;
+            // without this, every re-decode of an already-cached key inflates
+            // totalBytes monotonically and triggers premature eviction.
+            val previousBytes = cache[key]?.bytes ?: 0
             cache.put(key, Entry(bitmap, bytes))
-            totalBytes += bytes
+            totalBytes += bytes - previousBytes
             while (totalBytes > MAX_BYTES) {
                 val eldest = cache.removeEldestOrNull() ?: break
                 totalBytes -= eldest.second.bytes

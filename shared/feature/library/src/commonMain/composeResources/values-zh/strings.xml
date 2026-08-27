@@ -14,7 +14,6 @@
         <item quantity="other">%1$d 个项目</item>
     </plurals>
     <string name="library_no_items_found">未找到项目</string>
-    <string name="library_try_adjusting_filters">试着调整筛选条件</string>
     <string name="library_list_view">列表视图</string>
     <string name="library_grid_view">网格视图</string>
     <string name="library_thumb_view">缩略图视图</string>
@@ -22,14 +21,12 @@
     <string name="library_mood_playlists">心情播放列表</string>
     <string name="library_playlists">播放列表</string>
     <string name="library_shuffle">随机播放</string>
-    <string name="library_jump_to_letter">跳转到字母</string>
 
     <!-- LibraryFilterSheet -->
     <string name="library_reset">重置</string>
     <string name="library_sort_by">排序方式</string>
     <string name="library_media_type">媒体类型</string>
     <string name="library_status">状态</string>
-    <string name="library_sort_in_progress">进行中</string>
     <string name="library_filter_resumable">进行中</string>
     <string name="library_genres">类型</string>
     <string name="library_year_range">年份范围</string>

@@ -6,8 +6,6 @@
     <string name="auth_signing_in">Entrando…</string>
     <string name="auth_username">Usuário</string>
     <string name="auth_password">Senha</string>
-    <string name="auth_show_password">Mostrar senha</string>
-    <string name="auth_hide_password">Ocultar senha</string>
     <string name="auth_error_username_required">Insira um nome de usuário</string>
     <string name="auth_login_failed">Falha ao entrar</string>
     <string name="auth_back_to_sign_in">Voltar para Entrar</string>

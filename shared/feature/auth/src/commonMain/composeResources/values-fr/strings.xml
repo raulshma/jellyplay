@@ -6,8 +6,6 @@
     <string name="auth_signing_in">Connexion…</string>
     <string name="auth_username">Nom d\'utilisateur</string>
     <string name="auth_password">Mot de passe</string>
-    <string name="auth_show_password">Afficher le mot de passe</string>
-    <string name="auth_hide_password">Masquer le mot de passe</string>
     <string name="auth_error_username_required">Veuillez saisir un nom d\'utilisateur</string>
     <string name="auth_login_failed">Échec de la connexion</string>
     <string name="auth_back_to_sign_in">Retour à Se connecter</string>

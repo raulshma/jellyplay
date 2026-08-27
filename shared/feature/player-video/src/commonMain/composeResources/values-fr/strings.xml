@@ -5,7 +5,6 @@
     <string name="player_resumed_message">Repris là où vous l\'aviez laissé</string>
     <string name="player_reset_to_auto">Réinitialiser sur Auto</string>
     <string name="player_track_default">Par défaut</string>
-    <string name="player_track_off">Désactivés</string>
     <string name="player_track_none">Aucune</string>
 
     <string name="track_badge_forced">Forcés</string>
@@ -100,12 +99,10 @@
     <string name="player_video_play">Lire</string>
     <string name="player_video_stop">Arrêter</string>
     <string name="player_video_synced">Synchronisé</string>
-    <string name="player_video_syncing">Synchronisation</string>
     <string name="player_video_buffering">Mise en mémoire tampon</string>
     <string name="player_video_group">Groupe</string>
 
     <!-- Subtitle manager sheet -->
-    <string name="player_video_get_subtitles">Obtenir des sous-titres</string>
     <string name="player_video_download">Télécharger</string>
     <string name="player_video_search">Rechercher</string>
     <string name="player_video_upload">Téléverser</string>
@@ -149,7 +146,6 @@
     <string name="player_video_ends_at">Se termine à %1$s</string>
 
     <!-- Player overflow menu -->
-    <string name="player_video_subtitle_style">Style des sous-titres</string>
     <string name="player_video_dialogue_boost">Ampli des voix</string>
     <string name="player_video_dialogue_boost_on">Ampli des voix \u00B7 %1$s</string>
     <string name="player_video_night_mode">Mode nuit</string>
@@ -319,9 +315,6 @@
     <string name="player_video_font_invalid_format">Le fichier sélectionné n\'est pas une police .ttf ou .otf.</string>
 
     <string name="player_video_subtitle_provider_all">Tout</string>
-    <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
-    <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
-    <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
 
     <!-- Accessibilité : sémantique du lecteur d\'écran pour la zone de gestes luminosité/volume (P5 §3.1) -->
     <string name="a11y_gesture_controls">Contrôles de luminosité et de volume</string>

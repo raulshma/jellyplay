@@ -37,7 +37,6 @@
     <string name="home_switch_user">Switch User</string>
     <string name="home_going_online">Going online…</string>
     <string name="home_go_online">Go Online</string>
-    <string name="home_go_offline">Go Offline</string>
 
     <!-- Home empty / partial-load states. -->
     <string name="home_no_content_available">No Content Available</string>

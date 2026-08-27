@@ -36,7 +36,6 @@
     <string name="home_switch_user">사용자 전환</string>
     <string name="home_going_online">온라인으로 전환 중…</string>
     <string name="home_go_online">온라인으로 전환</string>
-    <string name="home_go_offline">오프라인으로 전환</string>
 
     <!-- Home empty / partial-load states. -->
     <string name="home_no_content_available">콘텐츠가 없습니다</string>

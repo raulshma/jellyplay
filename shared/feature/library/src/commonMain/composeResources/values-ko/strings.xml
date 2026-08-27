@@ -14,7 +14,6 @@
         <item quantity="other">항목 %1$d개</item>
     </plurals>
     <string name="library_no_items_found">항목을 찾을 수 없습니다</string>
-    <string name="library_try_adjusting_filters">필터를 조정해 보세요</string>
     <string name="library_list_view">목록 보기</string>
     <string name="library_grid_view">격자 보기</string>
     <string name="library_thumb_view">섬네일 보기</string>
@@ -22,14 +21,12 @@
     <string name="library_mood_playlists">분위기 재생목록</string>
     <string name="library_playlists">재생목록</string>
     <string name="library_shuffle">셔플</string>
-    <string name="library_jump_to_letter">글자로 이동</string>
 
     <!-- LibraryFilterSheet -->
     <string name="library_reset">재설정</string>
     <string name="library_sort_by">정렬 기준</string>
     <string name="library_media_type">미디어 유형</string>
     <string name="library_status">상태</string>
-    <string name="library_sort_in_progress">재생 중</string>
     <string name="library_filter_resumable">재생 중</string>
     <string name="library_genres">장르</string>
     <string name="library_year_range">연도 범위</string>

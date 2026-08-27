@@ -6,7 +6,6 @@
     <string name="player_resumed_message">Resumed from where you left off</string>
     <string name="player_reset_to_auto">Reset to Auto</string>
     <string name="player_track_default">Default</string>
-    <string name="player_track_off">Off</string>
     <string name="player_track_none">None</string>
 
     <string name="track_badge_forced">Forced</string>
@@ -101,12 +100,10 @@
     <string name="player_video_play">Play</string>
     <string name="player_video_stop">Stop</string>
     <string name="player_video_synced">Synced</string>
-    <string name="player_video_syncing">Syncing</string>
     <string name="player_video_buffering">Buffering</string>
     <string name="player_video_group">Group</string>
 
     <!-- Subtitle manager sheet -->
-    <string name="player_video_get_subtitles">Get Subtitles</string>
     <string name="player_video_download">Download</string>
     <string name="player_video_search">Search</string>
     <string name="player_video_upload">Upload</string>
@@ -121,9 +118,6 @@
     <string name="player_video_no_results_found">No results found</string>
     <string name="player_video_pick_language_hint">Pick a language and search to find subtitles.</string>
     <string name="player_video_subtitle_provider_all">All</string>
-    <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
-    <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
-    <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
     <string name="player_video_change_file">Change: %1$s</string>
     <string name="player_video_select_file">Select File (.srt, .ass, .ssa, .vtt)</string>
     <string name="player_video_language">Language</string>
@@ -156,7 +150,6 @@
     <string name="player_video_ends_at">Ends at %1$s</string>
 
     <!-- Player overflow menu -->
-    <string name="player_video_subtitle_style">Subtitle Style</string>
     <string name="player_video_dialogue_boost">Dialogue Boost</string>
     <string name="player_video_dialogue_boost_on">Dialogue Boost \u00B7 %1$s</string>
     <string name="player_video_night_mode">Night Mode</string>

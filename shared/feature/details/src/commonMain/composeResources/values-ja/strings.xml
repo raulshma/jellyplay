@@ -52,7 +52,6 @@
     <string name="detail_cd_options">オプション</string>
     <string name="detail_cd_episode_play">再生</string>
     <string name="detail_cd_track_play">再生</string>
-    <string name="detail_cd_close">閉じる</string>
     <string name="detail_cd_collapse">折りたたむ</string>
     <string name="detail_cd_expand">展開する</string>
     <string name="detail_cd_sort_oldest_first">古い順に並べ替え</string>
@@ -70,7 +69,6 @@
     <!-- ── Overflow / options menu ──────────────────────────────────────── -->
     <string name="detail_option_edit">編集</string>
     <string name="detail_option_share">共有</string>
-    <string name="detail_option_downloaded">ダウンロード済み</string>
     <string name="detail_option_downloading">ダウンロード中…</string>
     <string name="detail_option_downloading_percent">ダウンロード中 (%1$d%%)</string>
     <string name="detail_option_download">ダウンロード</string>
@@ -207,7 +205,6 @@
     <string name="detail_error_access_denied">このアイテムへのアクセス権がありません。</string>
     <string name="detail_error_details_not_loaded">メディアの詳細が読み込まれていません</string>
     <string name="detail_error_no_source">ダウンロードできるメディアソースがありません</string>
-    <string name="detail_error_no_stream_url">ストリームURLを取得できませんでした</string>
     <string name="detail_error_download_failed">ダウンロードに失敗しました</string>
     <string name="detail_error_not_a_series">これはシリーズではありません</string>
     <string name="detail_error_queue_failed">ダウンロードのキュー追加に失敗しました</string>
@@ -340,7 +337,6 @@
     <string name="detail_close">閉じる</string>
     <string name="detail_delete">削除</string>
     <string name="detail_delete_download_title">ダウンロードを削除</string>
-    <string name="detail_delete_download_cd">ダウンロードを削除</string>
     <string name="detail_delete_download_message">「%1$s」を端末から削除しますか？%2$s が解放されます。</string>
     <string name="detail_delete_episode_title">エピソードを削除</string>
     <string name="detail_delete_episode_cd">エピソードを削除</string>
@@ -398,9 +394,7 @@
     <string name="detail_original_title">原題</string>
     <string name="detail_year">公開年</string>
     <string name="detail_runtime">再生時間</string>
-    <string name="detail_file_name">ファイル</string>
     <string name="detail_episode_label">エピソード</string>
-    <string name="detail_no_downloaded_subtitles">ダウンロードされた字幕はありません</string>
     <string name="detail_view_download_details">ダウンロードの詳細を表示</string>
     <string name="detail_download_tab_overview">概要</string>
     <string name="detail_download_tab_media_info">メディア情報</string>
@@ -410,7 +404,6 @@
     <string name="detail_download_files_total">ディスク上の合計</string>
     <string name="detail_download_files_loading">ファイルサイズを計算中…</string>
     <string name="detail_download_files_empty">ダウンロードされたファイルが見つかりません</string>
-    <string name="detail_download_files_location">場所</string>
     <plurals name="detail_files_count">
         <item quantity="other">%1$d 個のファイル</item>
     </plurals>

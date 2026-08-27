@@ -28,7 +28,6 @@
     <string name="live_cancel_series">取消剧集</string>
     <string name="live_record_success">录制已安排</string>
     <string name="live_record_canceled">录制已取消</string>
-    <string name="live_record_failed">无法设置录制</string>
     <string name="live_record_no_program">没有节目信息</string>
     <string name="live_play_from_start">从头播放</string>
     <string name="live_error_playback">播放错误</string>

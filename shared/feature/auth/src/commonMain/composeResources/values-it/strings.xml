@@ -6,8 +6,6 @@
     <string name="auth_signing_in">Accesso in corso…</string>
     <string name="auth_username">Nome utente</string>
     <string name="auth_password">Password</string>
-    <string name="auth_show_password">Mostra password</string>
-    <string name="auth_hide_password">Nascondi password</string>
     <string name="auth_error_username_required">Inserisci un nome utente</string>
     <string name="auth_login_failed">Accesso non riuscito</string>
     <string name="auth_back_to_sign_in">Torna ad Accedi</string>

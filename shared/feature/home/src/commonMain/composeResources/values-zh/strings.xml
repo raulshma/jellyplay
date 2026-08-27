@@ -36,7 +36,6 @@
     <string name="home_switch_user">切换用户</string>
     <string name="home_going_online">正在联网…</string>
     <string name="home_go_online">联网</string>
-    <string name="home_go_offline">离线</string>
 
     <!-- Home empty / partial-load states. -->
     <string name="home_no_content_available">暂无内容</string>

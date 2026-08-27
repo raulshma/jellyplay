@@ -93,6 +93,12 @@ kotlin {
         getByName("commonTest").dependencies {
             implementation(kotlin("test"))
         }
+        // BlurHashCache byte-budget regression tests construct real ImageBitmaps;
+        // the skiko JVM artifacts on main are code-only, natives (dll.sha256)
+        // ride compose.desktop.currentOs. Host-OS only: jvmTest runs on it.
+        getByName("jvmTest").dependencies {
+            implementation(compose.desktop.currentOs)
+        }
         getByName("androidMain").dependencies {
             // Dominant-color extraction keeps the original Palette pipeline.
             implementation(libs.palette.ktx)

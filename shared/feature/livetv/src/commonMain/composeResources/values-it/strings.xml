@@ -11,12 +11,6 @@
     <string name="livetv_tab_schedule">Programmazione</string>
     <string name="livetv_tab_series">Serie</string>
 
-    <string name="livetv_row_on_now">In onda ora</string>
-    <string name="livetv_row_shows">Serie TV</string>
-    <string name="livetv_row_movies">Film</string>
-    <string name="livetv_row_sports">Sport</string>
-    <string name="livetv_row_kids">Bambini</string>
-    <string name="livetv_row_news">Notizie</string>
 
     <string name="livetv_no_programs_available">Nessun programma disponibile</string>
     <string name="livetv_no_recordings_available">Nessuna registrazione disponibile</string>

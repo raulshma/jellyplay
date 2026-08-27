@@ -12,12 +12,6 @@
     <string name="shortcuts_search_no_results">Keine Shortcuts entsprechen „%1$s"</string>
     <string name="shortcuts_search_clear">Suche löschen</string>
     <string name="shortcuts_admin_badge">Admin</string>
-    <string name="shortcuts_hero_eyebrow">SCHNELLZUGRIFF</string>
-    <string name="shortcuts_hero_title">Shortcuts</string>
-    <string name="shortcuts_hero_subtitle">Downloads, Anfragen, Einstellungen &amp; Admin-Tools</string>
-    <string name="shortcuts_stat_total">%1$d Shortcuts</string>
-    <string name="shortcuts_stat_category">%1$d %2$s</string>
-    <string name="shortcuts_featured_label">Empfohlen</string>
     <string name="shortcuts_item_downloads_title">Downloads</string>
     <string name="shortcuts_item_downloads_description">Offline-Inhalte und Download-Verwaltung.</string>
     <string name="shortcuts_item_favorites_title">Favoriten</string>

@@ -11,12 +11,6 @@
     <string name="livetv_tab_schedule">일정</string>
     <string name="livetv_tab_series">시리즈</string>
 
-    <string name="livetv_row_on_now">지금 방송 중</string>
-    <string name="livetv_row_shows">프로그램</string>
-    <string name="livetv_row_movies">영화</string>
-    <string name="livetv_row_sports">스포츠</string>
-    <string name="livetv_row_kids">어린이</string>
-    <string name="livetv_row_news">뉴스</string>
 
     <string name="livetv_no_programs_available">사용 가능한 프로그램이 없습니다</string>
     <string name="livetv_no_recordings_available">사용 가능한 녹화가 없습니다</string>

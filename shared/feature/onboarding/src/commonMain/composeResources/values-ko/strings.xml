@@ -69,8 +69,6 @@
     <string name="onboarding_security_lock_30s">30초</string>
     <string name="onboarding_security_lock_1m">1분</string>
     <string name="onboarding_security_lock_5m">5분</string>
-    <string name="onboarding_show_password">비밀번호 표시</string>
-    <string name="onboarding_hide_password">비밀번호 숨기기</string>
 
     <!-- HomeLayoutStep -->
     <string name="onboarding_home_layout_title">홈 레이아웃</string>

@@ -13,7 +13,6 @@
     <string name="audio_ab_set_point_b">B地点を設定</string>
     <string name="audio_ab_clear">A–Bをクリア</string>
     <string name="audio_ab_point_a_label">A</string>
-    <string name="audio_ab_point_b_label">B</string>
     <string name="audio_ab_loop_active_label">A-B</string>
 
     <!-- Common -->
@@ -101,7 +100,6 @@
 
     <!-- Add to playlist picker -->
     <string name="audio_playlist_picker_title">プレイリストに追加</string>
-    <string name="audio_added_to_playlist">「%1$s」に追加しました</string>
     <string name="audio_no_playlists">プレイリストがまだありません</string>
     <string name="audio_playlist_items_count">%1$d 件</string>
 

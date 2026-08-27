@@ -149,16 +149,12 @@
     <string name="admin_no_users">Keine Benutzer</string>
     <string name="admin_new_user_title">Neuer Benutzer</string>
     <string name="admin_password_optional">Passwort (optional)</string>
-    <string name="admin_show_password">Passwort anzeigen</string>
-    <string name="admin_hide_password">Passwort ausblenden</string>
     <string name="admin_create">Erstellen</string>
     <string name="admin_delete_user_title">Benutzer löschen</string>
     <string name="admin_delete_user_body">„%1$s\" löschen? Dies kann nicht rückgängig gemacht werden.</string>
     <string name="admin_new_password">Neues Passwort</string>
     <string name="admin_discard">Verwerfen</string>
     <string name="admin_save_changes">Änderungen speichern</string>
-    <string name="admin_changes_saved">Änderungen gespeichert</string>
-    <string name="admin_saved_reload_failed">Gespeichert – Neuladen nicht möglich; zum Bestätigen aktualisieren tippen</string>
     <string name="admin_could_not_reload">Aktualisierten Benutzer konnte nicht neu geladen werden</string>
 
     <!-- User detail: tabs / sections -->

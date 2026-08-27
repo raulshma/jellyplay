@@ -5,7 +5,6 @@
     <string name="player_resumed_message">Reanudado desde donde lo dejaste</string>
     <string name="player_reset_to_auto">Restablecer a Automático</string>
     <string name="player_track_default">Predeterminada</string>
-    <string name="player_track_off">Desactivado</string>
     <string name="player_track_none">Ninguna</string>
 
     <string name="track_badge_forced">Forzado</string>
@@ -100,12 +99,10 @@
     <string name="player_video_play">Reproducir</string>
     <string name="player_video_stop">Detener</string>
     <string name="player_video_synced">Sincronizado</string>
-    <string name="player_video_syncing">Sincronizando</string>
     <string name="player_video_buffering">Almacenando</string>
     <string name="player_video_group">Grupo</string>
 
     <!-- Subtitle manager sheet -->
-    <string name="player_video_get_subtitles">Obtener subtítulos</string>
     <string name="player_video_download">Descargar</string>
     <string name="player_video_search">Buscar</string>
     <string name="player_video_upload">Subir</string>
@@ -149,7 +146,6 @@
     <string name="player_video_ends_at">Termina a las %1$s</string>
 
     <!-- Player overflow menu -->
-    <string name="player_video_subtitle_style">Estilo de subtítulos</string>
     <string name="player_video_dialogue_boost">Realce de diálogos</string>
     <string name="player_video_dialogue_boost_on">Realce de diálogos \u00B7 %1$s</string>
     <string name="player_video_night_mode">Modo nocturno</string>
@@ -319,9 +315,6 @@
     <string name="player_video_font_invalid_format">El archivo seleccionado no es una fuente .ttf u .otf.</string>
 
     <string name="player_video_subtitle_provider_all">Todos</string>
-    <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
-    <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
-    <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
 
     <!-- Accesibilidad: semántica de lector de pantalla para el panel de gestos de brillo/volumen (P5 §3.1) -->
     <string name="a11y_gesture_controls">Controles de brillo y volumen</string>

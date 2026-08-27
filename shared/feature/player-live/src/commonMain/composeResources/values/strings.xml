@@ -33,7 +33,6 @@
     <string name="live_cancel_series">Cancel series</string>
     <string name="live_record_success">Recording scheduled</string>
     <string name="live_record_canceled">Recording canceled</string>
-    <string name="live_record_failed">Failed to set recording</string>
     <string name="live_record_no_program">No program info available</string>
     <string name="live_play_from_start">Play from start</string>
 

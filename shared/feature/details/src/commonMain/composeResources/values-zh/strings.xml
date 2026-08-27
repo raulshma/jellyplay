@@ -52,7 +52,6 @@
     <string name="detail_cd_options">选项</string>
     <string name="detail_cd_episode_play">播放</string>
     <string name="detail_cd_track_play">播放</string>
-    <string name="detail_cd_close">关闭</string>
     <string name="detail_cd_collapse">收起</string>
     <string name="detail_cd_expand">展开</string>
     <string name="detail_cd_sort_oldest_first">按最早排序</string>
@@ -70,7 +69,6 @@
     <!-- ── Overflow / options menu ──────────────────────────────────────── -->
     <string name="detail_option_edit">编辑</string>
     <string name="detail_option_share">分享</string>
-    <string name="detail_option_downloaded">已下载</string>
     <string name="detail_option_downloading">正在下载…</string>
     <string name="detail_option_downloading_percent">正在下载 (%1$d%%)</string>
     <string name="detail_option_download">下载</string>
@@ -207,7 +205,6 @@
     <string name="detail_error_access_denied">你没有该项目的访问权限。</string>
     <string name="detail_error_details_not_loaded">媒体详情未加载</string>
     <string name="detail_error_no_source">没有可用于下载的媒体源</string>
-    <string name="detail_error_no_stream_url">无法获取播放地址</string>
     <string name="detail_error_download_failed">下载失败</string>
     <string name="detail_error_not_a_series">这不是剧集</string>
     <string name="detail_error_queue_failed">加入下载队列失败</string>
@@ -340,7 +337,6 @@
     <string name="detail_close">关闭</string>
     <string name="detail_delete">删除</string>
     <string name="detail_delete_download_title">删除下载</string>
-    <string name="detail_delete_download_cd">删除下载</string>
     <string name="detail_delete_download_message">从设备移除“%1$s”？此操作将释放 %2$s。</string>
     <string name="detail_delete_episode_title">删除剧集</string>
     <string name="detail_delete_episode_cd">删除剧集</string>
@@ -398,9 +394,7 @@
     <string name="detail_original_title">原名</string>
     <string name="detail_year">年份</string>
     <string name="detail_runtime">时长</string>
-    <string name="detail_file_name">文件</string>
     <string name="detail_episode_label">剧集</string>
-    <string name="detail_no_downloaded_subtitles">暂无已下载字幕</string>
     <string name="detail_view_download_details">查看下载详情</string>
     <string name="detail_download_tab_overview">概览</string>
     <string name="detail_download_tab_media_info">媒体信息</string>
@@ -410,7 +404,6 @@
     <string name="detail_download_files_total">磁盘总计</string>
     <string name="detail_download_files_loading">正在计算文件大小…</string>
     <string name="detail_download_files_empty">未找到已下载文件</string>
-    <string name="detail_download_files_location">位置</string>
     <plurals name="detail_files_count">
         <item quantity="other">%1$d 个文件</item>
     </plurals>

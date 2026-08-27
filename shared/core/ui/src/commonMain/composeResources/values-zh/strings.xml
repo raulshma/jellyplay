@@ -11,23 +11,16 @@
     <!-- Additional shared action literals -->
     <string name="core_confirm">确认</string>
     <string name="core_ok">确定</string>
-    <string name="core_apply">应用</string>
     <string name="core_delete">删除</string>
     <string name="core_clear">清除</string>
     <string name="core_undo">撤销</string>
     <string name="core_clear_filters">清除筛选条件</string>
     <string name="core_copy">复制</string>
     <string name="core_copied_to_clipboard">已复制到剪贴板</string>
-    <string name="core_play_from_start">从头播放</string>
     <string name="core_restart">重新开始</string>
-    <string name="core_send_now">立即发送</string>
     <string name="core_search">搜索</string>
-    <string name="core_stop_playback">停止播放</string>
-    <string name="core_select_all">全选</string>
-    <string name="core_mark_all_seen">全部标记为已看</string>
     <string name="core_loading">加载中…</string>
     <!-- Media quick-action sheet labels -->
-    <string name="core_action_quick_actions">快捷操作</string>
     <string name="core_action_play">播放</string>
     <string name="core_action_mark_watched">标记为已看</string>
     <string name="core_action_mark_unwatched">标记为未看</string>
@@ -82,7 +75,6 @@
     <string name="core_report">报告</string>
     <string name="core_ui_back">返回</string>
     <string name="core_ui_select">选择…</string>
-    <string name="core_ui_selected">已选择</string>
 
     <!-- core/ui auth challenge -->
     <string name="core_ui_auth_title">身份验证</string>
@@ -180,7 +172,6 @@
     <string name="core_preview_new_format">%1$d 个新内容</string>
 
     <!-- Shared player speed-picker custom-value labels (§2.3). -->
-    <string name="player_speed_custom">自定义速度</string>
     <string name="player_speed_value">%.2fx</string>
     <string name="player_speed_slider_label">调整播放速度</string>
 

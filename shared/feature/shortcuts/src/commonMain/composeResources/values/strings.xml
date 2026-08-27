@@ -21,14 +21,8 @@
     <string name="shortcuts_admin_badge">Admin</string>
 
     <!-- Hero -->
-    <string name="shortcuts_hero_eyebrow">QUICK ACCESS</string>
-    <string name="shortcuts_hero_title">Shortcuts</string>
-    <string name="shortcuts_hero_subtitle">Downloads, requests, settings &amp; admin tools</string>
-    <string name="shortcuts_stat_total">%1$d shortcuts</string>
-    <string name="shortcuts_stat_category">%1$d %2$s</string>
 
     <!-- Featured -->
-    <string name="shortcuts_featured_label">Featured</string>
 
     <!-- Shortcut items -->
     <string name="shortcuts_item_downloads_title">Downloads</string>

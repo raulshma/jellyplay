@@ -11,7 +11,6 @@
     <string name="settings_preset_deleted">Eliminato \"%1$s\"</string>
     <string name="settings_share_preset">Condividi \"%1$s\"</string>
     <string name="settings_home_layout_subject">Layout home JellyPlay: %1$s</string>
-    <string name="settings_share_with">Apri con\u2026</string>
 
     <!-- Common shared strings -->
     <string name="settings_cancel">Annulla</string>
@@ -32,7 +31,6 @@
     <string name="settings_search_hint">Digita per cercare impostazioni</string>
     <string name="settings_recents_title">Recenti</string>
     <string name="settings_clear_recents">Cancella</string>
-    <string name="settings_signed_in_as_label">Connesso come</string>
     <string name="settings_account">Account</string>
     <string name="settings_signed_in_as_name">Connesso come %1$s</string>
     <string name="settings_sign_out">Disconnetti</string>
@@ -154,9 +152,6 @@
     <string name="settings_send_logs_chooser">Invia log</string>
     <string name="settings_check_updates_automatically">Controlla aggiornamenti automaticamente</string>
     <string name="settings_check_updates_subtitle">Controlla periodicamente su GitHub le nuove versioni</string>
-    <string name="settings_checking_for_updates">Controllo aggiornamenti\u2026</string>
-    <string name="settings_update_available">Aggiornamento disponibile: v%1$s</string>
-    <string name="settings_up_to_date">Aggiornato (v%1$s)</string>
     <string name="settings_check_for_updates">Cerca aggiornamenti</string>
     <string name="settings_acknowledgements">Ringraziamenti</string>
 
@@ -187,7 +182,6 @@
     <string name="settings_libraries_subtitle">%1$d di %2$d librerie monitorate</string>
     <string name="settings_quiet_hours_start">Inizio ore di silenzio</string>
     <string name="settings_quiet_hours_end">Fine ore di silenzio</string>
-    <string name="settings_max_items_per_check">Elementi massimi per controllo</string>
     <string name="settings_monitored_libraries">Librerie monitorate</string>
     <string name="settings_no_libraries_found">Nessuna libreria trovata</string>
     <string name="settings_items_count">%1$d elementi</string>
@@ -253,8 +247,6 @@
     <string name="settings_factory_reset_category_message">Reimpostare tutte le impostazioni di questa categoria ai valori di fabbrica? Questa azione non può essere annullata.</string>
     <string name="settings_factory_reset_changed_count">%1$d di %2$d modificate</string>
     <string name="settings_factory_reset_up_to_date">Aggiornato</string>
-    <string name="settings_factory_reset_current_value">Attuale</string>
-    <string name="settings_factory_reset_factory_value">Fabbrica</string>
     <string name="settings_factory_reset_summary_card">%1$d di %2$d impostazioni differiscono dai valori di fabbrica</string>
     <string name="settings_factory_reset_category_done">Categoria reimpostata ai valori di fabbrica</string>
     <string name="settings_factory_reset_all_done">Tutte le impostazioni reimpostate ai valori di fabbrica</string>
@@ -297,7 +289,6 @@
     <!-- ArrSettingsScreen.kt -->
     <string name="settings_arr_test">Verifica</string>
     <string name="settings_arr_test_all">Verifica tutti</string>
-    <string name="settings_arr_connected">Connesso</string>
     <string name="settings_seerr_sign_in">Accedi</string>
     <string name="settings_disconnect">Disconnetti</string>
     <string name="settings_integration_features">Funzioni di integrazione</string>
@@ -323,8 +314,6 @@
     <string name="settings_discover_region_subtitle">Regione usata per le date di uscita e la scoperta dei contenuti</string>
     <string name="settings_username_label">Nome utente</string>
     <string name="settings_password_label">Password</string>
-    <string name="settings_hide_password">Nascondi password</string>
-    <string name="settings_show_password">Mostra password</string>
     <string name="settings_email_label">Email</string>
     <string name="settings_connected">Connesso</string>
     <string name="settings_server_reached_version">Server raggiunto (v%1$s)</string>
@@ -482,7 +471,6 @@
 
     <!-- LanguageSettingsScreen.kt -->
     <string name="settings_lang_system_default">Predefinito di sistema</string>
-    <string name="settings_lang_english">Inglese</string>
     <string name="settings_lang_default">Predefinito</string>
     <string name="settings_language_subs_title">Lingua e sottotitoli</string>
     <string name="settings_language">Lingua</string>
@@ -608,11 +596,6 @@
     <string name="settings_save">Salva</string>
     <string name="settings_import_paste_description">Incolla qui sotto un JSON di layout home JellyPlay condiviso, quindi applicalo.</string>
     <string name="settings_apply">Applica</string>
-    <string name="settings_action_load">Carica</string>
-    <string name="settings_action_load_desc">Applica questo preset alla tua home</string>
-    <string name="settings_action_share_desc">Copia / invia il JSON del preset</string>
-    <string name="settings_action_delete">Elimina</string>
-    <string name="settings_action_delete_desc">Rimuovi questo preset</string>
 
     <!-- PinnedHomeSectionsScreen.kt -->
     <string name="settings_pinned_home_sections">Sezioni home fissate</string>
@@ -623,7 +606,6 @@
     <string name="settings_configure_libraries_desc">Scegli quali librerie mostrano Ultimi contenuti e Aggiunti di recente nella home</string>
     <string name="settings_library_sections">Librerie nella home</string>
     <string name="settings_library_no_libraries">Nessuna libreria trovata</string>
-    <string name="settings_library_load_error">Impossibile caricare le librerie</string>
     <string name="settings_subsection_latest_media">Ultimi contenuti</string>
     <string name="settings_subsection_recently_added">Aggiunti di recente</string>
     <string name="settings_subsection_latest_media_desc">Mostra una riga \"Ultimi\" per questa libreria</string>
@@ -766,7 +748,6 @@
     <!-- StorageSettingsScreen.kt: real storage mounts -->
     <string name="storage_internal">Memoria interna</string>
     <string name="storage_sd_card">Scheda SD</string>
-    <string name="storage_usb">Memoria USB</string>
     <string name="storage_external">Memoria esterna</string>
 
     <!-- AudioSettingsScreen.kt -->
@@ -1107,8 +1088,6 @@
     <string name="settings_popular_series_subtitle">Serie TV popolari su TMDB</string>
     <string name="settings_seerr_request_hub">Centro richieste Seerr</string>
     <string name="settings_seerr_header_description">Collega Jellyseerr o Overseerr per cercare, scoprire e richiedere contenuti direttamente da JellyPlay.</string>
-    <string name="settings_hide_api_key">Nascondi chiave API</string>
-    <string name="settings_show_api_key">Mostra chiave API</string>
     <string name="settings_jellyfin_username_placeholder">Nome utente Jellyfin</string>
     <string name="settings_jellyfin_password_placeholder">Password Jellyfin</string>
     <string name="settings_seerr_email_placeholder">Email dell\'account Seerr</string>

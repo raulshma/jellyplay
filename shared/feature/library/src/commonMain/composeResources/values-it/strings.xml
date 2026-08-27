@@ -15,7 +15,6 @@
         <item quantity="other">%1$d elementi</item>
     </plurals>
     <string name="library_no_items_found">Nessun elemento trovato</string>
-    <string name="library_try_adjusting_filters">Prova ad aggiustare i filtri</string>
     <string name="library_list_view">Vista a elenco</string>
     <string name="library_grid_view">Vista a griglia</string>
     <string name="library_thumb_view">Vista miniature</string>
@@ -23,14 +22,12 @@
     <string name="library_mood_playlists">Playlist per umore</string>
     <string name="library_playlists">Playlist</string>
     <string name="library_shuffle">Casuale</string>
-    <string name="library_jump_to_letter">Vai alla lettera</string>
 
     <!-- LibraryFilterSheet -->
     <string name="library_reset">Reimposta</string>
     <string name="library_sort_by">Ordina per</string>
     <string name="library_media_type">Tipo di contenuto</string>
     <string name="library_status">Stato</string>
-    <string name="library_sort_in_progress">In corso</string>
     <string name="library_filter_resumable">In corso</string>
     <string name="library_genres">Generi</string>
     <string name="library_year_range">Intervallo anni</string>

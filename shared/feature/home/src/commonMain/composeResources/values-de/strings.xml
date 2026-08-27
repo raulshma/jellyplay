@@ -36,7 +36,6 @@
     <string name="home_switch_user">Benutzer wechseln</string>
     <string name="home_going_online">Verbindung wird hergestellt…</string>
     <string name="home_go_online">Online gehen</string>
-    <string name="home_go_offline">Offline gehen</string>
 
     <!-- Home empty / partial-load states. -->
     <string name="home_no_content_available">Keine Inhalte verfügbar</string>

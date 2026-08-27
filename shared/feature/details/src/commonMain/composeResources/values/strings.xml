@@ -55,7 +55,6 @@
     <string name="detail_cd_options">Options</string>
     <string name="detail_cd_episode_play">Play</string>
     <string name="detail_cd_track_play">Play</string>
-    <string name="detail_cd_close">Close</string>
     <string name="detail_cd_collapse">Collapse</string>
     <string name="detail_cd_expand">Expand</string>
     <string name="detail_cd_sort_oldest_first">Sort oldest first</string>
@@ -74,7 +73,6 @@
     <!-- ── Overflow / options menu ──────────────────────────────────────── -->
     <string name="detail_option_edit">Edit</string>
     <string name="detail_option_share">Share</string>
-    <string name="detail_option_downloaded">Downloaded</string>
     <string name="detail_option_downloading">Downloading…</string>
     <string name="detail_option_downloading_percent">Downloading (%1$d%%)</string>
     <string name="detail_option_download">Download</string>
@@ -229,7 +227,6 @@
     <string name="detail_error_unavailable_offline">This item isn\'t available offline.</string>
     <string name="detail_error_details_not_loaded">Media details not loaded</string>
     <string name="detail_error_no_source">No media source available for download</string>
-    <string name="detail_error_no_stream_url">Could not get stream URL</string>
     <string name="detail_error_download_failed">Download failed</string>
     <string name="detail_error_not_a_series">This is not a series</string>
     <string name="detail_error_queue_failed">Failed to queue downloads</string>
@@ -375,16 +372,13 @@
     <string name="detail_original_title">Original title</string>
     <string name="detail_year">Year</string>
     <string name="detail_runtime">Runtime</string>
-    <string name="detail_file_name">File</string>
     <string name="detail_episode_label">Episode</string>
-    <string name="detail_no_downloaded_subtitles">No downloaded subtitles</string>
     <string name="detail_view_download_details">View download details</string>
 
     <!-- Download-details: on-disk file inventory (media + sidecar artifacts). -->
     <string name="detail_download_files_total">Total on disk</string>
     <string name="detail_download_files_loading">Calculating file sizes…</string>
     <string name="detail_download_files_empty">No downloaded files found</string>
-    <string name="detail_download_files_location">Location</string>
     <plurals name="detail_files_count">
         <item quantity="one">%1$d file</item>
         <item quantity="other">%1$d files</item>
@@ -408,7 +402,6 @@
 
     <!-- Delete confirmations for an attached download / downloaded episode. -->
     <string name="detail_delete_download_title">Delete download</string>
-    <string name="detail_delete_download_cd">Delete download</string>
     <string name="detail_delete_download_message">Remove \"%1$s\" from your device? This frees up %2$s.</string>
     <string name="detail_delete_episode_title">Delete episode</string>
     <string name="detail_delete_episode_cd">Delete episode</string>

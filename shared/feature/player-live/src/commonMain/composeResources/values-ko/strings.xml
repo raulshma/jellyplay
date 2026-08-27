@@ -28,7 +28,6 @@
     <string name="live_cancel_series">시리즈 취소</string>
     <string name="live_record_success">녹화가 예약되었습니다</string>
     <string name="live_record_canceled">녹화가 취소되었습니다</string>
-    <string name="live_record_failed">녹화를 설정할 수 없습니다</string>
     <string name="live_record_no_program">프로그램 정보가 없습니다</string>
     <string name="live_play_from_start">처음부터 재생</string>
     <string name="live_error_playback">재생 오류</string>

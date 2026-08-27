@@ -149,16 +149,12 @@
     <string name="admin_no_users">ユーザーなし</string>
     <string name="admin_new_user_title">新規ユーザー</string>
     <string name="admin_password_optional">パスワード（任意）</string>
-    <string name="admin_show_password">パスワードを表示</string>
-    <string name="admin_hide_password">パスワードを隠す</string>
     <string name="admin_create">作成</string>
     <string name="admin_delete_user_title">ユーザーを削除</string>
     <string name="admin_delete_user_body">「%1$s」を削除しますか？元に戻せません。</string>
     <string name="admin_new_password">新しいパスワード</string>
     <string name="admin_discard">破棄</string>
     <string name="admin_save_changes">変更を保存</string>
-    <string name="admin_changes_saved">変更を保存しました</string>
-    <string name="admin_saved_reload_failed">保存済み — 再読み込みできませんでした。更新をタップして確認してください</string>
     <string name="admin_could_not_reload">更新されたユーザーを再読み込みできませんでした</string>
 
     <!-- User detail: tabs / sections -->

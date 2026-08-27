@@ -149,16 +149,12 @@
     <string name="admin_no_users">Aucun utilisateur</string>
     <string name="admin_new_user_title">Nouvel utilisateur</string>
     <string name="admin_password_optional">Mot de passe (facultatif)</string>
-    <string name="admin_show_password">Afficher le mot de passe</string>
-    <string name="admin_hide_password">Masquer le mot de passe</string>
     <string name="admin_create">Créer</string>
     <string name="admin_delete_user_title">Supprimer l\'utilisateur</string>
     <string name="admin_delete_user_body">Supprimer « %1$s » ? Action irréversible.</string>
     <string name="admin_new_password">Nouveau mot de passe</string>
     <string name="admin_discard">Abandonner</string>
     <string name="admin_save_changes">Enregistrer les modifications</string>
-    <string name="admin_changes_saved">Modifications enregistrées</string>
-    <string name="admin_saved_reload_failed">Enregistré — rechargement impossible ; touchez Actualiser pour vérifier</string>
     <string name="admin_could_not_reload">Impossible de recharger l\'utilisateur mis à jour</string>
 
     <!-- User detail: tabs / sections -->
