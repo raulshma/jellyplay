@@ -263,6 +263,9 @@ internal actual fun rememberHasHardwareKeyboard(): Boolean {
  */
 internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = false
 
+/** Silent no-op — the focus diagnostic only ever speaks on a harness-armed desktop. */
+internal actual fun harnessFocusDiag(message: String) {}
+
 @Composable
 internal actual fun rememberIsPortraitOrientation(): Boolean =
     LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT

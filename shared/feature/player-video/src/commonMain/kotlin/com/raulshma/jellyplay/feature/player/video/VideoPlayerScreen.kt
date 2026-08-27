@@ -10,6 +10,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -68,7 +69,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import org.jetbrains.compose.resources.stringResource
@@ -314,6 +317,11 @@ fun VideoPlayerScreen(
     val tvCinemaIntroFocusRequester = remember { FocusRequester() }
     val tvNextEpisodeFocusRequester = remember { FocusRequester() }
     val keyboardFocusRequester = remember { FocusRequester() }
+    // Wave 14D (desktop only — updated by the jvm-gated onFocusChanged below,
+    // so it stays false on Android where the grab seam no-ops anyway): whether
+    // ANYTHING under the keyboard layer holds focus; drives the grab seam's
+    // re-assert-on-loss against the mpv surface-mount focus drop.
+    var keyboardLayerHoldsFocus by remember { mutableStateOf(false) }
     var userInteractionCount by rememberSaveable { mutableIntStateOf(0) }
 
     LaunchedEffect(showControls) {
@@ -629,7 +637,10 @@ fun VideoPlayerScreen(
                 else -> tvPlayerFocusRequester.tryRequestFocus("tv_player")
             }
         } else if (!isTv && hasHardwareKeyboard && !showControls) {
-            keyboardFocusRequester.tryRequestFocus("keyboard_player")
+            // Same call on every platform (Android behavior untouched); the
+            // captured result is a desktop-only harness-gated diag line.
+            val autoHideEdgeOk = keyboardFocusRequester.tryRequestFocus("keyboard_player")
+            harnessFocusDiag("auto-hide edge regrab ok=$autoHideEdgeOk")
         }
     }
 
@@ -651,6 +662,7 @@ fun VideoPlayerScreen(
         PlayerKeyboardFocusGrabEffect(
             focusRequester = keyboardFocusRequester,
             layerComposed = currentSheet == PlayerSheet.None,
+            targetHoldsFocus = keyboardLayerHoldsFocus,
         )
     }
 
@@ -902,9 +914,51 @@ fun VideoPlayerScreen(
                         // Esc=back, J/L=seek like YouTube.
                         Modifier
                             .focusRequester(keyboardFocusRequester)
+                            // Wave 14D focus diagnostics — desktop-only (the
+                            // grab seam is the same gate), so the Android
+                            // modifier chain is byte-identical: `.then(Modifier)`
+                            // short-circuits to `this`. onFocusChanged observes
+                            // the focus target below; the preview logger fires
+                            // only when a key dispatch actually DESCENDS into
+                            // this Box (a focused target inside it, or itself) —
+                            // under the null-focus fallback the chain stops at
+                            // the shell's scaffold Row above the screen, so
+                            // silence here means the key never had a Compose
+                            // focus target under this Box. Harness-gated no-op
+                            // output otherwise.
+                            .then(
+                                if (grabsKeyboardFocusWithControlsVisible()) {
+                                    Modifier
+                                        .onFocusChanged { state ->
+                                            keyboardLayerHoldsFocus = state.hasFocus
+                                            harnessFocusDiag(
+                                                "player-keyboard-box focus: isFocused=" +
+                                                    "${state.isFocused} hasFocus=${state.hasFocus}",
+                                            )
+                                        }
+                                        .onPreviewKeyEvent { keyEvent ->
+                                            harnessFocusDiag(
+                                                "player-keyboard-box PREVIEW: type=" +
+                                                    "${keyEvent.type} key=${keyEvent.key}",
+                                            )
+                                            false
+                                        }
+                                } else {
+                                    Modifier
+                                },
+                            )
                             .focusable()
                             .onKeyEvent { keyEvent ->
                                 if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
+                                // Wave 14D diagnostic (desktop-only, harness-gated
+                                // no-op): proves the key HANDLER ran, separating
+                                // "no Compose focus target" failures from
+                                // "handler ran but the play state flipped back".
+                                if (grabsKeyboardFocusWithControlsVisible()) {
+                                    harnessFocusDiag(
+                                        "player-keyboard-box onKeyEvent: key=${keyEvent.key}",
+                                    )
+                                }
                                 val keyCode = keyEvent.playerKeyCode
                                 userInteractionCount++
                                 viewModel.onUserInteraction()
