@@ -48,9 +48,12 @@ import org.w3c.dom.events.Event
  *
  * Deliberately NOT @Serializable and NOT persisted: the back stack is a
  * memory-only [SnapshotStateList] (no rememberNavBackStack/SavedState
- * configuration), so a page reload restarts on the landing pane. There are no
- * deep links; browser-history integration below mirrors DEPTH only, not
- * entry identity/arguments.
+ * configuration), so a page reload restarts on the landing pane — and a
+ * surviving "#wp=N" address bar is rewritten down to "#wp=0" at boot via
+ * history.replaceState (see the RELOAD bullet of [WebAppRoot]'s model notes
+ * for the exact post-reload contract). There are no deep links;
+ * browser-history integration below mirrors DEPTH only, not entry
+ * identity/arguments.
  */
 private data object WebLanding : NavKey
 
@@ -94,20 +97,36 @@ private fun historyHashToIndex(hash: String): Int? =
  *    "#wp=<newTopIndex>". History entries carry NO state payload (empty
  *    object would need JS interop gymnastics; the hash encodes the same fact
  *    and survives reload-free navigation equally well).
- *  - Pop — every pop path, all three of them (the explicit Back button,
- *    NavDisplay.onBack, core/ui's JellyPlayBackHandler registrations routed
- *    through [LocalWebBackDispatcher]) — goes through [requestPop]: mutate
- *    the list FIRST (UI stays correct even if the popstate event never
- *    arrives), then history.back() so the browser cursor follows.
+ *  - Pop — the ACTIVE pop paths (the explicit Back button and
+ *    NavDisplay.onBack) go through [requestPop]: mutate the list FIRST (UI
+ *    stays correct even if the popstate event never arrives), then
+ *    history.back() so the browser cursor follows. core/ui's
+ *    JellyPlayBackHandler registrations DO land in [LocalWebBackDispatcher],
+ *    but nothing invokes WebBackDispatcher.dispatchBack yet — v1 has zero
+ *    registrants (screens keep explicit affordances), so no path can bypass
+ *    the guard today; if dispatchBack ever gains callers they must route
+ *    through the same trimming, never a raw history.back(). That enforcement
+ *    is NOT wired — this doc states the gap instead of assuming it away.
+ *  - RELOAD mid-stack: composition restarts on the landing pane whatever
+ *    "#wp=N" survives in the address bar, and the boot effect below rewrites
+ *    THAT CURRENT entry down to "#wp=0" via history.replaceState (no new
+ *    history slot) so the mirror matches the restarted stack. Deeper
+ *    pre-reload entries further along the session trail keep their stale
+ *    hashes; surfacing one via Back/Forward simply re-runs reconciliation
+ *    against the LIVE list, so an old hash can never talk the shell into a
+ *    stack shape it did not choose itself.
  *  - Browser-initiated Back/Forward fires 'popstate'; the handler reconciles
  *    the list DOWNWARD to the hashed depth (a trim — dropping panes whose
- *    state was never persisted), treats a missing/foreign hash as depth 0,
- *    and re-aligns (history.go) when the user lands ON A FORWARD entry we
- *    already dropped past — v1 does not resurrect pruned levels, it walks
- *    the cursor back to the real top. The root-refuse guard survives intact:
- *    requestPop refuses at size <= 1 (an emptied stack crashes NavDisplay),
- *    so both the explicit Back button and armed screen handlers go inert at
- *    the root instead of popping the shell off the page.
+ *    state was never persisted) and treats a missing/foreign hash as depth 0.
+ *  - Forward onto a pruned level walks the cursor BACK to our top
+ *    (history.go with a negative delta): panes dropped by an earlier local
+ *    trim are never resurrected, so each Forward press past our real top
+ *    permanently BURNS those ghost slots in this tab's session trail
+ *    (accepted v1 walk-back contract).
+ *
+ * The root-refuse guard rides [requestPop] only, refusing at size <= 1 (an
+ * emptied stack crashes NavDisplay), so the explicit Back button goes inert
+ * at the root instead of popping the shell off the page.
  *
  * RUNTIME HONESTY (same rule as Main.kt/HtmlVideoEngine): compile-level proof
  * only (:apps:web:compileKotlinWasmJs). No headless browser lane exists in
@@ -151,6 +170,20 @@ fun WebAppRoot(
         window.history.pushState(null, "", "$HISTORY_HASH_PREFIX${backStack.lastIndex}")
     }
 
+    // Reload mid-stack lands here with a stale "#wp=N" in the address bar
+    // while the restarted stack holds only the landing pane — the address bar
+    // must stop disagreeing (see the RELOAD bullet in the class KDoc). rewrite
+    // the CURRENT entry only: replaceState, no new history slot. Stale hashes
+    // on DEEPER pre-reload entries are left alone on purpose; every popstate
+    // arrival is judged against the live list, never against stored hashes.
+    @OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
+    fun normalizeBootHashMirror() {
+        val bootIndex = historyHashToIndex(window.location.hash)
+        if (bootIndex != null && bootIndex != 0) {
+            window.history.replaceState(null, "", "$HISTORY_HASH_PREFIX${backStack.lastIndex}")
+        }
+    }
+
     // THE pop path. Root-refuse guard first (see class KDoc); local trim
     // before the cursor move so the UI never waits on the async history turn.
     fun requestPop() {
@@ -178,6 +211,7 @@ fun WebAppRoot(
     // DisposableEffect (DOM events fire on the single JS main thread), so the
     // hooks release correctly even if WebAppRoot ever gains a non-root caller.
     DisposableEffect(window) {
+        normalizeBootHashMirror()
         val listener: (Event) -> Unit = ::onPopState
         window.addEventListener("popstate", listener)
         onDispose { window.removeEventListener("popstate", listener) }

@@ -44,7 +44,13 @@ import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import kotlinx.browser.window
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.io.IOException
@@ -63,9 +69,19 @@ import kotlinx.io.IOException
  *    first error).
  *  - sign in: [authenticateUser] — adopts the probed server pre-auth,
  *    publishes the authenticated (server, user) pair atomically on success,
- *    restores the captured session on failure; then capabilities are posted
- *    best-effort (login-time concern only — nothing is posted on logout, the
- *    repository logout path doesn't either).
+ *    restores the captured session on failure; on success capability
+ *    declaration is fired via [declareCapabilitiesAfterSignIn] (login-time
+ *    concern only — nothing is posted on logout, the repository logout path
+ *    doesn't either).
+ *
+ * SIDE-EFFECT OWNERSHIP (the one non-obvious rule): publishing the session
+ * swaps the signed-in card in immediately, which DISPOSES the pane coroutine
+ * scope that made the call — anything still running there would be cancelled
+ * mid-flight. Post-success work with real effects (the capabilities POST that
+ * gates playback features server-side; the last-server-url DataStore write)
+ * therefore runs on this controller's own [sideEffectScope], not any pane's,
+ * and surfaces outcomes through [capabilityNote] instead of pane-local
+ * message state.
  *  - logout: revokeServerSession best-effort (server-side token revocation),
  *    then disconnect() clears the local pair unconditionally — same shape as
  *    `AuthRepositoryImpl.revokeServerSession` minus the Room/identity-store
@@ -86,6 +102,27 @@ internal class WebConnectController(
         val LAST_SERVER_URL_KEY = stringPreferencesKey("web_last_server_url")
     }
 
+    // Post-success work that must OUTLIVE the pane which started it (see
+    // SIDE-EFFECT OWNERSHIP above): the connected card can replace the
+    // sign-in form the instant the atomic session publishes, disposing the
+    // pane's rememberCoroutineScope. Owned by this shell-level controller —
+    // it lives as long as the page does, like the singleton API clients, and
+    // is never cancelled explicitly. SupervisorJob keeps one failed job from
+    // tearing down siblings; Dispatchers.Default is fine for a DataStore
+    // write and one POST on wasm.
+    private val sideEffectScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * Post-sign-in capability outcome for the connected card to render.
+     * Non-null once the latest declaration attempt finished badly; reset to
+     * null at each new sign-in's declaration start. Lives here rather than in
+     * pane state precisely because the declaration outlives the swap — the
+     * old "signed in, but capability registration failed" line was written to
+     * sign-in-form state and could never be seen after the swap.
+     */
+    private val _capabilityNote = MutableStateFlow<String?>(null)
+    val capabilityNote: StateFlow<String?> = _capabilityNote.asStateFlow()
+
     /**
      * The client's atomic session flow — the UI's single truth source for
      * signed-in-vs-not (context.md atomic rule: read the combined session,
@@ -103,8 +140,32 @@ internal class WebConnectController(
     suspend fun signIn(server: ServerInfo, username: String, password: String): Result<UserInfo> =
         auth.authenticateUser(serverInfo = server, username = username, password = password)
 
-    /** Login-time capability declaration; failures are non-fatal information. */
-    suspend fun postCapabilities(): Result<Unit> = auth.postCapabilities()
+    /**
+     * Fires capability declaration on [sideEffectScope] and returns
+     * immediately — this MUST NOT be awaited from a pane scope, because the
+     * ConnectedCard swap that follows sign-in success disposes that scope.
+     * Failure is non-fatal information: it lands in [capabilityNote] for the
+     * connected card to render, never gating the signed-in state.
+     */
+    fun declareCapabilitiesAfterSignIn() {
+        _capabilityNote.value = null
+        sideEffectScope.launch {
+            val failed = try {
+                auth.postCapabilities().isFailure
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Declaration work itself only fails as a Result; this catch
+                // guards the plumbing around it (job races, transport throw).
+                true
+            }
+            _capabilityNote.value = if (failed) {
+                "Capability registration failed; some playback features may misbehave."
+            } else {
+                null
+            }
+        }
+    }
 
     /**
      * Revokes the server-side session best-effort, then always clears the
@@ -135,8 +196,18 @@ internal class WebConnectController(
         null
     }
 
-    /** Persists a just-probed URL; failures degrade silently (session-only). */
-    suspend fun rememberServerUrl(url: String) {
+    /** Persists a just-probed URL on [sideEffectScope]; fire-and-forget. */
+    fun rememberServerUrlLater(url: String) {
+        sideEffectScope.launch { rememberServerUrl(url) }
+    }
+
+    /**
+     * Persists a just-probed URL; failures degrade silently (session-only).
+     * Private: callers must go through [rememberServerUrlLater] so the write
+     * cannot be orphaned by pane disposal (same rule as capability
+     * declaration above).
+     */
+    private suspend fun rememberServerUrl(url: String) {
         try {
             userPrefs.edit { prefs -> prefs[LAST_SERVER_URL_KEY] = url }
         } catch (_: Exception) {
@@ -202,6 +273,10 @@ private fun ConnectedCard(
     modifier: Modifier = Modifier,
 ) {
     var loggingOut by remember { mutableStateOf(false) }
+    // Declaration result lives on the controller (it outlives this card's
+    // composition); collected here so a failure is actually SEEABLE — the v1
+    // line for this was written into the disposed sign-in form instead.
+    val capabilityNote by controller.capabilityNote.collectAsState()
     val scope = rememberCoroutineScope()
 
     Card(
@@ -229,6 +304,13 @@ private fun ConnectedCard(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            capabilityNote?.let { note ->
+                Text(
+                    text = note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             // Connectivity pill: Surface (not AssistChip) — a disabled m3 chip
             // renders at reduced opacity, which reads as broken rather than as
             // a status badge.
@@ -392,7 +474,7 @@ private fun SignInCard(
                                     probedServer = info
                                     probeLine = "Found \"${info.name}\" at ${info.address}."
                                     probeIsError = false
-                                    controller.rememberServerUrl(info.address)
+                                    controller.rememberServerUrlLater(info.address)
                                 }
                                 .onFailure { failure ->
                                     if (failure is CancellationException) return@onFailure
@@ -464,15 +546,14 @@ private fun SignInCard(
                                 result
                                     .onSuccess { _ ->
                                         // Session already published by the client's
-                                        // atomicLogin; declare capabilities best-effort —
-                                        // failure must NOT gate the signed-in state.
-                                        val caps = controller.postCapabilities()
-                                        if (caps.isFailure) {
-                                            signInLine =
-                                                "Signed in, but capability registration failed; " +
-                                                    "some playback features may misbehave."
-                                        }
-                                        // ConnectedCard swap-out happens via the session flow.
+                                        // atomicLogin. Declaration fires on the
+                                        // CONTROLLER's scope, deliberately not this
+                                        // pane's: the ConnectedCard swap that this
+                                        // success triggers disposes the pane scope and
+                                        // would kill an in-flight capabilities POST.
+                                        controller.declareCapabilitiesAfterSignIn()
+                                        // Swap-out happens via the session flow; a failed
+                                        // declaration is surfaced IN the connected card.
                                     }
                                     .onFailure { failure ->
                                         if (failure is CancellationException) return@onFailure
@@ -491,14 +572,31 @@ private fun SignInCard(
 
 /**
  * True when [failure] looks like a transport-layer refusal rather than a
- * server verdict: Ktor Js/fetch IO errors (which CORS blocks surface as), or
- * the timeout plugin. Used only to decide whether the CORS doc pointer shows
- * alongside the error line — never to replace the typed message itself.
+ * server verdict. Two signals, either suffices:
+ *  - TYPE: Ktor Js/fetch IO errors (which CORS blocks surface as) or the
+ *    timeout plugin. The assumption that the Js engine wraps fetch failures
+ *    in [IOException] is statically unverifiable from this repo's lanes.
+ *  - MESSAGE: the raw browser rejection strings ("Failed to fetch" on
+ *    Chromium, "NetworkError" on Firefox, "Load failed" on WebKit) matched
+ *    case-insensitively down the cause chain, so the friendly line + CORS
+ *    hint survive an engine whose wrapping differs; the coordinator's
+ *    real-server browser pass will confirm the actual taxonomy.
+ *
+ * Used only to decide whether the CORS doc pointer shows alongside the error
+ * line — never to replace the typed message itself.
  */
 private fun isLikelyCorsOrTransport(failure: Throwable): Boolean {
     var cause: Throwable? = failure
     while (cause != null) {
         if (cause is HttpRequestTimeoutException || cause is IOException) return true
+        val message = cause.message?.lowercase() ?: ""
+        if (
+            "failed to fetch" in message ||
+            "networkerror" in message ||
+            "load failed" in message
+        ) {
+            return true
+        }
         cause = cause.cause
     }
     return false
