@@ -8,7 +8,11 @@
 //
 // Flow: connect/sign-in against a REAL Jellyfin server → ConnectedCard →
 // Diagnostics pane → assert IMAGE_STATE: OK + ENGINE_STATE pos>0 +
-// DIAG_OVERALL: OK, zero console errors / uncaught exceptions, screenshot.
+// DIAG_OVERALL: OK → wave 15C: pop back, open the FIRST feature screen
+// (Route.Requests → shared RequestsScreen), assert title + filter bar +
+// the honest "Seerr not configured" error state (Seerr is NOT part of the
+// fixture — see apps/web Main.kt's SEERR-ON-WEB HONESTY note), zero console
+// errors / uncaught exceptions, screenshots.
 //
 // Usage:
 //   node web-verify.mjs --server-url http://localhost:8096 \
@@ -455,7 +459,69 @@ async function main() {
     return path;
   });
 
-  // 12. Zero console errors.
+  // 12. Wave 15C: pop the diagnostics pane and open the FIRST shared feature
+  // screen — the ConnectedCard's "Requests" button pushes Route.Requests and
+  // the shell renders the shared RequestsScreen (koinViewModel() against the
+  // shell-provided ViewModelStoreOwner + requestsModule/dataWasmModule DI).
+  await step('open Requests pane', async () => {
+    const back = await waitForNode(cdp, 'diagnostics Back button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Back', 10000);
+    await clickNode(cdp, back, 'diagnostics Back button');
+    const requestsBtn = await waitForNode(cdp, 'Requests button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Requests', 15000);
+    await clickNode(cdp, requestsBtn, 'Requests button');
+    return 'popped Diagnostics, clicked landing Requests button';
+  });
+
+  // 13. The screen IS the shared RequestsScreen: title + filter bar + search
+  // field all AX-visible. Strings come from the feature's composeResources
+  // (requests_title / filter chips / media chips / sort chips) — exact
+  // StaticText matches; "All" and "Pending" both exist (filter row AND media
+  // row each have an "All").
+  await step('REQUESTS screen renders (title + filter bar)', async () => {
+    try {
+      await waitForNode(cdp, 'Requests title', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'Requests', 30000);
+      await waitForNode(cdp, 'filter chip Pending', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'Pending', 20000);
+      await waitForNode(cdp, 'filter chip Failed', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'Failed', 20000);
+      await waitForNode(cdp, 'media chip Movies', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'Movies', 20000);
+      await waitForNode(cdp, 'media chip TV', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'TV', 20000);
+      await waitForNode(cdp, 'sort chip Recent', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'Recent', 20000);
+      await waitForNode(cdp, 'sort chip Modified', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'Modified', 20000);
+      // Search field: the driver header's field lesson applies to wasm
+      // placeholders too — Compose renders the "Search requests" placeholder
+      // but does NOT expose it (nor a label) in the AX tree, so the field is
+      // asserted by its textbox ROLE (the pane's only one).
+      const boxes = (await axTree(cdp)).filter((n) => nodeRole(n).toLowerCase() === 'textbox');
+      if (boxes.length < 1) throw new Error('no search-field textbox in AX tree');
+    } catch (e) {
+      throw new Error(`${e.message}; texts=${JSON.stringify(await snapshotTexts(cdp))}`);
+    }
+    return 'Requests title + filter/media/sort chips + search field AX-visible';
+  });
+
+  // 14. The honest v1 data state: Seerr is NOT part of the fixture (no
+  // credentials UI on web; session-cookie auth is browser-impossible —
+  // Main.kt's SEERR-ON-WEB HONESTY note), so SeerrRepositoryImpl fails every
+  // read with "Seerr not configured" and the screen must render its error
+  // pane + Retry affordance (NOT a spinner, NOT a crash, NOT an empty list).
+  await step('REQUESTS not-configured state', async () => {
+    try {
+      await waitForNode(cdp, '"Seerr not configured" error line', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'Seerr not configured', 60000);
+    } catch (e) {
+      throw new Error(`${e.message}; texts=${JSON.stringify(await snapshotTexts(cdp))}`);
+    }
+    await waitForNode(cdp, 'Retry button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Retry', 15000);
+    return 'error pane + Retry visible (honest not-connected assertion)';
+  });
+
+  // 15. Screenshot evidence for the requests pane.
+  await step('requests screenshot', async () => {
+    await sleep(1000);
+    const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    const path = join(OUT_DIR, 'requests.png');
+    writeFileSync(path, Buffer.from(data, 'base64'));
+    return path;
+  });
+
+  // 16. Zero console errors.
   await step('zero console errors', async () => {
     if (consoleErrors.length > 0) throw new Error(`console errors: ${JSON.stringify(consoleErrors.slice(0, 5))}`);
     if (exceptions.length > 0) throw new Error(`uncaught exceptions: ${JSON.stringify(exceptions.slice(0, 5))}`);
@@ -497,6 +563,7 @@ try {
     logErrorEntries: logErrors,
     outDir: OUT_DIR,
     screenshot: join(OUT_DIR, 'diagnostics.png'),
+    requestsScreenshot: join(OUT_DIR, 'requests.png'),
   };
   const jsonPath = join(OUT_DIR, 'result.json');
   writeFileSync(jsonPath, JSON.stringify(result, null, 2));

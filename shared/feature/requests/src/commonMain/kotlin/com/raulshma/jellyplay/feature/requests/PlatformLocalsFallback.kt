@@ -22,12 +22,23 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
  * roots already provide both locals, byte-identical behavior) and a
  * remember-scoped root owner on web.
  *
- * WHY WRAP HERE AND NOT IN apps/web: `koinViewModel()` is evaluated as a
+ * WHY WRAP HERE AND NOT ONLY IN apps/web: `koinViewModel()` is evaluated as a
  * default parameter of [RequestsScreen]'s body, so the provider must sit
- * OUTSIDE that call — the requests nav entry is the natural seam and it is
- * this module's file (zero changes to the 15C-owned web shell). If the web
- * shell later provisions shell-scoped owners itself, this wrapper stays a
- * harmless pass-through there.
+ * OUTSIDE that call — the requests nav entry is the natural seam for hosts
+ * that do not provision owners (the android/desktop entries here; on those
+ * two the Activity/window already provide the locals, so this wrapper IS a
+ * pass-through).
+ *
+ * ONE TRUTH ON WEB (updated wave 15C): the web shell now provisions
+ * page-scoped owners at its composition ROOT — apps/web's
+ * ProvideWebShellViewModelOwners, wired in Main.kt — so on the shell path
+ * this wrapper's check finds a non-null LocalViewModelStoreOwner and passes
+ * through there too. That makes the shell the ONLY provisioning truth in
+ * the shipped app (matching desktop's window-scoped semantics, and giving
+ * future web feature screens their owners for free); this wrapper survives
+ * as the fallback for any NON-shell host of RequestsScreen (tests, embedded
+ * previews). This module's owner is `internal`, so apps/web structurally
+ * cannot reuse it — no duplicate path can quietly appear.
  */
 internal val LocalPlatformLocalsFallbackActive = compositionLocalOf { false }
 

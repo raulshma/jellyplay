@@ -25,13 +25,16 @@ import org.koin.dsl.module
  *    `datastoreCommonModule` (stores + application scope) and
  *    `networkWasmModule`.
  *
- * OPEN DEPENDENCY (15A follow-up): the wasm graph needs
- * `SeerrApiClient`/`TmdbApiClient`/`RadarrApiClient`/`SonarrApiClient`
- * registered somewhere reachable from the web shell's startKoin — today
- * network's wasm module registers only the auth/library/playback/user
- * clients; the Seerr/TMDB/Radarr/Sonarr client impls still live in network's
- * jvmShared. Until that lands, `requestsModule`'s ViewModels cannot resolve
- * at RUNTIME on web (everything here COMPILES and the wiring shape is final).
+ * DEPENDENCY CLOSURE (wave 15C update — the follow-up this module's first
+ * revision documented is DONE): the wasm clients this module's repos need —
+ * `SeerrApiClient`/`TmdbApiClient`/`RadarrApiClient`/`SonarrApiClient` — are
+ * registered by `networkWasmModule` (15A's KtorWasm* client bindings), and
+ * the web shell's startKoin (apps/web Main.kt) lists BOTH modules plus
+ * `requestsModule`, so the requests ViewModels resolve end-to-end at
+ * runtime on web (browser-verified by tools/e2e/web-verify.mjs, which also
+ * documents the remaining honesty cut: no Seerr credentials UI on web, and
+ * session-cookie auth is browser-impossible — only API-key creds can ever
+ * function there).
  */
 val dataWasmModule: Module = module {
 

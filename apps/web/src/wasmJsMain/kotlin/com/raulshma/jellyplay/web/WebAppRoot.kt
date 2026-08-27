@@ -35,25 +35,32 @@ import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalWebBackDispatcher
 import com.raulshma.jellyplay.core.ui.components.WebBackDispatcher
+import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.feature.requests.RequestsScreen
 import kotlinx.browser.window
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.w3c.dom.events.Event
 
 /**
  * Web-only route keys (wave 11B web-nav v1): apps/web keeps its OWN tiny
- * table instead of consuming the shared Route sealed class — no feature
- * module has a wasm target yet, so the shared leaves have nothing to render
- * into. [WebLanding] carries the connect/sign-in flow ([WebConnectFlow]),
- * [WebStatus] the connection-details level it pushes into.
+ * table of web-only leaves alongside the SHARED Route sealed class. The web
+ * entries render web-only panes ([WebLanding] carries the connect/sign-in
+ * flow ([WebConnectFlow]), [WebStatus] the connection-details level,
+ * [WebDiag] the diagnostics level); wave 15C adds the first SHARED route —
+ * `entry<Route.Requests>` renders the feature module's RequestsScreen —
+ * which is exactly why the shared keys remain usable here without being
+ * registered in this private table (the private objects exist because no
+ * shared web pane exists for them).
  *
  * Deliberately NOT @Serializable and NOT persisted: the back stack is a
  * memory-only [SnapshotStateList] (no rememberNavBackStack/SavedState
- * configuration), so a page reload restarts on the landing pane — and a
- * surviving "#wp=N" address bar is rewritten down to "#wp=0" at boot via
- * history.replaceState (see the RELOAD bullet of [WebAppRoot]'s model notes
- * for the exact post-reload contract). There are no deep links;
- * browser-history integration below mirrors DEPTH only, not entry
- * identity/arguments.
+ * configuration — NavKeySerializer's reflective persistence is the
+ * Android/jvm saveable path; the web shell never saves), so a page reload
+ * restarts on the landing pane — and a surviving "#wp=N" address bar is
+ * rewritten down to "#wp=0" at boot via history.replaceState (see the
+ * RELOAD bullet of [WebAppRoot]'s model notes for the exact post-reload
+ * contract). There are no deep links; browser-history integration below
+ * mirrors DEPTH only, not entry identity/arguments.
  */
 private data object WebLanding : NavKey
 
@@ -135,12 +142,16 @@ private fun historyHashToIndex(hash: String): Int? =
  * emptied stack crashes NavDisplay), so the explicit Back button goes inert
  * at the root instead of popping the shell off the page.
  *
- * RUNTIME HONESTY (same rule as Main.kt/HtmlVideoEngine): compile-level proof
- * only (:apps:web:compileKotlinWasmJs). No headless browser lane exists in
- * this repo, so an actual click-through, the live 'online'/'offline' flips,
- * AND the pushState/popstate round-trips remain unverified until a
- * real-browser pass lands. Not click-tested; stated explicitly rather than
- * implied otherwise.
+ * RUNTIME HONESTY (same rule as Main.kt/HtmlVideoEngine): the shell's own
+ * panes are browser-verified by the headless-Edge CDP lane
+ * (tools/e2e/web-verify.mjs — connect/sign-in, Connectivity flips are NOT
+ * flipped in-lane, pushState/popstate round-trips are exercised only as far
+ * as the lane's Back click). Wave 15C extends the lane one level further:
+ * after the diagnostics pane it pops back and opens the FIRST feature
+ * screen, Route.Requests → shared RequestsScreen, asserting the filter bar
+ * + the honest "Seerr not configured" error state with zero console errors
+ * (see Main.kt for why that error state is web-v1 truth: no Seerr
+ * credentials UI, and session-cookie auth is browser-impossible).
  */
 @Composable
 fun WebAppRoot(
@@ -237,6 +248,9 @@ fun WebAppRoot(
                     networkStatus = currentNetworkStatus,
                     onOpenConnectionDetails = { addEntry(WebStatus) },
                     onOpenDiagnostics = { addEntry(WebDiag) },
+                    // Wave 15C: the shared feature route — pushed as itself,
+                    // NOT as a web-only mirror key (see the route-keys KDoc).
+                    onOpenRequests = { addEntry(Route.Requests) },
                 )
             }
             entry<WebStatus> { _ ->
@@ -244,6 +258,38 @@ fun WebAppRoot(
             }
             entry<WebDiag> { _ ->
                 WebDiagnosticsPane(onBack = ::requestPop)
+            }
+            entry<Route.Requests> { _ ->
+                // Wave 15C: the FIRST shared feature screen on web. The shell
+                // (Main.kt → ProvideWebShellViewModelOwners) provides the
+                // ViewModelStoreOwner/LifecycleOwner koinViewModel() needs, so
+                // the screen composes bare — there is deliberately no wrapper
+                // here; requests' own ProvidePlatformLocalsFallback is
+                // `internal` to that module (invisible from apps/web), which
+                // structurally keeps ONE provisioning truth at the shell.
+                //
+                // SEERRDETAIL CUT (documented at the only site that could
+                // navigate there): onNavigateToDetail would push
+                // Route.SeerrDetail — the Seerr media detail screen, part of
+                // feature/detail, which has NO wasmJs target yet. The web
+                // callback is therefore a NO-OP stub; no snackbar either (the
+                // shell has no Scaffold/snackbar host, and window.alert is
+                // banned — same rule as WebConnectFlow). Reachability of the
+                // stub: it fires only from RequestDetailBottomSheet's
+                // open-detail action, which needs a populated request list —
+                // impossible in the browser fixture (no Seerr), so v1 never
+                // exercises it. When detail gains the web target, this stub
+                // becomes addEntry(Route.SeerrDetail(...)).
+                //
+                // onBack rides the SAME guarded pop path as every other pane
+                // (requestPop: root-refusing list trim + history.back()).
+                RequestsScreen(
+                    onBack = ::requestPop,
+                    onNavigateToDetail = { _, _ ->
+                        // No-op — SeerrDetail has no wasm target (see the cut
+                        // note above); nothing navigates.
+                    },
+                )
             }
         }
     }
