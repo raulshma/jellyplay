@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.core.model
 
-import java.util.LinkedHashMap
-
 /**
  * Access-order LRU map capped at [maxSize]: reads re-order to MRU and the
  * LRU entry is evicted on insert once the cap is exceeded.
@@ -11,12 +9,19 @@ import java.util.LinkedHashMap
  * offsets, subtitle previews, typefaces, empty-library fallbacks, TTL
  * entries). Not thread-safe by itself — confine access to one dispatcher
  * or synchronize externally, as each call site documents for its own regime.
+ *
+ * Promoted to commonMain in wave 15B when `core:data` grew a wasmJs target
+ * (its commonMain code was already calling [lruMapOf]). Platform regimes:
+ *  - JVM (android + desktop): the exact historical body —
+ *    `java.util.LinkedHashMap(16, 0.75f, accessOrder = true)` with
+ *    `removeEldestEntry`, byte-identical behavior.
+ *  - wasmJs: `kotlin.collections.LinkedHashMap` has no access-order mode, so
+ *    the actual is INSERTION-ORDER with eldest-insert eviction ( DOCUMENTED
+ *    DEGRADE — a read no longer refreshes recency, so the cache keeps the
+ *    first-inserted rather than the least-recently-read entries when at cap).
+ *    Bounded display caches only; the eviction cap semantics are identical.
  */
-fun <K, V> lruMapOf(maxSize: Int): MutableMap<K, V> =
-    object : LinkedHashMap<K, V>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>?): Boolean =
-            size > maxSize
-    }
+expect fun <K, V> lruMapOf(maxSize: Int): MutableMap<K, V>
 
 /**
  * Drops the oldest-inserted entries until the collection holds at most

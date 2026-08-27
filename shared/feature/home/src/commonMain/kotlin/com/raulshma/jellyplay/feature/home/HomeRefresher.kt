@@ -40,6 +40,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.datetime.toKotlinLocalDate
 import java.time.ZoneOffset
 
 /**
@@ -810,8 +811,11 @@ internal class HomeRefresher(
     private suspend fun fetchRecentlyGrabbed() {
         val now = timeSource.today(ZoneOffset.systemDefault())
         val end = now.plusDays(30)
-        arrRepository.refreshCalendar(now, end)
-        val items = arrRepository.calendar(now, end).first()
+        // Wave 15B: ArrRepository takes kotlinx.datetime.LocalDate now; the
+        // home pipeline keeps java.time (TimeSource seam) and converts at the
+        // boundary.
+        arrRepository.refreshCalendar(now.toKotlinLocalDate(), end.toKotlinLocalDate())
+        val items = arrRepository.calendar(now.toKotlinLocalDate(), end.toKotlinLocalDate()).first()
         _state.update { it.copy(recentlyGrabbed = items.map { it.toSeerrSearchItem() }) }
     }
 

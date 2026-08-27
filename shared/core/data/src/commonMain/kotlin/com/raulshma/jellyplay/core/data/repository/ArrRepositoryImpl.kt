@@ -35,8 +35,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
+import kotlinx.datetime.LocalDate
 
 /**
  * Default [ArrRepository]. See the interface KDoc for the overall contract;
@@ -99,7 +98,6 @@ class ArrRepositoryImpl(
      */
     private data class CalendarCache(val windowKey: String, val items: List<ArrCalendarItem>)
     private val _calendar = MutableStateFlow(CalendarCache("", emptyList()))
-    private val isoDate: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
     override fun calendar(from: LocalDate, to: LocalDate): Flow<List<ArrCalendarItem>> {
         val key = windowKey(from, to)
@@ -184,8 +182,11 @@ class ArrRepositoryImpl(
                 _calendar.value = CalendarCache(key, emptyList())
                 return@withContext Result.success(Unit)
             }
-            val startStr = from.format(isoDate)
-            val endStr = to.format(isoDate)
+            // LocalDate.toString() == ISO-8601 yyyy-MM-dd == the old
+            // DateTimeFormatter.ISO_LOCAL_DATE output (byte-identical query
+            // params to the Radarr/Sonarr `/api/v3/calendar` endpoints).
+            val startStr = from.toString()
+            val endStr = to.toString()
             val combined = coroutineScope {
                 val radarrJobs = summary.radarrServers.map { srv ->
                     async {
@@ -957,8 +958,14 @@ class ArrRepositoryImpl(
 
     private fun matchesWindow(item: ArrCalendarItem, from: LocalDate, to: LocalDate): Boolean {
         val dateStr = item.airDateUtc ?: return false
-        val date = runCatching { LocalDate.parse(dateStr.take(10), isoDate) }.getOrNull() ?: return false
-        return !date.isBefore(from) && !date.isAfter(to)
+        // take(10) == `yyyy-MM-dd`; kotlinx parses the same ISO shape the
+        // ISO_LOCAL_DATE formatter parsed (parse failures land in the same
+        // runCatching null path). Comparison via Comparable — kotlinx
+        // LocalDate has no isBefore/isAfter; the operators express the same
+        // inclusive window the old `!date.isBefore(from) && !date.isAfter(to)`
+        // did.
+        val date = runCatching { LocalDate.parse(dateStr.take(10)) }.getOrNull() ?: return false
+        return from <= date && date <= to
     }
 
     private fun windowKey(from: LocalDate, to: LocalDate): String = "${from}_$to"

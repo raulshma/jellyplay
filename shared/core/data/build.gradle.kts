@@ -16,20 +16,38 @@ kotlin {
         }
     }
 
-    // No wasmJs target: depends on :shared:core:database (Room), which has no
-    // wasm build (plan §Phase W — web v1 keeps the server as source of truth).
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
         }
     }
 
+    // Wave 15B: the requests slice's data layer compiles for the web shell.
+    // Room stayed behind: :shared:core:database has no wasm build, so the
+    // Room-backed repositories (QueuePersistenceHelper, SeenMedia*,
+    // ItemPlaybackPreference*, PlaylistRepositories, OfflineSyncProjection,
+    // ScanWorkerHelper) plus the other JVM-touching files moved to jvmShared,
+    // and the database edge demoted from commonMain api() to jvmShared
+    // implementation() (core:network precedent: common seams + jvmShared
+    // impls). The browser lane is compile-only like core:network's — no wasm
+    // test task (jvmTest pins the semantics).
+    wasmJs {
+        browser {
+            testTask {
+                enabled = false
+            }
+        }
+    }
+
     applyDefaultHierarchyTemplate()
 
     sourceSets {
-        // JVM-semantics code shared verbatim by android + desktop: every
-        // repository impl, OkHttp-shaped cache body and file-system touch of
-        // the old :core:data that migrates here (plan §Phase C4 part 2).
+        // JVM-semantics code shared verbatim by android + desktop: since wave
+        // 15B this is where Room touches live (the module's ONLY Room-coupled
+        // code — see the wasmJs note above), plus the java.io/java.time files
+        // and the file-system-touching repositories that have no wasm story.
+        // commonMain holds the common-safe seams + the promoted Seerr/Arr
+        // repositories (kotlinx-datetime instead of java.time).
         val jvmShared = create("jvmShared")
         jvmShared.dependsOn(getByName("commonMain"))
         getByName("androidMain") { dependsOn(jvmShared) }
@@ -38,8 +56,13 @@ kotlin {
         getByName("commonMain").dependencies {
             api(project(":shared:core:model"))
             api(project(":shared:core:network"))
-            api(project(":shared:core:database"))
+            // Room is consumed ONLY from jvmShared now (database has no wasm
+            // build; demoted from api() in wave 15B).
             api(project(":shared:core:datastore"))
+            // ArrRepository(Impl)'s calendar windows — kotlinx-datetime 0.8.0
+            // (ABI evidence in the catalog note: Kotlin 2.1.20-built klibs,
+            // safe under the repo's 2.3.21 pin).
+            implementation(libs.kotlinx.datetime)
             // Phase W.3: PlayerLifecycleCallbacks (implemented by
             // PlayerLifecycleManager) + RemotePlayableEngine (used by
             // ActivePlayerController consumers / VideoMiniPlayerState) moved to
@@ -65,6 +88,9 @@ kotlin {
             // Module/qualifier types appear in the public di signatures
             // (Phase C4 Koin construction owner). Never visible to wasmJs.
             api(libs.koin.core)
+            // Room DAOs/entities: confined to jvmShared since wave 15B (the
+            // moved Room-backed repositories above) — never visible to wasmJs.
+            api(project(":shared:core:database"))
             // @Inject/@Singleton/@Named stay on the impl classes; Dagger reads
             // them from binaries at the legacy shim's KSP processing.
             implementation(libs.javax.inject)

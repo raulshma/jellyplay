@@ -69,8 +69,6 @@ import com.raulshma.jellyplay.feature.requests.generated.resources.requests_time
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_time_years_ago
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.stringResource
-import java.time.Duration
-import java.time.OffsetDateTime
 
 @Composable
 fun RequestListItem(
@@ -367,7 +365,7 @@ fun RequestListItem(
  * Locale-aware relative-time formats, resolved once per recomposition via
  * [stringResource] and threaded into [formatRelativeTime].
  */
-private class RelativeTimeFormats(
+internal class RelativeTimeFormats(
     val justNow: String,
     val minutesAgo: String,
     val hoursAgo: String,
@@ -388,20 +386,29 @@ private fun rememberRelativeTimeFormats(): RelativeTimeFormats {
     )
 }
 
-private fun formatRelativeTime(dateStr: String, formats: RelativeTimeFormats): String? {
-    return try {
-        val date = OffsetDateTime.parse(dateStr)
-        val now = OffsetDateTime.now()
-        val duration = Duration.between(date, now)
-        when {
-            duration.toMinutes() < 1 -> formats.justNow
-            duration.toMinutes() < 60 -> formats.minutesAgo.format(duration.toMinutes())
-            duration.toHours() < 24 -> formats.hoursAgo.format(duration.toHours())
-            duration.toDays() < 30 -> formats.daysAgo.format(duration.toDays())
-            duration.toDays() < 365 -> formats.monthsAgo.format(duration.toDays() / 30)
-            else -> formats.yearsAgo.format(duration.toDays() / 365)
-        }
-    } catch (_: Exception) {
-        null
+/**
+ * Wave 15B: the java.time body moved to the [requestAgeMinutes] seam (the
+ * verbatim `OffsetDateTime`/`Duration` pipeline is the jvmShared actual;
+ * wasmJs gets strict-regex + integer-math — see RequestTime.kt). The buckets
+ * are integer-math over whole minutes and provably match the old
+ * `Duration`-based thresholds:
+ *  - `toMinutes() < 1`            -> minutes < 1 (also absorbs every negative
+ *    "future stamp" duration, so the JVM truncate-vs-floor division delta
+ *    below can never be observed);
+ *  - `toHours() < 24`             -> minutes < 1440, label minutes / 60
+ *    (floor-division equal to `toHours()` for all non-negative values);
+ *  - `toDays() < 30` / `< 365`    -> minutes < 43200 / 525600;
+ *  - `toDays() / 30` / `/ 365`    -> minutes / 43200 / 525600
+ *    (nested floor division: floor(floor(m/1440)/30) == floor(m/43200)).
+ */
+internal fun formatRelativeTime(dateStr: String, formats: RelativeTimeFormats): String? {
+    val minutes = requestAgeMinutes(dateStr) ?: return null
+    return when {
+        minutes < 1 -> formats.justNow
+        minutes < 60 -> formatCount(formats.minutesAgo, minutes)
+        minutes < 1_440 -> formatCount(formats.hoursAgo, minutes / 60)
+        minutes < 43_200 -> formatCount(formats.daysAgo, minutes / 1_440)
+        minutes < 525_600 -> formatCount(formats.monthsAgo, minutes / 43_200)
+        else -> formatCount(formats.yearsAgo, minutes / 525_600)
     }
 }

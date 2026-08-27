@@ -99,8 +99,6 @@ import com.raulshma.jellyplay.feature.requests.generated.resources.requests_stat
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -162,13 +160,13 @@ fun RequestDetailBottomSheet(
     }
     val statusLabel = stringResource(statusLabelRes)
 
+    // Wave 15B: the java.time read moved to the [formatRequestedDate] seam
+    // (verbatim `LocalDateTime.parse` + "MMM d, yyyy" on the jvmShared
+    // actual; strict-regex + fixed-English months on wasmJs — RequestTime.kt
+    // documents the equivalence + the locale degrade). The take(10) fallback
+    // is the original catch path.
     val formattedDate = remember(request.createdAt) {
-        try {
-            val parsed = LocalDateTime.parse(request.createdAt, DateTimeFormatter.ISO_DATE_TIME)
-            parsed.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
-        } catch (_: Exception) {
-            request.createdAt.take(10)
-        }
+        formatRequestedDate(request.createdAt) ?: request.createdAt.take(10)
     }
 
     val isTv = LocalTvMode.current

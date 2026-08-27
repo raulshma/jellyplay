@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.toKotlinLocalDate
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
@@ -103,7 +104,10 @@ class UpcomingCalendarViewModel(
             val month = _state.value.visibleMonth
             val from = month.atDay(1)
             val to = month.atEndOfMonth()
-            arrRepository.calendar(from, to).collect { items ->
+            // Wave 15B: ArrRepository takes kotlinx.datetime.LocalDate now; the
+            // VM keeps java.time internally (JVM-only module) and converts at
+            // the boundary.
+            arrRepository.calendar(from.toKotlinLocalDate(), to.toKotlinLocalDate()).collect { items ->
                 if (_state.value.visibleMonth == month) {
                     _state.value = _state.value.copy(items = items, error = null)
                 }
@@ -161,7 +165,10 @@ class UpcomingCalendarViewModel(
         launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
             val month = _state.value.visibleMonth
-            arrRepository.refreshCalendar(month.atDay(1), month.atEndOfMonth())
+            arrRepository.refreshCalendar(
+                    month.atDay(1).toKotlinLocalDate(),
+                    month.atEndOfMonth().toKotlinLocalDate(),
+                )
                 .onFailure { _state.value = _state.value.copy(error = it.message) }
             _state.value = _state.value.copy(isLoading = false)
         }

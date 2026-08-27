@@ -12,15 +12,20 @@ package com.raulshma.jellyplay.core.model
  * Construct via [of] from a real logged-in session, or use [UNKNOWN] before
  * login / after logout (nothing cached under that key can leak across users,
  * since no real identity ever collides with it).
+ *
+ * Wave 15B: promoted to commonMain (the [SessionIdentityProvider] seam in
+ * `core:data` exposes this type) as an expect/actual value class — the
+ * `@JvmInline` annotation is JVM-only, so the JVM actual carries it (inline
+ * representation preserved) and the wasmJs actual is an unboxed where
+ * possible value class. Equality/hash/encoding are identical on every target.
  */
-@JvmInline
-value class CacheIdentity private constructor(val encoded: String) {
-    companion object {
+public expect value class CacheIdentity private constructor(public val encoded: String) {
+    public companion object {
         /** Sentinel used before login / after logout — never collides with a real identity. */
-        val UNKNOWN = CacheIdentity("__unknown__")
+        public val UNKNOWN: CacheIdentity
 
         /** Encodes a `(serverId, userId)` pair as a stable cache-key segment. */
-        fun of(serverId: String, userId: String): CacheIdentity = CacheIdentity("$serverId/$userId")
+        public fun of(serverId: String, userId: String): CacheIdentity
 
         /**
          * Encodes a `(serverId, userId)` pair as a stable cache-key segment,
@@ -30,10 +35,6 @@ value class CacheIdentity private constructor(val encoded: String) {
          * `AtomicReference` mirror) and `LibraryApiClientImpl.currentHomeCacheIdentity()`
          * (reads engine `StateFlow`s) used to hand-roll inline.
          */
-        fun ofOrNull(serverId: String?, userId: String?): CacheIdentity {
-            val s = serverId ?: return UNKNOWN
-            val u = userId ?: return UNKNOWN
-            return of(s, u)
-        }
+        public fun ofOrNull(serverId: String?, userId: String?): CacheIdentity
     }
 }
