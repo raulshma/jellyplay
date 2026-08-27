@@ -31,6 +31,17 @@ kotlin {
 
     wasmJs {
         browser()
+        // Headless commonTest lane: wasmJsNodeTest runs under Kotlin's
+        // downloaded Node.js distribution — no Karma, no Chrome (the browser
+        // lane demanded Chrome, see plan history). PREREQUISITE (wave 12D
+        // probe): running this task requires dependencyResolutionManagement
+        // repositoriesMode PREFER_PROJECT; under FAIL_ON_PROJECT_REPOS KGP's
+        // kotlinWasmNodeJsSetup hard-fails with "'Distributions at
+        // https://nodejs.org/dist' was added by unknown code". The flip was
+        // deliberately NOT kept in this wave (repo-wide governance call);
+        // until an owner bakes it in, drive the lane ad hoc via that temp
+        // flip. Suite verified green on Node this way.
+        nodejs()
     }
 
     applyDefaultHierarchyTemplate()

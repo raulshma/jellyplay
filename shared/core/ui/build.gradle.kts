@@ -34,15 +34,22 @@ kotlin {
     wasmJs {
         browser {
             testTask {
-                // commonTest suites run via jvmTest; the wasmJs browser test
-                // run needs a local Chrome/Chromium (karma) and stays opt-in
-                // until Phase W wires a headless wasm test lane — without this
-                // guard, `gradlew build`/`check` would fail on Chrome-less
-                // machines that previously ran no wasm tests at all. (Same
-                // deliberate disable as :shared:core:network.)
+                // The karma/Chrome browser run stays opt-in/off: `gradlew
+                // build`/`check` must not fail on Chrome-less machines (same
+                // deliberate disable as :shared:core:network).
                 enabled = false
             }
         }
+        // Headless wasm test lane (wave 12D): wasmJsNodeTest compiles the full
+        // main+test wasm graphs headlessly — no Karma, no Chrome — but CANNOT
+        // EXECUTE this module's tests under plain Node: the Compose graph
+        // links skiko.mjs and Node cannot fetch/prepare its wasm ("both async
+        // and sync fetching of the wasm failed"). Execution is proven green
+        // only for skiko-free modules (:shared:core:model). Kept as a compile
+        // gate plus future hook; same PREFER_PROJECT prerequisite as
+        // :shared:core:model (FAIL_ON_PROJECT_REPOS trips
+        // kotlinWasmNodeJsSetup's 'nodejs.org/dist' repo add).
+        nodejs()
     }
 
     applyDefaultHierarchyTemplate()
