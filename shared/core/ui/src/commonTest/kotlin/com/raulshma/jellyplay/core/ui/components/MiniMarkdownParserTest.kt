@@ -9,8 +9,8 @@ import kotlin.test.assertTrue
 
 /**
  * Deterministic structure tests for [MiniMarkdownParser] — block sequence and
- * span flags only, no rendering. Pure stdlib, so the suite also runs on the
- * wasmJs Node test lane when that is enabled.
+ * span flags only, no rendering. Pure stdlib commonTest: runs under jvmTest and
+ * the headless wasmJsNodeTest Node lane alike.
  */
 class MiniMarkdownParserTest {
 

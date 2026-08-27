@@ -2,14 +2,13 @@ package com.raulshma.jellyplay.core.model
 
 import kotlin.test.assertEquals
 import kotlin.test.Test
-import java.util.Locale
 
 class ByteFormatterTest {
 
     @Test
     fun testFormatBytes() {
-        // Use Locale.US to ensure uniform decimal formatting (dot instead of comma)
-        Locale.setDefault(Locale.US)
+        // ByteFormatter is a pure-Kotlin replacement always emitting '.' as the
+        // decimal separator, so no Locale pinning is needed on any target.
 
         assertEquals(
 0L.formatBytes(),
@@ -54,7 +53,6 @@ class ByteFormatterTest {
 
     @Test
     fun testFormatSpeed() {
-        Locale.setDefault(Locale.US)
 
         assertEquals(
 0L.formatSpeed(),

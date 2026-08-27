@@ -34,15 +34,19 @@ kotlin {
     wasmJs {
         browser {
             testTask {
-                // commonTest suites run via jvmTest; the wasmJs browser test
-                // run needs a local Chrome/Chromium (karma) and stays opt-in
-                // until Phase W wires a headless wasm test lane — without this
-                // guard, `gradlew build`/`check` would fail on Chrome-less
-                // machines that previously ran no wasm tests at all. (Same
-                // deliberate disable as :shared:core:network.)
+                // The karma/Chrome browser run stays opt-in/off: `gradlew
+                // build`/`check` must not fail on Chrome-less machines (same
+                // deliberate disable as :shared:core:network).
                 enabled = false
             }
         }
+        // Headless wasm commonTest lane (wave 12D): wasmJsNodeTest runs the
+        // parser suite under Kotlin's downloaded Node.js distribution — no
+        // Karma, no Chrome. Same PREREQUISITE as :shared:core:model: needs
+        // repositoriesMode PREFER_PROJECT in settings (FAIL_ON_PROJECT_REPOS
+        // trips kotlinWasmNodeJsSetup's 'nodejs.org/dist' repo add); the flip
+        // was deliberately not kept here pending an owner governance call.
+        nodejs()
     }
 
     applyDefaultHierarchyTemplate()
