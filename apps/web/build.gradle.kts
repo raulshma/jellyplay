@@ -79,6 +79,13 @@ kotlin {
                 // TRANSITIVE implementation dep of shared/core/network, which
                 // does not leak onto our compile classpath.
                 implementation(libs.ktor.client.js)
+                // Wave 12C (WebConnectFlow): ktor-client-core is needed to
+                // CLASSIFY transport failures typed there / in ktor-io
+                // (HttpRequestTimeoutException, IOException) for the connect
+                // form's error lines — the same taxonomy the wasm network
+                // classifier uses. Direct edge for the same leak reason as
+                // ktor-client-js above (implementation dep of core/network).
+                implementation(libs.ktor.client.core)
 
                 implementation(libs.koin.core)
                 implementation(libs.kotlinx.coroutines.core)

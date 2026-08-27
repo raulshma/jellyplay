@@ -7,9 +7,11 @@ import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.crossfade
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
 import com.raulshma.jellyplay.core.datastore.di.webDatastoreModule
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.network.di.networkWasmModule
 import io.ktor.client.HttpClient
@@ -25,9 +27,10 @@ import org.koin.core.context.startKoin
  * primitives over the JB fork's NavDisplay.
  *
  * W.1 chunk 3: `networkWasmModule` registers the Ktor wasm clients
- * (auth/library/playback over ONE shared [AtomicSessionState]). No screen
- * drives them yet — the shell only OBSERVES the session state the auth
- * client publishes, proving the wiring is live end-to-end.
+ * (auth/library/playback over ONE shared [AtomicSessionState]). Wave 12C:
+ * [WebAppRoot] now DRIVES the auth client — connect probe, sign-in,
+ * capabilities, logout — through WebConnectController, so the shell observes
+ * published sessions it actually created end-to-end.
  *
  * W.4: boots the Coil image singleton (see main() below). Wired against the
  * repo-wide coil 3.4.0 pin — the last release line whose wasmJs klibs are
@@ -92,10 +95,16 @@ fun main() {
         JellyPlayTheme(darkTheme = isSystemInDarkTheme(), dynamicColor = false) {
             // The one shared session state the three wasm API clients are
             // built around — passed in directly rather than via a compose
-            // Koin scope (koin-compose is not a web-shell dep yet). WebAppRoot
-            // provisions the core/ui composition locals around its NavDisplay
-            // and renders the web-only landing/status panes.
-            WebAppRoot(sessionState = koinApp.koin.get())
+            // Koin scope (koin-compose is not a web-shell dep yet). Wave 12C
+            // adds the auth client (the session's writer) and the shared
+            // "user_prefs" DataStore (last-server-url persistence for the
+            // connect form); WebAppRoot provisions the core/ui composition
+            // locals around its NavDisplay and renders the web-only panes.
+            WebAppRoot(
+                sessionState = koinApp.koin.get(),
+                authApiClient = koinApp.koin.get(),
+                userPrefs = koinApp.koin.get(DatastoreQualifiers.userPreferencesDataStore),
+            )
         }
     }
 }
