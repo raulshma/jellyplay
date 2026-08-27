@@ -23,7 +23,7 @@ Toolset-wide (individual tools may need only a subset — see table):
 | `bootstrap-jellyfin.sh` | Brings up the local Jellyfin fixture (Docker container, wizard-over-API incl. 10.11 CSRF quirks, ffmpeg testsrc media + poster, library scan) and prints user/item credentials | live (coordinator) |
 | `msi-boot-pass.sh` | The installed-MSI artifact's payload boots: builds the MSI via `:apps:desktop:packageMsi`, administrative-extracts it (`msiexec /a`, no elevation, no install), checks the extracted layout (`JellyPlay.exe` + `runtime/` + `app/`), then boots the EXTRACTED exe under perf-harness properties and requires a clean self-exit with `windowShownMs >= 0` and zero crash logs | wave 13A — live |
 | `desktop-session-pass.sh` | Extended desktop session against a live Jellyfin fixture: in-APP video playback through the whole shared pipeline + Esc/popup-ordering evidence | wave 13B — live |
-| `web-verify` | Web (wasm) shell against a live Jellyfin fixture: sign-in, Coil artwork, HtmlVideoEngine playback, via headless-Edge CDP AX-tree driving | placeholder — landing on branch wave/13C |
+| `web-verify` | Web (wasm) shell against a live Jellyfin fixture: sign-in, Coil artwork, HtmlVideoEngine playback, via headless-Edge CDP AX-tree driving | wave 13C — live |
 
 ## Running bootstrap-jellyfin.sh
 
@@ -127,3 +127,29 @@ route or not — the recorded `finding` answers the ordering question).
 Requires Git Bash on Windows with `cygpath`, `powershell` and `taskkill`
 available, and an interactive session (the harness takes real screenshots via
 `java.awt.Robot`).
+
+## Running web-verify (wave 13C)
+
+Web-shell verification against a live Jellyfin: builds the wasm development
+bundle, stages it with the compose-resources merge, serves it statically,
+drives headless Edge over CDP through the accessibility tree (canvas app —
+no DOM locators), and asserts the full flow: sign-in → Diagnostics pane →
+Coil artwork decoded (`IMAGE_STATE: OK`) → HtmlVideoEngine muted autoplay
+reaching `playing=true pos>0` → `DIAG_OVERALL: OK` → zero console
+errors/exceptions → screenshot.
+
+```bash
+tools/e2e/web-verify.sh
+```
+
+Env overrides: `JP_SERVER_URL` (default `http://localhost:8096`),
+`JP_USERNAME` (`harness`), `JP_PASSWORD` (`harness-e2e-pass`). (`USERNAME`
+is deliberately not read — Windows sets it to the logged-in account and the
+sign-in would silently fail against the fixture.) Prerequisites: Node 18+
+with `ws` (`npm install` inside `tools/e2e/` — package.json committed),
+Edge, and the Node-download governance in `settings.gradle.kts` (webpack
+builds work with no repository-mode flips).
+
+One browser `Log.error` per run is expected and not gated: the automatic
+`/favicon.ico` 404 against the bare static server. Evidence (result.json +
+screenshot) lands in the OS temp dir, outside the repo.
