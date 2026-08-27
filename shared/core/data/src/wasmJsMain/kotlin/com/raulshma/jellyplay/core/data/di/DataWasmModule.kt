@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.ArrRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepositoryImpl
+import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.session.WasmSessionIdentityProvider
@@ -65,6 +66,12 @@ val dataWasmModule: Module = module {
         )
     }
     single<SeerrRepository> { get<SeerrRepositoryImpl>() }
+
+    // Wave 16C: SeerrRequestDelegate moved to commonMain (zero JVM imports —
+    // pure kotlinx.coroutines + core:model), so the web graph can serve the
+    // SeerrDetailViewModel ctor the same way DataKoinModule does on the JVM
+    // (single { SeerrRequestDelegate(get()) } over the SeerrRepository above).
+    single { SeerrRequestDelegate(get()) }
 
     single {
         ArrRepositoryImpl(

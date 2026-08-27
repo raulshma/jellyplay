@@ -78,6 +78,13 @@ kotlin {
                 // forward allowlist pins exactly these two registrations.
                 implementation(project(":shared:feature:requests"))
                 implementation(project(":shared:feature:calendar"))
+                // Wave 16C: the SECOND shared feature screen on web —
+                // WebAppRoot's `entry<Route.SeerrDetail>` composes the shared
+                // SeerrDetailScreen (details' wasmJs target; the MediaDetail
+                // cluster stays jvmShared/off-web) and Main.kt registers
+                // detailsModule + webDetailsPlatformModule (the narrow
+                // MediaRepository for the SeerrDetail cross-link).
+                implementation(project(":shared:feature:details"))
                 // Wave wC (HtmlVideoEngine): the wasm-visible MediaEngine
                 // contract + EnginePositionTicker/WebPlaybackMappings the
                 // web video engine implements. Not wired into the shell UI
@@ -110,6 +117,13 @@ kotlin {
                 // classifier uses. Direct edge for the same leak reason as
                 // ktor-client-js above (implementation dep of core/network).
                 implementation(libs.ktor.client.core)
+                // Wave 16C (WebMediaRepositoryNarrow): PagingData appears in
+                // MediaRepository's paged-member signatures — a direct edge
+                // for the same leak reason as ktor-client-js above (paging-
+                // common is an implementation dep of shared/core/data, so it
+                // does not reach our compile classpath transitively). The
+                // common-only artifact, no paging runtime enters the shell.
+                implementation(libs.paging.common)
 
                 implementation(libs.koin.core)
                 // Wave 15C: the koin-compose runtime behind the requests

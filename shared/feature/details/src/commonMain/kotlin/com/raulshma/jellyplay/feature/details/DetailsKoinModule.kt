@@ -19,45 +19,38 @@ import org.koin.dsl.module
  * Koin module for the details feature (V3/Phase X conveyor move; one
  * framework per type — every Hilt annotation was stripped at the move).
  *
+ * Wave 16C wasmJs split: everything whose dependency closure reaches the
+ * jvmShared halves of core:data (AudioQueueFacade, DownloadIntake,
+ * OfflineSyncManager, SyncPlayManager — Room/downloads/sync) moved OUT of
+ * commonMain together with [DetailViewModel] and its action-factory bundle;
+ * those defs now live in the per-platform registration modules
+ * (`androidDetailsModule(context)` in androidMain /
+ * `desktopDetailsPlatformModule(dataDir)` in jvmMain — the
+ * player-video androidPlayerVideoModule/desktopPlayerVideoModule precedent).
+ * This common module holds exactly the defs whose closure is wasm-clean;
+ * every def here is LATENT on web except [SeerrDetailViewModel], whose ctor
+ * deps (SeerrRepository + SeerrRequestDelegate from dataWasmModule,
+ * PreferenceProjections + SeerrPreferencesStore from datastoreCommonModule,
+ * the web shell's narrow MediaRepository) all resolve on web — that is the
+ * one path wave 16C puts on the browser.
+ *
  * Data-layer ctor deps resolve from the shared core graph on BOTH platforms
- * (dataJvmModule + datastoreCommonModule); the three module-local platform
- * seams are registered per platform:
- * - Android: `androidDetailsModule(context)` (storage probe) +
- *   app-side HiltInterop lazy singles for [DetailAudioPlayback] /
- *   [DetailThemeMusic] (they wrap the Hilt-owned legacy
- *   AudioPlaybackManager / ThemeMusicPlayer singletons).
+ * (dataJvmModule + datastoreCommonModule); the platform seams are registered
+ * per platform:
+ * - Android: `androidDetailsModule(context)` (storage probe + the jvm-only
+ *   VM/factory defs) + app-side HiltInterop lazy singles for
+ *   [DetailAudioPlayback] / [DetailThemeMusic].
  * - Desktop: `desktopDetailsPlatformModule(dataDir)` (no-op audio/theme +
- *   appdata storage probe) — the desktop registration is fully
- *   live-resolvable, dormant only for lack of nav wiring.
+ *   appdata storage probe + the same jvm-only VM/factory defs) — the desktop
+ *   registration is fully live-resolvable, dormant only for lack of nav
+ *   wiring.
  */
 val detailsModule: Module = module {
     single<DetailStrings> { detailStrings() }
     single { DetailStores(get(), get(), get(), get(), get()) }
     single { RemoteDiscoveryClients(get(), get(), get(), get()) }
-    single { DownloadLifecycleActions.Factory(get(), get(), get(), get()) }
-    single { ResyncActions.Factory(get(), get()) }
     single { PlaylistActions.Factory(get(), get()) }
-    single { WatchPartyActions.Factory(get(), get()) }
-    single { DetailActionFactories(get(), get(), get(), get()) }
 
-    viewModel {
-        DetailViewModel(
-            storageProbe = get(),
-            strings = get(),
-            mediaRepository = get(),
-            userDataMutator = get(),
-            mediaDetailProvider = get(),
-            playbackRepository = get(),
-            imageUrlProvider = get(),
-            offlineRepository = get(),
-            stores = get(),
-            remoteDiscovery = get(),
-            audioPlaybackManager = get(),
-            audioQueueFacade = get(),
-            themeMusicPlayer = get(),
-            actionFactories = get(),
-        )
-    }
     viewModel {
         CollectionDetailViewModel(
             mediaRepository = get(),

@@ -57,13 +57,17 @@ class KoinModuleRegistrationGuardTest {
 
     /**
      * The web shell's forward allowlist: every shared feature module the web
-     * startKoin is EXPECTED to register, exactly. apps/web depends on two
+     * startKoin is EXPECTED to register, exactly. apps/web depends on three
      * features today ([requestsModule] — wave 15C put Route.Requests on the
-     * browser; [calendarModule] — wave 16A put Route.UpcomingCalendar there);
-     * when the next feature gains a wasmJs target and a web nav entry,
+     * browser; [calendarModule] — wave 16A put Route.UpcomingCalendar there;
+     * [detailsModule] — wave 16C put Route.SeerrDetail there, the SeerrDetail
+     * slice of details' split commonMain module, the MediaDetail cluster's
+     * VM/factory defs living in the per-platform androidDetailsModule /
+     * desktopDetailsPlatformModule the android/desktop apps register); when
+     * the next feature gains a wasmJs target and a web nav entry,
      * register it in Main.kt AND add it here in the same commit.
      */
-    private val webForwardAllowlist = setOf("calendarModule", "requestsModule")
+    private val webForwardAllowlist = setOf("calendarModule", "requestsModule", "detailsModule")
 
     /**
      * Module-variant prefixes that are intentionally platform-/core-scoped:

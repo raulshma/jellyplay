@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import com.raulshma.jellyplay.core.model.seerr.SeerrAggregateCast
 import com.raulshma.jellyplay.core.model.seerr.SeerrCast
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromMinutes
+import kotlinx.datetime.LocalDate
 
 /**
  * Neutral cast-member view used by the detail UI. The Seerr API exposes cast
@@ -42,16 +43,27 @@ internal fun List<SeerrCast>.toCastMembers(): List<SeerrCastMember> =
 
 /**
  * Seerr-style date formatting. Parses an ISO date ("yyyy-MM-dd") and renders a
- * short locale-friendly form; falls back to the first 10 chars on parse failure.
+ * short form; falls back to the first 10 chars on parse failure.
  *
- * Extracted verbatim from `SeerrDetailScreen.kt`.
+ * Wave 16C purification: HEAD parsed with `java.time.format.DateTimeFormatter
+ * .ofPattern("yyyy-MM-dd")` and formatted with "MMM d, yyyy" + Locale.US. That
+ * output is FIXED-ENGLISH on every platform (Locale.US was explicit), so the
+ * pure-common replacement below — kotlinx-datetime parse + fixed English
+ * month abbreviations — is byte-equal on valid Seerr dates ("Jul 29, 2026").
+ * One deliberate edge delta: java's SMART resolver clamped impossible dates
+ * ("2026-02-30" → "Feb 28, 2026"); kotlinx-datetime rejects them, so such
+ * input now takes the take(10) fallback — which is what the documented
+ * contract ("falls back to the first 10 chars on parse failure") already
+ * prescribed. Real Seerr payloads only carry valid ISO dates.
  */
-private val ISO_INPUT_FORMAT = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
-private val SHORT_OUTPUT_FORMAT = java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy", java.util.Locale.US)
+private val MONTH_ABBREVIATIONS =
+    listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 internal fun formatDate(dateStr: String): String {
     return try {
-        java.time.LocalDate.parse(dateStr, ISO_INPUT_FORMAT).format(SHORT_OUTPUT_FORMAT)
+        val date = LocalDate.parse(dateStr)
+        val year = date.year.toString().padStart(4, '0')
+        "${MONTH_ABBREVIATIONS[date.monthNumber - 1]} ${date.dayOfMonth}, $year"
     } catch (_: Exception) {
         dateStr.take(10)
     }
@@ -78,11 +90,38 @@ internal fun youTubeThumbnailUrl(site: String?, key: String?): String? =
 /**
  * Converts a 2-letter ISO country code into its flag emoji.
  *
- * Extracted verbatim from `SeerrDetailScreen.kt`.
+ * Extracted verbatim from `SeerrDetailScreen.kt`; wave 16C purification moved
+ * the code-point arithmetic off `java.lang.Character` (JVM-only) onto the
+ * exact-math replicas below — identical outputs for every ISO country code,
+ * including the lowercase non-flag edge the jvmTest pins ('g' → U+1F10C, not
+ * a regional indicator).
  */
 internal fun getFlagEmoji(countryCode: String): String? {
     if (countryCode.length != 2) return null
-    val firstChar = Character.codePointAt(countryCode, 0) - 0x41 + 0x1F1E6
-    val secondChar = Character.codePointAt(countryCode, 1) - 0x41 + 0x1F1E6
-    return String(Character.toChars(firstChar)) + String(Character.toChars(secondChar))
+    val firstChar = codePointAt(countryCode, 0) - 0x41 + 0x1F1E6
+    val secondChar = codePointAt(countryCode, 1) - 0x41 + 0x1F1E6
+    return codePointToString(firstChar) + codePointToString(secondChar)
 }
+
+/**
+ * `java.lang.Character.codePointAt(seq, index)` verbatim: surrogate-pair aware
+ * (a high+low pair at [index] yields the supplementary code point, otherwise
+ * the char value).
+ */
+private fun codePointAt(seq: String, index: Int): Int {
+    val c = seq[index]
+    return if (c.isHighSurrogate() && index + 1 < seq.length && seq[index + 1].isLowSurrogate()) {
+        ((c.code and 0x03FF) shl 10) + (seq[index + 1].code and 0x03FF) + 0x10000
+    } else {
+        c.code
+    }
+}
+
+/** `String(Character.toChars(codePoint))` verbatim: BMP → 1 char, supplementary → surrogate pair. */
+private fun codePointToString(codePoint: Int): String =
+    if (codePoint < 0x10000) {
+        codePoint.toChar().toString()
+    } else {
+        val offset = codePoint - 0x10000
+        charArrayOf(((offset ushr 10) + 0xD800).toChar(), ((offset and 0x3FF) + 0xDC00).toChar()).concatToString()
+    }
