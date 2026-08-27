@@ -141,12 +141,18 @@ Read these before quoting any number above:
    deeper plumbing; not worth it while delta measures zero.
 5. **Auto-exit is measurement-only** and kills without graceful teardown by
    design (documented in code + printed at runtime whenever armed).
-6. **Tray/window icon UX was not human-click-tested by the authoring agent.**
-   Code path compiles, the packaged jar carries the icon bytes, and six
-   automated boots produced zero exceptions/fatal/uncaught lines — but tray
-   rendering, tooltip text, Show-JellyPlay restore/focus behavior, and Quit
-   via tray menu still need a one-time manual eyeball on a developer machine.
-   Closing the main window remains a full quit BY DESIGN (no hide-to-tray).
+6. **Tray UX: partially covered programmatically, visuals still uneyeballed.**
+   Wave 13A extracted the tray handlers into `DesktopTrayActions` with unit
+   cover for the programmatically reachable halves — Quit's delegation
+   (callback fires exactly once) and Show's null-window path (no-throw
+   no-op). NOT covered by any automated test, and still needing a one-time
+   manual eyeball on a developer machine: tray rendering, tooltip text, the
+   VISUAL restore/focus of a live window (a real `ComposeWindow` cannot be
+   constructed headless), and click-through Quit in a live session. Code
+   path compiles, the packaged jar carries the icon bytes, and automated
+   boots produced zero exceptions/fatal/uncaught lines — that is not a
+   substitute for the eyeball. Closing the main window remains a full quit
+   BY DESIGN (no hide-to-tray).
 7. Raw evidence (per-run logs + JSON copies + CSV) is kept OUTSIDE the repo in
    `%LOCALAPPDATA%\JellyPlayPerfBaseline\results-*` by the harness.
 
