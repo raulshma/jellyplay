@@ -14,7 +14,6 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_could_not_reload
-import com.raulshma.jellyplay.feature.admin.generated.resources.admin_saved_reload_failed
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -172,7 +171,7 @@ class UserDetailViewModelTest {
     }
 
     @Test
-    fun `save with reload failure sets honest message and saveError`() = runTest {
+    fun `save with reload failure keeps soft saveError and stays honest about staleness`() = runTest {
         val vm = loadViewModel(admin, listOf(admin))
         // mutation succeeds, but the post-save reload fails
         coEvery { adminRepository.renameUser("u-admin", "Alice2") } returns Result.success(admin.copy(name = "Alice2"))
@@ -187,21 +186,12 @@ class UserDetailViewModelTest {
         assertFalse(vm.uiState.value.isSaving)
         assertNull(vm.uiState.value.editedName)
         assertNull(vm.uiState.value.editedPolicy)
-        // reload failed -> honest message + soft saveError; user.name stays stale
+        // reload failed -> soft saveError carries the failure banner; user.name
+        // stays stale. The old ui-state `message` half of save() was dead — no
+        // screen ever rendered it — so only this saveError path remains, which
+        // UserDetailScreen shows.
         assertNotNull(vm.uiState.value.saveError)
         assertEquals(AdminUserMessage.Resource(Res.string.admin_could_not_reload), vm.uiState.value.saveError)
-        assertHonestReloadMessage(vm.uiState.value.message)
-    }
-
-    /**
-     * The reload-failure path must surface the honest `admin_saved_reload_failed`
-     * resource — never the stale `admin_changes_saved` one (assertion intent
-     * preserved from the legacy Context-stubbed suite, now against the
-     * unresolved AdminUserMessage instead of pre-resolved strings).
-     */
-    private fun assertHonestReloadMessage(actual: AdminUserMessage?) {
-        assertNotNull(actual)
-        assertEquals(AdminUserMessage.Resource(Res.string.admin_saved_reload_failed), actual)
     }
 
     @Test

@@ -11,9 +11,7 @@ import com.raulshma.jellyplay.core.model.ParentalRatingOption
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
-import com.raulshma.jellyplay.feature.admin.generated.resources.admin_changes_saved
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_could_not_reload
-import com.raulshma.jellyplay.feature.admin.generated.resources.admin_saved_reload_failed
 
 @Immutable
 data class UserDetailState(
@@ -25,7 +23,6 @@ data class UserDetailState(
     val editedName: String? = null,
     val isSaving: Boolean = false,
     val saveError: AdminUserMessage? = null,
-    val message: AdminUserMessage? = null,
     val showDeleteDialog: Boolean = false,
     val showPasswordDialog: Boolean = false,
     val isSelf: Boolean = false,
@@ -168,9 +165,9 @@ class UserDetailViewModel(
             }
             // 3. reload
             adminRepository.getManagedUser(id).onSuccess { fresh ->
-                _uiState.update { it.copy(isSaving = false, user = fresh, message = AdminUserMessage.Resource(Res.string.admin_changes_saved)) }
+                _uiState.update { it.copy(isSaving = false, user = fresh) }
             }.onFailure {
-                _uiState.update { it.copy(isSaving = false, message = AdminUserMessage.Resource(Res.string.admin_saved_reload_failed), saveError = AdminUserMessage.Resource(Res.string.admin_could_not_reload)) }
+                _uiState.update { it.copy(isSaving = false, saveError = AdminUserMessage.Resource(Res.string.admin_could_not_reload)) }
             }
         }
     }
@@ -182,7 +179,6 @@ class UserDetailViewModel(
             _uiState.update {
                 it.copy(
                     showPasswordDialog = false,
-                    message = if (r.isSuccess) AdminUserMessage.Raw(if (newPassword == null) "Password reset" else "Password updated") else null,
                     saveError = if (r.isFailure) r.exceptionOrNull()?.message?.let(AdminUserMessage::Raw) else null,
                 )
             }
@@ -215,6 +211,5 @@ class UserDetailViewModel(
         }
     }
 
-    fun consumeMessage() = _uiState.update { it.copy(message = null) }
     fun consumeSaveError() = _uiState.update { it.copy(saveError = null) }
 }
