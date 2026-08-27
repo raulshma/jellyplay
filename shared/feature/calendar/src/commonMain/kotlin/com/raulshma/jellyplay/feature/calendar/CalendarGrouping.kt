@@ -3,11 +3,9 @@ package com.raulshma.jellyplay.feature.calendar
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
-import java.time.LocalDate
-import java.time.YearMonth
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
-import java.util.Locale
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.YearMonth
+import kotlinx.datetime.daysUntil
 
 /**
  * Filter applied client-side to the merged calendar stream. Kept in the UI
@@ -26,15 +24,17 @@ data class CalendarDay(
     val items: List<ArrCalendarItem>,
 )
 
-private val ISO_DATE: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
-
 /**
  * Parses an [ArrCalendarItem]'s effective release date. Mirrors the parse in
  * `ArrRepositoryImpl.matchesWindow` (`airDateUtc` is a full ISO-8601 UTC
  * timestamp; only the leading `yyyy-MM-dd` is meaningful for day grouping).
+ * [LocalDate.parse] is strict ISO-8601 (the calendar's ISO format), so a
+ * malformed prefix throws [kotlinx.datetime.DateTimeFormatException] and the
+ * runCatching degrades to null — exactly the old
+ * `DateTimeFormatter.ISO_LOCAL_DATE` + `DateTimeParseException` contract.
  */
 fun ArrCalendarItem.releaseDate(): LocalDate? =
-    airDateUtc?.take(10)?.let { runCatching { LocalDate.parse(it, ISO_DATE) }.getOrNull() }
+    airDateUtc?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
 
 /**
  * Groups items by their release day, applies [filter], and sorts. Days with no
@@ -75,28 +75,34 @@ private fun typeRank(mediaType: ArrMediaType): Int = when (mediaType) {
  * tests are deterministic.
  */
 fun LocalDate.toRelativeLabel(today: LocalDate): String? {
-    val days = java.time.temporal.ChronoUnit.DAYS.between(today, this)
+    // daysUntil(other) is positive when other > this, i.e. the exact
+    // ChronoUnit.DAYS.between(today, this) direction the pre-wasm java.time
+    // body had.
+    val days = today.daysUntil(this)
     return when {
-        days == 0L -> "Today"
-        days == 1L -> "Tomorrow"
-        days == -1L -> "Yesterday"
-        days in 2L..6L -> "In $days days"
-        days in -6L..-2L -> "${-days} days ago"
+        days == 0 -> "Today"
+        days == 1 -> "Tomorrow"
+        days == -1 -> "Yesterday"
+        days in 2..6 -> "In $days days"
+        days in -6..-2 -> "${-days} days ago"
         else -> null
     }
 }
 
 /** `true` when [date] falls inside the calendar month [month]. */
 fun LocalDate.isInMonth(month: YearMonth): Boolean =
-    year == month.year && monthValue == month.monthValue
+    year == month.year && this.month == month.month
 
 /**
- * Day-of-week + day-of-month label, e.g. "Mon, Jul 14". Locale-aware so the
- * app follows the device locale (matching [java.time] usage elsewhere).
+ * Day-of-week + day-of-month label, e.g. "Mon, Jul 14". Locale resolution
+ * lives behind the [CalendarDateLabels] expect/actual seam: JVM/android keep
+ * the host-locale behavior, wasmJs serves fixed-English headers (documented
+ * degrade on the actual).
  */
-fun LocalDate.toDayHeaderLabel(locale: Locale = Locale.getDefault()): String =
-    format(DateTimeFormatter.ofPattern("EEE, MMM d", locale))
+fun LocalDate.toDayHeaderLabel(): String = calendarDayHeaderLabel(this)
 
-/** Full month + year label, e.g. "July 2026", used by the month nav header. */
-fun YearMonth.toMonthYearLabel(locale: Locale = Locale.getDefault()): String =
-    format(DateTimeFormatter.ofPattern("MMMM yyyy", locale))
+/**
+ * Full month + year label, e.g. "July 2026", used by the month nav header.
+ * Same [CalendarDateLabels] seam as [toDayHeaderLabel].
+ */
+fun YearMonth.toMonthYearLabel(): String = calendarMonthYearLabel(this)

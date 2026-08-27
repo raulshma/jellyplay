@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import kotlinx.datetime.LocalDate as KotlinLocalDate
 import kotlinx.datetime.toJavaLocalDate
+import kotlinx.datetime.toKotlinLocalDate
 import java.time.LocalDate
 import java.time.YearMonth
 import java.util.concurrent.atomic.AtomicInteger
@@ -243,13 +244,14 @@ class UpcomingCalendarViewModelTest {
         advanceUntilIdle()
         val windowsBefore = arr.calendarWindows.size
 
-        // Same month → no-op.
-        assertFalse(vm.goToDate(LocalDate.now()))
+        // Same month → no-op. (Wave 16A: goToDate takes kotlinx.datetime
+        // LocalDate now — the java.time `now()` converts at the call.)
+        assertFalse(vm.goToDate(LocalDate.now().toKotlinLocalDate()))
         assertEquals(windowsBefore, arr.calendarWindows.size)
 
         // Different month → swap + collector restart.
         val otherMonth = YearMonth.now().plusMonths(2)
-        assertTrue(vm.goToDate(otherMonth.atDay(15)))
+        assertTrue(vm.goToDate(otherMonth.atDay(15).toKotlinLocalDate()))
         advanceUntilIdle()
         assertEquals(
             otherMonth.atDay(1) to otherMonth.atEndOfMonth(),

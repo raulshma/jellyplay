@@ -92,6 +92,7 @@ jobs:
 
           :shared:feature:calendar:jvmJar
           :shared:feature:calendar:compileAndroidMain
+          :shared:feature:calendar:compileKotlinWasmJs
 
 
           :shared:feature:requests:jvmJar

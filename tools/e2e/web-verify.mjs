@@ -11,8 +11,11 @@
 // DIAG_OVERALL: OK → wave 15C: pop back, open the FIRST feature screen
 // (Route.Requests → shared RequestsScreen), assert title + filter bar +
 // the honest "Seerr not configured" error state (Seerr is NOT part of the
-// fixture — see apps/web Main.kt's SEERR-ON-WEB HONESTY note), zero console
-// errors / uncaught exceptions, screenshots.
+// fixture — see apps/web Main.kt's SEERR-ON-WEB HONESTY note) → wave 16A:
+// back again, open the SECOND feature screen (Route.UpcomingCalendar →
+// shared UpcomingCalendarScreen), assert the honest feature-disabled pane
+// (DIRECT_ARR_INTEGRATION boots off and no web settings UI can flip it),
+// zero console errors / uncaught exceptions, screenshots.
 //
 // Usage:
 //   node web-verify.mjs --server-url http://localhost:8096 \
@@ -521,7 +524,45 @@ async function main() {
     return path;
   });
 
-  // 16. Zero console errors.
+  // 16. Wave 16A: pop the requests pane and open the SECOND shared feature
+  // screen — the ConnectedCard's "Calendar" button pushes Route.UpcomingCalendar
+  // and the shell renders the shared UpcomingCalendarScreen (koinViewModel()
+  // against calendarModule, registered in Main.kt this wave).
+  await step('open Calendar pane', async () => {
+    const back = await waitForNode(cdp, 'requests Back button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Back', 10000);
+    await clickNode(cdp, back, 'requests Back button');
+    const calendarBtn = await waitForNode(cdp, 'Calendar button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Calendar', 15000);
+    await clickNode(cdp, calendarBtn, 'Calendar button');
+    return 'popped Requests, clicked landing Calendar button';
+  });
+
+  // 17. The honest v1 state: the fixture has NO *arr servers and the
+  // DIRECT_ARR_INTEGRATION experimental flag boots OFF with no web settings
+  // UI to flip it, so the screen must render its feature-disabled pane —
+  // title "Upcoming" + the "Direct *arr Integration is off" headline + the
+  // "Open *arr Settings" button (inert on web: settings has no wasm target,
+  // WebAppRoot's cut note). NOT a spinner, NOT a crash, NOT a fake list.
+  await step('CALENDAR disabled state', async () => {
+    try {
+      await waitForNode(cdp, 'calendar title "Upcoming"', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'Upcoming', 30000);
+      await waitForNode(cdp, '"Direct *arr Integration is off" line', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'Direct *arr Integration is off', 20000);
+    } catch (e) {
+      throw new Error(`${e.message}; texts=${JSON.stringify(await snapshotTexts(cdp))}`);
+    }
+    await waitForNode(cdp, '"Open *arr Settings" button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Open *arr Settings', 20000);
+    return 'title + disabled pane + settings affordance visible (honest flag-off assertion)';
+  });
+
+  // 18. Screenshot evidence for the calendar pane.
+  await step('calendar screenshot', async () => {
+    await sleep(1000);
+    const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    const path = join(OUT_DIR, 'calendar.png');
+    writeFileSync(path, Buffer.from(data, 'base64'));
+    return path;
+  });
+
+  // 19. Zero console errors.
   await step('zero console errors', async () => {
     if (consoleErrors.length > 0) throw new Error(`console errors: ${JSON.stringify(consoleErrors.slice(0, 5))}`);
     if (exceptions.length > 0) throw new Error(`uncaught exceptions: ${JSON.stringify(exceptions.slice(0, 5))}`);
@@ -564,6 +605,7 @@ try {
     outDir: OUT_DIR,
     screenshot: join(OUT_DIR, 'diagnostics.png'),
     requestsScreenshot: join(OUT_DIR, 'requests.png'),
+    calendarScreenshot: join(OUT_DIR, 'calendar.png'),
   };
   const jsonPath = join(OUT_DIR, 'result.json');
   writeFileSync(jsonPath, JSON.stringify(result, null, 2));
