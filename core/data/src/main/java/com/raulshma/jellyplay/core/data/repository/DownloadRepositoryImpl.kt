@@ -41,6 +41,9 @@ import com.raulshma.jellyplay.core.model.OfflineSubtitleEntry
 import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.isImageSubtitleCodec
+import com.raulshma.jellyplay.core.model.isVobsubFamilyCodec
+import com.raulshma.jellyplay.core.model.subtitleCompanionFileName
+import com.raulshma.jellyplay.core.model.subtitleSidecarExtension
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -58,6 +61,8 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -677,6 +682,10 @@ class DownloadRepositoryImpl @Inject constructor(
 
             subtitlesDir.mkdirs()
             val entries = mutableListOf<OfflineSubtitleEntry>()
+            // Any stream that fails to resolve a delivery URL or fetch marks
+            // the pass incomplete; only a complete pass may prune (contract in
+            // [pruneOrphanSidecarFiles]).
+            var incompletePass = false
 
             for (stream in subtitleStreams) {
                 try {
@@ -687,11 +696,23 @@ class DownloadRepositoryImpl @Inject constructor(
                             playbackRepository.buildSubtitleDeliveryUrl(itemId, mediaSourceId, stream.index, stream.codec)
                         else -> continue
                     }
-                    if (subUrl.isBlank()) continue
+                    if (subUrl.isBlank()) {
+                        incompletePass = true
+                        continue
+                    }
 
-                    val fileName = "${stream.index}.${subtitleFileExtension(stream.codec)}"
-                    val target = File(subtitlesDir, fileName)
-                    if (!downloadSubtitleFile(subUrl, target)) continue
+                    // VobSub renders only as an .idx+.sub pair; both halves are
+                    // fetched and the manifest points at the .idx (the player's
+                    // vobsub demuxer picks up the .sub sibling by base name).
+                    val fileName = if (isVobsubFamilyCodec(stream.codec)) {
+                        fetchVobsubPair(subUrl, subtitlesDir, stream.index)
+                    } else {
+                        fetchSingleSidecar(subUrl, subtitlesDir, stream.index, stream.codec)
+                    }
+                    if (fileName == null) {
+                        incompletePass = true
+                        continue
+                    }
 
                     entries.add(
                         OfflineSubtitleEntry(
@@ -703,17 +724,26 @@ class DownloadRepositoryImpl @Inject constructor(
                             displayTitle = stream.displayTitle,
                             isDefault = stream.isDefault,
                             isForced = stream.isForced,
+                            isImage = isImageSubtitleCodec(stream.codec),
                         )
                     )
                 } catch (e: Exception) {
+                    incompletePass = true
                     Log.d(TAG, "Failed to download subtitle stream ${stream.index} for $itemId", e)
                 }
             }
 
             if (entries.isNotEmpty()) {
                 // Persist a manifest describing exactly what landed on disk.
-                File(subtitlesDir, DownloadArtifacts.SUBTITLE_MANIFEST_FILE)
-                    .writeText(json.encodeToString(OfflineSubtitleManifest(entries)))
+                writeSubtitleManifest(subtitlesDir, entries, json)
+                if (!incompletePass) {
+                    // Pair halves count as live alongside the manifest's own
+                    // entry — a pruned .idx or .sub breaks the whole pair.
+                    val liveNames = entries.flatMap {
+                        listOfNotNull(it.fileName, subtitleCompanionFileName(it.fileName))
+                    }.toSet()
+                    pruneOrphanSidecarFiles(subtitlesDir, liveNames)
+                }
                 true
             } else {
                 // Deliverable streams existed but none fetched (transient
@@ -865,14 +895,42 @@ class DownloadRepositoryImpl @Inject constructor(
         )
     }
 
-    private fun subtitleFileExtension(codec: String?): String = when (codec?.lowercase()) {
-        "subrip", "srt" -> "srt"
-        "ass" -> "ass"
-        "ssa" -> "ass"
-        "webvtt", "vtt" -> "vtt"
-        "mov_text", "ttml" -> "ttml"
-        "sub" -> "sub"
-        else -> "srt"
+    /**
+     * Fetches one text/image sidecar as `{index}.{ext}`. Returns the manifest
+     * file name, or null when the fetch failed (the caller marks the pass
+     * incomplete; [downloadSubtitleFile]'s temp-file write leaves any previous
+     * pass's sidecar untouched).
+     */
+    private suspend fun fetchSingleSidecar(
+        subUrl: String,
+        subtitlesDir: File,
+        index: Int,
+        codec: String?,
+    ): String? {
+        val fileName = "$index.${subtitleSidecarExtension(codec)}"
+        return if (downloadSubtitleFile(subUrl, File(subtitlesDir, fileName))) fileName else null
+    }
+
+    /**
+     * Fetches both halves of a VobSub pair ([index].idx palette + [index].sub
+     * bitmap). The server's deliveryUrl for an external VobSub stream points
+     * at whichever file the MediaStream advertises; [vobsubPairUrls] derives
+     * the other half. Either half alone is unrenderable, so both fetches must
+     * succeed. Returns the manifest file name (`{index}.idx`, which the
+     * player's vobsub demuxer pairs with the `.sub` sibling), or null.
+     *
+     * On failure nothing is deleted: [downloadSubtitleFile] stages writes in
+     * temp files, so a pair fetched by a previous successful pass stays
+     * intact and keeps serving the still-valid manifest until the resync
+     * retries.
+     */
+    private suspend fun fetchVobsubPair(subUrl: String, subtitlesDir: File, index: Int): String? {
+        val (paletteUrl, bitmapUrl) = vobsubPairUrls(subUrl)
+        val idxFile = File(subtitlesDir, "$index.idx")
+        val subFile = File(subtitlesDir, "$index.sub")
+        if (!downloadSubtitleFile(paletteUrl, idxFile)) return null
+        if (!downloadSubtitleFile(bitmapUrl, subFile)) return null
+        return idxFile.name
     }
 
     /**
@@ -883,6 +941,11 @@ class DownloadRepositoryImpl @Inject constructor(
      * generic file-download helper.
      */
     private suspend fun downloadSubtitleFile(url: String, target: File): Boolean {
+        // Staged write: the stream goes to a `.part` sibling and is moved into
+        // place only when complete, so a mid-transfer failure never truncates
+        // (or replaces) the sidecar a previous successful pass wrote — offline
+        // playback keeps serving it until the resync retries.
+        val staging = File(target.parentFile, target.name + ".part")
         return try {
             // Auth rides on the baked-in api_key query param, with the
             // X-Emby-Token header as a fallback for servers/reverse proxies
@@ -904,14 +967,22 @@ class DownloadRepositoryImpl @Inject constructor(
                     Log.d(TAG, "Rejected subtitle response from $url: Content-Type $contentType")
                     return@use false
                 }
+                var moved = false
                 resp.body?.byteStream()?.use { input ->
-                    target.outputStream().use { output -> input.copyTo(output) }
+                    staging.outputStream().use { output -> input.copyTo(output) }
+                    Files.move(
+                        staging.toPath(), target.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING,
+                    )
+                    moved = true
                 }
-                target.exists() && target.length() > 0
+                moved
             }
         } catch (e: CancellationException) {
+            staging.delete()
             throw e
         } catch (e: Exception) {
+            staging.delete()
             Log.d(TAG, "Failed to download file from $url", e)
             false
         }

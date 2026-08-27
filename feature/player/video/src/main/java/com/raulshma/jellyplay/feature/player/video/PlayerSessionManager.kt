@@ -1034,9 +1034,23 @@ class PlayerSessionManager(
         // Try item-scoped directory first, fall back to legacy un-scoped.
         val scopedDir = java.io.File(parentDir, "subtitles_$itemId")
         val subtitlesDir = if (scopedDir.exists()) scopedDir else java.io.File(parentDir, "subtitles")
+        val engineCapabilities = _engine.value?.capabilities
         for (entry in manifest.subtitles) {
             val file = java.io.File(subtitlesDir, entry.fileName)
             if (!file.exists()) continue
+            // Bitmap sidecars (PGS/VOBSUB — bytes delivered verbatim via a server
+            // deliveryUrl) decode only through mpv's libav decoders; Exo/LibVLC
+            // would fail silently at render time, so skip them there. Mirrors the
+            // streaming path in [buildExternalSubtitles], which relies on the
+            // server refusing image endpoints instead.
+            if (entry.isBitmapSidecar && engineCapabilities?.supportsImageSubtitles != true) {
+                Log.d(
+                    "SubtitleUse",
+                    "loadOfflineSubtitles: skipping image sidecar index=${entry.index} " +
+                        "codec=${entry.codec} — engine lacks bitmap-subtitle support",
+                )
+                continue
+            }
             addExternalSubtitle(
                 SubtitleSource(
                     url = Uri.fromFile(file).toString(),
