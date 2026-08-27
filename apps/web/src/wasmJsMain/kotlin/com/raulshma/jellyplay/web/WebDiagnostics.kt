@@ -74,7 +74,10 @@ import org.w3c.dom.Element
  * do not reword them without updating tools/e2e/web-verify.mjs.
  */
 @Composable
-internal fun WebDiagnosticsPane(onBack: () -> Unit) {
+internal fun WebDiagnosticsPane(
+    onBack: () -> Unit,
+    onOpenSeerrDetailDemo: () -> Unit = {},
+) {
     val library = remember { GlobalContext.get().get<LibraryApiClient>() }
     val playback = remember { GlobalContext.get().get<PlaybackApiClient>() }
 
@@ -156,6 +159,19 @@ internal fun WebDiagnosticsPane(onBack: () -> Unit) {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
         )
+        // Wave 16C E2E surface: pushes Route.SeerrDetail(550, "movie") so the
+        // headless lane can drive the REAL shared SeerrDetailScreen (details'
+        // wasmJs target; the SeerrDetailViewModel DI graph resolves on web —
+        // narrow MediaRepository included) without a Seerr server: the
+        // fixture's requests list is empty ("Seerr not configured"), so
+        // nothing there is clickable. The VM's SeerrRepository call fails
+        // with that same honest error, which is exactly what the lane
+        // asserts: scaffold renders, error Text + Retry visible, no crash.
+        // Gated like everything else in this pane — reachable only through
+        // Diagnostics (manual navigation or the CDP driver).
+        Button(onClick = onOpenSeerrDetailDemo) {
+            Text("SeerrDetail (demo)")
+        }
         OutlinedButton(onClick = onBack, modifier = Modifier.padding(top = 8.dp)) {
             Text("Back")
         }

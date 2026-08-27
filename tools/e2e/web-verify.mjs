@@ -521,7 +521,66 @@ async function main() {
     return path;
   });
 
-  // 16. Zero console errors.
+  // 16. Wave 16C: pop the requests pane, reopen Diagnostics, and drive the
+  // REAL shared SeerrDetailScreen through the gated demo surface (see
+  // WebDiagnosticsPane's "SeerrDetail (demo)" button + WebAppRoot's
+  // entry<Route.SeerrDetail>). The fixture has no Seerr server and the
+  // requests list is empty ("Seerr not configured") — nothing is clickable
+  // there — so the demo button is the honest path to the screen: it pushes
+  // Route.SeerrDetail(550, "movie") through the REAL addEntry navigation,
+  // the real koinViewModel() graph resolves on web (detailsModule +
+  // dataWasmModule's SeerrRepository/SeerrRequestDelegate +
+  // webDetailsPlatformModule's narrow MediaRepository), and the screen
+  // renders its honest error state. Self-contained block before the console
+  // gate so sibling-wave inserts merge keep-both.
+  await step('reopen Diagnostics (pop requests)', async () => {
+    const back = await waitForNode(cdp, 'requests Back button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Back', 10000);
+    await clickNode(cdp, back, 'requests Back button');
+    const diag = await waitForNode(cdp, 'Diagnostics button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Diagnostics', 15000);
+    await clickNode(cdp, diag, 'Diagnostics button');
+    await waitForNode(cdp, 'pane title', (n) => nodeName(n) === 'Web diagnostics', 15000);
+    return 'popped Requests, reopened Diagnostics';
+  });
+
+  await step('open SeerrDetail (demo)', async () => {
+    try {
+      const demoBtn = await waitForNode(cdp, 'SeerrDetail (demo) button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'SeerrDetail (demo)', 10000);
+      await clickNode(cdp, demoBtn, 'SeerrDetail (demo) button');
+    } catch (e) {
+      throw new Error(`${e.message}; texts=${JSON.stringify(await snapshotTexts(cdp))}`);
+    }
+    return 'clicked SeerrDetail (demo)';
+  });
+
+  // 17. The screen IS the shared SeerrDetailScreen rendering its honest
+  // failure: the VM's SeerrRepository call fails with "Seerr not configured"
+  // (no Seerr credentials on web — Main.kt's SEERR-ON-WEB HONESTY note), the
+  // ErrorScreen shows that message + Retry, and the shell's Back scaffold is
+  // present. A spinner is tolerated transiently; the error MUST arrive.
+  // Crash-on-render (DI graph unresolved, LocalUriHandler missing, wasm klib
+  // absent from the bundle) would fire exceptionThrown and fail the console
+  // gate below.
+  await step('SEERRDETAIL renders honest error state', async () => {
+    try {
+      await waitForNode(cdp, '"Seerr not configured" error line', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'Seerr not configured', 60000);
+      await waitForNode(cdp, 'Retry button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Retry', 15000);
+      await waitForNode(cdp, 'shell Back button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Back', 15000);
+    } catch (e) {
+      throw new Error(`${e.message}; texts=${JSON.stringify(await snapshotTexts(cdp))}`);
+    }
+    return 'error Text + Retry + shell Back visible (honest not-connected assertion, no crash)';
+  });
+
+  // 18. Screenshot evidence for the SeerrDetail pane.
+  await step('seerrdetail screenshot', async () => {
+    await sleep(1000);
+    const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    const path = join(OUT_DIR, 'seerrdetail.png');
+    writeFileSync(path, Buffer.from(data, 'base64'));
+    return path;
+  });
+
+  // 19. Zero console errors.
   await step('zero console errors', async () => {
     if (consoleErrors.length > 0) throw new Error(`console errors: ${JSON.stringify(consoleErrors.slice(0, 5))}`);
     if (exceptions.length > 0) throw new Error(`uncaught exceptions: ${JSON.stringify(exceptions.slice(0, 5))}`);
@@ -564,6 +623,7 @@ try {
     outDir: OUT_DIR,
     screenshot: join(OUT_DIR, 'diagnostics.png'),
     requestsScreenshot: join(OUT_DIR, 'requests.png'),
+    seerrDetailScreenshot: join(OUT_DIR, 'seerrdetail.png'),
   };
   const jsonPath = join(OUT_DIR, 'result.json');
   writeFileSync(jsonPath, JSON.stringify(result, null, 2));

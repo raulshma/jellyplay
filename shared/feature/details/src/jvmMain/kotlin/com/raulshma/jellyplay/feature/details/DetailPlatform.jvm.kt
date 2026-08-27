@@ -9,6 +9,7 @@ import java.nio.file.Path
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
+import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -56,6 +57,34 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
     single<DetailAudioPlayback> { NoopDetailAudioPlayback }
     single<DetailThemeMusic> { NoopDetailThemeMusic }
     single<DetailStorageProbe> { DesktopDetailStorageProbe(dataDir) }
+    // Wave 16C: the jvm-only detail defs (dependency closure reaches the
+    // jvmShared halves of core:data — AudioQueueFacade, DownloadIntake,
+    // OfflineSyncManager, SyncPlayManager) moved here out of commonMain's
+    // detailsModule, which is now the wasm-clean module the web shell
+    // registers. Desktop registers BOTH modules; these defs resolve exactly
+    // as before (same Koin defs, different module home).
+    single { DownloadLifecycleActions.Factory(get(), get(), get(), get()) }
+    single { ResyncActions.Factory(get(), get()) }
+    single { WatchPartyActions.Factory(get(), get()) }
+    single { DetailActionFactories(get(), get(), get(), get()) }
+    viewModel {
+        DetailViewModel(
+            storageProbe = get(),
+            strings = get(),
+            mediaRepository = get(),
+            userDataMutator = get(),
+            mediaDetailProvider = get(),
+            playbackRepository = get(),
+            imageUrlProvider = get(),
+            offlineRepository = get(),
+            stores = get(),
+            remoteDiscovery = get(),
+            audioPlaybackManager = get(),
+            audioQueueFacade = get(),
+            themeMusicPlayer = get(),
+            actionFactories = get(),
+        )
+    }
 }
 
 /**

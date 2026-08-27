@@ -12,11 +12,25 @@ package com.raulshma.jellyplay.feature.details
  */
 internal object MediaInfoFormat {
 
-    /** Formats a bitrate (bits/sec) into Mbps / Kbps / bps. */
+    /**
+     * Formats a bitrate (bits/sec) into Mbps / Kbps / bps.
+     *
+     * Wave 16C purification: `"%.1f".format` / `"%.0f".format` are JVM-API
+     * (default-locale formatting, no wasm variant). Replaced with integer/
+     * HALF_UP math — identical digits, and the decimal point no longer flips
+     * to a comma under non-English JVM default locales.
+     */
     fun formatBitrate(bps: Long): String = when {
-        bps >= 1_000_000 -> "%.1f Mbps".format(bps / 1_000_000.0)
-        bps >= 1_000 -> "%.0f Kbps".format(bps / 1_000.0)
+        bps >= 1_000_000 -> formatTenths(bps / 1_000_000.0) + " Mbps"
+        bps >= 1_000 -> "${kotlin.math.round(bps / 1_000.0).toLong()} Kbps"
         else -> "$bps bps"
+    }
+
+    /** "%.1f" shape via integer math: HALF_UP at the first decimal, dot rendered. */
+    private fun formatTenths(value: Double): String {
+        val magnitude = kotlin.math.round(kotlin.math.abs(value) * 10).toLong()
+        val rendered = "${magnitude / 10}.${magnitude % 10}"
+        return if (value < 0) "-$rendered" else rendered
     }
 
     /**
@@ -28,7 +42,7 @@ internal object MediaInfoFormat {
         val hours = totalSeconds / 3600
         val minutes = (totalSeconds % 3600) / 60
         val seconds = totalSeconds % 60
-        return if (hours > 0) "%dh %dm".format(hours, minutes) else "%dm %ds".format(minutes, seconds)
+        return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m ${seconds}s"
     }
 
     /** Maps a video stream height to a human-readable quality bucket. */

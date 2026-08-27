@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.network.di.networkWasmModule
+import com.raulshma.jellyplay.feature.details.detailsModule
 import com.raulshma.jellyplay.feature.requests.di.requestsModule
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.js.Js
@@ -83,6 +84,17 @@ fun main() {
             networkWasmModule,
             dataWasmModule,
             requestsModule,
+            // Wave 16C: the SeerrDetail slice. detailsModule is now the
+            // wasm-clean module (the MediaDetail cluster's VM/factory defs
+            // moved to the jvm platform modules the android/desktop apps
+            // register); its only def the browser ever resolves is
+            // SeerrDetailViewModel, whose ctor deps — SeerrRepository +
+            // SeerrRequestDelegate (dataWasmModule), PreferenceProjections +
+            // SeerrPreferencesStore (datastoreCommonModule), and the narrow
+            // MediaRepository (webDetailsPlatformModule below, over
+            // networkWasmModule's LibraryApiClient) — all resolve on web.
+            detailsModule,
+            webDetailsPlatformModule(),
         )
     }
 

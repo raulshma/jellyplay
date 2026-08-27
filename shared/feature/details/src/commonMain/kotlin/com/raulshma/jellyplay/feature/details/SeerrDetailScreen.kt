@@ -120,8 +120,6 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
-import java.text.NumberFormat
-import java.util.Locale
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowRight
 import com.composables.icons.tabler.outline.Building
@@ -1541,7 +1539,7 @@ private fun EpisodeRow(
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                text = String.format("%.1f", rating),
+                                text = formatRatingOneDecimal(rating),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1813,7 +1811,7 @@ private fun RatingsRow(ratings: SeerrRatings?) {
                     }
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = String.format(Locale.US, "%.1f", imdbScore),
+                        text = formatRatingOneDecimal(imdbScore),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -1935,8 +1933,6 @@ private fun MediaInformationSection(
     discoverRegion: String = "US",
     seerrServerUrl: String = "",
 ) {
-    val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.US) }
-
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
             text = stringResource(Res.string.detail_seerr_information),
@@ -1961,16 +1957,16 @@ private fun MediaInformationSection(
 
             if (movie != null) {
                 movie.revenue?.takeIf { it > 0 }?.let {
-                    MediaInfoRow(stringResource(Res.string.detail_seerr_revenue), currencyFormatter.format(it), Tabler.Outline.Cash)
+                    MediaInfoRow(stringResource(Res.string.detail_seerr_revenue), formatUsCurrency(it), Tabler.Outline.Cash)
                 }
                 movie.budget?.takeIf { it > 0 }?.let {
-                    MediaInfoRow(stringResource(Res.string.detail_seerr_budget), currencyFormatter.format(it), Tabler.Outline.Wallet)
+                    MediaInfoRow(stringResource(Res.string.detail_seerr_budget), formatUsCurrency(it), Tabler.Outline.Wallet)
                 }
             }
 
             val language = movie?.originalLanguage ?: tv?.originalLanguage
             if (language != null) {
-                MediaInfoRow(stringResource(Res.string.detail_seerr_language), Locale(language).displayLanguage, Tabler.Outline.Language)
+                MediaInfoRow(stringResource(Res.string.detail_seerr_language), languageDisplayName(language) ?: language, Tabler.Outline.Language)
             }
 
             val productionCountries = movie?.productionCountries ?: emptyList()
@@ -2169,4 +2165,37 @@ private fun MediaInfoRow(
             )
         }
     }
+}
+
+// ── Wave 16C formatting seams (java.text purification) ───────────────────────
+// java.text.NumberFormat/String.format have no wasmJs variant; these integer-
+// math helpers replicate the Locale.US output shapes the two replaced call
+// sites produced. Same body as core:ui's wasmJs formatOneDecimal actual (wave
+// 11), which is `internal` to that module — hence the private copies here.
+
+/**
+ * "%.1f" formatting contract (the two former `String.format("%.1f", …)` /
+ * `String.format(Locale.US, "%.1f", …)` sites): HALF_UP rounding at the first
+ * decimal, decimal point always rendered, sign applied symmetrically so a
+ * stray negative matches "%.1f"'s away-from-zero output. Ties inside
+ * binary-representation noise can differ by one ulp from the JVM Formatter —
+ * invisible at rating precision.
+ */
+private fun formatRatingOneDecimal(value: Float): String {
+    val magnitude = kotlin.math.round(kotlin.math.abs(value) * 10).toLong()
+    val rendered = "${magnitude / 10}.${magnitude % 10}"
+    return if (value < 0) "-$rendered" else rendered
+}
+
+/**
+ * `NumberFormat.getCurrencyInstance(Locale.US)` output shape for whole-dollar
+ * Longs ("$8.99" family: "$" prefix — "-" before the "$" for negatives —
+ * comma-grouped thousands, exactly two decimals). Seerr budget/revenue are
+ * whole dollar amounts, so the cents are always "00", exactly as
+ * NumberFormat.format(Long) rendered them.
+ */
+private fun formatUsCurrency(amount: Long): String {
+    val digits = if (amount < 0) amount.toString().removePrefix("-") else amount.toString()
+    val grouped = digits.reversed().chunked(3).joinToString(",").reversed()
+    return (if (amount < 0) "-$" else "$") + grouped + ".00"
 }

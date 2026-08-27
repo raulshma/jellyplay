@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.web
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -19,6 +20,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -36,6 +39,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalWebBackDispatcher
 import com.raulshma.jellyplay.core.ui.components.WebBackDispatcher
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.feature.details.SeerrDetailScreen
 import com.raulshma.jellyplay.feature.requests.RequestsScreen
 import kotlinx.browser.window
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -257,7 +261,15 @@ fun WebAppRoot(
                 WebStatusPane(onBack = ::requestPop)
             }
             entry<WebDiag> { _ ->
-                WebDiagnosticsPane(onBack = ::requestPop)
+                WebDiagnosticsPane(
+                    onBack = ::requestPop,
+                    // Wave 16C E2E surface: pushes the SeerrDetail screen for a
+                    // FIXED demo key (tmdb 550, "movie") so the headless lane
+                    // can drive the real shared screen without a Seerr server
+                    // (the requests list is empty in the fixture — nothing is
+                    // clickable there). See WebDiagnosticsPane's button KDoc.
+                    onOpenSeerrDetailDemo = { addEntry(Route.SeerrDetail(550, "movie")) },
+                )
             }
             entry<Route.Requests> { _ ->
                 // Wave 15C: the FIRST shared feature screen on web. The shell
@@ -268,28 +280,61 @@ fun WebAppRoot(
                 // `internal` to that module (invisible from apps/web), which
                 // structurally keeps ONE provisioning truth at the shell.
                 //
-                // SEERRDETAIL CUT (documented at the only site that could
-                // navigate there): onNavigateToDetail would push
-                // Route.SeerrDetail — the Seerr media detail screen, part of
-                // feature/detail, which has NO wasmJs target yet. The web
-                // callback is therefore a NO-OP stub; no snackbar either (the
-                // shell has no Scaffold/snackbar host, and window.alert is
-                // banned — same rule as WebConnectFlow). Reachability of the
-                // stub: it fires only from RequestDetailBottomSheet's
-                // open-detail action, which needs a populated request list —
-                // impossible in the browser fixture (no Seerr), so v1 never
-                // exercises it. When detail gains the web target, this stub
-                // becomes addEntry(Route.SeerrDetail(...)).
+                // Wave 16C: the SEERRDETAIL CUT STUB IS GONE —
+                // onNavigateToDetail now pushes the real shared route, exactly
+                // like requests' RequestsNavigation does on android/desktop
+                // (`navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))`).
+                // mediaType arrives verbatim from the Seerr wire model
+                // ("movie"/"tv"; RequestDetailBottomSheet forwards
+                // request.type) and SeerrDetailScreen compares
+                // case-insensitively, so the pass-through needs no mapping.
+                // Reachability in the fixture: only from a populated request
+                // list — impossible without a Seerr server — so the lane
+                // exercises the screen through the gated diagnostics demo
+                // button instead (see entry<WebDiag> above).
                 //
                 // onBack rides the SAME guarded pop path as every other pane
                 // (requestPop: root-refusing list trim + history.back()).
                 RequestsScreen(
                     onBack = ::requestPop,
-                    onNavigateToDetail = { _, _ ->
-                        // No-op — SeerrDetail has no wasm target (see the cut
-                        // note above); nothing navigates.
+                    onNavigateToDetail = { tmdbId, mediaType ->
+                        addEntry(Route.SeerrDetail(tmdbId, mediaType))
                     },
                 )
+            }
+            entry<Route.SeerrDetail> { key ->
+                // Wave 16C: the SECOND shared feature screen on web. Same bare
+                // composition + shell-provided owners as the requests entry.
+                //
+                // - onBack rides the guarded pop path (requestPop).
+                // - onNavigate is a NO-OP STUB by platform rule: the screen's
+                //   cross-links target Route.MediaDetail (and friends), and
+                //   the MediaDetail cluster has NO wasmJs target — it is
+                //   jvmShared/off-web this wave (Room-blocked; see
+                //   shared/feature/details/build.gradle.kts). Nothing on web
+                //   can render it, so the callback deliberately does nothing
+                //   rather than pushing an unroutable key. (No snackbar — the
+                //   shell has no Scaffold host; window.alert is banned.)
+                // - The shell wraps the screen in a Back row because the
+                //   screen's own back affordance lives inside the loaded
+                //   content; in the honest "Seerr not configured" error state
+                //   (the only reachable one in the fixture) only ErrorScreen's
+                //   Retry exists.
+                // - LocalUriHandler is provisioned HERE (shell-owned platform
+                //   locals, same pattern as LocalNetworkStatus below): the
+                //   screen reads it for trailer embed-failure fallbacks, and
+                //   the ComposeViewport root provisions no UriHandler.
+                WebShellBackScaffold(onBack = ::requestPop) {
+                    SeerrDetailScreen(
+                        tmdbId = key.tmdbId,
+                        mediaType = key.mediaType,
+                        onBack = ::requestPop,
+                        onNavigate = { _ ->
+                            // MediaDetail cluster is off-web (no wasmJs
+                            // target) — documented dead-click, see above.
+                        },
+                    )
+                }
             }
         }
     }
@@ -311,6 +356,42 @@ fun WebAppRoot(
 /** Read the current browser-reported connectivity at call time. */
 private fun currentBrowserNetworkStatus(): NetworkStatus =
     if (window.navigator.onLine) NetworkStatus.Online else NetworkStatus.Offline
+
+/**
+ * Shell-owned chrome for shared feature screens whose own back affordance can
+ * disappear with their content state (SeerrDetail's lives inside the loaded
+ * body; in the honest "Seerr not configured" error state only ErrorScreen's
+ * Retry remains). The explicit Back routes through the guarded pop path.
+ *
+ * Also provisions [LocalUriHandler] with the browser implementation: the
+ * ComposeViewport root provisions none, and the shared screen reads it
+ * unconditionally (trailer embed-failure fallback → openUri). Shell-owned
+ * platform locals are the same pattern as LocalNetworkStatus below; desktop's
+ * Window does the equivalent provisioning internally.
+ */
+@Composable
+private fun WebShellBackScaffold(onBack: () -> Unit, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalUriHandler provides remember { WebShellUriHandler() }) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Button(
+                onClick = onBack,
+                modifier = Modifier.padding(start = 16.dp, top = 16.dp),
+            ) {
+                Text("Back")
+            }
+            Box(modifier = Modifier.fillMaxSize()) {
+                content()
+            }
+        }
+    }
+}
+
+/** Browser [UriHandler]: new tab (trailer links are external YouTube URLs). */
+private class WebShellUriHandler : UriHandler {
+    override fun openUri(uri: String) {
+        window.open(uri, "_blank")
+    }
+}
 
 /**
  * MutableStateFlow-backed [LocalNetworkStatus] provider seeded from
