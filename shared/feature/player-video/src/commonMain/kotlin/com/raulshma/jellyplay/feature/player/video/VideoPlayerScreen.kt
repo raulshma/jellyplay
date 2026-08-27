@@ -1045,60 +1045,76 @@ fun VideoPlayerScreen(
                     }
                 },
         ) {
+            // Effective zoom = pinch zoom × TV baseline zoom. Computed once
+            // so the video graphicsLayer and the zoom-gated subtitle logic
+            // share the exact same value (no drift). > 1 means the video is
+            // scaled/cropped, which is when subtitles would move off-screen.
+            val tvBaselineZoom = if (isTv && uiState.videoFx.tvZoomModePercent != 0f) {
+                1f + (uiState.videoFx.tvZoomModePercent / 100f)
+            } else 1f
+            // Suppress zoom while in PiP: the pinch-zoomed crop has no meaning in
+            // the floating window, and restoring on exit is automatic since the
+            // underlying videoZoom state is untouched.
+            val effectiveZoom = if (isInPipMode) 1f else videoZoom * tvBaselineZoom
+            val zoomed = effectiveZoom > 1f
+
+            // Platform surface seam (wave 9A): Android hosts the engine's
+            // SurfaceView (or the empty fallback view for non-View-surface
+            // engines — the V2a degrade); desktop hosts the SwingPanel/HWND
+            // child window mpv embeds into. Zoom transform + PiP bounds
+            // tracking stay with the platform actuals.
+            //
+            // Wave 14B: composed UNCONDITIONALLY — `engine` is null while the
+            // session is still creating one, and the desktop actual mounts its
+            // SwingPanel host exactly then: mpv's `wid` captures the embed
+            // target at engine construction, so the surface must exist BEFORE
+            // the engine factory's bounded wait for its HWND. Inside the old
+            // `engine != null` guard the surface and the engine waited on each
+            // other (surface composed only once an engine existed; the factory
+            // created an engine only once a surface published) and every
+            // desktop session fell through to the software-render surface.
+            // Per-engine behavior is preserved inside the actuals: Android
+            // renders nothing while null (what the former guard did) and keys
+            // its view per engine instance; desktop keeps ONE Canvas across
+            // the null → engine transition — the remembered embed target must
+            // never be swapped under a playing engine.
+            EngineVideoSurface(
+                engine = engine,
+                effectiveZoom = effectiveZoom,
+                onSurfaceCreated = { surface ->
+                    lastAppliedSubtitleStyle = uiState.subtitleStyle
+                    viewModel.applySubtitleStyle()
+                    playerViewRef = surface
+                },
+                onSurfaceUpdate = {
+                    val currentStyle = uiState.subtitleStyle
+                    // Only call applySubtitleStyle for visual style
+                    // changes (font/color/margins). Delay changes are
+                    // applied live via the engine config path
+                    // (setSpuDelay), not through the style-reload path.
+                    val lastStyle = lastAppliedSubtitleStyle
+                    if (lastStyle == null || styleChangedExcludingDelay(lastStyle, currentStyle)) {
+                        lastAppliedSubtitleStyle = currentStyle
+                        viewModel.applySubtitleStyle()
+                    } else if (lastStyle != currentStyle) {
+                        // Delay-only change: update the snapshot but
+                        // don't trigger the style reload path.
+                        lastAppliedSubtitleStyle = currentStyle
+                    }
+                },
+                onBoundsChanged = { left, top, right, bottom ->
+                    // Stop tracking once in PiP (the system renders the
+                    // window then) — the PiP source-rect hint is only
+                    // needed for the pre-PiP layout.
+                    if (!isInPipMode) {
+                        viewModel.updatePipSourceRect(left, top, right, bottom)
+                    }
+                },
+            )
+
             val currentEngine = engine
             if (currentEngine != null) {
-                // Effective zoom = pinch zoom × TV baseline zoom. Computed once
-                // so the video graphicsLayer and the zoom-gated subtitle logic
-                // share the exact same value (no drift). > 1 means the video is
-                // scaled/cropped, which is when subtitles would move off-screen.
-                val tvBaselineZoom = if (isTv && uiState.videoFx.tvZoomModePercent != 0f) {
-                    1f + (uiState.videoFx.tvZoomModePercent / 100f)
-                } else 1f
-                // Suppress zoom while in PiP: the pinch-zoomed crop has no meaning in
-                // the floating window, and restoring on exit is automatic since the
-                // underlying videoZoom state is untouched.
-                val effectiveZoom = if (isInPipMode) 1f else videoZoom * tvBaselineZoom
-                val zoomed = effectiveZoom > 1f
                 key(currentEngine) {
-                    // Platform surface seam (wave 9A): Android hosts the engine's
-                    // SurfaceView (or the empty fallback view for non-View-surface
-                    // engines — the V2a degrade); desktop hosts the SwingPanel/HWND
-                    // child window mpv embeds into. Zoom transform + PiP bounds
-                    // tracking stay with the platform actuals.
-                    EngineVideoSurface(
-                        engine = currentEngine,
-                        effectiveZoom = effectiveZoom,
-                        onSurfaceCreated = { surface ->
-                            lastAppliedSubtitleStyle = uiState.subtitleStyle
-                            viewModel.applySubtitleStyle()
-                            playerViewRef = surface
-                        },
-                        onSurfaceUpdate = {
-                            val currentStyle = uiState.subtitleStyle
-                            // Only call applySubtitleStyle for visual style
-                            // changes (font/color/margins). Delay changes are
-                            // applied live via the engine config path
-                            // (setSpuDelay), not through the style-reload path.
-                            val lastStyle = lastAppliedSubtitleStyle
-                            if (lastStyle == null || styleChangedExcludingDelay(lastStyle, currentStyle)) {
-                                lastAppliedSubtitleStyle = currentStyle
-                                viewModel.applySubtitleStyle()
-                            } else if (lastStyle != currentStyle) {
-                                // Delay-only change: update the snapshot but
-                                // don't trigger the style reload path.
-                                lastAppliedSubtitleStyle = currentStyle
-                            }
-                        },
-                        onBoundsChanged = { left, top, right, bottom ->
-                            // Stop tracking once in PiP (the system renders the
-                            // window then) — the PiP source-rect hint is only
-                            // needed for the pre-PiP layout.
-                            if (!isInPipMode) {
-                                viewModel.updatePipSourceRect(left, top, right, bottom)
-                            }
-                        },
-                    )
-
                     // Audio-only: keep the surface mounted (playback
                     // uninterrupted) but cover it with a black panel + label.
                     if (uiState.audioOnly) {

@@ -52,19 +52,22 @@ import javax.swing.JPanel
  */
 @Composable
 internal actual fun EngineVideoSurface(
-    engine: MediaEngine,
+    engine: MediaEngine?,
     effectiveZoom: Float,
     onSurfaceCreated: (Any?) -> Unit,
     onSurfaceUpdate: () -> Unit,
     onBoundsChanged: (Int, Int, Int, Int) -> Unit,
 ) {
-    // Wave 12B: engines whose video output is CPU frame buffers (mpv render-API
-    // software backend) host through the Compose Canvas pane instead — no child
+    // Wave 12B dispatch: engines whose video output is CPU frame buffers (mpv
+    // render-API software backend) host through the Compose Canvas pane instead — no child
     // window. Selected ONLY when the sw surface actually smoke-passed on this
     // machine's libmpv; every other engine keeps the exact SwingPanel/HWND
     // path below, byte-for-byte.
     val softwareSurface = engine as? SoftwareFrameVideoSurface
-    if (softwareSurface != null && DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported) {
+    if (engine != null &&
+        softwareSurface != null &&
+        DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported
+    ) {
         DesktopSoftwareVideoPane(
             surface = softwareSurface,
             playingFlow = engine.isPlaying,
@@ -79,8 +82,20 @@ internal actual fun EngineVideoSurface(
         )
         return
     }
+    // SwingPanel/HWND host. Wave 14B: this composes BEFORE the engine exists
+    // (engine == null) — mpv's `wid` is ctor-time, so the child window must be
+    // realized while DesktopMpvPlayerEngineFactory waits for the handle; see
+    // the commonMain seam KDoc for the full null-engine contract. The call
+    // site is unconditional, so this remember slot holds the SAME Canvas
+    // across the null → wid-engine transition: swapping the canvas after the
+    // engine embedded into its HWND would destroy the embed target under a
+    // playing session.
     val surface = remember {
         val canvas = Canvas()
+        // The video area is expected black; the pre-engine mount below makes
+        // this canvas visible BEFORE any engine exists, so keep the default
+        // system control color from flashing through.
+        canvas.background = Color.BLACK
         val handleProvider: () -> Long? = {
             // The Canvas must be displayable (added to the realized window)
             // before it has a native peer; until then there is no HWND.

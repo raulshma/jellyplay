@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -365,38 +366,48 @@ internal actual fun PlatformCastButton(castManager: Any?) {
 
 @Composable
 internal actual fun EngineVideoSurface(
-    engine: MediaEngine,
+    engine: MediaEngine?,
     effectiveZoom: Float,
     onSurfaceCreated: (Any?) -> Unit,
     onSurfaceUpdate: () -> Unit,
     onBoundsChanged: (Int, Int, Int, Int) -> Unit,
 ) {
-    AndroidView(
-        factory = { ctx ->
-            val view = (engine as? AndroidSurfaceProvider)?.createSurfaceView(ctx)
-                // Non-View-surface engine (desktop-style, impossible on Android
-                // today): empty surface, audio-only playback continues.
-                ?: android.view.View(ctx)
-            onSurfaceCreated(view)
-            view
-        },
-        update = { _ ->
-            onSurfaceUpdate()
-        },
-        modifier = Modifier
-            .fillMaxSize()
-            .graphicsLayer {
-                scaleX = effectiveZoom
-                scaleY = effectiveZoom
-            }
-            // Track the surface's window bounds so the Activity can
-            // supply a source-rect hint for a seamless PiP enter
-            // animation (the screen gates the PiP-mode case).
-            .onGloballyPositioned { coords ->
-                val r = coords.boundsInWindow()
-                onBoundsChanged(r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt())
+    // Wave 14B: the commonMain call site composes this seam unconditionally
+    // (engine may still be null — the desktop SwingPanel host must mount
+    // before the engine exists; see PlatformVideoSurfaceSeam). Android renders
+    // nothing while null, exactly what the former screen-side
+    // `engine != null` guard did, and keeps the per-engine view lifetime the
+    // old screen-side key(currentEngine) provided: a fresh surface view per
+    // engine instance, released with it.
+    val currentEngine = engine ?: return
+    key(currentEngine) {
+        AndroidView(
+            factory = { ctx ->
+                val view = (currentEngine as? AndroidSurfaceProvider)?.createSurfaceView(ctx)
+                    // Non-View-surface engine (desktop-style, impossible on Android
+                    // today): empty surface, audio-only playback continues.
+                    ?: android.view.View(ctx)
+                onSurfaceCreated(view)
+                view
             },
-    )
+            update = { _ ->
+                onSurfaceUpdate()
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = effectiveZoom
+                    scaleY = effectiveZoom
+                }
+                // Track the surface's window bounds so the Activity can
+                // supply a source-rect hint for a seamless PiP enter
+                // animation (the screen gates the PiP-mode case).
+                .onGloballyPositioned { coords ->
+                    val r = coords.boundsInWindow()
+                    onBoundsChanged(r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt())
+                },
+        )
+    }
 }
 
 @Composable

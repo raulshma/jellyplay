@@ -19,10 +19,25 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
  * (`wid` is ctor-time, so the child window must exist before the engine).
  * Engines that cannot embed degrade to an empty surface, audio keeps playing
  * — the same degrade the Android fallback view expresses.
+ *
+ * @param engine the live session engine, or null while the session is still
+ *   creating one. The null case is the wave-14B pre-engine surface mount: mpv
+ *   captures the embed target HWND at engine-construction time, so the desktop
+ *   SwingPanel must be realized BEFORE the engine factory's bounded wait for
+ *   the handle — with the old screen-side `engine != null` guard the two
+ *   waited on each other (the surface only composed once an engine existed,
+ *   and the factory only created an engine once a surface published) and
+ *   every session fell through to the software-render surface. The Android
+ *   actual renders nothing while null — exactly what the former guard did.
+ *   Desktop keeps the same remembered Canvas across the null → engine
+ *   transition (the seam call site is unconditional, so positional
+ *   memoization holds the instance), which is load-bearing: mpv embeds into
+ *   THAT canvas's HWND, and swapping the canvas after engine creation would
+ *   destroy the embed target under a playing session.
  */
 @Composable
 internal expect fun EngineVideoSurface(
-    engine: MediaEngine,
+    engine: MediaEngine?,
     effectiveZoom: Float,
     /** Invoked with the platform surface (Android View / AWT component) once created. */
     onSurfaceCreated: (surface: Any?) -> Unit,
