@@ -1,7 +1,10 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
 import com.raulshma.jellyplay.core.model.RefreshRateMode
+import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 
 /**
  * Host-window seam for the commonMain [VideoPlayerScreen] (wave 9A): every
@@ -144,3 +147,56 @@ internal expect fun rememberIsPortraitOrientation(): Boolean
  */
 @Composable
 internal expect fun rememberIs24HourFormat(): Boolean
+
+/**
+ * Whether the non-TV hardware-keyboard layer grabs focus onto its player Box
+ * whenever it composes, not only on the controls-hidden edge (the screen's
+ * at-HEAD focus-request condition, [VideoPlayerScreen]'s focus-request
+ * effect). Static platform fact — no remember needed.
+ *
+ * Desktop (wave 14A) is TRUE. The desktop shell takes no Compose focus of its
+ * own while the player is up: Route.VideoPlayer is isFullScreen so the nav
+ * rail is removed from composition, the sign-in pane was replaced when the
+ * session started, and PlayerControls' own focus grab is TV-only — but the
+ * controls START visible (`showControls = true`), so the at-HEAD "request when
+ * `!showControls`" condition left the player Box unfocused until the first
+ * controls auto-hide (default `controlsTimeoutMs` is 5 s), or indefinitely
+ * while a sheet/seek/overflow-menu suppressed the auto-hide. With no focused
+ * node, Compose dispatches key events through the chain from the root down to
+ * the TOPMOST key-input node only ([androidx.compose.ui.focus.FocusOwnerImpl]
+ * `dispatchKeyEvent` null-focus fallback) — on desktop that topmost node is
+ * DesktopNavScaffold's `onPreviewKeyEvent` Row, so ESC still popped the route
+ * while SPACE/arrows never reached the player's `onKeyEvent` (the wave 13B
+ * session-harness focus finding this seam's desktop grab fixes).
+ *
+ * Android is FALSE: the phone keyboard layer keeps the exact at-HEAD timing
+ * (focus requested on the `showControls → false` edge only), so Android
+ * behavior is byte-identical.
+ */
+internal expect fun grabsKeyboardFocusWithControlsVisible(): Boolean
+
+/**
+ * The desktop keyboard-focus grab: whenever [layerComposed] flips true (the
+ * hardware-keyboard layer entered composition — screen entry, or a sheet
+ * closing and the layer re-composing), grabs focus onto [focusRequester] with
+ * the codebase's retry idiom ([RequestOrRestoreFocus]: the requester's node
+ * may not be laid out on the first frame, so retry across a frame, up to 3
+ * attempts). Composes nothing on platforms whose
+ * [grabsKeyboardFocusWithControlsVisible] is false (Android: the at-HEAD
+ * showControls→false-edge request in the screen is the whole story there).
+ */
+@Composable
+internal fun PlayerKeyboardFocusGrabEffect(
+    focusRequester: FocusRequester,
+    layerComposed: Boolean,
+) {
+    if (!grabsKeyboardFocusWithControlsVisible()) return
+    LaunchedEffect(layerComposed) {
+        if (layerComposed) {
+            for (attempt in 1..3) {
+                androidx.compose.runtime.withFrameNanos { }
+                if (focusRequester.tryRequestFocus("keyboard_player")) break
+            }
+        }
+    }
+}

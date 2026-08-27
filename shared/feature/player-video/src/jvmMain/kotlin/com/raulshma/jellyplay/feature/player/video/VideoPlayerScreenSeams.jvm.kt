@@ -43,6 +43,14 @@ internal actual fun rememberStreamVolumeAdjuster(): (up: Boolean) -> Unit =
 @Composable
 internal actual fun rememberHasHardwareKeyboard(): Boolean = true
 
+/**
+ * Desktop grabs keyboard focus onto the player Box as soon as the
+ * hardware-keyboard layer composes (wave 14A; see the commonMain expect for
+ * the full dispatch-chain rationale — nothing else on the desktop shell holds
+ * Compose focus while the fullscreen player is up, so the layer must own it).
+ */
+internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = true
+
 /** Resizable desktop player window — treated as the landscape-style layout. */
 @Composable
 internal actual fun rememberIsPortraitOrientation(): Boolean = false

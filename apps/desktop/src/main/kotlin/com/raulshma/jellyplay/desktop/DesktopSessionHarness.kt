@@ -43,23 +43,26 @@ import kotlinx.coroutines.delay
  *     reached isPlaying with a playhead advance ≥ 1 s within 90 s.
  *  4. Screenshots (java.awt.Robot over the window bounds) at signed-in home,
  *     player-open, mid-play and controls-overlay.
- *  5. ESC_SEQUENCE — the wave-9 open question "Esc-dismiss-vs-sheet popup
- *     ordering on desktop": VideoPlayerScreen has NO keyboard-reachable
- *     bottom sheet (its non-TV handler covers space/arrows/F/M/J/L/Esc only;
- *     every PlayerSheet opens through pointer clicks), and its sheets render
- *     IN-WINDOW (PlayerModalBottomSheet/InWindowPlayerSheet — not a separate
- *     dialog window), so key ordering is decided by DesktopNavScaffold's
- *     onPreviewKeyEvent. The run verifies the ordering empirically through
- *     the one keyboard-reachable overlay: SPACE (pause + show controls, the
- *     playhead freeze proves the key reached the player), then a single ESC
- *     — the verified ordering on this platform is that the scaffold's back
- *     handling wins (the route pops; the screen's own Esc branch would only
- *     hide the controls). ESC_SEQUENCE is a REGRESSION GATE on that ordering:
- *     a not-popping run records the finding (it would answer wave-9's
- *     question the other way) and FAILS the step, so the tool goes red
- *     rather than silently re-baselining. (If SPACE itself never reaches
- *     the player's key handler, that is recorded as a focus finding — the
- *     ESC result stands on its own either way.)
+ *  5. OVERLAY_SPACE — the wave-9 open question "Esc-dismiss-vs-sheet popup
+ *     ordering on desktop", probed through the one keyboard-reachable overlay:
+ *     VideoPlayerScreen has NO keyboard-reachable bottom sheet (its non-TV
+ *     handler covers space/arrows/F/M/J/L/Esc only; every PlayerSheet opens
+ *     through pointer clicks), and its sheets render IN-WINDOW
+ *     (PlayerModalBottomSheet/InWindowPlayerSheet — not a separate dialog
+ *     window), so key ordering is decided by DesktopNavScaffold's
+ *     onPreviewKeyEvent. SPACE must toggle play/pause (wave 14A made this a
+ *     REGRESSION GATE, ESC_SEQUENCE-style: the step captures the isPlaying
+ *     flip + playhead freeze from the [EngineActivityRecorder] samples into
+ *     the report and FAILS when playback does not toggle — before wave 14A
+ *     the player Box held no focus while the controls were visible, so SPACE
+ *     died at the scaffold's null-focus fallback chain and this exact gate
+ *     was the wave-13B focus finding). Then a single ESC — the verified
+ *     ordering on this platform is that the scaffold's back handling wins
+ *     (the route pops; the screen's own Esc branch would only hide the
+ *     controls). ESC_SEQUENCE is a REGRESSION GATE on that ordering: a
+ *     not-popping run records the finding (it would answer wave-9's question
+ *     the other way) and FAILS the step, so the tool goes red rather than
+ *     silently re-baselining.
  *  6. Report — `<logs>/session-harness.json` (steps, pass/fail, machine
  *     facts incl. the surface branch the factory used), then exitProcess(0).
  *
@@ -247,6 +250,11 @@ object DesktopSessionHarness {
 
             // Wave-9 question: no keyboard-reachable sheet exists (see KDoc);
             // the SPACE-reachable controls overlay is the ordering probe.
+            // Wave 14A: the SPACE leg became a REGRESSION GATE (fail when
+            // playback does not toggle) — pre-fix runs recorded it as a
+            // "focus finding" because the player Box held no focus while the
+            // controls were visible, and the key died at the scaffold's
+            // null-focus fallback chain.
             step("SHEET_TRIGGER_SCAN") {
                 mapOf(
                     "keyboardReachableSheet" to "none",
@@ -260,17 +268,35 @@ object DesktopSessionHarness {
 
             var spaceReachedPlayer = false
             val overlayOk = !fatalStop && step("OVERLAY_SPACE") {
+                // Pre-condition: the engine must have sampled as PLAYING
+                // before the key lands, so a flip is attributable to SPACE.
+                deps.engineRecorder.latestVideoEngine().positionSamples.any { it.isPlaying } ||
+                    fail("no playing sample recorded before SPACE — playback liveness unproven")
                 val spaceAtMs = System.currentTimeMillis()
                 injectKey(KeyEvent.VK_SPACE) || fail("SPACE injection failed (Robot)")
-                delay(900)
+                val toggled = awaitUntil(SPACE_TOGGLE_TIMEOUT_MS) {
+                    deps.engineRecorder.latestVideoEngine().pausedSince(spaceAtMs)
+                }
+                spaceReachedPlayer = toggled
+                delay(900) // let the controls overlay settle, as before the screenshot
                 screenshot("player-controls-overlay")
                 val advance = deps.engineRecorder.latestVideoEngine().advanceSinceMs(spaceAtMs)
-                spaceReachedPlayer = advance <= 300
-                mapOf(
-                    "spaceReachedPlayer" to spaceReachedPlayer.toString(),
+                val details = mapOf(
+                    "spaceReachedPlayer" to toggled.toString(),
                     "playheadAdvanceSinceSpaceMs" to advance.toString(),
-                    "note" to "SPACE pauses + shows controls when the player key handler gets it",
+                    "note" to "SPACE pauses + shows controls when the player key handler gets it " +
+                        "(wave 14A regression gate: a run whose playback does not toggle FAILS)",
                 )
+                if (!toggled) {
+                    fail(
+                        "SPACE did not toggle playback within ${SPACE_TOGGLE_TIMEOUT_MS / 1000}s " +
+                            "of injection (playheadAdvanceSinceSpaceMs=$advance) — the key never " +
+                            "reached VideoPlayerScreen's key handler (focus gap regression)",
+                        details,
+                    )
+                } else {
+                    details
+                }
             }
 
             step("ESC_SEQUENCE") {
@@ -486,6 +512,14 @@ object DesktopSessionHarness {
 
     private const val DEFAULT_AUTO_EXIT_SECONDS = 120
     private const val REPORT_FILE_NAME = "session-harness.json"
+
+    /**
+     * How long OVERLAY_SPACE waits for the sampled isPlaying flip after
+     * injecting SPACE. The recorder samples on a ~500 ms cadence, so a real
+     * toggle clears within ~1 s; 8 s leaves margin for a busy UI thread
+     * without eating into the auto-exit deadline.
+     */
+    private const val SPACE_TOGGLE_TIMEOUT_MS = 8_000L
 }
 
 /** One recorded harness step. */

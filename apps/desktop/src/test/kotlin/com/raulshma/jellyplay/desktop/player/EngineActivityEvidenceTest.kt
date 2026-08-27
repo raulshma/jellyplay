@@ -85,6 +85,66 @@ class EngineActivityEvidenceTest {
         assertEquals(0L, snapshot.advanceSinceMs(2_500L))
     }
 
+    // ── wave 14A SPACE-toggle gate classification (pausedSince) ─────────────
+
+    @Test
+    fun `pausedSince flips true once a post-key sample reads paused after playing`() {
+        val snapshot = sample(
+            playing = true,
+            samples = listOf(
+                Triple(0L, 0L, true),
+                Triple(500L, 600L, true),
+                Triple(1_000L, 1_200L, true),
+            ),
+        )
+        // Playing samples only — not yet paused.
+        assertFalse(snapshot.pausedSince(800L))
+
+        // A post-injection paused sample lands (recorder cadence ~500 ms).
+        val paused = snapshot.copy(
+            positionSamples = snapshot.positionSamples +
+                EngineActivitySnapshot.PositionSample(1_500L, 1_200L, false),
+        )
+        assertTrue(paused.pausedSince(800L))
+    }
+
+    @Test
+    fun `pausedSince tolerates a pre-key playing sample straddling the injection instant`() {
+        // The key lands at 1_000; the recorder's last playing sample (1_050)
+        // is AFTER the cutoff but BEFORE the key took effect — the LATEST
+        // post-cutoff sample is what decides.
+        val straddled = sample(
+            playing = true,
+            samples = listOf(
+                Triple(0L, 0L, true),
+                Triple(1_050L, 900L, true), // straddles spaceAtMs=1_000
+                Triple(1_400L, 900L, false),
+                Triple(1_900L, 900L, false),
+            ),
+        )
+        assertTrue(straddled.pausedSince(1_000L))
+    }
+
+    @Test
+    fun `pausedSince is false without a playing sample or without post-key samples`() {
+        // Never played (gate precondition would fail first, but stay honest).
+        val neverPlayed = sample(
+            playing = false,
+            samples = listOf(Triple(0L, 0L, false), Triple(500L, 0L, false)),
+        )
+        assertFalse(neverPlayed.pausedSince(100L))
+
+        // Played, but every sample predates the key.
+        val played = sample(
+            playing = true,
+            samples = listOf(Triple(0L, 0L, true), Triple(500L, 600L, true)),
+        )
+        assertFalse(played.pausedSince(400L))
+
+        // Empty samples: no evidence either way.
+        assertFalse(sample().pausedSince(0L))
+    }
+
     @Test
     fun `playbackVerified requires playing AND the minimum advance`() {
         val advancing = sample(
