@@ -81,6 +81,7 @@ import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector
 import com.raulshma.jellyplay.core.data.streaming.BandwidthMonitor
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
@@ -279,9 +280,16 @@ val dataJvmModule: Module = module {
 
     single { HomeSession(get(), get(DatastoreQualifiers.applicationScope)) }
 
+    // Wave 15B: the identity seam the promoted commonMain graph consumes
+    // (SeerrRepositoryImpl's cache keys + SessionCacheRegistry's transition
+    // subscription). Binds the SAME HomeSession singleton — android/desktop
+    // behavior unchanged; wasmJs binds the AtomicSessionState-backed provider
+    // in dataWasmModule instead.
+    single<SessionIdentityProvider> { get<HomeSession>() }
+
     single {
         SessionCacheRegistry(
-            homeSession = get(),
+            sessionIdentity = get(),
             scope = get(DatastoreQualifiers.applicationScope),
         )
     }
@@ -587,7 +595,7 @@ val dataJvmModule: Module = module {
             tmdbApiClient = get(),
             seerrPreferencesStore = get(),
             secureCredentialsStore = get(),
-            homeSession = get(),
+            sessionIdentity = get(),
             sessionCacheRegistry = get(),
             cacheScope = get(DatastoreQualifiers.applicationScope),
         )

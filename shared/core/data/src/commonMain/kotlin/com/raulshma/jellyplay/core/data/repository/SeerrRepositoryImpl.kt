@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
@@ -27,10 +27,12 @@ class SeerrRepositoryImpl(
     private val secureCredentialsStore: SeerrSecureCredentialsStore,
     /**
      * Identity source for the detail cache's composite keys (see
-     * [HomeSession.cacheIdentity]): a bare-String key previously let the
-     * previous Jellyfin user's Seerr view survive a switch for the full TTL.
+     * [SessionIdentityProvider.cacheIdentity]): a bare-String key previously
+     * let the previous Jellyfin user's Seerr view survive a switch for the
+     * full TTL. jvmShared DI binds [HomeSession]; wasmJs binds the
+     * AtomicSessionState-backed provider.
      */
-    private val homeSession: HomeSession,
+    private val sessionIdentity: SessionIdentityProvider,
     /** Registers the detail cache for wholesale clears on identity change. */
     private val sessionCacheRegistry: SessionCacheRegistry,
     /**
@@ -41,9 +43,13 @@ class SeerrRepositoryImpl(
     private val cacheScope: CoroutineScope,
 ) : SeerrRepository {
 
-    @Volatile
+    // Both fields carried @Volatile on the pre-15B JVM sources; the annotation
+    // has no wasmJs actual, so promotion drops it. Staleness here is benign:
+    // the hash check only short-circuits an idempotent re-read/recompute of
+    // the same credentials (worst case one extra DataStore + secure-store
+    // read), and coroutine hand-offs between threads already provide
+    // happens-before edges through their dispatcher queues.
     private var cachedCredentials: SeerrCredentials? = null
-    @Volatile
     private var lastCredsHash: Int = 0
 
     private val _currentUser = MutableStateFlow<SeerrCurrentUser?>(null)
@@ -64,11 +70,11 @@ class SeerrRepositoryImpl(
     }
 
     private suspend fun <T> getCached(key: String): T? {
-        return detailCache.get(homeSession.cacheIdentity(), key) as? T
+        return detailCache.get(sessionIdentity.cacheIdentity(), key) as? T
     }
 
     private suspend fun putCached(key: String, value: Any) {
-        detailCache.put(homeSession.cacheIdentity(), key, value)
+        detailCache.put(sessionIdentity.cacheIdentity(), key, value)
     }
 
     private suspend fun getCredentials(): SeerrCredentials? {

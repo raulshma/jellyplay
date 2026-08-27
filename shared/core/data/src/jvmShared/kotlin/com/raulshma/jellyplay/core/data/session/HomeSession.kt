@@ -13,42 +13,10 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * The fully established `(serverId, userId)` an identity consumer should key
- * against. One half being absent is represented by a null identity (see
- * [HomeSession]), not by a partial value.
- */
-data class SessionIdentity(val serverId: String, val userId: String)
-
-/**
- * A single observed identity change, classified by [HomeSession] from the
- * transition between two consecutive stable identities.
- *
- * [previousIdentity] is `null` only on [SignedIn] (there was no previous
- * identity). [SignedOut] carries the identity that was cleared — consumers
- * like `MediaRepositoryImpl`'s SWR privacy clear need it after the session
- * flow has already moved to `null`.
- */
-sealed interface HomeSessionTransition {
-    /** The identity in effect before this transition; `null` on [SignedIn]. */
-    val previousIdentity: SessionIdentity?
-
-    /** An identity was established where none was before (login / restore). */
-    data object SignedIn : HomeSessionTransition {
-        override val previousIdentity: SessionIdentity? get() = null
-    }
-
-    /** A different user on the SAME server became active. */
-    data class UserSwitched(override val previousIdentity: SessionIdentity) : HomeSessionTransition
-
-    /** A different server (and therefore user) became active. */
-    data class ServerSwitched(override val previousIdentity: SessionIdentity) : HomeSessionTransition
-
-    /** The identity was cleared (logout / disconnect). */
-    data class SignedOut(override val previousIdentity: SessionIdentity?) : HomeSessionTransition
-}
-
-/**
- * The single owner of "the active identity changed" for the app.
+ * The single owner of "the active identity changed" for the app, and the
+ * jvmShared [SessionIdentityProvider] implementation (wave 15B: the seam's
+ * classifier types moved to commonMain so commonMain subscribers can read
+ * them; this classifier stays JVM-bound — see the interface KDoc).
  *
  * Historically THREE independent detectors each maintained their own
  * last-identity mirror by combining `apiClient.currentServer` +
@@ -96,7 +64,7 @@ sealed interface HomeSessionTransition {
 class HomeSession(
     private val apiClient: JellyfinApiClient,
     collectorScope: CoroutineScope,
-) {
+) : SessionIdentityProvider {
 
     /**
      * The last classified identity — `null` before the first sign-in and
@@ -125,7 +93,7 @@ class HomeSession(
      * (fresh install, signed out) has nothing to replay and needs the
      * one-shot identity reads instead.
      */
-    val transitions: SharedFlow<HomeSessionTransition> = _transitions.asSharedFlow()
+    override val transitions: SharedFlow<HomeSessionTransition> = _transitions.asSharedFlow()
 
     init {
         collectorScope.launch {
@@ -155,7 +123,7 @@ class HomeSession(
      * where a caller's collector fires before this class's collector has
      * written the mirror. Returns `null` when no identity is established.
      */
-    suspend fun currentIdentity(): SessionIdentity? =
+    override suspend fun currentIdentity(): SessionIdentity? =
         apiClient.session.first()?.let { SessionIdentity(it.server.id, it.user.id) }
 
     /**
@@ -163,7 +131,7 @@ class HomeSession(
      * keying from non-suspend contexts; prefer [currentIdentity] whenever the
      * caller can suspend.
      */
-    fun currentIdentitySnapshot(): SessionIdentity? = lastStableIdentity.get()
+    override fun currentIdentitySnapshot(): SessionIdentity? = lastStableIdentity.get()
 
     /**
      * [currentIdentity] mapped to the [CacheIdentity] key the identity-keyed
@@ -175,7 +143,7 @@ class HomeSession(
      * cached under that key can leak across users, since no real identity
      * ever collides with it.
      */
-    suspend fun cacheIdentity(): CacheIdentity {
+    override suspend fun cacheIdentity(): CacheIdentity {
         val identity = currentIdentity() ?: return CacheIdentity.UNKNOWN
         return CacheIdentity.ofOrNull(identity.serverId, identity.userId)
     }
@@ -186,7 +154,7 @@ class HomeSession(
      * there: identity switches clear the caches wholesale via [transitions]
      * regardless of which identity an entry was keyed under.
      */
-    fun cacheIdentitySnapshot(): CacheIdentity {
+    override fun cacheIdentitySnapshot(): CacheIdentity {
         val identity = currentIdentitySnapshot() ?: return CacheIdentity.UNKNOWN
         return CacheIdentity.ofOrNull(identity.serverId, identity.userId)
     }

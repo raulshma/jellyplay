@@ -59,6 +59,16 @@ pagingCompose = "3.5.0"
 workManager = "2.11.2"
 kotlinxSerialization = "1.11.0"
 kotlinxCoroutines = "1.11.0"
+# kotlinx-datetime 0.8.0 is the newest release line and is ABI-safe for this
+# repo's Kotlin 2.3.21 pin: its Gradle module metadata (fetched 2026-08-27,
+# wave 15B) declares kotlin-stdlib 2.1.20 on the metadataApiElements variant —
+# i.e. the klibs were produced by the Kotlin 2.1.20 compiler, which our 2.3.21
+# klib loader reads (a 2.4-built klib would be silently skipped — the coil
+# 3.4.0/mikepenz precedent). The wasm klib artifact
+# (org.jetbrains.kotlinx:kotlinx-datetime-wasm-js:0.8.0.klib) exists on Maven
+# Central. Its transitive kotlinx-serialization-core 1.6.2 want upgrades to the
+# repo-wide 1.11.0 pin — no new serialization version enters the graph.
+kotlinxDatetime = "0.8.0"
 # Browser DOM bindings for the wasmJs target (Kotlin/Wasm interop).
 kotlinxBrowser = "0.5.0"
 palette = "1.0.0"
@@ -244,6 +254,7 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-swing = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-swing", version.ref = "kotlinxCoroutines" }
+kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinxDatetime" }
 kotlinx-browser = { group = "org.jetbrains.kotlinx", name = "kotlinx-browser", version.ref = "kotlinxBrowser" }
 
 # Testing

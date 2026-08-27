@@ -15,7 +15,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 import kotlinx.coroutines.flow.Flow
-import java.time.LocalDate
+import kotlinx.datetime.LocalDate
 
 /**
  * Aggregates Radarr + Sonarr into a single read + management surface for the
@@ -38,6 +38,14 @@ import java.time.LocalDate
  * [refreshCalendar] / [refreshBlocklist]); there is no background singleton
  * poller, mirroring the `SeerrRepository.startPolling` doc rationale — the
  * flag is opt-in and battery-sensitive.
+ *
+ * Wave 15B: promoted from jvmShared to commonMain, so the calendar window
+ * takes `kotlinx.datetime.LocalDate` (the JVM `java.time.LocalDate` in these
+ * signatures was the one JVM leak). JVM callers convert at the boundary with
+ * kotlinx-datetime's `toKotlinLocalDate()`; the string forms (`yyyy-MM-dd`,
+ * both API query params and [windowKey] equivalents) are byte-identical to
+ * the old `ISO_LOCAL_DATE` formatting because `LocalDate.toString()` emits
+ * the same ISO-8601 shape.
  *
  * Every read method is safe to call when the flag is disabled: queue/calendar
  * flows simply emit empty lists, and [resolveServers] returns an empty

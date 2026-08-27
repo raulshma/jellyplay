@@ -9,8 +9,9 @@ import kotlinx.coroutines.launch
 /**
  * The single home for identity reactions in `core:data`.
  *
- * [HomeSession] classifies the engine's atomic session flow into
- * [HomeSessionTransition]s; this registry is the ONE subscriber that turns
+ * A [SessionIdentityProvider] (android/desktop: [HomeSession]; wasmJs: the
+ * AtomicSessionState-backed provider) classifies the engine's atomic session
+ * flow into [HomeSessionTransition]s; this registry is the ONE subscriber that turns
  * those transitions into cache drops. Before it, every identity-aware
  * repository hand-rolled the same `init {}` collector on its own
  * `SupervisorJob()` scope (`MediaRepositoryImpl`, `EpisodeCatalogueImpl`) —
@@ -49,31 +50,32 @@ import kotlinx.coroutines.launch
  * repositories must not hand-roll their own long-lived scopes for this job.
  */
 class SessionCacheRegistry(
-    homeSession: HomeSession,
+    sessionIdentity: SessionIdentityProvider,
     private val scope: CoroutineScope,
 ) {
 
-    // LinkedHashMap, not ConcurrentHashMap: reactions run in REGISTRATION
+    // LinkedHashMap, not a concurrent map: reactions run in REGISTRATION
     // order, which hash-bucket iteration would not give. Access is
-    // synchronized on the map; the collector copies under the lock and runs
+    // synchronized on the map ([guardUnderLock]; a pass-through on
+    // single-threaded wasmJs); the collector copies under the lock and runs
     // outside it because actions suspend.
     private val registeredCaches = LinkedHashMap<String, List<TtlCache<*>>>()
     private val registeredActions = LinkedHashMap<String, suspend (HomeSessionTransition) -> Unit>()
 
     init {
         scope.launch {
-            homeSession.transitions.collect { transition ->
+            sessionIdentity.transitions.collect { transition ->
                 if (transition is HomeSessionTransition.SignedIn) return@collect
                 // Caches first, then actions: an action like Media's
                 // persisted-SWR clear observes the same post-drop world the
                 // plain cache owners do.
-                val cachesToClear = synchronized(registeredCaches) { registeredCaches.toList() }
+                val cachesToClear = guardUnderLock(registeredCaches) { registeredCaches.toList() }
                 cachesToClear.forEach { (owner, caches) ->
                     caches.forEach { cache ->
                         runOwnerSafely(owner) { cache.clear() }
                     }
                 }
-                val actionsToRun = synchronized(registeredActions) { registeredActions.toList() }
+                val actionsToRun = guardUnderLock(registeredActions) { registeredActions.toList() }
                 actionsToRun.forEach { (owner, action) ->
                     runOwnerSafely(owner) { action(transition) }
                 }
@@ -86,7 +88,7 @@ class SessionCacheRegistry(
      * transition. Replaces any previous registration under [owner].
      */
     fun registerCaches(owner: String, vararg caches: TtlCache<*>) {
-        synchronized(registeredCaches) { registeredCaches[owner] = caches.toList() }
+        guardUnderLock(registeredCaches) { registeredCaches[owner] = caches.toList() }
     }
 
     /**
@@ -96,7 +98,7 @@ class SessionCacheRegistry(
      * cannot stack duplicate reactions.
      */
     fun registerAction(owner: String, action: suspend (HomeSessionTransition) -> Unit) {
-        synchronized(registeredActions) { registeredActions[owner] = action }
+        guardUnderLock(registeredActions) { registeredActions[owner] = action }
     }
 
     /**
