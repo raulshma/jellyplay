@@ -35,8 +35,11 @@ import org.koin.dsl.module
  * - [AudioQueueFacade] is the shared [DefaultAudioQueueFacade] over the
  *   desktop queue manager — every play/enqueue/instant-mix button in the
  *   music section is real.
- * - [AudioEffectsManager] / [AudioPlayerCast] are the honest-degradation
- *   desktop impls (state-only effects, never-connected cast).
+ * - [AudioEffectsManager] is the desktop [DesktopAudioEffectsManager] (full
+ *   state machine + mpv `af` DSP via the queue manager's engine); the
+ *   concrete instance is wired into the queue manager so effect mutations
+ *   reach the engine live. [AudioPlayerCast] is the never-connected desktop
+ *   cast seam.
  * - Per-item stream resolution rides [DesktopAudioSourceResolver] — the same
  *   shared `PlaybackRepository.getStreamUrl` overload + adaptive bitrate tier
  *   the Android audio browser uses, with auth in the `api_key` URL parameter
@@ -77,12 +80,14 @@ val desktopPlayerModule: Module = module {
             lyricsManager = get(),
             sleepTimerManager = get(),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+            effectsManager = get(),
             engineFactory = { MpvDesktopEngine(extraOptions = mapOf("vo" to "null")) },
         )
     }
     single<AudioQueueManager> { get<DesktopAudioQueueManager>() }
     single<AudioPlayerEngine> { get<DesktopAudioQueueManager>() }
-    single<AudioEffectsManager> { DesktopAudioEffectsManager() }
+    single { DesktopAudioEffectsManager() }
+    single<AudioEffectsManager> { get<DesktopAudioEffectsManager>() }
     single<AudioPlayerCast> { DesktopAudioPlayerCast() }
 
     single<AudioQueueFacade> {

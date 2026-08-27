@@ -7,6 +7,10 @@ import com.raulshma.jellyplay.core.data.playback.QueueUndoEvent
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.database.entity.AudioQueueEntity
 import com.raulshma.jellyplay.core.database.entity.AudioQueueStateEntity
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ChannelMixMode
+import com.raulshma.jellyplay.core.model.EqualizerPreset
+import com.raulshma.jellyplay.core.model.EqualizerSettings
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -60,6 +64,7 @@ class DesktopAudioQueueManagerTest {
         val repo = FakePlaybackRepository()
         val dao = InMemoryQueueDao()
         val undoEvents = CopyOnWriteEventLog()
+        val effects = DesktopAudioEffectsManager()
 
         private val dispatcher = UnconfinedTestDispatcher()
         private val scheduler = dispatcher.scheduler
@@ -78,6 +83,7 @@ class DesktopAudioQueueManagerTest {
             engineFactory = { FakeMediaEngine().also { engines += it } },
             mainThreadGuard = false,
             progressReportIntervalMs = 40L,
+            effectsManager = effects,
         ).also { manager ->
             scope.launch {
                 manager.undoEvents.collect { event -> undoEvents += event }
@@ -731,6 +737,124 @@ class DesktopAudioQueueManagerTest {
 
         h.tick(300) // next poll cycle echoes the engine's authoritative value
         assertEquals(0L, h.manager.currentPosition.value, "poll reconciles to the engine state after the clamp")
+    }
+
+    // ── effects wiring (wave 14C): state → engine af config ──────────────
+
+    @Test
+    fun engineCreationPushesInitialEffectsSnapshotAndMutationsRepush() {
+        val h = newHarness()
+        h.manager.playQueue(items("a"), startIndex = 0)
+        // Engine-create snapshot + the per-track ReplayGain context push that
+        // play() performs right after resolution (deterministic inline).
+        assertEquals(2, h.engine.appliedConfigs.size)
+        assertFalse(h.engine.appliedConfigs[0].audioEffects.equalizerEnabled)
+
+        h.effects.toggleEqualizer()
+
+        assertEquals(3, h.engine.appliedConfigs.size, "live mutation repushes the snapshot")
+        assertTrue(h.engine.appliedConfigs.last().audioEffects.equalizerEnabled)
+    }
+
+    @Test
+    fun replayGainContextFlowsThroughTheSnapshotWithAndroidAlbumShuffleRule() {
+        val h = newHarness()
+        h.effects.setReplayGainMode(AudioNormalizationMode.TRACK)
+        h.manager.playQueue(listOf(item("a").copy(normalizationGain = 2.5f)), startIndex = 0)
+        // TRACK: item gain + pre-amp (0) — AudioEffectsProcessor.applyReplayGain.
+        assertEquals(2.5f, h.engine.appliedConfigs.last().audioEffects.replayGainEffectiveDb)
+
+        // ALBUM + shuffled pins the gain at exactly 0.
+        h.manager.toggleShuffle() // single-row queue: flag flips, order untouched
+        h.effects.setReplayGainMode(AudioNormalizationMode.ALBUM)
+        assertEquals(0f, h.engine.appliedConfigs.last().audioEffects.replayGainEffectiveDb)
+    }
+
+    @Test
+    fun channelMixAndPitchStateReachTheEngineConfig() {
+        val h = newHarness()
+        h.manager.playQueue(items("a"), startIndex = 0)
+
+        h.effects.setChannelMix(ChannelMixMode.MONO, enabled = true)
+        h.effects.setPitchSemitones(2f)
+
+        val fx = h.engine.appliedConfigs.last().audioEffects
+        assertEquals(ChannelMixMode.MONO, fx.channelMixMode)
+        assertTrue(fx.channelMixEnabled)
+        assertEquals(2f, fx.pitchSemitones)
+    }
+
+    @Test
+    fun autoEqByGenreResolvesGenrePresetOntoTheEqualizerLikeAndroid() {
+        val h = newHarness()
+        h.effects.setAutoEqByGenre(true)
+        h.effects.applyAutoEqForGenre(listOf("Space Rock"))
+        assertEquals(EqualizerPreset.ROCK, h.effects.equalizerPreset.value)
+        assertEquals(
+            EqualizerSettings(EqualizerPreset.ROCK.bandLevels()),
+            h.effects.equalizerSettings.value,
+        )
+
+        // Flag off → the resolver is inert (Android verbatim).
+        h.effects.setAutoEqByGenre(false)
+        h.effects.resetEqualizer()
+        h.effects.applyAutoEqForGenre(listOf("Rock"))
+        assertEquals(EqualizerPreset.FLAT, h.effects.equalizerPreset.value)
+    }
+
+    // ── next-item prefetch (wave 14C: "pre-warm is next-item-only") ──────
+
+    @Test
+    fun prefetchResolvesTheNextItemBehindCurrentWithoutLoadingTheEngine() {
+        val h = newHarness()
+        h.manager.playQueue(items("a", "b", "c"), startIndex = 0)
+        val loadsBefore = h.engine.loadedRequests.size
+        val resolvesBefore = h.resolver.resolveCalls.size // just "a"
+
+        h.tick(2_100) // past the 2 s prefetch delay (virtual time)
+
+        assertEquals(
+            listOf("b" to 0L),
+            h.resolver.resolveCalls.drop(resolvesBefore),
+            "exactly the NEXT row resolved, at position zero",
+        )
+        assertEquals(loadsBefore, h.engine.loadedRequests.size, "prefetch never loads the engine")
+    }
+
+    @Test
+    fun advanceConsumesThePrefetchedTrackWithoutASecondResolve() {
+        val h = newHarness()
+        h.manager.playQueue(items("a", "b"), startIndex = 0)
+        h.tick(2_100) // b now cached
+        assertEquals(1, h.resolver.resolveCalls.count { it.first == "b" })
+
+        h.engine.simulateEnded() // auto-advance onto b
+
+        assertEquals("b", h.manager.currentPlayingItemId.value)
+        assertEquals(
+            1,
+            h.resolver.resolveCalls.count { it.first == "b" },
+            "the advance must consume the prefetch instead of resolving again",
+        )
+    }
+
+    @Test
+    fun queueMutationCancelsTheInFlightPrefetch() {
+        val h = newHarness()
+        h.manager.playQueue(items("a", "b", "c"), startIndex = 0)
+
+        h.manager.removeFromQueue(1) // remove b — the item about to be prefetched
+        h.tick(2_100)
+        assertEquals(
+            0,
+            h.resolver.resolveCalls.count { it.first == "b" },
+            "the mutation must cancel the scheduled prefetch (wasted-fetch degradation only)",
+        )
+
+        // Advance still lands correctly via the ordinary resolve path.
+        h.engine.simulateEnded()
+        assertEquals("c", h.manager.currentPlayingItemId.value)
+        assertEquals(1, h.resolver.resolveCalls.count { it.first == "c" })
     }
 
     // ── helpers ────────────────────────────────────────────────────────────

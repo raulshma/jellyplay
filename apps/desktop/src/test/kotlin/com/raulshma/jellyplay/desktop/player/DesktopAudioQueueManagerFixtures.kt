@@ -224,6 +224,7 @@ internal fun resolvedTrack(
     itemId: String,
     uri: String = "https://stream.example/$itemId",
     resumePositionTicks: Long? = null,
+    normalizationGain: Float? = null,
 ) = ResolvedAudioTrack(
     itemId = itemId,
     uri = uri,
@@ -234,6 +235,6 @@ internal fun resolvedTrack(
     album = "Album $itemId",
     mediaSourceId = "ms-$itemId",
     durationMs = 180_000L,
-    normalizationGain = null,
+    normalizationGain = normalizationGain,
     resumePositionTicks = resumePositionTicks,
 )

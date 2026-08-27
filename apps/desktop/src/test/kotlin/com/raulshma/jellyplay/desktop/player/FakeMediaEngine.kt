@@ -121,7 +121,11 @@ internal class FakeMediaEngine : MediaEngine {
 
     override val audioSessionId: Int = 0
     override val capabilities: EngineCapabilities = EngineCapabilities()
-    override fun updateConfig(config: EngineConfig) {}
+    /** Every [updateConfig] push, in order — effects-application assertions read this. */
+    val appliedConfigs = mutableListOf<EngineConfig>()
+    override fun updateConfig(config: EngineConfig) {
+        appliedConfigs += config
+    }
 
     override val availableTracks: StateFlow<List<MediaTrack>> = MutableStateFlow(emptyList())
     override fun applySubtitleStyle(style: SubtitleStyle) {}
