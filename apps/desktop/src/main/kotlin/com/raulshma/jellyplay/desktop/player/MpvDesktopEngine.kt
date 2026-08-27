@@ -84,8 +84,13 @@ import kotlinx.coroutines.launch
  * Deliberate V2 cuts (revisit when the player feature migrates in V3):
  * audio-effects/video-effects filter chains, ReplayGain normalization,
  * screenshot capture, live-cue history in [currentCues].
+ *
+ * Open (wave 12B) so [MpvSoftwareRenderEngine] can subclass it for the
+ * render-API software-render path with three small hooks ([liveMpvHandle],
+ * [onBeforeContextDestroy], [hwdecFor]) instead of duplicating the ~800-line
+ * contract implementation.
  */
-class MpvDesktopEngine(
+open class MpvDesktopEngine(
     /** Raw mpv options applied before mpv_initialize (e.g. vo/ao for tests). */
     extraOptions: Map<String, String> = emptyMap(),
     /**
@@ -295,6 +300,23 @@ class MpvDesktopEngine(
      */
     private fun aliveCtx(): Pointer? = if (released.get()) null else ctx
 
+    /**
+     * Engine-variant hook (wave 12B): the live mpv handle for subclasses that
+     * attach auxiliary contexts tied to it — [MpvSoftwareRenderEngine]'s
+     * render-API context is created on this handle at construction. Returns
+     * null post-[release] like [aliveCtx].
+     */
+    protected fun liveMpvHandle(): Pointer? = aliveCtx()
+
+    /**
+     * Engine-variant hook (wave 12B): emits into the engine's [errorFlow]
+     * during construction (e.g. sw render-context creation failure) —
+     * subclasses cannot touch the private backing flow directly.
+     */
+    protected fun tryEmitError(error: EngineError) {
+        _errorFlow.tryEmit(error)
+    }
+
     private fun handleEvent(event: MpvEvent) {
         when (event.event_id) {
             EVENT_START_FILE -> {
@@ -475,6 +497,7 @@ class MpvDesktopEngine(
             // (daemon thread + mpv handle) instead of crashing the process.
             return
         }
+        onBeforeContextDestroy()
         // Stop the stats poller and wait for in-flight native reads to finish
         // BEFORE destroying the context — engineScope reads are the other
         // use-after-destroy window besides the event thread.
@@ -491,6 +514,16 @@ class MpvDesktopEngine(
         _playbackState.value = EnginePlaybackState.IDLE
         _isPlaying.value = false
     }
+
+    /**
+     * Engine-variant hook (wave 12B): invoked exactly once during [release],
+     * after the event thread has drained/joined (or the leak path bailed) but
+     * BEFORE [MpvLib.mpv_terminate_destroy] — the last point where auxiliary
+     * native contexts tied to [ctx] can be torn down against a live core, as
+     * render.h L122-123 requires of mpv_render_context_free().
+     */
+    protected open fun onBeforeContextDestroy() {}
+
 
     // ── MediaEngine: transport control ──────────────────────────────────────
 
@@ -713,7 +746,8 @@ class MpvDesktopEngine(
         applySubtitleStyle(config.subtitleStyle)
     }
 
-    private fun hwdecFor(mode: DecoderMode): String = when (mode) {
+    /** Open for [MpvSoftwareRenderEngine], which must pin sw decode (no interop in the sw path). */
+    protected open fun hwdecFor(mode: DecoderMode): String = when (mode) {
         DecoderMode.SW_ONLY -> "no"
         else -> "auto-safe"   // HW_PREFERRED / HW_ONLY and any future variants
     }

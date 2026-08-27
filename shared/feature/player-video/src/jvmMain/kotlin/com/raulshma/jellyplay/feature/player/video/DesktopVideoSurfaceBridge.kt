@@ -21,6 +21,35 @@ object DesktopVideoSurfaceBridge {
     val isWindowsVideoSurfaceSupported: Boolean =
         System.getProperty("os.name", "").startsWith("Windows")
 
+    @Volatile
+    private var softwareSurfaceProbe: (() -> Boolean)? = null
+
+    /**
+     * Whether this JVM can drive the mpv render-API SOFTWARE surface
+     * (wave 12B): libmpv loads AND an offscreen "sw" render context smoke-pass.
+     * The app layer registers the prober (apps/desktop's
+     * MpvSoftwareSurfaceSupport — this module cannot see MpvLib); reads before
+     * registration (and probe failures) degrade to false, restoring the
+     * pre-12B dead-end behavior. Never throws: a throwing/crashing prober is
+     * treated as unsupported, so boot cannot be crashed through this path.
+     * Caching is the PROBER'S job (one native smoke test per process).
+     */
+    val isSoftwareVideoSurfaceSupported: Boolean
+        get() = try {
+            softwareSurfaceProbe?.invoke() ?: false
+        } catch (_: Throwable) {
+            false
+        }
+
+    /**
+     * Install/remove the software-surface prober. Idempotent overwrites are
+     * fine; call once during desktop app bootstrap ([DesktopAppRoot][com
+     * .raulshma.jellyplay.desktop.DesktopAppRoot] composition, wave 12B).
+     */
+    fun registerSoftwareSurfaceProbe(probe: (() -> Boolean)?) {
+        softwareSurfaceProbe = probe
+    }
+
     /** Register the provider for the composing video surface (composition factory). */
     fun register(provider: () -> Long?) {
         handleProvider = provider

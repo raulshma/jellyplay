@@ -19,6 +19,12 @@ import javax.swing.JPanel
  * Desktop actual of the engine video-surface seam (wave 9A): a SwingPanel
  * hosting a heavyweight [Canvas] whose HWND mpv embeds into via `wid`.
  *
+ * Wave 12B dispatch: engines implementing [SoftwareFrameVideoSurface] (mpv
+ * render-API software renderer) render through DesktopSoftwareVideoPane — a
+ * plain Compose Canvas — when the machine's sw support smoke-passed; see that
+ * pane for the pixel pipeline. The SwingPanel path below is unchanged and
+ * remains the primary host on Windows.
+ *
  * Sizing: SwingPanel lays its child out to the composable's bounds and the
  * Canvas fills the wrapping JPanel (BorderLayout/CENTER), so window resizes
  * reach the embedded child window through AWT layout.
@@ -52,6 +58,22 @@ internal actual fun EngineVideoSurface(
     onSurfaceUpdate: () -> Unit,
     onBoundsChanged: (Int, Int, Int, Int) -> Unit,
 ) {
+    // Wave 12B: engines whose video output is CPU frame buffers (mpv render-API
+    // software backend) host through the Compose Canvas pane instead — no child
+    // window. Selected ONLY when the sw surface actually smoke-passed on this
+    // machine's libmpv; every other engine keeps the exact SwingPanel/HWND
+    // path below, byte-for-byte.
+    val softwareSurface = engine as? SoftwareFrameVideoSurface
+    if (softwareSurface != null && DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported) {
+        DesktopSoftwareVideoPane(
+            surface = softwareSurface,
+            playingFlow = engine.isPlaying,
+            effectiveZoom = effectiveZoom,
+            onSurfaceCreated = onSurfaceCreated,
+            onSurfaceUpdate = onSurfaceUpdate,
+        )
+        return
+    }
     val surface = remember {
         val canvas = Canvas()
         val handleProvider: () -> Long? = {
