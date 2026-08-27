@@ -59,6 +59,13 @@ private data object WebLanding : NavKey
 
 private data object WebStatus : NavKey
 
+/**
+ * Wave 13C diagnostics level ([WebDiagnosticsPane]): gated E2E surface for
+ * the Coil artwork + HtmlVideoEngine browser passes. Same lifetime rules as
+ * [WebStatus] — memory-only, no deep link.
+ */
+private data object WebDiag : NavKey
+
 /** Location-hash prefix carrying the mirrored stack depth: "#wp=<index>". */
 private const val HISTORY_HASH_PREFIX = "#wp="
 
@@ -229,10 +236,14 @@ fun WebAppRoot(
                     controller = connectController,
                     networkStatus = currentNetworkStatus,
                     onOpenConnectionDetails = { addEntry(WebStatus) },
+                    onOpenDiagnostics = { addEntry(WebDiag) },
                 )
             }
             entry<WebStatus> { _ ->
                 WebStatusPane(onBack = ::requestPop)
+            }
+            entry<WebDiag> { _ ->
+                WebDiagnosticsPane(onBack = ::requestPop)
             }
         }
     }

@@ -1,0 +1,9 @@
+{
+  "name": "jellyplay-web-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Headless-Edge CDP driver for the apps/web verification lane (wave 13C). Node deps kept minimal: only the CDP websocket.",
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

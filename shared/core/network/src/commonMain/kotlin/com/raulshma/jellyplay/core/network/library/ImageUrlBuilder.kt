@@ -37,14 +37,42 @@ private val GUID_REGEX = Regex(
  * True when [value] parses as the dashed UUID form the SDK's
  * `String.toUUID()` accepts (`java.util.UUID.fromString` semantics: exactly
  * 8-4-4-4-12 hex digits). Callers mirror the JVM behavior of refusing to
- * build an image URL for a non-UUID id.
+ * build an image URL for a non-UUID id; the compact 32-hex form is handled
+ * by [normalizeItemIdGuid], not here.
  */
 fun isGuid(value: String): Boolean = GUID_REGEX.matches(value)
+
+private val COMPACT_GUID_REGEX = Regex("^[0-9a-fA-F]{32}$")
+
+/**
+ * Normalizes an item id into the dashed GUID form, accepting BOTH
+ * serializations Jellyfin emits: the dashed 8-4-4-4-12 form (what the JVM
+ * SDK's UUID-typed DTOs produce) and the bare 32-hex compact form (what
+ * Jellyfin 10.11's `/Items` responses carry — observed against the wave 13C
+ * harness server, whose ids arrive as e.g. `d27f3684c285863ac935d847f16548d1`;
+ * the server accepts either form on the image path, and the dashed URL this
+ * function emits for a compact id was decoded end-to-end by the wave 13C
+ * headless-browser lane — Coil fetched and rendered the artwork). Returns
+ * null for anything else, in which case callers refuse to build a URL.
+ */
+fun normalizeItemIdGuid(value: String): String? = when {
+    GUID_REGEX.matches(value) -> value
+    COMPACT_GUID_REGEX.matches(value) -> buildString {
+        append(value.substring(0, 8)); append('-')
+        append(value.substring(8, 12)); append('-')
+        append(value.substring(12, 16)); append('-')
+        append(value.substring(16, 20)); append('-')
+        append(value.substring(20, 32))
+    }
+    else -> null
+}
 
 /**
  * Builds `/Items/{itemId}/Images/{imageType}` under [baseUrl]. Returns ""
  * exactly where the JVM path returns "": no base URL, unknown image type, or
- * a non-UUID item id.
+ * an item id that is a GUID in neither serialization. Compact-form ids are
+ * normalized to dashed (see [normalizeItemIdGuid]) so the emitted URL is
+ * byte-identical to the JVM builder output for the same item.
  */
 fun buildItemImageUrl(
     baseUrl: String?,
@@ -57,10 +85,10 @@ fun buildItemImageUrl(
 ): String {
     if (baseUrl.isNullOrBlank()) return ""
     if (imageType !in KNOWN_IMAGE_TYPES) return ""
-    if (!isGuid(itemId)) return ""
+    val normalizedItemId = normalizeItemIdGuid(itemId) ?: return ""
     return buildString {
         append(baseUrl.trimEnd('/'))
-        append("/Items/").append(itemId).append("/Images/").append(imageType)
+        append("/Items/").append(normalizedItemId).append("/Images/").append(imageType)
         var separator = '?'
         fun param(key: String, value: Any?) {
             append(separator).append(key).append('=').append(value.toString())

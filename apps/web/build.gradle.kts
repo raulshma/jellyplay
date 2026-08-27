@@ -25,6 +25,13 @@ kotlin {
                 outputFileName = "webapp.js"
             }
         }
+        // Wave 13C: the main binary must be EXECUTABLE for webpack to produce
+        // the servable bundle (build/kotlin-webpack/wasmJs/
+        // developmentExecutable) the CDP verification lane
+        // (tools/e2e/web-verify.mjs) drives. Without this only the
+        // test-compilation executables exist and no
+        // wasmJsBrowserDevelopmentWebpack task is registered at all.
+        binaries.executable()
     }
 
     sourceSets {
