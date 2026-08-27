@@ -30,7 +30,7 @@
 
 One app for every screen: **phones, tablets, foldables, Android TV, and Amazon Fire TV**. Stream movies and shows, play music with synced lyrics, request content via **Jellyseerr/Overseerr**, manage your **Radarr/Sonarr** queues, download for offline, and run your server from a built-in **admin dashboard** — with three switchable video engines (**ExoPlayer, libmpv, LibVLC**), in-app **self-update** via GitHub Releases, no accounts, and no tracking.
 
-**Also growing beyond Android:** the codebase is now Kotlin Multiplatform — an early **Windows desktop** build (Compose Multiplatform + libmpv) runs browsing, search, details, home, settings, music with real audio playback, and in-player video today, and an experimental **web (wasm)** shell is underway. Player polish, and macOS/Linux (build-from-source, untested), are still landing — treat the desktop build as a preview, not a release.
+**Also growing beyond Android:** the codebase is now Kotlin Multiplatform — an early **Windows desktop** build (Compose Multiplatform + libmpv) runs browsing, search, details, home, settings, music with real audio playback, and in-player video today, and an experimental **web (wasm)** shell signs in, renders artwork, and plays video in-browser (verified against a live server). Player polish, and macOS/Linux (build-from-source, untested), are still landing — treat the desktop build as a preview, not a release.
 
 If you self-host Jellyfin and want a truly native, beautiful, capable client — or a **Plex/Kodi alternative** — give JellyPlay a try.
 
@@ -588,7 +588,7 @@ The codebase is mid-migration to Kotlin Multiplatform: features and core live in
 ```
 apps/
   desktop/                Windows desktop shell (Compose Multiplatform; libmpv engine via JNA) — preview
-  web/                    Experimental wasmJs browser shell (Coil images wired at compile level via coil-network-ktor3; real-render browser pass pending)
+  web/                    Experimental wasmJs browser shell (Coil artwork + HtmlVideoEngine verified in-browser against a live server, wave 13; feature screens still landing)
 app/                      Android application module (deep links, widgets, Cast, PiP host activity, shortcuts, TV)
 shared/
   core/
