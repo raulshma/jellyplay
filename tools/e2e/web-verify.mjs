@@ -521,7 +521,158 @@ async function main() {
     return path;
   });
 
-  // 16. Zero console errors.
+  // ── Wave 16B: Seerr credentials pane ───────────────────────────────────
+  // Self-contained block (pop Requests → open Seerr → fill → Save → honest
+  // test failure → localStorage persistence proof → screenshot). Placed
+  // AFTER the requests (and any calendar) steps, directly before the
+  // zero-console-errors gate, so sequential waves merge trivially.
+
+  // 16. Pop the requests pane and open the Seerr credentials pane from the
+  // landing connected card. The pop rides history.back() (Runtime.evaluate)
+  // — the BROWSER-INITIATED back path WebAppRoot.onPopState reconciles
+  // (downward trim to the hashed depth) — because RequestsScreen's scaffold
+  // back affordance is an icon-only CircleBgBackButton with no stable AX
+  // name, unlike the web panes' labelled "Back" buttons.
+  await step('open Seerr pane', async () => {
+    await cdp.send('Runtime.evaluate', { expression: 'history.back()' });
+    const seerrBtn = await waitForNode(cdp, 'Seerr button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Seerr', 15000);
+    await clickNode(cdp, seerrBtn, 'Seerr button');
+    try {
+      await waitForNode(cdp, 'Seerr pane title', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'Seerr settings', 15000);
+    } catch (e) {
+      throw new Error(`${e.message}; texts=${JSON.stringify(await snapshotTexts(cdp))}`);
+    }
+    return 'popped Requests (history.back), clicked landing Seerr button';
+  });
+
+  // 17. Both fields present. Same field lesson as the connect flow: Compose
+  // does not expose OutlinedTextField labels/placeholders in the AX tree, so
+  // the pane renders plain "Server URL"/"API Key" StaticText headers; the
+  // fields themselves are asserted by textbox ROLE (exactly two on this
+  // pane) and disambiguated by GEOMETRY — Server URL sits above API Key.
+  let seerrUrlField = null;
+  let seerApiKeyField = null;
+  await step('Seerr pane fields present', async () => {
+    try {
+      await waitForNode(cdp, '"Server URL" header', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'Server URL', 15000);
+      await waitForNode(cdp, '"API Key" header', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'API Key', 15000);
+      const deadline = Date.now() + 15000;
+      let tbs;
+      for (;;) {
+        tbs = (await axTree(cdp)).filter((n) => nodeRole(n).toLowerCase() === 'textbox');
+        if (tbs.length === 2) break;
+        if (Date.now() > deadline) throw new Error(`expected exactly 2 textboxes, got ${tbs.length}`);
+        await sleep(300);
+      }
+      const positioned = await Promise.all(
+        tbs.map(async (n) => ({ node: n, y: (await centerOf(cdp, n)).y })),
+      );
+      positioned.sort((a, b) => a.y - b.y);
+      seerrUrlField = positioned[0].node;
+      seerApiKeyField = positioned[1].node;
+    } catch (e) {
+      throw new Error(`${e.message}; texts=${JSON.stringify(await snapshotTexts(cdp))}`);
+    }
+    return 'Server URL + API Key headers and both textbox fields AX-visible';
+  });
+
+  // 18. Fill both fields (click + Input.insertText with the driver's
+  // key-event fallback) and verify content landed.
+  const SEERR_URL = 'http://localhost:5055';
+  const SEERR_API_KEY = 'e2e-seerr-api-key-0123456789abcdef';
+  await step('fill Seerr credentials', async () => {
+    const howUrl = await typeIntoField(cdp, seerrUrlField, 'Seerr Server URL field', SEERR_URL);
+    const howKey = await typeIntoField(cdp, seerApiKeyField, 'Seerr API Key field', SEERR_API_KEY);
+    // Re-read fresh nodes by backendDOMNodeId (ghost textbox lesson): the
+    // pane's Save/Test buttons gate on nothing, so VALUE CONTAINMENT here is
+    // the authoritative typing check.
+    const fresh = (await axTree(cdp)).filter((n) => nodeRole(n).toLowerCase() === 'textbox');
+    const u = fresh.find((n) => n.backendDOMNodeId === seerrUrlField.backendDOMNodeId);
+    const k = fresh.find((n) => n.backendDOMNodeId === seerApiKeyField.backendDOMNodeId);
+    if (!u || !k) throw new Error('Seerr field nodes vanished after typing');
+    if (nodeValue(u) !== SEERR_URL) throw new Error(`Seerr server URL is "${nodeValue(u)}"`);
+    if (nodeValue(k) !== SEERR_API_KEY) throw new Error(`Seerr API key is "${nodeValue(k)}"`);
+    return `url via ${howUrl}, key via ${howKey}`;
+  });
+
+  // 19. Save → the pane confirms with a "Saved" status line.
+  await step('Save → "Saved"', async () => {
+    try {
+      const save = await waitForNode(cdp, 'Save button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Save', 10000);
+      await clickNode(cdp, save, 'Save button');
+      await waitForNode(cdp, '"Saved" status line', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'Saved', 15000);
+    } catch (e) {
+      throw new Error(`${e.message}; texts=${JSON.stringify(await snapshotTexts(cdp))}`);
+    }
+    return 'Save clicked; "Saved" confirmation rendered';
+  });
+
+  // 20. Test connection with NO Seerr server in the fixture: the honest
+  // assertion is an ERROR status line (never "Connected"). The write happens
+  // before the call (persist-then-test, mirroring SeerrSettingsViewModel),
+  // so by the time this step ends the credentials are persisted regardless
+  // of the fetch outcome.
+  await step('Test connection fails honestly (no Seerr server)', async () => {
+    try {
+      const test = await waitForNode(cdp, 'Test connection button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Test connection', 10000);
+      await clickNode(cdp, test, 'Test connection button');
+      // Fetch to the dead host + RetryPolicy backoff (retryable transport
+      // failures retry 3x, ~1+2+4s) — 90s deadline is generous.
+      await waitForNode(cdp, '"Test failed:" status line', (n) => nodeRole(n) === 'StaticText' && nodeName(n).startsWith('Test failed:'), 90000);
+      const stillNoConnected = (await axTree(cdp)).every(
+        (n) => !(nodeRole(n) === 'StaticText' && nodeName(n).startsWith('Connected')),
+      );
+      if (!stillNoConnected) throw new Error('"Connected" line rendered without a Seerr server');
+    } catch (e) {
+      throw new Error(`${e.message}; texts=${JSON.stringify(await snapshotTexts(cdp))}`);
+    }
+    return 'error status line rendered; no "Connected" claim (honest failure)';
+  });
+
+  // 21. PERSISTENCE PROOF (wave 16B's whole point): the save survived to
+  // REAL localStorage. Exact keys (see LocalStorageSecureKeyValueStorage +
+  // WebDatastoreModule): the secure store under
+  // `jellyplay/secure/seerr/api_key` (Base64-of-UTF8 — asserted to DECODE to
+  // the typed key), and the Seerr preferences DataStore under
+  // `jellyplay/datastore/seerr_prefs.preferences_pb`.
+  await step('localStorage persistence proof', async () => {
+    const SEERR_SECURE_KEY = 'jellyplay/secure/seerr/api_key';
+    const SEERR_PREFS_KEY = 'jellyplay/datastore/seerr_prefs.preferences_pb';
+    const readExpr = `(function () {
+      return JSON.stringify({
+        secure: window.localStorage.getItem('${SEERR_SECURE_KEY}'),
+        prefs: window.localStorage.getItem('${SEERR_PREFS_KEY}'),
+        seerrKeys: Object.keys(window.localStorage).filter((k) => k.indexOf('seerr') !== -1),
+      });
+    })()`;
+    let snapshot = null;
+    const deadline = Date.now() + 20000;
+    while (Date.now() < deadline) {
+      const { result } = await cdp.send('Runtime.evaluate', { expression: readExpr, returnByValue: true });
+      snapshot = JSON.parse(result.value);
+      if (snapshot.secure && snapshot.prefs) break;
+      // Save is fire-and-forget on a controller scope; give the writes a beat.
+      await sleep(500);
+    }
+    if (!snapshot.secure) throw new Error(`${SEERR_SECURE_KEY} missing from localStorage (keys: ${JSON.stringify(snapshot.seerrKeys)})`);
+    if (!snapshot.prefs) throw new Error(`${SEERR_PREFS_KEY} missing from localStorage (keys: ${JSON.stringify(snapshot.seerrKeys)})`);
+    const decoded = Buffer.from(snapshot.secure, 'base64').toString('utf8');
+    if (decoded !== SEERR_API_KEY) throw new Error(`stored api_key decodes to "${decoded}", expected "${SEERR_API_KEY}"`);
+    return `secure=${SEERR_SECURE_KEY} (Base64→"${decoded}"), prefs=${SEERR_PREFS_KEY} present`;
+  });
+
+  // 22. Screenshot evidence for the Seerr pane.
+  await step('seerr screenshot', async () => {
+    await sleep(500);
+    const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    const path = join(OUT_DIR, 'seerr.png');
+    writeFileSync(path, Buffer.from(data, 'base64'));
+    return path;
+  });
+
+  // ── End wave 16B block ─────────────────────────────────────────────────
+
+  // 23. Zero console errors.
   await step('zero console errors', async () => {
     if (consoleErrors.length > 0) throw new Error(`console errors: ${JSON.stringify(consoleErrors.slice(0, 5))}`);
     if (exceptions.length > 0) throw new Error(`uncaught exceptions: ${JSON.stringify(exceptions.slice(0, 5))}`);
@@ -564,6 +715,11 @@ try {
     outDir: OUT_DIR,
     screenshot: join(OUT_DIR, 'diagnostics.png'),
     requestsScreenshot: join(OUT_DIR, 'requests.png'),
+    seerrScreenshot: join(OUT_DIR, 'seerr.png'),
+    seerrPersistenceKeys: {
+      secureApiKey: 'jellyplay/secure/seerr/api_key',
+      preferencesDataStore: 'jellyplay/datastore/seerr_prefs.preferences_pb',
+    },
   };
   const jsonPath = join(OUT_DIR, 'result.json');
   writeFileSync(jsonPath, JSON.stringify(result, null, 2));

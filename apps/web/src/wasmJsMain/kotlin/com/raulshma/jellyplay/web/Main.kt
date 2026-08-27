@@ -8,6 +8,9 @@ import coil3.compose.setSingletonImageLoaderFactory
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.crossfade
 import com.raulshma.jellyplay.core.data.di.dataWasmModule
+import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
+import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
 import com.raulshma.jellyplay.core.datastore.di.webDatastoreModule
@@ -55,19 +58,28 @@ import org.koin.core.context.startKoin
  *
  * SEERR-ON-WEB HONESTY (the wiring-site place a reader hits it): the
  * requests feature talks to a separate Overseerr/Jellyseerr server whose
- * credentials come from SeerrSecureCredentialsStore — on web that store is
- * [com.raulshma.jellyplay.core.datastore.WasmSecureKeyValueStorage],
- * SESSION-MEMORY ONLY (empty every boot; no UI to enter credentials exists
- * in the web shell this wave). And of the two Seerr auth methods, the
- * session-cookie one is BROWSER-IMPOSSIBLE by platform rule: a browser tab
- * cannot set the `Cookie` request header (forbidden header) nor read
- * `Set-Cookie` responses, so the cookie-based Seerr login the Android/desktop
- * apps perform can never function here — only the API-key credential mode
- * can work, and only once a settings/credentials UI lands (see
- * networkWasmModule's ArrSeerrApiSupport note for the same limitation at the
- * client layer). NET RESULT: until then the requests screen on web shows
- * its honest not-configured error state ("Seerr not configured" + Retry)
- * — the state the E2E lane asserts as v1 truth.
+ * credentials come from SeerrSecureCredentialsStore. Wave 16B closes the
+ * biggest honesty gap: a credentials UI now EXISTS ([WebSeerrPane] via
+ * WebAppRoot's `entry<WebSeerr>`, opened from the connected card's "Seerr"
+ * button), and the API key PERSISTS across reloads — webDatastoreModule
+ * binds SeerrSecureCredentialsStore to
+ * [com.raulshma.jellyplay.core.datastore.LocalStorageSecureKeyValueStorage]
+ * (localStorage, keys `jellyplay/secure/seerr/<key>`; XSS-readable by
+ * design-consequence, accepted for this config-tier secret — see that
+ * class's KDoc). And of the two Seerr auth methods, the session-cookie one
+ * is BROWSER-IMPOSSIBLE by platform rule: a browser tab cannot set the
+ * `Cookie` request header (forbidden header) nor read `Set-Cookie`
+ * responses, so the cookie-based Seerr login the Android/desktop apps
+ * perform can never function here — only the API-key credential mode can
+ * work, and the pane offers exactly that mode and nothing else. The OTHER
+ * credential stores (Jellyfin token, *arr keys, subtitle-provider
+ * credentials) remain SESSION-MEMORY ONLY
+ * ([com.raulshma.jellyplay.core.datastore.WasmSecureKeyValueStorage], empty
+ * every boot) — the wave-16B persistence carve-out covers Seerr alone.
+ * NET RESULT: until credentials are entered in the Seerr pane, the requests
+ * screen on web shows its honest not-configured error state ("Seerr not
+ * configured" + Retry); after a successful Save/Test they flip live with no
+ * restart (the repository re-reads the stores per call).
  */
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
@@ -143,6 +155,17 @@ fun main() {
                     sessionState = koinApp.koin.get(),
                     authApiClient = koinApp.koin.get(),
                     userPrefs = koinApp.koin.get(DatastoreQualifiers.userPreferencesDataStore),
+                    // Wave 16B: the WebSeerrController deps (same pattern as
+                    // userPrefs above — resolved here, passed down). All
+                    // three bindings are UNNAMED singles (DatastoreQualifiers
+                    // qualify only the raw DataStores):
+                    // datastoreCommonModule → SeerrPreferencesStore,
+                    // webDatastoreModule → SeerrSecureCredentialsStore
+                    // (localStorage-backed since wave 16B),
+                    // dataWasmModule → SeerrRepository.
+                    seerrPreferencesStore = koinApp.koin.get(),
+                    seerrSecureCredentialsStore = koinApp.koin.get(),
+                    seerrRepository = koinApp.koin.get(),
                 )
             }
         }

@@ -255,6 +255,9 @@ internal fun WebConnectFlow(
     // RequestsScreen). Optional like the other hooks so WebConnectFlow stays
     // renderable without a nav root behind it.
     onOpenRequests: (() -> Unit)? = null,
+    // Wave 16B: opens the Seerr credentials pane (WebSeerrPane) — the entry
+    // point that makes the requests feature usable on web (API-key creds).
+    onOpenSeerr: (() -> Unit)? = null,
 ) {
     // initial = null is honest on wasm v1: nothing restores a session at
     // boot (no persisted identity), so the flow genuinely starts empty. If a
@@ -270,6 +273,7 @@ internal fun WebConnectFlow(
             onOpenConnectionDetails = onOpenConnectionDetails,
             onOpenDiagnostics = onOpenDiagnostics,
             onOpenRequests = onOpenRequests,
+            onOpenSeerr = onOpenSeerr,
             modifier = modifier,
         )
     } else {
@@ -286,6 +290,7 @@ private fun ConnectedCard(
     onOpenConnectionDetails: (() -> Unit)?,
     onOpenDiagnostics: (() -> Unit)?,
     onOpenRequests: (() -> Unit)?,
+    onOpenSeerr: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     var loggingOut by remember { mutableStateOf(false) }
@@ -394,6 +399,14 @@ private fun ConnectedCard(
             if (onOpenRequests != null) {
                 Button(onClick = onOpenRequests) {
                     Text("Requests")
+                }
+            }
+            // Wave 16B: the Seerr credentials pane — the make-requests-work
+            // entry (server URL + API key, persist + test + disconnect).
+            // Primary Button like Requests (real feature), placed beside it.
+            if (onOpenSeerr != null) {
+                Button(onClick = onOpenSeerr) {
+                    Text("Seerr")
                 }
             }
             // Wave 13C E2E hook: gated entry into WebDiagnosticsPane. An
