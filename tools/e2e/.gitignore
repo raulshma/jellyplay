@@ -1,0 +1,10 @@
+# Runtime state rules for tools/e2e. All current tools keep their state in
+# the OS temp dir OUTSIDE the repo (extracted images, boot profiles, logs);
+# these patterns are defensive only — if a future tool must write beside the
+# scripts, its droppings should land here so they never reach a commit.
+*.log
+*.out
+*.err
+results/
+run-*/
+extract/
