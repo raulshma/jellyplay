@@ -181,7 +181,27 @@ internal expect fun grabsKeyboardFocusWithControlsVisible(): Boolean
  * closing and the layer re-composing), grabs focus onto [focusRequester] with
  * the codebase's retry idiom ([RequestOrRestoreFocus]: the requester's node
  * may not be laid out on the first frame, so retry across a frame, up to 3
- * attempts). Composes nothing on platforms whose
+ * attempts). Additionally (wave 14D): whenever [targetHoldsFocus] flips false
+ * while [layerComposed] is true — focus was taken AWAY from the grab target
+ * after a successful grab — the grab is re-asserted with the same retry
+ * idiom. The real desktop window needs this: the live session pass proved the
+ * initial grab succeeds (attempt=1 ok=true, +68 ms) yet Compose focus is
+ * dropped again ~1–2 s later when the wave-14B mpv SwingPanel/HWND surface
+ * mounts (the AWT focus owner shuffles off the SkiaLayer and the player Box
+ * reports hasFocus=false), and nothing ever re-grabbed — the auto-hide edge
+ * re-request is a single un-retried attempt and the controls auto-hide had
+ * already suppressed itself, so SPACE at the ~11 s injection found no Compose
+ * focused node and died at the scaffold's null-focus fallback (wave 14A's
+ * live-pass OVERLAY_SPACE failure; its desktop UI test passed because the
+ * miniature topology has no surface mount to steal focus).
+ *
+ * The re-assert watches [targetHoldsFocus] = the target's **hasFocus** (not
+ * isFocused), so a controls button INSIDE the player Box that took focus via
+ * a pointer click keeps it — the re-assert only fires when nothing in the
+ * player subtree holds focus at all. It is edge-triggered and gives up after
+ * 3 failed frames, so a detached target cannot loop it.
+ *
+ * Composes nothing on platforms whose
  * [grabsKeyboardFocusWithControlsVisible] is false (Android: the at-HEAD
  * showControls→false-edge request in the screen is the whole story there).
  */
@@ -189,14 +209,51 @@ internal expect fun grabsKeyboardFocusWithControlsVisible(): Boolean
 internal fun PlayerKeyboardFocusGrabEffect(
     focusRequester: FocusRequester,
     layerComposed: Boolean,
+    targetHoldsFocus: Boolean,
 ) {
     if (!grabsKeyboardFocusWithControlsVisible()) return
     LaunchedEffect(layerComposed) {
         if (layerComposed) {
+            val startMs = System.currentTimeMillis()
             for (attempt in 1..3) {
                 androidx.compose.runtime.withFrameNanos { }
-                if (focusRequester.tryRequestFocus("keyboard_player")) break
+                val ok = focusRequester.tryRequestFocus("keyboard_player")
+                harnessFocusDiag(
+                    "grab effect: attempt=$attempt ok=$ok t=+" +
+                        (System.currentTimeMillis() - startMs) + "ms layerComposed=true",
+                )
+                if (ok) break
+            }
+        } else {
+            harnessFocusDiag("grab effect: disarmed (layerComposed=false)")
+        }
+    }
+    if (layerComposed) {
+        LaunchedEffect(targetHoldsFocus) {
+            if (targetHoldsFocus) return@LaunchedEffect
+            val startMs = System.currentTimeMillis()
+            for (attempt in 1..3) {
+                androidx.compose.runtime.withFrameNanos { }
+                val ok = focusRequester.tryRequestFocus("keyboard_player_regrab")
+                harnessFocusDiag(
+                    "re-assert: attempt=$attempt ok=$ok t=+" +
+                        (System.currentTimeMillis() - startMs) + "ms targetHoldsFocus=false",
+                )
+                if (ok) break
             }
         }
     }
 }
+
+/**
+ * Harness-gated focus diagnostic (wave 14D): emits one stdout line when the
+ * desktop session harness is armed (`jellyplay.harness.enabled=true`, the same
+ * zero-cost gate [DesktopSessionHarness] uses), so a live
+ * `tools/e2e/desktop-session-pass.sh` run can correlate the Compose-side focus
+ * story (grab attempts, player-Box focus transitions, keys entering the
+ * screen's dispatch subtree) with the harness's AWT-side focus-owner
+ * observations. Every other platform is a silent no-op, and no call site runs
+ * outside the jvm-gated desktop branches, so normal boots (and all Android
+ * behavior) are byte-identical.
+ */
+internal expect fun harnessFocusDiag(message: String)

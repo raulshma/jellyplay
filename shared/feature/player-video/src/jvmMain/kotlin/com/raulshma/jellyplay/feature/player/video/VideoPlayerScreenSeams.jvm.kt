@@ -51,6 +51,17 @@ internal actual fun rememberHasHardwareKeyboard(): Boolean = true
  */
 internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = true
 
+/**
+ * Wave 14D focus diagnostic: stdout only while the desktop session harness is
+ * armed (`jellyplay.harness.enabled=true` — DesktopSessionHarness's zero-cost
+ * gate); silent on every normal desktop boot.
+ */
+internal actual fun harnessFocusDiag(message: String) {
+    if (System.getProperty("jellyplay.harness.enabled")?.equals("true", ignoreCase = true) == true) {
+        println("[JellyPlay][harness][focus-diag] $message")
+    }
+}
+
 /** Resizable desktop player window — treated as the landscape-style layout. */
 @Composable
 internal actual fun rememberIsPortraitOrientation(): Boolean = false

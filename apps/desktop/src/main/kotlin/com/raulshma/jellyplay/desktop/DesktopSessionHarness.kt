@@ -169,6 +169,7 @@ object DesktopSessionHarness {
 
         suspend fun run() {
             armAutoExit()
+            armFocusDiagnostics()
             println(
                 "[JellyPlay][harness] enabled: server=$serverUrl item=$itemId " +
                     "logs=$logsDir shots=$screenshotDir autoExit=${autoExitSeconds}s",
@@ -335,6 +336,59 @@ object DesktopSessionHarness {
             writeReportAndExit()
         }
 
+        /**
+         * Wave 14D focus diagnostics: log every AWT focus-owner / focused-window
+         * change (class + owning-window identity) and every key event's AWT
+         * dispatch target, so a failing OVERLAY_SPACE run shows whether the
+         * Robot-injected keys landed on the Compose component at all (e.g. the
+         * wave-14B mpv SwingPanel Canvas stealing AWT focus) and how the owner
+         * moved between the grab effect's attempts and the injection.
+         */
+        private fun armFocusDiagnostics() {
+            val ourWindow = deps.windowRef?.get()
+            runCatching {
+                java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                    .addPropertyChangeListener { evt ->
+                        when (evt.propertyName) {
+                            "focusOwner", "permanentFocusOwner", "focusedWindow" ->
+                                println(
+                                    "[JellyPlay][harness][awt-focus] ${evt.propertyName}: " +
+                                        "${evt.oldValue?.awtDescribe(ourWindow)} -> " +
+                                        "${evt.newValue?.awtDescribe(ourWindow)}",
+                                )
+                        }
+                    }
+            }.onFailure { System.err.println("[JellyPlay][harness] KFM listener failed: $it") }
+            runCatching {
+                java.awt.Toolkit.getDefaultToolkit().addAWTEventListener(
+                    { event ->
+                        if (event is java.awt.event.KeyEvent) {
+                            val id = when (event.id) {
+                                java.awt.event.KeyEvent.KEY_PRESSED -> "PRESSED"
+                                java.awt.event.KeyEvent.KEY_RELEASED -> "RELEASED"
+                                java.awt.event.KeyEvent.KEY_TYPED -> "TYPED"
+                                else -> event.id.toString()
+                            }
+                            println(
+                                "[JellyPlay][harness][awt-key] $id " +
+                                    "code=${event.keyCode} src=" +
+                                    (event.source as? java.awt.Component)?.awtDescribe(ourWindow),
+                            )
+                        }
+                    },
+                    java.awt.AWTEvent.KEY_EVENT_MASK,
+                )
+            }.onFailure { System.err.println("[JellyPlay][harness] AWT key listener failed: $it") }
+        }
+
+        private fun Any?.awtDescribe(ourWindow: java.awt.Window?): String {
+            val c = this as? java.awt.Component ?: return toString()
+            val ownerWindow = javax.swing.SwingUtilities.getWindowAncestor(c)
+            return "${c.javaClass.name}@${Integer.toHexString(System.identityHashCode(c))} " +
+                "inWindow=${ownerWindow?.javaClass?.simpleName} " +
+                "isOurComposeWindow=${ownerWindow != null && ownerWindow === ourWindow}"
+        }
+
         /** Deadline timer: write whatever exists, exit 0 (perf-harness twin). */
         private fun armAutoExit() {
             Timer("jellyplay-harness", true).schedule(
@@ -433,6 +487,16 @@ object DesktopSessionHarness {
             val window = deps.windowRef?.get() ?: return false
             return runCatching {
                 bringWindowToFront(window)
+                // Wave 14D: snapshot the AWT focus state at injection time —
+                // Robot delivers to the OS-focused window whose AWT focus owner
+                // receives the key; this line pairs with the [awt-key] events
+                // that follow.
+                val kfm = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                println(
+                    "[JellyPlay][harness][awt-focus] injectKey=$keyCode focusOwner=" +
+                        "${kfm.focusOwner.awtDescribe(window)} focusedWindow=" +
+                        "${kfm.focusedWindow.awtDescribe(window)}",
+                )
                 r.keyPress(keyCode)
                 delay(60)
                 r.keyRelease(keyCode)
