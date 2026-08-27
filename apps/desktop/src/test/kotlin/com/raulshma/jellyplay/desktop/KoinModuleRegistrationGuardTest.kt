@@ -57,12 +57,13 @@ class KoinModuleRegistrationGuardTest {
 
     /**
      * The web shell's forward allowlist: every shared feature module the web
-     * startKoin is EXPECTED to register, exactly. apps/web depends on one
-     * feature today ([requestsModule] — wave 15C put Route.Requests on the
-     * browser); when the next feature gains a wasmJs target and a web nav
-     * entry, register it in Main.kt AND add it here in the same commit.
+     * startKoin is EXPECTED to register, exactly. apps/web depends on two
+     * features today ([requestsModule] — wave 15C put Route.Requests on the
+     * browser; [calendarModule] — wave 16A put Route.UpcomingCalendar there);
+     * when the next feature gains a wasmJs target and a web nav entry,
+     * register it in Main.kt AND add it here in the same commit.
      */
-    private val webForwardAllowlist = setOf("requestsModule")
+    private val webForwardAllowlist = setOf("calendarModule", "requestsModule")
 
     /**
      * Module-variant prefixes that are intentionally platform-/core-scoped:

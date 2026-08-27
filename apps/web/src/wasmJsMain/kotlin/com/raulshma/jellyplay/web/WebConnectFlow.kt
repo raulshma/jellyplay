@@ -255,6 +255,9 @@ internal fun WebConnectFlow(
     // RequestsScreen). Optional like the other hooks so WebConnectFlow stays
     // renderable without a nav root behind it.
     onOpenRequests: (() -> Unit)? = null,
+    // Wave 16A: opens the SECOND shared feature screen (Route.UpcomingCalendar
+    // → UpcomingCalendarScreen). Same optionality contract as onOpenRequests.
+    onOpenCalendar: (() -> Unit)? = null,
 ) {
     // initial = null is honest on wasm v1: nothing restores a session at
     // boot (no persisted identity), so the flow genuinely starts empty. If a
@@ -270,6 +273,7 @@ internal fun WebConnectFlow(
             onOpenConnectionDetails = onOpenConnectionDetails,
             onOpenDiagnostics = onOpenDiagnostics,
             onOpenRequests = onOpenRequests,
+            onOpenCalendar = onOpenCalendar,
             modifier = modifier,
         )
     } else {
@@ -286,6 +290,7 @@ private fun ConnectedCard(
     onOpenConnectionDetails: (() -> Unit)?,
     onOpenDiagnostics: (() -> Unit)?,
     onOpenRequests: (() -> Unit)?,
+    onOpenCalendar: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     var loggingOut by remember { mutableStateOf(false) }
@@ -394,6 +399,15 @@ private fun ConnectedCard(
             if (onOpenRequests != null) {
                 Button(onClick = onOpenRequests) {
                     Text("Requests")
+                }
+            }
+            // Wave 16A: the second SHARED feature screen, same primary-Button
+            // treatment right next to Requests. The screen renders the honest
+            // feature-disabled pane on web (flag off, no settings UI — see
+            // WebAppRoot's Route.UpcomingCalendar entry note).
+            if (onOpenCalendar != null) {
+                Button(onClick = onOpenCalendar) {
+                    Text("Calendar")
                 }
             }
             // Wave 13C E2E hook: gated entry into WebDiagnosticsPane. An

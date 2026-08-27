@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.network.di.networkWasmModule
+import com.raulshma.jellyplay.feature.calendar.di.calendarModule
 import com.raulshma.jellyplay.feature.requests.di.requestsModule
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.js.Js
@@ -83,6 +84,12 @@ fun main() {
             networkWasmModule,
             dataWasmModule,
             requestsModule,
+            // Wave 16A: the second feature slice on web — the calendar VM
+            // (its ctor deps ArrRepository/SeerrRepository/ExperimentalStore
+            // all resolve from the modules above, calendarModule registers
+            // nothing new). KoinModuleRegistrationGuardTest's web allowlist
+            // pins this registration in the same change.
+            calendarModule,
         )
     }
 

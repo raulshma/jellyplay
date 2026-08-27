@@ -83,8 +83,12 @@ import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_refr
 import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_releases_count
 import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_title
 import com.raulshma.jellyplay.feature.calendar.generated.resources.calendar_today
-import java.time.LocalDate
-import java.time.ZoneId
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.onDay
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -251,12 +255,19 @@ fun UpcomingCalendarScreen(
         }
 
         if (showDatePicker) {
+            // Material3's DatePicker speaks UTC-anchored epoch-milli days. The
+            // forward leg renders the visible month's first day at start-of-
+            // day in the device zone; the return leg re-reads the pick back in
+            // UTC (NOT the device zone) — reading it in a zoned instant could
+            // shift the civil day when the device offset pushes the UTC
+            // midnight across a date boundary, so the UTC .date read is the
+            // load-bearing part of this round-trip (same shape the pre-wasm
+            // java.time `LocalDate.ofEpochDay(millis / 86_400_000L)` had).
             val datePickerState = rememberDatePickerState(
                 initialSelectedDateMillis = state.visibleMonth
-                    .atDay(1)
-                    .atStartOfDay(ZoneId.systemDefault())
-                    .toInstant()
-                    .toEpochMilli(),
+                    .onDay(1)
+                    .atStartOfDayIn(TimeZone.currentSystemDefault())
+                    .toEpochMilliseconds(),
             )
             DatePickerDialog(
                 onDismissRequest = { showDatePicker = false },
@@ -264,7 +275,9 @@ fun UpcomingCalendarScreen(
                     TextButton(
                         onClick = {
                             datePickerState.selectedDateMillis?.let { millis ->
-                                val picked = LocalDate.ofEpochDay(millis / 86_400_000L)
+                                val picked = Instant.fromEpochMilliseconds(millis)
+                                    .toLocalDateTime(TimeZone.UTC)
+                                    .date
                                 viewModel.goToDate(picked)
                                 pendingScrollDate = picked
                             }

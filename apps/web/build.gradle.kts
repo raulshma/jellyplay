@@ -71,11 +71,13 @@ kotlin {
                 // WebAppRoot's `entry<Route.Requests>` composes
                 // RequestsScreen (VM ctor deps: SeerrRepository +
                 // ArrRepository from dataWasmModule above, ExperimentalStore
-                // from datastoreCommonModule). Deliberately the only feature
-                // edge: every other shared/feature module still has no
-                // wasmJs target, and the KoinModuleRegistrationGuardTest's
-                // web forward allowlist pins exactly this one registration.
+                // from datastoreCommonModule). Wave 16A adds the second:
+                // `entry<Route.UpcomingCalendar>` composes
+                // UpcomingCalendarScreen against the same DI slice plus
+                // calendarModule. The KoinModuleRegistrationGuardTest's web
+                // forward allowlist pins exactly these two registrations.
                 implementation(project(":shared:feature:requests"))
+                implementation(project(":shared:feature:calendar"))
                 // Wave wC (HtmlVideoEngine): the wasm-visible MediaEngine
                 // contract + EnginePositionTicker/WebPlaybackMappings the
                 // web video engine implements. Not wired into the shell UI

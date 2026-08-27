@@ -20,10 +20,15 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.toKotlinLocalDate
-import java.time.LocalDate
-import java.time.YearMonth
-import java.time.ZoneId
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.YearMonth
+import kotlinx.datetime.onDay
+import kotlinx.datetime.plus
+import kotlinx.datetime.todayIn
+import kotlinx.datetime.yearMonth
+import kotlin.time.Clock
 
 /**
  * Whole-screen state for the Upcoming Calendar. The merged calendar stream is
@@ -34,7 +39,7 @@ import java.time.ZoneId
 @Immutable
 data class UpcomingCalendarUiState(
     val items: List<ArrCalendarItem> = emptyList(),
-    val visibleMonth: YearMonth = YearMonth.now(),
+    val visibleMonth: YearMonth = today().yearMonth,
     val filter: CalendarFilter = CalendarFilter.ALL,
     val isLoading: Boolean = false,
     val error: String? = null,
@@ -102,12 +107,11 @@ class UpcomingCalendarViewModel(
         monthCollectorJob?.cancel()
         monthCollectorJob = launch {
             val month = _state.value.visibleMonth
-            val from = month.atDay(1)
-            val to = month.atEndOfMonth()
-            // Wave 15B: ArrRepository takes kotlinx.datetime.LocalDate now; the
-            // VM keeps java.time internally (JVM-only module) and converts at
-            // the boundary.
-            arrRepository.calendar(from.toKotlinLocalDate(), to.toKotlinLocalDate()).collect { items ->
+            val from = month.onDay(1)
+            val to = month.lastDay
+            // Wave 16A: the whole module runs kotlinx.datetime now (wasmJs
+            // purification) — the repository boundary no longer converts.
+            arrRepository.calendar(from, to).collect { items ->
                 if (_state.value.visibleMonth == month) {
                     _state.value = _state.value.copy(items = items, error = null)
                 }
@@ -166,8 +170,8 @@ class UpcomingCalendarViewModel(
             _state.value = _state.value.copy(isLoading = true, error = null)
             val month = _state.value.visibleMonth
             arrRepository.refreshCalendar(
-                month.atDay(1).toKotlinLocalDate(),
-                month.atEndOfMonth().toKotlinLocalDate(),
+                month.onDay(1),
+                month.lastDay,
             )
                 .onFailure { _state.value = _state.value.copy(error = it.message) }
             _state.value = _state.value.copy(isLoading = false)
@@ -181,7 +185,7 @@ class UpcomingCalendarViewModel(
      * rows during the fetch.
      */
     fun changeMonth(delta: Int) {
-        val newMonth = _state.value.visibleMonth.plusMonths(delta.toLong())
+        val newMonth = _state.value.visibleMonth.plus(delta, DateTimeUnit.MONTH)
         if (newMonth == _state.value.visibleMonth) return
         _state.value = _state.value.copy(
             visibleMonth = newMonth,
@@ -194,7 +198,7 @@ class UpcomingCalendarViewModel(
 
     /** Jumps the visible month back to the current month. */
     fun goToToday() {
-        val now = YearMonth.now()
+        val now = today().yearMonth
         if (_state.value.visibleMonth == now) return
         _state.value = _state.value.copy(visibleMonth = now, items = emptyList(), error = null)
         startMonthCollector()
@@ -209,7 +213,7 @@ class UpcomingCalendarViewModel(
      * caller can decide whether to request a scroll-to-day.
      */
     fun goToDate(date: LocalDate): Boolean {
-        val target = YearMonth.from(date)
+        val target = date.yearMonth
         if (_state.value.visibleMonth == target) return false
         _state.value = _state.value.copy(visibleMonth = target, items = emptyList(), error = null)
         startMonthCollector()
@@ -232,5 +236,9 @@ class UpcomingCalendarViewModel(
         "${item.mediaType}|${item.tvdbId ?: "_"}|${item.tmdbId ?: "_"}|${item.title}|${item.airDateUtc ?: "_"}"
 }
 
-/** Today's date in the device timezone, centralised so the screen and VM agree. */
-internal fun today(): LocalDate = LocalDate.now(ZoneId.systemDefault())
+/**
+ * Today's date in the device timezone, centralised so the screen and VM agree.
+ * kotlin.time.Clock + the kotlinx todayIn extension (multiplatform since the
+ * wave 16A wasmJs purification — the java.time ZoneId seam is gone).
+ */
+internal fun today(): LocalDate = Clock.System.todayIn(TimeZone.currentSystemDefault())

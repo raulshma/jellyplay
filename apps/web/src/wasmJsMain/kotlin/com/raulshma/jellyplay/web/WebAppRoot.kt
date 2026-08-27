@@ -36,6 +36,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalWebBackDispatcher
 import com.raulshma.jellyplay.core.ui.components.WebBackDispatcher
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.feature.calendar.UpcomingCalendarScreen
 import com.raulshma.jellyplay.feature.requests.RequestsScreen
 import kotlinx.browser.window
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -151,7 +152,11 @@ private fun historyHashToIndex(hash: String): Int? =
  * screen, Route.Requests → shared RequestsScreen, asserting the filter bar
  * + the honest "Seerr not configured" error state with zero console errors
  * (see Main.kt for why that error state is web-v1 truth: no Seerr
- * credentials UI, and session-cookie auth is browser-impossible).
+ * credentials UI, and session-cookie auth is browser-impossible). Wave 16A
+ * extends it once more: back from Requests, open Route.UpcomingCalendar →
+ * shared UpcomingCalendarScreen, asserting the honest feature-disabled pane
+ * (the DIRECT_ARR_INTEGRATION flag boots off and no web settings UI can
+ * flip it).
  */
 @Composable
 fun WebAppRoot(
@@ -251,6 +256,8 @@ fun WebAppRoot(
                     // Wave 15C: the shared feature route — pushed as itself,
                     // NOT as a web-only mirror key (see the route-keys KDoc).
                     onOpenRequests = { addEntry(Route.Requests) },
+                    // Wave 16A: the second shared feature route, same shape.
+                    onOpenCalendar = { addEntry(Route.UpcomingCalendar) },
                 )
             }
             entry<WebStatus> { _ ->
@@ -288,6 +295,43 @@ fun WebAppRoot(
                     onNavigateToDetail = { _, _ ->
                         // No-op — SeerrDetail has no wasm target (see the cut
                         // note above); nothing navigates.
+                    },
+                )
+            }
+            entry<Route.UpcomingCalendar> { _ ->
+                // Wave 16A: the SECOND shared feature screen on web — the
+                // shared UpcomingCalendarScreen (koinViewModel() against
+                // calendarModule, registered in Main.kt this wave). The
+                // feature-disabled pane is the honest v1 state in the browser
+                // fixture: the DIRECT_ARR_INTEGRATION experimental flag boots
+                // off and no settings UI exists on web to flip it, so the E2E
+                // lane asserts the disabled pane (see web-verify.mjs).
+                //
+                // ARR-SETTINGS CUT (documented at the only site that could
+                // navigate there): onOpenArrSettings would push Route
+                // .ArrSettings — feature/settings has no wasmJs target
+                // (documented), so the callback is a NO-OP stub. Reachability
+                // of the stub: the Open-*arr-Settings button renders only in
+                // the disabled pane; until a settings target lands the button
+                // is inert on web. It becomes addEntry(Route.ArrSettings())
+                // when settings gains the web target.
+                //
+                // SEERRDETAIL CUT: onItemClick would push Route.SeerrDetail —
+                // feature/detail has no wasmJs target yet (16C lands it), so
+                // the callback is a NO-OP stub; it fires only from populated
+                // calendar rows, unreachable in the fixture (flag off).
+                //
+                // onBack rides the SAME guarded pop path as every other pane
+                // (requestPop: root-refusing list trim + history.back()).
+                UpcomingCalendarScreen(
+                    onBack = ::requestPop,
+                    onOpenArrSettings = {
+                        // No-op — settings has no wasm target (see the cut
+                        // note above); nothing navigates.
+                    },
+                    onItemClick = { _, _ ->
+                        // No-op — SeerrDetail has no wasm target yet (16C
+                        // lands it); nothing navigates.
                     },
                 )
             }
