@@ -20,10 +20,10 @@ import com.sun.jna.ptr.PointerByReference
  *    a JVM callback adds a thread-management hazard for zero benefit over our
  *    poll model. We POLL with a fixed cadence instead of subscribing (decision
  *    rationale in the spike doc).
- *  - `mpv_render_context_update` / MPV_RENDER_UPDATE_FRAME — only meaningful
- *    together with MPV_RENDER_PARAM_ADVANCED_CONTROL, which we do not set, and
- *    redundant under polling anyway ("This is optional if ADVANCED_CONTROL was
- *    not set" — render.h L642-643).
+ *  - `mpv_render_context_update` / MPV_RENDER_UPDATE_FRAME — mapped but never
+ *    invoked: only meaningful together with MPV_RENDER_PARAM_ADVANCED_CONTROL,
+ *    which we do not set, and redundant under polling anyway ("This is
+ *    optional if ADVANCED_CONTROL was not set" — render.h L641-642).
  *  - `mpv_render_context_report_swap` — informs libmpv's video-sync timing; it
  *    warns "if you use it inconsistently, expect bad playback" (render.h
  *    L715-716). A fixed-cadence poller cannot promise per-swap calls, so we
@@ -41,6 +41,11 @@ object MpvLibRender {
     const val PARAM_INVALID = 0                 // L176: array terminator, always 0
     const val PARAM_API_TYPE = 1                // L192 (char*)
     const val PARAM_OPENGL_INIT_PARAMS = 2      // L198 (mpv_opengl_init_params*)
+    // GAP note for readers tracing the dense L171-425 enum one-to-one:
+    // MPV_RENDER_PARAM_OPENGL_FBO = 3 (render.h L203) is deliberately absent —
+    // it describes GL-context render targets, which the sw path never has
+    // (FLIP_Y=4/DEPTH=5 ARE mapped below only because the table stays dense;
+    // header marks both ignored by the sw backend).
     const val PARAM_FLIP_Y = 4                  // L211 (int*)
     const val PARAM_DEPTH = 5                   // L219 (int*)
     const val PARAM_ICC_PROFILE = 6             // L226
@@ -69,6 +74,13 @@ object MpvLibRender {
      * exactly Skia's BGRA_8888 raster when the alpha type is OPAQUE (skia then
      * ignores the garbage 4th channel), which lets the compose surface consume
      * mpv output with no per-pixel conversion. Video is opaque anyway.
+     *
+     * ENDIANNESS CAVEAT for future non-x86 bring-up: the "bgr0"-as-
+     * BGRA_8888 equivalence above assumes LITTLE-endian hosts (x86-64 /
+     * ARM64 LE — everything this codebase has ever run on). On any big-endian
+     * target the component order must be re-derived, and colors must be
+     * checked VISUALLY on real hardware before trusting the pixel-variance
+     * tests — they detect change, not R/B swap (see spike doc "unverified").
      */
     const val SW_FORMAT_BGRA = "bgr0"
 
@@ -107,15 +119,20 @@ object MpvLibRender {
 
         /**
          * render.h L709: renders/pulls a frame into the target described by
-         * [params]. Exercised per pull tick by [com
-         .raulshma.jellyplay.desktop.player.MpvSoftwareRenderEngine.pullFrame].
+         * [params]. Exercised per pull tick by
+         * `MpvSoftwareRenderEngine.pullFrame`.
          */
         fun mpv_render_context_render(ctx: Pointer, params: Array<MpvRenderParam>): Int
 
         /** render.h L591 (mapped for completeness/future use; currently unused). */
         fun mpv_render_context_set_parameter(ctx: Pointer, param: MpvRenderParam): Int
 
-        /** render.h L661 — unmapped caller-side: we never set ADVANCED_CONTROL. */
+        /**
+         * render.h L661: MAPPED but NEVER CALLED by this codebase. Its result
+         * only matters under the update-callback/ADVANCED_CONTROL model we
+         * deliberately do not use — fixed-cadence polling decides when to
+         * render instead (see the decision list on [MpvLibRender]).
+         */
         fun mpv_render_context_update(ctx: Pointer): Long
 
         /** render.h L733: NULL is allowed and does nothing. MUST run before the core is destroyed. */

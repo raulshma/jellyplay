@@ -3,10 +3,9 @@ package com.raulshma.jellyplay.feature.player.video
 /**
  * Desktop HWND bridge (wave 9A): the SwingPanel video surface (jvmMain actual
  * of [EngineVideoSurface]) publishes the active child-window handle provider
- * here, and the desktop [PlayerEngineFactory][com.raulshma.jellyplay.feature
- * .player.video.engine.PlayerEngineFactory] implementation reads it when the
- * session creates its `MpvDesktopEngine` — mpv's `wid` option is ctor-time,
- * so the child window must exist before the engine.
+ * here, and the desktop `PlayerEngineFactory` implementation (apps/desktop) reads
+ * it when the session creates its `MpvDesktopEngine` — mpv's `wid` option is
+ * ctor-time, so the child window must exist before the engine.
  *
  * One active provider at a time: the desktop player route is single-instance
  * (Route.VideoPlayer), and [clear] is identity-guarded so a disposing surface
@@ -43,8 +42,8 @@ object DesktopVideoSurfaceBridge {
 
     /**
      * Install/remove the software-surface prober. Idempotent overwrites are
-     * fine; call once during desktop app bootstrap ([DesktopAppRoot][com
-     * .raulshma.jellyplay.desktop.DesktopAppRoot] composition, wave 12B).
+     * fine; call once during desktop app bootstrap (`DesktopAppRoot`
+     * composition, wave 12B).
      */
     fun registerSoftwareSurfaceProbe(probe: (() -> Boolean)?) {
         softwareSurfaceProbe = probe
