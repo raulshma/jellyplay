@@ -30,7 +30,7 @@ class BlurHashCacheAccountingTest {
     @Test
     fun `re-putting same key at same size keeps byte total exact - untouched canary survives`() {
         putSmall("canary")
-        // 100 * 16_384 + 16_384 = 1_655_424 <= budget: everything genuinely fits.
+        // 100 * 16_384 + 16_384 = 1_654_784 <= budget: everything genuinely fits.
         repeat(100) { putSmall("k$it") }
         // Every replace once added 16 KB of phantom bytes again (pre-fix total
         // would climb ~41 MB) -> the never-refreshed canary, always eldest,
@@ -51,8 +51,8 @@ class BlurHashCacheAccountingTest {
         // Ten mediums = 2_000_000 <= 2_097_152 fits.
         repeat(10) { putMedium("m$it") }
         // Pre-fix the m0 replacement also fails to retire m0's old 200_000
-        // bytes (phantom total 2_262_144 > budget) -> eldest m0 evicted
-        // although the real sum 2_062_144 leaves headroom.
+        // bytes (phantom total 2_200_000 > budget) -> eldest m0 evicted
+        // although the real sum 2_000_000 leaves headroom.
         putMedium("m0")
         repeat(10) { assertNotNull(BlurHashCache.get("m$it"), "m$it must survive") }
     }
