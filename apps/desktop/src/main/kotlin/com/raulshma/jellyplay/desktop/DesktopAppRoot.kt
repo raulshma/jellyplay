@@ -85,6 +85,7 @@ import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
+import com.raulshma.jellyplay.desktop.player.MpvSoftwareSurfaceSupport
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
 import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
@@ -110,10 +111,11 @@ import org.koin.compose.koinInject
  *  - SubtitleTester — androidMain-only, no commonMain section at all;
  *  - editor — latent (StreamingSubtitleStore has no desktop Koin def).
  *
- * VIDEO went live with wave 9A on WINDOWS: the commonMain VideoPlayerScreen
- * composes the SwingPanel/HWND mpv surface and the per-session engine resolves
- * through PlayerEngineFactory (desktopPlayerModule); non-Windows OSes keep the
- * dead-end guard until they have an embedding story.
+ * VIDEO went live with wave 9A on WINDOWS (SwingPanel/HWND mpv surface) and
+ * with wave 12B wherever the mpv software-render surface smoke-passes
+ * (DesktopSoftwareVideoPane, no child window); the per-session engine resolves
+ * through PlayerEngineFactory (desktopPlayerModule); OSes with neither surface
+ * story keep the dead-end guard.
  *
  * The AUDIO player went live with wave 9B real audio:
  * [audioPlayerSection] registers Route.AudioPlayer + Route.Ambient, so music
@@ -246,6 +248,19 @@ private fun DesktopNavScaffold() {
     )
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // Wave 12B: wire the software-surface prober before any route guard reads
+    // it (the Route.VideoPlayer entry registration + isDesktopDeadEndRoute both
+    // ask below in this same composition). The probe itself is lazy and cached
+    // inside MpvSoftwareSurfaceSupport — the first VideoPlayer-guard read pays
+    // the one-time libmpv/sw-context smoke test; any failure degrades to
+    // "unsupported", never crashes boot.
+    remember {
+        DesktopVideoSurfaceBridge.registerSoftwareSurfaceProbe {
+            MpvSoftwareSurfaceSupport.isSupported
+        }
+        true
+    }
 
     // App-level composition locals the shared screens read. Desktop v1
     // provisions static values: the JVM shell has no connectivity monitor
@@ -384,14 +399,17 @@ private fun DesktopNavScaffold() {
             // Windows and the audio play push routes through the live
             // audioPlayerSection (wave 9B).
             detailsSection(guardedNavigator)
-            // …player-video, wave 9A conveyor — live on WINDOWS only: the
-            // commonMain VideoPlayerScreen renders its SwingPanel/HWND mpv
-            // surface and the per-session MpvDesktopEngine resolves through
-            // PlayerEngineFactory (desktopPlayerModule). Other OSes keep the
-            // dead-end guard below (no libmpv embedding story there yet).
+            // …player-video, wave 9A conveyor — live where a surface story
+            // exists: the commonMain VideoPlayerScreen renders the
+            // SwingPanel/HWND mpv surface (Windows) or the wave-12B
+            // software-render pane, and the per-session engine resolves
+            // through PlayerEngineFactory (desktopPlayerModule). OSes with
+            // neither story keep the dead-end guard below.
             // The subtitle-tester overlay stays Android-only: its push target
             // remains in the dead-end list.
-            if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported) {
+            if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported ||
+                DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported
+            ) {
                 entry<Route.VideoPlayer> { key ->
                     VideoPlayerScreen(
                         itemId = key.itemId,
@@ -580,10 +598,12 @@ private fun DesktopRailItem(
  * every branch of that when must mirror the entryProvider's conditions.
  */
 private fun NavKey.isDesktopDeadEndRoute(): Boolean = when (this) {
-    // Players. VideoPlayer is live since wave 9A on WINDOWS: its entry
-    // composes the commonMain screen with the SwingPanel/HWND mpv surface and
-    // is registered exactly under this same bridge predicate the entry above
-    // registers under, so non-Windows OSes dead-end it.
+    // Players. VideoPlayer is live since wave 9A on WINDOWS and, since wave
+    // 12B, wherever the mpv software-render surface smoke-passes: its entry
+    // composes the commonMain screen (SwingPanel/HWND surface or the
+    // DesktopSoftwareVideoPane) and is registered exactly under this same
+    // bridge predicate pair the entry above registers under; OSes with
+    // neither story dead-end it.
     // Route.AudioPlayer left this list with wave 9B's real audio
     // (audioPlayerSection registers it; audio needs no surface host — the
     // audio-only engine runs with vo=null) and is now the music section's
@@ -591,7 +611,8 @@ private fun NavKey.isDesktopDeadEndRoute(): Boolean = when (this) {
     // Route.LiveTvChannelPlayer is pushed by livetv but has no desktop home,
     // so its clicks surface the snackbar instead.
     is Route.VideoPlayer ->
-        !DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported
+        !(DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported ||
+            DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported)
     is Route.LiveTvChannelPlayer -> true
     // Pushed by MediaDetailScreen's edit action: the editor feature is
     // registered but latent on desktop (StreamingSubtitleStore has no
