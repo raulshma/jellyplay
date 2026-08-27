@@ -51,7 +51,11 @@ import org.koin.dsl.module
  * `manager.start()` twin) is invoked from Main.kt after startKoin.
  */
 val desktopPlayerModule: Module = module {
-    single<PlayerEngineFactory> { DesktopMpvPlayerEngineFactory() }
+    // Wave 13B session harness: app-lifetime recorder of everything the video
+    // factory creates (engine + surface branch + state/position activity).
+    // Observation only — see EngineActivityRecorder.
+    single { EngineActivityRecorder() }
+    single<PlayerEngineFactory> { DesktopMpvPlayerEngineFactory(recorder = get()) }
 
     single<AudioTrackResolver> {
         val playbackStore = get<PlaybackStore>()

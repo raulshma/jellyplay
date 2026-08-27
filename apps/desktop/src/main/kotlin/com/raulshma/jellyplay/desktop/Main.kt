@@ -421,6 +421,9 @@ fun main() {
                     showAbout = showAbout.value,
                     onDismissAbout = { showAbout.value = false },
                     previousCrashLogPath = previousCrash?.logFile?.toString(),
+                    // Wave 13B session harness only (screenshots + key
+                    // injection); unused on every normal boot path.
+                    windowRef = windowRef,
                 )
             }
         }

@@ -5,6 +5,10 @@ import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.NoOpPlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
+import com.raulshma.jellyplay.desktop.player.EngineActivitySnapshot.Companion.SURFACE_HWND
+import com.raulshma.jellyplay.desktop.player.EngineActivitySnapshot.Companion.SURFACE_NO_OP
+import com.raulshma.jellyplay.desktop.player.EngineActivitySnapshot.Companion.SURFACE_SOFTWARE
+import com.raulshma.jellyplay.desktop.player.EngineActivitySnapshot.Companion.SURFACE_WID_NULL
 import kotlinx.coroutines.delay
 
 /**
@@ -36,45 +40,68 @@ import kotlinx.coroutines.delay
  * EXTERNAL keeps its Android semantics — playback happens out-of-band, which
  * the shared NoOpPlayerEngineFactory expresses — rather than pretending mpv
  * is someone else's window.
+ *
+ * Wave 13B: every created engine (and which branch created it) is reported to
+ * the [EngineActivityRecorder] Koin single — pure observation feeding the
+ * DesktopSessionHarness evidence; a null recorder (tests constructing the
+ * factory bare) records nothing.
+ *
+ * @param recorder engine-activity recorder, or null to skip recording.
  */
-class DesktopMpvPlayerEngineFactory : PlayerEngineFactory {
+class DesktopMpvPlayerEngineFactory(
+    private val recorder: EngineActivityRecorder? = null,
+) : PlayerEngineFactory {
 
-    override suspend fun create(playerType: PlayerType): MediaEngine = when (playerType) {
-        PlayerType.EXTERNAL -> NoOpPlayerEngineFactory.create(playerType)
-        PlayerType.MPV,
-        // mpv is the desktop stand-in until a media3/libVLC backend exists.
-        PlayerType.EXO_PLAYER,
-        PlayerType.LIBVLC,
-        -> {
-            val windowed = if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported) {
-                awaitSurfaceHandle()
-            } else {
-                null
+    override suspend fun create(playerType: PlayerType): MediaEngine {
+        val engine: MediaEngine
+        val surface: String
+        when (playerType) {
+            PlayerType.EXTERNAL -> {
+                engine = NoOpPlayerEngineFactory.create(playerType)
+                surface = SURFACE_NO_OP
             }
-            when {
-                windowed != null ->
-                    MpvDesktopEngine(extraOptions = emptyMap(), windowHandle = windowed)
-
-                DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported -> {
-                    // Wave 12B: no (or late) embedded surface — fall back to the
-                    // mpv render-API software renderer. On non-Windows this is
-                    // the PRIMARY path; on Windows it fires only when the HWND
-                    // never materialized within HANDLE_WAIT_TIMEOUT_MS, which is
-                    // worth a line of stderr because it means AWT did not
-                    // realize the child window in time.
-                    System.err.println(
-                        "[JellyPlay] video session: no embedded HWND available — " +
-                            "using mpv software-render surface",
-                    )
-                    MpvSoftwareRenderEngine()
+            PlayerType.MPV,
+            // mpv is the desktop stand-in until a media3/libVLC backend exists.
+            PlayerType.EXO_PLAYER,
+            PlayerType.LIBVLC,
+            -> {
+                val windowed = if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported) {
+                    awaitSurfaceHandle()
+                } else {
+                    null
                 }
+                when {
+                    windowed != null -> {
+                        engine = MpvDesktopEngine(extraOptions = emptyMap(), windowHandle = windowed)
+                        surface = SURFACE_HWND
+                    }
 
-                else ->
-                    // Legacy degrade chain: engine without wid → empty-surface
-                    // audio-only playback, exactly the pre-12B behavior.
-                    MpvDesktopEngine(extraOptions = emptyMap(), windowHandle = null)
+                    DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported -> {
+                        // Wave 12B: no (or late) embedded surface — fall back to the
+                        // mpv render-API software renderer. On non-Windows this is
+                        // the PRIMARY path; on Windows it fires only when the HWND
+                        // never materialized within HANDLE_WAIT_TIMEOUT_MS, which is
+                        // worth a line of stderr because it means AWT did not
+                        // realize the child window in time.
+                        System.err.println(
+                            "[JellyPlay] video session: no embedded HWND available — " +
+                                "using mpv software-render surface",
+                        )
+                        engine = MpvSoftwareRenderEngine()
+                        surface = SURFACE_SOFTWARE
+                    }
+
+                    else -> {
+                        // Legacy degrade chain: engine without wid → empty-surface
+                        // audio-only playback, exactly the pre-12B behavior.
+                        engine = MpvDesktopEngine(extraOptions = emptyMap(), windowHandle = null)
+                        surface = SURFACE_WID_NULL
+                    }
+                }
             }
         }
+        recorder?.recordCreated(engine, surface)
+        return engine
     }
 
     /**
