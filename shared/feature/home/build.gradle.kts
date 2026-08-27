@@ -36,6 +36,9 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
+            // Wave 15B ripple: ArrRepository's calendar window now takes
+            // kotlinx.datetime.LocalDate — HomeRefresher converts java.time at the boundary.
+            implementation(libs.kotlinx.datetime)
             implementation(project(":shared:core:datastore"))
             implementation(project(":shared:core:ui"))
             // JetBrains CMP distribution (see catalog note): Android targets

@@ -42,6 +42,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrStatusResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
+import kotlinx.datetime.LocalDate as KotlinLocalDate
+import kotlinx.datetime.toJavaLocalDate
 import java.time.LocalDate
 import java.time.YearMonth
 import java.util.concurrent.atomic.AtomicInteger
@@ -365,18 +367,22 @@ class UpcomingCalendarViewModelTest {
  * fails loudly so an unexpected code path can't pass silently.
  */
 private class FakeArrRepository : ArrRepository {
+    // Recorded as java.time pairs (converted at record time) so every
+    // assertion below keeps comparing the original java.time windows — the
+    // ArrRepository surface itself flipped to kotlinx.datetime.LocalDate in
+    // wave 15B.
     val calendarWindows = mutableListOf<Pair<LocalDate, LocalDate>>()
     val refreshCalls = mutableListOf<Pair<LocalDate, LocalDate>>()
     val calendarItems = MutableStateFlow(emptyList<ArrCalendarItem>())
     var refreshResult: Result<Unit> = Result.success(Unit)
 
-    override fun calendar(from: LocalDate, to: LocalDate): Flow<List<ArrCalendarItem>> {
-        calendarWindows += from to to
+    override fun calendar(from: KotlinLocalDate, to: KotlinLocalDate): Flow<List<ArrCalendarItem>> {
+        calendarWindows += from.toJavaLocalDate() to to.toJavaLocalDate()
         return calendarItems
     }
 
-    override suspend fun refreshCalendar(from: LocalDate, to: LocalDate): Result<Unit> {
-        refreshCalls += from to to
+    override suspend fun refreshCalendar(from: KotlinLocalDate, to: KotlinLocalDate): Result<Unit> {
+        refreshCalls += from.toJavaLocalDate() to to.toJavaLocalDate()
         return refreshResult
     }
 

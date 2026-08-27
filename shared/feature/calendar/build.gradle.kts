@@ -37,6 +37,9 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
+            // Wave 15B ripple: ArrRepository's calendar window now takes
+            // kotlinx.datetime.LocalDate — the VM converts java.time at the boundary.
+            implementation(libs.kotlinx.datetime)
             // ExperimentalStore (DIRECT_ARR_INTEGRATION flag slice).
             implementation(project(":shared:core:datastore"))
             implementation(project(":shared:core:ui"))
