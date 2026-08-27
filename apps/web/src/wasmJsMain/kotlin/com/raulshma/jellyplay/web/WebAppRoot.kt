@@ -26,6 +26,9 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
+import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
@@ -73,6 +76,16 @@ private data object WebStatus : NavKey
  * [WebStatus] — memory-only, no deep link.
  */
 private data object WebDiag : NavKey
+
+/**
+ * Wave 16B Seerr credentials level ([WebSeerrPane]): server URL + API key
+ * entry/persist/test/disconnect — the pane that finally lets the requests
+ * feature work on web (API-key mode is the only browser-viable Seerr auth).
+ * Same lifetime rules as [WebStatus]/[WebDiag] — memory-only, no deep link;
+ * the CREDENTIALS themselves persist (localStorage-backed secure store),
+ * so a reload lands back on the landing pane but the Seerr config survives.
+ */
+private data object WebSeerr : NavKey
 
 /** Location-hash prefix carrying the mirrored stack depth: "#wp=<index>". */
 private const val HISTORY_HASH_PREFIX = "#wp="
@@ -163,6 +176,9 @@ fun WebAppRoot(
     sessionState: AtomicSessionState,
     authApiClient: AuthApiClient,
     userPrefs: DataStore<Preferences>,
+    seerrPreferencesStore: SeerrPreferencesStore,
+    seerrSecureCredentialsStore: SeerrSecureCredentialsStore,
+    seerrRepository: SeerrRepository,
 ) {
     val networkStatus = rememberBrowserConnectivityStatus()
     // Collected once here: the landing card's chip/lines must recompose on
@@ -177,6 +193,18 @@ fun WebAppRoot(
     val webBackDispatcher = remember { WebBackDispatcher() }
     val connectController = remember(sessionState, authApiClient, userPrefs) {
         WebConnectController(auth = authApiClient, userPrefs = userPrefs)
+    }
+    // Wave 16B: the Seerr credentials controller, built exactly like
+    // [WebConnectController] — plain class, Koin-resolved deps passed in from
+    // Main.kt (SeerrPreferencesStore/SeerrSecureCredentialsStore are unnamed
+    // singles in datastoreCommonModule/webDatastoreModule, SeerrRepository in
+    // dataWasmModule), one page-lifetime instance.
+    val seerrController = remember(seerrPreferencesStore, seerrSecureCredentialsStore, seerrRepository) {
+        WebSeerrController(
+            seerrPreferencesStore = seerrPreferencesStore,
+            secureCredentialsStore = seerrSecureCredentialsStore,
+            seerrRepository = seerrRepository,
+        )
     }
 
     // Trims the stack to depth [depth] (keeping exactly depth+1 entries) when
@@ -245,7 +273,7 @@ fun WebAppRoot(
         pushHistoryMirror()
     }
 
-    val entryProvider = remember(sessionState, authApiClient, userPrefs) {
+    val entryProvider = remember(sessionState, authApiClient, userPrefs, seerrPreferencesStore, seerrSecureCredentialsStore, seerrRepository) {
         entryProvider<NavKey> {
             entry<WebLanding> { _ ->
                 WebConnectFlow(
@@ -258,6 +286,8 @@ fun WebAppRoot(
                     onOpenRequests = { addEntry(Route.Requests) },
                     // Wave 16A: the second shared feature route, same shape.
                     onOpenCalendar = { addEntry(Route.UpcomingCalendar) },
+                    // Wave 16B: the Seerr credentials pane.
+                    onOpenSeerr = { addEntry(WebSeerr) },
                 )
             }
             entry<WebStatus> { _ ->
@@ -265,6 +295,9 @@ fun WebAppRoot(
             }
             entry<WebDiag> { _ ->
                 WebDiagnosticsPane(onBack = ::requestPop)
+            }
+            entry<WebSeerr> { _ ->
+                WebSeerrPane(onBack = ::requestPop, controller = seerrController)
             }
             entry<Route.Requests> { _ ->
                 // Wave 15C: the FIRST shared feature screen on web. The shell

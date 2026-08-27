@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferencesSerializer
 import androidx.datastore.preferences.core.emptyPreferences
 import com.raulshma.jellyplay.core.datastore.ArrSecureCredentialsStore
+import com.raulshma.jellyplay.core.datastore.LocalStorageSecureKeyValueStorage
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.datastore.SubtitleProviderSecureCredentialsStore
 import com.raulshma.jellyplay.core.datastore.WasmSecureKeyValueStorage
@@ -25,8 +26,14 @@ import org.koin.dsl.module
 /**
  * Web platform Koin module (docs/kmp-migration-plan.md §Phase W): the four
  * named preference DataStores, persisted to `window.localStorage`, plus the
- * session-memory credential stores (web v1 scope cut — no persistent secret
- * storage, see [WasmSecureKeyValueStorage]).
+ * credential stores. Wave 16B scope change: ONLY the Seerr credential store
+ * is persistent now — [SeerrSecureCredentialsStore] binds to
+ * [LocalStorageSecureKeyValueStorage] (localStorage-backed; see that class
+ * for the why + the honest XSS caveat: cookie auth is browser-impossible, so
+ * the user-entered API key is the only functional Seerr credential and it is
+ * config-tier, not secret-tier). The Arr, subtitle-provider — and via
+ * platform modules the Jellyfin — credential stores KEEP the web v1
+ * session-memory cut ([WasmSecureKeyValueStorage], empty every boot).
  *
  * §Phase W spike outcome (recorded per plan): androidx.datastore 1.2.1 DOES
  * ship a fully usable wasmJs surface for custom persistence — `Storage<T>` /
@@ -71,12 +78,19 @@ fun webDatastoreModule(): Module = module {
         webPreferencesDataStore("subtitle_provider_prefs")
     }
 
+    // Wave 16B: the ONLY persistent credential store on web — the API key is
+    // the sole Seerr auth that can function in a browser (Cookie is a
+    // fetch-forbidden header), and it is user-entered config, so it persists
+    // via localStorage. See [LocalStorageSecureKeyValueStorage] for the full
+    // rationale + security caveat.
     single {
         SeerrSecureCredentialsStore(
-            WasmSecureKeyValueStorage(),
+            LocalStorageSecureKeyValueStorage(),
         )
     }
 
+    // Session-memory cuts UNCHANGED (see the module KDoc): no Arr/subtitle
+    // — and no Jellyfin — secret ever leaves process memory on web.
     single {
         ArrSecureCredentialsStore(
             WasmSecureKeyValueStorage(),

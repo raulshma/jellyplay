@@ -258,6 +258,9 @@ internal fun WebConnectFlow(
     // Wave 16A: opens the SECOND shared feature screen (Route.UpcomingCalendar
     // → UpcomingCalendarScreen). Same optionality contract as onOpenRequests.
     onOpenCalendar: (() -> Unit)? = null,
+    // Wave 16B: opens the Seerr credentials pane (WebSeerrPane) — the entry
+    // point that makes the requests feature usable on web (API-key creds).
+    onOpenSeerr: (() -> Unit)? = null,
 ) {
     // initial = null is honest on wasm v1: nothing restores a session at
     // boot (no persisted identity), so the flow genuinely starts empty. If a
@@ -274,6 +277,7 @@ internal fun WebConnectFlow(
             onOpenDiagnostics = onOpenDiagnostics,
             onOpenRequests = onOpenRequests,
             onOpenCalendar = onOpenCalendar,
+            onOpenSeerr = onOpenSeerr,
             modifier = modifier,
         )
     } else {
@@ -291,6 +295,7 @@ private fun ConnectedCard(
     onOpenDiagnostics: (() -> Unit)?,
     onOpenRequests: (() -> Unit)?,
     onOpenCalendar: (() -> Unit)?,
+    onOpenSeerr: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     var loggingOut by remember { mutableStateOf(false) }
@@ -408,6 +413,14 @@ private fun ConnectedCard(
             if (onOpenCalendar != null) {
                 Button(onClick = onOpenCalendar) {
                     Text("Calendar")
+                }
+            }
+            // Wave 16B: the Seerr credentials pane — the make-requests-work
+            // entry (server URL + API key, persist + test + disconnect).
+            // Primary Button like Requests (real feature), placed beside it.
+            if (onOpenSeerr != null) {
+                Button(onClick = onOpenSeerr) {
+                    Text("Seerr")
                 }
             }
             // Wave 13C E2E hook: gated entry into WebDiagnosticsPane. An
