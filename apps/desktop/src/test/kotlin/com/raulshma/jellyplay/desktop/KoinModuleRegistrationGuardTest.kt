@@ -25,11 +25,15 @@ import kotlin.test.fail
  * automatically; forgetting the one-line registration fails this test with
  * the exact fix.
  *
- * apps/web/Main.kt is covered by the reverse (typo/rename) check only: the
- * web shell does not depend on the feature modules yet (§Phase W adds them
- * as they gain wasm targets), so the forward check would fail today. When
- * the first feature module lands in the web module list, move the file into
- * [registrationFiles] so the forward ratchet covers it too.
+ * apps/web/Main.kt is covered per-site (wave 15C, the move the KDoc below
+ * anticipated): the web shell registers only the slice of the feature graph
+ * that has a wasmJs target — requestsModule since wave 15C, more as features
+ * land web targets — so its forward check runs against an explicit
+ * ALLOWLIST ([webForwardAllowlist]) with set-equality in BOTH directions:
+ * an allowlisted module missing from the web startKoin fails, and a feature
+ * module registered on web but absent from the allowlist fails too, so the
+ * allowlist can only grow by a conscious test edit (the same ratchet spirit
+ * as the desktop floor below). Desktop forward check + floor stay untouched.
  *
  * Source-scanning on plain text (no PSI) — deliberately cheap, like the
  * plan's "grep both registration files per feature" audit, but executable.
@@ -43,12 +47,22 @@ class KoinModuleRegistrationGuardTest {
     )
 
     /**
-     * Registration files covered by the reverse (typo/rename) check only — the
-     * web shell has no feature deps yet, so the forward check does not apply.
+     * Registration files whose forward check runs against a per-site
+     * allowlist instead of the full feature graph. The reverse (typo/rename)
+     * check still applies to them in full.
      */
-    private val reverseOnlyRegistrationFiles = listOf(
+    private val forwardAllowlistedRegistrationFiles = listOf(
         "Web app" to "apps/web/src/wasmJsMain/kotlin/com/raulshma/jellyplay/web/Main.kt",
     )
+
+    /**
+     * The web shell's forward allowlist: every shared feature module the web
+     * startKoin is EXPECTED to register, exactly. apps/web depends on one
+     * feature today ([requestsModule] — wave 15C put Route.Requests on the
+     * browser); when the next feature gains a wasmJs target and a web nav
+     * entry, register it in Main.kt AND add it here in the same commit.
+     */
+    private val webForwardAllowlist = setOf("requestsModule")
 
     /**
      * Module-variant prefixes that are intentionally platform-/core-scoped:
@@ -114,6 +128,49 @@ class KoinModuleRegistrationGuardTest {
         }
     }
 
+    /**
+     * Web-site forward ratchet (set-equality, both directions):
+     *  - every allowlisted module MUST appear in the web startKoin block
+     *    (the arrqueue/shortcuts lesson, web edition);
+     *  - every feature module appearing in the web block MUST be allowlisted
+     *    (a web target + registration for a new feature must update the
+     *    allowlist consciously, never silently).
+     */
+    @Test
+    fun webStartKoin_matchesItsForwardAllowlistExactly() {
+        val root = repoRoot()
+        val features = discoverFeatureModules(root)
+        val staleAllowlistEntries = webForwardAllowlist.filter { it !in features.keys }
+        assertTrue(
+            staleAllowlistEntries.isEmpty(),
+            "web forward allowlist names module(s) no longer declared in any shared " +
+                "feature commonMain: $staleAllowlistEntries — rename or removal? Update " +
+                "webForwardAllowlist alongside Main.kt.",
+        )
+
+        val (site, path) = forwardAllowlistedRegistrationFiles.single()
+        val block = startKoinModulesBlock(root.resolve(path))
+        val registered = features.keys.filter { name ->
+            Regex("\\b$name\\b").containsMatchIn(block)
+        }.toSet()
+
+        val missing = webForwardAllowlist - registered
+        val unlisted = registered - webForwardAllowlist
+        if (missing.isNotEmpty() || unlisted.isNotEmpty()) {
+            fail(
+                "$site's startKoin does not match its forward allowlist " +
+                    "(expected exactly $webForwardAllowlist):\n" +
+                    missing.joinToString("\n") { "  - '$it' allowlisted but NOT registered in $path" } +
+                    unlisted.joinToString("\n") {
+                        "  - '$it' registered in $path but NOT allowlisted (feature module — " +
+                            "add it to webForwardAllowlist in the same commit)"
+                } +
+                    "\nFix: keep apps/web/src/wasmJsMain/kotlin/com/raulshma/jellyplay/web/" +
+                    "Main.kt's modules(...) and webForwardAllowlist in lockstep.",
+            )
+        }
+    }
+
     @Test
     fun everyNonPlatformModuleInStartKoinBlocks_isDefinedInSharedSources() {
         val root = repoRoot()
@@ -122,7 +179,7 @@ class KoinModuleRegistrationGuardTest {
         val known = features.keys + core.keys + koinOwnModules
 
         val unknown = buildList {
-            for ((site, path) in registrationFiles + reverseOnlyRegistrationFiles) {
+            for ((site, path) in registrationFiles + forwardAllowlistedRegistrationFiles) {
                 val block = startKoinModulesBlock(root.resolve(path))
                 for (identifier in Regex("\\b[A-Za-z]\\w*Module\\b").findAll(block).map { it.value }) {
                     val skipped = platformPrefixes.any { identifier.startsWith(it) }

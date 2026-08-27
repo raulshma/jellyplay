@@ -23,11 +23,18 @@ import org.koin.dsl.module
  *  - [SessionCacheRegistry], [SeerrRepository] and [ArrRepository] are the
  *    promoted commonMain singletons; ctor deps resolve from
  *    `datastoreCommonModule` (stores + application scope) and
- *    `networkWasmModule` — which (since wave 15A) registers all four
- *    Seerr/TMDB/Radarr/Sonarr wasm clients. The requests graph resolves at
- *    RUNTIME on web once apps/web's startKoin includes `networkWasmModule +
- *    datastoreCommonModule + webDatastoreModule + dataWasmModule +
- *    requestsModule` (wave 15C's wiring).
+ *    `networkWasmModule`.
+ *
+ * DEPENDENCY CLOSURE (wave 15C update — the follow-up this module's first
+ * revision documented is DONE): the wasm clients this module's repos need —
+ * `SeerrApiClient`/`TmdbApiClient`/`RadarrApiClient`/`SonarrApiClient` — are
+ * registered by `networkWasmModule` (15A's KtorWasm* client bindings), and
+ * the web shell's startKoin (apps/web Main.kt) lists BOTH modules plus
+ * `requestsModule`, so the requests ViewModels resolve end-to-end at
+ * runtime on web (browser-verified by tools/e2e/web-verify.mjs, which also
+ * documents the remaining honesty cut: no Seerr credentials UI on web, and
+ * session-cookie auth is browser-impossible — only API-key creds can ever
+ * function there).
  */
 val dataWasmModule: Module = module {
 

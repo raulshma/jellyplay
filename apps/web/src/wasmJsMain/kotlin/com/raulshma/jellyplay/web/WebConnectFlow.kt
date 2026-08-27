@@ -251,6 +251,10 @@ internal fun WebConnectFlow(
     // Wave 13C: opens the gated E2E diagnostics pane (WebDiagnosticsPane)
     // — deliberately optional so nothing renders until the nav root wires it.
     onOpenDiagnostics: (() -> Unit)? = null,
+    // Wave 15C: opens the FIRST shared feature screen (Route.Requests →
+    // RequestsScreen). Optional like the other hooks so WebConnectFlow stays
+    // renderable without a nav root behind it.
+    onOpenRequests: (() -> Unit)? = null,
 ) {
     // initial = null is honest on wasm v1: nothing restores a session at
     // boot (no persisted identity), so the flow genuinely starts empty. If a
@@ -265,6 +269,7 @@ internal fun WebConnectFlow(
             networkStatus = networkStatus,
             onOpenConnectionDetails = onOpenConnectionDetails,
             onOpenDiagnostics = onOpenDiagnostics,
+            onOpenRequests = onOpenRequests,
             modifier = modifier,
         )
     } else {
@@ -280,6 +285,7 @@ private fun ConnectedCard(
     networkStatus: NetworkStatus,
     onOpenConnectionDetails: (() -> Unit)?,
     onOpenDiagnostics: (() -> Unit)?,
+    onOpenRequests: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     var loggingOut by remember { mutableStateOf(false) }
@@ -378,6 +384,16 @@ private fun ConnectedCard(
             if (onOpenConnectionDetails != null) {
                 Button(onClick = onOpenConnectionDetails) {
                     Text("Connection details")
+                }
+            }
+            // Wave 15C: the first SHARED feature screen. A primary Button
+            // (real feature, unlike the diagnostics tooling below) placed
+            // before it. The screen itself renders the honest "Seerr not
+            // configured" error state until Seerr credentials exist on web —
+            // see Main.kt's SEERR-ON-WEB HONESTY note.
+            if (onOpenRequests != null) {
+                Button(onClick = onOpenRequests) {
+                    Text("Requests")
                 }
             }
             // Wave 13C E2E hook: gated entry into WebDiagnosticsPane. An

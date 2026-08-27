@@ -15,8 +15,9 @@ kotlin {
     // image engine (W.4) is wired since the repo-wide coil 3.4.0 pin
     // (libs.versions.toml version note): 3.5.0's wasmJs klibs are Kotlin-
     // 2.4-ABI and silently skipped by our 2.3.21 loader. Wave 11B adds the
-    // real navigation shell (WebAppRoot over the JB fork's NavDisplay);
-    // feature screens are still later slices.
+    // real navigation shell (WebAppRoot over the JB fork's NavDisplay).
+    // Wave 15C: first FEATURE screen — `entry<Route.Requests>` renders the
+    // shared RequestsScreen (15B's wasm target) with the requests DI slice.
     wasmJs {
         browser {
             commonWebpackConfig {
@@ -54,13 +55,27 @@ kotlin {
                 // AuthApiClient/LibraryApiClient/PlaybackApiClient bindings).
                 // Deliberately absent: paging-compose (spike w-10C §1 proves
                 // its 3.5.0 wasm klibs exist, but no consuming web module
-                // needs LazyPagingItems yet), database/data (no Room on
-                // wasm v1).
+                // needs LazyPagingItems yet) and database (no Room on wasm
+                // v1 — core:data's wasm slice is the Room-free repository
+                // layer, wired below).
                 implementation(project(":shared:core:model"))
                 implementation(project(":shared:core:designsystem"))
                 implementation(project(":shared:core:ui"))
                 implementation(project(":shared:core:datastore"))
                 implementation(project(":shared:core:network"))
+                // Wave 15C: dataWasmModule (the requests repo slice —
+                // SeerrRepository/ArrRepository over the wasm clients) is
+                // imported into Main.kt's startKoin, hence the direct edge.
+                implementation(project(":shared:core:data"))
+                // Wave 15C: the FIRST shared feature screen renders here —
+                // WebAppRoot's `entry<Route.Requests>` composes
+                // RequestsScreen (VM ctor deps: SeerrRepository +
+                // ArrRepository from dataWasmModule above, ExperimentalStore
+                // from datastoreCommonModule). Deliberately the only feature
+                // edge: every other shared/feature module still has no
+                // wasmJs target, and the KoinModuleRegistrationGuardTest's
+                // web forward allowlist pins exactly this one registration.
+                implementation(project(":shared:feature:requests"))
                 // Wave wC (HtmlVideoEngine): the wasm-visible MediaEngine
                 // contract + EnginePositionTicker/WebPlaybackMappings the
                 // web video engine implements. Not wired into the shell UI
@@ -95,6 +110,18 @@ kotlin {
                 implementation(libs.ktor.client.core)
 
                 implementation(libs.koin.core)
+                // Wave 15C: the koin-compose runtime behind the requests
+                // entry's `koinViewModel()` (RequestsScreen's default
+                // parameter, compiled inside the feature klib). Explicit
+                // edges rather than relying on the feature module's
+                // transitive `implementation` deps reaching the wasm link —
+                // apps/desktop states the same policy (its line ~170: feature
+                // screens bring their own koin-compose edges). Both
+                // artifacts are ABI-safe on this repo's Kotlin 2.3.21 loader
+                // (4.2.2 wasm klibs require only stdlib 2.3.20; verified in
+                // the wave 15B spike before the catalog entries landed).
+                implementation(libs.koin.compose)
+                implementation(libs.koin.compose.viewmodel)
                 implementation(libs.kotlinx.coroutines.core)
                 // Web nav root (WebAppRoot, DesktopAppRoot's pattern): NavKey
                 // is public API surface of shared/core/ui's navigation

@@ -7,6 +7,7 @@ import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.crossfade
+import com.raulshma.jellyplay.core.data.di.dataWasmModule
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
 import com.raulshma.jellyplay.core.datastore.di.webDatastoreModule
@@ -14,6 +15,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.network.di.networkWasmModule
+import com.raulshma.jellyplay.feature.requests.di.requestsModule
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.js.Js
 import kotlinx.browser.document
@@ -40,17 +42,47 @@ import org.koin.core.context.startKoin
  * `ComposeViewport` is the current CMP web entry (it replaced the deprecated
  * `CanvasBasedWindow`); it renders into the document body, taking the full
  * viewport.
+ *
+ * Wave 15C — the first FEATURE screen renders here: `requestsModule` (the
+ * shared RequestsViewModel registration, same `module {}` the desktop shell
+ * lists) + `dataWasmModule` (15B's requests repository slice:
+ * SeerrRepository/ArrRepository over 15A's Seerr/TMDB/Radarr/Sonarr wasm
+ * clients) join the startKoin list, and [WebAppRoot] gains an
+ * `entry<Route.Requests>` composing the shared RequestsScreen. The shell
+ * also provisions the ViewModelStoreOwner/LifecycleOwner pair at this root
+ * ([ProvideWebShellViewModelOwners] — ComposeViewport provisions none; the
+ * requests module's own fallback wrapper is pass-through since this exists).
+ *
+ * SEERR-ON-WEB HONESTY (the wiring-site place a reader hits it): the
+ * requests feature talks to a separate Overseerr/Jellyseerr server whose
+ * credentials come from SeerrSecureCredentialsStore — on web that store is
+ * [com.raulshma.jellyplay.core.datastore.WasmSecureKeyValueStorage],
+ * SESSION-MEMORY ONLY (empty every boot; no UI to enter credentials exists
+ * in the web shell this wave). And of the two Seerr auth methods, the
+ * session-cookie one is BROWSER-IMPOSSIBLE by platform rule: a browser tab
+ * cannot set the `Cookie` request header (forbidden header) nor read
+ * `Set-Cookie` responses, so the cookie-based Seerr login the Android/desktop
+ * apps perform can never function here — only the API-key credential mode
+ * can work, and only once a settings/credentials UI lands (see
+ * networkWasmModule's ArrSeerrApiSupport note for the same limitation at the
+ * client layer). NET RESULT: until then the requests screen on web shows
+ * its honest not-configured error state ("Seerr not configured" + Retry)
+ * — the state the E2E lane asserts as v1 truth.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     // DI first: everything composable resolves lazily through Koin, so the
     // container must exist before the first composition. Same module shape
-    // as the desktop shell's startKoin, minus the jvm-only stacks.
+    // as the desktop shell's startKoin, minus the jvm-only stacks. Wave 15C
+    // adds the requests slice (feature VM + data repositories) — exactly the
+    // set the KoinModuleRegistrationGuardTest's web allowlist pins.
     val koinApp = startKoin {
         modules(
             datastoreCommonModule,
             webDatastoreModule(),
             networkWasmModule,
+            dataWasmModule,
+            requestsModule,
         )
     }
 
@@ -96,18 +128,23 @@ fun main() {
         }
 
         JellyPlayTheme(darkTheme = isSystemInDarkTheme(), dynamicColor = false) {
-            // The one shared session state the three wasm API clients are
-            // built around — passed in directly rather than via a compose
-            // Koin scope (koin-compose is not a web-shell dep yet). Wave 12C
-            // adds the auth client (the session's writer) and the shared
-            // "user_prefs" DataStore (last-server-url persistence for the
-            // connect form); WebAppRoot provisions the core/ui composition
-            // locals around its NavDisplay and renders the web-only panes.
-            WebAppRoot(
-                sessionState = koinApp.koin.get(),
-                authApiClient = koinApp.koin.get(),
-                userPrefs = koinApp.koin.get(DatastoreQualifiers.userPreferencesDataStore),
-            )
+            // Wave 15C: the ONE ViewModelStoreOwner/LifecycleOwner path (see
+            // WebShellPlatformOwners.kt) — wraps the whole shell so the
+            // requests entry's koinViewModel() resolves, desktop-style.
+            ProvideWebShellViewModelOwners {
+                // The one shared session state the three wasm API clients are
+                // built around — passed in directly rather than via a compose
+                // Koin scope (koin-compose is not a web-shell dep yet). Wave 12C
+                // adds the auth client (the session's writer) and the shared
+                // "user_prefs" DataStore (last-server-url persistence for the
+                // connect form); WebAppRoot provisions the core/ui composition
+                // locals around its NavDisplay and renders the web-only panes.
+                WebAppRoot(
+                    sessionState = koinApp.koin.get(),
+                    authApiClient = koinApp.koin.get(),
+                    userPrefs = koinApp.koin.get(DatastoreQualifiers.userPreferencesDataStore),
+                )
+            }
         }
     }
 }

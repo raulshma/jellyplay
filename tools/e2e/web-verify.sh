@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Web E2E verification lane (wave 13C): builds the webpack bundle, then drives
-# headless Edge through the canvas app against a real Jellyfin server via CDP
-# (see tools/e2e/web-verify.mjs). Evidence (screenshot + result.json) lands in
-# a TEMP dir that is intentionally never committed.
+# Web E2E verification lane (wave 13C; extended wave 15C): builds the webpack
+# bundle, then drives headless Edge through the canvas app against a real
+# Jellyfin server via CDP (see tools/e2e/web-verify.mjs) — diagnostics flow,
+# then the first feature screen (Route.Requests) with its honest
+# not-configured state. Evidence (screenshots + result.json) lands in a TEMP
+# dir that is intentionally never committed.
 #
 # Env (JP_-prefixed: USERNAME/PASSWORD collide with standard Windows env
 # vars — Git Bash exports USERNAME=<account>, which silently overrode the
