@@ -15,6 +15,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -226,10 +227,13 @@ internal class WebConnectController(
  * there is no snackbar host, and window.alert is banned. This is connect/auth
  * browsing status ONLY — not a feature browser.
  *
- * RUNTIME HONESTY: compile-level proof only (:apps:web:compileKotlinWasmJs);
- * no browser lane exists in this repo, so the forms' click-through and the
- * real round-trips against a live Jellyfin host remain unverified until the
- * coordinator's real-server browser pass.
+ * RUNTIME HONESTY: verified in a real browser (2026-08-27, wave 13C) — the
+ * headless-Edge CDP lane (tools/e2e/web-verify.mjs) clicked through this
+ * exact flow against a live Jellyfin 10.11.11 server: URL typed via CDP
+ * Input.insertText, probe (Connect) → sign-in fields, credentials entered,
+ * Sign in → ConnectedCard, with zero console errors. Autoplay-muted
+ * HtmlVideoEngine playback from the connected session was verified one level
+ * deeper in WebDiagnosticsPane the same run.
  *
  * Cut from v1 (documented deltas vs DesktopSignInPane): QuickConnect,
  * remembered-user prefill, password visibility toggle (no Tabler icon set on
@@ -243,6 +247,9 @@ internal fun WebConnectFlow(
     networkStatus: NetworkStatus,
     modifier: Modifier = Modifier,
     onOpenConnectionDetails: (() -> Unit)? = null,
+    // Wave 13C: opens the gated E2E diagnostics pane (WebDiagnosticsPane)
+    // — deliberately optional so nothing renders until the nav root wires it.
+    onOpenDiagnostics: (() -> Unit)? = null,
 ) {
     // initial = null is honest on wasm v1: nothing restores a session at
     // boot (no persisted identity), so the flow genuinely starts empty. If a
@@ -256,6 +263,7 @@ internal fun WebConnectFlow(
             session = active,
             networkStatus = networkStatus,
             onOpenConnectionDetails = onOpenConnectionDetails,
+            onOpenDiagnostics = onOpenDiagnostics,
             modifier = modifier,
         )
     } else {
@@ -270,6 +278,7 @@ private fun ConnectedCard(
     session: ActiveSession,
     networkStatus: NetworkStatus,
     onOpenConnectionDetails: (() -> Unit)?,
+    onOpenDiagnostics: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     var loggingOut by remember { mutableStateOf(false) }
@@ -368,6 +377,15 @@ private fun ConnectedCard(
             if (onOpenConnectionDetails != null) {
                 Button(onClick = onOpenConnectionDetails) {
                     Text("Connection details")
+                }
+            }
+            // Wave 13C E2E hook: gated entry into WebDiagnosticsPane. An
+            // OutlinedButton so it reads as secondary tooling next to the
+            // primary actions — the pane is a verification surface, not a
+            // user-facing feature.
+            if (onOpenDiagnostics != null) {
+                OutlinedButton(onClick = onOpenDiagnostics) {
+                    Text("Diagnostics")
                 }
             }
         }

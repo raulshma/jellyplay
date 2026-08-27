@@ -71,13 +71,16 @@ fun main() {
         // so the registry can never be populated on this target and explicit
         // registration is mandatory, not merely deterministic.
         //
-        // RUNTIME HONESTY (mirrors HtmlVideoEngine): this slice proves the
-        // pipeline COMPILES under wasmJs only (:apps:web:compileKotlinWasmJs;
-        // karma/browser testing is disabled by policy in this repo). No
-        // browser has yet rendered a real AsyncImage through this loader —
-        // a later real-server browser pass must verify actual artwork
-        // fetches work end-to-end (engine selection, CORS against the
-        // Jellyfin host, cache behaviour).
+        // RUNTIME HONESTY: VERIFIED IN A REAL BROWSER (2026-08-27, wave 13C)
+        // — the headless-Edge CDP lane (tools/e2e/web-verify.mjs) drove the
+        // connect/sign-in flow and the gated WebDiagnosticsPane against a
+        // live Jellyfin 10.11.11 server: a Primary artwork request through
+        // THIS loader (KtorNetworkFetcherFactory + HttpClient(Js)) decoded
+        // and rendered (painter State.Success; screenshot evidence kept out
+        // of the repo), with zero console errors and zero uncaught
+        // exceptions. Bearer-less image URLs (SDK parity — no api_key) load
+        // fine against that server. Still unverified: cache behaviour over
+        // time, large libraries, and non-Jellyfin image hosts.
         setSingletonImageLoaderFactory { context ->
             ImageLoader.Builder(context)
                 .components {

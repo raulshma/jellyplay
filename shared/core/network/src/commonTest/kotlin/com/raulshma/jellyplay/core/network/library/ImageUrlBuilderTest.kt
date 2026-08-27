@@ -66,4 +66,26 @@ class ImageUrlBuilderTest {
         assertFalse(isGuid(""))
         assertFalse(isGuid("0b0f2a75-5677-4c76-a416-a1c0d9d1111g"))
     }
+
+    @Test
+    fun `compact 32-hex ids normalize to the dashed sdk form`() {
+        // Wave 13C harness finding: Jellyfin 10.11 /Items responses carry
+        // compact 32-hex ids; the builder must still emit the dashed URL the
+        // JVM SDK produces (the server accepts both path forms).
+        assertEquals(
+            "$base/Items/0b0f2a75-5677-4c76-a416-a1c0d9d11111/Images/Primary?maxWidth=300",
+            buildItemImageUrl(base, "0b0f2a7556774c76a416a1c0d9d11111", "Primary", maxWidth = 300),
+        )
+        assertEquals(
+            "0b0f2a75-5677-4c76-a416-a1c0d9d11111",
+            normalizeItemIdGuid("0b0f2a7556774c76a416a1c0d9d11111"),
+        )
+        assertEquals(
+            "0b0f2a75-5677-4c76-a416-a1c0d9d11111",
+            normalizeItemIdGuid("0b0f2a75-5677-4c76-a416-a1c0d9d11111"),
+            "dashed input passes through unchanged",
+        )
+        assertEquals(null, normalizeItemIdGuid("0b0f2a75-5677-4c76-a416-a1c0d9d1111g"), "non-hex refused")
+        assertEquals(null, normalizeItemIdGuid("0b0f2a75"), "truncated refused")
+    }
 }
