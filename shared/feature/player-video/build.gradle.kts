@@ -88,6 +88,15 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.coroutines.test)
             implementation(libs.mockk)
+            // Wave 14A: desktop compose UI test for the keyboard-focus grab
+            // (PlayerKeyboardFocusGrabUiTest) — runComposeUiTest is the
+            // framework-agnostic ComposeUiTest entry (no JUnit4 runner; the
+            // suite stays on kotlin-test like the rest of jvmTest).
+            @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+            implementation(compose.uiTest)
+            // The UI test needs a real skia scene: currentOs pulls the
+            // skiko-awt runtime (native lib) the ui-test scene renders with.
+            implementation(compose.desktop.currentOs)
         }
         // Wave 7C shape (subtitle-tester androidMain-heavy precedent, one
         // notch further): every media3/libmpv/libVLC/cast type, the engine

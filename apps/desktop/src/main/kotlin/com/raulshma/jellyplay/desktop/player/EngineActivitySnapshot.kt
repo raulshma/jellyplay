@@ -70,6 +70,19 @@ data class EngineActivitySnapshot(
     }
 
     /**
+     * True when the samples prove playback was RUNNING and then flipped to
+     * paused at/after [sinceMs] — the wave-14A SPACE regression gate's toggle
+     * evidence. Played at some point (any playing sample) AND the most recent
+     * sample after [sinceMs] reads paused. The "latest" (not "all") shape
+     * tolerates a pre-key playing sample straddling the injection instant (the
+     * recorder samples on a ~500 ms cadence); polling clears once a post-pause
+     * sample lands.
+     */
+    fun pausedSince(sinceMs: Long): Boolean =
+        positionSamples.any { it.isPlaying } &&
+            positionSamples.lastOrNull { it.atMs > sinceMs }?.isPlaying == false
+
+    /**
      * The harness's playback gate: the engine reported isPlaying AND the
      * playhead advanced at least [minAdvanceMs] while playing.
      */

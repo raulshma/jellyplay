@@ -633,6 +633,27 @@ fun VideoPlayerScreen(
         }
     }
 
+    // Desktop (wave 14A): the hardware-keyboard layer must OWN focus whenever
+    // it composes, not only once the controls have hidden — see
+    // [grabsKeyboardFocusWithControlsVisible]. The at-HEAD effect above fires
+    // on the showControls→false edge, but the controls START visible
+    // (`showControls = true`) and auto-hide only after controlsTimeoutMs (or
+    // never, while a sheet/seek/overflow suppresses it), so a desktop key
+    // press in that window had no focused node to land on: Compose's
+    // null-focus fallback dispatch stops at the topmost key-input node (the
+    // desktop shell's scaffold onPreviewKeyEvent Row) — ESC popped, SPACE
+    // never reached this screen's handler (wave 13B harness finding).
+    // [layerComposed] tracks the keyboard layer's modifier branch above, so
+    // the grab re-arms when it re-composes after a sheet closes. The Android
+    // actual returns false, so the effect composes nothing on Android (phone
+    // and TV unchanged).
+    if (!isTv && hasHardwareKeyboard) {
+        PlayerKeyboardFocusGrabEffect(
+            focusRequester = keyboardFocusRequester,
+            layerComposed = currentSheet == PlayerSheet.None,
+        )
+    }
+
     val doPlay: () -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
         {
             playbackIntended = true

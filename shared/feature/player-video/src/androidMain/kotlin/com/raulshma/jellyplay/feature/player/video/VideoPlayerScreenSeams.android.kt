@@ -254,6 +254,14 @@ internal actual fun rememberHasHardwareKeyboard(): Boolean {
     }
 }
 
+/**
+ * Android keeps the at-HEAD focus timing: the keyboard layer's focus is
+ * requested only on the controls-hidden edge (the screen's focus-request
+ * effect), so this desktop-only grab stays a no-op here and phone/TV
+ * behavior is byte-identical to HEAD.
+ */
+internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = false
+
 @Composable
 internal actual fun rememberIsPortraitOrientation(): Boolean =
     LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
