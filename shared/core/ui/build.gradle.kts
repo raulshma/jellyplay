@@ -40,12 +40,15 @@ kotlin {
                 enabled = false
             }
         }
-        // Headless wasm commonTest lane (wave 12D): wasmJsNodeTest runs the
-        // parser suite under Kotlin's downloaded Node.js distribution — no
-        // Karma, no Chrome. Same PREREQUISITE as :shared:core:model: needs
-        // repositoriesMode PREFER_PROJECT in settings (FAIL_ON_PROJECT_REPOS
-        // trips kotlinWasmNodeJsSetup's 'nodejs.org/dist' repo add); the flip
-        // was deliberately not kept here pending an owner governance call.
+        // Headless wasm test lane (wave 12D): wasmJsNodeTest compiles the full
+        // main+test wasm graphs headlessly — no Karma, no Chrome — but CANNOT
+        // EXECUTE this module's tests under plain Node: the Compose graph
+        // links skiko.mjs and Node cannot fetch/prepare its wasm ("both async
+        // and sync fetching of the wasm failed"). Execution is proven green
+        // only for skiko-free modules (:shared:core:model). Kept as a compile
+        // gate plus future hook; same PREFER_PROJECT prerequisite as
+        // :shared:core:model (FAIL_ON_PROJECT_REPOS trips
+        // kotlinWasmNodeJsSetup's 'nodejs.org/dist' repo add).
         nodejs()
     }
 

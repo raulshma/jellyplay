@@ -9,8 +9,9 @@ import kotlin.test.assertTrue
 
 /**
  * Deterministic structure tests for [MiniMarkdownParser] — block sequence and
- * span flags only, no rendering. Pure stdlib commonTest: runs under jvmTest and
- * the headless wasmJsNodeTest Node lane alike.
+ * span flags only, no rendering. Pure stdlib commonTest, executed via jvmTest;
+ * stdlib-only by construction so a future skiko-free wasm host can take the
+ * suite over unchanged.
  */
 class MiniMarkdownParserTest {
 
@@ -70,6 +71,26 @@ class MiniMarkdownParserTest {
         val blocks = MiniMarkdownParser.parse("## **bold** head")
         val spans = assertIs<Block.Heading>(blocks.single()).spans
         assertEquals(listOf(Span("bold", bold = true), Span(" head")), spans)
+    }
+
+    @Test
+    fun heading_trailingClosingSequenceStripsWhenWhitespacePrecedes() {
+        val h = assertIs<Block.Heading>(MiniMarkdownParser.parse("## Title ##").single())
+        assertEquals(2, h.level)
+        assertEquals(listOf(Span("Title")), h.spans)
+    }
+
+    @Test
+    fun heading_hashRunWithoutPrecedingSpaceStaysInText() {
+        // CommonMark: the closing sequence needs whitespace before it.
+        val h = assertIs<Block.Heading>(MiniMarkdownParser.parse("## title#").single())
+        assertEquals(listOf(Span("title#")), h.spans)
+    }
+
+    @Test
+    fun heading_multiHashClosingSequenceCollapsesToo() {
+        val h = assertIs<Block.Heading>(MiniMarkdownParser.parse("# one ### ").single())
+        assertEquals(listOf(Span("one")), h.spans)
     }
 
     // endregion
@@ -176,6 +197,34 @@ class MiniMarkdownParserTest {
         assertEquals(listOf(Span("\\*", code = true)), spans)
     }
 
+    @Test
+    fun inline_widenedEscapeSetCoversAmpersandAndDollar() {
+        val spans = MiniMarkdownParser.parseInline("""AT\&T sells for \$5""")
+        assertEquals(listOf(Span("AT&T sells for $5")), spans)
+    }
+
+    @Test
+    fun inline_doubledOpenerRequiresAdjacentTextLikeSinglePath() {
+        // CommonMark left-flanking: '**' followed by whitespace is literal,
+        // symmetric with the single-marker openOk guard.
+        assertEquals(
+            listOf(Span("** bold**")),
+            MiniMarkdownParser.parseInline("** bold**"),
+        )
+        assertEquals(
+            listOf(Span("__ i__ and __ __ tail")),
+            MiniMarkdownParser.parseInline("__ i__ and __ __ tail"),
+        )
+    }
+
+    @Test
+    fun inline_properlyFlankedDoubledStillEmphasizes() {
+        assertEquals(
+            listOf(Span("b", bold = true), Span(" ok")),
+            MiniMarkdownParser.parseInline("**b** ok"),
+        )
+    }
+
     // endregion
 
     // region links & images --------------------------------------------------
@@ -236,6 +285,37 @@ class MiniMarkdownParserTest {
         assertEquals(
             listOf(Span("![alt")),
             MiniMarkdownParser.parseInline("![alt"),
+        )
+    }
+
+    @Test
+    fun link_balancedParensInsideUrlSurvive() {
+        val spans = MiniMarkdownParser.parseInline(
+            "[wiki](https://en.wikipedia.org/wiki/A_(b)) now",
+        )
+        assertEquals(
+            listOf(
+                Span("wiki", url = "https://en.wikipedia.org/wiki/A_(b)"),
+                Span(" now"),
+            ),
+            spans,
+        )
+    }
+
+    @Test
+    fun link_unbalancedOpenParenConsumesToEofAsLiteral() {
+        assertEquals(
+            listOf(Span("[x](a(b")),
+            MiniMarkdownParser.parseInline("[x](a(b"),
+        )
+    }
+
+    @Test
+    fun link_loneCloseParenAfterDepthStillClosesUrl() {
+        // ')' that would take depth negative ends the url exactly like depth 0.
+        assertEquals(
+            listOf(Span("y", url = "u"), Span("(z")) ,
+            MiniMarkdownParser.parseInline("[y](u)(z"),
         )
     }
 
@@ -308,6 +388,19 @@ class MiniMarkdownParserTest {
         assertIs<Block.Paragraph>(blocks[1])
     }
 
+    @Test
+    fun fence_quadrupleBackticksUnsupportedPinsBehavior() {
+        // Disclosed approximation: >3 backticks are not a valid fence opener.
+        // ````x opens as an ordinary ``` fence whose info string swallows the
+        // extra "`x"; only a BARE ``` closes, so the intended closer is
+        // consumed as content and EOF ends the block.
+        val code = assertIs<Block.CodeBlock>(
+            MiniMarkdownParser.parse("````x\na\n````").single(),
+        )
+        assertEquals("`x", code.info)
+        assertEquals("a\n````", code.content)
+    }
+
     // endregion
 
     // region lists -----------------------------------------------------------
@@ -348,6 +441,40 @@ class MiniMarkdownParserTest {
     fun list_markerWithoutSpaceIsLiteralParagraphText() {
         val p = assertIs<Block.Paragraph>(MiniMarkdownParser.parse("-5 degrees").single())
         assertEquals(listOf(Span("-5 degrees")), p.spans)
+    }
+
+    @Test
+    fun list_orderedMarkerWithoutSpaceStaysParagraph() {
+        // Regression: the old optional-space regex invented ListItems from
+        // "12.May sales report" / "1.5x speedups land".
+        for (input in listOf("12.May sales report", "1.5x speedups land")) {
+            val p = assertIs<Block.Paragraph>(
+                MiniMarkdownParser.parse(input).single(),
+                "input: $input",
+            )
+            assertEquals(listOf(Span(input)), p.spans, "input: $input")
+        }
+        // Bare "N." with no content also stays paragraph.
+        assertIs<Block.Paragraph>(MiniMarkdownParser.parse("3.").single())
+    }
+
+    @Test
+    fun list_multiDigitOrderedIndicesParseUpToNineDigits() {
+        val ten = assertIs<Block.ListItem>(MiniMarkdownParser.parse("10. ten").single())
+        assertEquals(10, ten.index)
+        val max = MiniMarkdownParser.parse("123456789. big")
+        assertEquals(123456789, assertIs<Block.ListItem>(max.single()).index)
+        // Ten digits exceed the 9-digit cap (disclosed approximation).
+        val overflow = MiniMarkdownParser.parse("1234567890. x").single()
+        assertIs<Block.Paragraph>(overflow)
+    }
+
+    @Test
+    fun list_orderedSuffixPreservesAuthoredSeparator() {
+        val dot = assertIs<Block.ListItem>(MiniMarkdownParser.parse("4. four").single())
+        assertEquals('.', dot.suffix)
+        val paren = assertIs<Block.ListItem>(MiniMarkdownParser.parse("5) five").single())
+        assertEquals(')', paren.suffix)
     }
 
     @Test
@@ -414,6 +541,25 @@ class MiniMarkdownParserTest {
     }
 
     @Test
+    fun rule_spacedRunsFormRule() {
+        // Regression for the commit-message promise: CommonMark spaced breaks.
+        val inputs = listOf("* * *", "- - -", "_ _ _", "*  *  * * *")
+        inputs.forEach { input ->
+            if (input == "*  *  * * *") {
+                // Double spaces are NOT single-space separators → falls back
+                // to literal/list handling; pinned here as documentation.
+                val first = MiniMarkdownParser.parse(input).first()
+                assertIs<Block.ListItem>(first, "double-space fallback: $input")
+            } else {
+                assertIs<Block.HorizontalRule>(
+                    MiniMarkdownParser.parse(input).single(),
+                    "input: $input",
+                )
+            }
+        }
+    }
+
+    @Test
     fun rule_twoDashesStayParagraph() {
         val p = assertIs<Block.Paragraph>(MiniMarkdownParser.parse("--").single())
         assertEquals(listOf(Span("--")), p.spans)
@@ -468,6 +614,26 @@ class MiniMarkdownParserTest {
         val blocks = MiniMarkdownParser.parse("intro\n- bullet")
         val items = blocks.map { it::class.simpleName }
         assertEquals(listOf("Paragraph", "ListItem"), items)
+    }
+
+    @Test
+    fun doc_boldAndCodeSpanAcrossSoftLineBreaks() {
+        // Paragraph lines join with '\n' BEFORE inline parsing, so emphasis
+        // and code spans survive the soft break.
+        val p = assertIs<Block.Paragraph>(
+            MiniMarkdownParser.parse("start **goes\nacross** end").single(),
+        )
+        assertEquals(
+            listOf(Span("start "), Span("goes\nacross", bold = true), Span(" end")),
+            p.spans,
+        )
+        val codeP = assertIs<Block.Paragraph>(
+            MiniMarkdownParser.parse("run `multi\nline` now").single(),
+        )
+        assertEquals(
+            listOf(Span("run "), Span("multi\nline", code = true), Span(" now")),
+            codeP.spans,
+        )
     }
 
     // endregion

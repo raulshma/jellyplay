@@ -75,7 +75,10 @@ private fun RenderBlock(block: MiniMarkdownParser.Block) {
                 3 -> MaterialTheme.typography.titleSmall
                 else -> MaterialTheme.typography.titleSmall
             }
-            // Levels 1-3 bold, level 4 semibold — identical weights to JVM.
+            // Levels 1-3 bold, level 4 semibold — mirrors the jvmShared
+            // mikepenz map's weights; h5/h6 only clamp here into the level-4
+            // slot (the JVM pipeline gives them its own smaller entry), so the
+            // *sizes* of clamped headings diverge, not the bold/semibold rule.
             val weight = if (block.level <= 3) FontWeight.Bold else FontWeight.SemiBold
             RenderSpans(block.spans, base.copy(fontWeight = weight))
         }
@@ -104,7 +107,9 @@ private fun RenderBlock(block: MiniMarkdownParser.Block) {
         }
 
         is MiniMarkdownParser.Block.ListItem -> {
-            val marker = if (block.ordered) "${block.index}. " else "• "
+            // Authored marker verbatim: bullet, or number + the authored
+            // separator ('.' or ')') exactly as parsed.
+            val marker = if (block.ordered) "${block.index}${block.suffix} " else "• "
             // Hanging indent: first line starts at the margin carrying the
             // marker; wrapped continuation lines indent past it.
             val bodyFontSize = MaterialTheme.typography.bodySmall.fontSize

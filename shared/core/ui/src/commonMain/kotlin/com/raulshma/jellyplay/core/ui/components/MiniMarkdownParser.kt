@@ -8,22 +8,33 @@ package com.raulshma.jellyplay.core.ui.components
  *
  * COVERED SYNTAX (per-rule precision lives next to each branch):
  *  - ATX headings `#`..`######`; levels beyond 4 clamp down to 4 rendering steps
+ *    (mirroring the jvmShared mikepenz typography map); CommonMark-style
+ *    trailing closing sequence " ##" is stripped when whitespace precedes it;
+ *    "#tag" without a following space is literal text
  *  - paragraphs; single newlines inside a paragraph are preserved as '\n' so
- *    changelog lines keep their breaks
+ *    changelog lines keep their breaks; bold/code may span the joined lines
  *  - inline: **bold**, __bold__, *italic*, _italic_, `` `code` ``,
- *    backslash-escaped ASCII punctuation, [text](url) links; `![alt](url)`
- *    images degrade to their alt text as plain spans
+ *    backslash-escaped ASCII punctuation (full CommonMark set), [text](url)
+ *    links with balanced-paren urls, `![alt](url)` images degrade to their alt
+ *    text as plain spans
  *  - fenced code blocks ``` ``` ```: content verbatim incl. blank lines;
  *    unterminated fences run to end of input; inline code never parses markup
- *  - unordered lists `- `/`* `, ordered lists `N.`/`N)` displaying the
- *    explicitly written number (no auto-renumbering: what the author wrote is
- *    what renders, keeping runs like `7.` then `9.` exactly as authored)
+ *  - unordered lists `- `/`* `, ordered lists `N.`/`N) ` requiring exactly one
+ *    space after the marker, displaying marker number AND separator verbatim
+ *    (no auto-renumbering: what the author wrote is what renders)
  *  - blockquotes `> ` (flat: one span-list per source line, no nesting)
- *  - horizontal rules `---` / `***` / `___`
+ *  - horizontal rules `---` / `***` / `___` and their spaced forms
+ *    `- - -` / `* * *` / `_ _ _`
  *
  * NOT covered (stays literal text): setext headings, tables, task-list
  * checkboxes, HTML/tags/entities, reference links, autolinks `<http://…>`,
- * nested blocks inside quotes or list items.
+ * strikethrough `~~`, nested blocks inside quotes or list items.
+ * DISCLOSED APPROXIMATIONS: ordered markers cap at 9 digits (`1234567890. x`
+ * stays paragraph text); fences longer than three backticks are unsupported —
+ * ` ```` ` opens as a fence whose info string swallows the extra backtick and
+ * only a bare ` ``` ` closes, unterminated content runs to EOF unchanged;
+ * pathological inline input costs up to O(n^2) from delimiter rescan — accepted
+ * for changelog/README-scale text.
  */
 internal object MiniMarkdownParser {
 
@@ -52,9 +63,16 @@ internal object MiniMarkdownParser {
 
         /**
          * One list item. [index] is 0 for unordered items; for ordered ones it
-         * is the explicitly written number (no auto-renumbering).
+         * is the explicitly written number (no auto-renumbering) and [suffix]
+         * carries the authored separator ('.' or ')') so rendering shows the
+         * marker exactly as written.
          */
-        data class ListItem(val ordered: Boolean, val index: Int, val spans: List<Span>) : Block
+        data class ListItem(
+            val ordered: Boolean,
+            val index: Int,
+            val suffix: Char = '.',
+            val spans: List<Span>,
+        ) : Block
 
         /** Consecutive `>` lines, prefix stripped; blank line ends the quote. */
         data class Blockquote(val lines: List<List<Span>>) : Block
@@ -64,8 +82,14 @@ internal object MiniMarkdownParser {
 
     private const val MAX_HEADING_LEVEL = 4
 
-    // Ordered marker: digits + '.' or ')' + optional single space + content.
-    private val ORDERED_ITEM = Regex("""(\d{1,9})[.)][ ]?(.*)""")
+    // ATX closing sequence: a trailing run of '#' that whitespace precedes.
+    private val CLOSING_SEQ = Regex("""\s+#+$""")
+
+    // Ordered marker: digits + '.' or ')' + REQUIRED single space + content.
+    // The mandatory space keeps "12.May sales report" / "1.5x speedups" as
+    // paragraph text instead of invented list items; a bare "N." with no
+    // content also stays paragraph (empty group is rejected below).
+    private val ORDERED_ITEM = Regex("""(\d{1,9})([.)]) (.*)""")
 
     fun parse(markdown: String): List<Block> {
         if (markdown.isEmpty()) return emptyList()
@@ -106,7 +130,11 @@ internal object MiniMarkdownParser {
                 i++
             } else if (headingLevel(trimmed) != 0) {
                 val hashes = headingLevel(trimmed)
-                val text = trimmed.dropWhile { it == '#' }.trimStart(' ')
+                var text = trimmed.dropWhile { it == '#' }.trimStart(' ')
+                // CommonMark closing sequence: trailing " #+", but only when
+                // whitespace precedes the '#' run ("## Title ##" → "Title",
+                // "## Title#" keeps its hash).
+                CLOSING_SEQ.find(text)?.let { text = text.substring(0, it.range.first) }
                 blocks += Block.Heading(
                     level = hashes.coerceAtMost(MAX_HEADING_LEVEL),
                     spans = parseInline(text),
@@ -131,9 +159,15 @@ internal object MiniMarkdownParser {
                 )
                 i++
             } else if (orderedMatch(trimmed) != null) {
-                val m = orderedMatch(trimmed)!!
-                // The explicitly written marker number is what renders.
-                blocks += Block.ListItem(ordered = true, index = m.first, spans = parseInline(m.second))
+                val (number, suffix, content) = orderedMatch(trimmed)!!
+                // The explicitly written marker (number AND separator) is what
+                // renders.
+                blocks += Block.ListItem(
+                    ordered = true,
+                    index = number,
+                    suffix = suffix,
+                    spans = parseInline(content),
+                )
                 i++
             } else {
                 // Paragraph: absorb plain-text lines until a blank line or any
@@ -157,11 +191,17 @@ internal object MiniMarkdownParser {
         return n
     }
 
-    /** `---`, `***`, `___` lines of 3+ identical marker chars are rules. */
+    /**
+     * Thematic break, CommonMark-style: `---` / `***` / `___` (3+ identical
+     * chars) or the same marker spaced out — `* * *`, `- - -`, `_ _ _` — i.e.
+     * >=3 single-marker runs separated by exactly one space.
+     */
+    private val SPACED_RULE = Regex("""^([*\-_])( \1){2,}$""")
+
     private fun isHorizontalRule(t: String): Boolean =
         t.length >= 3 &&
-            (t[0] == '-' || t[0] == '*' || t[0] == '_') &&
-            t.all { it == t[0] }
+            t[0] in "*-_" &&
+            (t.all { it == t[0] } || SPACED_RULE.matches(t))
 
     /**
      * Leading-# count when it forms an ATX heading (space or end-of-line must
@@ -174,11 +214,13 @@ internal object MiniMarkdownParser {
         return if (hashes < t.length && t[hashes] != ' ') 0 else hashes
     }
 
-    private fun orderedMatch(t: String): Pair<Int, String>? =
+    private fun orderedMatch(t: String): Triple<Int, Char, String>? =
         ORDERED_ITEM.matchEntire(t)?.let { m ->
             // Content must exist: a bare "3." stays paragraph text (same rule
             // as the empty-content requirement for unordered markers).
-            m.groupValues[2].takeIf { it.isNotEmpty() }?.let { m.groupValues[1].toInt() to it }
+            m.groupValues[3].takeIf { it.isNotEmpty() }?.let {
+                Triple(m.groupValues[1].toInt(), m.groupValues[2].first(), it)
+            }
         }
 
     private fun startsBlock(line: String): Boolean {
@@ -195,7 +237,8 @@ internal object MiniMarkdownParser {
 
     // region inline parsing -------------------------------------------------
 
-    private const val ESCAPABLE = "\\`*_{}[]()#+-.!|>~"
+    // Full CommonMark ASCII punctuation escape set (32 chars, no space).
+    private const val ESCAPABLE = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 
     private data class LinkShape(val text: String, val url: String, val end: Int)
 
@@ -270,9 +313,13 @@ internal object MiniMarkdownParser {
                 c == '*' || c == '_' -> {
                     val doubled = i + 1 < s.length && s[i + 1] == c
                     if (doubled) {
-                        val close = findCloser(s, i + 2, "$c$c")
-                        // Empty ** pair (closer right after opener) renders
-                        // both markers literally instead of an empty span.
+                        // Opener flanking guard, symmetric with the single-
+                        // marker path: '**' followed by whitespace is literal
+                        // (CommonMark left-flanking rule).
+                        val openOk = i + 2 >= s.length || !s[i + 2].isWhitespace()
+                        val close = if (openOk) findCloser(s, i + 2, "$c$c") else -1
+                        // Empty ** pair or missing closer renders both markers
+                        // literally instead of an empty span.
                         if (close == -1 || close == i + 2) {
                             plain.append(c).append(c)
                             i += 2
@@ -320,12 +367,28 @@ internal object MiniMarkdownParser {
     /**
      * Attempts `[text](url)` with '[' at [open]; returns link text, url, and
      * index past ')'. URL must be non-empty and whitespace-free (light rule);
-     * a missing shape yields null → the caller emits '[' literally.
+     * balanced parentheses inside the url are allowed — the closer is the
+     * FIRST ')' at depth zero (so `[wiki](A_(b))` keeps its trailing paren) —
+     * and an unbalanced '(' consumes to EOF → null → '[' renders literally.
      */
     private fun parseLinkShape(s: String, open: Int): LinkShape? {
         val mid = s.indexOf("](", open + 1)
         if (mid == -1) return null
-        val close = s.indexOf(')', mid + 2)
+        var close = -1
+        var depth = 0
+        for (j in mid + 2 until s.length) {
+            val ch = s[j]
+            when {
+                ch == '(' -> depth++
+                ch == ')' -> {
+                    if (depth == 0) {
+                        close = j
+                        break
+                    }
+                    depth--
+                }
+            }
+        }
         if (close == -1) return null
         val url = s.substring(mid + 2, close)
         if (url.isEmpty() || url.any { it.isWhitespace() }) return null
