@@ -442,18 +442,16 @@ fun main() {
                         // that same AWT event thread, and this hop costs one
                         // loop turn while guaranteeing every future listener
                         // variant stays on-thread.
-                        // NOTE (honesty): restore/focus path not manually
-                        // click-tested yet — see docs/perf notes + gate report.
+                        // Window restore/focus itself lives in DesktopTrayActions
+                        // (wave 13A extraction — null path unit-covered; the
+                        // visual restore still needs a one-time manual eyeball,
+                        // see docs/perf notes + gate report).
                         java.awt.EventQueue.invokeLater {
                             windowState.isMinimized = false
-                            val w = windowRef.get()
-                            if (w != null) {
-                                w.extendedState = java.awt.Frame.NORMAL
-                                w.requestFocus()
-                            }
+                            DesktopTrayActions.showMainWindow(windowRef.get())
                         }
                     }
-                    Item("Quit") { exitApplication() }
+                    Item("Quit") { DesktopTrayActions.quit { exitApplication() } }
                 },
             )
         }
