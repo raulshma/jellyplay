@@ -12,3 +12,6 @@ local.properties
 app/src/main/assets/aboutlibraries.json
 /tools/
 .kotlin/
+
+# E2E tooling runtime state (Jellyfin docker volumes, generated media)
+tools/e2e/.state/
