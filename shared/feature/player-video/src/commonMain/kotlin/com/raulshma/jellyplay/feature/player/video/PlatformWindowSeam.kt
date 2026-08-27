@@ -277,3 +277,11 @@ internal expect fun harnessFocusDiag(message: String)
  * Android behavior is byte-identical.
  */
 internal expect fun installPlayerKeySink(sink: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?)
+
+/**
+ * [installPlayerKeySink]'s dispose twin, identity-guarded: the sink is
+ * cleared only when it is still the [expected] instance — a stacked player
+ * installed a newer sink that the popped screen must not disarm (latent; no
+ * current route stacks players). Android actual is a no-op like install.
+ */
+internal expect fun uninstallPlayerKeySink(expected: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?)

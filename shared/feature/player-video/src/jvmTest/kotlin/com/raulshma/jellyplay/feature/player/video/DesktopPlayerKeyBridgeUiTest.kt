@@ -228,9 +228,10 @@ class DesktopPlayerKeyBridgeUiTest {
                 flags["sinkHandledSpace"] == true,
                 "the sink must decline while the layer subtree holds focus (no double handling)",
             )
-            assertTrue(
-                DesktopPlayerKeyBridge.deliveryCount() > before,
-                "the bridge was still consulted (and declined), so the counter moved",
+            assertEquals(
+                before,
+                DesktopPlayerKeyBridge.deliveryCount(),
+                "declined offers are not deliveries: the counter counts only sink-accepted keys",
             )
         }
 

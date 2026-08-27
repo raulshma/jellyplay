@@ -274,6 +274,8 @@ internal actual fun harnessFocusDiag(message: String) {}
  */
 internal actual fun installPlayerKeySink(sink: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {}
 
+internal actual fun uninstallPlayerKeySink(expected: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {}
+
 @Composable
 internal actual fun rememberIsPortraitOrientation(): Boolean =
     LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT

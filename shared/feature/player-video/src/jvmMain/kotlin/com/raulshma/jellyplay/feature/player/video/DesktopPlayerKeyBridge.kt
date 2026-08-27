@@ -30,10 +30,13 @@ import androidx.compose.ui.input.key.KeyEvent
  * and the shell consumes the key — again exactly once. Either way one key
  * press produces one interpretation.
  *
- * [deliveryCount] is the wave-14E harness's "did the key provably reach the
- * player" probe: [DesktopSessionHarness] snapshots it around each SPACE
- * injection and retries when the count did not move (a flap gap swallowed the
- * key), while a moved count with no playback toggle remains a genuine FAIL.
+ * [deliveryCount] is the wave-14E harness's "did the key reach AND get
+ * interpreted by the player's handler" probe: only sink-ACCEPTED deliveries
+ * count — a declined offer (focused subtree, sheet open, non-vocabulary key)
+ * is NOT a delivery. [DesktopSessionHarness] snapshots it around each SPACE
+ * injection and retries when the count did not move (the key never reached
+ * the handler), while a moved count with no playback toggle remains a
+ * genuine handler-ran failure.
  */
 object DesktopPlayerKeyBridge {
 
@@ -66,7 +69,18 @@ object DesktopPlayerKeyBridge {
      */
     fun deliver(event: KeyEvent): Boolean {
         val current = sink ?: return false
-        deliveryCount += 1
-        return runCatching { current(event) }.getOrDefault(false)
+        val handled = runCatching { current(event) }.getOrDefault(false)
+        if (handled) deliveryCount += 1
+        return handled
+    }
+
+    /**
+     * [install]'s dispose twin for stacked-player safety: nulls the sink only
+     * if it is still [expected] — a player pushed OVER a live one installs a
+     * newer sink, and the popped screen's dispose must not disarm the
+     * survivor.
+     */
+    internal fun uninstall(expected: ((KeyEvent) -> Boolean)?) {
+        if (sink === expected) sink = null
     }
 }

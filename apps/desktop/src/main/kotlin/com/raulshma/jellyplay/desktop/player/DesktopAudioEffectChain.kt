@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.pow
@@ -63,7 +64,7 @@ internal object DesktopAudioEffectChain {
         // tonal stages), then tone, then spatial, balance LAST (steers the
         // final mix).
         if (config.nightModeEnabled) {
-            filters += "lavfi=[volume=${"%.2f".format(nightModeNetDb(config))}dB]"
+            filters += "lavfi=[volume=${"%.2f".format(Locale.ROOT, nightModeNetDb(config))}dB]"
         }
 
         when (config.audioNormalizationMode) {
@@ -73,7 +74,7 @@ internal object DesktopAudioEffectChain {
             -> {
                 val db = config.replayGainEffectiveDb
                 if (db != null && abs(db) > GAIN_EPSILON) {
-                    filters += "lavfi=[volume=${"%.2f".format(db)}dB]"
+                    filters += "lavfi=[volume=${"%.2f".format(Locale.ROOT, db)}dB]"
                 }
             }
             AudioNormalizationMode.NONE -> Unit
@@ -94,7 +95,7 @@ internal object DesktopAudioEffectChain {
                 val mB = (levelMb + (offsets[index] ?: 0)).coerceIn(-1500, 1500)
                 if (mB != 0) {
                     val freq = EqualizerSettings.BAND_FREQUENCIES.getOrElse(index) { 1000 }
-                    filters += "lavfi=[equalizer=f=${freq}:t=q:w=1:g=${"%.2f".format(mB / 100.0)}]"
+                    filters += "lavfi=[equalizer=f=${freq}:t=q:w=1:g=${"%.2f".format(Locale.ROOT, mB / 100.0)}]"
                 }
             }
         }
@@ -103,11 +104,11 @@ internal object DesktopAudioEffectChain {
         }
 
         if (config.bassBoostEnabled) {
-            filters += "lavfi=[bass=g=${"%.1f".format(bassGainDb(config.bassBoostStrength))}:f=100]"
+            filters += "lavfi=[bass=g=${"%.1f".format(Locale.ROOT, bassGainDb(config.bassBoostStrength))}:f=100]"
         }
 
         if (config.virtualizerEnabled) {
-            filters += "lavfi=[extrastereo=m=${"%.2f".format(virtualizerWidth(config.virtualizerStrength))}]"
+            filters += "lavfi=[extrastereo=m=${"%.2f".format(Locale.ROOT, virtualizerWidth(config.virtualizerStrength))}]"
         }
 
         reverbEcho(config.reverbPreset)?.let { filters += "lavfi=[aecho=$it]" }
@@ -173,9 +174,10 @@ internal object DesktopAudioEffectChain {
     /**
      * Night-mode net gain in dB: the `EffectStrengthMapping` volume cut +
      * the DOCUMENTED loudness-compensation labels (+1.5/+3.0/+4.5 dB).
-     * `nightModeGainMb` returns those labels ×100 as millibels, so mB/1000
-     * recovers the documented dB — the ×100 literal mB reading would be a
-     * +30 dB boost at MODERATE (see the parity table).
+     * `nightModeGainMb`'s mB constants are the documented dB ×1000 (the
+     * same 10× literal the parity table calls out — LOW=1500 for 1.5 dB),
+     * so /1000 recovers the label. Do NOT "reconcile" this to /100: the
+     * labels read as mB/100 would be a +30 dB boost at MODERATE.
      */
     internal fun nightModeNetDb(config: AudioEffectsConfig): Double =
         twentyLog10(EffectStrengthMapping.nightModeVolumeAttenuation(config.nightModeStrength)) +
@@ -219,7 +221,7 @@ internal object DesktopAudioEffectChain {
         if (abs(b) < GAIN_EPSILON) return null
         val left = if (b >= 0f) 1f - b else 1f
         val right = if (b >= 0f) 1f else 1f + b
-        return "pan=stereo|c0=c0*${"%.3f".format(left)}|c1=c1*${"%.3f".format(right)}"
+        return "pan=stereo|c0=c0*${"%.3f".format(Locale.ROOT, left)}|c1=c1*${"%.3f".format(Locale.ROOT, right)}"
     }
 
     private fun twentyLog10(v: Float): Double = 20.0 * log10(v.toDouble())

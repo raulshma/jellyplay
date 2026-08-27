@@ -300,17 +300,27 @@ object DesktopSessionHarness {
                 while (true) {
                     attempts += 1
                     // Wave 14E retry: snapshot the bridge's delivery counter
-                    // around each injection. An unchanged count after the
-                    // probe window PROVES the key never reached the player's
-                    // handler (a flap gap swallowed it) — retry. A moved count
-                    // with no playback toggle is a genuine handler-ran-did-
-                    // not-toggle failure and stops immediately.
+                    // around each injection. The counter only counts
+                    // sink-ACCEPTED deliveries (a declined offer is not a
+                    // delivery), so an unchanged count after the probe window
+                    // PROVES the key never reached (was not interpreted by)
+                    // the player's handler (a flap gap swallowed it) — retry.
+                    // A moved count with no playback toggle is a genuine
+                    // handler-ran-did-not-toggle failure and stops
+                    // immediately.
                     val beforeCount = DesktopPlayerKeyBridge.deliveryCount()
                     spaceAtMs = System.currentTimeMillis()
                     injectKey(KeyEvent.VK_SPACE, "OVERLAY_SPACE attempt $attempts") ||
                         fail("SPACE injection failed (Robot)")
                     toggled = awaitUntil(SPACE_TOGGLE_PROBE_MS) {
-                        deps.engineRecorder.latestVideoEngine().pausedSince(spaceAtMs)
+                        // Paused AND playhead frozen: the 12 s clip can EOF
+                        // inside the probe window, and keep-open EOF parks the
+                        // engine paused — a bare pausedSince() would false-pass
+                        // on an untouched SPACE. The freeze tolerance covers
+                        // the ~2 Hz sample cadence + dispatch latency.
+                        val engine = deps.engineRecorder.latestVideoEngine()
+                        engine.pausedSince(spaceAtMs) &&
+                            engine.advanceSinceMs(spaceAtMs) <= SPACE_TOGGLE_FREEZE_TOLERANCE_MS
                     }
                     val reached = DesktopPlayerKeyBridge.deliveryCount() > beforeCount
                     attemptNotes += "attempt=$attempts reached=$reached toggled=$toggled"
@@ -737,6 +747,9 @@ object DesktopSessionHarness {
      * attempts + spacing) well inside the auto-exit deadline.
      */
     private const val SPACE_TOGGLE_PROBE_MS = 3_000L
+
+    /** Playhead drift still consistent with an immediate SPACE pause (sample cadence + dispatch). */
+    private const val SPACE_TOGGLE_FREEZE_TOLERANCE_MS = 1_500L
 
     /**
      * Wave 14E: maximum SPACE injection attempts per OVERLAY_SPACE step. A

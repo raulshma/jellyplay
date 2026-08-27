@@ -880,10 +880,18 @@ fun VideoPlayerScreen(
             }
         }
         DisposableEffect(isTv, hasHardwareKeyboard) {
-            installPlayerKeySink { keyEvent -> latestKeySink(keyEvent) }
+            val sink: (KeyEvent) -> Boolean = { keyEvent -> latestKeySink(keyEvent) }
+            installPlayerKeySink(sink)
             harnessFocusDiag("player-key sink installed")
             onDispose {
-                installPlayerKeySink(null)
+                // Identity-guarded: if a stacked player installed a newer
+                // sink, popping this screen must not disarm it (latent — no
+                // current route stacks players).
+                uninstallPlayerKeySink(sink)
+                // Reset the focus flag explicitly: onFocusChanged never fires
+                // for a composition that simply left, and the cast branch has
+                // no keyboard layer to update it.
+                keyboardLayerHoldsFocus = false
                 harnessFocusDiag("player-key sink uninstalled")
             }
         }

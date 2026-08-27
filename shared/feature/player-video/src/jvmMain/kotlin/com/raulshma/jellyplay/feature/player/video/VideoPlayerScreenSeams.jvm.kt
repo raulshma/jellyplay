@@ -75,6 +75,10 @@ internal actual fun installPlayerKeySink(sink: ((androidx.compose.ui.input.key.K
     DesktopPlayerKeyBridge.install(sink)
 }
 
+internal actual fun uninstallPlayerKeySink(expected: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {
+    DesktopPlayerKeyBridge.uninstall(expected)
+}
+
 /** Resizable desktop player window — treated as the landscape-style layout. */
 @Composable
 internal actual fun rememberIsPortraitOrientation(): Boolean = false
