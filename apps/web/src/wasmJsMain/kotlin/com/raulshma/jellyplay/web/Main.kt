@@ -3,9 +3,18 @@ package com.raulshma.jellyplay.web
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeViewport
+import coil3.EventListener
 import coil3.ImageLoader
+import coil3.annotation.ExperimentalCoilApi
 import coil3.compose.setSingletonImageLoaderFactory
+import coil3.fetch.Fetcher
+import coil3.key.Keyer
+import coil3.memory.MemoryCache
 import coil3.network.ktor3.KtorNetworkFetcherFactory
+import coil3.request.ErrorResult
+import coil3.request.ImageRequest
+import coil3.request.Options
+import coil3.request.SuccessResult
 import coil3.request.crossfade
 import com.raulshma.jellyplay.core.data.di.dataWasmModule
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
@@ -144,8 +153,30 @@ fun main() {
         // and rendered (painter State.Success; screenshot evidence kept out
         // of the repo), with zero console errors and zero uncaught
         // exceptions. Bearer-less image URLs (SDK parity — no api_key) load
-        // fine against that server. Still unverified: cache behaviour over
-        // time, large libraries, and non-Jellyfin image hosts.
+        // fine against that server.
+        //
+        // CACHE/LONG-SESSION: NOW VERIFIED TOO (2026-08-28, wave 18A, tools/
+        // e2e/web-soak.mjs, 50 Back→Diagnostics cycles + 3 reloads): cold
+        // load = 2 network fetches (the pane's two concurrent same-URL loads
+        // — raw painter + MediaImage — are NOT coalesced; each fetches, both
+        // then share one memory entry keyed by the URL); every warm cycle
+        // after that = 2 memory-cache hits and ZERO refetches for the whole
+        // soak (final counters hits=98 misses=2 net=2 fail=0); GC'd
+        // JSHeapUsedSize stayed flat across all 10 GC'd samples (28.7→28.9MB,
+        // final/first = 1.006, slope ≈ -0.4KB/cycle); GC'd Nodes/Listeners
+        // returned to baseline every time (231/55 → 231/55 — VideoCheck's
+        // video-host div create/remove does not leak); ms-to-OK p50 4ms /
+        // max 18ms; zero console errors end to end. The first
+        // instrumentation draft ALSO caught a real bug in itself (counters
+        // nobody read reported hits=0 while Coil's DEBUG log proved
+        // MEMORY_CACHE hits) — recorded in CountingMemoryCache's KDoc.
+        // STILL UNVERIFIED on web: large libraries (the fixture has exactly
+        // one poster — LRU eviction beyond ~130 decoded entries at the 80MB
+        // cap is arithmetic, not measurement), non-Jellyfin image hosts, and
+        // browser HTTP-cache reuse across reloads (measured
+        // fromDiskCache=false on every reload against this server's headers
+        // — informational; the wasm singleton has no Coil disk cache to
+        // persist anything itself).
         setSingletonImageLoaderFactory { context ->
             ImageLoader.Builder(context)
                 .components {
@@ -155,7 +186,41 @@ fun main() {
                     // engine construction out of composition until the first
                     // request.
                     add(KtorNetworkFetcherFactory(httpClient = { HttpClient(Js) }))
+                    // WAVE 18A MEASURED FINDING (the Coil long-session soak):
+                    // without a Keyer for String, the memory cache NEVER
+                    // engages on this target — MemoryCacheService.newCacheKey
+                    // consults ComponentRegistry.keyers, and coil-core 3.4.0's
+                    // wasmJs klib ships only UriKeyer/FileUriKeyer (checked
+                    // the klib symbols; StringKeyer does not exist upstream at
+                    // this pin at all). The first soak run measured exactly
+                    // that: hits=0 misses=0 while net=2 fired on EVERY pane
+                    // entry — the cache was allocated (15% of Coil's hardcoded
+                    // wasm memory ceiling) but never read nor written. Same
+                    // explicit-registration mandate as the fetcher above: the
+                    // JVM side self-populates its String keyer through
+                    // ServiceLoader, and the nonJvm registry starts empty.
+                    // Keying by the raw URL string (what upstream later added
+                    // as StringKeyer) makes the cache live: same URL ⇒ same
+                    // key ⇒ warm pane entries resolve from memory; size
+                    // differences stay safe because a non-transformed request
+                    // bakes no size into the key and isCacheValueValid still
+                    // rejects undersized sampled results.
+                    add(Keyer<String> { data, _ -> data })
                 }
+                // Wave 18A: cache/long-session observability for the web-soak
+                // lane (tools/e2e/web-soak.mjs). Both hooks are behavior-
+                // preserving (see CoilStats KDoc for what is counted and why
+                // the counting cache mirrors, not replaces, the default).
+                .memoryCache {
+                    CountingMemoryCache(
+                        // EXACTLY the cache ImageLoader.Builder.build() would
+                        // create on its own (same maxSizePercent(application)
+                        // default — 15% of Coil's wasm totalAvailableMemoryBytes),
+                        // so cache sizing is unchanged; only get() is observed.
+                        delegate = MemoryCache.Builder().maxSizePercent(context).build(),
+                    ).also { CoilStats.cache = it }
+                }
+                .eventListener(CoilStatsEventListener)
                 .crossfade(true)
                 .build()
         }
@@ -239,3 +304,121 @@ private fun e2eVariantParam(): String? = js("new URLSearchParams(window.location
  *  be a function's whole body, never embedded in larger expressions). */
 @OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
 private fun e2eRouteParam(): String? = js("new URLSearchParams(window.location.search).get('e2eRoute')")
+
+/**
+ * Wave 18A: process-lifetime counters for the web Coil singleton, surfaced in
+ * the WebDiagnostics pane as the load-bearing `COIL_STATS:` / `COIL_CACHE:`
+ * lines (see that pane's strings-contract note) and read by the long-session
+ * soak lane (tools/e2e/web-soak.mjs). Deliberately dumb totals — no reset, no
+ * history: the soak takes its own per-cycle deltas from these monotonics.
+ *
+ * WHAT IS COUNTED (measured against coil-core 3.4.0 sources, not inferred):
+ *  - hits/misses: Coil 3.4.0's [EventListener] has NO memory-cache events
+ *    (the memoryCacheHit/Miss/Set callbacks are a later-3.x addition), so the
+ *    counts are taken at the [MemoryCache.get] boundary by
+ *    [CountingMemoryCache] instead. EngineInterceptor executes exactly one
+ *    memory-cache lookup per request run (its getCacheValue call), so one
+ *    request ⇒ one hit OR one miss — PROVIDED a cache key exists: with no
+ *    matching Keyer the lookup is skipped entirely (hits=misses=0, the
+ *    pre-fix state the first soak run measured; see the Keyer registration
+ *    in main()). Weak-reference re-hits count as hits too (they return
+ *    non-null through RealMemoryCache.get — from Coil's and our perspective
+ *    a hit is a hit).
+ *  - net: EventListener.fetchStart fires before EVERY Fetcher.fetch attempt.
+ *    On this config the only registered fetcher for URL data is the Ktor
+ *    network fetcher and wasm has no disk cache (singletonDiskCache() is
+ *    null), so every fetchStart is a real network fetch execution — and every
+ *    miss resolves to exactly one net (miss ⇒ fetch; there is no second
+ *    tier). Measured net==misses after cold loads is therefore EXPECTED and
+ *    itself documents the no-disk-cache reality.
+ *  - fail: request-level onError — a non-2xx body, transport failure, or
+ *    decode error all funnel here on this config.
+ *
+ * Wasm/JS is single-threaded in this shell (no Kotlin workers — the compose
+ * web entry runs every coroutine on the one JS event loop), so the counters
+ * are plain Ints. Note this is a measured platform constraint, not a choice:
+ * the stdlib common atomics (kotlin.concurrent.atomics) do not resolve their
+ * documented surface on the wasmJs actual at the 2.3.21 pin (.value private,
+ * addAndGet unresolved), and the JVM-only kotlin.concurrent.AtomicInt does
+ * not exist on this target at all.
+ */
+internal object CoilStats {
+    var requests = 0
+        internal set
+    var hits = 0
+        internal set
+    var misses = 0
+        internal set
+    var net = 0
+        internal set
+    var fail = 0
+        internal set
+    var success = 0
+        internal set
+
+    /** The counting cache registered in main()'s loader factory; null until
+     *  the singleton first resolves (it is built lazily). Written exactly
+     *  once from the factory initializer in main(). */
+    var cache: CountingMemoryCache? = null
+        internal set
+
+    /** The AX-visible stats line — exact format is load-bearing
+     *  (WebDiagnostics strings contract; tools/e2e/web-soak.mjs parses it). */
+    fun axStatsLine(): String =
+        "COIL_STATS: hits=$hits misses=$misses net=$net fail=$fail"
+
+    /** Coil-counted bytes of decoded bitmaps currently held vs the LRU cap
+     *  (the default 15% of Coil's hardcoded wasm totalAvailableMemoryBytes —
+     *  the runtime value is measured, not assumed). */
+    fun axCacheLine(): String {
+        val counting = cache ?: return "COIL_CACHE: none"
+        return "COIL_CACHE: size=${counting.size} maxSize=${counting.maxSize}"
+    }
+}
+
+/**
+ * The one [EventListener] for the web singleton. Counts request starts
+ * (so the soak can sanity-check hits+misses against them), fetch attempts
+ * ([net]), completions, and failures. See [CoilStats] for the exact
+ * 3.4.0 event semantics.
+ */
+internal object CoilStatsEventListener : EventListener() {
+    override fun onStart(request: ImageRequest) {
+        CoilStats.requests += 1
+    }
+
+    override fun fetchStart(request: ImageRequest, fetcher: Fetcher, options: Options) {
+        CoilStats.net += 1
+    }
+
+    override fun onSuccess(request: ImageRequest, result: SuccessResult) {
+        CoilStats.success += 1
+    }
+
+    override fun onError(request: ImageRequest, result: ErrorResult) {
+        CoilStats.fail += 1
+    }
+}
+
+/**
+ * Behavior-preserving [MemoryCache] decorator: everything delegates to the
+ * real cache except [get], which tallies hit/miss STRAIGHT INTO
+ * [CoilStats] on its way through (single source of truth for the pane line —
+ * the first wired version incremented counters nobody read, and the soak
+ * faithfully reported hits=0 misses=0 while Coil's own DEBUG logger proved
+ * warm entries resolving from MEMORY_CACHE; the soak caught the bug). The
+ * delegate is constructed with the identical default sizing call
+ * (MemoryCache.Builder().maxSizePercent(context).build()) that
+ * ImageLoader.Builder.build() uses when no cache is supplied — so eviction
+ * bounds, weak-reference behavior, and cache keys are all unchanged; only the
+ * lookup outcome is observed. initialMaxSize is @ExperimentalCoilApi in the
+ * interface (the one opt-in this wave needs; a decorator must implement it).
+ */
+@OptIn(ExperimentalCoilApi::class)
+internal class CountingMemoryCache(private val delegate: MemoryCache) : MemoryCache by delegate {
+    override fun get(key: MemoryCache.Key): MemoryCache.Value? {
+        val value = delegate[key]
+        if (value != null) CoilStats.hits += 1 else CoilStats.misses += 1
+        return value
+    }
+}

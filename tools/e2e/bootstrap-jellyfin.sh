@@ -168,10 +168,19 @@ done
 log "item id: $ITEM_ID"
 
 # Ensure a primary image exists (scan usually extracts one; upload fallback is deterministic).
+# MEASURED (wave 18A, Jellyfin 10.11.11 / jellyfin:latest): SetItemImage
+# base64-DECODES the request body (FromBase64Transform inside ImageSaver), so a
+# raw JPEG body 500s with "One of the identified items was in an invalid
+# format"; the body must be the base64 text of the image. Raw is tried first
+# for older-server compatibility, base64 is the fallback.
 if ! curl -sf -m 10 -H "X-Emby-Token: $TOKEN" -o /dev/null "$BASE/Items/$ITEM_ID/Images/Primary"; then
   log "no primary image from scan - uploading poster.jpg"
   curl -sf -m 15 -X POST -H "X-Emby-Token: $TOKEN" -H 'Content-Type: image/jpeg' \
-    --data-binary "@$STATE_DIR/poster.jpg" "$BASE/Items/$ITEM_ID/Images/Primary" >/dev/null
+    --data-binary "@$STATE_DIR/poster.jpg" "$BASE/Items/$ITEM_ID/Images/Primary" >/dev/null \
+  || { base64 -w0 "$STATE_DIR/poster.jpg" > "$STATE_DIR/poster.b64"
+       curl -sf -m 15 -X POST -H "X-Emby-Token: $TOKEN" -H 'Content-Type: image/jpeg' \
+         --data-binary "@$STATE_DIR/poster.b64" "$BASE/Items/$ITEM_ID/Images/Primary" >/dev/null
+       rm -f "$STATE_DIR/poster.b64"; }
 fi
 
 printf '%s' "$ITEM_ID" > "$ITEM_FILE"
