@@ -18,6 +18,8 @@ import com.raulshma.jellyplay.core.data.repository.DesktopLocalStreamProbe
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
+import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
+import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStoreImpl
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepositoryImpl
 import com.raulshma.jellyplay.core.data.util.DesktopImageUrlProvider
@@ -39,8 +41,9 @@ import org.koin.dsl.module
 /**
  * Desktop platform pick of the Koin-owned data layer (Phase C4 part 2).
  * Holds the always-connected connectivity seams, the LinkedHashMap-based
- * image-URL memoiser, and the (unsupported, badge-less) desktop stream
- * probe; everything else resolves from [dataJvmModule].
+ * image-URL memoiser, the (unsupported, badge-less) desktop stream
+ * probe, and the file-backed StreamingSubtitleStore (wave 18B); everything
+ * else resolves from [dataJvmModule].
  *
  * V3 downloads conveyor: also holds the desktop actuals of the portable
  * download engine's seams — the appdata storage layout, the in-process
@@ -178,6 +181,21 @@ fun desktopDataModule(dataDir: Path): Module {
             object : LibrarySyncHook {
                 override suspend fun onLibraryScanComplete() {}
             }
+        }
+
+        // ── Streaming-subtitle store (wave 18B promotion) ────────────────────
+        // The impl moved out of the legacy Android-Hilt-owned :core:data shim
+        // into jvmShared, so desktop gets the real file-backed store, not a
+        // stub. baseDir is the appdata dir — the desktop twin of Android's
+        // `filesDir`; the impl appends its own "streaming-subtitles" root
+        // (same subtree name on both platforms). Backs the metadata editor's
+        // external-provider subtitle downloads AND the player's
+        // SubtitleManager provider-download path on desktop.
+        single<StreamingSubtitleStore> {
+            StreamingSubtitleStoreImpl(
+                baseDir = dataDir.toFile(),
+                json = get(),
+            )
         }
 
         // ── AppUpdate split (Wave xB): the desktop update-check actual ──────

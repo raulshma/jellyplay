@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video.di
 
-import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.feature.player.video.ActivePlayerController
 import com.raulshma.jellyplay.feature.player.video.CastManager
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoPlayerPlatform
@@ -12,7 +11,6 @@ import com.raulshma.jellyplay.feature.player.video.NoOpJellyfinRemotePlayCastStr
 import com.raulshma.jellyplay.feature.player.video.NoOpMediaSessionFactory
 import com.raulshma.jellyplay.feature.player.video.NoOpPipController
 import com.raulshma.jellyplay.feature.player.video.NoOpPlayerVideoMessageBus
-import com.raulshma.jellyplay.feature.player.video.NoOpStreamingSubtitleStore
 import com.raulshma.jellyplay.feature.player.video.NoOpSubtitlePreviewRepository
 import com.raulshma.jellyplay.feature.player.video.PipController
 import com.raulshma.jellyplay.feature.player.video.PlayerVideoMessageBus
@@ -30,9 +28,10 @@ import org.koin.dsl.module
  * Desktop wiring for the video player (wave 8C): the VideoPlayerViewModel is
  * commonMain and live-resolvable here. Every repository/DataStore dep
  * resolves from the shared modules the desktop root already loads
- * (dataJvmModule / datastoreCommonModule / desktopDataModule); the one
- * exception is [StreamingSubtitleStore], whose impl is still
- * Android-Hilt-owned, so a desktop empty-store stub binds here.
+ * (dataJvmModule / datastoreCommonModule / desktopDataModule) — including
+ * [StreamingSubtitleStore], the real file-backed store in desktopDataModule
+ * since the wave 18B jvmShared promotion of its impl (it was a throwing
+ * empty-store stub before that).
  *
  * Wave 9A: the desktop playback host is live (SwingPanel/HWND surface +
  * Route.VideoPlayer unguarded on Windows), and the per-session engine
@@ -54,7 +53,6 @@ val desktopPlayerVideoModule: Module = module {
     single<PlayerVideoMessageBus> { NoOpPlayerVideoMessageBus }
     single<FontProvider> { NoOpFontProvider }
     single<SubtitlePreviewRepository> { NoOpSubtitlePreviewRepository }
-    single<StreamingSubtitleStore> { NoOpStreamingSubtitleStore }
     viewModel { params ->
         VideoPlayerViewModel(
             platform = get(),
