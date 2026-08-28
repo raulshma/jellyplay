@@ -41,7 +41,8 @@ import java.io.IOException
  *
  * **Not in scope here.** Multi-connection transfer stays in
  * [MultiConnectionDownloadStrategy] (it already routes throwables through the
- * policy); migrating it onto [DownloadTransferClient] is a follow-up. The byte,
+ * policy), but it now rides the same [DownloadTransferClient] seam this runner
+ * uses — one transfer plumbing for both paths. The byte,
  * notify, and poll cadence (64 KiB buffer, 2 s status-only poll) is reproduced
  * exactly from the pre-extraction loop — this is a behaviour-preserving move.
  *

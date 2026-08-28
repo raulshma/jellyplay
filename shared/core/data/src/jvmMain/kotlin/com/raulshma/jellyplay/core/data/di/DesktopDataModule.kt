@@ -117,7 +117,6 @@ fun desktopDataModule(dataDir: Path): Module {
                 tokenCipher = get(),
                 concurrencyLimiter = get(),
                 transferClient = get(),
-                downloadHttpClient = get(NetworkQualifiers.downloadHttpClient),
                 // Lazy: the manager is the repository's coordinator actual, so
                 // an eager resolution here would re-enter the repository
                 // single's construction (see the manager ctor kdoc).

@@ -11,8 +11,6 @@ import com.raulshma.jellyplay.core.data.worker.StaleMediaScanWorker
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextWorker
 import com.raulshma.jellyplay.core.data.worker.UserDataSyncWorker
 import com.raulshma.jellyplay.core.data.worker.WatchedMediaScanWorker
-import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
-import okhttp3.OkHttpClient
 
 /**
  * Wave 8A: the seven legacy :core:data workers lost their HiltWorker
@@ -81,7 +79,6 @@ class CoreDataWorkerFactory : WorkerFactory() {
                 tokenCipher = koin().get(),
                 concurrencyLimiter = koin().get(),
                 transferClient = koin().get(),
-                okHttpClient = koin().get(NetworkQualifiers.downloadHttpClient),
             )
             else -> null
         }

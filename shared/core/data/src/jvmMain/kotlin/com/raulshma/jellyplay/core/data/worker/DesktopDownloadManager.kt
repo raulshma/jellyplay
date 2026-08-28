@@ -26,7 +26,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -74,7 +73,6 @@ class DesktopDownloadManager(
     private val tokenCipher: TokenCipher,
     private val concurrencyLimiter: DownloadConcurrencyLimiter,
     private val transferClient: DownloadTransferClient,
-    private val downloadHttpClient: OkHttpClient,
     /**
      * Lazy to break the construction cycle this manager sits inside: the
      * repository's coordinator seam IS this manager, so an eager
@@ -269,7 +267,7 @@ class DesktopDownloadManager(
                         val totalSize = runner.probeContentSize(entity.downloadUrl, accessToken)
                         outcome = if (totalSize > DownloadTransferRunner.MIN_MULTI_SIZE && numConnections > 1) {
                             MultiConnectionDownloadStrategy.execute(
-                                downloadClient = downloadHttpClient,
+                                downloadClient = transferClient, // same seam as the single-connection path
                                 dao = downloadDao,
                                 downloadId = downloadId,
                                 entity = entity,
