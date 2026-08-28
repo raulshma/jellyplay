@@ -179,6 +179,11 @@ a render is still in flight is DROPPED (never queued behind itself).
 - The EOF-keep-open replay path WAS exercised against the real sw engine; the
   multi-session reuse case (factory reusing engines across navigation) follows
   the HWND engine's release discipline and was not separately stress-tested.
+  RESOLVED (2026-08-28, post-wave-19): MpvEngineMultiSessionStressTest now
+  runs 6 sequential create→load→READY→play→stop→release sessions per variant
+  (plain headless + sw render) plus a post-stress context probe against the
+  real libmpv; the interplay half of the AudioQueue bullet above is also
+  covered (swRenderEngineDrivesTheSameQueueLifecycle).
 - Wayland: wl_display param constant exists but untested; X11 likewise.
 
 ## Files (wave 12B)
