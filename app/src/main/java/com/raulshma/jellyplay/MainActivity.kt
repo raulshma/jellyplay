@@ -53,6 +53,8 @@ import com.raulshma.jellyplay.core.ui.components.colorBlindFilter
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.di.KoinViewModelFactory
 import com.raulshma.jellyplay.navigation.JellyPlayApp
+import com.raulshma.jellyplay.shell.AppLockRedirect
+import com.raulshma.jellyplay.shell.AppLockState
 import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
 
@@ -76,8 +78,17 @@ class MainActivity : FragmentActivity() {
     private val audioPlaybackManagerLazy: kotlin.Lazy<AudioPlaybackManager> =
         lazy { KoinPlatform.getKoin()!!.get() }
 
+    // App-scoped lock flag (wave 20E): hoisted off the former compose-local
+    // `isPinUnlocked` mutableStateOf so PlayerActivity's redirect check (the
+    // media-notification class-name-PendingIntent bypass fix) reads the SAME
+    // flag this gate renders. Same resolution pattern as the shell infra
+    // above; same default (locked) and the same call sites flip it — this is
+    // a state-home move, not a behavior change (one deliberate delta: the
+    // flag now survives this activity's recreate() — pre-Android-13 language
+    // change — instead of re-locking mid-session; see AppLockState KDoc).
+    private val appLockState: AppLockState by lazy { KoinPlatform.getKoin()!!.get() }
+
     private var backgroundedAt = 0L
-    private var isPinUnlocked = mutableStateOf(false)
 
     // Set in onCreate before setContent: whether the one-time CastContext
     // initialization succeeded. The hidden media-route button in setContent
@@ -203,6 +214,10 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+            // The unlocked flag lives in the app-scoped holder (wave 20E) —
+            // collected here so the gate below recomposes exactly like the
+            // former compose-local isPinUnlocked state did.
+            val pinUnlocked by appLockState.unlocked.collectAsStateWithLifecycle()
                 var pinError by rememberSaveable { mutableStateOf<String?>(null) }
                 var pinVerifying by rememberSaveable { mutableStateOf(false) }
             val context = androidx.compose.ui.platform.LocalContext.current
@@ -234,10 +249,15 @@ class MainActivity : FragmentActivity() {
             }
 
             val hasLockEnabled by remember {
-                derivedStateOf { preferences.pinLockEnabled || preferences.biometricLockEnabled }
+                derivedStateOf {
+                    AppLockRedirect.isGateConfigured(
+                        pinLockEnabled = preferences.pinLockEnabled,
+                        biometricLockEnabled = preferences.biometricLockEnabled,
+                    )
+                }
             }
             val showLockScreen by remember {
-                derivedStateOf { hasLockEnabled && !isPinUnlocked.value }
+                derivedStateOf { hasLockEnabled && !pinUnlocked }
             }
 
             // Preference-driven dark-theme derivation (DARK/LIGHT/SYSTEM/SCHEDULED
@@ -313,7 +333,7 @@ class MainActivity : FragmentActivity() {
                                     verifying = pinVerifying,
                                     onPinEntered = { pin ->
                                         if (pin.isEmpty()) {
-                                            isPinUnlocked.value = true
+                                            appLockState.unlock()
                                             pinError = null
                                         } else if (preferences.pinHash != null) {
                                             if (pinVerifying) return@AuthChallengeScreen
@@ -335,7 +355,7 @@ class MainActivity : FragmentActivity() {
                                             lifecycleScope.launch {
                                                 val valid = securityStore.verifyPinOffMainThread(pin)
                                                 if (valid) {
-                                                    isPinUnlocked.value = true
+                                                    appLockState.unlock()
                                                     pinError = null
                                                     pinRateLimiter.resetPinLockout()
                                                 } else {
@@ -425,10 +445,14 @@ class MainActivity : FragmentActivity() {
 
         if (backgroundedAt > 0L) {
             val prefs = viewModel.preferences.value
-            if ((prefs.pinLockEnabled || prefs.biometricLockEnabled) && prefs.autoLockTimerMs > 0L) {
+            if (AppLockRedirect.isGateConfigured(
+                    pinLockEnabled = prefs.pinLockEnabled,
+                    biometricLockEnabled = prefs.biometricLockEnabled,
+                ) && prefs.autoLockTimerMs > 0L
+            ) {
                 val elapsed = System.currentTimeMillis() - backgroundedAt
                 if (elapsed >= prefs.autoLockTimerMs) {
-                    isPinUnlocked.value = false
+                    appLockState.lock()
                 }
             }
             backgroundedAt = 0L
