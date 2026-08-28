@@ -247,6 +247,11 @@ async function main() {
     if (!existsSync(join(DIST_DIR, 'webapp.js'))) {
       throw new Error(`webapp.js missing under ${DIST_DIR} — run :apps:web:wasmJsBrowserDevelopmentWebpack`);
     }
+    // STALENESS TRAP (wave 19 coordinator, 3 lane runs lost): this lane
+    // stages build/dist AS-IS — compileKotlinWasmJs alone leaves the old
+    // bundle in place, so newly-added AX strings (e.g. COIL_STATS) are
+    // silently absent and only their steps fail. After ANY apps/web source
+    // change, run the full webpack task before this lane.
     const resourcesDir = join(REPO_ROOT, 'apps', 'web', 'build', 'processedResources', 'wasmJs', 'main');
     cpSync(DIST_DIR, OUT_DIR, { recursive: true });
     cpSync(resourcesDir, OUT_DIR, { recursive: true });
