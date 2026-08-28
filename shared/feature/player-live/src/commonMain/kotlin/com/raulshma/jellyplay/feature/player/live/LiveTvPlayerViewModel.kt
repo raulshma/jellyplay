@@ -144,8 +144,10 @@ class LiveTvPlayerViewModel(
 
     /**
      * A zap that arrived while the channel list was still loading, deferred
-     * instead of dropped (wave 19C gap: PiP SKIP maps to channelUp/Down, so a
-     * SKIP during load silently no-oped). Exactly ONE zap is retained and a
+     * instead of dropped (wave 19C gap: a zap during load silently no-oped;
+     * the callers that actually hit the window are D-pad/screen zaps — the
+     * PiP transport is armed only after an engine exists, and no engine
+     * exists during a load window). Exactly ONE zap is retained and a
      * newer zap replaces it — user intent is the LAST direction requested.
      * Applied via [switchTo] once [loadChannelsAndPlay] commits a non-empty
      * list (identical to a zap landing after the commit, including

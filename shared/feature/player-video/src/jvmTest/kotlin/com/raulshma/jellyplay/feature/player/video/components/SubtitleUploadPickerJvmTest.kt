@@ -32,6 +32,30 @@ class SubtitleUploadPickerJvmTest {
     }
 
     @Test
+    fun `filename filter passes directories of the LISTED dir so navigation works`() {
+        // Reviewer catch (wave 20 fix round): the filter once resolved
+        // `File(name).isDirectory` against the process CWD, so on peers that
+        // honor setFilenameFilter every directory read false and the dialog
+        // was unnavigable. The directory check must resolve against the dir
+        // AWT hands the filter. A unique directory name (temp-dir-random)
+        // guarantees the CWD never contains it, so the old CWD-resolving
+        // implementation fails this deterministically.
+        val listed = createTempDirectory("jp-sub-listed").toFile()
+        val uniqueDirName = "jp-sub-nav-${System.nanoTime()}"
+        File(listed, uniqueDirName).mkdirs()
+        val filter = subtitlePickFilenameFilter()
+
+        try {
+            assertTrue(filter.accept(listed, uniqueDirName), "directory inside the listed dir must pass")
+            assertTrue(filter.accept(listed, "movie.srt"))
+            assertFalse(filter.accept(listed, "movie.mkv"))
+        } finally {
+            File(listed, uniqueDirName).delete()
+            listed.delete()
+        }
+    }
+
+    @Test
     fun `pickedLocalFile resolves only existing local files`() {
         val dir = createTempDirectory("jp-sub-uk").toFile()
         val picked = File(dir, "movie.srt").apply { writeText("1\n00:00:01,000 --> 00:00:02,000\nhi\n") }

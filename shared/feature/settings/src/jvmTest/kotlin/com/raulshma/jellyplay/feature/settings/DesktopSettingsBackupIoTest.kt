@@ -27,6 +27,20 @@ class DesktopSettingsBackupIoTest {
     }
 
     @Test
+    fun `picker file uri with spaces and unicode round-trips through backupFileFor`() {
+        // Realistic Windows pick: toURI percent-encodes ('John Smith' →
+        // 'John%20Smith'); File(URI) must decode back to the exact path.
+        // Reviewer nit (wave 20 fix round): the space-free test alone
+        // pinned only the trivial case.
+        val picked = File(createTempDirectory("jp-settings-sp").toFile(), "John Smith — backup (1).json")
+        val uri = picked.toURI().toString()
+
+        assertTrue(uri.startsWith("file:"))
+        assertTrue("%20" in uri, "sanity: the path really is percent-encoded")
+        assertEquals(picked.absolutePath, backupFileFor(uri).absolutePath)
+    }
+
+    @Test
     fun `export sink writes and import source reads back the same bytes`() = runTest {
         val io = DesktopSettingsBackupIo()
         val dir = createTempDirectory("jp-settings-io").toFile()

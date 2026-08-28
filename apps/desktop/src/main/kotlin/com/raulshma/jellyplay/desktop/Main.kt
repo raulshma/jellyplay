@@ -220,7 +220,8 @@ fun main() {
             // (WatchHistoryRepository + PlaybackRepository from
             // dataJvmModule, MediaRepository from the flipped cluster), and
             // nav v1 renders insightsSection in the rail. The share seam's
-            // null actual keeps the share button hidden.
+            // desktop actual (wave 20C) writes a tmpdir PNG and hands it to
+            // the system viewer, so the share button is visible.
             insightsModule,
 
 

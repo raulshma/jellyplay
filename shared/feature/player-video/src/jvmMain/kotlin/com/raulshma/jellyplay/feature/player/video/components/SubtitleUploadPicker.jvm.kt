@@ -35,8 +35,12 @@ internal fun isAdvisorySubtitleFileName(name: String): Boolean =
     name.substringAfterLast('.', "").lowercase() in SUBTITLE_PICK_EXTENSIONS
 
 /** Advisory-only filename filter (see [SUBTITLE_PICK_EXTENSIONS]); directories always pass so navigation works. */
-internal fun subtitlePickFilenameFilter(): FilenameFilter = FilenameFilter { _, name ->
-    File(name).isDirectory || isAdvisorySubtitleFileName(name)
+// dir must be part of the directory check: `File(name).isDirectory` resolves
+// against the process CWD, so on peers that honor setFilenameFilter (Windows
+// does not) every directory would read false and the dialog would be
+// unnavigable — DesktopEditorFilePicker.editorImageFilenameFilter twin.
+internal fun subtitlePickFilenameFilter(): FilenameFilter = FilenameFilter { dir, name ->
+    File(dir, name).isDirectory || isAdvisorySubtitleFileName(name)
 }
 
 @Composable

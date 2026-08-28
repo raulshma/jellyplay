@@ -106,7 +106,9 @@ class TimeSyncManagerTest {
         // deterministic min-delay winner — the property under test — and (b)
         // assert against brackets derived from the same wall clock sync()
         // reads, so the bounds hold under any load instead of a fixed
-        // tolerance.
+        // tolerance. Residual wall-clock seam (reviewer, accepted): a
+        // >500ms stall STRICTLY inside the first mocked dispatch (GC pause)
+        // could still flip the winner; margins below that are safe.
         val beforeFirst = System.currentTimeMillis()
         coEvery { apiClient.getServerTime() } returns Result.success(
             UtcTimeResponse(

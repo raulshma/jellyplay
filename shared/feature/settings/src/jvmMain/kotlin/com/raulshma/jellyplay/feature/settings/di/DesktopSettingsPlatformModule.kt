@@ -24,8 +24,9 @@ import org.koin.dsl.module
 
 /**
  * Desktop platform pick of the settings feature's seams (the
- * androidDataModule/desktopDataModule split pattern): the no-picker backup IO
- * stub, the no-op app-locale setter, the zero/no-op storage actuals, the
+ * androidDataModule/desktopDataModule split pattern): the AWT-dialog backup
+ * picker + JDK-stream backup IO (wave 20C), the no-op app-locale setter, the
+ * zero/no-op storage actuals, the
  * build-literal AppMeta / null-log / classpath aboutlibraries actuals, and
  * the desktop notification-poke actuals. The desktop composition root loads
  * this alongside [settingsModule].

@@ -340,9 +340,12 @@ class HomeDiscoveryStoreTest {
         // marker assertion below. Building the facade BEFORE any activation
         // makes the collector's first emission the signed-out state; it then
         // migrates during this test's own activations (idempotent, well
-        // before the reset), and after the reset activeUserId is unchanged so
-        // distinctUntilChanged suppresses any re-run — no fresh subscription
-        // exists on the far side of the reset edit.
+        // before the reset). Post-reset safety is the Unconfined-inline
+        // resumption + DataStore-actor FIFO ordering: the collector processes
+        // the (unchanged) activeUserId chain and goes quiescent before the
+        // test's reset edit commits, and distinctUntilChanged merely dedupes
+        // what was already processed — no fresh subscription exists on the
+        // far side of the reset edit either way.
         val facade = createUserPreferencesStore(scope, dataStore)
 
         // Two users with namespaced state, plus a leftover legacy flat key.
