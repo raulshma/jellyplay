@@ -20,9 +20,9 @@ import org.koin.dsl.module
  *    binding).
  *
  * Live-resolvable on BOTH platforms: desktop renders editorSection since the
- * wave 18B unguard (DesktopAppRoot registers Route.MetadataEditor; the local
- * file-picker actuals still return null, so upload-from-file stays inert
- * there — see DesktopEditorFilePicker).
+ * wave 18B unguard (DesktopAppRoot registers Route.MetadataEditor; wave 20A
+ * gave the platform file-picker actuals a native AWT dialog on desktop, so
+ * upload-from-file works there too — see DesktopEditorFilePicker).
  */
 val editorModule: Module = module {
     viewModel {
