@@ -255,6 +255,76 @@ class DesktopAudioQueueManagerRealEngineTest {
         }
     }
 
+    /**
+     * Wave 17B interplay variant (docs/spikes/x-desktop-video-surface-story.md
+     * "AudioQueue interplay"): the SAME manager lifecycle over the
+     * software-render engine variant instead of plain [MpvDesktopEngine] —
+     * the manager's ctor takes an `engineFactory`, so this is cheap. Proves
+     * the queue semantics (play, position ticker, end-of-queue park) behave
+     * identically when the session engine is the sw variant; the manager
+     * hard-wires nothing engine-specific (it only sees the [MediaEngine]
+     * contract, which is the point of the spike-doc note).
+     */
+    @Test
+    fun swRenderEngineDrivesTheSameQueueLifecycle() {
+        assumeTrue(libmpvAvailable(), { "libmpv not available on this machine" })
+        // Gate on the sw backend with a throwaway engine (the sw tests' own
+        // assumeTrue discipline — no libmpv swd/sw render backend, no point).
+        val probeEngine = MpvSoftwareRenderEngine(extraOptions = mapOf("ao" to "null"))
+        val swRendererAvailable = probeEngine.isSoftwareRendererActive
+        probeEngine.release()
+        assumeTrue(swRendererAvailable, { "libmpv has no usable 'sw' render backend" })
+        val dir = File(System.getProperty("java.io.tmpdir"), "jellyplay-audio-sw-${System.nanoTime()}")
+            .apply { mkdirs() }
+            .also { cleanupDir = it }
+        val wavA = writeTestWav(File(dir, "a.wav"), seconds = 3.0)
+        val wavB = writeTestWav(File(dir, "b.wav"), seconds = 3.0)
+
+        val executor = Executors.newSingleThreadExecutor()
+        val scope = CoroutineScope(SupervisorJob() + executor.asCoroutineDispatcher())
+        val engineRef = AtomicReference<MpvSoftwareRenderEngine>()
+        val manager = DesktopAudioQueueManager(
+            trackResolver = FakeResolver().apply {
+                tracks["a"] = resolvedTrack("a", uri = wavA.absolutePath)
+                tracks["b"] = resolvedTrack("b", uri = wavB.absolutePath)
+            },
+            playbackRepository = FakePlaybackRepository(),
+            imageUrlProvider = FakeImages(),
+            queuePersistenceHelper = QueuePersistenceHelper(InMemoryQueueDao()),
+            lyricsManager = AudioLyricsManager(FakeLyricsRepository()),
+            sleepTimerManager = SleepTimerManager(TestTimeSource()),
+            scope = scope,
+            // sw variant: vo=libmpv (frames nobody pulls — audio is the
+            // subject here) + ao=null, the sw engine tests' own recipe.
+            engineFactory = {
+                MpvSoftwareRenderEngine(extraOptions = mapOf("ao" to "null"))
+                    .also { engineRef.set(it) }
+            },
+            mainThreadGuard = false,
+        )
+        try {
+            manager.start()
+            manager.playQueue(queueOf(wavA, wavB), startIndex = 0)
+            pollUntil("sw-engine track a playing", timeoutMs = 20_000) { manager.isPlaying.value }
+            pollUntil("sw-engine ticker sampled live position", timeoutMs = 10_000) {
+                manager.currentPosition.value > 0 && manager.duration.value > 0
+            }
+            // Natural-EOF auto-advance across A→B, then the end-of-queue
+            // park — the same assertions as the plain-engine variant above.
+            pollUntil("sw-engine auto-advanced onto track b", timeoutMs = 25_000) {
+                manager.currentPlayingItemId.value == "b" && manager.currentIndex.value == 1
+            }
+            pollUntil("sw-engine end-of-queue park", timeoutMs = 15_000) {
+                !manager.isPlaying.value && manager.currentIndex.value == 1
+            }
+            assertTrue(engineRef.get()?.isSoftwareRendererActive == true, "engine was the sw variant")
+        } finally {
+            manager.stopAndRelease()
+            scope.cancel()
+            executor.shutdownNow()
+        }
+    }
+
     @Test
     fun realEngineKeepsPausedAcrossASkipReloadLikeExoPlayWhenReady() {
         assumeTrue(libmpvAvailable(), { "libmpv not available on this machine" })

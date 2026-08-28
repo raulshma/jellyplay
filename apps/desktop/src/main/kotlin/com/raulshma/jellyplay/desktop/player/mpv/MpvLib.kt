@@ -5,7 +5,6 @@ import com.sun.jna.Memory
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.Structure
-import com.sun.jna.Union
 
 /**
  * JNA binding for the subset of libmpv's `client.h` API that
@@ -28,6 +27,15 @@ object MpvLib {
     const val FORMAT_INT64 = 4
     const val FORMAT_DOUBLE = 5
     const val FORMAT_NODE = 6
+
+    /**
+     * MPV_FORMAT_NODE_ARRAY / MPV_FORMAT_NODE_MAP: mpv normalizes a top-level
+     * NODE read to these when the value IS an array/map (e.g. `track-list`
+     * comes back as NODE_ARRAY), and nested array/map values use them too —
+     * all three formats share the same `u.list` union member.
+     */
+    const val FORMAT_NODE_ARRAY = 7
+    const val FORMAT_NODE_MAP = 8
 
     // ── mpv_event_id ────────────────────────────────────────────────────────
     const val EVENT_NONE = 0
@@ -150,47 +158,13 @@ object MpvLib {
         @JvmField var playlist_entry_id: Long = 0
     }
 
-    /**
-     * `mpv_node_u` — which member is valid is decided by the node's format.
-     * `list` is a raw pointer (mpv_node is recursive — a typed field would make
-     * JNA's eager field validation instantiate the cycle forever).
-     */
-    class MpvNodeU : Union {
-        constructor() : super()
-
-        @JvmField var string: Pointer? = null
-        @JvmField var flag: Int = 0
-        @JvmField var int64: Long = 0
-        @JvmField var doubleValue: Double = 0.0
-        @JvmField var list: Pointer? = null
-        @JvmField var byteArray: Pointer? = null
-    }
-
-    /** `mpv_node` — tagged union read via [readNodeValue]. */
-    @Structure.FieldOrder("u", "format")
-    class MpvNode : Structure {
-        constructor() : super()
-        constructor(p: Pointer) : super(p)
-
-        @JvmField var u: MpvNodeU = MpvNodeU()
-        @JvmField var format: Int = 0
-
-        companion object {
-            /** sizeof(mpv_node) — union(8) + format(4) + tail padding(4). */
-            val BYTE_SIZE: Long = MpvNode().size().toLong()
-        }
-    }
-
-    /** `mpv_node_list` — array (keys == null) or map (keys != null); pointers only. */
-    @Structure.FieldOrder("num", "values", "keys")
-    class MpvNodeList : Structure {
-        constructor() : super()
-        constructor(p: Pointer) : super(p)
-
-        @JvmField var num: Int = 0
-        @JvmField var values: Pointer? = null
-        @JvmField var keys: Pointer? = null
-    }
+    // ── mpv_node / mpv_node_list x64 C-layout offsets (readNode's raw reads) ─
+    // mpv_node { union u(8); int format; pad } and
+    // mpv_node_list { int num; pad; mpv_node* values; char** keys }.
+    private const val NODE_BYTE_SIZE = 16L
+    private const val NODE_FORMAT_OFFSET = 8L
+    private const val LIST_VALUES_OFFSET = 8L
+    private const val LIST_KEYS_OFFSET = 16L
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -223,63 +197,60 @@ object MpvLib {
 
     /** Reads a NODE property into a plain Kotlin value (String/Boolean/Long/Double/List/Map). */
     fun readNode(ctx: Pointer, name: String): Any? {
-        val node = MpvNode()
-        val rc = mpv.mpv_get_property(ctx, name, FORMAT_NODE, node.getPointer())
+        // Wave 17B: raw memory + manual offsets, NOT the MpvNode Structure.
+        // mpv writes the node tree in C layout and two things broke the old
+        // Structure path: top-level arrays arrive as MPV_FORMAT_NODE_ARRAY
+        // (format 7 — the old `when` matched only generic NODE), and JNA's
+        // nested-union marshalling never successfully followed the
+        // foreign-written memory anyway. Net effect: readNode returned null
+        // for every list/map property and the engine's track listing was
+        // empty since V2. Offsets are the x64 C layouts (constants below).
+        val mem = Memory(NODE_BYTE_SIZE)
+        val rc = mpv.mpv_get_property(ctx, name, FORMAT_NODE, mem)
         if (rc < 0) return null
         try {
-            return readNodeValue(node)
+            return readNodeAt(mem)
         } finally {
-            mpv.mpv_free_node_contents(node.getPointer())
+            mpv.mpv_free_node_contents(mem)
         }
     }
 
     /**
-     * Decodes an already-marshalled mpv_node. The union's active member must be
-     * selected before the struct can be read, and the discriminator (`format`)
-     * sits behind the union — so read the field alone first via [Structure.readField].
+     * Decodes the `mpv_node` at [node] via raw reads: the `u` union at
+     * offset 0, the `format` int at offset 8. mpv normalizes a top-level
+     * list/map value to [FORMAT_NODE_ARRAY]/[FORMAT_NODE_MAP] (verified
+     * live: `track-list` reads back format 7) — all three list-shaped
+     * formats share the `u.list` union member.
      */
-    private fun readNodeValue(node: MpvNode): Any? {
-        val format = (node.readField("format") as? Int) ?: FORMAT_NONE
+    private fun readNodeAt(node: Pointer): Any? {
+        fun emptyFor(): Any = if (node.getInt(NODE_FORMAT_OFFSET) == FORMAT_NODE_MAP) {
+            emptyMap<String, Any?>()
+        } else {
+            emptyList<Any?>()
+        }
+        val format = node.getInt(NODE_FORMAT_OFFSET)
         return when (format) {
-            FORMAT_STRING -> node.u.readMember("string")?.let { (it as Pointer).getString(0) }
-            FORMAT_FLAG -> node.u.readMember("flag") != 0
-            FORMAT_INT64 -> node.u.readMember("int64") as Long
-            FORMAT_DOUBLE -> node.u.readMember("doubleValue") as Double
-            FORMAT_NODE -> {
-                val listPtr = node.u.readMember("list") as? Pointer ?: return null
-                val list = MpvNodeList(listPtr).also { it.read() }
-                val valuesPtr = list.values
-                if (valuesPtr == null || list.num <= 0) {
-                    if (list.keys != null) emptyMap<String, Any?>() else emptyList<Any?>()
+            FORMAT_STRING -> node.getPointer(0)?.getString(0)
+            FORMAT_FLAG -> node.getInt(0) != 0
+            FORMAT_INT64 -> node.getLong(0)
+            FORMAT_DOUBLE -> node.getDouble(0)
+            FORMAT_NODE, FORMAT_NODE_ARRAY, FORMAT_NODE_MAP -> {
+                val list = node.getPointer(0) ?: return emptyFor()
+                val num = list.getInt(0)
+                if (num <= 0) return emptyFor()
+                val values = list.getPointer(LIST_VALUES_OFFSET) ?: return emptyFor()
+                val keys = list.getPointer(LIST_KEYS_OFFSET)
+                if (keys == null) {
+                    (0 until num).map { readNodeAt(values.share(it * NODE_BYTE_SIZE)) }
                 } else {
-                    val nodes = (0 until list.num).map { i ->
-                        MpvNode(valuesPtr.share(i * MpvNode.BYTE_SIZE)).also { it.read() }
-                    }
-                    val keysPointer = list.keys
-                    if (keysPointer == null) {
-                        nodes.map { readNodeValue(it) }
-                    } else {
-                        val keys = (0 until list.num).map { i ->
-                            keysPointer.getPointer((i * Native.POINTER_SIZE).toLong())?.getString(0)
-                        }
-                        keys.mapIndexedNotNull { i, key ->
-                            key?.let { it to (nodes.getOrNull(i)?.let(::readNodeValue)) }
-                        }.toMap()
-                    }
+                    (0 until num).mapNotNull { i ->
+                        val key = keys.getPointer((i * Native.POINTER_SIZE).toLong())?.getString(0)
+                            ?: return@mapNotNull null
+                        key to readNodeAt(values.share(i * NODE_BYTE_SIZE))
+                    }.toMap()
                 }
             }
             else -> null
-        }
-    }
-
-    /** Selects [member] on the union, reads it, and returns its value. */
-    private fun Union.readMember(member: String): Any? {
-        setType(member)
-        read()
-        return javaClass.getField(member).get(this).let { unwrapped ->
-            // JNA boxes primitives in the reflected field read; Pointer fields
-            // come back as-is.
-            unwrapped
         }
     }
 

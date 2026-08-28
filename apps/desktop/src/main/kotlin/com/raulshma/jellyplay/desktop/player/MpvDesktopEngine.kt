@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.FORMAT_STRING
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.MpvEvent
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.MpvEventEndFile
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.MpvEventProperty
+import com.raulshma.jellyplay.feature.player.video.DesktopFrameCaptureEngine
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
@@ -48,7 +49,10 @@ import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelInfo
 import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
 import com.sun.jna.Memory
 import com.sun.jna.Pointer
+import java.awt.image.BufferedImage
+import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.imageio.ImageIO
 import kotlin.concurrent.thread
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -81,10 +85,16 @@ import kotlinx.coroutines.launch
  * on Windows) from the Compose/Swing layer. Headless setups (tests) pass
  * [extraOptions] with `vo=null`/`ao=null`.
  *
- * Deliberate V2 cuts (revisit when the player feature migrates in V3):
- * video-effects (`vf`) filter chains, screenshot capture, live-cue history in
- * [currentCues]. Wave 14C closed the audio-effects cut: `EngineConfig.audioEffects`
- * is now applied as a live mpv `af` chain + `audio-channels`/`pitch` properties
+ * The former V2 cuts are closed (wave 17B, the "when the player feature
+ * migrates" trigger fired waves ago): `EngineConfig.videoEffects` is applied
+ * as a live mpv `vf` chain + `video-rotate` property ([DesktopVideoEffectChain]
+ * builds the strings — see its shared→mpv parity table), screenshot capture
+ * goes through mpv's `screenshot-to-file` ([captureVideoFrame], the desktop
+ * seam's COMPOSE engine hook), and [currentCues] accumulates the live-cue
+ * history from the observed `sub-text` (with a live `sub-start` read) like
+ * the Android MPV engine's `accumulateMpvSubText`. Wave 14C closed the
+ * audio-effects cut before that: `EngineConfig.audioEffects` is applied as a
+ * live mpv `af` chain + `audio-channels`/`pitch` properties
  * ([DesktopAudioEffectChain] builds the strings — see its Android→mpv parity
  * table). `PlaybackRequest.normalizationGain` stays unused here: the desktop
  * audio path carries the manager-computed final ReplayGain dB in the config
@@ -106,14 +116,17 @@ open class MpvDesktopEngine(
      * therefore creates the heavyweight child window first, then the engine.
      */
     windowHandle: Long? = null,
-) : MediaEngine {
+) : MediaEngine,
+    DesktopFrameCaptureEngine {
 
     override val displayName: String = PlayerType.MPV.displayName
 
     override val capabilities: EngineCapabilities = EngineCapabilities(
         supportsPip = false,          // no PiP on desktop; windowing covers it
         supportsMiniMode = false,
-        supportsCues = false,         // mpv composites subs itself; no cue list
+        // Wave 17B: `sub-text`/`sub-start` now accumulate into currentCues
+        // exactly like the Android MPV engine (EngineCapabilityMatrix.MPV).
+        supportsCues = true,
         supportsAudioDelay = true,
         supportsSubtitleDelay = true,
         supportsAudioPassthrough = true,
@@ -315,6 +328,12 @@ open class MpvDesktopEngine(
     @Volatile private var lastAppliedPitch: Double? = 1.0
     @Volatile private var lastAppliedAfChain: String? = null
 
+    // Video twin of the same discipline (wave 17B): `vf` writes re-init the
+    // video pipeline, so only actual CHANGES are pushed, and an all-defaults
+    // config performs zero writes. `video-rotate` starts at mpv's own 0.
+    @Volatile private var lastAppliedVfChain: String? = null
+    @Volatile private var lastAppliedRotationDeg: Int = 0
+
     /**
      * The live mpv handle for member calls, or null after [release] — every
      * public member routes through this so a post-release call degrades to a
@@ -428,8 +447,17 @@ open class MpvDesktopEngine(
             "duration" -> data?.let { durationValue = (it.getDouble(0) * 1000).toLong() }
             "demuxer-cache-time" -> data?.let { _bufferedPositionMs.value = it.getLong(0) * 1000 }
             // Contract: null when no line is active — mpv emits "" on clear.
-            "sub-text" -> _liveSubtitleCue.value =
-                data?.getString(0)?.takeIf { it.isNotBlank() }
+            // Non-blank lines also fold into the currentCues history (G10,
+            // same pairing as Android's accumulateMpvSubText). Wave 17B fix:
+            // FORMAT_STRING event data is a char** (client.h hands the value
+            // behind one pointer) — reading the bytes AT data yielded pointer
+            // garbage; dereference first.
+            "sub-text" -> {
+                val raw = data?.getPointer(0)?.getString(0)
+                val text = raw?.takeIf { it.isNotBlank() }
+                _liveSubtitleCue.value = text
+                if (text != null) accumulateCue(text)
+            }
             "speed" -> data?.let { speedValue = it.getDouble(0).toFloat() }
             "track-list" -> refreshTracks()
             "audio-params/channel-count" -> {
@@ -459,10 +487,13 @@ open class MpvDesktopEngine(
         _availableTracks.value = emptyList()
         _videoStats.value = EngineVideoStats()
         // Reset per-item derived state: the previous item's duration/buffer
-        // must not leak into this item's BUFFERING window (Android resets both).
+        // must not leak into this item's BUFFERING window (Android resets both
+        // — and the played-range cue history too, which belongs to the
+        // previous item).
         durationValue = 0L
         serverDurationMs = request.serverDurationMs
         _bufferedPositionMs.value = 0L
+        _currentCues.value = emptyList()
 
         // Per-request options. http-header-fields is a list option that
         // PERSISTS on the context — reset it first or the previous item's
@@ -585,6 +616,7 @@ open class MpvDesktopEngine(
         _isPlaying.value = false
         _availableTracks.value = emptyList()
         _liveSubtitleCue.value = null
+        _currentCues.value = emptyList()
     }
 
     override fun seekTo(positionMs: Long) {
@@ -770,6 +802,11 @@ open class MpvDesktopEngine(
             // pitch on property writes (verified against the bundled libmpv).
             applyAudioEffects(newConfig)
         }
+        if (oldConfig.videoEffects != newConfig.videoEffects) {
+            // Video twin: mpv re-inits the video pipeline on `vf` writes
+            // (same class of live re-apply as the af chain above).
+            applyVideoEffects(newConfig)
+        }
     }
 
     private fun applyConfigToMpv(config: EngineConfig) {
@@ -779,6 +816,7 @@ open class MpvDesktopEngine(
         MpvLib.setPropertyString(context, "hwdec", hwdecFor(config.decoderMode))
         applySubtitleStyle(config.subtitleStyle)
         applyAudioEffects(config)
+        applyVideoEffects(config)
     }
 
     /**
@@ -810,6 +848,121 @@ open class MpvDesktopEngine(
                 MpvLib.command(context, "af", "clr", "")
             }
             lastAppliedAfChain = chain
+        }
+    }
+
+    /**
+     * Wave 17B: push the video-effects config onto mpv — the `vf` chain
+     * ([DesktopVideoEffectChain.buildVfChain]) and the rotation via the
+     * separate `video-rotate` property (rotation is an output transform, not
+     * a filter). Both are runtime-settable; mpv rebuilds the video pipeline
+     * on `vf` writes — which is why unchanged values are never re-written
+     * (see the pacing note on the last-applied fields above).
+     */
+    private fun applyVideoEffects(config: EngineConfig) {
+        val context = aliveCtx() ?: return
+        val fx = config.videoEffects
+        val chain = DesktopVideoEffectChain.buildVfChain(fx)
+        if (chain != lastAppliedVfChain) {
+            if (chain != null) {
+                MpvLib.setPropertyString(context, "vf", chain)
+            } else {
+                MpvLib.command(context, "vf", "clr", "")
+            }
+            lastAppliedVfChain = chain
+        }
+        val rotation = DesktopVideoEffectChain.rotationDegrees(fx)
+        if (rotation != lastAppliedRotationDeg) {
+            // STRING, not DOUBLE: this libmpv REJECTS FORMAT_DOUBLE writes on
+            // the integer `video-rotate` property (verified live — the write
+            // returns MPV_ERROR_INVALID_PARAMETER and nothing sticks; the
+            // string form applies and reads back).
+            MpvLib.setPropertyString(context, "video-rotate", rotation.toString())
+            lastAppliedRotationDeg = rotation
+        }
+    }
+
+    // ── Cue history (G10, mirrors the Android MPV engine's accumulate path) ─
+
+    /**
+     * Folds a newly-displayed subtitle line into the [currentCues] history so
+     * the subtitle-sync preview can render prev/active/next for embedded subs
+     * without re-fetching bytes. mpv fires `sub-text` only on a line *change*
+     * and skips blank clears here; the end time starts open-ended and is
+     * closed when the next line begins. Covers the played range only —
+     * identical semantics to Android's `accumulateMpvSubText`/
+     * `mergeAccumulatedCues` pair (the merge rules are mirrored privately
+     * here because player-video keeps its accumulator module-internal).
+     *
+     * Micro-divergence from Android: the START time is read live from the
+     * `sub-start` property instead of Android's event-cached value — this
+     * libmpv delivers the `sub-text` event BEFORE the matching `sub-start`
+     * property update (observed live: the second line inherited the first
+     * line's cached start), so the cache is stale exactly at line
+     * transitions. One property read per line change; the position fallback
+     * mirrors Android for the no-line-yet case.
+     */
+    private fun accumulateCue(text: String) {
+        if (text.isBlank()) return
+        val startSec = aliveCtx()
+            ?.let { propDouble(it, "sub-start") }
+            ?.takeIf { it >= 0 }
+            ?: (currentPositionMs / 1000.0)
+        val incoming = TimedCue((startSec * 1_000_000L).toLong(), Long.MAX_VALUE, text)
+        val existing = _currentCues.value
+        if (existing.isEmpty()) {
+            _currentCues.value = listOf(incoming)
+            return
+        }
+        // Close the open-ended span of any cue still "active" at the point
+        // the new line begins.
+        var changed = false
+        val closed = existing.map { cue ->
+            if (cue.endTimeUs == Long.MAX_VALUE && cue.startTimeUs < incoming.startTimeUs) {
+                changed = true
+                cue.copy(endTimeUs = incoming.startTimeUs)
+            } else {
+                cue
+            }
+        }
+        // mpv re-emits the active line on some track/list transitions — an
+        // identical repeat changes nothing (only the closure above applies).
+        val lastText = closed.lastOrNull()?.text
+        if (lastText != null && incoming.text.toString() == lastText.toString()) {
+            if (changed) _currentCues.value = closed
+            return
+        }
+        _currentCues.value = (closed + incoming)
+            .sortedBy { it.startTimeUs }
+            .takeLast(MAX_ACCUMULATED_CUES)
+    }
+
+    // ── Screenshot capture (wave 17B) ────────────────────────────────────────
+
+    /**
+     * Wave 17B: captures the currently-displayed video frame (subtitles
+     * composited, like Android's PixelCopy path) via mpv's
+     * `screenshot-to-file` into a temp PNG, decodes it into the platform
+     * bitmap the desktop capture seam consumes, and deletes the temp file.
+     * Returns null when there is nothing to capture (no file loaded, a
+     * `vo=null` audio-only engine has no frame) or the command/decode fails —
+     * callers degrade to a failure message, never an exception. Engine-tested
+     * against the bundled libmpv (sw-render variant); the HWND-embedded
+     * production vo is the same mpv code path.
+     */
+    override fun captureVideoFrame(): BufferedImage? {
+        val context = aliveCtx() ?: return null
+        if (!fileLoaded) return null
+        return try {
+            val temp = File.createTempFile(TEMP_SHOT_PREFIX, ".png")
+            try {
+                val ok = MpvLib.command(context, "screenshot-to-file", temp.absolutePath, "subtitles")
+                if (!ok || temp.length() <= 0L) null else ImageIO.read(temp)
+            } finally {
+                temp.delete()
+            }
+        } catch (_: Throwable) {
+            null
         }
     }
 
@@ -923,5 +1076,11 @@ open class MpvDesktopEngine(
         private const val RELEASE_JOIN_ATTEMPTS = 3
         /** mpv's untouched default for `audio-channels`. */
         private const val AUTO_CHANNELS = "auto"
+
+        /** Cue-history cap (player-video's CueAccumulator.MAX_ACCUMULATED_CUES). */
+        private const val MAX_ACCUMULATED_CUES = 500
+
+        /** Temp-file prefix for screenshot-to-file captures. */
+        private const val TEMP_SHOT_PREFIX = "jellyplay-frame-"
     }
 }
