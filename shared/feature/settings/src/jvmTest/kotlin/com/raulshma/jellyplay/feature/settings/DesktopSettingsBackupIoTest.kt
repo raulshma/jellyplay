@@ -1,0 +1,55 @@
+package com.raulshma.jellyplay.feature.settings
+
+import java.io.File
+import kotlin.io.path.createTempDirectory
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+import kotlinx.coroutines.test.runTest
+
+/**
+ * Wave 20C: the desktop backup seam's pure/IO half — the picker→IO uri
+ * contract and the JDK stream mapping. The AWT FileDialog half (showing the
+ * native SAVE/LOAD dialog, pre-filling the suggested export name, swallowing
+ * cancels) is a native modal dialog and stays manually-verified; these tests
+ * pin everything the streams do once a `file:` uri arrives.
+ */
+class DesktopSettingsBackupIoTest {
+
+    @Test
+    fun `picker file uri round-trips through backupFileFor`() {
+        val picked = File(createTempDirectory("jp-settings-uk").toFile(), "jellyplay-settings.json")
+        val uri = picked.toURI().toString()
+
+        assertTrue(uri.startsWith("file:"))
+        assertEquals(picked.absolutePath, backupFileFor(uri).absolutePath)
+    }
+
+    @Test
+    fun `export sink writes and import source reads back the same bytes`() = runTest {
+        val io = DesktopSettingsBackupIo()
+        val dir = createTempDirectory("jp-settings-io").toFile()
+        val target = File(dir, "jellyplay-settings.json")
+        val payload = """{"schemaVersion":2,"slices":{},"extras":{}}"""
+
+        io.openExportSink(target.toURI().toString())!!.use { sink ->
+            sink.write(payload.toByteArray())
+        }
+        val readBack = io.openImportSource(target.toURI().toString())!!.use { it.readBytes() }
+
+        assertEquals(payload, readBack.decodeToString())
+    }
+
+    @Test
+    fun `non-file uri fails the stream opener like a dead SAF stream`() = runTest {
+        val io = DesktopSettingsBackupIo()
+
+        // File(URI) rejects content-style uris; the ViewModel's runCatching
+        // turns this into "Import failed: …" — same shape as Android's
+        // unopenable contentResolver stream.
+        assertFailsWith<IllegalArgumentException> {
+            io.openImportSource("content://com.android.providers.downloads.documents/42")
+        }
+    }
+}

@@ -7,13 +7,13 @@ import java.io.OutputStream
  * Platform IO seam for [SettingsViewModel]'s backup/restore + cache-size
  * plumbing (V3 settings conveyor). Android bridges the SAF contentResolver
  * streams (create-document output sink, open-document input source) and walks
- * the internal/external cache dirs; desktop v1 has no file pickers, so the
- * stream actuals return null — the VM then runs the identical
- * "Cannot open … stream" [java.io.IOException] error path it used for a
- * missing SAF stream — and the cache-size actual reports 0.
+ * the internal/external cache dirs; desktop (wave 20C) maps the picker's
+ * `file:` URIs to plain JDK file streams — the cache-size actual still
+ * reports 0 (no desktop storage layout yet).
  *
  * Streams are returned open; callers own closing them (`.use`).
- * [uri] handles are opaque strings (Android SAF uris serialised by the screen).
+ * [uri] handles are opaque strings (Android SAF / desktop file uris
+ * serialised by the picker seam).
  */
 interface SettingsBackupIo {
     /** Output stream for a create-document SAF target, or null if it can't be opened. */

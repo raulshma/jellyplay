@@ -70,11 +70,13 @@ interface VideoPlayerPlatform : SubtitleContentGateway {
 }
 
 /**
- * Content-URI IO seam for side-loaded/uploaded subtitles (SAF picks). The
- * Android actual reads through `Context.contentResolver`
- * (OpenableColumns.SIZE query / openInputStream); the desktop actual is a
- * stub. [uri] is the string form of the picked content URI — Uri is
- * stringified at the API boundary because it only flows to platform code.
+ * Content-URI IO seam for side-loaded/uploaded subtitles (SAF/native picks).
+ * The Android actual reads through `Context.contentResolver`
+ * (OpenableColumns.SIZE query / openInputStream); the desktop actual (wave
+ * 20C) resolves the AWT pickers' `file:` URIs to plain [java.io.File] length/
+ * bytes and reports 0/empty for anything else. [uri] is the string form of
+ * the picked URI — Uri is stringified at the API boundary because it only
+ * flows to platform code.
  */
 interface SubtitleContentGateway {
 

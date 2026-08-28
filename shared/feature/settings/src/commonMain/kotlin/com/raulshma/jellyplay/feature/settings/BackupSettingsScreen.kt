@@ -48,9 +48,9 @@ fun BackupSettingsScreen(
     val isTv = LocalTvMode.current
     val messenger = rememberSettingsMessenger()
 
-    // SAF pickers behind the platform seam: Android returns the SAF launcher
-    // facade, desktop null (no file pickers yet) — the export/import rows then
-    // no-op while staying rendered.
+    // SAF/native pickers behind the platform seam: Android returns the SAF
+    // launcher facade, desktop (wave 20C) an AWT FileDialog facade — both
+    // deliver opaque uri strings straight into the ViewModel below.
     val backupPicker = rememberBackupFilePicker(
         onExportUriSelected = { viewModel.exportSettings(it) },
         onImportUriSelected = { viewModel.importSettings(it) },
