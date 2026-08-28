@@ -296,11 +296,13 @@ private fun DesktopNavScaffold() {
     }
 
     // App-level composition locals the shared screens read. Desktop v1
-    // provisions static values: the JVM shell has no connectivity monitor
-    // yet (assumed Online — the API client's own reachability/failover
-    // probing remains the real gate), and the server-health banner stays
-    // neutral (Unknown). Only StudioDetailScreen reads LocalServerHealth
-    // today; several screens read LocalNetworkStatus for offline banners.
+    // provisions static values: the shell does not surface :core:data's
+    // NetworkMonitor yet (wave 17C gave that monitor a real
+    // NetworkInterface probe, but LocalNetworkStatus stays a static Online —
+    // the API client's own reachability/failover probing remains the real
+    // gate), and the server-health banner stays neutral (Unknown). Only
+    // StudioDetailScreen reads LocalServerHealth today; several screens
+    // read LocalNetworkStatus for offline banners.
     val networkStatus = remember { MutableStateFlow(NetworkStatus.Online) }
     val serverHealth = remember { MutableStateFlow(ServerHealth.Unknown) }
 

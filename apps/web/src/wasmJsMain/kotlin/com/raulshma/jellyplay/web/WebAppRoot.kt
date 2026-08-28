@@ -168,8 +168,9 @@ private fun historyHashToIndex(hash: String): Int? =
  * after the diagnostics pane it pops back and opens the FIRST feature
  * screen, Route.Requests → shared RequestsScreen, asserting the filter bar
  * + the honest "Seerr not configured" error state with zero console errors
- * (see Main.kt for why that error state is web-v1 truth: no Seerr
- * credentials UI, and session-cookie auth is browser-impossible). Wave 16A
+ * (honest at that lane point: no credentials saved yet — the 16B Seerr
+ * pane opens later in the lane — and session-cookie auth stays
+ * browser-impossible; see Main.kt). Wave 16A
  * extends it once more: back from Requests, open Route.UpcomingCalendar →
  * shared UpcomingCalendarScreen, asserting the honest feature-disabled pane
  * (the DIRECT_ARR_INTEGRATION flag boots off and no web settings UI can

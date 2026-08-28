@@ -32,10 +32,13 @@ import org.koin.dsl.module
  * registered by `networkWasmModule` (15A's KtorWasm* client bindings), and
  * the web shell's startKoin (apps/web Main.kt) lists BOTH modules plus
  * `requestsModule`, so the requests ViewModels resolve end-to-end at
- * runtime on web (browser-verified by tools/e2e/web-verify.mjs, which also
- * documents the remaining honesty cut: no Seerr credentials UI on web, and
- * session-cookie auth is browser-impossible — only API-key creds can ever
- * function there).
+ * runtime on web (browser-verified by tools/e2e/web-verify.mjs). The
+ * credentials-UI cut this note used to carry is closed by wave 16B: the
+ * shell's Seerr pane (WebSeerrPane) saves and persists the API key
+ * (localStorage carve-out — the other web credential stores stay
+ * session-memory only). Still true: session-cookie Seerr auth is
+ * browser-impossible (forbidden `Cookie` header), so only API-key creds
+ * can ever function on web.
  */
 val dataWasmModule: Module = module {
 
