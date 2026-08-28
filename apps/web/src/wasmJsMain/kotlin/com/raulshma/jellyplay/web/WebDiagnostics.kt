@@ -20,6 +20,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -30,6 +31,7 @@ import coil3.compose.AsyncImagePainter
 import coil3.compose.LocalPlatformContext
 import coil3.compose.rememberAsyncImagePainter
 import coil3.request.ImageRequest
+import coil3.size.Size
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.isVideoType
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
@@ -76,6 +78,25 @@ import org.w3c.dom.Element
  * soak lane can watch cache hits, network fetches, and failures across
  * cycles. `COIL_CACHE: none` renders before the image loader singleton has
  * resolved.
+ *
+ * Wave 20B appends the eviction/foreign-host cards (bottom of the pane —
+ * AFTER the Back button, so no existing element moves and the older lanes'
+ * click geometry is untouched):
+ *  c) CACHE PROBE: enumerates the library's video items and loads each
+ *     item's Primary poster SEQUENTIALLY at full decode size through the
+ *     app-wide loader. Per settled item it appends the audit line
+ *     `CACHE_PROBE: idx=<i>/<n> item=<name> state=<OK|ERR>`; the status line
+ *     ends `CACHE_PROBE: done ok=<k> err=<m>`. `CACHE_REVISIT: state=OK|ERR`
+ *     re-requests item[0]'s poster — after a probe pass that evicted it, the
+ *     revisit's hit/miss outcome is read from COIL_STATS deltas by the lane
+ *     (a MISS delta proves LRU eviction; the pane deliberately does NOT
+ *     duplicate that signal).
+ *  d) FOREIGN HOST: loads an image from a NON-Jellyfin origin passed as the
+ *     gated `?foreignImage=<url>` boot param (absent → `FOREIGN_HOST:
+ *     skipped (no param)`; no human surface ever sets it) — both the raw
+ *     painter (state source) and the shared [MediaImage] pipeline, proving
+ *     Coil's ktor3 fetcher handles cross-origin fetches when the origin
+ *     sends CORS headers.
  *
  * Deliberately NOT a feature screen: no error taxonomy, no i18n, no design
  * polish. The ALL-CAPS text lines are load-bearing strings for the drivers —
@@ -214,6 +235,13 @@ internal fun WebDiagnosticsPane(
         OutlinedButton(onClick = onBack, modifier = Modifier.padding(top = 8.dp)) {
             Text("Back")
         }
+        // Wave 20B cards render BELOW the Back button on purpose: a Column
+        // sibling appended after an existing element cannot move anything
+        // above it, so the older lanes' (web-verify/web-soak) click geometry
+        // on the buttons above is provably unchanged. The eviction lane runs
+        // in a taller window (and can wheel-scroll) to reach these.
+        CacheProbeCheck(library = library)
+        ForeignHostCheck()
     }
 }
 
@@ -359,6 +387,268 @@ private fun VideoCheck(
         }
     }
 }
+
+// ── c) Wave 20B: memory-cache eviction probe ───────────────────────────────
+
+/**
+ * The wave-20B cache probe. "Probe all" loads every enumerated video item's
+ * Primary poster SEQUENTIALLY through the app-wide loader at FULL decode
+ * size ([Size.ORIGINAL] — the fixture's probe posters are sized so 8 decoded
+ * entries exceed the measured 80,530,636-byte memory-cache cap; a
+ * constraint-sampled thumbnail would dodge the eviction the card exists to
+ * prove). One request at a time: the next [ProbeImage] only composes after
+ * the previous settled (plus a settle beat so the pane's COIL_STATS poll
+ * observes each item's counters before the next starts).
+ *
+ * Load-bearing strings (the eviction lane, tools/e2e/web-cache-eviction.mjs):
+ *  - per settled item: `CACHE_PROBE: idx=<i>/<n> item=<name> state=<OK|ERR>`
+ *    (the log RENDERS persistently, so the driver reads the full audit trail
+ *    at the end — no polling race can lose an intermediate line);
+ *  - status: `CACHE_PROBE: idle n=<count>` / `running idx=<i>/<n>` /
+ *    `done ok=<k> err=<m>` (terminal condition: `done`);
+ *  - revisit: `CACHE_REVISIT: state=<OK|ERR>` after clicking "Revisit #1".
+ *
+ * The pane deliberately does NOT report hit/miss for the revisit itself —
+ * that signal is a COIL_STATS misses-delta the lane computes (counting it
+ * here too would duplicate Main.kt's [CoilStats] source of truth).
+ */
+@Composable
+private fun CacheProbeCheck(library: LibraryApiClient) {
+    // Enumerate once per pane entry (poster inventory; nothing loads until a
+    // button is clicked — zero behavior change for the older lanes).
+    var items by remember { mutableStateOf<List<MediaItem>?>(null) }
+    var enumErr by remember { mutableStateOf<String?>(null) }
+
+    // -1 idle; 0..n-1 loading item i; n pass finished.
+    var probeIdx by remember { mutableStateOf(-1) }
+    var pendingAdvance by remember { mutableStateOf(false) }
+    var probeLog by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    var revisitPhase by remember { mutableStateOf("idle") }
+    var revisitAttempt by remember { mutableStateOf(0) }
+
+    LaunchedEffect(library) {
+        library.getMediaItems(parentId = null, limit = 20)
+            .onSuccess { search ->
+                items = search.items.filter { it.mediaType.isVideoType }.ifEmpty { search.items }
+            }
+            .onFailure { failure ->
+                enumErr = failure.message ?: failure::class.simpleName
+            }
+    }
+
+    // Settle beat between sequential loads: the AX log line for item i is
+    // committed, the pane's 500ms COIL_STATS poll picks up its counters, THEN
+    // item i+1 starts — keeping the lane's per-item miss attribution clean.
+    LaunchedEffect(pendingAdvance) {
+        if (pendingAdvance) {
+            delay(250)
+            pendingAdvance = false
+            probeIdx += 1
+        }
+    }
+
+    val list = items.orEmpty()
+    val okCount = probeLog.count { it.endsWith("state=OK") }
+    val errCount = probeLog.count { it.endsWith("state=ERR") }
+    val statusLine = when {
+        enumErr != null -> "CACHE_PROBE: enum-err $enumErr"
+        items == null -> "CACHE_PROBE: enumerating…"
+        probeIdx == -1 -> "CACHE_PROBE: idle n=${items!!.size}"
+        probeIdx < items!!.size -> "CACHE_PROBE: running idx=${probeIdx + 1}/${items!!.size}"
+        else -> "CACHE_PROBE: done ok=$okCount err=$errCount"
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("CACHE PROBE (Coil memory-cache LRU)", style = MaterialTheme.typography.titleMedium)
+            Text(statusLine, style = MaterialTheme.typography.bodyLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        probeLog = emptyList()
+                        pendingAdvance = false
+                        probeIdx = 0
+                    },
+                    enabled = items != null && (probeIdx == -1 || probeIdx >= list.size),
+                ) {
+                    Text("Probe all")
+                }
+                OutlinedButton(
+                    onClick = {
+                        revisitAttempt += 1
+                        revisitPhase = "loading"
+                    },
+                    enabled = list.isNotEmpty() && revisitPhase != "loading",
+                ) {
+                    Text("Revisit #1")
+                }
+            }
+            // One load at a time; the drawn [Image] is what resolves the
+            // painter (an undrawn painter never receives constraints).
+            if (probeIdx in list.indices) {
+                val current = list[probeIdx]
+                key(current.id) {
+                    ProbeImage(
+                        url = library.getImageUrl(current.id, "Primary", maxWidth = null),
+                        contentDescription = "cache probe artwork ${current.name}",
+                    ) { ok ->
+                        probeLog = probeLog +
+                            "CACHE_PROBE: idx=${probeIdx + 1}/${list.size} item=${current.name} state=${if (ok) "OK" else "ERR"}"
+                        pendingAdvance = true
+                    }
+                }
+            }
+            // Revisit #1: re-request item[0]'s poster. Re-keyed per attempt so
+            // a repeat click builds a FRESH painter (a remembered painter for
+            // the same URL keeps its settled state and never re-requests).
+            if (revisitPhase == "loading" && list.isNotEmpty()) {
+                val first = list[0]
+                key("revisit-$revisitAttempt") {
+                    ProbeImage(
+                        url = library.getImageUrl(first.id, "Primary", maxWidth = null),
+                        contentDescription = "cache revisit artwork ${first.name}",
+                    ) { ok -> revisitPhase = if (ok) "OK" else "ERR" }
+                }
+            }
+            probeLog.takeLast(20).forEach { line ->
+                Text(line, style = MaterialTheme.typography.bodySmall)
+            }
+            Text(
+                text = when (revisitPhase) {
+                    "idle" -> "CACHE_REVISIT: idle"
+                    "loading" -> "CACHE_REVISIT: loading"
+                    "OK" -> "CACHE_REVISIT: state=OK"
+                    else -> "CACHE_REVISIT: state=ERR"
+                },
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
+    }
+}
+
+/**
+ * One full-decode image load whose settle state feeds a machine-readable
+ * line. Same shape as [ImageCheck]'s painter (rendered [Image], collected
+ * painter [coil3.compose.AsyncImagePainter.State]) plus TWO probe-specific
+ * behaviors: [Size.ORIGINAL] (the memory-cache entry must be the fixture's
+ * full-size poster, not a layout-sampled thumbnail) and settle-exactly-once
+ * reporting via a per-URL remembered flag.
+ */
+@Composable
+private fun ProbeImage(
+    url: String,
+    contentDescription: String,
+    onSettled: (ok: Boolean) -> Unit,
+) {
+    val context = LocalPlatformContext.current
+    val request = remember(url) {
+        ImageRequest.Builder(context)
+            .data(url)
+            // Full decode size is the point (see CacheProbeCheck KDoc): the
+            // fixture's 2560x1440 posters must land in the memory cache as
+            // 14,745,600-byte entries so 8 of them exceed the measured cap.
+            .size(Size.ORIGINAL)
+            .build()
+    }
+    val painter = rememberAsyncImagePainter(model = request)
+    val painterState by painter.state.collectAsState()
+    var settled by remember(url) { mutableStateOf(false) }
+
+    LaunchedEffect(painterState, url) {
+        if (settled) return@LaunchedEffect
+        when (painterState) {
+            is AsyncImagePainter.State.Success -> {
+                settled = true
+                onSettled(true)
+            }
+            is AsyncImagePainter.State.Error -> {
+                settled = true
+                onSettled(false)
+            }
+            else -> Unit
+        }
+    }
+
+    Image(
+        painter = painter,
+        contentDescription = contentDescription,
+        modifier = Modifier.size(width = 300.dp, height = 170.dp),
+        contentScale = ContentScale.Crop,
+    )
+}
+
+// ── d) Wave 20B: non-Jellyfin-origin artwork check ─────────────────────────
+
+/**
+ * Loads one image from a NON-Jellyfin origin whose URL arrives via the gated
+ * `?foreignImage=` boot param (read once per composition; absent → skipped).
+ * Rendering mirrors ImageCheck: the raw painter (whose state feeds the
+ * `FOREIGN_HOST: OK|ERR` line) plus the shared [MediaImage] — the pipeline
+ * feature screens actually call. Both resolve the app-wide loader
+ * (KtorNetworkFetcherFactory over the browser fetch engine), so a pass proves
+ * cross-origin artwork works when the origin sends CORS headers (the lane's
+ * fixture origin answers `Access-Control-Allow-Origin: *`).
+ */
+@Composable
+private fun ForeignHostCheck() {
+    val foreignUrl = remember { foreignImageParam() }
+    var phase by remember { mutableStateOf(if (foreignUrl == null) "skipped" else "loading") }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("FOREIGN HOST (Coil → non-Jellyfin origin)", style = MaterialTheme.typography.titleMedium)
+            if (foreignUrl == null) {
+                Text(
+                    text = "FOREIGN_HOST: skipped (no param)",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    key(foreignUrl) {
+                        ProbeImage(
+                            url = foreignUrl,
+                            contentDescription = "foreign-host artwork painter",
+                        ) { ok -> phase = if (ok) "OK" else "ERR" }
+                    }
+                    MediaImage(
+                        url = foreignUrl,
+                        contentDescription = "foreign-host artwork MediaImage",
+                        modifier = Modifier.size(width = 120.dp, height = 68.dp),
+                    )
+                }
+                Text(
+                    text = "FOREIGN_HOST: $phase",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = when (phase) {
+                        "OK" -> MaterialTheme.colorScheme.primary
+                        "ERR" -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+                Text(
+                    text = "FOREIGN_URL: ${foreignUrl.ifBlank { "<blank>" }}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * `?foreignImage=` boot param — wave-20B lane hook with the same rules as
+ * Main.kt's `?e2eRoute=`/`?variant=` (parsed from the boot URL only; no
+ * user-facing surface ever sets it, so every human load gets null). Single-
+ * expression `js()` body (the WasmClock rule: wasm `js()` may only be a
+ * function's whole body).
+ */
+@OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
+private fun foreignImageParam(): String? =
+    js("new URLSearchParams(window.location.search).get('foreignImage')")
 
 /**
  * Fixed bottom-left host rect for the diagnostics video overlay. `js()`
