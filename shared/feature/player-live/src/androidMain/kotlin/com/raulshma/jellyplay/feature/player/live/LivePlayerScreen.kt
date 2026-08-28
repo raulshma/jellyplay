@@ -31,7 +31,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.VideoSize
 import androidx.media3.ui.PlayerView
 import com.raulshma.jellyplay.core.designsystem.theme.PlayerDarkTheme
 import com.raulshma.jellyplay.core.ui.player.findActivity
@@ -102,8 +104,16 @@ fun LivePlayerScreen(
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
 
-    // Initialize playback once when the screen enters.
+    // Initialize playback once when the screen enters. A *changed* channelId
+    // on a live screen instance (the host PlayerActivity's onNewIntent args
+    // swap — e.g. picking another channel from the browse UI while in PiP)
+    // must stop-and-retune first: the VM is activity-scoped and its
+    // `initialized` latch would otherwise no-op, keeping the old channel
+    // playing under the new route.
+    var tunedChannelId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(channelId) {
+        if (tunedChannelId != null && tunedChannelId != channelId) viewModel.stop()
+        tunedChannelId = channelId
         viewModel.initialize(channelId, audioStreamIndex, subtitleStreamIndex)
     }
 
@@ -272,6 +282,19 @@ fun LivePlayerScreen(
                             // LiveErrorBanner (M3 Expressive LoadingIndicator);
                             // disable Media3's native spinner to avoid doubles.
                             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                            // PiP aspect-ratio feed (wave 19C): forward the
+                            // decoded video's dimensions so the host
+                            // PlayerActivity shapes the PiP window to the
+                            // content instead of its 16:9 fallback. Fires on
+                            // every track selection while the engine lives.
+                            media3Player?.addListener(object : Player.Listener {
+                                override fun onVideoSizeChanged(videoSize: VideoSize) {
+                                    viewModel.onVideoSizeChanged(
+                                        videoSize.width,
+                                        videoSize.height,
+                                    )
+                                }
+                            })
                         }
                     },
                 )

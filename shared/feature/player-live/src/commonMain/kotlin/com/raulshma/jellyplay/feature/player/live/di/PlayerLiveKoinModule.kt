@@ -26,6 +26,13 @@ import org.koin.dsl.module
  * UserMessageBus: the VM emits LivePlayerMessage values on a messages Flow
  * that LivePlayerScreen renders via the app bus (livetv conveyor's
  * LiveTvUserMessage seam shape).
+ *
+ * Wave 19C (live PiP): the VM's `pip` seam is a fourth platform slot —
+ * Android binds it in `androidPlayerLiveModule` (adapter over the legacy
+ * core:data singleton the host PlayerActivity reads). Like the audio seam it
+ * has no jvm definition, so the desktop registration here stays
+ * documented-latent for one more unresolvable dep — the live screen never
+ * composes there (Route.LiveTvChannelPlayer stays guarded in DesktopAppRoot).
  */
 val playerLiveModule: Module = module {
     viewModel {
@@ -40,6 +47,7 @@ val playerLiveModule: Module = module {
             imageUrlProvider = get(),
             audio = get(),
             transcodeReasonsRenderer = get(),
+            pip = get(),
         )
     }
     single {
