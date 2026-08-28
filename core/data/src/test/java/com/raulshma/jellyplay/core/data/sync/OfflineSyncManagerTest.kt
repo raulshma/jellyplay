@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.ResyncCategory
 import com.raulshma.jellyplay.core.model.ResyncOptions
 import com.raulshma.jellyplay.core.model.ResyncStep
 import com.raulshma.jellyplay.core.model.StreamType
@@ -116,7 +117,7 @@ class OfflineSyncManagerTest {
     fun `resyncItem skips subtitles and trickplay writers when those options are off`() = runTest {
         manager.resyncItem(
             itemId,
-            options = ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = false, trickplay = false, segments = true),
+            options = ResyncOptions.of(ResyncCategory.SEGMENTS),
         )
 
         assertFalse(writer.calls.contains("downloadExternalSubtitles"))
@@ -129,7 +130,7 @@ class OfflineSyncManagerTest {
     fun `resyncItem skips segments and does not bust cache when segments option is off`() = runTest {
         manager.resyncItem(
             itemId,
-            options = ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = false, trickplay = false, segments = false),
+            options = ResyncOptions.NONE,
         )
 
         assertFalse(writer.calls.contains("downloadMediaSegments"))
@@ -137,8 +138,54 @@ class OfflineSyncManagerTest {
     }
 
     @Test
+    fun `resyncItem with chapters only still persists the offline detail row`() = runTest {
+        // Chapters are a column of the offline row (and fold into its composite
+        // metadata signature), so a chapters-only selection must go through the
+        // same row persist as a metadata selection.
+        manager.resyncItem(
+            itemId,
+            options = ResyncOptions.of(ResyncCategory.CHAPTERS),
+        )
+
+        assertTrue(writer.calls.contains("saveOfflineMediaDetail"))
+    }
+
+    @Test
+    fun `resyncItem with metadata and chapters both off skips the row persist and retains the prior signature`() = runTest {
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(metadataSignature = "stale-meta-sig")
+
+        manager.resyncItem(
+            itemId,
+            options = ResyncOptions.NONE,
+        )
+
+        assertFalse(writer.calls.contains("saveOfflineMediaDetail"))
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals("stale-meta-sig", slot.captured.syncedMetadataSignature)
+    }
+
+    @Test
+    fun `resyncItem with chapters only re-seeds the composite metadata signature`() = runTest {
+        // The chapters write refreshes the whole row, so the composite signature
+        // (metadata + chapters) must be re-seeded from the fresh fetch — keeping
+        // the stale value would re-flag the axis on the next check.
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(metadataSignature = "stale-meta-sig")
+
+        manager.resyncItem(
+            itemId,
+            options = ResyncOptions.of(ResyncCategory.CHAPTERS),
+        )
+
+        val expected = comparator.metadataSignature(detail())
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals(expected, slot.captured.syncedMetadataSignature)
+    }
+
+    @Test
     fun `resyncItem busts segments cache before refreshing segments`() = runTest {
-        manager.resyncItem(itemId, options = ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = false, trickplay = false, segments = true))
+        manager.resyncItem(itemId, options = ResyncOptions.of(ResyncCategory.SEGMENTS))
 
         coVerifyOrder {
             playbackRepository.invalidateSegmentsCache(itemId)
@@ -150,13 +197,13 @@ class OfflineSyncManagerTest {
 
     @Test
     fun `resyncItem retains skipped subtitle signature in the persisted baseline`() = runTest {
-        // Baseline carries a real subtitle signature; options.subtitles = false
+        // Baseline carries a real subtitle signature; options exclude SUBTITLES
         // must carry it forward unchanged instead of wiping it.
         coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(subtitleSignature = "prior-sub-sig")
 
         manager.resyncItem(
             itemId,
-            options = ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = false, trickplay = true, segments = true),
+            options = ResyncOptions.of(ResyncCategory.TRICKPLAY, ResyncCategory.SEGMENTS),
         )
 
         val slot = slot<SyncBaselineEntity>()
@@ -176,7 +223,7 @@ class OfflineSyncManagerTest {
 
         val result = manager.resyncItem(
             itemId,
-            options = ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = true, trickplay = false, segments = false),
+            options = ResyncOptions.of(ResyncCategory.SUBTITLES),
         )
 
         val subsStep = result.steps.firstOrNull { it.step == ResyncStep.DOWNLOAD_SUBTITLES }
@@ -317,7 +364,7 @@ class OfflineSyncManagerTest {
 
         val result = manager.resyncItem(
             itemId,
-            options = ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = true, trickplay = false, segments = false),
+            options = ResyncOptions.of(ResyncCategory.SUBTITLES),
         )
 
         val subsStep = result.steps.firstOrNull { it.step == ResyncStep.DOWNLOAD_SUBTITLES }
@@ -343,7 +390,7 @@ class OfflineSyncManagerTest {
 
         manager.resyncItem(
             itemId,
-            options = ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = true, trickplay = false, segments = false),
+            options = ResyncOptions.of(ResyncCategory.SUBTITLES),
         )
 
         val slot = slot<SyncBaselineEntity>()
@@ -354,7 +401,7 @@ class OfflineSyncManagerTest {
 
     @Test
     fun `resyncItem keeps pending when the subtitle block never runs because the download row vanished`() = runTest {
-        // options.subtitles=true but no download row -> downloadPath null -> the
+        // options include SUBTITLES but no download row -> downloadPath null -> the
         // fetch block is skipped. Nothing was fetched, so the pending flag must
         // survive instead of being silently cleared by the success default.
         coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(
@@ -365,7 +412,7 @@ class OfflineSyncManagerTest {
 
         manager.resyncItem(
             itemId,
-            options = ResyncOptions(metadata = true, poster = true, backdrop = true, subtitles = true, trickplay = true, segments = true),
+            options = ResyncOptions.ALL,
         )
 
         assertFalse(writer.calls.contains("downloadExternalSubtitles"))
@@ -388,7 +435,7 @@ class OfflineSyncManagerTest {
 
         manager.resyncItem(
             itemId,
-            options = ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = true, trickplay = false, segments = false),
+            options = ResyncOptions.of(ResyncCategory.SUBTITLES),
         )
 
         assertFalse(writer.calls.contains("downloadExternalSubtitles"))
@@ -480,12 +527,13 @@ class OfflineSyncManagerTest {
         subtitlesPending: Int = 0,
         trickplaySignature: String? = "stale-trick-sig",
         segmentsSignature: String? = "stale-seg-sig",
+        metadataSignature: String? = comparator.metadataSignature(detail()),
         lastSyncedAt: Long? = 0L, // expired TTL by default so checks/resyncs don't short-circuit
     ): SyncBaselineEntity = SyncBaselineEntity(
         id = itemId,
         syncedPosterTag = "poster-1",
         syncedBackdropTag = "backdrop-1",
-        syncedMetadataSignature = comparator.metadataSignature(detail()),
+        syncedMetadataSignature = metadataSignature,
         syncedSubtitleSignature = subtitleSignature,
         syncedTrickplaySignature = trickplaySignature,
         syncedSegmentsSignature = segmentsSignature,

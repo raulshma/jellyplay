@@ -20,6 +20,15 @@ interface DownloadRepository : OfflineDownloadWriter {
     fun getAllDownloads(): Flow<List<DownloadItem>>
 
     /**
+     * One-shot read of every download row, uncapped — unlike [getAllDownloads],
+     * whose 500-row window exists for list rendering. The force-resync picker
+     * resolves its candidates from this so every downloaded item stays
+     * resyncable regardless of library size, and so the picker is correct even
+     * when opened before the reactive list has emitted its first value.
+     */
+    suspend fun getAllDownloadsSnapshot(): List<DownloadItem>
+
+    /**
      * Download rows for exactly [mediaItemIds] — the scoped reactive read for
      * screens tracking a known set of items (e.g. an album's tracks). Fetching
      * only the matching rows costs far less per re-emission than collecting

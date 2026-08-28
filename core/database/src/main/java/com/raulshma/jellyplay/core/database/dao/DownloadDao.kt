@@ -16,6 +16,15 @@ interface DownloadDao {
     fun getAllDownloads(limit: Int = 500): Flow<List<DownloadEntity>>
 
     /**
+     * One-shot read of every download row, newest first — deliberately uncapped,
+     * unlike [getAllDownloads]' 500-row UI window. The force-resync picker uses
+     * this so a library larger than the UI window still offers all of its
+     * downloaded items for resync.
+     */
+    @Query("SELECT * FROM downloads ORDER BY createdAt DESC")
+    suspend fun getAllDownloadsSnapshot(): List<DownloadEntity>
+
+    /**
      * One page of `COMPLETED` audio (`MUSIC`/`AUDIO`) downloads, newest
      * first. The media-library DOWNLOADS browse page previously fetched
      * [getAllDownloads]' full 500-row window and filtered/sliced it in

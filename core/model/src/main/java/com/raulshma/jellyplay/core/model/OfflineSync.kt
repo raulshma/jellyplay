@@ -78,34 +78,71 @@ data class ResyncCheckResult(
 )
 
 /**
- * User-facing selection of which data categories a resync should refresh. Maps
- * onto the optional [ResyncStep]s (metadata -> PERSIST_METADATA, poster ->
- * DOWNLOAD_POSTER, backdrop -> DOWNLOAD_BACKDROP, subtitles ->
- * DOWNLOAD_SUBTITLES, trickplay -> DOWNLOAD_TRICKPLAY, segments ->
- * DOWNLOAD_SEGMENTS); FETCH_DETAIL and UPDATE_BASELINE are always-on
- * infrastructure and therefore not selectable.
+ * One selectable data axis of a resync. Maps onto the optional [ResyncStep]s
+ * (METADATA -> PERSIST_METADATA, POSTER -> DOWNLOAD_POSTER, BACKDROP ->
+ * DOWNLOAD_BACKDROP, SUBTITLES -> DOWNLOAD_SUBTITLES, TRICKPLAY ->
+ * DOWNLOAD_TRICKPLAY, SEGMENTS -> DOWNLOAD_SEGMENTS); FETCH_DETAIL and
+ * UPDATE_BASELINE are always-on infrastructure and therefore not selectable.
+ * Chapters share the metadata row and its composite signature, so selecting
+ * CHAPTERS routes through the same PERSIST_METADATA step as METADATA (see
+ * [com.raulshma.jellyplay.core.data.sync.OfflineSyncManager.resyncItem]).
  *
- * Defaults to all-true so the existing "resync everything" call sites behave
- * identically when the parameter is omitted. A user-driven force resync passes
- * an explicit selection (e.g. metadata + poster only) to skip categories.
+ * Declaration order is the UI display order in the resync sheets.
+ */
+@Immutable
+@Serializable
+enum class ResyncCategory {
+    METADATA,
+    CHAPTERS,
+    POSTER,
+    BACKDROP,
+    SUBTITLES,
+    TRICKPLAY,
+    SEGMENTS,
+}
+
+/**
+ * User-facing selection of which data categories a resync should refresh.
+ * Defaults to every category so the existing "resync everything" call sites
+ * behave identically when the parameter is omitted. A user-driven force resync
+ * passes an explicit selection (e.g. `ResyncOptions.of(METADATA, POSTER)`) to
+ * skip categories.
  */
 @Immutable
 @Serializable
 data class ResyncOptions(
-    val metadata: Boolean = true,
-    val poster: Boolean = true,
-    val backdrop: Boolean = true,
-    val subtitles: Boolean = true,
-    val trickplay: Boolean = true,
-    val segments: Boolean = true,
+    val categories: Set<ResyncCategory> = ResyncCategory.entries.toSet(),
 ) {
     /** True when no category is selected — callers should treat this as a no-op. */
-    val isEmpty: Boolean get() =
-        !metadata && !poster && !backdrop && !subtitles && !trickplay && !segments
+    val isEmpty: Boolean get() = categories.isEmpty()
+
+    /**
+     * True when the selection must persist the offline detail row: chapters
+     * are a column of that row and fold into its composite metadata signature,
+     * so selecting either METADATA or CHAPTERS means the row is rewritten and
+     * the signature honestly re-seeded. Single home of that coupling — the
+     * sync manager gates both the row persist and the signature re-seed on
+     * this property.
+     */
+    val writesMetadataRow: Boolean get() =
+        ResyncCategory.METADATA in categories || ResyncCategory.CHAPTERS in categories
+
+    operator fun contains(category: ResyncCategory): Boolean = category in categories
+
+    /** A selection with [category] flipped; the resync sheets' per-row toggle. */
+    operator fun plus(category: ResyncCategory): ResyncOptions = ResyncOptions(categories + category)
+
+    operator fun minus(category: ResyncCategory): ResyncOptions = ResyncOptions(categories - category)
 
     companion object {
         /** Resync every category. The historical default behaviour. */
         val ALL get() = ResyncOptions()
+
+        /** Resync nothing — a no-op selection. */
+        val NONE get() = ResyncOptions(emptySet())
+
+        /** Resync exactly the given categories. */
+        fun of(vararg categories: ResyncCategory) = ResyncOptions(categories.toSet())
     }
 }
 

@@ -52,6 +52,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,6 +80,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.ResyncCategory
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -439,11 +441,18 @@ fun DownloadsScreen(
     }
 
     if (showForceResyncSheet) {
+        // Candidates resolve straight from the DB on each open (suspend) so the
+        // picker offers every eligible downloaded item — not just those inside
+        // the UI list's 500-row window, and not an empty set when the sheet is
+        // opened before the list flow's first emission.
+        var forceResyncCandidates by remember { mutableStateOf<List<ForceResyncCandidate>>(emptyList()) }
+        // Keyed on Unit: the enclosing `if` remounts this block on every sheet
+        // open, so a sheet-keyed key would be a constant that can never re-fire.
+        LaunchedEffect(Unit) {
+            forceResyncCandidates = viewModel.forceResyncCandidates()
+        }
         ForceResyncSheet(
-            // Source of truth lives in the VM so the filter is testable and
-            // single-defined; keyed on downloads so the picker recomputes when
-            // the completed set changes.
-            candidates = remember(uiState.downloads) { viewModel.forceResyncCandidates() },
+            candidates = forceResyncCandidates,
             progress = resyncProgress,
             onSync = { ids, options -> viewModel.forceResync(ids, options) },
             onDismiss = {
@@ -1085,7 +1094,7 @@ private fun ResyncSheetRow(
 }
 
 /**
- * Force-resync sheet: a user-directed resync over an explicit set of completed
+ * Force-resync sheet: a user-directed resync over an explicit set of downloaded
  * items, refreshing only the selected data categories (metadata / poster /
  * backdrop). Two phases — a picker (items + data checkboxes) and a progress
  * state that reuses [ResyncBatchProgress] from the sync manager, matching the
@@ -1104,7 +1113,7 @@ private fun ResyncSheetRow(
  * sheet while a background batch is still running (after a mid-batch dismiss)
  * surfaces running progress rather than a fresh editable picker.
  *
- * @param candidates completed items available for selection, with episode context.
+ * @param candidates downloaded items available for selection, with episode context.
  * @param progress live batch progress, shared with the regular resync flow.
  * @param onSync invoked with the selected item ids and data options.
  * @param onDismiss closes the sheet and clears batch progress.
@@ -1122,12 +1131,9 @@ private fun ForceResyncSheet(
     // to all-on matches the historical resync behaviour; items start empty so
     // the user must opt in (an accidental full-library resync is costly).
     var selectedIds by remember { androidx.compose.runtime.mutableStateOf(emptySet<String>()) }
-    var syncMetadata by remember { androidx.compose.runtime.mutableStateOf(true) }
-    var syncPoster by remember { androidx.compose.runtime.mutableStateOf(true) }
-    var syncBackdrop by remember { androidx.compose.runtime.mutableStateOf(true) }
-    var syncSubtitles by remember { androidx.compose.runtime.mutableStateOf(true) }
-    var syncTrickplay by remember { androidx.compose.runtime.mutableStateOf(true) }
-    var syncSegments by remember { androidx.compose.runtime.mutableStateOf(true) }
+    var selectedOptions by remember {
+        androidx.compose.runtime.mutableStateOf(com.raulshma.jellyplay.core.model.ResyncOptions.ALL)
+    }
     // Latch: sticky once a sync has been kicked off (or is still running from a
     // prior mid-batch dismiss). Derived purely from live progress so an
     // orphaned background batch latches this sheet straight into the running/
@@ -1265,51 +1271,20 @@ private fun ForceResyncSheet(
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                        ForceResyncDataRow(
-                            label = stringResource(R.string.downloads_force_resync_data_metadata),
-                            description = stringResource(R.string.downloads_force_resync_data_metadata_desc),
-                            checked = syncMetadata,
-                            onToggle = { syncMetadata = !syncMetadata },
-                        )
-                        ForceResyncDataRow(
-                            label = stringResource(R.string.downloads_force_resync_data_poster),
-                            description = stringResource(R.string.downloads_force_resync_data_poster_desc),
-                            checked = syncPoster,
-                            onToggle = { syncPoster = !syncPoster },
-                        )
-                        ForceResyncDataRow(
-                            label = stringResource(R.string.downloads_force_resync_data_backdrop),
-                            description = stringResource(R.string.downloads_force_resync_data_backdrop_desc),
-                            checked = syncBackdrop,
-                            onToggle = { syncBackdrop = !syncBackdrop },
-                        )
-                        ForceResyncDataRow(
-                            label = stringResource(R.string.downloads_force_resync_data_subtitles),
-                            description = stringResource(R.string.downloads_force_resync_data_subtitles_desc),
-                            checked = syncSubtitles,
-                            onToggle = { syncSubtitles = !syncSubtitles },
-                        )
-                        ForceResyncDataRow(
-                            label = stringResource(R.string.downloads_force_resync_data_trickplay),
-                            description = stringResource(R.string.downloads_force_resync_data_trickplay_desc),
-                            checked = syncTrickplay,
-                            onToggle = { syncTrickplay = !syncTrickplay },
-                        )
-                        ForceResyncDataRow(
-                            label = stringResource(R.string.downloads_force_resync_data_segments),
-                            description = stringResource(R.string.downloads_force_resync_data_segments_desc),
-                            checked = syncSegments,
-                            onToggle = { syncSegments = !syncSegments },
-                        )
-                        val options = com.raulshma.jellyplay.core.model.ResyncOptions(
-                            metadata = syncMetadata,
-                            poster = syncPoster,
-                            backdrop = syncBackdrop,
-                            subtitles = syncSubtitles,
-                            trickplay = syncTrickplay,
-                            segments = syncSegments,
-                        )
-                        if (options.isEmpty) {
+                        ResyncCategory.entries.forEach { category ->
+                            val (labelRes, descRes) = category.stringRes()
+                            ForceResyncDataRow(
+                                label = stringResource(labelRes),
+                                description = stringResource(descRes),
+                                checked = category in selectedOptions,
+                                onToggle = {
+                                    selectedOptions =
+                                        if (category in selectedOptions) selectedOptions - category
+                                        else selectedOptions + category
+                                },
+                            )
+                        }
+                        if (selectedOptions.isEmpty) {
                             Text(
                                 stringResource(R.string.downloads_force_resync_no_data),
                                 style = MaterialTheme.typography.labelSmall,
@@ -1325,15 +1300,7 @@ private fun ForceResyncSheet(
             // complete in the background, matching the regular resync sheet).
             // In the picker phase the primary Sync action sits beside it so the
             // two terminal controls share a row.
-            val options = com.raulshma.jellyplay.core.model.ResyncOptions(
-                metadata = syncMetadata,
-                poster = syncPoster,
-                backdrop = syncBackdrop,
-                subtitles = syncSubtitles,
-                trickplay = syncTrickplay,
-                segments = syncSegments,
-            )
-            val canSync = !showRunning && !showDone && selectedIds.isNotEmpty() && !options.isEmpty
+            val canSync = !showRunning && !showDone && selectedIds.isNotEmpty() && !selectedOptions.isEmpty
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1346,7 +1313,7 @@ private fun ForceResyncSheet(
                     Text(stringResource(R.string.downloads_close))
                 }
                 androidx.compose.material3.Button(
-                    onClick = { onSync(selectedIds.toList(), options) },
+                    onClick = { onSync(selectedIds.toList(), selectedOptions) },
                     modifier = Modifier.weight(1f),
                     enabled = canSync,
                 ) {
@@ -1404,6 +1371,25 @@ private fun ForceResyncItemRow(
             }
         }
     }
+}
+
+/** Label + description strings for one resync data-category row, exhaustive
+ *  so a new [ResyncCategory] fails compilation until it gets copy. */
+private fun ResyncCategory.stringRes(): Pair<Int, Int> = when (this) {
+    ResyncCategory.METADATA ->
+        R.string.downloads_force_resync_data_metadata to R.string.downloads_force_resync_data_metadata_desc
+    ResyncCategory.CHAPTERS ->
+        R.string.downloads_force_resync_data_chapters to R.string.downloads_force_resync_data_chapters_desc
+    ResyncCategory.POSTER ->
+        R.string.downloads_force_resync_data_poster to R.string.downloads_force_resync_data_poster_desc
+    ResyncCategory.BACKDROP ->
+        R.string.downloads_force_resync_data_backdrop to R.string.downloads_force_resync_data_backdrop_desc
+    ResyncCategory.SUBTITLES ->
+        R.string.downloads_force_resync_data_subtitles to R.string.downloads_force_resync_data_subtitles_desc
+    ResyncCategory.TRICKPLAY ->
+        R.string.downloads_force_resync_data_trickplay to R.string.downloads_force_resync_data_trickplay_desc
+    ResyncCategory.SEGMENTS ->
+        R.string.downloads_force_resync_data_segments to R.string.downloads_force_resync_data_segments_desc
 }
 
 @Composable

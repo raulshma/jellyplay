@@ -139,6 +139,8 @@
     <string name="downloads_force_resync_data_header">要同步的数据</string>
     <string name="downloads_force_resync_data_metadata">元数据</string>
     <string name="downloads_force_resync_data_metadata_desc">简介、演员、评分</string>
+    <string name="downloads_force_resync_data_chapters">章节</string>
+    <string name="downloads_force_resync_data_chapters_desc">章节标记</string>
     <string name="downloads_force_resync_data_poster">海报</string>
     <string name="downloads_force_resync_data_poster_desc">主要图片</string>
     <string name="downloads_force_resync_data_backdrop">背景</string>

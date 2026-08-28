@@ -219,6 +219,11 @@ class PlayerActivity : FragmentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Safety net for the paths that never reach onPipModeChanged(false):
+        // a destroy while still in PiP (recreate / OEM callback orderings) or a
+        // cancelled entry. Without this the action receiver stays registered on
+        // a dead activity and the framework logs IntentReceiverLeaked.
+        unregisterPipActionReceiver()
         // Drop any orientation lock the player applied so the browse host
         // (MainActivity, UNSPECIFIED) resumes into a clean, system-controlled
         // orientation. VideoPlayerScreen.onDispose skips its orientation restore
@@ -427,7 +432,11 @@ class PlayerActivity : FragmentActivity() {
     fun enterPipMode(): Boolean {
         if (!isPipCapable()) return false
 
-        registerPipActionReceiver()
+        // No receiver registration here: if the system cancels the entry
+        // (e.g. another window steals top position) onPipModeChanged(true)
+        // never fires and an eager registration would leak. onPipModeChanged
+        // registers on confirmed entry — early enough, since the RemoteActions
+        // only exist inside the PiP window that the mode change precedes.
 
         val params = buildPipParams(preArm = false, includeActions = true)
         return runCatching {

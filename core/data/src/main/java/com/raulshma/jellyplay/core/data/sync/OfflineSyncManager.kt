@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.OfflineSyncState
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
 import com.raulshma.jellyplay.core.model.ResyncCheckResult
 import com.raulshma.jellyplay.core.model.ResyncItemProgress
+import com.raulshma.jellyplay.core.model.ResyncCategory
 import com.raulshma.jellyplay.core.model.ResyncOptions
 import com.raulshma.jellyplay.core.model.ResyncPhase
 import com.raulshma.jellyplay.core.model.ResyncResult
@@ -250,13 +251,14 @@ class OfflineSyncManager @Inject constructor(
             val downloadPath = downloadRepository.getDownloadByMediaItemId(itemId)?.downloadPath
             val parentDir = downloadPath?.let { File(it).parentFile }
 
-            // Metadata: re-persist the offline detail row. Skipped when the user
-            // only asked for images/sidecars — the existing metadata row is left as-is.
-            if (options.metadata) {
+            // Metadata: re-persist the offline detail row whenever the selection
+            // writes it (see ResyncOptions.writesMetadataRow for why chapters
+            // count). Preserves the existing local image paths so the
+            // re-persisted row keeps pointing at the on-disk files; only changed
+            // image bytes are overwritten below. Falls back to remote URLs if
+            // none persisted yet.
+            if (options.writesMetadataRow) {
                 setProgress(itemId, ResyncPhase.WORKING, ResyncStep.PERSIST_METADATA)
-                // Preserve the existing local image paths so the re-persisted row
-                // keeps pointing at the on-disk files; only changed image bytes are
-                // overwritten below. Falls back to remote URLs if none persisted yet.
                 val paths = offlineMediaDao.getLocalImagePaths(itemId)
                 val posterPath = paths?.posterPath
                 val backdropPath = paths?.backdropPath
@@ -265,7 +267,7 @@ class OfflineSyncManager @Inject constructor(
             }
 
             if (parentDir != null) {
-                if (options.poster) {
+                if (ResyncCategory.POSTER in options) {
                     val posterChanged = baseline == null || comparator.isImageChanged(baseline.posterTag, detail.posterImageTag)
                     if (posterChanged) {
                         setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_POSTER)
@@ -275,7 +277,7 @@ class OfflineSyncManager @Inject constructor(
                         steps += ResyncStepResult(itemId, ResyncStep.DOWNLOAD_POSTER, success = poster != null)
                     }
                 }
-                if (options.backdrop) {
+                if (ResyncCategory.BACKDROP in options) {
                     val backdropChanged = baseline == null || comparator.isImageChanged(baseline.backdropTag, detail.backdropImageTag)
                     if (backdropChanged) {
                         setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_BACKDROP)
@@ -303,7 +305,7 @@ class OfflineSyncManager @Inject constructor(
             var trickplayOk = true
             var segmentsOk = true
             if (downloadPath != null && freshSource != null) {
-                if (options.subtitles) {
+                if (ResyncCategory.SUBTITLES in options) {
                     val subsChanged = baseline == null ||
                         comparator.isSubtitleChanged(baseline, detail)
                     if (subsChanged) {
@@ -319,7 +321,7 @@ class OfflineSyncManager @Inject constructor(
                         steps += ResyncStepResult(itemId, ResyncStep.DOWNLOAD_SUBTITLES, success = subtitlesOk)
                     }
                 }
-                if (options.trickplay) {
+                if (ResyncCategory.TRICKPLAY in options) {
                     val info = freshSource.trickplayInfo
                     if (info != null) {
                         val trickplayChanged = baseline == null ||
@@ -341,7 +343,7 @@ class OfflineSyncManager @Inject constructor(
             // the option is on (no change-gate) because the detection fetch would
             // otherwise double the round-trips for a rarely-changing artifact.
             var freshSegments: List<com.raulshma.jellyplay.core.model.MediaSegment>? = null
-            if (options.segments && downloadPath != null) {
+            if (ResyncCategory.SEGMENTS in options && downloadPath != null) {
                 setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_SEGMENTS)
                 playbackRepository.invalidateSegmentsCache(itemId)
                 segmentsOk = writer.downloadMediaSegments(itemId, downloadPath)
@@ -608,13 +610,13 @@ private fun SyncBaseline?.mergePartial(
     fresh
 } else {
     SyncBaseline(
-        posterTag = if (options.poster) fresh.posterTag else posterTag,
-        backdropTag = if (options.backdrop) fresh.backdropTag else backdropTag,
-        metadataSignature = if (options.metadata) fresh.metadataSignature else metadataSignature,
-        subtitleSignature = if (options.subtitles) fresh.subtitleSignature else subtitleSignature,
-        subtitlesPending = if (options.subtitles) fresh.subtitlesPending else subtitlesPending,
-        trickplaySignature = if (options.trickplay) fresh.trickplaySignature else trickplaySignature,
-        segmentsSignature = if (options.segments) fresh.segmentsSignature else segmentsSignature,
+        posterTag = if (ResyncCategory.POSTER in options) fresh.posterTag else posterTag,
+        backdropTag = if (ResyncCategory.BACKDROP in options) fresh.backdropTag else backdropTag,
+        metadataSignature = if (options.writesMetadataRow) fresh.metadataSignature else metadataSignature,
+        subtitleSignature = if (ResyncCategory.SUBTITLES in options) fresh.subtitleSignature else subtitleSignature,
+        subtitlesPending = if (ResyncCategory.SUBTITLES in options) fresh.subtitlesPending else subtitlesPending,
+        trickplaySignature = if (ResyncCategory.TRICKPLAY in options) fresh.trickplaySignature else trickplaySignature,
+        segmentsSignature = if (ResyncCategory.SEGMENTS in options) fresh.segmentsSignature else segmentsSignature,
         // Media-source id/size are always recomputed from the fresh detail
         // (not user-selectable); they never retain a stale value.
         mediaSourceId = fresh.mediaSourceId,

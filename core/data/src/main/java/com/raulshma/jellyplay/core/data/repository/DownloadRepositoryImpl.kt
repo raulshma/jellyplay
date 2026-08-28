@@ -132,6 +132,9 @@ class DownloadRepositoryImpl @Inject constructor(
             entities.map { it.toDownloadItem() }
         }.distinctUntilChanged { old, new -> old.rendersSameAs(new) }
 
+    override suspend fun getAllDownloadsSnapshot(): List<DownloadItem> =
+        downloadDao.getAllDownloadsSnapshot().map { it.toDownloadItem() }
+
     override suspend fun getCompletedAudioDownloads(limit: Int, offset: Int): List<DownloadItem> =
         downloadDao.getCompletedAudioDownloads(limit, offset).map { it.toDownloadItem() }
 

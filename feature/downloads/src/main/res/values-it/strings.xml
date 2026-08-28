@@ -143,6 +143,8 @@
     <string name="downloads_force_resync_data_header">Dati da sincronizzare</string>
     <string name="downloads_force_resync_data_metadata">Metadati</string>
     <string name="downloads_force_resync_data_metadata_desc">Riassunto, cast, valutazioni</string>
+    <string name="downloads_force_resync_data_chapters">Capitoli</string>
+    <string name="downloads_force_resync_data_chapters_desc">Marcatori dei capitoli</string>
     <string name="downloads_force_resync_data_poster">Locandina</string>
     <string name="downloads_force_resync_data_poster_desc">Immagine principale</string>
     <string name="downloads_force_resync_data_backdrop">Sfondo</string>
