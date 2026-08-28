@@ -56,7 +56,7 @@ height × `--force-device-scale-factor` × plain/scroll matrix, measuring:
   click.
 
 Edge: `--headless=new`, Windows 10.0.26200 host at 150% display scaling,
-Microsoft Edge 151.0.4129.107, Compose Multiplatform ui 1.12.0 (wasmJs).
+Microsoft Edge 151.0.4129.107, Compose Multiplatform ui 1.11.1 (wasmJs; repo pin — gradle cache resolves only 1.11.1).
 
 ## Environment table (measured)
 
@@ -77,7 +77,7 @@ Three env facts kill three suspects outright:
   so the "device-px at DPR 1.5" mechanism (suspect 1) could never have
   applied to its runs.
 - **No canvas**: there is no `<canvas>` element anywhere in the document in
-  CMP 1.12.0 web — the app lives in a single full-viewport DIV and material
+  CMP 1.11.1 web — the app lives in a single full-viewport DIV and material
   semantics as real DOM nodes (that is where the AX tree's
   `backendDOMNodeId` boxes come from). Suspect 2 (canvas hit-test region =
   viewport/dpr) has no canvas to be true of. Suspect 3 (frozen canvas
@@ -156,7 +156,7 @@ computed post-scroll coordinate clicked P12 instead of the intended P17.
    reports `devicePixelRatio = 1` regardless of the OS 150% scaling; 1.5
    requires `--force-device-scale-factor`. Suspect 1's precondition
    (lane running at DPR 1.5) never held.
-5. **No `<canvas>`, no occluder (measured).** CMP 1.12.0 web renders into
+5. **No `<canvas>`, no occluder (measured).** CMP 1.11.1 web renders into
    a plain DIV with materialized DOM semantics; single body child,
    `elementFromPoint` clean at all in-viewport depths.
 6. **Wheel input delivers (measured).** The scroll variant's 600px
