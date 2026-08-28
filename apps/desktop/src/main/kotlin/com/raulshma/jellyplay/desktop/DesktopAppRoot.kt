@@ -105,8 +105,10 @@ import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Desktop nav root (Phase X "desktop nav v1"): session-gated shell over the
- * shared feature conveyor. Signed-out users get [DesktopSignInPane]; a live
- * session renders the NavigationRail + NavDisplay scaffold below.
+ * shared feature conveyor. Signed-out users get [DesktopSignedOutAuthHost]
+ * (the shared auth section; wave 19A retired the legacy DesktopSignInPane
+ * with its cut-list); a live session renders the NavigationRail + NavDisplay
+ * scaffold below.
  *
  * What is deliberately NOT wired yet (each omission is guarded by
  * [isDesktopDeadEndRoute] so a shared screen pushing the route shows a
@@ -144,8 +146,11 @@ import java.util.concurrent.atomic.AtomicReference
  * detail route (search results, requests/calendar → SeerrDetail, person/
  * cast/collection drill-ins), and [authSection] backs the settings
  * Server/UserManagement pushes (AddServer/ServerList/Login/QuickConnect/
- * UserSelection). Desktop still signs IN through DesktopSignInPane — the
- * auth section serves signed-in server management only.
+ * UserSelection). Since wave 19A the SAME section is the sign-in flow:
+ * [DesktopSignedOutAuthHost] registers it while signed out, so desktop signs
+ * in through the shared screens (Quick Connect, remembered-user picker,
+ * add-server discovery included) — here the section only serves signed-in
+ * server management.
  *
  * Settings + admin went live with the admin repositories' Koin flip (Wave
  * wB): AdminRepository/AdminStatisticsRepository are Koin singles in
@@ -206,9 +211,10 @@ internal fun DesktopAppRoot(
 
     when {
         !sessionRestoreDone -> SessionRestoreSplash()
-        !isAuthenticated -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            DesktopSignInPane()
-        }
+        // Wave 19A: the signed-out gate is the SHARED auth flow now (see
+        // DesktopSignedOutAuthHost) — the legacy DesktopSignInPane pane is
+        // retired with its v1 cut-list.
+        !isAuthenticated -> DesktopSignedOutAuthHost()
         else -> DesktopNavScaffold()
     }
 
@@ -254,25 +260,7 @@ private fun DesktopNavScaffold() {
     val navigation = rememberNavigationState(
         startRoute = Route.Search,
         topLevelRoutes = DESKTOP_TOP_LEVEL_ROUTES,
-        savedStateConfiguration = SavedStateConfiguration {
-            // The sealed Route serializer handles every leaf; registering it
-            // as the polymorphic default lets NavKey-scope lookups resolve
-            // any Route subclass without enumerating ~100 leaves.
-            serializersModule = SerializersModule {
-                polymorphic(NavKey::class) {
-                    // The sealed Route hierarchy enumerates its leaves via
-                    // kotlin-reflect; new Route subclasses register themselves.
-                    for (leaf in Route::class.sealedSubclasses) {
-                        @Suppress("UNCHECKED_CAST")
-                        val leafClass = leaf as KClass<NavKey>
-                        @Suppress("UNCHECKED_CAST")
-                        val leafSerializer =
-                            serializer(leaf.java as Class<NavKey>) as KSerializer<NavKey>
-                        subclass(leafClass, leafSerializer)
-                    }
-                }
-            }
-        },
+        savedStateConfiguration = desktopNavSavedStateConfiguration(),
     )
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -355,7 +343,7 @@ private fun DesktopNavScaffold() {
     val onLogout: (Boolean) -> Unit = { revoke ->
         // Same semantics as the Android SessionCoordinator pair: revoke=true
         // also revokes the server session. isAuthenticated flips false and
-        // DesktopAppRoot swaps in the sign-in pane.
+        // DesktopAppRoot swaps in the signed-out auth host.
         scope.launch {
             if (revoke) authRepository.revokeServerSession() else authRepository.logout()
         }
@@ -472,9 +460,12 @@ private fun DesktopNavScaffold() {
             }
             // Auth cluster drill-ins, live since the auth conveyor flip: the
             // settings Server/UserManagement screens push AddServer/ServerList
-            // into these entries. Signed-OUT users still get DesktopSignInPane
-            // (this scaffold only renders authenticated); onAuthenticated =
-            // goBack, the Android wiring (JellyPlayApp).
+            // into these entries. Signed-OUT users never reach this scaffold —
+            // DesktopSignedOutAuthHost registers the same authSection as the
+            // sign-in flow; onAuthenticated = goBack, the Android wiring
+            // (JellyPlayApp) — here a completed server-management step pops
+            // back instead of swapping the shell (only the observer flip does
+            // that, and it can't fire mid-session).
             authSection(guardedNavigator) { guardedNavigator.goBack() }
             liveTvSection(guardedNavigator)
             // Music, live since Wave wC and fully playable since wave 9B: the
@@ -640,6 +631,31 @@ private val DESKTOP_TOP_LEVEL_ROUTES: Set<Route> = setOf(
     Route.Settings,
     Route.AdminDashboard,
 )
+
+/**
+ * The saved-state configuration every desktop NavDisplay shares: the sealed
+ * Route serializer is registered as the polymorphic NavKey default so
+ * saved-state lookups resolve any Route subclass without enumerating ~100
+ * leaves per lookup. Two consumers today — [DesktopNavScaffold] and
+ * [DesktopSignedOutAuthHost].
+ */
+internal fun desktopNavSavedStateConfiguration(): SavedStateConfiguration =
+    SavedStateConfiguration {
+        serializersModule = SerializersModule {
+            polymorphic(NavKey::class) {
+                // The sealed Route hierarchy enumerates its leaves via
+                // kotlin-reflect; new Route subclasses register themselves.
+                for (leaf in Route::class.sealedSubclasses) {
+                    @Suppress("UNCHECKED_CAST")
+                    val leafClass = leaf as KClass<NavKey>
+                    @Suppress("UNCHECKED_CAST")
+                    val leafSerializer =
+                        serializer(leaf.java as Class<NavKey>) as KSerializer<NavKey>
+                    subclass(leafClass, leafSerializer)
+                }
+            }
+        }
+    }
 
 @Composable
 private fun DesktopRailItem(

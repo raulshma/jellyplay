@@ -249,12 +249,11 @@ fun main() {
             // desktop (AuthRepository + ServerDiscoveryRepository from
             // dataJvmModule, LocalNetworkStatus from the jvmMain platform
             // pick below), so this registration is live-resolvable — NOT
-            // dormant-for-missing-deps like editor. The shell still signs
-            // in through its own DesktopSignInPane and the settings
-            // UserManagement drill-ins (Route.AddServer/ServerList) stay
-            // dead-end-guarded in DesktopAppRoot: no desktop nav entry
-            // instantiates these ViewModels yet — wiring them (or unifying
-            // on the shared sign-in flow) is Phase X nav work.
+            // dormant-for-missing-deps like editor. Wave 19A unified sign-in
+            // on these shared screens: the signed-out gate
+            // (DesktopSignedOutAuthHost) and the signed-in settings drill-ins
+            // (DesktopAppRoot's authSection entries) both instantiate these
+            // ViewModels; the legacy DesktopSignInPane pane is retired.
             authModule,
             desktopAuthPlatformModule,
 
