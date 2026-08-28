@@ -16,6 +16,7 @@ import java.io.File
 import java.text.DateFormat
 import java.util.Locale
 import javax.swing.SwingUtilities
+import kotlin.concurrent.thread
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -205,6 +206,31 @@ internal actual fun PlatformCastButton(castManager: Any?) {
 
 // EngineVideoSurface lives in DesktopVideoSurface.jvm.kt (SwingPanel host).
 
+/**
+ * Desktop engines that can capture the currently-displayed video frame as a
+ * platform bitmap (wave 17B). Desktop has no PixelCopy equivalent for the
+ * mpv-embedded child window — capture goes through the ENGINE instead (mpv's
+ * `screenshot-to-file`), so the desktop `requestVideoFrameCapture` actual
+ * downcasts its engine parameter to this interface, the exact dispatch
+ * pattern [EngineVideoSurface]'s desktop actual uses for
+ * [SoftwareFrameVideoSurface].
+ *
+ * Lives in jvmMain (not commonMain) because its contract is JVM-native
+ * ([java.awt.image.BufferedImage] — the desktop PlatformBitmap); the Android
+ * target never sees it, so the commonMain seam keeps its signature and the
+ * Android PixelCopy actual stays untouched. Implemented by apps/desktop's
+ * `MpvDesktopEngine`.
+ */
+interface DesktopFrameCaptureEngine {
+
+    /**
+     * Captures the current video frame (subtitles composited), or null when
+     * there is nothing to capture or the capture fails — implementations
+     * degrade, never throw.
+     */
+    fun captureVideoFrame(): java.awt.image.BufferedImage?
+}
+
 @Composable
 internal actual fun NativePinnedSubtitleHost(engine: MediaEngine) {
     // No NATIVE_PINNED engine on desktop (mpv is COMPOSE_CUE).
@@ -222,10 +248,51 @@ internal actual fun ZoomedSubtitleOverlayHost(
 
 internal actual fun requestVideoFrameCapture(
     surfaceView: Any?,
+    engine: MediaEngine?,
     titleHint: String,
     onMessage: (String) -> Unit,
 ) {
-    onMessage("Capture failed: screenshot capture is not supported on desktop")
+    // The desktop never reads surfaceView: the AWT Canvas is mpv's output
+    // window and has no read-back — capture is an engine (mpv command) path.
+    // This also covers the software-render surface, which publishes no
+    // platform surface object at all.
+    val capturable = engine as? DesktopFrameCaptureEngine
+    if (capturable == null) {
+        onMessage("Capture failed: engine cannot capture frames")
+        return
+    }
+    // mpv command + PNG encode/decode off the UI thread (Android's
+    // ScreenshotSaver does its file I/O on a background thread too); the
+    // caller's onMessage only launches a snackbar coroutine, thread-safe.
+    thread(name = "jellyplay-frame-capture", isDaemon = true) {
+        val image = runCatching { capturable.captureVideoFrame() }.getOrNull()
+        if (image == null) {
+            onMessage("Capture failed: no frame available")
+            return@thread
+        }
+        val message = runCatching { saveCapture(image, titleHint) }
+            .getOrElse { "Capture failed: ${it.message ?: it.javaClass.simpleName}" }
+        onMessage(message)
+    }
+}
+
+/**
+ * Persists [image] under `~/Pictures/JellyPlay` (the desktop analogue of
+ * Android's MediaStore folder), falling back to the temp dir when the
+ * Pictures tree cannot be made. The timestamped name keeps rapid double
+ * captures from colliding.
+ */
+private fun saveCapture(image: java.awt.image.BufferedImage, titleHint: String): String {
+    val pictures = File(System.getProperty("user.home"), "Pictures/JellyPlay")
+    val dir = if (pictures.isDirectory || pictures.mkdirs()) pictures
+    else File(System.getProperty("java.io.tmpdir"))
+    val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH-mm-ss.SSS", Locale.ROOT).format(java.util.Date())
+    val safeTitle = titleHint.replace(Regex("[\\\\/:*?\"<>|]"), " ").trim().take(60)
+    val name = listOfNotNull("JellyPlay", safeTitle.takeIf { it.isNotBlank() }, stamp)
+        .joinToString(" ") + ".png"
+    val out = File(dir, name)
+    javax.imageio.ImageIO.write(image, "png", out)
+    return "Frame saved to ${out.absolutePath} (${image.width}×${image.height})"
 }
 
 // ── Transcode reasons ──────────────────────────────────────────────────────

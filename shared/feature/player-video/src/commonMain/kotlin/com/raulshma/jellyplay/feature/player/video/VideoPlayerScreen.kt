@@ -1632,16 +1632,24 @@ fun VideoPlayerScreen(
             val onVideoFilterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.VideoFilter }) }
             // Capture the current video frame from the engine's surface
             // (platform seam: PixelCopy on Android's SurfaceView surfaces —
-            // only PixelCopy, not View.drawToBitmap, can read them). The
-            // titleHint seeds the MediaStore filename. Result surfaces as a
-            // snackbar with the saved path.
+            // only PixelCopy, not View.drawToBitmap, can read them; mpv's
+            // screenshot command on desktop, routed through the engine). The
+            // titleHint seeds the MediaStore / save filename. Result surfaces
+            // as a snackbar with the saved path. The guard passes when EITHER
+            // a platform surface or an engine exists — the desktop software-
+            // render surface publishes no view object at all, so the engine
+            // alone carries the desktop capture (the Android actual still
+            // requires the view and fails gracefully in the surface-less
+            // window). `engine` is a collectAsState delegate read at
+            // invocation time, like the effectsState lambdas above.
             val onScreenshotClick: () -> Unit = remember {
                 {
                     val view = playerViewRef
-                    if (view != null) {
+                    if (view != null || engine != null) {
                         scope.launch { snackbarHostState.showSnackbar("Capturing frame…", duration = SnackbarDuration.Short) }
                         requestVideoFrameCapture(
                             surfaceView = view,
+                            engine = engine,
                             titleHint = uiState.title,
                         ) { message ->
                             scope.launch {

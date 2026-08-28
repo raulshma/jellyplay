@@ -72,17 +72,21 @@ internal expect fun ZoomedSubtitleOverlayHost(
 
 /**
  * Capture the current video frame (screenshot action). Android keeps the
- * PixelCopy path via ScreenshotSaver; desktop reports an honest failure —
- * there is no read-back of the mpv-embedded child window (capture would go
- * through mpv's own screenshot command, queued work), so this path stays
- * defensive even though the desktop engine mirrors the matrix's
- * `supportsScreenshot = true` and the controls show the action.
+ * PixelCopy path via ScreenshotSaver; desktop captures through the ENGINE
+ * (mpv's `screenshot-to-file` — the embedded child window has no read-back),
+ * so its actual downcasts [engine] to its own capture interface and ignores
+ * [surfaceView] entirely, which also covers the software-render surface that
+ * publishes no platform surface object (wave 17B).
  *
- * @param surfaceView the platform surface the engine renders into.
+ * @param surfaceView the platform surface the engine renders into (Android
+ *   PixelCopy path; unused on desktop).
+ * @param engine the live session engine, or null while none exists. Android
+ *   ignores it; the desktop actual requires a capture-capable engine.
  * @param onMessage the user-facing outcome message (saved path or failure).
  */
 internal expect fun requestVideoFrameCapture(
     surfaceView: Any?,
+    engine: MediaEngine?,
     titleHint: String,
     onMessage: (message: String) -> Unit,
 )

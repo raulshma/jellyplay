@@ -456,11 +456,19 @@ internal actual fun ZoomedSubtitleOverlayHost(
 
 internal actual fun requestVideoFrameCapture(
     surfaceView: Any?,
+    engine: MediaEngine?,
     titleHint: String,
     onMessage: (String) -> Unit,
 ) {
+    // PixelCopy needs the attached View; engine is desktop-only routing and
+    // is ignored here. The null guard keeps a (narrow) engine-before-surface
+    // window from NPE-ing — the caller historically gated on the view alone.
+    val view = surfaceView as? android.view.View ?: run {
+        onMessage("Capture failed: player surface not ready")
+        return
+    }
     ScreenshotSaver.capture(
-        surfaceView = surfaceView as android.view.View,
+        surfaceView = view,
         titleHint = titleHint,
     ) { result ->
         onMessage(
