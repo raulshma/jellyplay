@@ -264,9 +264,10 @@ class EditorViewModel(
     }
 
     /**
-     * Reads the bytes of a [file] (picked via the SAF picker seam) and uploads
-     * them. The background-thread contentResolver read moved into the Android
-     * actual of [EditorPickedFile.readBytes]; failures surface through
+     * Reads the bytes of a [file] (picked via the platform file-picker seam)
+     * and uploads them. The background-thread read moved into the platform
+     * actuals of [EditorPickedFile.readBytes] (contentResolver on Android,
+     * java.io.File on desktop); failures surface through
      * [EditorUiState.error] exactly as the legacy contentResolver idiom did.
      */
     fun uploadImageFromFile(file: EditorPickedFile, imageType: String) {
@@ -316,10 +317,11 @@ class EditorViewModel(
     }
 
     /**
-     * Reads the bytes of a [file] (picked via the SAF picker seam) and uploads
-     * them. Falls back to the file name derived by the picker when [fileName]
-     * is blank. The background-thread contentResolver read moved into the
-     * Android actual of [EditorPickedFile.readBytes]; failures surface through
+     * Reads the bytes of a [file] (picked via the platform file-picker seam)
+     * and uploads them. Falls back to the file name derived by the picker when
+     * [fileName] is blank. The background-thread read moved into the platform
+     * actuals of [EditorPickedFile.readBytes] (contentResolver on Android,
+     * java.io.File on desktop); failures surface through
      * [EditorUiState.error] exactly as the legacy contentResolver idiom did.
      */
     fun uploadSubtitleFromFile(

@@ -180,10 +180,10 @@ fun main() {
             // desktopDataModule binds the real file-backed store (appdata
             // streaming-subtitles subtree), so the EditorViewModel ctor graph
             // fully resolves and DesktopAppRoot renders editorSection (the
-            // details screen's edit push, admin-gated like Android). Local
-            // file-picker actuals still return null (DesktopEditorFilePicker),
-            // so upload-from-file buttons stay inert; URL image upload and
-            // remote/provider subtitle search work.
+            // details screen's edit push, admin-gated like Android). Wave 20A
+            // gave the upload sheets native AWT file pickers
+            // (DesktopEditorFilePicker), so upload-from-file works alongside
+            // URL image upload and remote/provider subtitle search.
             editorModule,
 
             // …calendar, conveyor feature — LIVE and wired in nav v1
