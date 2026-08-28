@@ -39,6 +39,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -57,6 +58,8 @@ class LiveTvPlayerViewModelTest {
     private val capturedRequests = mutableListOf<LivePlaybackRequest>()
     private val appRuntimeFlow = MutableStateFlow(AppRuntimeState())
     private val playbackFlow = MutableStateFlow(PlaybackSlice())
+    private val engineIsPlayingFlow = MutableStateFlow(false)
+    private val engineStateFlow = MutableStateFlow(LiveEngineState.IDLE)
 
     @BeforeTest
     fun setUp() {
@@ -79,12 +82,15 @@ class LiveTvPlayerViewModelTest {
             appRuntimeFlow.value = appRuntimeFlow.value.copy(favoriteChannels = newFavs)
         }
         every { playbackRepo.getAccessToken() } returns "tok"
-        every { fakeEngine.state } returns MutableStateFlow(LiveEngineState.IDLE)
-        every { fakeEngine.isPlaying } returns MutableStateFlow(false)
+        every { fakeEngine.state } returns engineStateFlow
+        every { fakeEngine.isPlaying } returns engineIsPlayingFlow
         every { fakeEngine.isAtLiveEdge } returns MutableStateFlow(true)
         every { fakeEngine.positionMs } returns MutableStateFlow(0L)
         every { fakeEngine.durationMs } returns MutableStateFlow(-1L)
         every { fakeEngine.errorMessage } returns MutableStateFlow(null)
+        // Read by the state collector on the ERROR path (transcode-reasons
+        // detail merge) — first exercised by the wave-19C PiP auto-exit test.
+        every { fakeEngine.errorDetail } returns MutableStateFlow(null)
         every { fakeEngine.load(any()) } answers { capturedRequests.add(firstArg()) }
 
         // Default: no EPG programs. Individual tests override as needed.
@@ -444,7 +450,142 @@ class LiveTvPlayerViewModelTest {
         io.mockk.verify { fakeEngine.seekTo(12_000L) }
     }
 
-    private fun createVm(): LiveTvPlayerViewModel = LiveTvPlayerViewModel(
+    /**
+     * Recording fake of the wave-19C live PiP seam: captures the calls the VM
+     * makes so the seam assertions below read as plain list checks.
+     */
+    private class FakePip : PipController {
+        override val isInPipMode = MutableStateFlow(false)
+        override var pipTransport: PipTransport? = null
+        val autoEnterRequests = mutableListOf<Boolean>()
+        val playingMirrors = mutableListOf<Boolean>()
+        val autoExits = mutableListOf<Unit>()
+        val aspects = mutableListOf<Pair<Int, Int>?>()
+        var resetCount = 0
+
+        override fun setPlaying(playing: Boolean) {
+            playingMirrors.add(playing)
+        }
+
+        override fun requestAutoEnterPip(shouldEnter: Boolean) {
+            autoEnterRequests.add(shouldEnter)
+        }
+
+        override fun requestAutoExitPip() {
+            autoExits.add(Unit)
+        }
+
+        override fun setPipAspectRatio(aspect: Pair<Int, Int>?) {
+            aspects.add(aspect)
+        }
+
+        override fun reset() {
+            resetCount++
+            // Matches the real controller's reset contract: full teardown
+            // nulls the transport.
+            pipTransport = null
+        }
+    }
+
+    @Test
+    fun `pip seam arms auto-enter on tune and mirrors play state and aspect`() = runTest {
+        coEvery {
+            liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
+        } returns Result.success(channels(2))
+        stubResolve()
+
+        val pip = FakePip()
+        val vm = createVm(pip = pip)
+        vm.initialize("ch-0", null, null)
+        kotlinx.coroutines.delay(50)
+
+        // A successful tune arms auto-enter exactly once.
+        assertEquals(listOf(true), pip.autoEnterRequests)
+
+        // Engine play-state emissions mirror into the seam for the host
+        // Activity's play/pause PiP icon.
+        engineIsPlayingFlow.value = true
+        assertTrue(pip.playingMirrors.contains(true))
+
+        // Aspect feed: valid dimensions push through; a zero pair clears.
+        vm.onVideoSizeChanged(1920, 1080)
+        assertEquals(1920 to 1080, pip.aspects.last())
+        vm.onVideoSizeChanged(0, 0)
+        assertNull(pip.aspects.last())
+    }
+
+    @Test
+    fun `pip transport zaps channels on skip actions and hits engine on play pause`() = runTest {
+        coEvery {
+            liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
+        } returns Result.success(channels(3))
+        stubResolve()
+
+        val pip = FakePip()
+        val vm = createVm(pip = pip)
+        vm.initialize("ch-0", null, null)
+        kotlinx.coroutines.delay(50)
+
+        val transport = pip.pipTransport
+        assertNotNull(transport)
+
+        // Live PiP convention: rewind/forward SKIP actions step channel
+        // down/up (re-resolving with the route's stream overrides), not DVR
+        // micro-seeks.
+        transport.handle(PipAction.SKIP_FORWARD)
+        kotlinx.coroutines.delay(50)
+        assertEquals(1, vm.state.value.currentIndex)
+        assertEquals(2, capturedRequests.size)
+        transport.handle(PipAction.SKIP_BACKWARD)
+        kotlinx.coroutines.delay(50)
+        assertEquals(0, vm.state.value.currentIndex)
+
+        transport.handle(PipAction.PLAY)
+        transport.handle(PipAction.PAUSE)
+        io.mockk.verify { fakeEngine.play() }
+        io.mockk.verify { fakeEngine.pause() }
+    }
+
+    @Test
+    fun `pip seam requests auto-exit on engine error while in pip`() = runTest {
+        coEvery {
+            liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
+        } returns Result.success(channels(1))
+        stubResolve()
+
+        val pip = FakePip()
+        val vm = createVm(pip = pip)
+        vm.initialize("ch-0", null, null)
+        kotlinx.coroutines.delay(50)
+
+        // An engine ERROR while the window is up must translate into the
+        // Activity's dismiss path — not leave a dead stream floating.
+        pip.isInPipMode.value = true
+        engineStateFlow.value = LiveEngineState.ERROR
+        kotlinx.coroutines.delay(50)
+        assertEquals(1, pip.autoExits.size)
+    }
+
+    @Test
+    fun `stop resets the pip seam`() = runTest {
+        coEvery {
+            liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
+        } returns Result.success(channels(1))
+        stubResolve()
+
+        val pip = FakePip()
+        val vm = createVm(pip = pip)
+        vm.initialize("ch-0", null, null)
+        kotlinx.coroutines.delay(50)
+        assertNotNull(pip.pipTransport)
+
+        vm.stop()
+
+        assertEquals(1, pip.resetCount)
+        assertNull(pip.pipTransport)
+    }
+
+    private fun createVm(pip: PipController? = null): LiveTvPlayerViewModel = LiveTvPlayerViewModel(
         mediaRepository = liveTvRepo,
         playbackRepository = playbackRepo,
         appRuntimeStateStore = appRuntimeStateStore,
@@ -453,5 +594,6 @@ class LiveTvPlayerViewModelTest {
         lastChannelStore = lastChannelStore,
         engineFactory = LiveEngineFactory { _, _ -> fakeEngine },
         imageUrlProvider = imageUrlProvider,
+        pip = pip,
     )
 }

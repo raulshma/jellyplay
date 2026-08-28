@@ -11,8 +11,8 @@ import org.junit.Test
 /**
  * Characterization test of [PlaybackHostRouter.decide] — pins every
  * (route x preferredPlayer) cell of the CURRENT host table so any future
- * answer change (e.g. Live TV -> DedicatedActivity) is a deliberate,
- * visible edit rather than silent drift.
+ * answer change is a deliberate, visible edit rather than silent drift
+ * (wave 19C flipped Live TV from InNav to DedicatedActivity exactly that way).
  *
  * Pure JVM: the router is a pure function of (NavKey, PlayerType) with no
  * Android types. Its single consumer is the navigateFilter adapter in
@@ -75,7 +75,7 @@ class PlaybackHostRouterTest {
 
             assertEquals(
                 HostDecision.DedicatedActivity(
-                    PlayerActivityArgs(
+                    PlayerActivityArgs.Video(
                         itemId = "item-1",
                         mediaSourceId = "source-1",
                         startPositionTicks = 10_000_000L,
@@ -93,7 +93,7 @@ class PlaybackHostRouterTest {
         val decision = PlaybackHostRouter.decide(videoMinimalArgs, PlayerType.EXO_PLAYER)
 
         assertEquals(
-            HostDecision.DedicatedActivity(PlayerActivityArgs(itemId = "item-min")),
+            HostDecision.DedicatedActivity(PlayerActivityArgs.Video(itemId = "item-min")),
             decision,
         )
     }
@@ -114,14 +114,23 @@ class PlaybackHostRouterTest {
     }
 
     @Test
-    fun `live tv with any non-EXTERNAL engine stays InNav by decision`() {
-        // Deliberate host choice (not omission): LivePlayerScreen manages its
-        // own engine lifecycle and gains nothing from PlayerActivity today.
-        // Changing this answer is a one-line edit in PlaybackHostRouter.
+    fun `live tv with any non-EXTERNAL engine answers DedicatedActivity carrying the channel args`() {
+        // Wave 19C: the dedicated PlayerActivity hosts live for every embedded
+        // engine so system PiP serves live TV (the former in-nav answer died
+        // with MainActivity's supportsPictureInPicture). The channel fields
+        // map onto PlayerActivityArgs.Live verbatim; no resume position for a
+        // live stream.
         listOf(PlayerType.EXO_PLAYER, PlayerType.MPV, PlayerType.LIBVLC).forEach { pref ->
             assertEquals(
                 "pref=$pref",
-                HostDecision.InNav,
+                HostDecision.DedicatedActivity(
+                    PlayerActivityArgs.Live(
+                        channelId = "chan-1",
+                        channelName = "Channel One",
+                        subtitleStreamIndex = 4,
+                        audioStreamIndex = 2,
+                    ),
+                ),
                 PlaybackHostRouter.decide(liveTv, pref),
             )
         }
@@ -190,6 +199,9 @@ class PlaybackHostRouterTest {
     fun `only video and live tv can answer ExternalPlayer`() {
         // The external-player result flow (reportExternalPlaybackStopped)
         // credits watched progress; it must only ever run for these routes.
+        // For live, every non-EXTERNAL engine now answers DedicatedActivity
+        // (wave 19C live PiP) — the ExternalPlayer handoff survives only for
+        // PlayerType.EXTERNAL.
         allPlayerTypes.forEach { pref ->
             val videoDecision = PlaybackHostRouter.decide(videoAllArgs, pref)
             assertTrue(
@@ -200,7 +212,7 @@ class PlaybackHostRouterTest {
             val liveDecision = PlaybackHostRouter.decide(liveTv, pref)
             assertTrue(
                 "pref=$pref",
-                liveDecision is HostDecision.ExternalPlayer || liveDecision is HostDecision.InNav,
+                liveDecision is HostDecision.ExternalPlayer || liveDecision is HostDecision.DedicatedActivity,
             )
             assertFalse(
                 "pref=$pref",

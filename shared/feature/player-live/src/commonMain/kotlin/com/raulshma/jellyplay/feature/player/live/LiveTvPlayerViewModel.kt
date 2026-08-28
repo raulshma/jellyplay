@@ -92,6 +92,11 @@ private const val LIVE_BUFFERING_TIMEOUT_MS = 20_000L
  * now flows through [messages] (livetv's LiveTvUserMessage screen-forward
  * seam) and localized error state stays unresolved until render time
  * ([LivePlayerMessage]).
+ *
+ * Wave 19C (live PiP): the nullable [pip] seam (androidMain adapter over the
+ * legacy core:data singleton the host Activity reads) arms auto-enter on each
+ * successful tune, mirrors play state, installs the remote-action transport
+ * (SKIP = channel zap) and tears it all down in [stop] — see [PipController].
  */
 class LiveTvPlayerViewModel(
     private val mediaRepository: MediaRepository,
@@ -105,6 +110,7 @@ class LiveTvPlayerViewModel(
     private val audio: LivePlayerAudio? = null,
     private val transcodeReasonsRenderer: TranscodeReasonsRenderer =
         TranscodeReasonsRenderer { emptyList() },
+    private val pip: PipController? = null,
 ) : ViewModel() {
 
     private val liveTvRepository: LiveTvRepository = mediaRepository
@@ -135,6 +141,15 @@ class LiveTvPlayerViewModel(
     private var engine: LivePlayerEngine? = null
     private var initialized = false
     private var preMuteVolume: Float? = null
+
+    /**
+     * The route's preferred stream overrides, captured at [initialize] so the
+     * PiP transport's channel-zap mapping re-resolves with the same preferred
+     * tracks the screen passes on its D-pad/button zaps (the transport has no
+     * composition context to read them from).
+     */
+    private var routeAudioStreamIndex: Int? = null
+    private var routeSubtitleStreamIndex: Int? = null
 
     /**
      * Audio-focus (duck/restore) + becoming-noisy auto-pause seam. Shared
@@ -193,6 +208,11 @@ class LiveTvPlayerViewModel(
         audioStreamIndex: Int?,
         subtitleStreamIndex: Int?,
     ) {
+        // Captured even on a no-op re-init (initialized already true) so the
+        // PiP transport's zap mapping always carries the latest route's
+        // overrides — a PlayerActivity onNewIntent args swap re-fires this.
+        routeAudioStreamIndex = audioStreamIndex
+        routeSubtitleStreamIndex = subtitleStreamIndex
         if (initialized) return
         initialized = true
         viewModelScope.launch { loadChannelsAndPlay(channelId, audioStreamIndex, subtitleStreamIndex) }
@@ -441,6 +461,12 @@ class LiveTvPlayerViewModel(
                     container = resolved.container,
                 )
             )
+        // PiP auto-entry arms on every successful tune (init, zap, retry,
+        // stream-option reload all funnel through here) — mirrors the VOD
+        // session's per-load arm. The Activity additionally gates entry on
+        // isPlaying + unlocked controls, so an armed-but-paused live stream
+        // never yanks the user into PiP.
+        pip?.requestAutoEnterPip(true)
 
         _state.value = _state.value.copy(isSwitchingChannel = false)
         loadPrograms(channel.id)
@@ -605,6 +631,11 @@ class LiveTvPlayerViewModel(
         // engine instance, mirroring the VOD player. They persist across
         // channel switches and are torn down in [stop].
         playerAudioLifecycle?.onEngineCreated()
+        // Re-arm the PiP transport alongside every engine creation: [stop]
+        // runs PipController.reset() which nulls it, and this (reused,
+        // activity-scoped) VM's init never re-runs on a screen re-entry — so
+        // the bridge must ride the engine lifecycle or PiP controls go dead.
+        registerPipTransport()
         return newEngine
     }
 
@@ -641,6 +672,16 @@ class LiveTvPlayerViewModel(
                 },
                 errorDetail = combinedDetail,
             )
+            // Auto-exit PiP on engine END/ERROR so the floating window does not
+            // linger on a dead stream; the Activity's collector translates this
+            // into the existing dismiss path (pause + finish). Mirrors the VOD
+            // coordinator's playbackState policy.
+            if (
+                (s == LiveEngineState.ERROR || s == LiveEngineState.ENDED) &&
+                pip?.isInPipMode?.value == true
+            ) {
+                pip?.requestAutoExitPip()
+            }
             // Buffering watchdog: arm a timeout on entering BUFFERING, cancel it
             // on any other state. If the tuner stalls without a PlaybackException,
             // the timeout surfaces a retryable error so the user isn't stuck on
@@ -667,8 +708,12 @@ class LiveTvPlayerViewModel(
                 }
             }
         }.launchIn(viewModelScope)
-        eng.isPlaying.onEach { _state.value = _state.value.copy(isPlaying = it) }
-            .launchIn(viewModelScope)
+        eng.isPlaying.onEach {
+            _state.value = _state.value.copy(isPlaying = it)
+            // Mirror play state so the host Activity renders the correct
+            // play/pause icon on the PiP window.
+            pip?.setPlaying(it)
+        }.launchIn(viewModelScope)
         eng.isAtLiveEdge.onEach { _state.value = _state.value.copy(isAtLiveEdge = it) }
             .launchIn(viewModelScope)
         eng.positionMs.onEach { _positionMs.value = it }
@@ -861,6 +906,44 @@ class LiveTvPlayerViewModel(
         }
     }
 
+    /**
+     * Arms the PiP transport bridge so the host Activity can dispatch PiP
+     * remote-action intents to the live engine. Live mapping: PLAY/PAUSE hit
+     * the engine directly; the window's rewind/forward SKIP actions zap
+     * channel-down/up (the live-TV PiP convention — a DVR micro-seek is
+     * meaningless on pure-live streams, and [seekWithinDvr] is already a
+     * no-op there), re-resolving with the route's preferred stream overrides;
+     * NEXT stays unmapped (live has no "next episode", so pipHasNext is never
+     * set and the Activity never renders that action).
+     */
+    private fun registerPipTransport() {
+        val pip = pip ?: return
+        pip.pipTransport = PipTransport { action ->
+            when (action) {
+                PipAction.PLAY -> engine?.play()
+                PipAction.PAUSE -> engine?.pause()
+                PipAction.SKIP_FORWARD ->
+                    channelUp(routeAudioStreamIndex, routeSubtitleStreamIndex)
+                PipAction.SKIP_BACKWARD ->
+                    channelDown(routeAudioStreamIndex, routeSubtitleStreamIndex)
+                PipAction.NEXT -> Unit
+            }
+        }
+    }
+
+    /**
+     * PiP aspect-ratio feed from the Android screen's video surface (media3
+     * `onVideoSizeChanged`): forwards the decoded video's dimensions so the
+     * host Activity shapes the PiP window to the content instead of its 16:9
+     * fallback. A non-positive pair clears the override. The commonMain
+     * engine surface carries no video-size state, so this rides the screen
+     * (the only place media3's [androidx.media3.common.VideoSize] is visible)
+     * — same shape as the VOD player's `updatePipSourceRect` screen seam.
+     */
+    fun onVideoSizeChanged(width: Int, height: Int) {
+        pip?.setPipAspectRatio(if (width > 0 && height > 0) width to height else null)
+    }
+
     /** Exposes the live engine for PlayerView attachment (null before first load). */
     fun engineForRendering(): LivePlayerEngine? = engine
 
@@ -893,6 +976,11 @@ class LiveTvPlayerViewModel(
         // player is never restored on a later unmute (e.g. mute → leave screen →
         // return to a fresh engine). isMuted is reset via the fresh uiState below.
         preMuteVolume = null
+        // Full PiP teardown: nulls the transport, disarms auto-enter and drops
+        // the aspect/playing mirrors so a stale armed flag can't float the next
+        // screen's window into PiP. The transport re-arms in [ensureEngine] on
+        // the next entry.
+        pip?.reset()
         _positionMs.value = 0L
         _durationMs.value = -1L
         _state.value = LiveTvPlayerUiState()

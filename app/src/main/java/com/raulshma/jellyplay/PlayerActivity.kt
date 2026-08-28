@@ -41,6 +41,7 @@ import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
+import com.raulshma.jellyplay.feature.player.live.LivePlayerScreen
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.navigation.playbackhost.PlayerActivityArgs
 import kotlinx.coroutines.flow.combine
@@ -49,7 +50,9 @@ import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
 
 /**
- * Dedicated host Activity for fullscreen video playback.
+ * Dedicated host Activity for fullscreen playback — VOD ([VideoPlayerScreen])
+ * and, since wave 19C, Live TV ([LivePlayerScreen]; the host table moved live
+ * out of the nav shell so system PiP serves it — see [PlaybackHostRouter]).
  *
  * Introduced so that system Picture-in-Picture floats over the browse UI
  * (architecture): this Activity shares the default `taskAffinity` with
@@ -61,11 +64,15 @@ import org.koin.mp.KoinPlatform
  * The PiP apparatus (param builder, remote actions, lifecycle coordination) is
  * ported from the former single-Activity implementation so the feature set is
  * preserved: RemoteActions (play/pause/skip/next), auto-enter on home, auto-exit
- * on END/ERROR, source-rect hint, aspect-ratio clamp.
+ * on END/ERROR, source-rect hint, aspect-ratio clamp. Both hosts feed it
+ * through the same legacy `core:data` PipController singleton — VOD's VM via
+ * the wave-8C player-video seam, live's VM via the wave-19C player-live seam
+ * (SKIP remote actions map to channel zap for live) — so every collector below
+ * serves both variants unchanged.
  *
- * The engine is created fresh by [VideoPlayerScreen]'s `VideoPlayerViewModel`
- * (scoped to this Activity) — there is no cross-Activity engine handoff in
- * the normal open-play-PiP flow.
+ * Each screen creates its engine fresh via its ViewModel (scoped to this
+ * Activity) — there is no cross-Activity engine handoff in the normal
+ * open-play-PiP flow.
  */
 class PlayerActivity : FragmentActivity() {
 
@@ -85,11 +92,13 @@ class PlayerActivity : FragmentActivity() {
     /**
      * Hoisted launch arguments read from the start/new Intent via
      * [PlayerActivityArgs.fromIntent]. [onNewIntent] (re-selection while this
-     * `singleTask` activity is already alive — e.g. picking another item from
-     * the browse UI while in PiP) updates this so the Compose tree recomposes
-     * with the new `itemId` and re-fires the screen's
-     * `LaunchedEffect(itemId)` → `initialize()`, instead of the new extras
-     * being silently dropped.
+     * `singleTask` activity is already alive — e.g. picking another item or
+     * channel from the browse UI while in PiP) updates this so the Compose
+     * tree recomposes with the new args — video re-fires the screen's
+     * `LaunchedEffect(itemId)` → `initialize()`; live stops-and-retunes the
+     * activity-scoped VM on the channel change (the screen's own
+     * changed-channelId branch) — instead of the new extras being silently
+     * dropped.
      */
     private val launchArgs = mutableStateOf<PlayerActivityArgs?>(null)
 
@@ -124,34 +133,42 @@ class PlayerActivity : FragmentActivity() {
             // Subtitle tester overlays the player (keeps the video engine alive
             // underneath) rather than navigating away, mirroring the old nav-push
             // behaviour. The tester builds its own preview engine, so it is
-            // self-contained.
+            // self-contained. Video-only — live has no subtitle side-loading.
             var showSubtitleTester by remember { mutableStateOf(false) }
             // Hoisted launch args so onNewIntent (re-selection while this
             // singleTask activity is alive, e.g. picking another item while in
-            // PiP) can swap the item without recreating the Activity. Reading
-            // launchArgs.value here recomposes VideoPlayerScreen with the new
-            // itemId, re-firing its LaunchedEffect(itemId) → initialize().
+            // PiP) can swap the payload without recreating the Activity. The
+            // variant branch recomposes the matching screen with the new args.
             val args = launchArgs.value ?: return@setContent
             JellyPlayPreferenceTheme(
                 preferences = preferences,
                 darkTheme = darkTheme,
             ) {
-                Box(Modifier.fillMaxSize()) {
-                    VideoPlayerScreen(
-                        itemId = args.itemId,
-                        mediaSourceId = args.mediaSourceId,
-                        startPositionTicks = args.startPositionTicks,
-                        subtitleStreamIndex = args.subtitleStreamIndex,
-                        audioStreamIndex = args.audioStreamIndex,
-                        onBack = { finish() },
-                        onEnterPip = { enterPipMode() },
-                        onOpenSubtitleTester = { showSubtitleTester = true },
-                    )
-                    if (showSubtitleTester) {
-                        com.raulshma.jellyplay.feature.subtitle.tester.SubtitleTesterScreen(
-                            onBack = { showSubtitleTester = false },
+                when (args) {
+                    is PlayerActivityArgs.Video -> Box(Modifier.fillMaxSize()) {
+                        VideoPlayerScreen(
+                            itemId = args.itemId,
+                            mediaSourceId = args.mediaSourceId,
+                            startPositionTicks = args.startPositionTicks,
+                            subtitleStreamIndex = args.subtitleStreamIndex,
+                            audioStreamIndex = args.audioStreamIndex,
+                            onBack = { finish() },
+                            onEnterPip = { enterPipMode() },
+                            onOpenSubtitleTester = { showSubtitleTester = true },
                         )
+                        if (showSubtitleTester) {
+                            com.raulshma.jellyplay.feature.subtitle.tester.SubtitleTesterScreen(
+                                onBack = { showSubtitleTester = false },
+                            )
+                        }
                     }
+                    is PlayerActivityArgs.Live -> LivePlayerScreen(
+                        channelId = args.channelId,
+                        channelName = args.channelName,
+                        audioStreamIndex = args.audioStreamIndex,
+                        subtitleStreamIndex = args.subtitleStreamIndex,
+                        onBack = { finish() },
+                    )
                 }
             }
         }
@@ -204,12 +221,15 @@ class PlayerActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // Swap the item without recreating this singleTask Activity: updating
-        // launchArgs recomposes VideoPlayerScreen with the new itemId, re-firing
-        // its LaunchedEffect(itemId) → viewModel.initialize(). This is the path
-        // that handles "play another media while in PiP" — without it the live
-        // instance expands out of PiP but the new extras are dropped and the
-        // old item keeps playing.
+        // Swap the payload without recreating this singleTask Activity:
+        // updating launchArgs recomposes the matching screen with the new
+        // args. This is the path that handles "play another media/channel
+        // while in PiP" — video re-fires its LaunchedEffect(itemId) →
+        // initialize(); live's screen sees the changed channelId and
+        // stop-and-retunes the activity-scoped VM (its `initialized` latch
+        // would otherwise no-op and keep the old channel playing). Without
+        // any of this the live instance expands out of PiP but the new extras
+        // are dropped and the old media keeps playing.
         PlayerActivityArgs.fromIntent(intent)?.let { launchArgs.value = it }
     }
 

@@ -32,7 +32,7 @@ sealed interface HostDecision {
     data class DedicatedActivity(val args: PlayerActivityArgs) : HostDecision
 
     /**
-     * Compose inside the nav shell (audio player, Live TV).
+     * Compose inside the nav shell (audio player).
      */
     data object InNav : HostDecision
 
@@ -49,15 +49,11 @@ object PlaybackHostRouter {
             HostDecision.ExternalPlayer(route.itemId, route.mediaSourceId, route.startPositionTicks)
 
         // Live TV quirk (deliberate, pinned by test): hands off to an external
-        // app when EXTERNAL is preferred, but composes in-nav for every other
-        // engine choice (see the InNav branch below).
-        //
-        // TODO(pip): in-nav player PiP (e.g. LiveTV) is broken since the
-        //  PlayerActivity migration (55cd569f8) removed
-        //  MainActivity:supportsPictureInPicture — a former enterPipMode()
-        //  call now always fails, so the stubbed in-nav onEnterPip chain was
-        //  deleted. Restore by answering DedicatedActivity here (and mounting
-        //  live playback in PlayerActivity), not by reviving the stub.
+        // app when EXTERNAL is preferred; every other engine choice mounts in
+        // the dedicated activity below (wave 19C — live PiP restored by
+        // hosting live playback in PlayerActivity, whose full PiP apparatus
+        // MainActivity can't offer since 55cd569f8 removed its
+        // supportsPictureInPicture).
         route is Route.LiveTvChannelPlayer && preferredPlayer == PlayerType.EXTERNAL ->
             HostDecision.ExternalPlayer(route.channelId, null, 0L)
 
@@ -71,7 +67,7 @@ object PlaybackHostRouter {
         // locked (fall back to routing through MainActivity's gate).
         route is Route.VideoPlayer ->
             HostDecision.DedicatedActivity(
-                PlayerActivityArgs(
+                PlayerActivityArgs.Video(
                     itemId = route.itemId,
                     mediaSourceId = route.mediaSourceId,
                     startPositionTicks = route.startPositionTicks,
@@ -80,13 +76,26 @@ object PlaybackHostRouter {
                 ),
             )
 
-        // Audio always composes in-nav (never external). Live TV *deliberately*
-        // composes in-nav for non-EXTERNAL engines: LivePlayerScreen manages
-        // its own engine lifecycle (channel zapping keeps the ExoPlayer
-        // instance alive across channel swaps) and gains nothing from the
-        // dedicated activity today — this is the chosen host, not an omission.
-        // Changing the answer for Live TV is a one-line edit here.
-        route is Route.AudioPlayer || route is Route.LiveTvChannelPlayer -> HostDecision.InNav
+        // Wave 19C (live PiP): Live TV moved out of the nav shell — the
+        // dedicated PlayerActivity hosts LivePlayerScreen, whose PiP apparatus
+        // (auto-enter on home, remote actions, aspect-shaped window) serves
+        // live through the live VM's PipController seam. LivePlayerScreen
+        // keeps its engine lifecycle across channel zaps inside that host
+        // (the reused engine survives a zap; a route swap re-tunes via
+        // PlayerActivity.onNewIntent).
+        route is Route.LiveTvChannelPlayer ->
+            HostDecision.DedicatedActivity(
+                PlayerActivityArgs.Live(
+                    channelId = route.channelId,
+                    channelName = route.channelName,
+                    subtitleStreamIndex = route.subtitleStreamIndex,
+                    audioStreamIndex = route.audioStreamIndex,
+                ),
+            )
+
+        // Audio always composes in-nav (never external, never the dedicated
+        // activity — the audio host owns its own mini-player/background flow).
+        route is Route.AudioPlayer -> HostDecision.InNav
 
         else -> HostDecision.NotPlayback
     }
