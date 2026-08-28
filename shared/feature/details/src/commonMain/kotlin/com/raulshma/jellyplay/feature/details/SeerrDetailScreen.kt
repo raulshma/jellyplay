@@ -2176,13 +2176,19 @@ private fun MediaInfoRow(
 /**
  * "%.1f" formatting contract (the two former `String.format("%.1f", …)` /
  * `String.format(Locale.US, "%.1f", …)` sites): HALF_UP rounding at the first
- * decimal, decimal point always rendered, sign applied symmetrically so a
- * stray negative matches "%.1f"'s away-from-zero output. Ties inside
- * binary-representation noise can differ by one ulp from the JVM Formatter —
- * invisible at rating precision.
+ * decimal — computed as floor(|v|·10 + 0.5), i.e. ties round AWAY from zero,
+ * the same rule java's Formatter applies to the same binary value — with the
+ * decimal point always rendered and the sign applied symmetrically.
+ *
+ * Side benefit worth noting (review round): the episode-row site used
+ * default-locale `String.format` at HEAD, so de/fr/ru/pt-BR JVM devices saw
+ * "8,7" — this helper always renders the dot.
+ *
+ * Known-inert delta: -0.0f renders "0.0" (java emitted "-0.0"); unreachable
+ * for Seerr ratings, kept documented for the next consumer.
  */
 private fun formatRatingOneDecimal(value: Float): String {
-    val magnitude = kotlin.math.round(kotlin.math.abs(value) * 10).toLong()
+    val magnitude = (kotlin.math.abs(value) * 10 + 0.5).toLong()
     val rendered = "${magnitude / 10}.${magnitude % 10}"
     return if (value < 0) "-$rendered" else rendered
 }

@@ -159,16 +159,16 @@ internal fun WebDiagnosticsPane(
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
         )
-        // Wave 16C E2E surface: pushes Route.SeerrDetail(550, "movie") so the
-        // headless lane can drive the REAL shared SeerrDetailScreen (details'
-        // wasmJs target; the SeerrDetailViewModel DI graph resolves on web —
-        // narrow MediaRepository included) without a Seerr server: the
-        // fixture's requests list is empty ("Seerr not configured"), so
-        // nothing there is clickable. The VM's SeerrRepository call fails
-        // with that same honest error, which is exactly what the lane
-        // asserts: scaffold renders, error Text + Retry visible, no crash.
-        // Gated like everything else in this pane — reachable only through
-        // Diagnostics (manual navigation or the CDP driver).
+        // Wave 16C E2E surface: pushes Route.SeerrDetail(550, "movie") so a
+        // HUMAN can drive the real shared SeerrDetailScreen from the shell
+        // (details' wasmJs target; the SeerrDetailViewModel DI graph resolves
+        // on web — narrow MediaRepository included) without a Seerr server:
+        // the fixture's requests list is empty ("Seerr not configured"), so
+        // nothing there is clickable. The CDP lane does NOT use this button —
+        // synthetic clicks into the pane's lower region proved
+        // environment-sensitive on the automation host — and boots into the
+        // route via the gated ?e2eRoute= param instead (WebAppRoot's
+        // backStack note). Gated like everything else in this pane.
         Button(onClick = onOpenSeerrDetailDemo) {
             Text("SeerrDetail (demo)")
         }

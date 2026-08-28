@@ -16,19 +16,21 @@ internal object MediaInfoFormat {
      * Formats a bitrate (bits/sec) into Mbps / Kbps / bps.
      *
      * Wave 16C purification: `"%.1f".format` / `"%.0f".format` are JVM-API
-     * (default-locale formatting, no wasm variant). Replaced with integer/
-     * HALF_UP math — identical digits, and the decimal point no longer flips
-     * to a comma under non-English JVM default locales.
+     * (default-locale formatting, no wasm variant). Replaced with integer
+     * HALF_UP math (floor(x + 0.5) — java Formatter's ties-away-from-zero,
+     * NOT kotlin.math.round's ties-to-even; `0.25f` → "0.3" here as in java,
+     * where round(2.5) would give "0.2"), and the decimal point no longer
+     * flips to a comma under non-English JVM default locales.
      */
     fun formatBitrate(bps: Long): String = when {
         bps >= 1_000_000 -> formatTenths(bps / 1_000_000.0) + " Mbps"
-        bps >= 1_000 -> "${kotlin.math.round(bps / 1_000.0).toLong()} Kbps"
+        bps >= 1_000 -> "${((bps / 1_000.0) + 0.5).toLong()} Kbps"
         else -> "$bps bps"
     }
 
     /** "%.1f" shape via integer math: HALF_UP at the first decimal, dot rendered. */
     private fun formatTenths(value: Double): String {
-        val magnitude = kotlin.math.round(kotlin.math.abs(value) * 10).toLong()
+        val magnitude = (kotlin.math.abs(value) * 10 + 0.5).toLong()
         val rendered = "${magnitude / 10}.${magnitude % 10}"
         return if (value < 0) "-$rendered" else rendered
     }

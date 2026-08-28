@@ -183,7 +183,13 @@ internal class WebMediaRepositoryNarrow(
 
     override fun getFavoritesPaged(mediaTypes: List<MediaType>?): Flow<PagingData<MediaItem>> = offWeb("getFavoritesPaged")
 
-    override val userDataChanges: Flow<UserDataChange> = offWeb("userDataChanges")
+    // PROPERTY overrides must throw LAZILY (getter, not initializer): an
+    // eager `= offWeb(...)` runs at construction, so merely RESOLVING this
+    // single (SeerrDetailViewModel's ctor dep) exploded before the screen
+    // ever loaded — the browser pass caught exactly that (Koin's
+    // InstanceCreationException wrapping this throw). Fun members are lazy
+    // by nature; this getter keeps the same loud-throw contract.
+    override val userDataChanges: Flow<UserDataChange> get() = offWeb("userDataChanges")
 
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> = offWeb("toggleFavorite")
 

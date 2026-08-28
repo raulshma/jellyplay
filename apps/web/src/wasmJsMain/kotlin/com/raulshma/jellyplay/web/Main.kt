@@ -18,6 +18,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.network.di.networkWasmModule
+import androidx.navigation3.runtime.NavKey
+import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.calendar.di.calendarModule
 import com.raulshma.jellyplay.feature.details.detailsModule
 import com.raulshma.jellyplay.feature.requests.di.requestsModule
@@ -185,8 +187,38 @@ fun main() {
                     seerrPreferencesStore = koinApp.koin.get(),
                     seerrSecureCredentialsStore = koinApp.koin.get(),
                     seerrRepository = koinApp.koin.get(),
+                    // GATED E2E BOOT ROUTE (see WebAppRoot's backStack note):
+                    // parsed once here from the boot URL; real navigation
+                    // never sets the param, so this is null for every human
+                    // load.
+                    bootRoute = parseE2eBootRoute(),
                 )
             }
         }
     }
 }
+
+/**
+ * GATED E2E BOOT ROUTE (desktop `jellyplay.harness.*` prop precedent):
+ * `?e2eRoute=seerrdetail/<tmdbId>/<mediaType>` seeds the shell's back stack
+ * with that shared route at boot so the CDP verification lane can reach it
+ * without synthetic mouse clicks (whose delivery into compose's lower
+ * hit-tested regions proved environment-sensitive on the automation host —
+ * see WebAppRoot's backStack note). Parsed ONCE at boot; no user-facing
+ * surface sets the parameter, so every human load parses null and boots on
+ * the landing pane. Unknown values are ignored silently — this is a lane
+ * hook, not a router.
+ */
+@OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
+private fun parseE2eBootRoute(): NavKey? {
+    val raw = e2eRouteParam() ?: return null
+    val parts = raw.split('/')
+    if (parts.size != 3 || parts[0] != "seerrdetail") return null
+    val tmdbId = parts[1].toIntOrNull() ?: return null
+    return Route.SeerrDetail(tmdbId = tmdbId, mediaType = parts[2])
+}
+
+/** Single-expression `js()` body (the WasmClock rule: wasm `js()` may only
+ *  be a function's whole body, never embedded in larger expressions). */
+@OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
+private fun e2eRouteParam(): String? = js("new URLSearchParams(window.location.search).get('e2eRoute')")

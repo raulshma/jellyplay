@@ -12,10 +12,12 @@
 // (Route.Requests → shared RequestsScreen), assert title + filter bar +
 // the honest "Seerr not configured" error state (Seerr is NOT part of the
 // fixture — see apps/web Main.kt's SEERR-ON-WEB HONESTY note) → wave 16A:
-// back again, open the SECOND feature screen (Route.UpcomingCalendar →
-// shared UpcomingCalendarScreen), assert the honest feature-disabled pane
-// (DIRECT_ARR_INTEGRATION boots off and no web settings UI can flip it),
-// zero console errors / uncaught exceptions, screenshots.
+// the SECOND feature screen (Route.UpcomingCalendar → shared
+// UpcomingCalendarScreen), asserting the honest feature-disabled pane
+// (DIRECT_ARR_INTEGRATION boots off) → wave 16B: the Seerr credentials pane
+// (fill/save/honest test-fail/localStorage persistence proof) → wave 16C:
+// boot into Route.SeerrDetail via the gated e2eRoute param, asserting the
+// honest error state → zero console errors / uncaught exceptions, screenshots.
 //
 // Usage:
 //   node web-verify.mjs --server-url http://localhost:8096 \
@@ -318,6 +320,14 @@ async function main() {
     await cdp.send('Page.enable');
     await cdp.send('Log.enable');
     await cdp.send('DOM.enable');
+    // Probe hooks: capture window-level unhandled rejections/errors that the
+    // CDP exception listener has empirically NOT seen fire for wasm compose
+    // failures (the SeerrDetail demo investigation).
+    await cdp.send('Runtime.evaluate', {
+      expression: `window.addEventListener('unhandledrejection', function (e) { window.__jpErr = 'REJECTION: ' + String((e.reason && e.reason.message) || e.reason).slice(0, 300); });
+        window.addEventListener('error', function (e) { window.__jpErr = 'ERROR: ' + String(e.message).slice(0, 300); });`,
+      returnByValue: true,
+    });
     return 'Runtime/Page/Log/DOM enabled';
   });
 
@@ -500,11 +510,14 @@ async function main() {
     return 'Requests title + filter/media/sort chips + search field AX-visible';
   });
 
-  // 14. The honest v1 data state: Seerr is NOT part of the fixture (no
-  // credentials UI on web; session-cookie auth is browser-impossible —
-  // Main.kt's SEERR-ON-WEB HONESTY note), so SeerrRepositoryImpl fails every
-  // read with "Seerr not configured" and the screen must render its error
-  // pane + Retry affordance (NOT a spinner, NOT a crash, NOT an empty list).
+  // 14. The honest v1 data state AT THIS POINT IN THE LANE: Seerr is NOT
+  // part of the fixture and no credentials have been saved yet (the 16B pane
+  // saves dead-host credentials only LATER, step 22+ — this assertion is
+  // positionally correct because it runs before that save; session-cookie
+  // auth additionally is browser-impossible — Main.kt's SEERR-ON-WEB HONESTY
+  // note), so SeerrRepositoryImpl fails every read with "Seerr not
+  // configured" and the screen must render its error pane + Retry affordance
+  // (NOT a spinner, NOT a crash, NOT an empty list).
   await step('REQUESTS not-configured state', async () => {
     try {
       await waitForNode(cdp, '"Seerr not configured" error line', (n) => nodeRole(n) === 'StaticText' && nodeName(n) === 'Seerr not configured', 60000);
@@ -528,8 +541,10 @@ async function main() {
   // screen — the ConnectedCard's "Calendar" button pushes Route.UpcomingCalendar
   // and the shell renders the shared UpcomingCalendarScreen (koinViewModel()
   // against calendarModule, registered in Main.kt this wave). The pop rides
-  // history.back() (coordinator merge: the Seerr block's live-proven route —
-  // RequestsScreen's scaffold back is icon-only with no stable AX name).
+  // history.back() — browser-initiated back is WebAppRoot's reconciled pop
+  // path (the correction from the review round: RequestsScreen's scaffold
+  // back DOES carry a contentDescription ("Back"); history.back() is chosen
+  // for robustness across pane re-layouts, not because the name is missing).
   await step('open Calendar pane', async () => {
     await cdp.send('Runtime.evaluate', { expression: 'history.back()' });
     const calendarBtn = await waitForNode(cdp, 'Calendar button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Calendar', 15000);
@@ -714,49 +729,38 @@ async function main() {
 
   // ── Wave 16C: SeerrDetail demo surface ─────────────────────────────────
   // Coordinator merge placement: runs LAST (after the 16B credentials block,
-  // which leaves the shell on the Seerr pane) so every block's pop path is
-  // one browser-initiated back from a known pane.
+  // whose persisted dead-host credentials shape the honest failure below).
 
-  // 26. Open the gated demo surface and drive the REAL shared
-  // SeerrDetailScreen through it (see WebDiagnosticsPane's "SeerrDetail
-  // (demo)" button + WebAppRoot's entry<Route.SeerrDetail>). The fixture has
-  // no live Seerr server, so the demo button is the honest path to the
-  // screen: it pushes Route.SeerrDetail(550, "movie") through the REAL
-  // addEntry navigation, the real koinViewModel() graph resolves on web
+  // 26. Boot straight into Route.SeerrDetail via the GATED e2eRoute param
+  // (WebAppRoot's backStack note; desktop jellyplay.harness.* precedent).
+  // HISTORY: the lane originally clicked the Diagnostics pane's "SeerrDetail
+  // (demo)" button — but synthetic clicks into the pane's lower region died
+  // on this host (Back died with it; the video host display:none'd changed
+  // nothing; a pre-existing CMP-wasm input quirk wave 13's lane never
+  // exercised, NOT a wave-16 regression). The boot param decouples the
+  // verification from mouse mechanics entirely: reload the page with
+  // ?e2eRoute=seerrdetail/550/movie and the shell seeds its back stack with
+  // the REAL shared route — the same koinViewModel() graph resolves
   // (detailsModule + dataWasmModule's SeerrRepository/SeerrRequestDelegate +
-  // webDetailsPlatformModule's narrow MediaRepository), and the screen
-  // renders its honest error state. history.back() from the Seerr
-  // credentials pane reconciles to the landing; then Diagnostics reopens.
-  await step('reopen Diagnostics (pop Seerr pane)', async () => {
-    await cdp.send('Runtime.evaluate', { expression: 'history.back()' });
-    const diag = await waitForNode(cdp, 'Diagnostics button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Diagnostics', 15000);
-    await clickNode(cdp, diag, 'Diagnostics button');
-    await waitForNode(cdp, 'pane title', (n) => nodeName(n) === 'Web diagnostics', 15000);
-    return 'popped Seerr pane (history.back), reopened Diagnostics';
-  });
-
-  await step('open SeerrDetail (demo)', async () => {
-    try {
-      const demoBtn = await waitForNode(cdp, 'SeerrDetail (demo) button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'SeerrDetail (demo)', 10000);
-      await clickNode(cdp, demoBtn, 'SeerrDetail (demo) button');
-    } catch (e) {
-      throw new Error(`${e.message}; texts=${JSON.stringify(await snapshotTexts(cdp))}`);
-    }
-    return 'clicked SeerrDetail (demo)';
+  // webDetailsPlatformModule's narrow MediaRepository). The demo button
+  // remains for human navigation.
+  await step('boot into SeerrDetail (gated e2eRoute param)', async () => {
+    await cdp.send('Page.navigate', { url: `http://127.0.0.1:${SERVE_PORT}/?e2eRoute=seerrdetail/550/movie` });
+    return 'navigated to /?e2eRoute=seerrdetail/550/movie';
   });
 
   // 27. The screen IS the shared SeerrDetailScreen rendering its honest
   // failure. Ordering note (coordinator merge): the 16B block above already
-  // persisted DEAD-host credentials into the REAL stores, so the VM's
-  // SeerrRepository call here fails with a CONNECTION error, not the
-  // credential-less "Seerr not configured" literal — the error literal is
-  // environment-dependent, so the assertion is the ERROR-STATE AFFORDANCES
-  // (the Retry button only exists in the error branch) + the shell's Back
-  // scaffold; the error line itself is captured for the step record. A
-  // spinner is tolerated transiently; the error state MUST arrive.
-  // Crash-on-render (DI graph unresolved, LocalUriHandler missing, wasm klib
-  // absent from the bundle) would fire exceptionThrown and fail the console
-  // gate below.
+  // persisted DEAD-host credentials into the REAL stores (localStorage
+  // survives the reload), so the VM's SeerrRepository call here fails with a
+  // CONNECTION error, not the credential-less "Seerr not configured" literal
+  // — the error literal is environment-dependent, so the assertion is the
+  // ERROR-STATE AFFORDANCES (the Retry button only exists in the error
+  // branch) + the shell's Back scaffold; the error line itself is captured
+  // for the step record. A spinner is tolerated transiently; the error state
+  // MUST arrive. Crash-on-render (DI graph unresolved, LocalUriHandler
+  // missing, wasm klib absent from the bundle) would fire exceptionThrown
+  // and fail the console gate below.
   await step('SEERRDETAIL renders honest error state', async () => {
     try {
       await waitForNode(cdp, 'Retry button (error-state affordance)', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Retry', 60000);

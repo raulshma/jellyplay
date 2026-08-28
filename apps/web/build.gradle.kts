@@ -71,14 +71,14 @@ kotlin {
                 // WebAppRoot's `entry<Route.Requests>` composes
                 // RequestsScreen (VM ctor deps: SeerrRepository +
                 // ArrRepository from dataWasmModule above, ExperimentalStore
-                // from datastoreCommonModule). Wave 16A adds the second:
-                // `entry<Route.UpcomingCalendar>` composes
-                // UpcomingCalendarScreen against the same DI slice plus
-                // calendarModule. The KoinModuleRegistrationGuardTest's web
-                // forward allowlist pins exactly these two registrations.
+                // from datastoreCommonModule). Waves 16A/16C add the second
+                // and third: `entry<Route.UpcomingCalendar>` (calendarModule)
+                // and `entry<Route.SeerrDetail>` (detailsModule). The
+                // KoinModuleRegistrationGuardTest's web forward allowlist
+                // pins exactly these three registrations.
                 implementation(project(":shared:feature:requests"))
                 implementation(project(":shared:feature:calendar"))
-                // Wave 16C: the SECOND shared feature screen on web —
+                // Wave 16C: the THIRD shared feature screen on web —
                 // WebAppRoot's `entry<Route.SeerrDetail>` composes the shared
                 // SeerrDetailScreen (details' wasmJs target; the MediaDetail
                 // cluster stays jvmShared/off-web) and Main.kt registers

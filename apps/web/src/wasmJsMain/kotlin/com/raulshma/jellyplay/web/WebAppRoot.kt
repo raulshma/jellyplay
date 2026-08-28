@@ -183,6 +183,7 @@ fun WebAppRoot(
     seerrPreferencesStore: SeerrPreferencesStore,
     seerrSecureCredentialsStore: SeerrSecureCredentialsStore,
     seerrRepository: SeerrRepository,
+    bootRoute: NavKey? = null,
 ) {
     val networkStatus = rememberBrowserConnectivityStatus()
     // Collected once here: the landing card's chip/lines must recompose on
@@ -192,7 +193,18 @@ fun WebAppRoot(
     // Static provisioning exactly as desktop does it (DesktopNavScaffold):
     // nothing probes a real Jellyfin host for HEALTH this slice.
     val serverHealth = remember { MutableStateFlow(ServerHealth.Unknown) }
-    val backStack = remember { mutableStateListOf<NavKey>(WebLanding) }
+    // GATED E2E BOOT ROUTE (desktop `jellyplay.harness.*` prop precedent):
+    // [bootRoute] seeds the stack one level deep so the CDP lane can reach a
+    // shared-feature route without synthetic mouse clicks, whose delivery
+    // proved environment-sensitive on this host (input below y≈600 died in
+    // the Diagnostics pane with the video host display:none'd too — a
+    // pre-existing CMP-wasm input quirk, NOT a wave-16 regression; wave 13's
+    // lane simply never clicked that low). Humans use the demo button; the
+    // lane boots straight into the route. Real navigation never sets the
+    // query param, so the flag has no user-facing effect.
+    val backStack = remember {
+        mutableStateListOf<NavKey>(WebLanding).apply { bootRoute?.let { add(it) } }
+    }
 
     val webBackDispatcher = remember { WebBackDispatcher() }
     val connectController = remember(sessionState, authApiClient, userPrefs) {
@@ -330,8 +342,8 @@ fun WebAppRoot(
                 // case-insensitively, so the pass-through needs no mapping.
                 // Reachability in the fixture: only from a populated request
                 // list — impossible without a Seerr server — so the lane
-                // exercises the screen through the gated diagnostics demo
-                // button instead (see entry<WebDiag> above).
+                // boots into the screen via the gated e2eRoute param instead
+                // (see parseE2eBootRoute in Main.kt).
                 //
                 // onBack rides the SAME guarded pop path as every other pane
                 // (requestPop: root-refusing list trim + history.back()).
