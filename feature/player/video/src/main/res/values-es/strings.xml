@@ -117,6 +117,7 @@
     <string name="player_video_use">Usar</string>
     <string name="player_video_failed_tap_to_retry">Falló — toca para reintentar</string>
     <string name="player_video_search_failed">La búsqueda falló</string>
+    <string name="player_video_load_subtitles_failed">No se pudieron cargar los subtítulos</string>
     <string name="player_video_no_results_found">No se encontraron resultados</string>
     <string name="player_video_pick_language_hint">Elige un idioma y busca para encontrar subtítulos.</string>
     <string name="player_video_change_file">Cambiar: %1$s</string>

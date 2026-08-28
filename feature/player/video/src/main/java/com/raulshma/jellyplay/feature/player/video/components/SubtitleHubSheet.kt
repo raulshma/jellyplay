@@ -97,6 +97,7 @@ internal fun SubtitleHubSheet(
     // Get tab
     downloadSubtitles: List<RemoteSubtitleInfo>,
     isDownloading: Boolean,
+    remoteSubtitlesError: String?,
     onDownload: (RemoteSubtitleInfo) -> Unit,
     onLoadLocalFile: () -> Unit,
     searchResults: List<RemoteSubtitleInfo>,
@@ -238,6 +239,7 @@ internal fun SubtitleHubSheet(
                 SubtitleHubTab.GET -> SubtitleManagerSection(
                     downloadSubtitles = downloadSubtitles,
                     isDownloading = isDownloading,
+                    remoteSubtitlesError = remoteSubtitlesError,
                     onDownload = onDownload,
                     onLoadLocalFile = onLoadLocalFile,
                     searchResults = searchResults,

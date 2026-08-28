@@ -50,7 +50,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.annotation.StringRes
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -98,6 +100,7 @@ fun SubtitleManagerSheet(
     // Download tab
     downloadSubtitles: List<RemoteSubtitleInfo>,
     isDownloading: Boolean,
+    remoteSubtitlesError: String? = null,
     onDownload: (RemoteSubtitleInfo) -> Unit,
     onLoadLocalFile: () -> Unit,
     // Search tab
@@ -147,6 +150,7 @@ fun SubtitleManagerSheet(
         SubtitleManagerSection(
             downloadSubtitles = downloadSubtitles,
             isDownloading = isDownloading,
+            remoteSubtitlesError = remoteSubtitlesError,
             onDownload = onDownload,
             onLoadLocalFile = onLoadLocalFile,
             searchResults = searchResults,
@@ -187,6 +191,7 @@ fun SubtitleManagerSheet(
 internal fun androidx.compose.foundation.layout.ColumnScope.SubtitleManagerSection(
     downloadSubtitles: List<RemoteSubtitleInfo>,
     isDownloading: Boolean,
+    remoteSubtitlesError: String? = null,
     onDownload: (RemoteSubtitleInfo) -> Unit,
     onLoadLocalFile: () -> Unit,
     searchResults: List<RemoteSubtitleInfo>,
@@ -259,6 +264,7 @@ internal fun androidx.compose.foundation.layout.ColumnScope.SubtitleManagerSecti
                 modifier = Modifier.weight(1f, fill = false),
                 subtitles = downloadSubtitles,
                 isLoading = isDownloading,
+                remoteSubtitlesError = remoteSubtitlesError,
                 onDownload = onDownload,
                 onLoadLocalFile = onLoadLocalFile,
                 downloadingSubtitles = downloadingSubtitles,
@@ -302,10 +308,41 @@ internal fun androidx.compose.foundation.layout.ColumnScope.SubtitleManagerSecti
 
 // region Download tab (formerly SubtitleDownloadSheet body) ------------------
 
+/**
+ * Inline fetch-failure block shared by the Download tab (server-default list)
+ * and the legacy search results: a red title so the state reads as a failure
+ * rather than "no subtitles exist", plus the raw error detail beneath it.
+ */
+@Composable
+private fun SubtitleFetchErrorBlock(
+    @StringRes titleRes: Int,
+    message: String,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                stringResource(titleRes),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun DownloadTab(
     subtitles: List<RemoteSubtitleInfo>,
     isLoading: Boolean,
+    remoteSubtitlesError: String?,
     onDownload: (RemoteSubtitleInfo) -> Unit,
     onLoadLocalFile: () -> Unit,
     downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
@@ -342,12 +379,23 @@ private fun DownloadTab(
                     .padding(24.dp),
             )
         } else if (subtitles.isEmpty()) {
-            Text(
-                stringResource(R.string.player_video_no_remote_subtitles),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
-            )
+            // Inline failure, never a global toast — see [SubtitleState.remoteSubtitlesError].
+            if (remoteSubtitlesError != null) {
+                SubtitleFetchErrorBlock(
+                    titleRes = R.string.player_video_load_subtitles_failed,
+                    message = remoteSubtitlesError,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                )
+            } else {
+                Text(
+                    stringResource(R.string.player_video_no_remote_subtitles),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
+                )
+            }
         } else {
             LazyColumn(modifier = Modifier.verticalWrapAround().weight(1f, fill = false)) {
                 // Composite key: providers (OpenSubtitles, etc.) occasionally
@@ -695,26 +743,12 @@ private fun LegacySearchResults(
                     .align(Alignment.Center)
                     .padding(24.dp),
             )
-        // A failure must read as a failure, not as "no subtitles exist", so
-        // the user is prompted to retry rather than change their query.
-        searchError != null -> Box(
+        // Not an empty result — see [SubtitleFetchErrorBlock].
+        searchError != null -> SubtitleFetchErrorBlock(
+            titleRes = R.string.player_video_search_failed,
+            message = searchError,
             modifier = Modifier.fillMaxWidth().height(180.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    stringResource(R.string.player_video_search_failed),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    searchError,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        )
         hasSearched && results.isEmpty() -> Box(
             modifier = Modifier.fillMaxWidth().height(180.dp),
             contentAlignment = Alignment.Center,

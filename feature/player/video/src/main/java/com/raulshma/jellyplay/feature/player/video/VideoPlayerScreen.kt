@@ -2286,6 +2286,7 @@ private fun PlayerSheetRouter(
                 // Get tab
                 downloadSubtitles = subtitleState.remoteSubtitles,
                 isDownloading = subtitleState.isLoadingRemoteSubtitles,
+                remoteSubtitlesError = subtitleState.remoteSubtitlesError,
                 onDownload = { viewModel.subtitles.downloadSubtitle(it) },
                 onLoadLocalFile = onLoadLocalSubtitle,
                 searchResults = subtitleState.searchedSubtitles,

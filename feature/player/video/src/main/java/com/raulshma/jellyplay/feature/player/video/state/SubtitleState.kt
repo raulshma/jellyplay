@@ -34,6 +34,13 @@ data class SubtitleState(
     val subtitleSearchError: String? = null,
     val isUploadingSubtitle: Boolean = false,
     val isLoadingRemoteSubtitles: Boolean = false,
+    /**
+     * Failure message from the last [remoteSubtitles] fetch, rendered inline on
+     * the Get tab's Download section. Deliberately not a global toast: the
+     * fetch's retry chain can outlive the hub (even the player), and a late
+     * global toast over an unrelated screen reads as an error with no context.
+     */
+    val remoteSubtitlesError: String? = null,
     val defaultSearchLanguage: String = "eng",
     /** Per-subtitle-id download status for the "Get Subtitles" sheet. */
     val downloadingSubtitles: Map<String, SubtitleDownloadStatus> = emptyMap(),

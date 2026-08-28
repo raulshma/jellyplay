@@ -177,22 +177,30 @@ internal class SubtitleManager(
     fun loadRemoteSubtitles() {
         val itemId = getCurrentItemId() ?: return
         // Offline the server read can never succeed; skipping silently avoids
-        // the retry chain's delayed "Could not load subtitle list" toast (see
-        // [isOffline]).
+        // burning the retry chain on a read with no chance of success (see
+        // [isOffline]). Any stale error from a prior online attempt clears too.
         if (isOffline()) {
-            _state.update { it.copy(remoteSubtitles = emptyList(), isLoadingRemoteSubtitles = false) }
+            _state.update {
+                it.copy(remoteSubtitles = emptyList(), isLoadingRemoteSubtitles = false, remoteSubtitlesError = null)
+            }
             return
         }
         remoteSubtitlesJob?.cancel()
-        _state.update { it.copy(isLoadingRemoteSubtitles = true) }
+        _state.update { it.copy(isLoadingRemoteSubtitles = true, remoteSubtitlesError = null) }
         remoteSubtitlesJob = scope.launch {
             playbackRepository.getRemoteSubtitles(itemId).fold(
                 onSuccess = { subs ->
                     _state.update { it.copy(remoteSubtitles = subs, isLoadingRemoteSubtitles = false) }
                 },
                 onFailure = { e ->
-                    userMessageBus.error("Could not load subtitle list: ${e.message ?: "unknown error"}")
-                    _state.update { it.copy(remoteSubtitles = emptyList(), isLoadingRemoteSubtitles = false) }
+                    // Inline on the Get tab — see [SubtitleState.remoteSubtitlesError].
+                    _state.update {
+                        it.copy(
+                            remoteSubtitles = emptyList(),
+                            isLoadingRemoteSubtitles = false,
+                            remoteSubtitlesError = e.message ?: "unknown error",
+                        )
+                    }
                 },
             )
         }
@@ -570,6 +578,7 @@ internal class SubtitleManager(
                 providerSearchResults = emptyList(),
                 providerSearchErrors = emptyMap(),
                 readySubtitles = emptyMap(),
+                remoteSubtitlesError = null,
             )
         }
     }

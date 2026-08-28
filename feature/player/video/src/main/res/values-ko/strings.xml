@@ -117,6 +117,7 @@
     <string name="player_video_use">사용</string>
     <string name="player_video_failed_tap_to_retry">실패 — 다시 시도하려면 탭</string>
     <string name="player_video_search_failed">검색 실패</string>
+    <string name="player_video_load_subtitles_failed">자막을 불러오지 못했습니다</string>
     <string name="player_video_no_results_found">결과를 찾을 수 없음</string>
     <string name="player_video_pick_language_hint">언어를 선택하고 검색하여 자막을 찾으세요.</string>
     <string name="player_video_change_file">변경: %1$s</string>

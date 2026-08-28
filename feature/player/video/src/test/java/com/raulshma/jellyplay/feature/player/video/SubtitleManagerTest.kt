@@ -115,13 +115,29 @@ class SubtitleManagerTest {
     }
 
     @Test
-    fun loadRemoteSubtitles_failureYieldsEmptyListWithoutCrashing() {
+    fun loadRemoteSubtitles_failureYieldsEmptyListAndInlineError() {
         coEvery { playbackRepository.getRemoteSubtitles("item-1") } returns Result.failure(RuntimeException("boom"))
 
         manager.loadRemoteSubtitles()
 
         assertTrue(manager.state.value.remoteSubtitles.isEmpty())
         assertFalse(manager.state.value.isLoadingRemoteSubtitles)
+        assertEquals("boom", manager.state.value.remoteSubtitlesError)
+        io.mockk.verify(exactly = 0) { userMessageBus.error(any<String>()) }
+    }
+
+    @Test
+    fun loadRemoteSubtitles_successClearsPriorError() {
+        coEvery { playbackRepository.getRemoteSubtitles("item-1") } returns Result.failure(RuntimeException("boom"))
+        manager.loadRemoteSubtitles()
+        assertEquals("boom", manager.state.value.remoteSubtitlesError)
+
+        val subs = listOf(RemoteSubtitleInfo(id = "s1", name = "English"))
+        coEvery { playbackRepository.getRemoteSubtitles("item-1") } returns Result.success(subs)
+        manager.loadRemoteSubtitles()
+
+        assertEquals(subs, manager.state.value.remoteSubtitles)
+        assertNull(manager.state.value.remoteSubtitlesError)
     }
 
     @Test
@@ -153,6 +169,23 @@ class SubtitleManagerTest {
         assertTrue(manager.state.value.remoteSubtitles.isEmpty())
         assertFalse(manager.state.value.isLoadingRemoteSubtitles)
         io.mockk.verify(exactly = 0) { userMessageBus.error(any<String>()) }
+    }
+
+    @Test
+    fun loadRemoteSubtitles_offlineSkipClearsStaleError() {
+        // A failed online attempt leaves the inline error; the next offline
+        // skip must clear it, or the Get tab would show a stale failure for a
+        // fetch that was never made.
+        coEvery { playbackRepository.getRemoteSubtitles("item-1") } returns Result.failure(RuntimeException("boom"))
+        manager.loadRemoteSubtitles()
+        assertEquals("boom", manager.state.value.remoteSubtitlesError)
+
+        manager = managerWithItemId("item-1", isOffline = { true })
+        manager.loadRemoteSubtitles()
+
+        assertNull(manager.state.value.remoteSubtitlesError)
+        assertTrue(manager.state.value.remoteSubtitles.isEmpty())
+        assertFalse(manager.state.value.isLoadingRemoteSubtitles)
     }
 
     @Test

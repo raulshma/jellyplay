@@ -118,6 +118,8 @@
     <string name="player_video_use">Use</string>
     <string name="player_video_failed_tap_to_retry">Failed — tap to retry</string>
     <string name="player_video_search_failed">Search failed</string>
+    <!-- Shown inline on the Get tab when the server-default remote-subtitle list fails to load (replaces the former global toast). -->
+    <string name="player_video_load_subtitles_failed">Couldn\'t load subtitles</string>
     <string name="player_video_no_results_found">No results found</string>
     <string name="player_video_pick_language_hint">Pick a language and search to find subtitles.</string>
     <string name="player_video_subtitle_provider_all">All</string>
