@@ -734,13 +734,20 @@ async function main() {
   // 26. Boot straight into Route.SeerrDetail via the GATED e2eRoute param
   // (WebAppRoot's backStack note; desktop jellyplay.harness.* precedent).
   // HISTORY: the lane originally clicked the Diagnostics pane's "SeerrDetail
-  // (demo)" button — but synthetic clicks into the pane's lower region died
-  // on this host (Back died with it; the video host display:none'd changed
-  // nothing; a pre-existing CMP-wasm input quirk wave 13's lane never
-  // exercised, NOT a wave-16 regression). The boot param decouples the
-  // verification from mouse mechanics entirely: reload the page with
-  // ?e2eRoute=seerrdetail/550/movie and the shell seeds its back stack with
-  // the REAL shared route — the same koinViewModel() graph resolves
+  // (demo)" button — and the wave-16 run read the resulting silence as a
+  // "CMP-wasm input dead region below y≈600". Wave 17A's clean-room probe
+  // (tools/e2e/input-probe.mjs; docs/e2e/web-input-dead-region.md) measured
+  // NO dead region: synthetic CDP clicks deliver everywhere inside the
+  // viewport (to y=803.5 of an 805px viewport, at device scale 1 and 1.5;
+  // getBoxModel centers are CSS px and stay correct at dpr 1.5 — dividing
+  // by dpr is what MISCALCULATES). The wave-16 silence is attributed to
+  // that wave's SeerrDetailViewModel construction crash (fixed in
+  // e44eb5c46): the demo click landed, navigated, and the crash froze
+  // composition, so every later click — Back included — hit a dead UI. The
+  // boot param STAYS as lane hygiene regardless of the retraction: reload
+  // the page with ?e2eRoute=seerrdetail/550/movie and the shell seeds its
+  // back stack with the REAL shared route, decoupling verification from
+  // mouse mechanics — the same koinViewModel() graph resolves
   // (detailsModule + dataWasmModule's SeerrRepository/SeerrRequestDelegate +
   // webDetailsPlatformModule's narrow MediaRepository). The demo button
   // remains for human navigation.

@@ -185,7 +185,19 @@ fun WebAppRoot(
     seerrSecureCredentialsStore: SeerrSecureCredentialsStore,
     seerrRepository: SeerrRepository,
     bootRoute: NavKey? = null,
+    bootVariant: String? = null,
 ) {
+    // GATED E2E INPUT PROBE (wave 17A, `?e2eRoute=inputprobe[&variant=scroll]`):
+    // render ONLY the probe lattice and return — no NavDisplay, no session
+    // gate, no browser-history wiring. The check sits BEFORE any remember{}
+    // below so the probe pane composes in complete isolation from the shell
+    // (that isolation is the experiment's point); bootRoute/bootVariant are
+    // boot-URL constants, so the early return cannot deshape any state.
+    // Humans can never reach this branch (no user surface sets the param).
+    if (bootRoute === WebInputProbe) {
+        WebInputProbePane(scrollable = bootVariant == "scroll")
+        return
+    }
     val networkStatus = rememberBrowserConnectivityStatus()
     // Collected once here: the landing card's chip/lines must recompose on
     // 'online'/'offline' flips even though they live inside NavDisplay panes
@@ -196,11 +208,17 @@ fun WebAppRoot(
     val serverHealth = remember { MutableStateFlow(ServerHealth.Unknown) }
     // GATED E2E BOOT ROUTE (desktop `jellyplay.harness.*` prop precedent):
     // [bootRoute] seeds the stack one level deep so the CDP lane can reach a
-    // shared-feature route without synthetic mouse clicks, whose delivery
-    // proved environment-sensitive on this host (input below y≈600 died in
-    // the Diagnostics pane with the video host display:none'd too — a
-    // pre-existing CMP-wasm input quirk, NOT a wave-16 regression; wave 13's
-    // lane simply never clicked that low). Humans use the demo button; the
+    // shared-feature route without depending on synthetic mouse-click
+    // GEOMETRY. Wave 17A's clean-room probe (tools/e2e/input-probe.mjs +
+    // docs/e2e/web-input-dead-region.md) found NO Compose input dead region:
+    // synthetic clicks deliver everywhere inside the viewport (measured to
+    // y=803.5 of an 805px viewport, at device scale 1 and 1.5). The wave-16
+    // "dead region below y≈600" report is attributed to that wave's
+    // SeerrDetailViewModel construction crash freezing composition after the
+    // demo-button click LANDED (plus headless geometry: --window-size height
+    // 900 is an 805px viewport, and below-fold boxes zero out at (0,0)).
+    // The boot param STAYS as lane hygiene: a lane that never needs click
+    // coordinates cannot regress with them. Humans use the demo button; the
     // lane boots straight into the route. Real navigation never sets the
     // query param, so the flag has no user-facing effect.
     val backStack = remember {
