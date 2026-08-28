@@ -9,21 +9,20 @@ import org.koin.dsl.module
  * Koin construction owner for the editor feature (docs/kmp-migration-plan.md
  * §Phase V3, ninth conveyor item). The HiltViewModel/@Inject/@ApplicationContext
  * annotations were stripped at the move — Koin is the single constructor owner
- * (one framework per type). Ctor deps split three ways:
+ * (one framework per type). Ctor deps split two ways:
  *  - MetadataEditorRepository / AuthRepository / SubtitleProviderRepository
  *    are Koin-native (dataJvmModule in :shared:core:data);
- *  - StreamingSubtitleStore's interface lives in shared :core:data commonMain
- *    but its impl is still Hilt-owned (legacy SubtitleModule @Binds), so on
- *    Android it reaches Koin through the app composition root's Hilt interop
- *    module (dies at Phase X);
- *  - the @ApplicationContext Context param died with the SAF-read seam
- *    (EditorFilePicker: the contentResolver byte read moved into the Android
- *    actual).
+ *  - StreamingSubtitleStore: the interface lives in :shared:core:data's
+ *    jvmShared source set, and its file-backed impl was promoted there too
+ *    (wave 18B) — Android binds it over `context.filesDir` in
+ *    androidCoreDataModule, desktop over the appdata dir in desktopDataModule
+ *    (both platforms also feed the player's SubtitleManager from the same
+ *    binding).
  *
- * Desktop: no StreamingSubtitleStore definition exists yet, so resolution of
- * this ViewModel would throw NoDefinitionFound — registered inert-latent like
- * the other pre-Phase-X conveyor modules (the desktop shell has no editor nav
- * entry; grep confirms no route/screen reference).
+ * Live-resolvable on BOTH platforms: desktop renders editorSection since the
+ * wave 18B unguard (DesktopAppRoot registers Route.MetadataEditor; the local
+ * file-picker actuals still return null, so upload-from-file stays inert
+ * there — see DesktopEditorFilePicker).
  */
 val editorModule: Module = module {
     viewModel {

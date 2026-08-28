@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import android.content.Context
 import com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle
 import com.raulshma.jellyplay.core.model.subtitle.StreamingSubtitleManifest
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
@@ -10,22 +9,22 @@ import kotlinx.serialization.json.Json
 import java.io.File
 
 /**
- * File-backed [StreamingSubtitleStore]. Layout under `filesDir`:
+ * File-backed [StreamingSubtitleStore]. Layout under the platform app-data
+ * [baseDir] (Android `filesDir` / desktop appdata dir):
  *
- *  - `streaming-subtitles/<itemId>/manifest.json`
- *  - `streaming-subtitles/<itemId>/<provider>_<id>.<ext>`   subtitle bytes
+ *  - `<baseDir>/streaming-subtitles/<itemId>/manifest.json`
+ *  - `<baseDir>/streaming-subtitles/<itemId>/<provider>_<id>.<ext>`   subtitle bytes
  *
- * Uses `filesDir` (durable) deliberately — the disposable cache copy the
- * `SubtitleManager` keeps for the immediate side-load is distinct. The store
- * owns this subtree, so callers never build these paths directly.
+ * Uses the durable app-data dir (not the disposable cache dir the
+ * `SubtitleManager` keeps for the immediate side-load) deliberately — the
+ * store owns this subtree, so callers never build these paths directly.
  */
 class StreamingSubtitleStoreImpl(
-    private val context: Context,
+    baseDir: File,
     private val json: Json,
 ) : StreamingSubtitleStore {
 
-    private val rootDir: File
-        get() = File(context.filesDir, ROOT_DIR_NAME)
+    private val rootDir: File = File(baseDir, ROOT_DIR_NAME)
 
     private fun itemDir(itemId: String): File = File(rootDir, itemId)
 

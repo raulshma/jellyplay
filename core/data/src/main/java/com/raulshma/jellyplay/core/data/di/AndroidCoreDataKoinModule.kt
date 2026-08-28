@@ -219,7 +219,7 @@ fun androidCoreDataModule(context: Context): Module = module {
 
     single {
         StreamingSubtitleStoreImpl(
-            context = context,
+            baseDir = context.filesDir,
             json = get(),
         )
     }

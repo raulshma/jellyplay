@@ -175,14 +175,15 @@ fun main() {
             adminModule,
 
 
-            // …editor, ninth conveyor item — documented-latent, syncplay
-            // pattern: the StreamingSubtitleStore dep (Android-only Koin
-            // single since wave 8A) has no desktop definition yet, but resolution is
-            // lazy so boot stays safe, and the desktop shell has no editor
-            // nav entry (grep confirms no route/screen reference), so the
-            // module is registered but never instantiated. The desktop
-            // file-picker actuals return null, so even a future editor
-            // screen would degrade to URL-only uploads, not crash.
+            // …editor, ninth conveyor item — LIVE since the wave 18B store
+            // promotion: StreamingSubtitleStoreImpl moved to jvmShared and
+            // desktopDataModule binds the real file-backed store (appdata
+            // streaming-subtitles subtree), so the EditorViewModel ctor graph
+            // fully resolves and DesktopAppRoot renders editorSection (the
+            // details screen's edit push, admin-gated like Android). Local
+            // file-picker actuals still return null (DesktopEditorFilePicker),
+            // so upload-from-file buttons stay inert; URL image upload and
+            // remote/provider subtitle search work.
             editorModule,
 
             // …calendar, conveyor feature — LIVE and wired in nav v1

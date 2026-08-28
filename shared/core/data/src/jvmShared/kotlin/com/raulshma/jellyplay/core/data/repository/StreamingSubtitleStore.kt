@@ -10,8 +10,9 @@ import java.io.File
  * keys subtitles off a downloaded media file's directory, which streaming items
  * don't have. This store fills that gap: external-provider subtitles (OpenSubtitles,
  * Wyzie) downloaded while streaming are persisted under
- * `<filesDir>/streaming-subtitles/<itemId>/` (durable `filesDir`, **not** the
- * disposable `cacheDir` used for the one-shot side-load) so they survive replay
+ * `<appDataDir>/streaming-subtitles/<itemId>/` — Android `filesDir`, desktop
+ * appdata dir; the durable app-data dir, not the disposable cache dir used
+ * for the one-shot side-load — so they survive replay
  * and remain usable when the Jellyfin server is unreachable.
  *
  * The store is the single owner of that directory; everything else goes through

@@ -75,6 +75,7 @@ import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.calendar.navigation.calendarSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
+import com.raulshma.jellyplay.feature.editor.navigation.editorSection
 import com.raulshma.jellyplay.feature.home.navigation.homeSection
 import com.raulshma.jellyplay.feature.insights.navigation.insightsSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
@@ -111,8 +112,13 @@ import java.util.concurrent.atomic.AtomicReference
  * [isDesktopDeadEndRoute] so a shared screen pushing the route shows a
  * snackbar instead of crashing NavDisplay with an unregistered entry):
  *  - LiveTvChannelPlayer — the live-TV surface has no desktop engine host;
- *  - SubtitleTester — androidMain-only, no commonMain section at all;
- *  - editor — latent (StreamingSubtitleStore has no desktop Koin def).
+ *  - SubtitleTester — androidMain-only, no commonMain section at all.
+ *
+ * The metadata editor went live with the wave 18B store promotion:
+ * StreamingSubtitleStoreImpl moved to jvmShared with a desktop binding in
+ * desktopDataModule (appdata-backed), so [editorSection] below renders
+ * Route.MetadataEditor — the details screen's edit action opens the shared
+ * EditorScreen (admin-gated, like Android).
  *
  * VIDEO went live with wave 9A on WINDOWS (SwingPanel/HWND mpv surface) and
  * with wave 12B wherever the mpv software-render surface smoke-passes
@@ -400,7 +406,7 @@ private fun DesktopNavScaffold() {
         "no back stack for top-level route $currentTopLevel"
     }
 
-    // Remember the entry provider graph so the ~12 section builders aren't
+    // Remember the entry provider graph so the ~13 section builders aren't
     // re-invoked (allocating fresh lambdas + entry objects) on every
     // recomposition of this scaffold (same memoization the Android shell
     // applies to its sharedEntryProvider).
@@ -429,11 +435,19 @@ private fun DesktopNavScaffold() {
             // from desktopDetailsPlatformModule, AudioQueueFacade from the
             // wave-9B DefaultAudioQueueFacade binding). Details is drill-in
             // only — no rail entry; shared screens push
-            // Route.MediaDetail/SeerrDetail/PersonDetail/etc. Play/edit pushes
-            // stay guarded below (MetadataEditor); VideoPlayer is live on
-            // Windows and the audio play push routes through the live
-            // audioPlayerSection (wave 9B).
+            // Route.MediaDetail/SeerrDetail/PersonDetail/etc. The edit push
+            // lands in the live editorSection below (wave 18B); VideoPlayer
+            // is live on Windows and the audio play push routes through the
+            // live audioPlayerSection (wave 9B).
             detailsSection(guardedNavigator)
+            // Metadata editor, live since the wave 18B store promotion: the
+            // file-backed StreamingSubtitleStore binds in desktopDataModule,
+            // so the shared EditorViewModel's whole ctor graph resolves here.
+            // Drill-in only — the details screen's edit action pushes
+            // Route.MetadataEditor (admin-gated in the screen itself, like
+            // Android); the download-provider-subtitle row persists to the
+            // appdata streaming-subtitles subtree.
+            editorSection(guardedNavigator)
             // …player-video, wave 9A conveyor — live where a surface story
             // exists: the commonMain VideoPlayerScreen renders the
             // SwingPanel/HWND mpv surface (Windows) or the wave-12B
@@ -669,10 +683,6 @@ private fun NavKey.isDesktopDeadEndRoute(): Boolean = when (this) {
         !(DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported ||
             DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported)
     is Route.LiveTvChannelPlayer -> true
-    // Pushed by MediaDetailScreen's edit action: the editor feature is
-    // registered but latent on desktop (StreamingSubtitleStore has no
-    // desktop Koin def) and has no desktop nav section.
-    is Route.MetadataEditor -> true
     // LanguageSettings pushes this from the now-live settings cluster; the
     // subtitle-tester feature is androidMain-only (no commonMain section).
     Route.SubtitleTester -> true

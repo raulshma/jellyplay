@@ -223,38 +223,6 @@ internal object NoOpSubtitlePreviewRepository : com.raulshma.jellyplay.feature.p
     override fun clearCache(url: String?) {}
 }
 
-/**
- * Desktop stub for the one VM repository dep that has no jvm-side binding:
- * StreamingSubtitleStore's impl still lives in the legacy :core:data shim and
- * reaches Android only through the app-side Hilt interop. No streaming
- * playback exists on desktop, so the store stays empty.
- */
-internal object NoOpStreamingSubtitleStore : com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore {
-    override suspend fun save(
-        itemId: String,
-        provider: com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind,
-        providerSubtitleId: String,
-        fileName: String,
-        language: String?,
-        codec: String?,
-        isForced: Boolean,
-        isHearingImpaired: Boolean,
-        bytes: ByteArray,
-    ): com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle =
-        throw UnsupportedOperationException("No streaming subtitle storage on desktop")
-
-    override suspend fun loadAll(itemId: String): List<com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle> = emptyList()
-
-    override suspend fun fileFor(
-        itemId: String,
-        saved: com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle,
-    ): File = throw UnsupportedOperationException("No streaming subtitle storage on desktop")
-
-    override suspend fun delete(itemId: String, saved: com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle) {}
-
-    override suspend fun clear(itemId: String) {}
-}
-
 internal object NoOpVideoPlayerAudio : VideoPlayerAudio {
     override fun isAudioFocusActive(): Boolean = false
     override fun registerAudioFocus() {}

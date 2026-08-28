@@ -8,13 +8,12 @@ import java.io.File
 /**
  * In-memory [StreamingSubtitleStore] for tests that construct collaborators
  * (e.g. [PlayerSessionManager], [SubtitleManager]) and need to verify a save
- * happened without touching the real file-backed impl (which needs Robolectric
- * + the kotlinx.serialization classpath).
+ * happened without touching the real file-backed impl.
  *
  * Tracks saves in a per-itemId map so `loadAll` round-trips what `save`
  * recorded. `fileFor` returns a placeholder path so side-load URL construction
  * doesn't NPE; the real persistence round-trip is covered by
- * `StreamingSubtitleStoreImplTest` in core:data.
+ * `StreamingSubtitleStoreImplTest` in shared :core:data's jvmTest.
  */
 internal fun noOpStreamingSubtitleStore(): StreamingSubtitleStore =
     object : StreamingSubtitleStore {
