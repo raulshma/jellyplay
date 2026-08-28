@@ -448,6 +448,8 @@
     <string name="settings_audio_caching_off">已禁用缓存</string>
     <string name="settings_audio_cache_size">缓存大小</string>
     <string name="settings_audio_cache_size_subtitle">已缓存音频的最大磁盘空间</string>
+    <string name="settings_video_cache_size">视频缓存大小</string>
+    <string name="settings_video_cache_size_subtitle">已缓存视频的最大磁盘空间</string>
     <string name="settings_audio_prefetch_lookahead">预读取前瞻</string>
     <string name="settings_audio_prefetch_lookahead_subtitle">向前缓冲的即将播放曲目数</string>
     <string name="settings_audio_prefetch_backfill">回填数量</string>
@@ -1448,6 +1450,8 @@
     <string name="ss_audio_caching_enabled_subtitle">为即将播放的曲目缓冲以即时播放</string>
     <string name="ss_audio_cache_size_title">音频缓存大小</string>
     <string name="ss_audio_cache_size_subtitle">已缓存音频的最大磁盘空间</string>
+    <string name="ss_video_cache_size_title">视频缓存大小</string>
+    <string name="ss_video_cache_size_subtitle">已缓存视频的最大磁盘空间</string>
     <string name="ss_audio_prefetch_lookahead_title">音频预取前瞻</string>
     <string name="ss_audio_prefetch_lookahead_subtitle">向前缓冲的即将播放曲目数量</string>
     <string name="ss_audio_cache_network_policy_title">音频缓存网络策略</string>

@@ -68,6 +68,47 @@ fun normalizeItemIdGuid(value: String): String? = when {
 }
 
 /**
+ * Builds `/Users/{userId}/Images/{imageType}` under [baseUrl] — the user
+ * avatar variant (SDK `ImageApi.getUserImageUrl`), sibling of
+ * [buildItemImageUrl]. Same refusal contract: returns "" for no base URL,
+ * unknown image type, or a user id that is a GUID in neither serialization
+ * (compact 32-hex ids normalize to dashed via [normalizeItemIdGuid]).
+ *
+ * Two deltas from the item variant, both mirroring the SDK's user endpoint:
+ * no `imageIndex` (user images are singletons), and the server serves these
+ * URLs anonymously — the pre-login user-picker gallery depends on that — so
+ * the bearer-less note above holds here too. [tag] (the `UserDto`/
+ * `UserInfo.primaryImageTag`) is optional cache-busting only: a tag-less URL
+ * is fully valid, it just stops the server 304/coil cache from noticing an
+ * avatar change.
+ */
+fun buildUserImageUrl(
+    baseUrl: String?,
+    userId: String,
+    imageType: String,
+    maxWidth: Int? = null,
+    maxHeight: Int? = null,
+    tag: String? = null,
+): String {
+    if (baseUrl.isNullOrBlank()) return ""
+    if (imageType !in KNOWN_IMAGE_TYPES) return ""
+    val normalizedUserId = normalizeItemIdGuid(userId) ?: return ""
+    return buildString {
+        append(baseUrl.trimEnd('/'))
+        append("/Users/").append(normalizedUserId).append("/Images/").append(imageType)
+        var separator = '?'
+        fun param(key: String, value: Any?) {
+            append(separator).append(key).append('=').append(value.toString())
+            separator = '&'
+        }
+        // Same SDK buildMap order / null-filter as the item variant.
+        maxWidth?.let { param("maxWidth", it) }
+        maxHeight?.let { param("maxHeight", it) }
+        tag?.let { param("tag", it) }
+    }
+}
+
+/**
  * Builds `/Items/{itemId}/Images/{imageType}` under [baseUrl]. Returns ""
  * exactly where the JVM path returns "": no base URL, unknown image type, or
  * an item id that is a GUID in neither serialization. Compact-form ids are

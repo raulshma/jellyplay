@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.cache.VIDEO_CACHE_DIR_NAME
 import com.raulshma.jellyplay.core.data.playback.STRIP_SAFE_QUERY_PARAMS
 import com.raulshma.jellyplay.core.data.playback.isSessionKeyedUrl
 import com.raulshma.jellyplay.core.data.playback.stripVolatileQueryParams
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import java.io.File
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
@@ -25,9 +26,9 @@ import kotlin.concurrent.withLock
  * (the audio side's reference implementation), deliberately as a sibling in the
  * video player module rather than a shared abstraction: the two caches differ
  * in scoping (video is gated to direct-play/direct-stream URLs by
- * [ExoPlayerEngine], audio is not) and in sizing source (audio reads the
- * user-configured AudioCacheStore; video uses the fixed
- * [DEFAULT_CACHE_SIZE_MB] until a settings surface lands).
+ * [ExoPlayerEngine], audio is not) and in sizing surface (audio's
+ * AudioCacheStore settings group lives in the audio screen; the video cap is a
+ * row in the playback screen's video group — both default to 1024 MB).
  *
  * OkHttp's disk Cache cannot do this job: ExoPlayer's progressive source
  * issues `206 Partial Content` range requests, which OkHttp never stores (it
@@ -53,6 +54,7 @@ import kotlin.concurrent.withLock
  */
 class VideoStreamCache(
     private val context: Context,
+    private val videoPlayerStore: VideoPlayerStore,
 ) {
     private val cacheDir = File(context.cacheDir, VIDEO_CACHE_DIR_NAME)
 
@@ -83,7 +85,14 @@ class VideoStreamCache(
     private fun ensureCacheLocked(): SimpleCache? {
         cache?.let { return it }
         if (cacheUnavailable) return null
-        val sizeBytes = DEFAULT_CACHE_SIZE_MB.coerceAtLeast(1).toLong() * 1024L * 1024L
+        // User-configured cap (playback settings' video cache size, mirroring
+        // audioCacheSizeMb). Read at cache-open time from the store's eagerly
+        // started StateFlow — SimpleCache's bound is fixed for its lifetime,
+        // so a mid-session change lands on the next process launch; first
+        // playback is seconds after startup, long past the disk read that
+        // seeds the flow (the AudioCacheStore/ImageUrlProvider read pattern).
+        val sizeMb = videoPlayerStore.videoPlayer.value.videoCacheSizeMb
+        val sizeBytes = sizeMb.coerceAtLeast(1).toLong() * 1024L * 1024L
         val evictor = LeastRecentlyUsedCacheEvictor(sizeBytes)
         val dir = cacheDir.apply { mkdirs() }
         if (!dir.exists() || !dir.isDirectory) {
@@ -149,15 +158,5 @@ class VideoStreamCache(
             .setUpstreamDataSourceFactory(upstream)
             .setCacheKeyFactory(cacheKeyFactory)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-    }
-
-    private companion object {
-        /**
-         * Cache bound in MB. Matches the audio cache's default bound
-         * (AudioCacheStore's `audioCacheSizeMb` default of 1024 MB) so the two
-         * transient media caches behave consistently. Fixed for now — a
-         * user-facing size setting is a deliberate follow-up.
-         */
-        const val DEFAULT_CACHE_SIZE_MB = 1024
     }
 }

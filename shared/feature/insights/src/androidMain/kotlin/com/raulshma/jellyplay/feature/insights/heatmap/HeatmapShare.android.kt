@@ -3,37 +3,40 @@ package com.raulshma.jellyplay.feature.insights.heatmap
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.core.content.FileProvider
-import androidx.core.view.drawToBitmap
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Android actual of the [HeatmapShare] seam — the pre-migration
- * WatchProgressHeatmapScreen capture + share bodies, verbatim, just funnelled
- * through one object reached from the composable's LocalContext/LocalView.
- * The chooser title arrives pre-resolved from composition (the legacy body
- * called Context.getString at share time).
+ * Android actual of the [HeatmapShare] seam. The legacy body captured the
+ * whole window via `View.drawToBitmap`; the F-23 revisit replaced that with a
+ * GraphicsLayer subtree capture — the grid records itself into
+ * [captureLayer] on every draw pass (see [WatchProgressHeatmapScreen]'s
+ * HeatmapGrid), and `toImageBitmap()` snapshots exactly that subtree, so the
+ * shared PNG carries the heatmap alone (no app bar, no pull-to-refresh
+ * chrome). The chooser title arrives pre-resolved from composition (the
+ * legacy body called Context.getString at share time).
  */
 internal class AndroidHeatmapShare(
     private val context: Context,
-    private val view: View,
+    private val captureLayer: GraphicsLayer,
     private val chooserTitle: String,
 ) : HeatmapShare {
 
     override suspend fun shareHeatmapImage() {
         withContext(Dispatchers.IO) {
             runCatching {
-                // TODO(F-23): capture only the HeatmapGrid subtree once
-                // rememberGraphicsLayer is available in the Compose BOM.
-                val bitmap = view.drawToBitmap()
+                // Same runCatching-silent-swallow as the legacy body: a failed
+                // capture (or a layer never recorded — the share button only
+                // exists once the grid has drawn) does nothing, never crashes.
+                val bitmap = captureLayer.toImageBitmap().asAndroidBitmap()
                 shareHeatmapImage(context, bitmap)
             }
         }
@@ -59,10 +62,13 @@ internal class AndroidHeatmapShare(
 }
 
 @Composable
-internal actual fun rememberHeatmapShare(chooserTitle: String): HeatmapShare? {
+internal actual fun rememberHeatmapShare(
+    chooserTitle: String,
+    captureLayer: GraphicsLayer?,
+): HeatmapShare? {
     val context = LocalContext.current
-    val view = LocalView.current
-    return remember(context, view, chooserTitle) {
-        AndroidHeatmapShare(context, view, chooserTitle)
+    if (captureLayer == null) return null
+    return remember(context, captureLayer, chooserTitle) {
+        AndroidHeatmapShare(context, captureLayer, chooserTitle)
     }
 }

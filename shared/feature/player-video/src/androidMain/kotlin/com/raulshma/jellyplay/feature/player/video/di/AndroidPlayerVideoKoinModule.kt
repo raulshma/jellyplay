@@ -71,6 +71,9 @@ fun androidPlayerVideoModule(context: Context): Module = module {
     single {
         VideoStreamCache(
             context = context,
+            // Eager StateFlow store: the cache-open path reads videoCacheSizeMb
+            // (playback settings' video cache size) synchronously at open time.
+            videoPlayerStore = get(),
         )
     }
     single { AndroidSubtitlePreviewRepository(context = context, okHttpClient = get()) }

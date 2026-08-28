@@ -124,6 +124,7 @@ class PreferenceProjections constructor(
                 videoEpisodeBrowserEnabled = video.videoEpisodeBrowserEnabled,
                 videoShowPlaybackMetadata = video.videoShowPlaybackMetadata,
                 videoPreloadBufferSize = video.videoPreloadBufferSize,
+                videoCacheSizeMb = video.videoCacheSizeMb,
                 keepScreenOnDuringVideo = playback.keepScreenOnDuringVideo,
                 showTimeRemaining = video.showTimeRemaining,
                 pauseOnAudioFocusLoss = playback.pauseOnAudioFocusLoss,

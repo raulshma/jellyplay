@@ -96,6 +96,7 @@ data class UserPreferences(
     val videoEpisodeBrowserEnabled: Boolean = true,
     val videoShowPlaybackMetadata: Boolean = true,
     val videoPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
+    val videoCacheSizeMb: Int = 1024,
     val audioPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
     val audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
     val audioNormalizationEnabled: Boolean = false,

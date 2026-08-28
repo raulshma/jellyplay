@@ -53,6 +53,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -64,6 +65,9 @@ import androidx.compose.ui.semantics.semantics
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -153,8 +157,11 @@ fun WatchProgressHeatmapScreen(
     // capture + FileProvider chooser bodies; the desktop actual is null and the
     // share IconButton below stays hidden. The chooser title resolves here in
     // composition — the legacy body called Context.getString at share time.
+    // The F-23 capture: the grid records itself into this layer each draw pass
+    // and the Android actual snapshots it (subtree share, not whole-window).
+    val captureLayer = rememberGraphicsLayer()
     val shareChooserTitle = stringResource(Res.string.insights_share_chooser_title)
-    val share = rememberHeatmapShare(shareChooserTitle)
+    val share = rememberHeatmapShare(shareChooserTitle, captureLayer)
 
     // TV focus-on-launch: focus the heatmap content once it arrives so D-pad input lands on
     // content, not the navigation drawer.
@@ -347,6 +354,7 @@ fun WatchProgressHeatmapScreen(
                             dailyActivities = state.dailyActivities,
                             minActivityDate = state.minActivityDate,
                             onDayClick = { viewModel.onEvent(HeatmapEvent.SelectDay(it)) },
+                            captureLayer = captureLayer,
                         )
                     }
                 } else {
@@ -426,6 +434,7 @@ fun WatchProgressHeatmapScreen(
                                 dailyActivities = state.dailyActivities,
                                 minActivityDate = state.minActivityDate,
                                 onDayClick = { viewModel.onEvent(HeatmapEvent.SelectDay(it)) },
+                                captureLayer = captureLayer,
                             )
                         }
                     }
@@ -658,6 +667,7 @@ private fun HeatmapGrid(
     dailyActivities: List<DailyWatchActivity>,
     minActivityDate: LocalDate?,
     onDayClick: (LocalDate?) -> Unit,
+    captureLayer: GraphicsLayer? = null,
 ) {
     val (grid, numWeeks) = remember(year, dailyActivities, minActivityDate) {
         calculateGrid(year, dailyActivities, minActivityDate)
@@ -743,6 +753,26 @@ private fun HeatmapGrid(
     val focusRingColor = MaterialTheme.colorScheme.primary
     val focusRingWidthPx = with(LocalDensity.current) { TvFocusDefaults.BorderWidth.toPx() }
 
+    // F-23 share capture: when a layer is provided (Android share path), every
+    // draw pass re-records this subtree into it so the share seam can snapshot
+    // the grid — labels, cells, legend — instead of the whole window. Recording
+    // passes the content through the layer; on-screen output is unchanged.
+    val captureModifier = if (captureLayer != null) {
+        Modifier.drawWithContent {
+            captureLayer.record { this@drawWithContent.drawContent() }
+            drawLayer(captureLayer)
+        }
+    } else {
+        Modifier
+    }
+
+    // Wrapper needed for the capture: the recorded layer holds exactly the
+    // nodes drawn under one modifier, so grid + legend move under a Column.
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(captureModifier),
+    ) {
     Box(modifier = Modifier
         .fillMaxWidth()) {
         DayLabels(
@@ -914,6 +944,7 @@ private fun HeatmapGrid(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+    } // capture wrapper Column
 }
 
 @Composable

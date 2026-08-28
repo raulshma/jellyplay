@@ -448,6 +448,8 @@
     <string name="settings_audio_caching_off">Mise en cache désactivée</string>
     <string name="settings_audio_cache_size">Taille du cache</string>
     <string name="settings_audio_cache_size_subtitle">Espace disque maximum pour l\'audio en cache</string>
+    <string name="settings_video_cache_size">Taille du cache vidéo</string>
+    <string name="settings_video_cache_size_subtitle">Espace disque maximum pour la vidéo en cache</string>
     <string name="settings_audio_prefetch_lookahead">Préchargement anticipé</string>
     <string name="settings_audio_prefetch_lookahead_subtitle">Nombre de morceaux à venir à précharger</string>
     <string name="settings_audio_prefetch_backfill">Compte de rétro-remplissage</string>
@@ -1448,6 +1450,8 @@
     <string name="ss_audio_caching_enabled_subtitle">Mettre en mémoire tampon les pistes à venir pour une lecture instantanée</string>
     <string name="ss_audio_cache_size_title">Taille du cache audio</string>
     <string name="ss_audio_cache_size_subtitle">Espace disque maximum pour l\'audio en cache</string>
+    <string name="ss_video_cache_size_title">Taille du cache vidéo</string>
+    <string name="ss_video_cache_size_subtitle">Espace disque maximum pour la vidéo en cache</string>
     <string name="ss_audio_prefetch_lookahead_title">Anticipation de préchargement audio</string>
     <string name="ss_audio_prefetch_lookahead_subtitle">Nombre de pistes à venir à précharger</string>
     <string name="ss_audio_cache_network_policy_title">Politique réseau du cache audio</string>

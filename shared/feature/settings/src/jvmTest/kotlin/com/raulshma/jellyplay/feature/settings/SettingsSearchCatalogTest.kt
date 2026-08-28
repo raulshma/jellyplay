@@ -52,11 +52,12 @@ class SettingsSearchCatalogTest {
     }
 
     @Test
-    fun `aggregation preserves the verbatim move - all 259 items in flat order`() {
+    fun `aggregation preserves the verbatim move - all 260 items in flat order`() {
         val items = SettingsSearchCatalog.items
         // The old core/ui registry held 259 items; the aggregation must have
-        // kept every one. Bump this count when you deliberately add items.
-        assertEquals(259, items.size)
+        // kept every one (the 260th is the wave-18C video-cache-size row).
+        // Bump this count when you deliberately add items.
+        assertEquals(260, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation
         // of the per-screen lists (no dedup, no reordering).

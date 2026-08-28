@@ -124,6 +124,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_player_eng
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preferred_renderer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preferred_renderer_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preload_buffer_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_cache_size_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_cache_size_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preload_buffer_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_brightness_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_brightness_title
@@ -387,6 +389,16 @@ internal val PlaybackSettingsSearchItems = listOf(
         keywords = listOf("buffer", "preload", "cache", "size", "network cache"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Refresh,
+        isAdvanced = true
+    ),
+    SettingsSearchItem(
+        id = "video_cache_size",
+        titleRes = Res.string.ss_video_cache_size_title,
+        subtitleRes = Res.string.ss_video_cache_size_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_playback,
+        keywords = listOf("cache", "video cache", "size", "storage", "stream cache"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Database,
         isAdvanced = true
     ),
     SettingsSearchItem(

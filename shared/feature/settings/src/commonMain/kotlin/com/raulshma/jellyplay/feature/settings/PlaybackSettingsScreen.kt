@@ -236,6 +236,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pref
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_renderer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_cache_size
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_cache_size_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_1080p
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_1080p_full_hd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_360p
@@ -400,7 +402,7 @@ fun PlaybackSettingsScreen(
             "controls_timeout", "skip_back_on_resume", "pass_out_protection", "autoplay_trailers",
             "cinema_mode", "android_tv_watch_next", "tv_zoom_mode", "episode_browser", "playback_metadata",
             "swipe_seek_range", "remember_brightness", "default_brightness_level", "trickplay_preview",
-            "trickplay_on_gestures", "preload_buffer", "background_audio", "keep_screen_on", "incognito_mode",
+            "trickplay_on_gestures", "preload_buffer", "video_cache_size", "background_audio", "keep_screen_on", "incognito_mode",
             "show_time_remaining", "show_clock_player", "pause_on_focus_loss", "duck_on_transient_focus_loss",
         )
         val advancedVideo = listOf(
@@ -869,6 +871,24 @@ fun PlaybackSettingsScreen(
                                     subtitle = { "Min: ${it.minBufferMs / 1000}s · Max: ${it.maxBufferMs / 1000}s" },
                                     isSelected = { it == preferences.videoPreloadBufferSize },
                                     onSelect = { viewModel.setVideoPreloadBufferSize(it) },
+                                )
+                            },
+                        )
+
+                        val videoCacheSizeTitle = stringResource(Res.string.settings_video_cache_size)
+                        SettingListItem(
+                            icon = Tabler.Outline.Database,
+                            title = videoCacheSizeTitle,
+                            subtitle = stringResource(Res.string.settings_video_cache_size_subtitle),
+                            trailingText = "${preferences.videoCacheSizeMb} MB",
+                            highlighted = highlightSettingId == "video_cache_size",
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = videoCacheSizeTitle,
+                                    items = listOf(128, 256, 512, 1024, 2048, 4096),
+                                    label = { "$it MB" },
+                                    isSelected = { it == preferences.videoCacheSizeMb },
+                                    onSelect = { viewModel.setVideoCacheSizeMb(it) },
                                 )
                             },
                         )

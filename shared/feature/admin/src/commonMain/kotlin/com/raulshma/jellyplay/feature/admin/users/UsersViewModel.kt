@@ -17,12 +17,24 @@ data class UsersState(
     val selectedUser: ManagedUser? = null,
 )
 
+/** Decode cap for the 40 dp row avatar (128 px covers ~3.2x density). */
+internal const val AVATAR_MAX_WIDTH = 128
+
 class UsersViewModel(
     private val adminRepository: AdminRepository,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(UsersState())
     val state: UsersState get() = _state.value
+
+    /**
+     * Avatar URL for a list row: the repository's bearer-less
+     * `/Users/{id}/Images/Primary` builder, or null (initials fallback) when
+     * no server is active or the id is not a GUID.
+     */
+    fun avatarUrl(user: ManagedUser): String? =
+        adminRepository.getUserImageUrl(user.id, user.primaryImageTag, maxWidth = AVATAR_MAX_WIDTH)
+            .ifEmpty { null }
 
     init {
         loadUsers()

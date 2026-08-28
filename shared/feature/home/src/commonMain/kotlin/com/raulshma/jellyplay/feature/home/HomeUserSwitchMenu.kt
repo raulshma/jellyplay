@@ -15,19 +15,29 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Check
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.network.library.buildUserImageUrl
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+
+/** Decode cap for the tiny avatar circle (20–28 dp; 96 px covers ~3.4x density). */
+internal const val AVATAR_MAX_WIDTH = 96
 
 /**
  * A single user-switcher entry, shared by the touch [DropdownMenuItem] and the
@@ -38,9 +48,27 @@ internal data class UserSwitchOption(
     val user: UserInfo,
     val avatarColor: Color,
     val onAvatarColor: Color,
+    /** Bearer-less `/Users/{id}/Images/Primary` URL, or null when unusable. */
+    val avatarUrl: String?,
     val isCurrent: Boolean,
     val onClick: () -> Unit,
 )
+
+/**
+ * The avatar URL for a persisted [UserInfo]: the server's user-image endpoint
+ * with the stored [UserInfo.primaryImageTag] as cache-buster (the tag is
+ * optional — a tag-less URL is valid, it just won't notice avatar changes
+ * until restart). "" (no address, non-GUID id) collapses to null so the
+ * initials avatar renders.
+ */
+internal fun userAvatarUrl(user: UserInfo, maxWidth: Int = AVATAR_MAX_WIDTH): String? =
+    buildUserImageUrl(
+        baseUrl = user.serverAddress,
+        userId = user.id,
+        imageType = "Primary",
+        maxWidth = maxWidth,
+        tag = user.primaryImageTag,
+    ).ifEmpty { null }
 
 /**
  * Builds the ordered list of user options for the quick user switcher.
@@ -67,6 +95,7 @@ internal fun rememberUserSwitchOptions(
                 user = user,
                 avatarColor = bg,
                 onAvatarColor = fg,
+                avatarUrl = userAvatarUrl(user),
                 isCurrent = user.id == currentUserId,
                 onClick = {
                     onClose()
@@ -79,9 +108,11 @@ internal fun rememberUserSwitchOptions(
 
 /**
  * Renders the user avatar — a colored circle with the first initial — used by
- * both the dock chip and each menu row. Matches the initials-avatar convention
- * from `ActiveSessionsSection` / `ActiveDevicesRow` (no user image URL builder
- * exists in the project; image fetching is a follow-up, not v1).
+ * both the dock chip and each menu row. When [imageUrl] is usable it is drawn
+ * over the circle (Coil fetches the bearer-less `/Users/{id}/Images/Primary`
+ * URL); the initials stay composed underneath as the loading state and
+ * reappear whenever the URL is null or the fetch errors, matching the
+ * initials-avatar convention from `ActiveSessionsSection` / `ActiveDevicesRow`.
  */
 @Composable
 internal fun UserAvatar(
@@ -90,8 +121,11 @@ internal fun UserAvatar(
     avatarColor: Color,
     onAvatarColor: Color,
     modifier: Modifier = Modifier,
+    imageUrl: String? = null,
 ) {
     val initial = name.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+    var imageFailed by remember(imageUrl) { mutableStateOf(false) }
+    val showImage = imageUrl != null && !imageFailed
     Box(
         modifier = modifier
             .size(size)
@@ -105,6 +139,17 @@ internal fun UserAvatar(
             fontWeight = FontWeight.Bold,
             color = onAvatarColor,
         )
+        if (showImage) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(size),
+                onState = { state ->
+                    if (state is AsyncImagePainter.State.Error) imageFailed = true
+                },
+            )
+        }
     }
 }
 
@@ -122,6 +167,7 @@ internal fun UserSwitchDropdownItem(option: UserSwitchOption) {
                     size = 24.dp,
                     avatarColor = option.avatarColor,
                     onAvatarColor = option.onAvatarColor,
+                    imageUrl = option.avatarUrl,
                 )
                 Text(
                     text = option.user.name.ifBlank { "?" },
@@ -165,6 +211,7 @@ internal fun UserSwitchTvRow(option: UserSwitchOption) {
                 size = 28.dp,
                 avatarColor = option.avatarColor,
                 onAvatarColor = option.onAvatarColor,
+                imageUrl = option.avatarUrl,
             )
             Text(
                 text = option.user.name.ifBlank { "?" },

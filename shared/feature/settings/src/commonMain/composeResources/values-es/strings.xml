@@ -448,6 +448,8 @@
     <string name="settings_audio_caching_off">Caché desactivada</string>
     <string name="settings_audio_cache_size">Tamaño de la caché</string>
     <string name="settings_audio_cache_size_subtitle">Espacio máximo en disco para el audio en caché</string>
+    <string name="settings_video_cache_size">Tamaño de la caché de vídeo</string>
+    <string name="settings_video_cache_size_subtitle">Espacio máximo en disco para el vídeo en caché</string>
     <string name="settings_audio_prefetch_lookahead">Anticipación de precarga</string>
     <string name="settings_audio_prefetch_lookahead_subtitle">Número de próximas pistas que guardar en el búfer por adelantado</string>
     <string name="settings_audio_prefetch_backfill">Rellenado hacia atrás</string>
@@ -1448,6 +1450,8 @@
     <string name="ss_audio_caching_enabled_subtitle">Almacena en búfer las próximas pistas para una reproducción instantánea</string>
     <string name="ss_audio_cache_size_title">Tamaño de la caché de audio</string>
     <string name="ss_audio_cache_size_subtitle">Espacio máximo en disco para el audio en caché</string>
+    <string name="ss_video_cache_size_title">Tamaño de la caché de vídeo</string>
+    <string name="ss_video_cache_size_subtitle">Espacio máximo en disco para el vídeo en caché</string>
     <string name="ss_audio_prefetch_lookahead_title">Precarga anticipada de audio</string>
     <string name="ss_audio_prefetch_lookahead_subtitle">Número de próximas pistas que se almacenarán en búfer</string>
     <string name="ss_audio_cache_network_policy_title">Política de red de la caché de audio</string>

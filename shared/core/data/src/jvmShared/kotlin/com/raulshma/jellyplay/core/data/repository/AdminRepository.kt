@@ -35,6 +35,16 @@ interface AdminRepository {
     /** Users + current user id + active-admin count in one joined read. */
     suspend fun getUsersOverview(): Result<UsersOverview>
 
+    /**
+     * Bearer-less avatar URL for a managed user: `/Users/{userId}/Images/Primary`
+     * under the active server, with [tag] ([ManagedUser.primaryImageTag]) as
+     * cache-buster and [maxWidth] as decode cap. Jellyfin serves user images
+     * anonymously, so no token travels in the URL. "" when no server is active
+     * or [userId] is not a GUID in either serialization — callers fall back to
+     * the initials avatar.
+     */
+    fun getUserImageUrl(userId: String, tag: String?, maxWidth: Int): String
+
     suspend fun createUser(name: String, password: String?): Result<ManagedUser>
 
     suspend fun deleteUser(userId: String): Result<Unit>

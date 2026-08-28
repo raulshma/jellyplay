@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.UserEditorContext
 import com.raulshma.jellyplay.core.model.UsersOverview
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
+import com.raulshma.jellyplay.core.network.library.buildUserImageUrl
 import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
 import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
 import kotlinx.coroutines.async
@@ -50,6 +51,15 @@ class AdminRepositoryImpl constructor(
         )
 
     override suspend fun getSystemInfo(): Result<SystemInfo> = apiClient.getSystemInfo()
+
+    override fun getUserImageUrl(userId: String, tag: String?, maxWidth: Int): String =
+        buildUserImageUrl(
+            baseUrl = engine.currentServer.value?.address,
+            userId = userId,
+            imageType = "Primary",
+            maxWidth = maxWidth,
+            tag = tag,
+        )
 
     override suspend fun getUsersOverview(): Result<UsersOverview> = coroutineScope {
         // Independent round-trips — run concurrently (sum → max latency).

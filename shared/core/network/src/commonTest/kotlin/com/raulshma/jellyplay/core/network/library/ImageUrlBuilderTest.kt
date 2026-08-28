@@ -88,4 +88,51 @@ class ImageUrlBuilderTest {
         assertEquals(null, normalizeItemIdGuid("0b0f2a75-5677-4c76-a416-a1c0d9d1111g"), "non-hex refused")
         assertEquals(null, normalizeItemIdGuid("0b0f2a75"), "truncated refused")
     }
+
+    // --- buildUserImageUrl (the /Users/{userId}/Images avatar variant) ---
+
+    @Test
+    fun `user url uses the Users path with camelCase params in SDK order`() {
+        assertEquals(
+            "$base/Users/0b0f2a75-5677-4c76-a416-a1c0d9d11111/Images/Primary?maxWidth=96&tag=img-tag",
+            buildUserImageUrl(
+                baseUrl = base,
+                userId = "0b0f2a75-5677-4c76-a416-a1c0d9d11111",
+                imageType = "Primary",
+                maxWidth = 96,
+                tag = "img-tag",
+            ),
+        )
+    }
+
+    @Test
+    fun `user url omits null params and never emits imageIndex`() {
+        assertEquals(
+            "$base/Users/0b0f2a75-5677-4c76-a416-a1c0d9d11111/Images/Primary",
+            buildUserImageUrl(base, "0b0f2a75-5677-4c76-a416-a1c0d9d11111", "Primary"),
+            "tag-less URL is valid (loses cache-busting only)",
+        )
+        assertEquals(
+            "$base/Users/0b0f2a75-5677-4c76-a416-a1c0d9d11111/Images/Primary?maxWidth=96&tag=t",
+            buildUserImageUrl(base, "0b0f2a75-5677-4c76-a416-a1c0d9d11111", "Primary", maxWidth = 96, tag = "t"),
+        )
+    }
+
+    @Test
+    fun `user url refusals mirror the item builder`() {
+        assertEquals("", buildUserImageUrl(null, "0b0f2a75-5677-4c76-a416-a1c0d9d11111", "Primary", 96))
+        assertEquals("", buildUserImageUrl("", "0b0f2a75-5677-4c76-a416-a1c0d9d11111", "Primary", 96),
+            "blank base URL refused like the item builder")
+        assertEquals("", buildUserImageUrl(base, "not-a-uuid", "Primary", 96), "non-UUID user id refused")
+        assertEquals("", buildUserImageUrl(base, "0b0f2a75-5677-4c76-a416-a1c0d9d11111", "Frobnicate", 96),
+            "unknown image type refused")
+    }
+
+    @Test
+    fun `user url accepts compact 32-hex user ids`() {
+        assertEquals(
+            "$base/Users/0b0f2a75-5677-4c76-a416-a1c0d9d11111/Images/Primary?maxWidth=96",
+            buildUserImageUrl(base, "0b0f2a7556774c76a416a1c0d9d11111", "Primary", maxWidth = 96),
+        )
+    }
 }
