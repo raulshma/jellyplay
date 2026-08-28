@@ -20,10 +20,12 @@ Toolset-wide (individual tools may need only a subset — see table):
 
 | Tool | What it verifies | Status |
 |---|---|---|
-| `bootstrap-jellyfin.sh` | Brings up the local Jellyfin fixture (Docker container, wizard-over-API incl. 10.11 CSRF quirks, ffmpeg testsrc media + poster, library scan) and prints user/item credentials | live (coordinator) |
+| `bootstrap-jellyfin.sh` | Brings up the local Jellyfin fixture (Docker container, wizard-over-API incl. 10.11 CSRF quirks, ffmpeg testsrc media + posters, library scan) and prints user/item credentials — since wave 20B with 9 movies (8 carrying 2560x1440 posters sized to exceed Coil's measured wasm cache cap) | live (coordinator) |
 | `msi-boot-pass.sh` | The installed-MSI artifact's payload boots: builds the MSI via `:apps:desktop:packageMsi`, administrative-extracts it (`msiexec /a`, no elevation, no install), checks the extracted layout (`JellyPlay.exe` + `runtime/` + `app/`), then boots the EXTRACTED exe under perf-harness properties and requires a clean self-exit with `windowShownMs >= 0` and zero crash logs | wave 13A — live |
 | `desktop-session-pass.sh` | Extended desktop session against a live Jellyfin fixture: in-APP video playback through the whole shared pipeline + Esc/popup-ordering evidence | wave 13B — live |
 | `web-verify` | Web (wasm) shell against a live Jellyfin fixture: sign-in, Coil artwork, HtmlVideoEngine playback, via headless-Edge CDP AX-tree driving | wave 13C — live |
+| `foreign-origin.mjs` | Second-origin static server (serve.mjs fork) with `Access-Control-Allow-Origin: *` on every response — the CORS half of the web-cache-eviction lane | wave 20B — live |
+| `web-cache-eviction` | Coil wasm memory-cache LRU eviction under large-library pressure + cross-origin artwork from a non-Jellyfin host, via the Diagnostics pane's wave-20B cache-probe cards | wave 20B — live |
 
 ## Running bootstrap-jellyfin.sh
 
@@ -34,11 +36,18 @@ tools/e2e/bootstrap-jellyfin.sh
 Starts (or restarts) the `jellyplay-e2e` Docker container on port 8096 with
 persisted state under `tools/e2e/.state/` (gitignored), runs the first-run
 wizard over the API, ensures user `harness` / `harness-e2e-pass`, generates
-the 12 s testsrc movie + poster, adds the `E2E Media` library and waits for
-the item scan. Idempotent: re-running skips completed stages. 10.11 quirks
-handled inside: wizard POSTs need browser-like `Origin`/`Referer` + cookie
-jar (CSRF middleware answers origin-less POSTs with 404), and JSON key casing
-varies per endpoint.
+the 12 s testsrc movie + poster PLUS the wave-20B cache-probe library (8
+movies with 2560x1440 posters — decoded 14,745,600 bytes each, 8× = 1.47×
+Coil's measured 80,530,636-byte wasm cache cap), adds the `E2E Media`
+library and waits for the item scan. Idempotent: re-running skips completed
+stages (per-item name lookup + byte-compared poster replacement; the scan
+itself extracts small primaries from the video pixels which the size check
+replaces). 10.11 quirks handled inside: wizard POSTs need browser-like
+`Origin`/`Referer` + cookie jar (CSRF middleware answers origin-less POSTs
+with 404), JSON key casing varies per endpoint, and the file parser splits
+"Name (Year).mp4" into Name + ProductionYear (lookups use display names).
+If the config volume rots (wizard 401s before poster repair), wipe
+`tools/e2e/.state/config` and re-run.
 
 ## Running msi-boot-pass.sh
 
@@ -157,3 +166,36 @@ builds work with no repository-mode flips).
 One browser `Log.error` per run is expected and not gated: the automatic
 `/favicon.ico` 404 against the bare static server. Evidence (result.json +
 screenshot) lands in the OS temp dir, outside the repo.
+
+## Running web-cache-eviction (wave 20B)
+
+Closes the two honest cuts wave 18A left open (numbers + method in
+`docs/e2e/web-cache-eviction.md`): (1) LRU eviction under large-library
+pressure — the fixture's 8 × 14.7 MB decoded posters force the wasm
+memory cache through its 80,530,636-byte cap; the Diagnostics pane's
+"Probe all" loads every poster sequentially at full decode size and the
+lane asserts every item settles OK, COIL_CACHE never exceeds maxSize, the
+pass produced misses == net == n, and the cache genuinely filled
+(≥ 50% of cap); (2) a NON-Jellyfin origin — the lane itself spawns
+`foreign-origin.mjs` on 127.0.0.1:8599 (CORS `Access-Control-Allow-Origin:
+*`, different port = different origin), generates a distinct smptebars
+poster with ffmpeg, boots the app with `?foreignImage=…`, and asserts
+`FOREIGN_HOST: OK` plus actually-observed cross-origin network responses.
+The revisit step classifies its outcome honestly: a MISS re-fetches
+(entry gone from every layer), while a WEAK-HIT (measured on this
+platform: Coil's WeakMemoryCache resurrects an LRU-evicted bitmap even
+after pane disposal + forced GCs) is recorded as a named negative — the
+LRU eviction itself is proven by the byte-accounting plateau.
+
+```bash
+tools/e2e/bootstrap-jellyfin.sh                        # 9-item fixture, idempotent
+./gradlew :apps:web:wasmJsBrowserDevelopmentWebpack    # FRESH dist (stale-dist trap)
+node tools/e2e/web-cache-eviction.mjs                  # exit 0 = PASS
+```
+
+Prerequisites beyond web-verify's: ffmpeg on PATH (foreign poster). Same
+`ws` dependency; self-contained process hygiene (servers + Edge spawned
+and killed by PID). Uses a 1400×2000 window (the wave-20B cards render
+below the pane's Back button) with a wheel-scroll fallback for smaller
+windows. Evidence (result.json with the step ledger + `eviction.png`)
+lands in the OS temp dir, outside the repo.

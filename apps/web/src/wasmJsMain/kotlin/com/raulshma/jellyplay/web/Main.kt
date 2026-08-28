@@ -170,13 +170,29 @@ fun main() {
         // instrumentation draft ALSO caught a real bug in itself (counters
         // nobody read reported hits=0 while Coil's DEBUG log proved
         // MEMORY_CACHE hits) — recorded in CountingMemoryCache's KDoc.
-        // STILL UNVERIFIED on web: large libraries (the fixture has exactly
-        // one poster — LRU eviction beyond ~130 decoded entries at the 80MB
-        // cap is arithmetic, not measurement), non-Jellyfin image hosts, and
-        // browser HTTP-cache reuse across reloads (measured
-        // fromDiskCache=false on every reload against this server's headers
-        // — informational; the wasm singleton has no Coil disk cache to
-        // persist anything itself).
+        // WAVE 20B CLOSES THE LAST TWO CUTS (tools/e2e/web-cache-eviction.mjs,
+        // 2026-08-28, two consecutive PASS runs): (1) LRU EVICTION under
+        // large-library pressure — 8 extra fixture movies with 2560x1440
+        // posters (14,745,600 decoded bytes each; 8x = 117,964,800 = 1.47x
+        // the measured 80,530,636-byte cap) probed sequentially at
+        // Size.ORIGINAL held COIL_CACHE at exactly its 5-entry plateau
+        // (73,728,000 bytes; max observed 80,209,200 with small entries
+        // co-resident) — never once over maxSize, misses==net==9 for the
+        // pass. MEASURED SUBTLETY: a revisit of the first-loaded (evicted)
+        // poster still HIT after pane disposal + 3x forced GC — Coil's
+        // WeakMemoryCache (every evicted value demoted to a JS WeakRef over
+        // a JsReference) resurrected the bitmap, so LRU eviction is real
+        // (byte accounting) but evicted entries can remain servable on this
+        // platform; retention source unattributed. (2) NON-JELLYFIN HOSTS —
+        // a second origin (127.0.0.1:8599, Access-Control-Allow-Origin: *)
+        // served a 1600x900 poster that THIS loader fetched, decoded, and
+        // rendered through both the raw painter and MediaImage (FOREIGN_HOST:
+        // OK, 2x status-200 cross-origin responses observed by the CDP
+        // Network domain). STILL IMPOSSIBLE (upstream design): cross-reload
+        // persistence — the wasm singleton has no Coil disk cache
+        // (singletonDiskCache() is null), so only the browser's HTTP cache
+        // could serve warm reloads, and it measured fromDiskCache=false on
+        // every reload against this server's headers.
         setSingletonImageLoaderFactory { context ->
             ImageLoader.Builder(context)
                 .components {
