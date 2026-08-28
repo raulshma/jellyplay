@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
 import com.raulshma.jellyplay.feature.player.audio.AudioPlayerEngine
 import com.raulshma.jellyplay.floating.FloatingPlayerState
+import com.raulshma.jellyplay.shell.AppLockState
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
 import com.raulshma.jellyplay.shell.UpdateCoordinator
@@ -59,6 +60,14 @@ import org.koin.mp.KoinPlatform
  */
 fun androidAppModule(context: Context): Module = module {
     single { DeepLinkHandler() }
+
+    // App-scoped PIN/biometric lock flag (wave 20E): the single source of
+    // truth for "unlocked" that MainActivity's compose gate renders AND
+    // PlayerActivity's locked-redirect check reads — hoisted off
+    // MainActivity's former compose-local state so the media-notification
+    // class-name PendingIntent can no longer reach playback without a
+    // challenge (see AppLockState KDoc).
+    single { AppLockState() }
 
     // Floating overlay bridge: both deps resolve from the core graphs
     // (ActivePlayerController from androidCoreDataModule's legacy remainder,

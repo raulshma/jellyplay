@@ -83,6 +83,23 @@ class SecurityStoreTest {
     }
 
     @Test
+    fun `firstPersistedSecurity returns the persisted slice, not the seed defaults`() = runTest {
+        // Wave 20E consumer (PlayerActivity's lock-redirect check) needs the
+        // REAL persisted gate flags: `security.value` may still be the
+        // SecuritySlice() seed on a cold process before the Eagerly-collected
+        // upstream emits, which would read a configured gate as absent.
+        store.setPinLockEnabled(true)
+        assertTrue(store.firstPersistedSecurity().pinLockEnabled)
+    }
+
+    @Test
+    fun `firstPersistedSecurity on an empty store returns the defaults`() = runTest {
+        val slice = store.firstPersistedSecurity()
+        assertFalse(slice.pinLockEnabled)
+        assertFalse(slice.biometricLockEnabled)
+    }
+
+    @Test
     fun `autoLockTimer round-trips`() = runTest {
         store.setAutoLockTimerMs(120_000L)
         assertEquals(120_000L, store.security.first().autoLockTimerMs)

@@ -57,14 +57,16 @@ object PlaybackHostRouter {
         route is Route.LiveTvChannelPlayer && preferredPlayer == PlayerType.EXTERNAL ->
             HostDecision.ExternalPlayer(route.channelId, null, 0L)
 
-        // Known gap (deliberately NOT handled here — decision item recorded
-        // in docs/architecture/plans/10-playback-host-seam.md, "PIN-lock"):
-        // PlayerActivity performs no PIN/biometric check. With a lock enabled,
-        // a media-notification tap opens PlayerActivity directly via its
-        // class-name PendingIntent and reaches full playback without
-        // challenge — MainActivity's lock gate never runs. If/when the gate
-        // is enforced, it plugs in right here: refuse DedicatedActivity while
-        // locked (fall back to routing through MainActivity's gate).
+        // PIN/biometric gate (wave 20E — CLOSED): PlayerActivity enforces
+        // MainActivity's lock itself now — its onCreate/onNewIntent redirect
+        // to MainActivity (whose gate renders the lock screen) while a lock
+        // is configured and the app-scoped AppLockState says locked, so the
+        // media-notification class-name PendingIntent no longer reaches
+        // playback without a challenge. The router stays lock-blind by
+        // design: the gate is a host-activity concern
+        // (AppLockRedirect.shouldRedirect), not a routing input — gating the
+        // DedicatedActivity answer here would not cover the notification
+        // path at all (the PendingIntent starts PlayerActivity directly).
         route is Route.VideoPlayer ->
             HostDecision.DedicatedActivity(
                 PlayerActivityArgs.Video(

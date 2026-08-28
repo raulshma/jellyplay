@@ -38,15 +38,20 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.raulshma.jellyplay.core.data.playback.PipAction
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
+import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
 import com.raulshma.jellyplay.feature.player.live.LivePlayerScreen
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.navigation.playbackhost.PlayerActivityArgs
+import com.raulshma.jellyplay.shell.AppLockRedirect
+import com.raulshma.jellyplay.shell.AppLockState
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.mp.KoinPlatform
 
 /**
@@ -73,6 +78,12 @@ import org.koin.mp.KoinPlatform
  * Each screen creates its engine fresh via its ViewModel (scoped to this
  * Activity) — there is no cross-Activity engine handoff in the normal
  * open-play-PiP flow.
+ *
+ * Because the media notification opens this host by class name (bypassing
+ * MainActivity), it enforces the app PIN/biometric gate itself (wave 20E):
+ * `onCreate`/`onNewIntent` redirect to MainActivity while a lock is
+ * configured and the app-scoped AppLockState says locked — see
+ * [redirectToLockGateIfNeeded].
  */
 class PlayerActivity : FragmentActivity() {
 
@@ -104,6 +115,14 @@ class PlayerActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // PIN/biometric gate (wave 20E) — FIRST, before any window styling,
+        // playback setup or setContent: while a lock is configured and the
+        // app is locked, no player UI may compose. The media notification's
+        // content intent opens this activity by class name, so this host must
+        // enforce the gate itself; redirecting to MainActivity routes the
+        // user into the lock screen its own compose gate renders.
+        if (redirectToLockGateIfNeeded()) return
 
         // Edge-to-edge so the player draws under the system bars; VideoPlayerScreen
         // owns immersive show/hide and inset handling itself (it was designed for
@@ -221,6 +240,12 @@ class PlayerActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        // Lock gate on the live-instance path too: this activity is
+        // `singleTask`, so a media-notification tap while a PlayerActivity
+        // instance is alive (e.g. backgrounded/PiP playback) routes here —
+        // onCreate never runs and would otherwise not re-check. Same
+        // redirect as onCreate.
+        if (redirectToLockGateIfNeeded()) return
         // Swap the payload without recreating this singleTask Activity:
         // updating launchArgs recomposes the matching screen with the new
         // args. This is the path that handles "play another media/channel
@@ -280,6 +305,66 @@ class PlayerActivity : FragmentActivity() {
     // brightness to the system auto value while in PiP (the in-app brightness
     // gesture is irrelevant in the floating window) and restores it on expand.
     private var savedBrightness: Float = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+
+    // ── PIN/biometric lock gate (wave 20E) ─────────────────────────────────
+    //
+    // Closes the media-notification bypass: the video MediaSession pins its
+    // session-activity PendingIntent to this class BY NAME
+    // (AndroidMediaSessionController), so a notification tap while the app is
+    // locked used to reach full playback (video since the dedicated-host
+    // split, live TV too since wave 19C) without ever hitting MainActivity's
+    // lock gate. When a gate is configured and the app-scoped AppLockState
+    // says locked, this host hands off to MainActivity — whose own gate then
+    // renders AuthChallengeScreen — and finishes before composing anything.
+    //
+    // Note: this is the APP lock, not the in-player "screen lock" overlay
+    // (usePinForPlayerLock / SlideToUnlockOverlay inside VideoPlayerScreen) —
+    // that feature locks player controls; this one gates entry to the app.
+    /**
+     * Redirects to MainActivity's lock gate when a PIN/biometric lock is
+     * configured and the app is locked. Returns `true` when the redirect
+     * fired — callers must return immediately so no player UI, PiP collector
+     * or window styling runs (finishing in `onCreate` precedes
+     * `onUserLeaveHint`/`onTopResumedActivityChanged`/`STARTED`-gated
+     * collectors, so no PiP path can trigger on the redirect).
+     */
+    private fun redirectToLockGateIfNeeded(): Boolean {
+        val koin = KoinPlatform.getKoin() ?: return false
+        val lockState = koin.get<AppLockState>()
+        val securityStore = koin.get<SecurityStore>()
+        // The gate predicate must read the PERSISTED security slice, not the
+        // `.security` StateFlow seed: on a cold process (recents-restore of a
+        // task topped by this activity) the Eagerly-collected upstream may
+        // not have emitted yet and the seed's defaults would read as "no gate
+        // configured", re-opening the bypass in exactly the coldest case.
+        // firstPersistedSecurity() suspends until DataStore's initial read
+        // lands — warm-process callers return from the cached snapshot
+        // without disk IO — bounded by a timeout so a pathological read can
+        // never wedge cold start; on timeout fall back to the current
+        // StateFlow value (the pre-20E behavior).
+        val security = runBlocking {
+            withTimeoutOrNull(APP_LOCK_GATE_READ_TIMEOUT_MS) {
+                securityStore.firstPersistedSecurity()
+            }
+        } ?: securityStore.security.value
+        val gateConfigured = AppLockRedirect.isGateConfigured(
+            pinLockEnabled = security.pinLockEnabled,
+            biometricLockEnabled = security.biometricLockEnabled,
+        )
+        if (!AppLockRedirect.shouldRedirect(gateConfigured = gateConfigured, unlocked = lockState.unlocked.value)) {
+            return false
+        }
+        // Plain launch intent (playback args deliberately NOT forwarded —
+        // after unlocking, the user lands on the browse UI exactly like a
+        // cold app start). MainActivity is singleTask on the same default
+        // taskAffinity as this activity, so this routes to the existing
+        // instance underneath this finishing one, or cold-creates it; either
+        // way its own gate shows the lock screen (and its auto-lock-on-resume
+        // check re-locks first if the timer elapsed).
+        startActivity(Intent(this, MainActivity::class.java))
+        finish()
+        return true
+    }
 
     // ── PiP remote actions ──
     private var pipActionReceiver: BroadcastReceiver? = null
@@ -578,6 +663,12 @@ class PlayerActivity : FragmentActivity() {
         const val PIP_ACTION_SKIP_FORWARD = 3
         const val PIP_ACTION_SKIP_BACK = 4
         const val PIP_ACTION_NEXT = 5
+
+        // Upper bound for the persisted-security-slice read in the lock-gate
+        // check (see redirectToLockGateIfNeeded) — a pathological DataStore
+        // read must never wedge cold start; on timeout the check falls back
+        // to the current Eagerly-collected StateFlow value.
+        const val APP_LOCK_GATE_READ_TIMEOUT_MS = 1_000L
 
         // Launch extras live in PlayerActivityArgs — the single build/parse
         // adapter for this activity's intent contract.

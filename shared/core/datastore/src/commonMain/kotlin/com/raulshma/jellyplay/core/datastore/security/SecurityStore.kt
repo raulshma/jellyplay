@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
@@ -67,6 +68,22 @@ class SecurityStore constructor(
         .map { read(it) }
         .distinctUntilChanged()
         .stateIn(scope, SharingStarted.Eagerly, SecuritySlice())
+
+    /**
+     * The FIRST **persisted** slice — suspends until DataStore's initial read
+     * lands (wave 20E). [security]` .value` can still be the `SecuritySlice()`
+     * seed on a cold process: the Eagerly-collected upstream has been started
+     * but the file read is asynchronous, and a caller reading `.value`
+     * immediately after the store is first resolved would see the defaults —
+     * for the lock-redirect consumer in PlayerActivity that false-negative
+     * would defeat the whole gate. Collecting the underlying cold flow instead
+     * always replays the persisted file contents as the first emission (from
+     * DataStore's in-memory snapshot in a warm process, from disk on a cold
+     * one), so a no-gate user gets the real defaults, not the seed race.
+     */
+    suspend fun firstPersistedSecurity(): SecuritySlice = sharedPrefs
+        .map { read(it) }
+        .first()
 
     internal fun read(prefs: Preferences): SecuritySlice = SecuritySlice(
         pinLockEnabled = PreferenceCodec.readBool(prefs, Keys.PIN_LOCK_ENABLED, "pin_lock_enabled", false),
