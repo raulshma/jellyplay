@@ -328,6 +328,23 @@ class HomeDiscoveryStoreTest {
 
     @Test
     fun `factory reset clears both users' namespaced keys, legacy keys and the marker`() = runTest {
+        // Wave 20D deflake — the constructor-ordering race lived HERE, not in
+        // setup: createUserPreferencesStore() builds a fresh HomeDiscoveryStore
+        // whose init subscribes an ensureNamespacedMigration collector against
+        // the FIRST activeUserId emission it processes. Constructed at the
+        // reset (the old shape), that first emission — userB, still active
+        // after the reset — could be processed AFTER the reset edit committed
+        // under full-suite load; the marker was gone, so the migration
+        // legitimately re-ran ("the next user activation retries", by design)
+        // and re-set home_ns_migrated from the cleared store, failing the
+        // marker assertion below. Building the facade BEFORE any activation
+        // makes the collector's first emission the signed-out state; it then
+        // migrates during this test's own activations (idempotent, well
+        // before the reset), and after the reset activeUserId is unchanged so
+        // distinctUntilChanged suppresses any re-run — no fresh subscription
+        // exists on the far side of the reset edit.
+        val facade = createUserPreferencesStore(scope, dataStore)
+
         // Two users with namespaced state, plus a leftover legacy flat key.
         activate("userA")
         store.setHomeMode(HomeMode.MUSIC)
@@ -343,7 +360,7 @@ class HomeDiscoveryStoreTest {
         dataStore.edit { it[stringPreferencesKey("u_a::b::home_mode")] = HomeMode.MUSIC.name }
 
         // Factory reset drives the facade's HOME_DISCOVERY category.
-        createUserPreferencesStore(scope, dataStore).resetCategory(PreferenceResetCategory.HOME_DISCOVERY)
+        facade.resetCategory(PreferenceResetCategory.HOME_DISCOVERY)
 
         val raw = raw()
         assertTrue(raw.asMap().keys.none { it.name.startsWith("u_") }, "expected no namespaced keys, got: " + raw.asMap().keys.joinToString { it.name })

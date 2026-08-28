@@ -143,6 +143,25 @@ class LiveTvPlayerViewModel(
     private var preMuteVolume: Float? = null
 
     /**
+     * A zap that arrived while the channel list was still loading, deferred
+     * instead of dropped (wave 19C gap: PiP SKIP maps to channelUp/Down, so a
+     * SKIP during load silently no-oped). Exactly ONE zap is retained and a
+     * newer zap replaces it — user intent is the LAST direction requested.
+     * Applied via [switchTo] once [loadChannelsAndPlay] commits a non-empty
+     * list (identical to a zap landing after the commit, including
+     * last-channel persistence); dropped when the load fails or on [stop] —
+     * never retried from the zap path itself.
+     */
+    private var pendingZap: PendingZap? = null
+
+    /** Direction (+1 = up / -1 = down) plus the deferred zap's stream overrides. */
+    private data class PendingZap(
+        val direction: Int,
+        val audioStreamIndex: Int?,
+        val subtitleStreamIndex: Int?,
+    )
+
+    /**
      * The route's preferred stream overrides, captured at [initialize] so the
      * PiP transport's channel-zap mapping re-resolves with the same preferred
      * tracks the screen passes on its D-pad/button zaps (the transport has no
@@ -227,6 +246,10 @@ class LiveTvPlayerViewModel(
         val channels = liveTvRepository.getLiveTvChannels(limit = CHANNEL_LIST_LIMIT)
             .getOrNull().orEmpty()
         if (channels.isEmpty()) {
+            // Load failed (or returned nothing): a zap queued during the
+            // load is dropped — applying it against a missing list is
+            // meaningless, and the zap path never retries the load.
+            pendingZap = null
             _state.value = _state.value.copy(
                 isLoadingChannels = false,
                 isBuffering = false,
@@ -251,19 +274,45 @@ class LiveTvPlayerViewModel(
             currentIndex = index,
             currentChannel = channels[index],
         )
-        playChannel(channels[index], audioStreamIndex, subtitleStreamIndex)
+        // A zap that arrived while this list was loading applies now —
+        // through the same switchTo a post-load zap takes (so last-channel
+        // persistence and switching chrome behave identically). Consumed
+        // exactly once; a later zap while the list is committed goes the
+        // direct channelUp/channelDown route.
+        val deferredZap = pendingZap
+        pendingZap = null
+        if (deferredZap != null) {
+            val zapped = (index + deferredZap.direction + channels.size) % channels.size
+            switchTo(zapped, deferredZap.audioStreamIndex, deferredZap.subtitleStreamIndex)
+        } else {
+            playChannel(channels[index], audioStreamIndex, subtitleStreamIndex)
+        }
     }
 
     fun channelUp(audioStreamIndex: Int? = null, subtitleStreamIndex: Int? = null) {
         val channels = _state.value.channels
-        if (channels.isEmpty()) return
+        if (channels.isEmpty()) {
+            // List still loading → defer the zap; it applies once the list
+            // commits. Otherwise (load failed / never initialized) the silent
+            // no-op stands — a zap must not retry a failed load.
+            if (_state.value.isLoadingChannels) {
+                pendingZap = PendingZap(+1, audioStreamIndex, subtitleStreamIndex)
+            }
+            return
+        }
         val next = (_state.value.currentIndex + 1) % channels.size
         switchTo(next, audioStreamIndex, subtitleStreamIndex)
     }
 
     fun channelDown(audioStreamIndex: Int? = null, subtitleStreamIndex: Int? = null) {
         val channels = _state.value.channels
-        if (channels.isEmpty()) return
+        if (channels.isEmpty()) {
+            // See channelUp: defer while loading, no-op otherwise.
+            if (_state.value.isLoadingChannels) {
+                pendingZap = PendingZap(-1, audioStreamIndex, subtitleStreamIndex)
+            }
+            return
+        }
         val prev = (_state.value.currentIndex - 1 + channels.size) % channels.size
         switchTo(prev, audioStreamIndex, subtitleStreamIndex)
     }
@@ -972,6 +1021,9 @@ class LiveTvPlayerViewModel(
         engine?.release()
         engine = null
         initialized = false
+        // Drop any zap deferred during an in-flight load — it belongs to the
+        // session being torn down and must not fire on the next entry's load.
+        pendingZap = null
         // Clear the captured pre-mute volume so a stale value from the previous
         // player is never restored on a later unmute (e.g. mute → leave screen →
         // return to a fresh engine). isMuted is reset via the fresh uiState below.
