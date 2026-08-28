@@ -16,6 +16,13 @@ import java.io.InputStream
  * Mirrors the `FakeMediaEngine` shape: implements the production interface,
  * records what was requested, and exposes the scripted outcomes. Lives in
  * `jvmTest` (same module as the runner — no cross-module test need).
+ *
+ * [MultiConnectionDownloadStrategyTest] drives the fake with N concurrent
+ * chunk requests, whose arrival order is nondeterministic — so besides the
+ * FIFO queue it accepts a [replyByRequest] replier keyed on the request
+ * itself (the strategy's chunks are distinguishable by their `Range` header),
+ * and a [Reply.ThrowAny] variant that can throw non-`IOException` throwables
+ * (to exercise the strategies' failure-message overrides).
  */
 class FakeDownloadTransferClient : DownloadTransferClient {
 
@@ -38,16 +45,47 @@ class FakeDownloadTransferClient : DownloadTransferClient {
             override fun hashCode(): Int = arrayOf(code, body, totalSize).contentHashCode()
         }
 
+        /** A response whose body is a pre-constructed stream (streaming/cancel scenarios). */
+        data class Stream(
+            val code: Int,
+            val stream: InputStream,
+            val totalSize: Long? = null,
+        ) : Reply
+
         /** Throw this [exception] when the request is executed. */
         data class Throw(val exception: IOException) : Reply
+
+        /**
+         * Like [Throw] but for any [Throwable] — non-IO throwables are how a
+         * test reaches the strategy-level generic-failure classification that
+         * an `IOException` never produces.
+         */
+        data class ThrowAny(val exception: Throwable) : Reply
     }
 
     private val queue: ArrayDeque<Reply> = ArrayDeque()
-    val requests: MutableList<TransferRequest> = mutableListOf()
+
+    /**
+     * Fallback replier consulted when the FIFO queue is empty. Keyed on the
+     * request because concurrent callers (multi-connection chunks) have no
+     * deterministic arrival order to script against.
+     */
+    private var fallback: ((TransferRequest) -> Reply)? = null
+
+    // Concurrent chunk callers append from Dispatchers.IO threads — guard the
+    // capture list (the FIFO queue itself is only raced in request-driven mode,
+    // where it stays empty).
+    val requests: MutableList<TransferRequest> =
+        java.util.Collections.synchronizedList(mutableListOf<TransferRequest>())
 
     /** Enqueues one or more scripted replies (FIFO). */
     fun enqueue(vararg replies: Reply) {
         replies.forEach { queue.addLast(it) }
+    }
+
+    /** Scripts every request the FIFO queue doesn't cover via [replier]. */
+    fun replyByRequest(replier: (TransferRequest) -> Reply) {
+        fallback = replier
     }
 
     /** Convenience for enqueuing a simple 2xx body response. */
@@ -57,18 +95,23 @@ class FakeDownloadTransferClient : DownloadTransferClient {
 
     override suspend fun execute(request: TransferRequest): TransferResponse {
         requests += request
-        return when (val reply = queue.removeFirstOrNull() ?: error("No scripted reply for $request")) {
+        return when (val reply = queue.removeFirstOrNull() ?: fallback?.invoke(request)
+            ?: error("No scripted reply for $request")) {
             is Reply.Throw -> throw reply.exception
-            is Reply.Status -> FakeResponse(reply)
+            is Reply.ThrowAny -> throw reply.exception
+            is Reply.Status -> FakeResponse(reply.code, reply.totalSize) { ByteArrayInputStream(reply.body) }
+            is Reply.Stream -> FakeResponse(reply.code, reply.totalSize) { reply.stream }
         }
     }
 
     /** Whether every enqueued reply has been consumed. */
     val isExhausted: Boolean get() = queue.isEmpty()
 
-    private class FakeResponse(private val reply: Reply.Status) : TransferResponse {
-        override val code: Int = reply.code
-        override val totalSize: Long? = reply.totalSize
+    private class FakeResponse(
+        override val code: Int,
+        override val totalSize: Long?,
+        private val bodyProvider: () -> InputStream,
+    ) : TransferResponse {
         private var bodyOpened = false
         private var closed = false
 
@@ -76,7 +119,7 @@ class FakeDownloadTransferClient : DownloadTransferClient {
             check(!closed) { "response already closed" }
             check(!bodyOpened) { "body already opened" }
             bodyOpened = true
-            return ByteArrayInputStream(reply.body)
+            return bodyProvider()
         }
 
         override fun close() {

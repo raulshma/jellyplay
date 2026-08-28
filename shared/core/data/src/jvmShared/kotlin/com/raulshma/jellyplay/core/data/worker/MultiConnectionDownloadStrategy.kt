@@ -16,10 +16,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.io.RandomAccessFile
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -82,10 +81,12 @@ interface DownloadTransferNotifications {
  * package). Transforms: the `Context` + `setForegroundInfo(ForegroundInfo)`
  * params collapsed into the [DownloadTransferNotifications] seam;
  * `androidx.work.ListenableWorker.Result` returns became [TransferOutcome];
- * `android.util.Log` routes through the module's Log facade. The multi-conn
- * path keeps the concrete [OkHttpClient] (jvmShared-legal). Visibility was
- * `internal` in the legacy module and is public since the move (same
- * precedent as DownloadArtifacts / Call.awaitResponse) because the
+ * `android.util.Log` routes through the module's Log facade. Chunk requests
+ * ride the same [DownloadTransferClient] seam as [DownloadTransferRunner]
+ * (both paths share one underlying OkHttp client through the production
+ * adapter — this is a seam/testability decoupling, not a client swap).
+ * Visibility was `internal` in the legacy module and is public since the move
+ * (same precedent as DownloadArtifacts / Call.awaitResponse) because the
  * staying-legacy DownloadWorker still calls it.
  */
 object MultiConnectionDownloadStrategy {
@@ -94,7 +95,7 @@ object MultiConnectionDownloadStrategy {
     private const val PROGRESS_UPDATE_INTERVAL_MS = 2000L
 
     suspend fun execute(
-        downloadClient: OkHttpClient,
+        downloadClient: DownloadTransferClient,
         dao: DownloadDao,
         downloadId: String,
         entity: DownloadEntity,
@@ -258,8 +259,18 @@ object MultiConnectionDownloadStrategy {
         else -> "Download failed"
     }
 
-    private fun downloadChunk(
-        downloadClient: OkHttpClient,
+    /**
+     * Transfers one `[start, end]` byte range into [file] at its scattered
+     * offset. Rides the [DownloadTransferClient] seam: the adapter emits the
+     * same headers this method used to hand-build (User-Agent JellyPlay/1.0.0,
+     * `Range: bytes=start-end`, `X-Emby-Token` when the token is non-blank), so
+     * only the response handling maps onto [TransferResponse]. Runs on
+     * [Dispatchers.IO]; `execute` suspends instead of the old blocking
+     * `Call.execute()` (cancellation-collapsible) and the per-buffer-read
+     * [cancelled] check is kept exactly.
+     */
+    private suspend fun downloadChunk(
+        downloadClient: DownloadTransferClient,
         url: String,
         chunk: ChunkInfo,
         file: File,
@@ -267,25 +278,26 @@ object MultiConnectionDownloadStrategy {
         cancelled: AtomicBoolean,
         accessToken: String?,
     ) {
-        val requestBuilder = Request.Builder()
-            .url(url)
-            .header("User-Agent", "JellyPlay/1.0.0")
-            .header("Range", "bytes=${chunk.start}-${chunk.end}")
+        val response = downloadClient.execute(
+            TransferRequest(
+                url = url,
+                accessToken = accessToken,
+                range = "bytes=${chunk.start}-${chunk.end}",
+            )
+        )
 
-        if (!accessToken.isNullOrBlank()) {
-            requestBuilder.header("X-Emby-Token", accessToken)
-        }
-
-        val response = downloadClient.newCall(requestBuilder.build()).execute()
-
+        // 206 (Range honoured) or 200 (server ignored Range) both deliver the
+        // chunk bytes; anything else — including the 416 a single-connection
+        // resume recovers from — fails this chunk. No 416 recovery here.
         if (response.code != 206 && response.code != 200) {
             response.close()
             throw IOException("Chunk ${chunk.index} failed with code ${response.code}")
         }
 
-        val body = response.body ?: run {
-            response.close()
-            throw IOException("Chunk ${chunk.index} has no body")
+        val body: InputStream = try {
+            response.openBody()
+        } catch (e: IOException) {
+            throw IOException("Chunk ${chunk.index} has no body", e)
         }
 
         try {
@@ -293,7 +305,7 @@ object MultiConnectionDownloadStrategy {
                 raf.seek(chunk.start)
                 val buffer = ByteArray(BUFFER_SIZE)
                 var bytesRead: Int
-                body.byteStream().buffered().use { input ->
+                body.buffered().use { input ->
                     while (input.read(buffer).also { bytesRead = it } != -1) {
                         if (cancelled.get()) {
                             response.close()

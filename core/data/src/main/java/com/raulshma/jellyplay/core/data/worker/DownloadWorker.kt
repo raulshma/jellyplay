@@ -17,7 +17,6 @@ import com.raulshma.jellyplay.core.data.repository.applyTo
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.firstOrNull
-import okhttp3.OkHttpClient
 import java.io.File
 
 /**
@@ -27,9 +26,10 @@ import java.io.File
  * then delegates the actual byte transfer to [DownloadTransferRunner] (single
  * connection) or [MultiConnectionDownloadStrategy] (multi-connection).
  *
- * The transfer logic lives in the runner so the hot path is unit-testable via
- * the narrow [DownloadTransferClient] seam; this worker keeps only the
- * WorkManager-specific orchestration that can't move.
+ * The transfer logic lives in the runner and the strategy, and both ride the
+ * narrow [DownloadTransferClient] seam (one client plumbing for single- and
+ * multi-connection), so the hot paths are unit-testable; this worker keeps
+ * only the WorkManager-specific orchestration that can't move.
  *
  * **Why a thin worker shell.** Before extraction this file owned the 250-line
  * transfer method, the HTTP-status branches, and the integrity checks — all
@@ -50,11 +50,6 @@ class DownloadWorker(
     private val tokenCipher: TokenCipher,
     private val concurrencyLimiter: DownloadConcurrencyLimiter,
     private val transferClient: DownloadTransferClient,
-    // Multi-connection path (MultiConnectionDownloadStrategy) still takes the
-    // concrete OkHttpClient directly — migrating it onto DownloadTransferClient
-    // is a follow-up. Kept here so the single/multi branching decision stays in
-    // the worker; the single-connection path goes through transferClient.
-    private val okHttpClient: OkHttpClient,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -161,7 +156,7 @@ class DownloadWorker(
                     val totalSize = runner.probeContentSize(entity.downloadUrl, accessToken)
                     if (totalSize > DownloadTransferRunner.MIN_MULTI_SIZE && numConnections > 1) {
                         MultiConnectionDownloadStrategy.execute(
-                            downloadClient = okHttpClient, // multi-conn path still on OkHttp (follow-up)
+                            downloadClient = transferClient, // same seam as the single-connection path
                             dao = dao,
                             downloadId = downloadId,
                             entity = entity,

@@ -9,25 +9,33 @@ import java.io.IOException
 import java.io.InputStream
 
 /**
- * Narrow seam over the byte-transfer HTTP layer, decoupling the download
- * transfer loop ([DownloadTransferRunner]) from the concrete `OkHttpClient`.
+ * Narrow seam over the byte-transfer HTTP layer, decoupling both transfer
+ * paths — [DownloadTransferRunner] (single connection) and
+ * [MultiConnectionDownloadStrategy] (multi-connection) — from the concrete
+ * `OkHttpClient`.
  *
- * **Why this exists.** Before this seam the transfer loop built `okhttp3.Request`s
- * directly and called `Call.awaitResponse()`, welding the worker to OkHttp.
- * That made the hot path — the 250-line transfer method with its HTTP-status
- * branches (416/401/403/transient) and integrity checks — impossible to unit
+ * **Why this exists.** Before this seam the transfer loops built
+ * `okhttp3.Request`s
+ * directly and called `Call.awaitResponse()`, welding the download engine to
+ * OkHttp.
+ * That made the hot paths — the runner's 250-line transfer method with its
+ * HTTP-status
+ * branches (416/401/403/transient) and integrity checks, and the strategy's
+ * N-range chunk loop — impossible to unit
  * test without a real server. This interface mirrors the shape of `FakeMediaEngine`:
- * a small production interface the runner depends on, so a test fake
+ * a small production interface the transfer code depends on, so a test fake
  * ([FakeDownloadTransferClient] in `src/test`) can script responses (200/206/416/
  * 401/403/503, byte arrays, truncation, empty bodies, thrown `IOException`s)
  * and the policy branches become fast pure-JVM tests instead of Robolectric.
  *
- * The interface is deliberately close to what the loop consumes from an
+ * The interface is deliberately close to what the loops consume from an
  * `okhttp3.Response` — code, Content-Length, Content-Range, and the body
  * stream — so the production adapter is a thin wrapper and the fake has no
  * OkHttp types to satisfy. `HEAD` (content-size probe) and `GET` (transfer)
  * share one method: [execute] with a [TransferRequest.range] that is null for
- * a probe / fresh start and non-null for a resume.
+ * a probe / fresh start, `"bytes=N-"` for a single-connection resume, and
+ * `"bytes=start-end"` for one multi-connection chunk. The adapter emits the
+ * User-Agent / `X-Emby-Token` headers both paths previously hand-built.
  */
 interface DownloadTransferClient {
 
@@ -46,7 +54,8 @@ interface DownloadTransferClient {
  * @param url the download/stream URL.
  * @param head true for a content-size probe (no body consumed).
  * @param accessToken optional `X-Emby-Token`; null/blank omits the header.
- * @param range `bytes=N-` resume range, or null for a fresh/probe request.
+ * @param range `bytes=N-` single-connection resume range, `bytes=start-end`
+ *   for one multi-connection chunk, or null for a fresh/probe request.
  */
 data class TransferRequest(
     val url: String,
