@@ -125,6 +125,7 @@ fun buildUserPreferencesSnapshot(
     videoEpisodeBrowserEnabled = videoPlayer.videoEpisodeBrowserEnabled,
     videoShowPlaybackMetadata = videoPlayer.videoShowPlaybackMetadata,
     videoPreloadBufferSize = videoPlayer.videoPreloadBufferSize,
+    videoCacheSizeMb = videoPlayer.videoCacheSizeMb,
     audioPreloadBufferSize = audio.audioPreloadBufferSize,
     audioNormalizationMode = audio.audioNormalizationMode,
     audioNormalizationEnabled = audio.audioNormalizationEnabled,

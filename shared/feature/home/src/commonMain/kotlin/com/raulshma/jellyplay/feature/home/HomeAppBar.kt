@@ -590,6 +590,9 @@ private fun UserSwitcherChip(
     val (avatarColor, onAvatarColor) = remember(currentUser.name, containerTriplet, onContainerTriplet) {
         avatarColorsForName(currentUser.name, containerTriplet, onContainerTriplet)
     }
+    val currentUserAvatarUrl = remember(currentUser.id, currentUser.serverAddress, currentUser.primaryImageTag) {
+        userAvatarUrl(currentUser)
+    }
 
     val chipFocusState = rememberTvFocusState()
     Box {
@@ -619,6 +622,7 @@ private fun UserSwitcherChip(
                 size = 20.dp,
                 avatarColor = avatarColor,
                 onAvatarColor = onAvatarColor,
+                imageUrl = currentUserAvatarUrl,
             )
             Text(
                 text = currentUser.name.ifBlank { "?" },

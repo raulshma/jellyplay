@@ -88,6 +88,10 @@ class VideoPlayerStore constructor(
         val VIDEO_EPISODE_BROWSER_ENABLED = booleanPreferencesKey("video_episode_browser_enabled")
         val VIDEO_SHOW_PLAYBACK_METADATA = booleanPreferencesKey("video_show_playback_metadata")
         val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
+        // The direct-play video byte-cache cap (VideoStreamCache's LRU bound),
+        // added on the F-23 follow-up — never string-typed in the legacy store,
+        // so the read below uses plain `prefs[key] ?: default`.
+        val VIDEO_CACHE_SIZE_MB = intPreferencesKey("video_cache_size_mb")
         val SHOW_CLOCK_IN_PLAYER = booleanPreferencesKey("show_clock_in_player")
         val SHOW_TIME_REMAINING = booleanPreferencesKey("show_time_remaining")
         val TV_ZOOM_MODE_PERCENT = floatPreferencesKey("tv_zoom_mode_percent")
@@ -148,6 +152,7 @@ class VideoPlayerStore constructor(
         videoEpisodeBrowserEnabled = PreferenceCodec.readBool(prefs, Keys.VIDEO_EPISODE_BROWSER_ENABLED, "video_episode_browser_enabled", true),
         videoShowPlaybackMetadata = PreferenceCodec.readBool(prefs, Keys.VIDEO_SHOW_PLAYBACK_METADATA, "video_show_playback_metadata", true),
         videoPreloadBufferSize = readPreloadBufferSize(prefs),
+        videoCacheSizeMb = prefs[Keys.VIDEO_CACHE_SIZE_MB] ?: 1024,
         showClockInPlayer = PreferenceCodec.readBool(prefs, Keys.SHOW_CLOCK_IN_PLAYER, "show_clock_in_player", false),
         showTimeRemaining = PreferenceCodec.readBool(prefs, Keys.SHOW_TIME_REMAINING, "show_time_remaining", false),
         tvZoomModePercent = PreferenceCodec.readFloat(prefs, Keys.TV_ZOOM_MODE_PERCENT, "tv_zoom_mode_percent", 0f),
@@ -341,6 +346,11 @@ class VideoPlayerStore constructor(
         dataStore.edit { it[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = size.name }
     }
 
+    /** Sibling of [com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore.setAudioCacheSizeMb]. */
+    suspend fun setVideoCacheSizeMb(sizeMb: Int) {
+        dataStore.edit { it[Keys.VIDEO_CACHE_SIZE_MB] = sizeMb }
+    }
+
     suspend fun setShowClockInPlayer(enabled: Boolean) {
         dataStore.edit { it[Keys.SHOW_CLOCK_IN_PLAYER] = enabled }
     }
@@ -412,6 +422,7 @@ class VideoPlayerStore constructor(
         Keys.VIDEO_EPISODE_BROWSER_ENABLED,
         Keys.VIDEO_SHOW_PLAYBACK_METADATA,
         Keys.VIDEO_PRELOAD_BUFFER_SIZE,
+        Keys.VIDEO_CACHE_SIZE_MB,
         Keys.SHOW_CLOCK_IN_PLAYER,
         Keys.SHOW_TIME_REMAINING,
         Keys.TV_ZOOM_MODE_PERCENT,
@@ -457,6 +468,7 @@ class VideoPlayerStore constructor(
             Keys.VIDEO_EPISODE_BROWSER_ENABLED,
             Keys.VIDEO_SHOW_PLAYBACK_METADATA,
             Keys.VIDEO_PRELOAD_BUFFER_SIZE,
+            Keys.VIDEO_CACHE_SIZE_MB,
             Keys.SHOW_CLOCK_IN_PLAYER,
             Keys.SHOW_TIME_REMAINING,
             Keys.TV_ZOOM_MODE_PERCENT,
@@ -511,6 +523,7 @@ class VideoPlayerStore constructor(
             prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = userPreferences.videoEpisodeBrowserEnabled
             prefs[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = userPreferences.videoShowPlaybackMetadata
             prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = userPreferences.videoPreloadBufferSize.name
+            prefs[Keys.VIDEO_CACHE_SIZE_MB] = userPreferences.videoCacheSizeMb
             prefs[Keys.SHOW_CLOCK_IN_PLAYER] = userPreferences.showClockInPlayer
             prefs[Keys.SHOW_TIME_REMAINING] = userPreferences.showTimeRemaining
             prefs[Keys.TV_ZOOM_MODE_PERCENT] = userPreferences.tvZoomModePercent
@@ -555,6 +568,7 @@ class VideoPlayerStore constructor(
             prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = slice.videoEpisodeBrowserEnabled
             prefs[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = slice.videoShowPlaybackMetadata
             prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = slice.videoPreloadBufferSize.name
+            prefs[Keys.VIDEO_CACHE_SIZE_MB] = slice.videoCacheSizeMb
             prefs[Keys.SHOW_CLOCK_IN_PLAYER] = slice.showClockInPlayer
             prefs[Keys.SHOW_TIME_REMAINING] = slice.showTimeRemaining
             prefs[Keys.TV_ZOOM_MODE_PERCENT] = slice.tvZoomModePercent
@@ -597,6 +611,8 @@ data class VideoPlayerSlice(
     val videoEpisodeBrowserEnabled: Boolean = true,
     val videoShowPlaybackMetadata: Boolean = true,
     val videoPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
+    /** Direct-play byte-cache cap in MB (see [Keys.VIDEO_CACHE_SIZE_MB]). */
+    val videoCacheSizeMb: Int = 1024,
     val showClockInPlayer: Boolean = false,
     val showTimeRemaining: Boolean = false,
     val tvZoomModePercent: Float = 0f,

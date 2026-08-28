@@ -448,6 +448,8 @@
     <string name="settings_audio_caching_off">Caching deaktiviert</string>
     <string name="settings_audio_cache_size">Cache-Größe</string>
     <string name="settings_audio_cache_size_subtitle">Maximaler Speicherplatz für gecachte Audiodaten</string>
+    <string name="settings_video_cache_size">Video-Cache-Größe</string>
+    <string name="settings_video_cache_size_subtitle">Maximaler Speicherplatz für gecachte Videos</string>
     <string name="settings_audio_prefetch_lookahead">Prefetch-Vorlauf</string>
     <string name="settings_audio_prefetch_lookahead_subtitle">Anzahl der vorzupuffernden kommenden Titel</string>
     <string name="settings_audio_prefetch_backfill">Backfill-Anzahl</string>
@@ -1446,6 +1448,8 @@
     <string name="ss_audio_caching_enabled_subtitle">Anstehende Tracks für sofortige Wiedergabe puffern</string>
     <string name="ss_audio_cache_size_title">Audio-Cache-Größe</string>
     <string name="ss_audio_cache_size_subtitle">Maximaler Speicherplatz für zwischengespeicherte Audios</string>
+    <string name="ss_video_cache_size_title">Video-Cache-Größe</string>
+    <string name="ss_video_cache_size_subtitle">Maximaler Speicherplatz für gecachte Videos</string>
     <string name="ss_audio_prefetch_lookahead_title">Audio-Prefetch-Vorgriff</string>
     <string name="ss_audio_prefetch_lookahead_subtitle">Anzahl der vorgeladenen, kommenden Tracks</string>
     <string name="ss_audio_cache_network_policy_title">Audio-Cache-Netzwerkrichtlinie</string>

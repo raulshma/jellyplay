@@ -170,10 +170,14 @@ fun UsersScreen(
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                                 itemsIndexed(items = state.users, key = { _, u -> u.id }) { _, user ->
+                                    // Pure URL assembly over (id, tag) — never changes mid-row.
+                                    val avatarUrl = remember(user.id, user.primaryImageTag) {
+                                        viewModel.avatarUrl(user)
+                                    }
                                     UserRow(
                                         user = user,
                                         isSelf = user.id == state.currentUserId,
-                                        avatarUrl = null, // v1: initials fallback. Follow-up to build image URL from primaryImageTag.
+                                        avatarUrl = avatarUrl,
                                         onClick = { onUserDetail(user.id) },
                                         onDelete = { viewModel.showDeleteDialog(user) },
                                     )

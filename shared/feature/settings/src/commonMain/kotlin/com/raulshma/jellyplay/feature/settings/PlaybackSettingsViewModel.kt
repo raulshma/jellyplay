@@ -133,6 +133,8 @@ class PlaybackSettingsViewModel(
         editor.edit { videoPlayer.setVideoSwipeSeekMaxMs(ms) }
     fun setVideoPreloadBufferSize(size: PreloadBufferSize) =
         editor.edit { videoPlayer.setVideoPreloadBufferSize(size) }
+    fun setVideoCacheSizeMb(sizeMb: Int) =
+        editor.edit { videoPlayer.setVideoCacheSizeMb(sizeMb) }
     fun setAudioDelayMs(ms: Long) =
         editor.edit { audio.setAudioDelay(ms) }
     fun setVideoBrightnessLevel(level: Float) =
