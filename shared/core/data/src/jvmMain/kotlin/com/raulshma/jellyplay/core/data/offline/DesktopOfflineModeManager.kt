@@ -16,8 +16,10 @@ import kotlinx.coroutines.launch
 
 /**
  * Desktop implementation of the [OfflineModeManager] seam: offline mode
- * never auto-engages (the desktop [NetworkMonitor] is always `Online`), so
- * the only path to [OfflineMode.OFFLINE_MANUAL] is the manual toggle. The
+ * never auto-engages (auto-derive off the network seam stays deliberately
+ * unwired on desktop — post-17C the [DesktopNetworkMonitor] probe feeds
+ * the collector below as a re-derive trigger only, never a value), so the
+ * only path to [OfflineMode.OFFLINE_MANUAL] is the manual toggle. The
  * collector mirrors the Android derivation verbatim minus the
  * ProcessLifecycleOwner foreground check, which has no desktop equivalent —
  * `checkNetworkAndAutoDetect` is therefore a plain re-derivation over the
@@ -61,8 +63,9 @@ class DesktopOfflineModeManager(
     }
 
     override fun checkNetworkAndAutoDetect() {
-        // Desktop never auto-engages offline mode: the connectivity seam
-        // reports Online until Phase V1 refines desktop detection.
+        // Desktop never auto-engages offline mode: the manual flag is the
+        // only input — the wave-17C real probe flipping the reported
+        // network status must not flip the mode either.
         if (networkOfflineStore.networkOffline.value.manualOfflineEnabled) {
             _offlineMode.value = OfflineMode.OFFLINE_MANUAL
         } else if (_offlineMode.value == OfflineMode.OFFLINE_MANUAL) {

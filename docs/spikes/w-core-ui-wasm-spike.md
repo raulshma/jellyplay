@@ -254,6 +254,15 @@ real-browser pass yet (same honesty rule as HtmlVideoEngine/10B):
 - **BackHandler**: inert on web — naive popstate binding would fight
   NavDisplay's stack management; browser-history integration deferred until
   the web shell navigates for real.
+  RESOLVED (2026-08-28, wave-17C audit): wave 12C superseded this cut once
+  the web shell navigated for real — apps/web WebAppRoot owns the
+  browser-history model (`#wp=<index>` hash mirror on push, popstate
+  reconcile on browser back/forward) and core/ui's wasm
+  `JellyPlayBackHandler` actual is a real LIFO dispatcher over
+  `LocalWebBackDispatcher` (provided by the shell). Inertness now survives
+  only outside a providing shell. Residual, stated at the wiring site:
+  zero registrants in v1 — screens keep explicit affordances, so
+  `dispatchBack` has no callers yet.
 - **Language tables**: coverage bounded by the compiled-in matrix instead of
   host CLDR (`no:nor` + JDK legacy aliases iw/in/ji included post-review);
   unregistered short codes return null instead of passthrough on the

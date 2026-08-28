@@ -146,8 +146,12 @@ fun desktopDataModule(dataDir: Path): Module {
         // androidCoreDataModule, ContinueWatchingBroadcaster/LibrarySyncHook
         // in the app's androidAppModule).
         //  - PlaybackSyncScheduler: Android drains the playback-progress
-        //    offline outbox via WorkManager; the desktop client is assumed
-        //    online (DesktopNetworkMonitor), so there is no outbox to drain.
+        //    offline outbox via WorkManager; desktop stages rows into the
+        //    same outbox (manual offline toggle or a transient HTTP
+        //    failure) but ships no drain machinery — the WorkManager
+        //    worker is Android-side per plan §Phase C4 — so staged rows
+        //    sit. 17C's real network probe changes nothing here: staging
+        //    keys off the manual offline mode, never the network seam.
         //  - TvWatchNextScheduler: the Android TV "Watch Next" OS row has no
         //    desktop equivalent.
         //  - ContinueWatchingBroadcaster: refreshes the Android app widget's
