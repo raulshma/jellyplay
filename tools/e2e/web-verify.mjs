@@ -17,7 +17,10 @@
 // (DIRECT_ARR_INTEGRATION boots off) → wave 16B: the Seerr credentials pane
 // (fill/save/honest test-fail/localStorage persistence proof) → wave 16C:
 // boot into Route.SeerrDetail via the gated e2eRoute param, asserting the
-// honest error state → zero console errors / uncaught exceptions, screenshots.
+// honest error state → wave 18A: the Diagnostics REVISIT gate (pop the demo,
+// re-enter Diagnostics cold, re-enter AGAIN, assert the COIL_STATS line:
+// hits>0 / net>0 / fail=0 — the memory cache must serve the second entry) →
+// zero console errors / uncaught exceptions, screenshots.
 //
 // Usage:
 //   node web-verify.mjs --server-url http://localhost:8096 \
@@ -787,6 +790,97 @@ async function main() {
     const path = join(OUT_DIR, 'seerrdetail.png');
     writeFileSync(path, Buffer.from(data, 'base64'));
     return path;
+  });
+
+  // 28b. Wave 18A: the Diagnostics REVISIT + Coil observability gate. The
+  // lane's earlier pane visit (steps 7-11) ran on a cold ImageLoader — every
+  // artwork request was a memory-cache MISS, so COIL_STATS' hits counter was
+  // necessarily 0 there and could only be asserted as "present". But this
+  // step also has to contend with the lane's own step 26: the boot-param
+  // reload DISCARDED the in-memory session (WasmSecureKeyValueStorage is
+  // session-memory only — see Main.kt's SEERR-ON-WEB HONESTY note), so
+  // popping the SeerrDetail demo reveals the CONNECT/sign-in card, not the
+  // Connected landing (first run's lesson: "timeout waiting for
+  // ConnectedCard"). So this step re-signs-in from the revealed card (same
+  // flow as steps 5-6, trimmed), enters Diagnostics once (cold entry for
+  // this page context: misses + network fetches), then BACK and in AGAIN —
+  // the second entry re-runs the exact same two artwork requests, which MUST
+  // resolve from the memory cache (hits >= 1) with zero failures and at
+  // least one network fetch on the books. The line itself is
+  // WebDiagnostics' COIL_STATS (Main.kt CoilStats); the driver polls it
+  // (500ms app-side refresh) rather than assuming immediacy.
+  await step('COIL_STATS after Diagnostics revisit (hits>0)', async () => {
+    // Pop the SeerrDetail demo → WebLanding (signed out after the reload).
+    const backFromDetail = await waitForNode(cdp, 'shell Back button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Back', 15000);
+    await clickNode(cdp, backFromDetail, 'shell Back button');
+    // Re-sign-in (trimmed steps 5-6): the connect form is either still in
+    // its first phase or the last-server-url DataStore prefilled the field
+    // and the probe still needs the Connect click.
+    await waitForNode(cdp, 'connect form', (n) => nodeName(n).includes('Connect to your Jellyfin server'), 30000);
+    const urlField = await textboxAt(cdp, 0, 'Server URL field');
+    const currentUrl = nodeValue((await axTree(cdp)).find((n) => n.backendDOMNodeId === urlField.backendDOMNodeId) || urlField);
+    if (currentUrl !== SERVER_URL) {
+      if (currentUrl.length > 0) await clearField(cdp, urlField);
+      await typeIntoField(cdp, urlField, 'Server URL field', SERVER_URL);
+    }
+    const connect = await waitForNode(cdp, 'Connect button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Connect', 10000);
+    await clickNode(cdp, connect, 'Connect button');
+    await waitForNode(cdp, 'sign-in section', (n) => nodeName(n).startsWith('Sign in to'), 30000);
+    const deadline = Date.now() + 15000;
+    let tbs;
+    for (;;) {
+      tbs = (await axTree(cdp)).filter((n) => nodeRole(n).toLowerCase() === 'textbox');
+      if (tbs.length >= 3) break;
+      if (Date.now() > deadline) throw new Error(`expected 3 textboxes, got ${tbs.length}`);
+      await sleep(300);
+    }
+    const positioned = await Promise.all(
+      tbs.slice(1).map(async (n) => ({ node: n, y: (await centerOf(cdp, n)).y })),
+    );
+    positioned.sort((a, b) => a.y - b.y);
+    await typeIntoField(cdp, positioned[0].node, 'Username field', USERNAME);
+    await typeIntoField(cdp, positioned[1].node, 'Password field', PASSWORD, { requireContains: false });
+    const signIn = await waitForNode(cdp, 'Sign in button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Sign in', 10000);
+    for (let i = 0; i < 25; i++) {
+      if (await buttonEnabled(cdp, 'Sign in')) break;
+      await sleep(400);
+      if (i === 24) throw new Error('Sign in never became enabled (typing did not land)');
+    }
+    await clickNode(cdp, signIn, 'Sign in button');
+    await waitForNode(cdp, 'ConnectedCard', (n) => nodeName(n) === 'Connected', 60000);
+    // Cold entry (this page context's first): misses + fetches.
+    let diag = await waitForNode(cdp, 'Diagnostics button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Diagnostics', 15000);
+    await clickNode(cdp, diag, 'Diagnostics button');
+    await waitForNode(cdp, 'pane title', (n) => nodeName(n) === 'Web diagnostics', 15000);
+    await waitForNode(cdp, 'IMAGE_STATE OK line', (n) => nodeName(n).startsWith('IMAGE_STATE: OK'), 60000);
+    // Revisit: the same two requests must hit the memory cache now.
+    const back = await waitForNode(cdp, 'diagnostics Back button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Back', 10000);
+    await clickNode(cdp, back, 'diagnostics Back button');
+    await waitForNode(cdp, 'ConnectedCard', (n) => nodeName(n) === 'Connected', 20000);
+    diag = await waitForNode(cdp, 'Diagnostics button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Diagnostics', 15000);
+    await clickNode(cdp, diag, 'Diagnostics button');
+    await waitForNode(cdp, 'pane title', (n) => nodeName(n) === 'Web diagnostics', 15000);
+    await waitForNode(cdp, 'IMAGE_STATE OK line', (n) => nodeName(n).startsWith('IMAGE_STATE: OK'), 60000);
+    // Poll the line itself (counters refresh on the pane's 500ms poll; the
+    // MediaImage hit may land one beat after the painter's).
+    const lineDeadline = Date.now() + 15000;
+    let line = null;
+    let parsed = null;
+    while (Date.now() < lineDeadline) {
+      line = (await axTree(cdp)).find((n) => nodeRole(n) === 'StaticText' && nodeName(n).startsWith('COIL_STATS:'));
+      parsed = line && /COIL_STATS: hits=(\d+) misses=(\d+) net=(\d+) fail=(\d+)/.exec(nodeName(line));
+      if (parsed && +parsed[1] > 0) break;
+      await sleep(500);
+    }
+    if (!parsed) {
+      throw new Error(`COIL_STATS line never parsed; texts=${JSON.stringify(await snapshotTexts(cdp))}`);
+    }
+    const [, hits, misses, net, fail] = parsed;
+    if (+hits < 1) throw new Error(`hits=${hits} after revisit — memory cache never hit`);
+    if (+net < 1) throw new Error(`net=${net} — cold entry recorded no fetch at all`);
+    if (+fail !== 0) throw new Error(`fail=${fail} — a request errored during the lane`);
+    const cacheLine = (await axTree(cdp)).find((n) => nodeRole(n) === 'StaticText' && nodeName(n).startsWith('COIL_CACHE:'));
+    return `COIL_STATS hits=${hits} misses=${misses} net=${net} fail=${fail}; ${cacheLine ? nodeName(cacheLine) : 'COIL_CACHE line missing'}`;
   });
 
   // 29. Zero console errors.

@@ -69,9 +69,19 @@ import org.w3c.dom.Element
  * Success) AND the engine reported playing with position > 0; the CDP driver
  * asserts exactly that string (plus zero console errors) for a green run.
  *
+ * Wave 18A adds the Coil observability lines `COIL_STATS: hits=<n>
+ * misses=<n> net=<n> fail=<n>` and `COIL_CACHE: size=<n> maxSize=<n>`
+ * (process-lifetime totals from Main.kt's [CoilStats]; refreshed on a 500ms
+ * poll, the same idiom as VideoCheck's position mirror) so the long-session
+ * soak lane can watch cache hits, network fetches, and failures across
+ * cycles. `COIL_CACHE: none` renders before the image loader singleton has
+ * resolved.
+ *
  * Deliberately NOT a feature screen: no error taxonomy, no i18n, no design
- * polish. The ALL-CAPS text lines are load-bearing strings for the driver —
- * do not reword them without updating tools/e2e/web-verify.mjs.
+ * polish. The ALL-CAPS text lines are load-bearing strings for the drivers —
+ * do not reword them without updating tools/e2e/web-verify.mjs (asserts
+ * IMAGE_STATE/DIAG_OVERALL and, since 18A, the presence + shape of
+ * COIL_STATS) and tools/e2e/web-soak.mjs (parses COIL_STATS/COIL_CACHE).
  */
 @Composable
 internal fun WebDiagnosticsPane(
@@ -119,6 +129,21 @@ internal fun WebDiagnosticsPane(
         else -> "DIAG_OVERALL: PENDING"
     }
 
+    // Wave 18A: Coil counters are plain process-lifetime Ints outside
+    // Compose state, so the lines refresh on a 500ms poll rather than
+    // waiting for an unrelated recomposition (same idiom as VideoCheck's
+    // position mirror). Drivers gate on IMAGE_STATE: OK first, which orders
+    // every counter mutation of a pane visit before their reads.
+    var coilStatsLine by remember { mutableStateOf(CoilStats.axStatsLine()) }
+    var coilCacheLine by remember { mutableStateOf(CoilStats.axCacheLine()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            coilStatsLine = CoilStats.axStatsLine()
+            coilCacheLine = CoilStats.axCacheLine()
+            delay(500)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -158,6 +183,16 @@ internal fun WebDiagnosticsPane(
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
+        )
+        // Wave 18A Coil observability (load-bearing strings — see the
+        // strings-contract note in this file's KDoc).
+        Text(
+            text = coilStatsLine,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Text(
+            text = coilCacheLine,
+            style = MaterialTheme.typography.bodySmall,
         )
         // Wave 16C E2E surface: pushes Route.SeerrDetail(550, "movie") so a
         // HUMAN can drive the real shared SeerrDetailScreen from the shell
