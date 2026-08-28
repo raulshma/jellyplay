@@ -236,7 +236,8 @@ internal class WebConnectController(
  * HtmlVideoEngine playback from the connected session was verified one level
  * deeper in WebDiagnosticsPane the same run.
  *
- * Cut from v1 (documented deltas vs DesktopSignInPane): QuickConnect,
+ * Cut from v1 (documented deltas vs the shared auth screens the desktop shell
+ * hosts since wave 19A): QuickConnect,
  * remembered-user prefill, password visibility toggle (no Tabler icon set on
  * the web module), and a server Version line — /System/Info/Public carries
  * Version in real responses but the shared wire DTO subset reads only
