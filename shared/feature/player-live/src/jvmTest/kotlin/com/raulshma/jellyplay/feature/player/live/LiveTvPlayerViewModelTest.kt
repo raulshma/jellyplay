@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.feature.player.live.generated.resources.live_error
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -380,6 +381,114 @@ class LiveTvPlayerViewModelTest {
         assertTrue(error is LivePlayerMessage.Resource, "expected Resource error, was $error")
         assertEquals(Res.string.live_error_no_channels, (error as LivePlayerMessage.Resource).res)
         assertNull(vm.state.value.currentChannel)
+    }
+
+    // ── Deferred zaps (wave 20D): a zap during the channel-list load is
+    // queued, not dropped — PiP SKIP maps to a zap, so SKIP used to no-op
+    // while the list was loading. The gate pattern below parks
+    // getLiveTvChannels mid-flight so the zap provably arrives inside the
+    // loading window. ──
+
+    @Test
+    fun `zap during channel load is applied once the list arrives`() = runTest {
+        val loadGate = CompletableDeferred<Unit>()
+        coEvery {
+            liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
+        } coAnswers {
+            loadGate.await()
+            Result.success(channels(3))
+        }
+        stubResolve()
+
+        val vm = createVm()
+        vm.initialize("ch-0", null, null)
+        assertTrue(vm.state.value.isLoadingChannels, "channel load should still be in flight")
+
+        // The zap (screen D-pad or PiP SKIP_FORWARD) lands mid-load —
+        // deferred, and nothing may resolve before the list commits.
+        vm.channelUp()
+        assertEquals(0, capturedRequests.size, "no tune may start before the channel list commits")
+
+        loadGate.complete(Unit)
+        kotlinx.coroutines.delay(50)
+
+        // Applied after the commit: route channel was ch-0 (index 0), the
+        // deferred up-zap tunes index 1 — exactly as a post-load zap would.
+        assertEquals(1, vm.state.value.currentIndex)
+        assertEquals("ch-1", vm.state.value.currentChannel?.id)
+        assertEquals(1, capturedRequests.size)
+        assertEquals("Channel 1", capturedRequests[0].title)
+    }
+
+    @Test
+    fun `two zaps during load keep only the last requested direction`() = runTest {
+        val loadGate = CompletableDeferred<Unit>()
+        coEvery {
+            liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
+        } coAnswers {
+            loadGate.await()
+            Result.success(channels(3))
+        }
+        stubResolve()
+
+        val vm = createVm()
+        vm.initialize("ch-0", null, null)
+        vm.channelUp() // superseded…
+        vm.channelDown() // …by the later intent: down wins.
+        loadGate.complete(Unit)
+        kotlinx.coroutines.delay(50)
+
+        // From route ch-0 (index 0), the retained down-zap wraps to the LAST
+        // channel — not the up-zap's index 1.
+        assertEquals(2, vm.state.value.currentIndex)
+        assertEquals("ch-2", vm.state.value.currentChannel?.id)
+        assertEquals(1, capturedRequests.size)
+        assertEquals("Channel 2", capturedRequests[0].title)
+    }
+
+    @Test
+    fun `queued zap is dropped when the channel load fails and does not fire on re-entry`() = runTest {
+        val loadGate = CompletableDeferred<Unit>()
+        var failLoad = true
+        coEvery {
+            liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
+        } coAnswers {
+            // Sample the flag when the call STARTS (before parking on the
+            // gate): the test flips failLoad while this load is parked, and
+            // the flip must only affect the re-entry load below — the parked
+            // call's outcome is sealed at entry.
+            val shouldFail = failLoad
+            loadGate.await()
+            if (shouldFail) Result.failure<List<LiveTvChannel>>(RuntimeException("offline"))
+            else Result.success(channels(3))
+        }
+        stubResolve()
+
+        val vm = createVm()
+        vm.initialize("ch-0", null, null)
+        assertTrue(vm.state.value.isLoadingChannels, "channel load should still be in flight")
+        vm.channelUp() // queued while loading…
+        failLoad = false // …but the in-flight load fails under it.
+        loadGate.complete(Unit)
+        kotlinx.coroutines.delay(50)
+
+        // Failure path keeps the old behavior: no-channels error, no crash,
+        // and no tune attempted (the zap must not retry the load).
+        val error = vm.state.value.errorMessage
+        assertTrue(error is LivePlayerMessage.Resource, "expected Resource error, was $error")
+        assertEquals(Res.string.live_error_no_channels, (error as LivePlayerMessage.Resource).res)
+        assertNull(vm.state.value.currentChannel)
+        assertTrue(capturedRequests.isEmpty())
+
+        // Re-entry proves the queued zap was DROPPED, not retained: the fresh
+        // load plays the route channel directly — no surprise zap to ch-1.
+        vm.stop()
+        vm.initialize("ch-0", null, null)
+        kotlinx.coroutines.delay(50)
+        assertEquals(0, vm.state.value.currentIndex)
+        assertEquals("ch-0", vm.state.value.currentChannel?.id)
+        assertEquals(1, capturedRequests.size)
+        assertEquals("Channel 0", capturedRequests[0].title)
     }
 
     @Test

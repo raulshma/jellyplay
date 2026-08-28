@@ -40,10 +40,13 @@ jobs:
         # The AGP KMP library plugin exposes no per-variant assembleDebug;
         # android target verifies via its single androidMain compilation.
         # wasmJs target exists on model/datastore/designsystem/ui/network/
-        # player-contract plus the calendar/requests/details feature
+        # data/player-contract plus the calendar/requests/details feature
         # modules (waves 16A/15B/16C) and the apps:web shell (§Phase W) —
-        # database and data ship without it (no Room on wasm v1, plan
-        # §Phase W).
+        # only database ships without it (no Room on wasm v1, plan §Phase W).
+        # data gained wasm in 15B when the Room-backed repositories moved to
+        # its jvmShared source set (the lane line below caught up in 20D —
+        # the target existed but was never compiled here, so wasm-only
+        # breakage in core:data surfaced only via :apps:web).
         # player-contract gained wasm in W.3 when MediaEngine's supertypes
         # (PlayerLifecycleCallbacks, RemotePlayableEngine) moved into it from
         # shared core:data in the same packages.
@@ -64,6 +67,7 @@ jobs:
           :shared:core:network:compileKotlinWasmJs
           :shared:core:network:compileAndroidMain
           :shared:core:data:jvmJar
+          :shared:core:data:compileKotlinWasmJs
           :shared:core:data:compileAndroidMain
           :shared:core:ui:jvmJar
           :shared:core:ui:compileKotlinWasmJs
