@@ -6,9 +6,11 @@ import androidx.compose.runtime.Composable
  * Platform file-picker seam for [BackupSettingsScreen] (Wave 1b SAF move): the
  * create-document (export target) and open-document (import source) launchers
  * live behind one nullable handle. Android wires the verbatim SAF
- * `ActivityResultContracts` bodies; desktop v1 has no file pickers, so the
- * actual returns null and the screen's export/import rows no-op (the factory
- * reset row is platform-independent and stays active).
+ * `ActivityResultContracts` bodies; desktop (wave 20C) shows native AWT
+ * `FileDialog`s — SAVE pre-filled with the suggested export name, LOAD for
+ * the import source — and delivers `file:` URIs, so the export/import rows
+ * work on every platform (the factory reset row is platform-independent and
+ * stayed active throughout).
  *
  * Uri handles are delivered as opaque [String]s — the same serialisation
  * [SettingsBackupIo] consumes.
