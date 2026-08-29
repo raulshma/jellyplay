@@ -92,7 +92,6 @@ mockk = "1.14.11"
 orgJson = "20240303"
 coroutinesTest = "1.11.0"
 robolectric = "4.16.1"
-roomTesting = "2.8.4"
 androidxTestCore = "1.7.0"
 uiautomator = "2.4.0"
 playServicesCast = "22.3.1"
@@ -108,7 +107,6 @@ okhttp = "5.4.0"
 # Ktor: wasmJs HTTP/WebSocket client (plan §Phase W). Desktop/Android keep
 # OkHttp; Ktor exists for the wasm target of shared/core/network + apps/web.
 ktor = "3.5.2"
-smoothCornerRect = "v1.0.0"
 tvMaterial = "1.1.0"
 tablerIcons = "2.2.1"
 biometric = "1.4.0-alpha07"
@@ -272,7 +270,6 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "roomTesting" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
 androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 
@@ -282,13 +279,11 @@ mediarouter = { group = "androidx.mediarouter", name = "mediarouter", version.re
 
 # SLF4J
 slf4j-api = { group = "org.slf4j", name = "slf4j-api", version.ref = "slf4j" }
-slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version.ref = "slf4j" }
 
 # Player Engines
 libmpv = { group = "io.github.abdallahmehiz", name = "mpv-android-lib", version.ref = "libmpv" }
 # Desktop libmpv access (mpv-2.dll / libmpv.so / libmpv.dylib) for MpvDesktopEngine
 jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
-jna-platform = { group = "net.java.dev.jna", name = "jna-platform", version.ref = "jna" }
 libvlc-all = { group = "org.videolan.android", name = "libvlc-all", version.ref = "libvlc" }
 # libass wired into Media3's renderer pipeline — full ASS/SSA rendering
 # (positioning, fonts, animations, karaoke, vector drawing) on the
@@ -314,9 +309,6 @@ ktor-client-js = { group = "io.ktor", name = "ktor-client-js", version.ref = "kt
 ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
 ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
 ktor-client-websockets = { group = "io.ktor", name = "ktor-client-websockets", version.ref = "ktor" }
-
-# Smooth Corner Rect
-smooth-corner-rect = { group = "com.github.racra", name = "smooth-corner-rect-android-compose", version.ref = "smoothCornerRect" }
 
 # Android TV
 tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMaterial" }

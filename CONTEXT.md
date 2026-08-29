@@ -64,7 +64,7 @@ collaborators). Paths below are relative to the repo root.
   implementation — the bounded paused-wait (`POSITION_PAUSED_RECHECK_MS = 2_500L`),
   play↔pause edge detection and `delay(pollingIntervalMs)` live in exactly one
   place.
-- **`PlayerLifecycleManager`** (`shared/core/data/src/commonMain/kotlin/com/raulshma/jellyplay/core/data/playback/PlayerLifecycleManager.kt`)
+- **`PlayerLifecycleManager`** (`shared/core/data/src/jvmShared/kotlin/com/raulshma/jellyplay/core/data/playback/PlayerLifecycleManager.kt` — moved out of commonMain with the wave-15B jvmShared split)
   is the Activity↔engine lifecycle bridge: the host Activity calls
   `onActivityPause()` / `onActivityResume()`, which delegate straight to the
   `@Volatile activeCallbacks` engine reference (set by `PlayerSessionManager`
