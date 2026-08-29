@@ -40,6 +40,9 @@
     <string name="auth_error_ssl">SSL/TLS 오류 - 서버 인증서를 확인하세요</string>
     <string name="auth_error_cleartext">HTTP 연결은 허용되지 않습니다. HTTPS를 사용하세요.</string>
     <string name="auth_error_connection_failed">서버 연결 실패</string>
+    <string name="auth_tls_trust_title">이 서버의 인증서를 신뢰하시겠습니까?</string>
+    <string name="auth_tls_trust_body">%1$s 서버가 JellyPlay에서 확인할 수 없는 인증서(자체 서명 또는 신뢰할 수 없음)를 사용하고 있습니다. 신뢰하면 JellyPlay가 이 서버에 안전하게 연결할 수 있습니다. 나중에 설정 → 서버 관리에서 쳐회할 수 있습니다.</string>
+    <string name="auth_tls_trust_confirm">신뢰하고 연결</string>
 
     <!-- Android 17+ local network permission -->
     <string name="auth_error_local_network_denied">로컬 네트워크 액세스가 차단되었습니다. Wi-Fi의 서버에 연결하려면 로컬 네트워크 권한을 허용하세요.</string>

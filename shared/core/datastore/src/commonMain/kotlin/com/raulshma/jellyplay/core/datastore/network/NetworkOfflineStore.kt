@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
@@ -56,6 +57,7 @@ class NetworkOfflineStore constructor(
         val NETWORK_TIMEOUT_PRESET = stringPreferencesKey("network_timeout_preset")
         val MAX_CACHE_SIZE_MB = intPreferencesKey("max_cache_size_mb")
         val AUTO_DELETE_CACHE = booleanPreferencesKey("auto_delete_cache")
+        val SELF_SIGNED_TRUST_HOSTS = stringSetPreferencesKey("self_signed_trust_hosts")
     }
 
     private val sharedPrefs: Flow<Preferences> = dataStore.data
@@ -77,6 +79,7 @@ class NetworkOfflineStore constructor(
         networkTimeoutPreset = readNetworkTimeoutPreset(prefs),
         maxCacheSizeMb = PreferenceCodec.readInt(prefs, Keys.MAX_CACHE_SIZE_MB, "max_cache_size_mb", 0),
         autoDeleteCache = PreferenceCodec.readBool(prefs, Keys.AUTO_DELETE_CACHE, "auto_delete_cache", true),
+        selfSignedTrustHosts = prefs[Keys.SELF_SIGNED_TRUST_HOSTS] ?: emptySet(),
     )
 
     private fun readMeteredNetworkBehavior(prefs: Preferences): MeteredNetworkBehavior = try {
@@ -131,6 +134,36 @@ class NetworkOfflineStore constructor(
         dataStore.edit { it[Keys.AUTO_DELETE_CACHE] = enabled }
     }
 
+    // ------------------------------------------------------------------
+    // Self-signed certificate trust (opt-in, per server address)
+    // ------------------------------------------------------------------
+
+    /**
+     * Grants TLS trust for one server address. Entries are stored in the
+     * canonical `scheme://host[:port]` form (no trailing slash) — the same
+     * shape [com.raulshma.jellyplay.core.network.failover.ServerAddressRouter]
+     * uses for endpoint addresses. Idempotent; trimming keeps a grant written
+     * from user-typed input aligned with the matcher's parsing.
+     */
+    suspend fun addSelfSignedTrustHost(entry: String) {
+        val normalized = entry.trim().trimEnd('/')
+        if (normalized.isEmpty()) return
+        dataStore.edit { prefs ->
+            prefs[Keys.SELF_SIGNED_TRUST_HOSTS] =
+                (prefs[Keys.SELF_SIGNED_TRUST_HOSTS] ?: emptySet()) + normalized
+        }
+    }
+
+    /** Revokes TLS trust for one server address. Idempotent. */
+    suspend fun removeSelfSignedTrustHost(entry: String) {
+        val normalized = entry.trim().trimEnd('/')
+        if (normalized.isEmpty()) return
+        dataStore.edit { prefs ->
+            val current = prefs[Keys.SELF_SIGNED_TRUST_HOSTS] ?: return@edit
+            prefs[Keys.SELF_SIGNED_TRUST_HOSTS] = current - normalized
+        }
+    }
+
     /**
      * Keys owned by this store, for factory-reset participation. This is the
      * network/offline subset of the legacy `DOWNLOADS_NETWORK` reset category —
@@ -143,6 +176,10 @@ class NetworkOfflineStore constructor(
         Keys.MANUAL_BANDWIDTH_CAP, Keys.METERED_NETWORK_BEHAVIOR,
         Keys.ADAPTIVE_BITRATE_ENABLED, Keys.DATA_SAVER_ENABLED,
         Keys.VERBOSE_NETWORK_LOGGING, Keys.NETWORK_TIMEOUT_PRESET,
+        // Trust grants are security-relevant: every reset lane that touches
+        // the network domain clears them (fail closed — a wiped grant simply
+        // re-prompts on the next TLS failure).
+        Keys.SELF_SIGNED_TRUST_HOSTS,
     )
 
     /**
@@ -162,6 +199,7 @@ class NetworkOfflineStore constructor(
             Keys.DATA_SAVER_ENABLED,
             Keys.VERBOSE_NETWORK_LOGGING,
             Keys.NETWORK_TIMEOUT_PRESET,
+            Keys.SELF_SIGNED_TRUST_HOSTS,
         )
         else -> emptyList()
     }
@@ -206,6 +244,7 @@ class NetworkOfflineStore constructor(
             it[Keys.DATA_SAVER_ENABLED] = slice.dataSaverEnabled
             it[Keys.VERBOSE_NETWORK_LOGGING] = slice.verboseNetworkLogging
             it[Keys.NETWORK_TIMEOUT_PRESET] = slice.networkTimeoutPreset.name
+            it[Keys.SELF_SIGNED_TRUST_HOSTS] = slice.selfSignedTrustHosts
         }
     }
 }
@@ -227,4 +266,9 @@ data class NetworkOfflineSlice(
     val networkTimeoutPreset: NetworkTimeoutPreset = NetworkTimeoutPreset.DEFAULT,
     val maxCacheSizeMb: Int = 0,
     val autoDeleteCache: Boolean = true,
+    /**
+     * Server addresses granted self-signed TLS trust, canonical
+     * `scheme://host[:port]` form. Empty by default (opt-in only).
+     */
+    val selfSignedTrustHosts: Set<String> = emptySet(),
 )

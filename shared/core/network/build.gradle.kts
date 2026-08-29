@@ -110,6 +110,10 @@ kotlin {
             implementation(libs.coroutines.test)
             implementation(libs.okhttp)
             implementation(libs.okhttp.mockwebserver)
+            // Self-signed-trust integration tests mint server certificates
+            // with HandshakeCertificates/HeldCertificate (okhttp-tls is not
+            // a transitive dep of mockwebserver in the 5.x line).
+            implementation(libs.okhttp.tls)
             implementation(libs.mockk)
             // Koin module smoke tests (C4): load networkJvmModule +
             // desktopNetworkModule against the datastore modules.

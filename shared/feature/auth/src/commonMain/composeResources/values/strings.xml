@@ -45,6 +45,9 @@
     <string name="auth_error_ssl">SSL/TLS error - check server certificate</string>
     <string name="auth_error_cleartext">HTTP connections are not allowed. Use HTTPS.</string>
     <string name="auth_error_connection_failed">Failed to connect to server</string>
+    <string name="auth_tls_trust_title">Trust this server\'s certificate?</string>
+    <string name="auth_tls_trust_body">The server at %1$s uses a certificate JellyPlay couldn\'t verify (self-signed or untrusted). Trusting it lets JellyPlay connect securely to this server. You can revoke this later in Settings → Server Management.</string>
+    <string name="auth_tls_trust_confirm">Trust and connect</string>
 
     <!-- Android 17+ local network permission -->
     <string name="auth_error_local_network_denied">Local network access is blocked. Grant the local network permission to reach servers on your Wi-Fi.</string>

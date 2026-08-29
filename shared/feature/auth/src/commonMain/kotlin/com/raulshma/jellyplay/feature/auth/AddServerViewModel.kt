@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.auth
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepository
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -24,12 +25,21 @@ data class AddServerUiState(
     val isConnecting: Boolean = false,
     val connectError: AuthMessage? = null,
     val manualAddress: String = "",
+    /**
+     * Non-null when the last connect attempt failed on TLS trust AND the
+     * address is https: the canonical `scheme://host[:port]` the user would
+     * grant self-signed-certificate trust for. The screen renders the
+     * trust-and-retry dialog while set; [AddServerViewModel.dismissTrustPrompt]
+     * / [AddServerViewModel.confirmTrustServer] clear it.
+     */
+    val tlsTrustPromptAddress: String? = null,
 )
 
 class AddServerViewModel(
     private val authRepository: AuthRepository,
     private val serverDiscoveryRepository: ServerDiscoveryRepository,
     private val localNetworkStatus: LocalNetworkStatus,
+    private val networkOfflineStore: NetworkOfflineStore,
 ) : JellyPlayViewModel() {
 
     private val _uiState: StateFlowHandle<AddServerUiState> = stateFlow(AddServerUiState())
@@ -92,8 +102,10 @@ class AddServerViewModel(
             it.copy(
                 manualAddress = address,
                 connectError = null,
+                tlsTrustPromptAddress = null,
             )
         }
+        pendingTrustRetry = null
     }
 
     /**
@@ -105,19 +117,60 @@ class AddServerViewModel(
             return
         }
 
-        _uiState.update { it.copy(isConnecting = true, connectError = null) }
+        _uiState.update { it.copy(isConnecting = true, connectError = null, tlsTrustPromptAddress = null) }
 
         launch {
-            val result = authRepository.addServer(address.trim())
+            val trimmed = address.trim()
+            val result = authRepository.addServer(trimmed)
             _uiState.update { it.copy(isConnecting = false) }
             result.onSuccess {
+                pendingTrustRetry = null
                 onResult(result)
             }.onFailure { throwable ->
+                val tlsPrompt = tlsTrustPromptFor(trimmed, throwable)
                 _uiState.update {
-                    it.copy(connectError = getConnectionErrorMessage(address.trim(), throwable, localNetworkStatus))
+                    it.copy(
+                        connectError = getConnectionErrorMessage(trimmed, throwable, localNetworkStatus),
+                        tlsTrustPromptAddress = tlsPrompt,
+                    )
+                }
+                if (tlsPrompt != null) {
+                    // Remember how to redo THIS attempt so the trust dialog's
+                    // confirm can retry the exact same connect (address +
+                    // caller callback) once the grant is persisted.
+                    pendingTrustRetry = { connectToServer(address, onResult) }
+                } else {
+                    pendingTrustRetry = null
                 }
                 onResult(result)
             }
+        }
+    }
+
+    /**
+     * User declined the trust dialog: drop the prompt (the connect error
+     * message stays visible) and forget the pending retry.
+     */
+    fun dismissTrustPrompt() {
+        pendingTrustRetry = null
+        _uiState.update { it.copy(tlsTrustPromptAddress = null) }
+    }
+
+    /**
+     * User accepted the trust dialog: persist the host grant, then retry the
+     * failed connect. The grant lands in the OkHttp config StateFlow before
+     * the retry's probe runs, so the very next TLS handshake honors it — no
+     * client rebuild anywhere (the network layer reads the set at handshake
+     * time).
+     */
+    fun confirmTrustServer() {
+        val entry = _uiState.value.tlsTrustPromptAddress ?: return
+        val retry = pendingTrustRetry
+        pendingTrustRetry = null
+        launch {
+            networkOfflineStore.addSelfSignedTrustHost(entry)
+            _uiState.update { it.copy(tlsTrustPromptAddress = null) }
+            retry?.invoke()
         }
     }
 
@@ -129,12 +182,34 @@ class AddServerViewModel(
         super.onCleared()
         discoveryJob?.cancel()
     }
+
+    /** Pending retry for the shown TLS-trust dialog, if any. */
+    private var pendingTrustRetry: (() -> Unit)? = null
 }
 
 private fun getRootCause(throwable: Throwable): Throwable {
     var cause = throwable
     while (cause.cause != null && cause.cause != cause) cause = cause.cause!!
     return cause
+}
+
+/**
+ * The canonical address to offer self-signed trust for, or null when the
+ * failure isn't a TLS-trust failure or the address isn't https (a cleartext
+ * address can never present a certificate). Mirrors the normalization
+ * `connectToServer` applies before probing, so the stored entry is exactly
+ * the endpoint that failed the handshake.
+ */
+internal fun tlsTrustPromptFor(address: String, throwable: Throwable): String? {
+    val normalized = address.trim().trimEnd('/').let {
+        if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it"
+    }
+    if (!normalized.startsWith("https://")) return null
+    // SSLHandshakeException / SSLPeerUnverifiedException are both SSLException
+    // subclasses — the file-local twin of the jvmShared ApiException
+    // classifier's predicate (kept local for the same reason
+    // getConnectionErrorMessage classifies inline).
+    return if (getRootCause(throwable) is javax.net.ssl.SSLException) normalized else null
 }
 
 internal fun getConnectionErrorMessage(

@@ -168,6 +168,9 @@ val settingsModule: Module = module {
         ServerManagementViewModel(
             authRepository = get(),
             serverIdentityStore = get(),
+            // Per-server self-signed trust toggle state + grants (network
+            // DataStore, same store the OkHttp config StateFlow flows from).
+            networkOfflineStore = get(),
         )
     }
     viewModel {

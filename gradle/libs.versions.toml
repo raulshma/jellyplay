@@ -297,6 +297,10 @@ truetype-parser = { group = "io.github.yubyf", name = "truetypeparser-light", ve
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
+# Test-only: HandshakeCertificates/HeldCertificate for the self-signed-trust
+# TLS integration tests (mockwebserver 5.x no longer pulls okhttp-tls in
+# transitively). Same version.ref as the OkHttp 5.4 pin.
+okhttp-tls = { group = "com.squareup.okhttp3", name = "okhttp-tls", version.ref = "okhttp" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 
 # Ktor (wasmJs transport, Phase W) — engine for wasmJs comes from ktor-client-js

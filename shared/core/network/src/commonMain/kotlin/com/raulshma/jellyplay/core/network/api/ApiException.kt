@@ -43,6 +43,16 @@ class ApiException(
      * the failure wasn't an HTTP response or the body wasn't read.
      */
     val responseBody: String? = null,
+    /**
+     * Whether the failure chain is a TLS-trust failure (untrusted/self-signed
+     * certificate or failed hostname verification). Set by the JVM-side
+     * classifiers (`ApiExceptionJvm.kt`) by walking the cause chain for
+     * `javax.net.ssl.SSLException` — commonMain cannot see that type, so the
+     * flag travels as plain Boolean. Lets callers offer the self-signed trust
+     * dialog instead of a generic network error. Always false on wasm (the
+     * browser owns certificate decisions there).
+     */
+    val isTlsTrustError: Boolean = false,
     message: String,
     cause: Throwable? = null,
 ) : RuntimeException(message, cause) {

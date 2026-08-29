@@ -17,6 +17,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import com.raulshma.jellyplay.core.data.di.dataJvmModule
 import com.raulshma.jellyplay.core.data.di.desktopDataModule
@@ -28,6 +29,7 @@ import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
 import com.raulshma.jellyplay.core.datastore.di.desktopDatastoreModule
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.network.di.desktopNetworkModule
+import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
 import com.raulshma.jellyplay.desktop.player.desktopPlayerModule
 import com.raulshma.jellyplay.feature.search.di.searchModule
@@ -338,11 +340,30 @@ fun main() {
     // equally safe off the cold-start critical path).
     koinApp.koin.get<com.raulshma.jellyplay.desktop.player.DesktopAudioQueueManager>().start()
 
-    // Desktop image engine: the OkHttp network fetcher self-registers via
-    // ServiceLoader from the coil-network-okhttp dependency; crossfade is the
-    // only tweak needed on top.
+    // Desktop image engine: an explicit OkHttp fetcher over the Koin-owned
+    // base STREAMING client (same seam as the Android app's imageClient) —
+    // the streaming client derives from the base client via newBuilder(), so
+    // it shares the base sslSocketFactory/hostnameVerifier and the SAME
+    // dynamic self-signed trust layer (grants read at handshake time). The
+    // previous shape let coil-network-okhttp self-register via ServiceLoader
+    // with its OWN default OkHttpClient, which would have kept failing the
+    // TLS handshake against a self-signed server the user had granted —
+    // every other surface would connect while artwork stayed broken. The
+    // lambda defers the Koin resolution to the first image load (well after
+    // startKoin); crossfade stays the only other tweak.
     SingletonImageLoader.setSafe {
-        ImageLoader.Builder(it).crossfade(true).build()
+        ImageLoader.Builder(it)
+            .components {
+                add(
+                    OkHttpNetworkFetcherFactory(
+                        callFactory = {
+                            koinApp.koin.get<okhttp3.OkHttpClient>(NetworkQualifiers.streamingHttpClient)
+                        },
+                    ),
+                )
+            }
+            .crossfade(true)
+            .build()
     }
 
     application {

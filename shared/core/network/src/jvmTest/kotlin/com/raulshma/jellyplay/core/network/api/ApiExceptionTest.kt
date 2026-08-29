@@ -181,4 +181,40 @@ class ApiExceptionTest {
         assertFalse(ex.isRetryable)
         assertNull(ex.retryAfterMs)
     }
+
+    // ------------------------------------------- wave 21A: TLS-trust flag
+
+    @Test
+    fun `fromNetwork flags SSLHandshakeException as a TLS-trust failure`() {
+        val ex = ApiException.fromNetwork(
+            javax.net.ssl.SSLHandshakeException("PKIX path building failed"),
+            "ssl",
+        )
+        assertTrue(ex.isTlsTrustError)
+    }
+
+    @Test
+    fun `fromNetwork flags wrapped SSLPeerUnverifiedException chain`() {
+        val ex = ApiException.fromNetwork(
+            java.io.IOException("boom", javax.net.ssl.SSLPeerUnverifiedException("Hostname not verified")),
+            "ssl",
+        )
+        assertTrue(ex.isTlsTrustError)
+    }
+
+    @Test
+    fun `fromNetwork leaves transport failures unflagged`() {
+        assertFalse(ApiException.fromNetwork(ConnectException("refused"), "x").isTlsTrustError)
+        assertFalse(
+            ApiException.fromNetwork(java.io.IOException("Cleartext HTTP traffic not permitted"), "x").isTlsTrustError,
+        )
+    }
+
+    @Test
+    fun `fromJellyfin flags TLS-trust failures too`() {
+        val ex = ApiException.fromJellyfin(
+            java.io.IOException("handshake", javax.net.ssl.SSLException("certificate_unknown")),
+        )
+        assertTrue(ex.isTlsTrustError)
+    }
 }

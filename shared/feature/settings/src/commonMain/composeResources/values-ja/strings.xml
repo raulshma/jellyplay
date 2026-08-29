@@ -38,6 +38,8 @@
     <string name="settings_sign_out_from_server">サーバーからサインアウト</string>
     <string name="settings_sign_out_from_server_subtitle">サーバー上のこの端末のセッションを取り消します</string>
     <string name="settings_server_management_subtitle">サーバーを切り替えたり新しい接続を追加</string>
+    <string name="settings_trust_self_signed">自己署名証明書を信頷する</string>
+    <string name="settings_trust_self_signed_off">検証できない場合でもこのサーバーの証明書を信頷します。有効な証明書を必要とするにはオフにします。</string>
     <string name="settings_switch_user_subtitle">サーバーのユーザーとプロフィールを管理</string>
     <string name="settings_activity_insights">アクティビティ &amp; インサイト</string>
     <string name="settings_activity_insights_subtitle">お気に入り、履歴、キュー、今後の予定</string>

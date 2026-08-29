@@ -1,6 +1,10 @@
 package com.raulshma.jellyplay.core.network.failover
 
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.network.config.OkHttpConfig
+import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
+import com.raulshma.jellyplay.core.network.config.applySelfSignedTrust
+import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -57,9 +61,24 @@ data class AddressProbeResult(
  *     would make every probe report the primary as healthy;
  *  2. its short timeouts (2s connect / 3s read) keep selection fast even when
  *     an address black-holes packets.
+ *
+ * The probe client DOES share the app client's self-signed trust layer
+ * (installed from [okHttpConfigProvider], read at handshake time): without it,
+ * a probe against a self-signed server would die in the TLS handshake and the
+ * router would classify the server "unreachable" even though the user granted
+ * its certificate — and `connectToServer` (which probes through this router)
+ * would then never offer the trust dialog a second time.
+ *
+ * @param okHttpConfigProvider source of the granted self-signed trust set.
+ *   Production (Koin) always passes the real provider. The default exists so
+ *   the many unit-test constructions (`ServerAddressRouter()` with the
+ *   `prober` seam stubbed) keep compiling; an empty-grants provider leaves
+ *   platform trust behavior byte-identical.
  */
 @Singleton
-class ServerAddressRouter @Inject constructor() {
+class ServerAddressRouter @Inject constructor(
+    private val okHttpConfigProvider: OkHttpConfigProvider = ServerAddressRouter.emptyConfigProvider,
+) {
 
     data class Endpoint(
         val url: HttpUrl,
@@ -290,17 +309,31 @@ class ServerAddressRouter @Inject constructor() {
     companion object {
         private val json = Json { ignoreUnknownKeys = true }
 
-        /**
-         * Probe client: deliberately NOT derived from the shared app client —
-         * see the class KDoc. Fresh construction avoids the failover
-         * interceptor (and its DI cycle) and pins short timeouts.
-         */
-        private val probeClient: OkHttpClient by lazy {
-            OkHttpClient.Builder()
-                .connectTimeout(2, TimeUnit.SECONDS)
-                .readTimeout(3, TimeUnit.SECONDS)
-                .callTimeout(5, TimeUnit.SECONDS)
-                .build()
+        /** Empty-grants provider backing the test/default construction path. */
+        private val emptyConfigProvider = object : OkHttpConfigProvider {
+            override val config = MutableStateFlow(
+                OkHttpConfig(
+                    maxCacheSizeMb = 0,
+                    networkTimeoutPreset = NetworkTimeoutPreset.DEFAULT,
+                    verboseNetworkLogging = false,
+                ),
+            )
         }
+    }
+
+    /**
+     * Probe client: deliberately NOT derived from the shared app client —
+     * see the class KDoc. Fresh construction avoids the failover interceptor
+     * (and its DI cycle), pins short timeouts (2s connect / 3s read / 5s
+     * call), and installs the same self-signed trust layer as the app client
+     * so granted servers probe as reachable.
+     */
+    private val probeClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(2, TimeUnit.SECONDS)
+            .readTimeout(3, TimeUnit.SECONDS)
+            .callTimeout(5, TimeUnit.SECONDS)
+            .applySelfSignedTrust { okHttpConfigProvider.config.value.selfSignedTrustHosts }
+            .build()
     }
 }

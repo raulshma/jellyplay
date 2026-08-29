@@ -6,6 +6,7 @@ import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import com.raulshma.jellyplay.core.network.config.isTlsTrustFailure
 
 /**
  * JVM-side throwable classifiers for [ApiException] (docs/kmp-migration-plan.md
@@ -22,6 +23,7 @@ fun ApiException.Companion.fromJellyfin(throwable: Throwable): ApiException {
         isAccessDenied = code in ACCESS_DENIED_CODES,
         message = JellyfinErrorMapper.map(throwable),
         cause = throwable,
+        isTlsTrustError = isTlsTrustFailure(throwable),
     )
 }
 
@@ -37,6 +39,7 @@ fun ApiException.Companion.fromNetwork(throwable: Throwable, friendlyMessage: St
         isRetryable = retryable,
         message = friendlyMessage,
         cause = throwable,
+        isTlsTrustError = isTlsTrustFailure(throwable),
     )
 }
 

@@ -38,6 +38,8 @@ import com.raulshma.jellyplay.core.network.arr.ResilientSonarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClientImpl
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
+import com.raulshma.jellyplay.core.network.config.applySelfSignedTrust
+import com.raulshma.jellyplay.core.network.config.selfSignedTrustHostsReader
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import com.raulshma.jellyplay.core.network.failover.ServerFailoverInterceptor
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
@@ -80,7 +82,10 @@ import org.koin.dsl.module
  */
 val networkJvmModule: Module = module {
     single { Json { ignoreUnknownKeys = true } }
-    single { ServerAddressRouter() }
+    // Resolves OkHttpConfigProvider cross-module (dataJvmModule provides the
+    // impl): the router's probe client installs the SAME self-signed trust
+    // layer as the app client so granted servers probe as reachable.
+    single { ServerAddressRouter(get()) }
     single { BandwidthInterceptor() }
     single { DeviceProfileProvider(get()) }
     single {
@@ -282,6 +287,13 @@ internal fun baseOkHttpClient(
         .connectionPool(ConnectionPool(16, 15, TimeUnit.MINUTES))
         .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
         .retryOnConnectionFailure(true)
+        // Self-signed trust layer: SSLContext + hostname verifier that read
+        // the granted set from the config StateFlow AT HANDSHAKE TIME (same
+        // dynamic-config contract as the timeout interceptor below), so the
+        // base client — and every client derived from it via newBuilder(),
+        // which shares this sslSocketFactory/hostnameVerifier — honors grants
+        // and revokes without any rebuild.
+        .applySelfSignedTrust(selfSignedTrustHostsReader(okHttpConfigProvider))
         // Outermost interceptor: every derived client (SDK, Coil,
         // streaming, downloads, WebSocket) inherits it, so requests
         // targeting an unreachable primary address are transparently
