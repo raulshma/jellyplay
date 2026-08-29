@@ -231,8 +231,13 @@ private fun MainHomeContent(
     val filteredOfflineLibrary = remember(state.offlineLibrary, state.homeMode) {
         filterOfflineByMode(state.offlineLibrary, state.homeMode)
     }
-    val offlineSections = remember(filteredOfflineLibrary, offlineTitles) {
-        buildOfflineHomeSections(filteredOfflineLibrary, offlineTitles)
+    // Downloaded episodes feed the offline Continue Watching / Next Up rows —
+    // the top-level library excludes episodes by design (browse shows series).
+    val filteredOfflineEpisodes = remember(state.offlineEpisodes, state.homeMode) {
+        filterOfflineByMode(state.offlineEpisodes, state.homeMode)
+    }
+    val offlineSections = remember(filteredOfflineLibrary, filteredOfflineEpisodes, offlineTitles, state.offlineSectionPrefs) {
+        buildOfflineHomeSections(filteredOfflineLibrary, filteredOfflineEpisodes, offlineTitles, state.offlineSectionPrefs)
     }
     // Server fetch failed but downloads exist -> implicit offline: the same
     // integrated home plus a status banner so the fallback isn't silent.
@@ -251,14 +256,16 @@ private fun MainHomeContent(
     val mediaBackdropUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getBackdropUrl(item.id) } }
     // Hero artwork while offline resolves to the downloaded item's local
     // backdrop (falling back to its poster) instead of a server URL, which is
-    // unreachable offline. Online keeps the server resolver. Keyed on the
-    // id+path triples (structurally equal across download-progress emissions)
-    // rather than the library list itself, so the hero controller below is not
-    // rebuilt — resetting its rotation state — on every progress tick.
+    // unreachable offline. Episodes are included so an all-episodes offline
+    // library still features artwork. Keyed on the id+path triples
+    // (structurally equal across download-progress emissions) rather than the
+    // library list itself, so the hero controller below is not rebuilt —
+    // resetting its rotation state — on every progress tick.
     val offlineBackdropResolver = remember(
-        filteredOfflineLibrary.map { Triple(it.id, it.backdropPath, it.posterPath) }
+        filteredOfflineLibrary.map { Triple(it.id, it.backdropPath, it.posterPath) } +
+            filteredOfflineEpisodes.map { Triple(it.id, it.backdropPath, it.posterPath) }
     ) {
-        val byId = filteredOfflineLibrary.associateBy { it.id }
+        val byId = offlineItemsById(filteredOfflineLibrary, filteredOfflineEpisodes)
         return@remember { id: String -> byId[id]?.let { it.backdropPath ?: it.posterPath } ?: "" }
     }
     val onlineBackdropResolver = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
@@ -591,10 +598,12 @@ private fun MainHomeContent(
                                 allDiscoverItems = allDiscoverItems,
                                 recentlyGrabbed = state.recentlyGrabbed,
                                 photoFolderChildUrls = photoFolderChildUrls,
-                                // Only forward offlineLibrary when it can actually
-                                // render (offline branch), so download-progress ticks while
-                                // online never invalidate the content list.
+                                // Only forward the offline library + episodes when
+                                // they can actually render (offline branch), so
+                                // download-progress ticks while online never
+                                // invalidate the content list.
                                 offlineLibrary = if (renderingOffline) state.offlineLibrary else emptyList(),
+                                offlineEpisodes = if (renderingOffline) state.offlineEpisodes else emptyList(),
                                 statusBanner = if (implicitOffline) {
                                     "Couldn't reach the server — showing your downloads."
                                 } else null,

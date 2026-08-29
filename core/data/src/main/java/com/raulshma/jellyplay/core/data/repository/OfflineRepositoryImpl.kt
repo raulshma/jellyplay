@@ -49,6 +49,13 @@ import javax.inject.Singleton
  */
 const val MIN_OFFLINE_SEARCH_LENGTH: Int = 2
 
+/**
+ * Batch size for `WHERE mediaItemId IN (...)` download lookups. SQLite's
+ * legacy host-variable cap is 999 (Android < 12); the whole-library episode
+ * paths can exceed that, so ids are chunked below it.
+ */
+private const val MAX_SQLITE_HOST_VARIABLES = 900
+
 private val MEDIA_TYPE_BY_NAME: Map<String, MediaType> = MediaType.entries.associateBy { it.name }
 private val DOWNLOAD_STATUS_BY_NAME: Map<String, DownloadStatus> = DownloadStatus.entries.associateBy { it.name }
 
@@ -103,17 +110,7 @@ class OfflineRepositoryImpl @Inject constructor(
 
     override fun getChildren(parentId: String): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getChildrenByParent(parentId).flatMapLatest { rows ->
-            val ids = rows.map { it.media.id }
-            if (ids.isEmpty()) {
-                flowOf(emptyList())
-            } else {
-                downloadDao.getDownloadsByMediaItemIdsFlow(ids).map { downloads ->
-                    val downloadMap = downloads.associateBy { it.mediaItemId }
-                    rows.map { row ->
-                        row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
-                    }
-                }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
-            }
+            rowsWithDownloadsAndArtwork(rows)
         }.distinctUntilChanged()
 
     override fun getOfflineLibrary(): Flow<List<OfflineMediaItem>> =
@@ -124,6 +121,11 @@ class OfflineRepositoryImpl @Inject constructor(
     override fun getOfflineLibraryInFolder(folderId: String): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getTopLevelItemsInLibrary(folderId).flatMapLatest { rows ->
             buildOfflineLibrary(rows)
+        }.distinctUntilChanged()
+
+    override fun getOfflineEpisodes(): Flow<List<OfflineMediaItem>> =
+        offlineMediaDao.getDownloadedEpisodes().flatMapLatest { rows ->
+            rowsWithDownloadsAndArtwork(rows)
         }.distinctUntilChanged()
 
     /**
@@ -159,12 +161,7 @@ class OfflineRepositoryImpl @Inject constructor(
         // via cheap data-class copies.
         val baseItems = rows.map { it.toOfflineMediaItem() }
         val directDownloadsFlow: Flow<Map<String, DownloadEntity>> =
-            if (directIds.isEmpty()) {
-                flowOf(emptyMap())
-            } else {
-                downloadDao.getDownloadsByMediaItemIdsFlow(directIds)
-                    .map { it.associateBy { d -> d.mediaItemId } }
-            }
+            downloadsByItemIdsFlow(directIds)
         val seriesAggregatesFlow: Flow<Map<String, SeriesSizeAggregate>> =
             if (seriesIds.isEmpty()) {
                 flowOf(emptyMap())
@@ -194,6 +191,39 @@ class OfflineRepositoryImpl @Inject constructor(
             .flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
     }
 
+    /**
+     * Rows → items with downloads joined and local artwork resolved — the one
+     * shape behind every reactive offline browse flow (whole library, per-folder,
+     * episodes, children). The downloads lookup is chunked: SQLite on Android
+     * < 12 caps host variables at 999, and the episode paths can exceed that
+     * on long-running libraries.
+     */
+    private fun rowsWithDownloadsAndArtwork(
+        rows: List<OfflineMediaWithPlayback>,
+    ): Flow<List<OfflineMediaItem>> {
+        val baseItems = rows.map { it.toOfflineMediaItem() }
+        if (baseItems.isEmpty()) return flowOf(emptyList())
+        return downloadsByItemIdsFlow(baseItems.map { it.id })
+            .map { downloadMap -> baseItems.map { it.withDownload(downloadMap[it.id]) } }
+            .distinctUntilChanged()
+            .flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+    }
+
+    private fun downloadsByItemIdsFlow(ids: List<String>): Flow<Map<String, DownloadEntity>> =
+        if (ids.isEmpty()) {
+            flowOf(emptyMap())
+        } else {
+            combine(ids.chunked(MAX_SQLITE_HOST_VARIABLES).map { chunk ->
+                downloadDao.getDownloadsByMediaItemIdsFlow(chunk)
+                    .map { list -> list.associateBy { it.mediaItemId } }
+            }) { maps -> maps.reduce { acc, map -> acc + map } }
+        }
+
+    private suspend fun downloadsByItemIds(ids: List<String>): Map<String, DownloadEntity> =
+        ids.chunked(MAX_SQLITE_HOST_VARIABLES)
+            .flatMap { downloadDao.getDownloadsByMediaItemIds(it) }
+            .associateBy { it.mediaItemId }
+
     override fun getSeasonsForSeries(seriesId: String): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getSeasonsForSeries(seriesId).map { rows ->
             rows.map { it.toOfflineMediaItem() }
@@ -202,22 +232,13 @@ class OfflineRepositoryImpl @Inject constructor(
 
     override fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getEpisodesForSeason(seasonId).flatMapLatest { rows ->
-            val ids = rows.map { it.media.id }
-            if (ids.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyList())
-            else downloadDao.getDownloadsByMediaItemIdsFlow(ids).map { downloads ->
-                val downloadMap = downloads.associateBy { it.mediaItemId }
-                rows.map { row ->
-                    row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
-                }
-            }.distinctUntilChanged()
-                .flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+            rowsWithDownloadsAndArtwork(rows)
         }.distinctUntilChanged()
 
     override suspend fun getEpisodesForSeries(seriesId: String): List<OfflineMediaItem> {
         val rows = offlineMediaDao.getEpisodesForSeries(seriesId)
-        val ids = rows.map { it.media.id }
-        if (ids.isEmpty()) return emptyList()
-        val downloadMap = downloadDao.getDownloadsByMediaItemIds(ids).associateBy { it.mediaItemId }
+        if (rows.isEmpty()) return emptyList()
+        val downloadMap = downloadsByItemIds(rows.map { it.media.id })
         return resolveArtworkList(rows.map { row ->
             row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
         })

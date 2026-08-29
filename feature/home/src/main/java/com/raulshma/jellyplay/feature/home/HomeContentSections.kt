@@ -97,6 +97,12 @@ internal data class HomeContentState(
     val photoFolderChildUrls: Map<String, List<String>>,
     val offlineLibrary: List<OfflineMediaItem>,
     /**
+     * Downloaded episodes for the offline CW/Next Up rows' id→item re-resolution
+     * (the top-level [offlineLibrary] excludes episodes by design). Mirrors the
+     * same gate as [offlineLibrary]: empty while online.
+     */
+    val offlineEpisodes: List<OfflineMediaItem> = emptyList(),
+    /**
      * Non-blocking informational banner (e.g. the implicit-offline
      * "couldn't reach the server — showing your downloads" notice). Null hides it.
      */
@@ -223,13 +229,16 @@ internal fun HomeContentList(
         }
 
         // Single id→offline-item lookup shared by the offline hero's click
-        // routing and the DOWNLOADED section rows. (The screen only forwards
-        // offlineLibrary when the offline branch can render, so this is free
-        // while online.) It rebuilds on every library change — download-progress
-        // emissions included — so the hero's click lambda reads it through
-        // [currentOfflineById] to stay the same instance across those ticks.
-        val offlineById = remember(state.offlineLibrary) {
-            state.offlineLibrary.associateBy { it.id }
+        // routing and the DOWNLOADED section rows. Includes the downloaded
+        // episodes — the offline CW/Next Up rows are episode-backed and re-
+        // resolve their originals here for local artwork. (The screen only
+        // forwards the offline library when the offline branch can render, so
+        // this is free while online.) It rebuilds on every library change —
+        // download-progress emissions included — so the hero's click lambda
+        // reads it through [currentOfflineById] to stay the same instance
+        // across those ticks.
+        val offlineById = remember(state.offlineLibrary, state.offlineEpisodes) {
+            offlineItemsById(state.offlineLibrary, state.offlineEpisodes)
         }
         val currentOfflineById by rememberUpdatedState(offlineById)
 

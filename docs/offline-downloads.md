@@ -197,10 +197,28 @@ You can also toggle **Offline mode** manually from the home screen at any
 time — useful to force offline playback even when a flaky connection is
 available. While offline (manually, automatically on network loss, or when
 the server can't be reached), the home screen keeps its normal layout and
-shows rows derived from your downloads — Continue Watching, Recently
-Downloaded, Movies, Series, Music — served entirely from the on-device
-store. The hero follows the same rule: it features your downloaded movies
-and series with their locally saved artwork (the downloaded poster when no
+shows rows derived from your downloads — Continue Watching, Next Up,
+Recently Downloaded, Movies, Series, Music — served entirely from the
+on-device store:
+
+- **Continue Watching** lists every downloaded item (movies *and*
+  episodes) mid-watch — between 1% and 95% progress — most recently played
+  first. Episodes count even though the library grid only shows the series:
+  they come from their own episode index.
+- **Next Up** lists, for each downloaded series, the first not-yet-finished
+  downloaded episode in season/episode order, with the series you watched
+  most recently first (capped at 20). Strict chronology: an episode isn't
+  skipped past just because a later one is downloaded — the row follows the
+  same order you'd watch in. It reflects offline watching live: finish an
+  episode offline and the next one takes its place immediately.
+- Both rows honor your home-screen layout preferences (hide-from-
+  Continue-Watching, excluded Next Up series, disabled sections, and the
+  merge Continue Watching + Next Up toggle). Server-side Next Up tuning
+  (rewatching, day cutoffs) stays online-only.
+
+All rows are playable offline and tap through to the offline detail screen.
+The hero follows the same rule: it features your downloaded movies and
+series with their locally saved artwork (the downloaded poster when no
 backdrop was stored), and tapping it opens the offline detail screen. The
 music home never shows a hero, online or off. The library follows the same
 rule as the rows: its grid auto-filters to your downloads, exactly as if

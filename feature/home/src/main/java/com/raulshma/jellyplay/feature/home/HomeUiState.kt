@@ -32,6 +32,21 @@ data class HomeUiState(
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
     val offlineLibrary: List<OfflineMediaItem> = emptyList(),
     /**
+     * Downloaded episodes (playback state joined, local artwork resolved),
+     * collected under the same gate as [offlineLibrary]. Episodes are excluded
+     * from the library itself by design — the offline library browse shows
+     * series — so this is the offline home's only episode source, feeding the
+     * Continue Watching and Next Up rows via [buildOfflineHomeSections].
+     */
+    val offlineEpisodes: List<OfflineMediaItem> = emptyList(),
+    /**
+     * The CW/NextUp prefs the offline home rows must honor (enabled flags,
+     * hidden CW items, excluded Next Up series, CW+NextUp merge). Built from
+     * the same prefs snapshot that drives the online section query so the
+     * offline home never contradicts the user's online home layout.
+     */
+    val offlineSectionPrefs: OfflineHomeSectionPrefs = OfflineHomeSectionPrefs(),
+    /**
      * True while the offline-library collection gate is open but the first
      * emission hasn't landed — the implicit-offline fallback is still deciding
      * whether downloads exist. The home shows a loading state (and suppresses

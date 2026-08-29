@@ -96,8 +96,12 @@ data class OfflinePersonInfo(
  * a near-finished item can have a resume position of 95–99% with `played =
  * false`. Without this normalization the offline episode cards would show
  * "0m left" instead of "Watched".
+ *
+ * Public because every surface that partitions "in progress" vs "finished"
+ * (offline home Continue Watching / Next Up) must agree with the display
+ * normalization above — the threshold is one fact, owned here.
  */
-private const val OFFLINE_WATCHED_THRESHOLD = 0.95
+const val OFFLINE_WATCHED_THRESHOLD = 0.95
 
 /**
  * Adapts an [OfflineMediaItem] into a [MediaItem] so the shared online card

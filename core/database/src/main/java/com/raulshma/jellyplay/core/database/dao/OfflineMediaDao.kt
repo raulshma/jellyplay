@@ -85,6 +85,24 @@ interface OfflineMediaDao {
     )
     suspend fun getEpisodesForSeries(seriesId: String): List<OfflineMediaWithPlayback>
 
+    /**
+     * Every downloaded episode in one reactive query, with playback state
+     * joined — the data source behind the offline home's Continue Watching /
+     * Next Up rows (episodes are excluded from the top-level library queries
+     * by design, so this is the only whole-library episode source). Capped
+     * generously; a library past the cap drops whole trailing series from the
+     * offline rows rather than corrupting per-series episode order.
+     */
+    @Query(
+        """
+        SELECT * FROM offline_media_with_playback
+        WHERE mediaType = 'EPISODE'
+        ORDER BY seriesId ASC, seasonNumber ASC, episodeNumber ASC
+        LIMIT 2000
+        """
+    )
+    fun getDownloadedEpisodes(): Flow<List<OfflineMediaWithPlayback>>
+
     @Query(
         """
         SELECT * FROM offline_media_with_playback

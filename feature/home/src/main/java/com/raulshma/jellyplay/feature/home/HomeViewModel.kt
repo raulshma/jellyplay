@@ -435,6 +435,13 @@ class HomeViewModel @Inject constructor(
                     enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes,
                     homeSectionOrder = prefs.home.homeSectionOrder,
                     libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides,
+                    offlineSectionPrefs = OfflineHomeSectionPrefs(
+                        continueWatchingEnabled = HomeSectionType.CONTINUE_WATCHING in prefs.home.enabledHomeSectionTypes,
+                        nextUpEnabled = HomeSectionType.NEXT_UP in prefs.home.enabledHomeSectionTypes,
+                        hiddenCwItemIds = prefs.home.hiddenCwItemIds,
+                        nextUpExcludedSeriesIds = prefs.home.nextUpExcludedSeriesIds,
+                        mergeCwAndNextUp = prefs.home.mergeContinueWatchingAndNextUp,
+                    ),
                 ) }
 
                 if (homeSectionPrefsChanged) {
@@ -487,6 +494,30 @@ class HomeViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(offlineLibrary = emission.items, offlineFallbackPending = emission.pending)
                     }
+                }
+        }
+
+        // Downloaded episodes ride the SAME gate as the library above but are
+        // collected independently — they feed only the offline CW/Next Up rows
+        // via [buildOfflineHomeSections], so their (potentially large, artwork-
+        // resolving) emissions must not delay the library's pending→loaded
+        // transition. First emission while the gate is closed is empty.
+        @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+        launch {
+            combine(
+                offlineModeManager.offlineMode,
+                refresher.state.map { it.fetchFailedEmpty },
+            ) { mode, fetchFailedEmpty -> mode != OfflineMode.ONLINE || fetchFailedEmpty }
+                .distinctUntilChanged()
+                .flatMapLatest { collectEpisodes ->
+                    if (collectEpisodes) {
+                        offlineRepository.getOfflineEpisodes()
+                    } else {
+                        flowOf(emptyList())
+                    }
+                }
+                .collect { episodes ->
+                    _uiState.update { it.copy(offlineEpisodes = episodes) }
                 }
         }
 

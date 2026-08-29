@@ -266,6 +266,7 @@ class HomeViewModelTest {
         every { downloadRepository.getActiveDownloadCount() } returns flowOf(0)
         every { downloadRepository.observeCompletedDownloadedIds() } returns flowOf(emptySet())
         every { offlineRepository.getOfflineLibrary() } returns flowOf(emptyList())
+        every { offlineRepository.getOfflineEpisodes() } returns flowOf(emptyList())
         every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)
     }
 
@@ -733,13 +734,18 @@ class HomeViewModelTest {
         assertTrue(viewModel.uiState.value.offlineLibrary.isEmpty())
         assertFalse(viewModel.uiState.value.offlineFallbackPending)
         verify(exactly = 0) { offlineRepository.getOfflineLibrary() }
+        verify(exactly = 0) { offlineRepository.getOfflineEpisodes() }
         stopPeriodicRefresh()
     }
 
     @Test
     fun offlineLibraryCollection_onlineFetchFailure_collectsLibraryAndClearsPending() = runTest {
         val libraryFlow = MutableSharedFlow<List<OfflineMediaItem>>(extraBufferCapacity = 8)
+        // A completing cold flow (not a hot SharedFlow): combine waits for both
+        // upstreams, and a never-emitting hot episodes flow would stall it.
+        val episodes = listOf(OfflineMediaItem(id = "e1", name = "Ep", mediaType = MediaType.EPISODE))
         every { offlineRepository.getOfflineLibrary() } returns libraryFlow
+        every { offlineRepository.getOfflineEpisodes() } returns flowOf(episodes)
         coEvery {
             mediaRepository.getHomeSections(any())
         } returns Result.failure(RuntimeException("Connection timeout"))
@@ -758,6 +764,9 @@ class HomeViewModelTest {
         runCurrent()
 
         assertEquals(downloaded, viewModel.uiState.value.offlineLibrary)
+        // Downloaded episodes land in their own state slice for the offline
+        // CW / Next Up rows (the top-level library excludes episodes).
+        assertEquals(episodes, viewModel.uiState.value.offlineEpisodes)
         assertFalse(viewModel.uiState.value.offlineFallbackPending)
         stopPeriodicRefresh()
     }
