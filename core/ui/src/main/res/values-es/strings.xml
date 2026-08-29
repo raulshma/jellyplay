@@ -111,11 +111,6 @@
     <string name="core_ui_color_style_title">Estilo de color</string>
     <string name="core_ui_color_style_subtitle">Define el estilo visual de las paletas generadas</string>
     <string name="core_ui_dynamic_colors">Colores dinámicos del fondo de pantalla</string>
-    <string name="core_ui_synthwave_accent_title">Acento Synthwave</string>
-    <string name="core_ui_synthwave_accent_subtitle">Selecciona una muestra de color de acento neón personalizada</string>
-    <string name="core_ui_soothing_accent_title">Acento suave</string>
-    <string name="core_ui_soothing_accent_subtitle">Selecciona un color de acento relajante</string>
-
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Quitar</string>
     <string name="core_ui_play">Reproducir</string>
@@ -240,4 +235,6 @@
     <string name="transcode_reason_hint_decoder">Cambiar el decodificador a Software/FFmpeg podría solucionarlo.</string>
     <string name="transcode_reason_hint_quality">Sube el límite de calidad de streaming en el selector de calidad.</string>
     <string name="transcode_reason_hint_subtitle">Elige un subtítulo SRT/externo para evitar la incrustación.</string>
+    <string name="core_ui_variant_accent_title">Acento de %1$s</string>
+    <string name="core_ui_variant_accent_subtitle">Selecciona el color de acento para este estilo de tema</string>
 </resources>

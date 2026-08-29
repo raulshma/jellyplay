@@ -406,7 +406,7 @@ hosts the MPV/VLC/ExoPlayer engine, SyncPlay, casting and Live TV & DVR
 groups). Every item is a
 `SettingsSearchItem(id, titleRes, subtitleRes, categoryRes, keywords, route,
 icon, isAdvanced)`; `SettingsSearchCatalog` aggregates the per-screen lists
-in one curated flat order (259 items — the matcher's stable sort uses that
+in one curated flat order (256 items — the matcher's stable sort uses that
 order as the tiebreaker, so keep additions deliberate). The `ss_<id>_title`
 /`ss_<id>_subtitle` strings live in feature/settings' `strings.xml`; the 14
 `ss_cat_*` category strings stay in core/ui because both feature modules
@@ -441,7 +441,7 @@ persistence contract), the screen itself, and its items in the co-located
 one line in `SettingsSearchCatalog`). No core/ui edit, no new callback
 field. `SettingsSearchCatalogTest` (feature/settings, JVM-only — parses
 both modules' `strings.xml` from disk like the old matcher test did) pins
-id uniqueness, string resolvability and the 259-item aggregation;
+id uniqueness, string resolvability and the 256-item aggregation;
 `SettingsSearchMatcherTest` (core/ui) is synthetic and pins matching only.
 
 ## TV drawer and focus wiring

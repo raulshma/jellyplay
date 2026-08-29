@@ -51,16 +51,10 @@ class AppearanceSettingsViewModel @Inject constructor(
     fun setPerformanceMode(enabled: Boolean) = editor.setPerformanceMode(enabled)
     fun setColorStyle(style: ColorStyle) = editor.setColorStyle(style)
     fun setAccentColorSwatch(swatch: String) = editor.setAccentColorSwatch(swatch)
-    fun setSynthwaveMode(enabled: Boolean) =
-        editor.edit { appearance.setSynthwaveMode(enabled) }
-    fun setSynthwaveAccent(accent: String) =
-        editor.edit { appearance.setSynthwaveAccent(accent) }
-    fun setSoothingMode(enabled: Boolean) =
-        editor.edit { appearance.setSoothingMode(enabled) }
-    fun setSoothingAccent(accent: String) =
-        editor.edit { appearance.setSoothingAccent(accent) }
-    fun setMonochromeMode(enabled: Boolean) =
-        editor.edit { appearance.setMonochromeMode(enabled) }
+    fun setThemeVariant(variant: String) =
+        editor.edit { appearance.setThemeVariant(variant) }
+    fun setVariantAccent(variant: String, accent: String) =
+        editor.edit { appearance.setVariantAccent(variant, accent) }
     fun setBlueLightFilterEnabled(enabled: Boolean) =
         editor.edit { appearance.setBlueLightFilterEnabled(enabled) }
     fun setBlueLightFilterStrength(strength: Float) =

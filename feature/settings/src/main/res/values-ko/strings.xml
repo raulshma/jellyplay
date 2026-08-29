@@ -376,24 +376,12 @@
     <string name="settings_appearance_title">모양</string>
     <string name="settings_reset_defaults_cd">기본값으로 재설정</string>
     <string name="settings_theme">테마</string>
-    <string name="settings_synthwave_accent">신스웨이브 (%1$s)</string>
-    <string name="settings_soothing_accent">소딩 (%1$s)</string>
-    <string name="settings_monochrome_nothing">모노크롬 (Nothing Phone)</string>
     <string name="settings_artwork_dynamic">아트워크 동적</string>
     <string name="settings_theme_mode">테마 모드</string>
-    <string name="settings_overridden_synthwave">신스웨이브 모드로 재정의됨</string>
-    <string name="settings_overridden_soothing">소딩 모드로 재정의됨</string>
-    <string name="settings_overridden_monochrome">모노크롬 모드로 재정의됨</string>
     <string name="settings_theme_follow_system">시스템 설정 따르기</string>
     <string name="settings_theme_always_light">항상 밝게</string>
     <string name="settings_theme_always_dark">항상 어둡게</string>
     <string name="settings_theme_scheduled">자동 낮/밤 (%1$d:00\u2013%2$d:00)</string>
-    <string name="settings_synthwave_mode">신스웨이브 모드</string>
-    <string name="settings_synthwave_mode_subtitle">날카로운 모서리의 레트로 퓨처리즘 네온 테마 적용</string>
-    <string name="settings_soothing_mode">소딩 모드</string>
-    <string name="settings_soothing_mode_subtitle">부드러운 둥근 모서리의 차분하고 Facebook 스타일 테마 적용</string>
-    <string name="settings_monochrome_mode">모노크롬 모드</string>
-    <string name="settings_monochrome_mode_subtitle">Nothing OS에서 영감을 받은 엄격한 흑/백 테마 적용</string>
     <string name="settings_dynamic_theming">동적 테마</string>
     <string name="settings_dynamic_theming_subtitle">아트워크에서 추출한 색상</string>
     <string name="settings_oled_mode">OLED 모드</string>
@@ -1216,10 +1204,6 @@
     <string name="ss_theme_scheduler_subtitle">시간대에 따라 라이트 및 다크 테마를 자동으로 전환합니다</string>
     <string name="ss_theme_mode_title">테마 모드</string>
     <string name="ss_theme_mode_subtitle">시스템 설정, 라이트 모드 또는 다크 모드를 따릅니다</string>
-    <string name="ss_synthwave_mode_title">Synthwave 모드</string>
-    <string name="ss_synthwave_mode_subtitle">날카로운 모서리의 레트로 퓨처리즘 네온 테마입니다</string>
-    <string name="ss_soothing_mode_title">부드러운 모드</string>
-    <string name="ss_soothing_mode_subtitle">부드러운 스타일링과 둥근 모서리입니다</string>
     <string name="ss_dynamic_theming_title">동적 테마</string>
     <string name="ss_dynamic_theming_subtitle">재생 중인 미디어 아트워크에서 색상을 동적으로 추출합니다</string>
     <string name="ss_oled_mode_title">OLED 모드</string>
@@ -1274,8 +1258,6 @@
     <string name="ss_blue_light_filter_subtitle">야간 눈의 피로를 줄이기 위해 화면을 호박색으로 물들입니다</string>
     <string name="ss_blue_light_strength_title">블루라이트 필터 강도</string>
     <string name="ss_blue_light_strength_subtitle">호박색 오버레이의 강도입니다</string>
-    <string name="ss_monochrome_mode_title">모노크롬 모드</string>
-    <string name="ss_monochrome_mode_subtitle">Nothing OS에서 영감을 받은 엄격한 흑백 테마를 적용합니다</string>
     <string name="ss_hide_search_history_title">검색 기록 숨기기</string>
     <string name="ss_hide_search_history_subtitle">검색 화면에서 최근 검색 기록을 숨깁니다</string>
     <string name="ss_scheduled_start_title">테마 예약 시작</string>
@@ -1670,4 +1652,12 @@
     <string name="ss_subtitle_provider_settings_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
     <string name="ss_MEDIA_CARD_PEEK_title">길게 눌러 미리보기</string>
     <string name="ss_MEDIA_CARD_PEEK_subtitle">미디어 카드를 길게 눌러 흐려진 미리보기를 보고, 놓으면 닫기</string>
+    <string name="settings_theme_style">테마 스타일</string>
+    <string name="settings_theme_style_subtitle">전체 테마 룩 선택 — Standard, Synthwave, Soothing, Monochrome, Vivid, Aurora, Sakura, Vector Pop</string>
+    <string name="settings_style_summary">%1$s (%2$s)</string>
+    <string name="settings_overridden_variant">%1$s에 의해 재정의됨</string>
+    <string name="ss_theme_style_title">테마 스타일</string>
+    <string name="ss_theme_style_subtitle">테마 룩 선택: Standard, Synthwave, Soothing, Monochrome, Vivid, Aurora, Sakura, Vector Pop</string>
+    <string name="ss_style_accent_title">테마 스타일 강조색</string>
+    <string name="ss_style_accent_subtitle">활성 테마 스타일의 강조색</string>
 </resources>

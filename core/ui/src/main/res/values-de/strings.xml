@@ -111,11 +111,6 @@
     <string name="core_ui_color_style_title">Farbstil</string>
     <string name="core_ui_color_style_subtitle">Bestimmen Sie die visuelle Stimmung generierter Paletten</string>
     <string name="core_ui_dynamic_colors">Dynamische Hintergrundfarben</string>
-    <string name="core_ui_synthwave_accent_title">Synthwave-Akzent</string>
-    <string name="core_ui_synthwave_accent_subtitle">Benutzerdefinierte Neon-Akzentfarbe auswählen</string>
-    <string name="core_ui_soothing_accent_title">Sanfter Akzent</string>
-    <string name="core_ui_soothing_accent_subtitle">Beruhigende Akzentfarbe auswählen</string>
-
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Entfernen</string>
     <string name="core_ui_play">Wiedergeben</string>
@@ -241,4 +236,6 @@
     <string name="transcode_reason_hint_decoder">Den Dekoder auf Software/FFmpeg umzustellen könnte das beheben.</string>
     <string name="transcode_reason_hint_quality">Erhöhe das Streaming-Qualitätslimit in der Qualitätsauswahl.</string>
     <string name="transcode_reason_hint_subtitle">Wähle einen SRT-/externen Untertitel, um das Einbrennen zu vermeiden.</string>
+    <string name="core_ui_variant_accent_title">%1$s-Akzent</string>
+    <string name="core_ui_variant_accent_subtitle">Akzentfarbe für diesen Designstil auswählen</string>
 </resources>

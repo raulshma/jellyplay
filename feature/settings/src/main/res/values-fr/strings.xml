@@ -376,24 +376,12 @@
     <string name="settings_appearance_title">Apparence</string>
     <string name="settings_reset_defaults_cd">Réinitialiser aux valeurs par défaut</string>
     <string name="settings_theme">Thème</string>
-    <string name="settings_synthwave_accent">Synthwave (%1$s)</string>
-    <string name="settings_soothing_accent">Apaisant (%1$s)</string>
-    <string name="settings_monochrome_nothing">Monochrome (Nothing Phone)</string>
     <string name="settings_artwork_dynamic">Pochette dynamique</string>
     <string name="settings_theme_mode">Mode de thème</string>
-    <string name="settings_overridden_synthwave">Remplacé par le mode Synthwave</string>
-    <string name="settings_overridden_soothing">Remplacé par le mode Apaisant</string>
-    <string name="settings_overridden_monochrome">Remplacé par le mode Monochrome</string>
     <string name="settings_theme_follow_system">Suivre le paramètre système</string>
     <string name="settings_theme_always_light">Toujours clair</string>
     <string name="settings_theme_always_dark">Toujours sombre</string>
     <string name="settings_theme_scheduled">Auto jour/nuit (%1$d:00\u2013%2$d:00)</string>
-    <string name="settings_synthwave_mode">Mode Synthwave</string>
-    <string name="settings_synthwave_mode_subtitle">Appliquer un thème rétro-futuriste néon avec des angles marqués</string>
-    <string name="settings_soothing_mode">Mode Apaisant</string>
-    <string name="settings_soothing_mode_subtitle">Appliquer un thème calme inspiré de Facebook avec des coins arrondis doux</string>
-    <string name="settings_monochrome_mode">Mode Monochrome</string>
-    <string name="settings_monochrome_mode_subtitle">Appliquer un thème strict noir/blanc inspiré de Nothing OS</string>
     <string name="settings_dynamic_theming">Thématisation dynamique</string>
     <string name="settings_dynamic_theming_subtitle">Couleurs extraites des pochettes</string>
     <string name="settings_oled_mode">Mode OLED</string>
@@ -1218,10 +1206,6 @@
     <string name="ss_theme_scheduler_subtitle">Basculer automatiquement entre thème clair et sombre selon l\'heure</string>
     <string name="ss_theme_mode_title">Mode de thème</string>
     <string name="ss_theme_mode_subtitle">Suivre le réglage système, mode clair ou mode sombre</string>
-    <string name="ss_synthwave_mode_title">Mode Synthwave</string>
-    <string name="ss_synthwave_mode_subtitle">Thème néon rétro-futuriste aux coins anguleux</string>
-    <string name="ss_soothing_mode_title">Mode apaisant</string>
-    <string name="ss_soothing_mode_subtitle">Style doux inspiré de Facebook et coins arrondis</string>
     <string name="ss_dynamic_theming_title">Thème dynamique</string>
     <string name="ss_dynamic_theming_subtitle">Couleurs extraites dynamiquement de l\'illustration du média en cours</string>
     <string name="ss_oled_mode_title">Mode OLED</string>
@@ -1276,8 +1260,6 @@
     <string name="ss_blue_light_filter_subtitle">Teinter l\'écran en ambre pour réduire la fatigue oculaire la nuit</string>
     <string name="ss_blue_light_strength_title">Intensité du filtre lumière bleue</string>
     <string name="ss_blue_light_strength_subtitle">Intensité de la superposition ambre</string>
-    <string name="ss_monochrome_mode_title">Mode monochrome</string>
-    <string name="ss_monochrome_mode_subtitle">Appliquer un thème strict noir/blanc inspiré de Nothing OS</string>
     <string name="ss_hide_search_history_title">Masquer l\'historique de recherche</string>
     <string name="ss_hide_search_history_subtitle">Masquer l\'historique de recherche récent de l\'écran de recherche</string>
     <string name="ss_scheduled_start_title">Début planifié du thème</string>
@@ -1672,4 +1654,12 @@
     <string name="ss_subtitle_provider_settings_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
     <string name="ss_MEDIA_CARD_PEEK_title">Aperçu appui-maintien</string>
     <string name="ss_MEDIA_CARD_PEEK_subtitle">Appuyez longuement sur une carte média pour afficher un aperçu flou ; relâchez pour fermer</string>
+    <string name="settings_theme_style">Style de thème</string>
+    <string name="settings_theme_style_subtitle">Choisissez un look complet — Standard, Synthwave, Soothing, Monochrome, Vivid, Aurora, Sakura ou Vector Pop</string>
+    <string name="settings_style_summary">%1$s (%2$s)</string>
+    <string name="settings_overridden_variant">Remplacé par %1$s</string>
+    <string name="ss_theme_style_title">Style de thème</string>
+    <string name="ss_theme_style_subtitle">Choisissez un thème : Standard, Synthwave, Soothing, Monochrome, Vivid, Aurora, Sakura ou Vector Pop</string>
+    <string name="ss_style_accent_title">Accent du style de thème</string>
+    <string name="ss_style_accent_subtitle">Couleur d\'accent du style de thème actif</string>
 </resources>

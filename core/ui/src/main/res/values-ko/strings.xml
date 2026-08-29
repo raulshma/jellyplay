@@ -111,11 +111,6 @@
     <string name="core_ui_color_style_title">색상 스타일</string>
     <string name="core_ui_color_style_subtitle">생성된 팔레트의 시각적 분위기 정의</string>
     <string name="core_ui_dynamic_colors">동적 배경화면 색상</string>
-    <string name="core_ui_synthwave_accent_title">Synthwave 강조 색상</string>
-    <string name="core_ui_synthwave_accent_subtitle">사용자 지정 네온 강조 색상 견본 선택</string>
-    <string name="core_ui_soothing_accent_title">부드러운 강조 색상</string>
-    <string name="core_ui_soothing_accent_subtitle">차분한 강조 색상 선택</string>
-
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">제거</string>
     <string name="core_ui_play">재생</string>
@@ -240,4 +235,6 @@
     <string name="transcode_reason_hint_decoder">디코더를 Software/FFmpeg로 전환하면 해결될 수 있습니다.</string>
     <string name="transcode_reason_hint_quality">품질 선택에서 스트리밍 품질 한도를 높이세요.</string>
     <string name="transcode_reason_hint_subtitle">번인을 피하려면 SRT/외부 자막을 선택하세요.</string>
+    <string name="core_ui_variant_accent_title">%1$s 강조색</string>
+    <string name="core_ui_variant_accent_subtitle">이 테마 스타일의 강조색을 선택하세요</string>
 </resources>

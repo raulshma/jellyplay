@@ -107,39 +107,20 @@ internal val AppearanceSettingsSearchItems = listOf(
         icon = Tabler.Outline.Moon
     ),
     SettingsSearchItem(
-        id = "synthwave_mode",
-        titleRes = R.string.ss_synthwave_mode_title,
-        subtitleRes = R.string.ss_synthwave_mode_subtitle,
+        id = "theme_style",
+        titleRes = R.string.ss_theme_style_title,
+        subtitleRes = R.string.ss_theme_style_subtitle,
         categoryRes = com.raulshma.jellyplay.core.ui.R.string.ss_cat_appearance,
-        keywords = listOf("synthwave", "retro", "neon", "theme", "colors"),
+        keywords = listOf("theme", "style", "variant", "synthwave", "soothing", "monochrome", "vivid", "aurora", "sakura", "vector", "pop", "pastel", "neon", "retro", "look"),
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.Palette
     ),
     SettingsSearchItem(
-        id = "synthwave_accent",
-        titleRes = com.raulshma.jellyplay.core.ui.R.string.core_ui_synthwave_accent_title,
-        subtitleRes = com.raulshma.jellyplay.core.ui.R.string.core_ui_synthwave_accent_subtitle,
+        id = "style_accent",
+        titleRes = R.string.ss_style_accent_title,
+        subtitleRes = R.string.ss_style_accent_subtitle,
         categoryRes = com.raulshma.jellyplay.core.ui.R.string.ss_cat_appearance,
-        keywords = listOf("synthwave", "accent", "neon", "color", "swatch"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Palette,
-        isAdvanced = true
-    ),
-    SettingsSearchItem(
-        id = "soothing_mode",
-        titleRes = R.string.ss_soothing_mode_title,
-        subtitleRes = R.string.ss_soothing_mode_subtitle,
-        categoryRes = com.raulshma.jellyplay.core.ui.R.string.ss_cat_appearance,
-        keywords = listOf("soothing", "soft", "rounded", "calm", "theme"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Palette
-    ),
-    SettingsSearchItem(
-        id = "soothing_accent",
-        titleRes = com.raulshma.jellyplay.core.ui.R.string.core_ui_soothing_accent_title,
-        subtitleRes = com.raulshma.jellyplay.core.ui.R.string.core_ui_soothing_accent_subtitle,
-        categoryRes = com.raulshma.jellyplay.core.ui.R.string.ss_cat_appearance,
-        keywords = listOf("soothing", "accent", "color", "calm", "swatch"),
+        keywords = listOf("accent", "color", "swatch", "synthwave", "soothing", "vivid", "aurora", "sakura", "vector", "neon", "theme"),
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.Palette,
         isAdvanced = true
@@ -447,16 +428,6 @@ internal val AppearanceSettingsSearchItems = listOf(
         keywords = listOf("blue light", "strength", "amber", "intensity", "overlay"),
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.Adjustments,
-        isAdvanced = true
-    ),
-    SettingsSearchItem(
-        id = "monochrome_mode",
-        titleRes = R.string.ss_monochrome_mode_title,
-        subtitleRes = R.string.ss_monochrome_mode_subtitle,
-        categoryRes = com.raulshma.jellyplay.core.ui.R.string.ss_cat_appearance,
-        keywords = listOf("monochrome", "black", "white", "nothing", "grayscale", "minimal"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Palette,
         isAdvanced = true
     ),
     SettingsSearchItem(

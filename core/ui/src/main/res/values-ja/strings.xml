@@ -111,11 +111,6 @@
     <string name="core_ui_color_style_title">カラースタイル</string>
     <string name="core_ui_color_style_subtitle">生成されるパレットの視覚的な雰囲気を定義</string>
     <string name="core_ui_dynamic_colors">動的な壁紙の色</string>
-    <string name="core_ui_synthwave_accent_title">Synthwave アクセント</string>
-    <string name="core_ui_synthwave_accent_subtitle">カスタムネオンアクセントカラーを選択</string>
-    <string name="core_ui_soothing_accent_title">落ち着いたアクセント</string>
-    <string name="core_ui_soothing_accent_subtitle">穏やかなアクセントカラーを選択</string>
-
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">削除</string>
     <string name="core_ui_play">再生</string>
@@ -240,4 +235,6 @@
     <string name="transcode_reason_hint_decoder">デコーダーを Software/FFmpeg に切り替えると解決する場合があります。</string>
     <string name="transcode_reason_hint_quality">品質選択でストリーミング品質の上限を上げてください。</string>
     <string name="transcode_reason_hint_subtitle">焼き込みを避けるには SRT/外部字幕を選んでください。</string>
+    <string name="core_ui_variant_accent_title">%1$sアクセント</string>
+    <string name="core_ui_variant_accent_subtitle">このテーマスタイルのアクセントカラーを選択</string>
 </resources>

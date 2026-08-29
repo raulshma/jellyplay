@@ -49,7 +49,7 @@ If you self-host Jellyfin and want a truly native, beautiful, capable client —
 | 👯 **SyncPlay & Play On** | Real-time watch parties with speed/skip-to-sync correction and in-player chat, plus cast-to and control other Jellyfin sessions. |
 | 🛠️ **Server admin dashboard** | System health, active sessions, scheduled tasks, server logs, user stats, and stale-media cleanup — without leaving the app. |
 | 📺 **Live TV & DVR** | Browse live channels, an Electronic Program Guide, **delivery-method selection** (Auto / Direct Stream / Transcode), and manage DVR recordings. |
-| 🎨 **Fully customizable** | 4 themes (Standard, Synthwave, Soothing, Monochrome), OLED mode, **390+ settings**, 4 home-screen widgets, and a 10-step onboarding wizard. |
+| 🎨 **Fully customizable** | 8 themes (Standard, Synthwave, Soothing, Monochrome, Vivid, Aurora, Sakura, Vector Pop), OLED mode, **390+ settings**, 4 home-screen widgets, and a 10-step onboarding wizard. |
 
 <table align="center" cellpadding="0" cellspacing="0" style="border-collapse: collapse; border-spacing: 0;">
 	<tr>
@@ -385,7 +385,7 @@ Click any section to expand. The full feature list is preserved — collapsed on
 - Android TV screensaver (Daydream) with configurable slideshow and Ken Burns effect
 - PIN lock and biometric authentication (fingerprint/face) with auto-lock timer
 - Kids Mode with content filtering
-- **4 theme variants**: Standard (Material 3 dynamic), Synthwave (neon/retro), Soothing (GitHub-dark-inspired), and Monochrome (black-and-white)
+- **8 theme variants**: Standard (Material 3 dynamic), Synthwave (neon/retro), Soothing (GitHub-dark-inspired), Monochrome (black-and-white), Vivid (bold two-tone pop), Aurora (night-sky gradient, dark-only), Sakura (soft pastels), and Vector Pop (flat poster look with thick outlines)
 - 9 accent color swatches (Dynamic, Brand, Sapphire Blue, Emerald Green, Amethyst Purple, Rose Pink, Coral Orange, Amber Gold, Crimson Red)
 - 3 contrast levels (Default, Medium, High) with full light/dark variants
 - OLED mode for AMOLED displays
@@ -427,7 +427,7 @@ Click any section to expand. The full feature list is preserved — collapsed on
 - **SyncPlay**: progress reporting, auto-join, sync correction parameters
 - **Downloads**: connections preference, max cache size (with unlimited/0 option support)
 - **Storage**: offline media management, cache size, download location
-- **Visual**: dynamic theming, theme variant (Standard/Synthwave/Soothing/Monochrome), accent color, contrast level, OLED mode, streaming quality, performance mode, home backdrop
+- **Visual**: dynamic theming, theme variant (Standard/Synthwave/Soothing/Monochrome/Vivid/Aurora/Sakura/Vector Pop), accent color, contrast level, OLED mode, streaming quality, performance mode, home backdrop
 - **Navigation**: overflow menu visibility, tablet navigation-rail toggle, hide header on scroll
 - **Security**: PIN lock, biometric lock, auto-lock timer
 - **Privacy & Data**: clear cache/image cache/search history, sign out, factory reset
@@ -559,7 +559,7 @@ Two more workflows run alongside it:
 ```
 app/                     Main Android application module (deep links, widgets, Cast, PiP host activity, shortcuts)
 core/model/              Shared data models (91 model files)
-core/designsystem/       Shared theming (4 variants), colors, shapes, typography, motion
+core/designsystem/       Shared theming (8 variants), colors, shapes, typography, motion
 core/network/            Jellyfin API clients, Radarr/Sonarr (Arr) clients, Seerr client, TMDB, LRCLIB, Wyzie/OpenSubtitles, GitHub Releases, server discovery, address failover
 core/database/           Room database (17 DAOs), migration schemas
 core/datastore/          DataStore preferences (~391 settings), encrypted credentials

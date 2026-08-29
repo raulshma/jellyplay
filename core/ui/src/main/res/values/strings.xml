@@ -121,10 +121,8 @@
     <string name="core_ui_color_style_title">Color Style</string>
     <string name="core_ui_color_style_subtitle">Define the visual vibe of generated palettes</string>
     <string name="core_ui_dynamic_colors">Dynamic wallpaper colors</string>
-    <string name="core_ui_synthwave_accent_title">Synthwave Accent</string>
-    <string name="core_ui_synthwave_accent_subtitle">Select custom neon accent color swatch</string>
-    <string name="core_ui_soothing_accent_title">Soothing Accent</string>
-    <string name="core_ui_soothing_accent_subtitle">Select a calming accent color</string>
+    <string name="core_ui_variant_accent_title">%1$s Accent</string>
+    <string name="core_ui_variant_accent_subtitle">Select the accent color for this theme style</string>
 
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Remove</string>
