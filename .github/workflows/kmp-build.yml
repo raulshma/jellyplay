@@ -2,7 +2,9 @@ name: KMP Build
 
 # Shared-tree (KMP) verification: docs/kmp-migration-plan.md Phase 0.
 # Compiles every configured target of the shared/ tree on all three desktop
-# OSes and runs its common tests. Android app lanes are unaffected.
+# OSes and runs its common tests. The android-app job below covers the :app
+# module itself — its phone/tv unit tests (audit F5) and the phoneDebug APK
+# compose-resources guard (audit F1).
 
 on:
   push:
@@ -208,6 +210,45 @@ jobs:
         # PackagingIconAssetsTest suites, so it must run in CI, not just
         # locally.
         run: ./gradlew :apps:desktop:test --stacktrace
+
+  android-app:
+    # Wave 22c audit findings F1 + F5: the :app module previously ran in NO
+    # lane of this workflow — its unit tests existed only as local wave gates
+    # (F5), and the wave-21 P0 (AGP-9 KMP library modules shipping Res
+    # accessors with no backing .cvr assets — fixed by
+    # androidResources { enable = true } in every shared module) had no
+    # automated check because no gate ever opened the built APK (F1). The
+    # :app:verifyPhoneDebugComposeResources task closes that: it derives the
+    # resource-carrying shared modules and their locale sets from the source
+    # tree at execution time and asserts every assets/composeResources/
+    # <packageOfResClass>/ prefix carries a .cvr entry per locale in the
+    # built phoneDebug APK (wave-21 baseline: 216 = 24 modules x 9 locales).
+    # No explicit Android SDK setup is needed: hosted ubuntu runners ship the
+    # SDK (same reliance as release.yml and codeql.yml).
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+
+      - name: App unit tests (phone + tv debug)
+        # F5: run in CI, not just as local wave gates (wave-21 baseline:
+        # 94 phone / 98 tv tests).
+        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest --stacktrace
+
+      - name: Compose-resources APK guard (wave-21 P0 regression guard, F1)
+        # dependsOn assemblePhoneDebug — the guard opens the built APKs.
+        run: ./gradlew :app:verifyPhoneDebugComposeResources --stacktrace
 
   desktop-package:
     # Wave 10A release engineering: packaging dry-run per OS. Proves the

@@ -1,3 +1,5 @@
+import java.util.zip.ZipFile
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -129,6 +131,153 @@ aboutLibraries {
 
 // The exported asset regenerates on demand (./gradlew :app:exportLibraryDefinitions)
 // rather than on every preBuild — it only changes when the dependency graph does.
+
+// ---------------------------------------------------------------------------
+// Compose-resources APK guard (wave 22c, audit finding F1 — the wave-21 P0
+// made automatic). Wave 21's launch-blocking crash: the AGP-9 KMP library
+// plugin leaves android resources OFF by default, so a shared module can ship
+// generated `Res` accessor classes in the APK while its backing `.cvr` string
+// assets are silently missing (23 of 24 resource-carrying modules were in
+// exactly that state until c6da8ff8a added
+// `androidResources { enable = true }` across the tree). No compile gate can
+// see it — the accessors compile fine, the MissingResourceException only
+// fires on the first string read at runtime — so this task opens the BUILT
+// phoneDebug APK as a zip instead and asserts, for every resource-carrying
+// shared module, that its assets/composeResources/<packageOfResClass>/
+// directory exists with at least one .cvr entry per locale:
+//   * the module list is derived from the source tree at EXECUTION time
+//     (every shared/*/* module with a commonMain/composeResources directory)
+//     — deliberately not hardcoded, so a NEW resource-carrying module without
+//     the enable flag fails here, and a module that stops carrying resources
+//     drops out of scope by itself;
+//   * the per-module asset namespace is the module's compose
+//     `packageOfResClass` (parsed from its build.gradle.kts; fallback
+//     `<android namespace>.generated.resources`), which is exactly the
+//     directory name compose-resources creates under assets/composeResources/
+//     in the APK (verified against the real phoneDebug artifact, wave 21:
+//     e.g. shared/feature/home → com.raulshma.jellyplay.feature.home.
+//     generated.resources/values-de/strings.commonMain.cvr — note the legacy
+//     import paths, NOT the kotlin.android namespace);
+//   * the locale set derives from the module's values/values-xx directory
+//     names (today 9 per module: values, -de, -es, -fr, -it, -ja, -ko, -pt,
+//     -zh) and the derivation reproduces the wave-21 measured baseline of
+//     216 .cvr entries = 24 modules × 9 locales.
+// Always re-runs (the zip scan is cheap): a cached "PASS" would defeat the
+// point of a guard. TV flavor ships the same merged assets graph; the phone
+// artifact is the guard's assertion surface.
+// ---------------------------------------------------------------------------
+abstract class VerifyPhoneDebugComposeResourcesTask : DefaultTask() {
+    /** Directory :app:assemblePhoneDebug writes the per-ABI split APKs into. */
+    @get:Internal
+    abstract val apkDir: DirectoryProperty
+
+    /** Repo root — the shared/ source tree is scanned at execution time. */
+    @get:Internal
+    abstract val repoRoot: DirectoryProperty
+
+    @TaskAction
+    fun verify() {
+        val root = repoRoot.get().asFile
+        val sharedRoot = root.resolve("shared")
+        if (!sharedRoot.isDirectory) {
+            throw GradleException("verifyPhoneDebugComposeResources: shared/ tree not found under $root")
+        }
+
+        // 1. Expected modules + locale sets, derived NOW from the source tree.
+        //    (module path, asset namespace, locale dir names)
+        val expected = mutableListOf<Triple<String, String, List<String>>>()
+        for (group in sharedRoot.listFiles { f -> f.isDirectory }.orEmpty()) {
+            for (module in group.listFiles { f -> f.isDirectory }.orEmpty()) {
+                val resRoot = module.resolve("src/commonMain/composeResources")
+                if (!resRoot.isDirectory) continue
+                val script = module.resolve("build.gradle.kts").readText()
+                val namespace = Regex("""packageOfResClass\s*=\s*"([^"]+)"""").find(script)?.groupValues?.get(1)
+                    ?: Regex("""namespace\s*=\s*"([^"]+)"""").find(script)?.groupValues?.get(1)
+                        ?.plus(".generated.resources")
+                    ?: throw GradleException(
+                        "verifyPhoneDebugComposeResources: shared/${group.name}/${module.name} carries " +
+                            "composeResources but its build.gradle.kts declares neither packageOfResClass " +
+                            "nor namespace — cannot derive its assets/composeResources/ directory"
+                    )
+                val localeDirs = resRoot
+                    .listFiles { f -> f.isDirectory && (f.name == "values" || f.name.startsWith("values-")) }
+                    .orEmpty().map { it.name }.sorted()
+                expected.add(Triple("shared/${group.name}/${module.name}", namespace, localeDirs))
+            }
+        }
+        expected.sortBy { it.first }
+        if (expected.isEmpty()) {
+            throw GradleException(
+                "verifyPhoneDebugComposeResources: no shared/*/* module carries " +
+                    "commonMain/composeResources — guard input vanished?"
+            )
+        }
+
+        // 2. The built APKs (per-ABI splits carry identical assets — check all).
+        val apkDirFile = apkDir.get().asFile
+        val apks = apkDirFile.listFiles { f -> f.isFile && f.name.endsWith(".apk") }.orEmpty()
+        if (apks.isEmpty()) {
+            throw GradleException(
+                "verifyPhoneDebugComposeResources: no APK found in $apkDirFile — " +
+                    "run :app:assemblePhoneDebug first"
+            )
+        }
+
+        val localePairs = expected.sumOf { it.third.size }
+        logger.lifecycle(
+            "verifyPhoneDebugComposeResources: ${expected.size} resource-carrying shared modules, " +
+                "$localePairs expected module/locale pairs (wave-21 baseline: 24 modules x 9 locales = 216)"
+        )
+
+        // 3. Assert every (module, locale) pair has a .cvr asset in every APK.
+        val failures = mutableListOf<String>()
+        for (apk in apks) {
+            val entries = ZipFile(apk).use { zip ->
+                zip.entries().toList().map { it.name }
+            }
+            for ((modulePath, namespace, localeDirs) in expected) {
+                val prefix = "assets/composeResources/$namespace/"
+                val moduleEntries = entries.filter { it.startsWith(prefix) }
+                if (moduleEntries.isEmpty()) {
+                    failures += "${apk.name}: $modulePath — $prefix missing entirely " +
+                        "(androidResources { enable = true } absent or copyAndroidMainComposeResourcesToAndroidAssets never ran?)"
+                    continue
+                }
+                for (localeDir in localeDirs) {
+                    val hasCvr = moduleEntries.any {
+                        it.startsWith("$prefix$localeDir/") && it.endsWith(".cvr")
+                    }
+                    if (!hasCvr) {
+                        failures += "${apk.name}: $modulePath — no .cvr asset under $prefix$localeDir/ " +
+                            "(locale '${localeDir.removePrefix("values-").ifEmpty { "base" }}' not packaged)"
+                    }
+                }
+            }
+        }
+
+        // 4. Fail loudly, naming the first missing module/locale (then all of them).
+        if (failures.isNotEmpty()) {
+            throw GradleException(
+                "verifyPhoneDebugComposeResources FAILED — first missing module/locale:\n  ${failures.first()}\n" +
+                    "  all ${failures.size} gap(s):\n  " + failures.joinToString("\n  ")
+            )
+        }
+        logger.lifecycle(
+            "verifyPhoneDebugComposeResources: OK — every expected .cvr asset is packaged " +
+                "in ${apks.size} phoneDebug APK(s)"
+        )
+    }
+}
+
+val verifyPhoneDebugComposeResources = tasks.register<VerifyPhoneDebugComposeResourcesTask>("verifyPhoneDebugComposeResources") {
+    group = "verification"
+    description = "Wave-21 P0 guard (audit F1): asserts the phoneDebug APK packages every " +
+        "resource-carrying shared module's compose-resources .cvr assets for every locale."
+    dependsOn("assemblePhoneDebug")
+    apkDir.set(layout.buildDirectory.dir("outputs/apk/phone/debug"))
+    repoRoot.set(rootProject.layout.projectDirectory)
+    outputs.upToDateWhen { false }
+}
 
 // Baseline Profile consumers. The androidx.baselineprofile 1.5.x plugin
 // resolves producers per variant: dependencies are the merge of the `main`,
