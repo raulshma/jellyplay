@@ -81,6 +81,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
+import com.raulshma.jellyplay.core.datastore.settings.mergeWith
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineSlice
@@ -361,7 +362,7 @@ class UserPreferencesStore @Inject constructor(
         decodeOrNull(slices, BackupSliceKey.SUBTITLE, SubtitleSlice.serializer(), json)?.let { subtitleLanguageStore.restore(it) }
         decodeOrNull(slices, BackupSliceKey.SYNC_PLAY_CAST, SyncPlayCastSlice.serializer(), json)?.let { syncPlayCastStore.restore(it) }
         decodeOrNull(slices, BackupSliceKey.EXPERIMENTAL, ExperimentalSlice.serializer(), json)?.let { experimentalStore.restore(it) }
-        appRuntimeStateStore.restore(backup.extras)
+        appRuntimeStateStore.restore(backup.extras, clearNullIds = true)
     }
 
     private fun <T> encodeSliceElement(slice: T, serializer: kotlinx.serialization.KSerializer<T>): kotlinx.serialization.json.JsonElement =
@@ -375,6 +376,133 @@ class UserPreferencesStore @Inject constructor(
     ): T? {
         val element = slices[key] ?: return null
         return runCatching { json.decodeFromJsonElement(serializer, element) }.getOrNull()
+    }
+
+    /**
+     * Per-category import support. Maps each [PreferenceResetCategory] to the
+     * set of [BackupSliceKey]s that carry its fields. Used only to decide
+     * *which* slices to touch; the actual per-category write for co-owned
+     * slices is field-level via `SliceCategoryMergers` (so `AUDIO` + `PLAYBACK`
+     * sharing `AudioSlice.audioDelayMs` no longer bleeds). Keeping the map
+     * here (not in `feature:settings`'s presentation registry) avoids a
+     * `core:datastore → feature:settings` dependency cycle — the registry
+     * already lives in `feature:settings`, but the store must know the slice
+     * keys without depending on UI.
+     *
+     * Extras (`AppRuntimeState`) are handled orthogonally — they have no
+     * `PreferenceResetCategory` and are imported as part of `restoreV2` all or
+     * via the synthetic `APP_RUNTIME` card.
+     */
+    fun slicesForCategory(category: PreferenceResetCategory): Set<String> = when (category) {
+        PreferenceResetCategory.APPEARANCE -> setOf(BackupSliceKey.APPEARANCE)
+        PreferenceResetCategory.PLAYBACK -> setOf(BackupSliceKey.PLAYBACK, BackupSliceKey.VIDEO_PLAYER, BackupSliceKey.AUDIO)
+        PreferenceResetCategory.AUDIO -> setOf(BackupSliceKey.AUDIO, BackupSliceKey.AUDIO_EFFECTS)
+        PreferenceResetCategory.SUBTITLES_LANGUAGE -> setOf(BackupSliceKey.SUBTITLE, BackupSliceKey.PLAYBACK)
+        PreferenceResetCategory.DOWNLOADS_NETWORK -> setOf(BackupSliceKey.DOWNLOADS, BackupSliceKey.NETWORK_OFFLINE)
+        PreferenceResetCategory.HOME_DISCOVERY -> setOf(BackupSliceKey.HOME_DISCOVERY, BackupSliceKey.LIBRARY, BackupSliceKey.NAVIGATION)
+        PreferenceResetCategory.AUDIO_CACHE -> setOf(BackupSliceKey.AUDIO_CACHE)
+        PreferenceResetCategory.SECURITY -> setOf(BackupSliceKey.SECURITY)
+        PreferenceResetCategory.NOTIFICATIONS -> setOf(BackupSliceKey.NOTIFICATION)
+        PreferenceResetCategory.SCREENSAVER -> setOf(BackupSliceKey.SCREENSAVER)
+        PreferenceResetCategory.NEWSLETTER -> setOf(BackupSliceKey.NOTIFICATION)
+        PreferenceResetCategory.SYNCPLAY_CASTING -> setOf(BackupSliceKey.SYNC_PLAY_CAST)
+        PreferenceResetCategory.PLAYER_ENGINES -> setOf(BackupSliceKey.PLAYER_ENGINE)
+        PreferenceResetCategory.EXPERIMENTAL -> setOf(BackupSliceKey.EXPERIMENTAL)
+        PreferenceResetCategory.MISC_APP -> setOf(BackupSliceKey.APPEARANCE, BackupSliceKey.PLAYBACK, BackupSliceKey.SUBTITLE, BackupSliceKey.EXPERIMENTAL)
+    }
+
+    /**
+     * Restores only the slices that belong to [categories] with **field-level**
+     * merging for co-owned slices. The previous wholesale per-slice replacement
+     * bled across categories that share a slice (e.g. `AUDIO` + `PLAYBACK` both
+     * touch `AudioSlice.audioDelayMs`). Each shared slice now merges via
+     * `SliceCategoryMergers` so importing `PLAYBACK` does not silently overwrite
+     * `AUDIO` fields and vice-versa. Exclusive slices are still wholesale-
+     * restored when their single owning category is selected.
+     *
+     * Extras are written only when [includeExtras] is true (Import All).
+     */
+    suspend fun restoreV2Categories(
+        backup: SettingsBackup,
+        categories: Set<PreferenceResetCategory>,
+        restoreSecuritySensitive: Boolean = true,
+        includeExtras: Boolean = false,
+    ) {
+        if (categories.isEmpty() && !includeExtras) return
+        val json = PreferencesJson.import
+        val slices = backup.slices
+        val allowed = categories.flatMapTo(mutableSetOf()) { slicesForCategory(it) }
+
+        // Shared slices — field-level merge so per-category import does not bleed.
+        if (BackupSliceKey.APPEARANCE in allowed) {
+            decodeOrNull(slices, BackupSliceKey.APPEARANCE, AppearanceSlice.serializer(), json)?.let { incoming ->
+                val current = appearanceStore.appearance.first()
+                val merged = current.mergeWith(incoming, categories)
+                if (merged != current) appearanceStore.restore(merged)
+            }
+        }
+        if (BackupSliceKey.PLAYBACK in allowed) {
+            decodeOrNull(slices, BackupSliceKey.PLAYBACK, PlaybackSlice.serializer(), json)?.let { incoming ->
+                val current = playbackStore.playback.first()
+                val merged = current.mergeWith(incoming, categories)
+                if (merged != current) playbackStore.restore(merged)
+            }
+        }
+        if (BackupSliceKey.AUDIO in allowed) {
+            decodeOrNull(slices, BackupSliceKey.AUDIO, AudioSlice.serializer(), json)?.let { incoming ->
+                val current = audioStore.audio.first()
+                val merged = current.mergeWith(incoming, categories)
+                if (merged != current) audioStore.restore(merged)
+            }
+        }
+        if (BackupSliceKey.NOTIFICATION in allowed) {
+            decodeOrNull(slices, BackupSliceKey.NOTIFICATION, NotificationSlice.serializer(), json)?.let { incoming ->
+                val current = notificationStore.notification.first()
+                val merged = current.mergeWith(incoming, categories)
+                if (merged != current) notificationStore.restore(merged)
+            }
+        }
+        if (BackupSliceKey.EXPERIMENTAL in allowed) {
+            decodeOrNull(slices, BackupSliceKey.EXPERIMENTAL, ExperimentalSlice.serializer(), json)?.let { incoming ->
+                val current = experimentalStore.experimental.first()
+                val merged = current.mergeWith(incoming, categories)
+                if (merged != current) experimentalStore.restore(merged)
+            }
+        }
+        if (BackupSliceKey.SUBTITLE in allowed) {
+            decodeOrNull(slices, BackupSliceKey.SUBTITLE, SubtitleSlice.serializer(), json)?.let { incoming ->
+                val current = subtitleLanguageStore.subtitle.first()
+                val merged = current.mergeWith(incoming, categories)
+                if (merged != current) subtitleLanguageStore.restore(merged)
+            }
+        }
+        // Exclusive slices — wholesale restore when their category was requested.
+        if (BackupSliceKey.VIDEO_PLAYER in allowed) decodeOrNull(slices, BackupSliceKey.VIDEO_PLAYER, VideoPlayerSlice.serializer(), json)?.let { videoPlayerStore.restore(it) }
+        if (BackupSliceKey.DOWNLOADS in allowed) decodeOrNull(slices, BackupSliceKey.DOWNLOADS, DownloadsSlice.serializer(), json)?.let { downloadsStore.restore(it) }
+        if (BackupSliceKey.PLAYER_ENGINE in allowed) decodeOrNull(slices, BackupSliceKey.PLAYER_ENGINE, PlayerEngineSlice.serializer(), json)?.let { engineStore.restore(it) }
+        if (BackupSliceKey.HOME_DISCOVERY in allowed) decodeOrNull(slices, BackupSliceKey.HOME_DISCOVERY, HomeDiscoverySlice.serializer(), json)?.let { homeDiscoveryStore.restore(it) }
+        if (BackupSliceKey.AUDIO_EFFECTS in allowed) decodeOrNull(slices, BackupSliceKey.AUDIO_EFFECTS, AudioEffectsSlice.serializer(), json)?.let { audioEffectsStore.restore(it) }
+        if (BackupSliceKey.AUDIO_CACHE in allowed) decodeOrNull(slices, BackupSliceKey.AUDIO_CACHE, AudioCacheSlice.serializer(), json)?.let { audioCacheStore.restore(it) }
+        if (BackupSliceKey.LIBRARY in allowed) decodeOrNull(slices, BackupSliceKey.LIBRARY, LibrarySlice.serializer(), json)?.let { libraryStore.restore(it) }
+        if (BackupSliceKey.NAVIGATION in allowed) decodeOrNull(slices, BackupSliceKey.NAVIGATION, NavigationSlice.serializer(), json)?.let { navigationStore.restore(it) }
+        if (BackupSliceKey.NETWORK_OFFLINE in allowed) decodeOrNull(slices, BackupSliceKey.NETWORK_OFFLINE, NetworkOfflineSlice.serializer(), json)?.let { networkOfflineStore.restore(it) }
+        if (BackupSliceKey.SCREENSAVER in allowed) decodeOrNull(slices, BackupSliceKey.SCREENSAVER, ScreensaverSlice.serializer(), json)?.let { screensaverStore.restore(it) }
+        if (BackupSliceKey.SECURITY in allowed) {
+            decodeOrNull(slices, BackupSliceKey.SECURITY, SecuritySlice.serializer(), json)?.let { slice ->
+                securityStore.restore(slice)
+                if (restoreSecuritySensitive) securityStore.restoreSecuritySensitive(slice)
+            }
+        }
+        if (BackupSliceKey.SYNC_PLAY_CAST in allowed) decodeOrNull(slices, BackupSliceKey.SYNC_PLAY_CAST, SyncPlayCastSlice.serializer(), json)?.let { syncPlayCastStore.restore(it) }
+        if (includeExtras) appRuntimeStateStore.restore(backup.extras, clearNullIds = true)
+    }
+
+    /**
+     * Synthetic helper for the import-preview "App State" card (extras).
+     * Not a `PreferenceResetCategory` — factory reset never shows it.
+     */
+    suspend fun restoreExtras(backup: SettingsBackup) {
+        appRuntimeStateStore.restore(backup.extras, clearNullIds = true)
     }
 
     suspend fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {

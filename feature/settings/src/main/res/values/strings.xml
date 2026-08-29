@@ -308,6 +308,25 @@
     <string name="factory_reset_cat_player_engines">Player Engines</string>
     <string name="factory_reset_cat_experimental">Experimental</string>
     <string name="factory_reset_cat_misc_app">Miscellaneous</string>
+    <string name="factory_reset_cat_app_state">App State</string>
+
+    <!-- ImportPreviewScreen.kt -->
+    <string name="settings_import_preview_title">Import Preview</string>
+    <string name="settings_import_preview_loading">Loading backup…</string>
+    <string name="settings_import_preview_error">Could not read backup file</string>
+    <string name="settings_import_preview_summary_card">%1$d of %2$d settings will change</string>
+    <string name="settings_import_preview_import_all">Import All</string>
+    <string name="settings_import_preview_import_category">Import Category</string>
+    <string name="settings_import_preview_security_option">Also restore PIN / biometric lock</string>
+    <string name="settings_import_preview_legacy_warning">This is a legacy backup (older app version). Settings will be migrated where possible.</string>
+    <string name="settings_import_preview_version_warning">Backup was exported from a newer app version (%1$d). Some settings may be ignored.</string>
+    <string name="settings_import_preview_confirm">Import</string>
+    <string name="settings_import_preview_confirm_all_title">Import All Settings?</string>
+    <string name="settings_import_preview_confirm_all_message">This will overwrite all current settings with the values from the backup. This cannot be undone.</string>
+    <string name="settings_import_preview_confirm_category_title">Import This Category?</string>
+    <string name="settings_import_preview_confirm_category_message">Only the settings in this category will be overwritten from the backup.</string>
+    <string name="settings_import_preview_confirm_extras_title">Import App State?</string>
+    <string name="settings_import_preview_confirm_extras_message">This will overwrite favorite channels, last channel, Watch Later playlist and onboarding state from the backup.</string>
 
     <!-- ActiveDevicesRow.kt -->
     <string name="settings_active_devices">Active Devices</string>

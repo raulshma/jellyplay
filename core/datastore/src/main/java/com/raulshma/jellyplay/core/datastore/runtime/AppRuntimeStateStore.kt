@@ -132,13 +132,36 @@ class AppRuntimeStateStore @Inject constructor(
      * Faithful inverse of [state]'s projection: writes every field of [slice]
      * back to the DataStore using the same encoding as the legacy facade
      * setters. Nullable ids are skipped on `null` (matching the legacy
-     * `?.let` behaviour) rather than removed.
+     * Restores a snapshot. Nullable ids (`liveTvLastChannelId`,
+     * `watchLaterPlaylistId`) are *preserved* when the slice carries `null`
+     * (matches the legacy `?.let` / existing test
+     * `restore(slice) with null ids leaves any prior id untouched`). For a
+     * full backup restore that must clear stale ids, call [restoreForBackup]
+     * with `clearNullIds = true`.
      */
     suspend fun restore(slice: AppRuntimeState) {
+        restore(slice, clearNullIds = false)
+    }
+
+    /**
+     * Full-restore variant used by backup import's "Everything" path.
+     * When [clearNullIds] is true, a `null` id explicitly removes the key so
+     * importing a backup with `null` does not leave a stale prior value
+     * (review finding: stale-clear bug).
+     */
+    suspend fun restore(slice: AppRuntimeState, clearNullIds: Boolean) {
         dataStore.edit { prefs ->
             prefs[Keys.FAVORITE_CHANNELS] = json.encodeToString(slice.favoriteChannels)
-            slice.liveTvLastChannelId?.let { prefs[Keys.LIVE_TV_LAST_CHANNEL_ID] = it }
-            slice.watchLaterPlaylistId?.let { prefs[Keys.WATCH_LATER_PLAYLIST_ID] = it }
+            if (slice.liveTvLastChannelId != null) {
+                prefs[Keys.LIVE_TV_LAST_CHANNEL_ID] = slice.liveTvLastChannelId
+            } else if (clearNullIds) {
+                prefs.remove(Keys.LIVE_TV_LAST_CHANNEL_ID)
+            }
+            if (slice.watchLaterPlaylistId != null) {
+                prefs[Keys.WATCH_LATER_PLAYLIST_ID] = slice.watchLaterPlaylistId
+            } else if (clearNullIds) {
+                prefs.remove(Keys.WATCH_LATER_PLAYLIST_ID)
+            }
             prefs[Keys.ONBOARDING_COMPLETED] = slice.onboardingCompleted
             prefs[Keys.RECENT_DLNA_DEVICES] = json.encodeToString(slice.recentDlnaDevices)
         }

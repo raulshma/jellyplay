@@ -335,6 +335,15 @@ sealed class Route : NavKey {
     }
 
     /**
+     * Import preview screen. Shows a before/after diff of every setting from
+     * the selected backup file (current vs incoming) with per-category and
+     * import-all actions. Reached from [BackupSettings] after a file is picked.
+     *
+     * @param uri the `Uri` of the picked backup file, as an encoded string.
+     */
+    @Serializable data class ImportPreview(val uri: String) : Route()
+
+    /**
      * Integrations hub — top-level list of every third-party service JellyPlay
      * talks to (Seerr, Radarr/Sonarr). Each entry drills into its own screen
      * ([SeerrSettings] / [ArrSettings]).

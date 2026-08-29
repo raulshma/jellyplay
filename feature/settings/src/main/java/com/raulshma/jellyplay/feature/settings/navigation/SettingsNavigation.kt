@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.settings.AboutScreen
 import com.raulshma.jellyplay.feature.settings.ArrSettingsScreen
+import com.raulshma.jellyplay.feature.settings.ImportPreviewScreen
 import com.raulshma.jellyplay.feature.settings.SubtitleProviderSettingsScreen
 import com.raulshma.jellyplay.feature.settings.AppearanceSettingsScreen
 import com.raulshma.jellyplay.feature.settings.AudioSettingsScreen
@@ -170,6 +171,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
         BackupSettingsScreen(
             onBack = { navigator.goBack() },
             onFactoryReset = { navigator.navigate(Route.FactoryReset()) },
+            onImportPreview = { uri -> navigator.navigate(Route.ImportPreview(uri)) },
             highlightSettingId = entry.highlightSettingId,
         )
     }
@@ -178,6 +180,13 @@ fun EntryProviderScope<NavKey>.settingsSection(
         FactoryResetScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.ImportPreview> { entry ->
+        ImportPreviewScreen(
+            onBack = { navigator.goBack() },
+            uri = entry.uri,
         )
     }
 
