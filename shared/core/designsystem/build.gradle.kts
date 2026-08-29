@@ -8,8 +8,10 @@ plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.kotlin.compose)
-    // compose-resources infrastructure (Res accessors + font packaging) for
-    // the bundled brand fonts; same setup as shared/feature/* modules.
+    // compose-resources infrastructure (Res accessors + per-target resource
+    // packaging) for the bundled brand fonts, which live in the jvmMain and
+    // wasmJsMain composeResources dirs ONLY — deliberately not commonMain, so
+    // the Android APK (whose actual resolves fonts via GMS) ships none of them.
     alias(libs.plugins.compose.multiplatform)
 }
 
