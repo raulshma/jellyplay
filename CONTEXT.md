@@ -417,7 +417,7 @@ groups). Every item is a
 icon, isAdvanced)` (the `*Res` fields are Compose `StringResource`s since the
 KMP move — locale resolves lazily at render/match time); `SettingsSearchCatalog`
 aggregates the per-screen lists
-in one curated flat order (259 items — the matcher's stable sort uses that
+in one curated flat order (260 items — the matcher's stable sort uses that
 order as the tiebreaker, so keep additions deliberate). The `ss_<id>_title`
 /`ss_<id>_subtitle` strings live in feature/settings' Compose resources; the 14
 `ss_cat_*` category strings stay in shared/core/ui because both feature modules

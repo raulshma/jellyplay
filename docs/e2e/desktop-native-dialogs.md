@@ -106,8 +106,10 @@ is what the lane gates.
 
 Each item: exact steps on desktop → the observable that counts. The dialog
 mechanics themselves (open/type/Enter/cancel) are **indirectly evidenced**
-for every item by the automated lane, because all flows call the same
-`pickAwtFile` helper with the same modal shape; what remains manual is the
+for the FileDialog flows (items 1–4 and 6) by the automated lane, because
+they all call the same `pickAwtFile` helper with the same modal shape —
+item 5 (heatmap share) goes through `Desktop.open` instead and has no
+automated dialog evidence; what remains manual for every item is the
 per-flow click wiring and the flow-specific post-condition.
 
 1. **Settings backup export — row wiring.** Sign in → Settings rail tab →

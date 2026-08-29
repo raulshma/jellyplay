@@ -19,8 +19,9 @@ import kotlin.concurrent.Volatile
  * resource file and, on Android, inflates a DEFLATE-compressed APK asset
  * from byte 0 to the entry offset. Settings carries the app's largest table
  * (1,583 entries; 105-137 KB per locale), and its search surfaces resolve
- * the entire catalog (260 items × title/subtitle/category = 780 entries) on
- * first use: cold, that is seconds of blocking reads — the filed
+ * the entire catalog (260 items × title/subtitle/category = 780 reads over
+ * 534 distinct entries — the 14 category strings are shared) on first use:
+ * cold, that is seconds of blocking reads — the filed
  * settings-open ANR (docs/e2e/device-locale-pass.md). Warming at app start
  * turns every later read — first composition of the settings screen
  * included — into a runtime-cache hit; the residual cold path is the

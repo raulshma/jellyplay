@@ -9,7 +9,8 @@ import java.io.File
 /**
  * Ratchet against reintroducing the settings-open ANR
  * (docs/e2e/device-locale-pass.md): the whole-catalog compose-resources
- * resolve — one blocking read per entry when cold, 780 entries today — must
+ * resolve — one blocking read per entry when cold, 780 reads over 534
+ * distinct entries today — must
  * stay confined to the sanctioned off-main homes:
  *
  *  - [SettingsSearchCatalog.resolved] / [recentItems] (the Dispatchers.Default
@@ -107,5 +108,30 @@ class SettingsMainThreadCatalogResolveGuardTest {
                     ". Route callers through SettingsSearchCatalog.resolved()/recentItems() instead.",
             )
         }
+    }
+
+    @Test
+    fun `prewarm stays eager at Koin registration`() {
+        // The warm pass is the cold-latency half of the ANR fix; flipping
+        // createdAtStart to false (or dropping the warm() kick) would keep
+        // every other test green while silently disabling it.
+        val candidates = mainSources().filter { it.name == "SettingsKoinModule.kt" }
+        assertTrue(candidates.isNotEmpty(), "SettingsKoinModule.kt not found in main sources")
+        val moduleFile = candidates.singleOrNull()
+            ?: fail("expected exactly one SettingsKoinModule.kt, found ${candidates.size}")
+        val lines = moduleFile.readText(Charsets.UTF_8).stripComments().lines()
+        val registrationLine = lines.withIndex().singleOrNull { (_, line) ->
+            "SettingsSearchCatalogPrewarmer(" in line
+        } ?: fail("SettingsSearchCatalogPrewarmer is no longer registered in SettingsKoinModule.kt")
+        val window = lines.subList(
+            maxOf(0, registrationLine.index - 3),
+            minOf(lines.size, registrationLine.index + 4),
+        )
+        assertTrue(
+            window.any { "createdAtStart = true" in it },
+            "the SettingsSearchCatalogPrewarmer single must keep createdAtStart = true — " +
+                "a lazy registration defers the warm pass until first Settings " +
+                "resolution, reopening the cold-start ANR window",
+        )
     }
 }
