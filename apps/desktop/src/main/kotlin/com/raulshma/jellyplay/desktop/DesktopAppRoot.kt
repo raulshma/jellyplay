@@ -211,6 +211,15 @@ internal fun DesktopAppRoot(
         )
     }
 
+    // Wave 22F native-dialog harness (DesktopNativeDialogHarness KDoc): the
+    // audit-F9 gate for the wave-20 AWT FileDialog flows — composes NOTHING
+    // unless jellyplay.dialogpass.enabled=true. Server-free by design (the
+    // settings backup round trip is local-prefs-only), so it needs no login
+    // and no fixture.
+    if (DesktopNativeDialogHarness.requested()) {
+        DesktopNativeDialogHarnessHost()
+    }
+
     // Session-restore probe: until it completes we cannot know whether a
     // persisted (server, user) pair exists, so hold on a neutral splash
     // instead of flashing the sign-in pane at every resuming session.

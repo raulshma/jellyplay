@@ -67,6 +67,10 @@ dependencies {
     // Koin flip (Wave wB): nav v1+ renders settingsSection in the rail (with
     // the desktop platform actuals; Desktop's update-check row since Wave xB).
     implementation(project(":shared:feature:settings"))
+    // Wave 22F dialog pass: the harness names SettingsViewModel directly (the
+    // shell's own screens only render settingsSection, so the ViewModel
+    // supertype was never on the shell classpath before).
+    implementation(libs.lifecycle.viewmodel)
 
     // …admin, eighth conveyor item — LIVE since the same flip:
     // AdminRepository + AdminStatisticsRepository are Koin singles in

@@ -23,6 +23,7 @@ Toolset-wide (individual tools may need only a subset — see table):
 | `bootstrap-jellyfin.sh` | Brings up the local Jellyfin fixture (Docker container, wizard-over-API incl. 10.11 CSRF quirks, ffmpeg testsrc media + posters, library scan) and prints user/item credentials — since wave 20B with 9 movies (8 carrying 2560x1440 posters sized to exceed Coil's measured wasm cache cap) | live (coordinator) |
 | `msi-boot-pass.sh` | The installed-MSI artifact's payload boots: builds the MSI via `:apps:desktop:packageMsi`, administrative-extracts it (`msiexec /a`, no elevation, no install), checks the extracted layout (`JellyPlay.exe` + `runtime/` + `app/`), then boots the EXTRACTED exe under perf-harness properties and requires a clean self-exit with `windowShownMs >= 0` and zero crash logs | wave 13A — live |
 | `desktop-session-pass.sh` | Extended desktop session against a live Jellyfin fixture: in-APP video playback through the whole shared pipeline + Esc/popup-ordering evidence | wave 13B — live |
+| `desktop-native-dialog-pass.sh` | Desktop native-dialog flows inside the real windowed app: the AWT FileDialog settings-backup export/import round trip (SAVE with the production prefill, LOAD, ESC cancel) typed into by a Robot driver, asserting the exported file's existence + v2 JSON shape and the VM's status lines — server-free, the audit-F9 lane | wave 22F — live |
 | `web-verify` | Web (wasm) shell against a live Jellyfin fixture: sign-in, Coil artwork, HtmlVideoEngine playback, via headless-Edge CDP AX-tree driving | wave 13C — live |
 | `foreign-origin.mjs` | Second-origin static server (serve.mjs fork) with `Access-Control-Allow-Origin: *` on every response — the CORS half of the web-cache-eviction lane | wave 20B — live |
 | `web-cache-eviction` | Coil wasm memory-cache LRU eviction under large-library pressure + cross-origin artwork from a non-Jellyfin host, via the Diagnostics pane's wave-20B cache-probe cards | wave 20B — live |
@@ -140,6 +141,37 @@ available, and an interactive session (the harness takes real screenshots via
 `java.awt.Robot`). Evidence retention: the FAIL path keeps the profile dir
 and prints its path; the PASS path keeps it too (temp dir, auto-cleaned by
 the OS eventually) — the report JSON path is always printed.
+
+## Running desktop-native-dialog-pass.sh (wave 22F)
+
+Closes audit finding F9: the wave-20 desktop AWT `FileDialog` flows that
+landed "manually-verified-only" and then fell off the wave-21
+remaining-surface ledger. The settings backup export + import round trip now
+has committed, re-runnable evidence: the app runs with the REAL modal
+dialogs (`pickAwtFile` shown on the EDT, the production SAVE prefill and
+titles) while a `java.awt.Robot` driver thread clears the filename box
+(Ctrl+A), types the full absolute path of a pre-created workspace file and
+presses Enter (ESC for the cancel leg); the pass asserts the observable
+app-side effects from OUTSIDE the dialog machinery — the exported file's
+existence + `schemaVersion:2` JSON shape on disk and the
+`SettingsViewModel`'s export/import status lines. Server-free by design
+(the backup flow is local-prefs-only — no Jellyfin fixture, no libmpv, no
+sign-in). Full ledger + what stays manual (the BackupSettingsScreen row
+clicks, editor pickers, heatmap share, player subtitle upload) in
+`docs/e2e/desktop-native-dialogs.md`.
+
+```bash
+tools/e2e/desktop-native-dialog-pass.sh
+```
+
+Env overrides: `AUTO_EXIT_SECONDS` (90; the Robot types ~100 chars at
+40 ms/keystroke, so each typed dialog costs ~9 s — 90 s covers the whole
+run plus the 3-attempt retry ladder). Same hygiene as the session pass:
+refuses to start while any `JellyPlay.exe` runs, PID-only `taskkill //PID`
+teardown of sampled PIDs, isolated `-Djellyplay.perf.dataDir` profile,
+space-free paths enforced (JAVA_TOOL_OPTIONS whitespace split). Report:
+`<profile>/data/logs/dialog-harness.json` (`"overallPass":true` gates the
+exit code) + dialog screenshots under the workspace `shots/` dir.
 
 ## Running web-verify (wave 13C)
 
