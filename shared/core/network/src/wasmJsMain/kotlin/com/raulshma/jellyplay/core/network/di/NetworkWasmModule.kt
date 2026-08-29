@@ -19,7 +19,7 @@ import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.network.createWasmHttpClient
 import com.raulshma.jellyplay.core.network.createWasmProbeHttpClient
-import com.raulshma.jellyplay.core.network.randomUuidV4
+import com.raulshma.jellyplay.core.network.persistedOrRandomDeviceId
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -35,15 +35,19 @@ private const val WASM_DEVICE_NAME = "JellyPlay Web"
 /**
  * Koin construction owner for the wasmJs network stack (Phase W chunks 1-2;
  * chunk 4 adds the stateless Seerr / Radarr / Sonarr / TMDB clients) —
- * the counterpart of [networkJvmModule] for the web target. Nothing
- * consumes it yet (apps/web wiring lands in a later Phase W chunk); it
- * exists so the module keeps compiling and the wiring is reviewable in
- * isolation.
+ * the counterpart of [networkJvmModule] for the web target. Consumed by the
+ * web shell's startKoin (apps/web Main.kt registers it alongside
+ * datastoreCommonModule/webDatastoreModule/dataWasmModule and the feature
+ * modules), where its auth/library/playback singles drive the connect/sign-in
+ * flow and the shared feature screens' repositories.
  *
- * Device identity: the device id is a random UUID v4 PER BOOT — there is no
- * persisted device identity on wasm v1 (browser storage adapter arrives with
- * the Phase W persistence chunk). Consequence, documented: the server lists
- * each browser reload as a new device until persistence lands.
+ * Device identity (wave 21C): the device id is PERSISTED across boots —
+ * direct localStorage under `jellyplay/device-id` (see
+ * [persistedOrRandomDeviceId]): the first boot on an origin generates a UUID
+ * v4 and stores it, every later boot re-uses the stored value, so the server
+ * stops listing each browser reload as a new device. Storage-disabled/
+ * private-mode origins fall back to the old random-per-boot behaviour for
+ * that session only.
  *
  * Session sharing (chunk 2): ONE [AtomicSessionState] is constructed here and
  * injected into the auth, library and playback clients — the auth client
@@ -59,7 +63,10 @@ val networkWasmModule: Module = module {
             clientName = "JellyPlay",
             clientVersion = WASM_APP_VERSION,
             deviceName = WASM_DEVICE_NAME,
-            deviceId = randomUuidV4(),
+            // Resolved ONCE per boot into this immutable val: stable for the
+            // whole session regardless of later storage failures; re-read
+            // from localStorage only on the next cold boot.
+            deviceId = persistedOrRandomDeviceId(),
         )
     }
     single {
