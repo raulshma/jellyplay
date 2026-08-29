@@ -79,9 +79,11 @@ kotlin {
             implementation(libs.tabler.icons.outline)
             implementation(libs.tabler.icons.filled)
             implementation(libs.coil.compose)
-            // mikepenz moved to jvmShared below: its 0.43.0 wasm klibs are
-            // Kotlin-2.4-ABI (silently skipped by our 2.3.21 klib loader) and
-            // its graph evicts kotlin-stdlib to 2.4 — spike w-10C class C.
+            // MarkdownText's engine (wave 21D): the mikepenz 0.41.0 pin
+            // publishes Kotlin-2.3-built wasm klibs, so the SAME GFM pipeline
+            // renders on android + desktop + wasm (see the catalog note).
+            implementation(libs.multiplatform.markdown.renderer)
+            implementation(libs.multiplatform.markdown.renderer.m3)
             // Nav3 ships KMP variants from google maven directly (desktop/iOS/
             // js/wasm variants in the same androidx coordinates) — no mirror.
             implementation(libs.navigation3.runtime)
@@ -91,10 +93,6 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
         }
         getByName("jvmShared").dependencies {
-            // MarkdownText's engine (class C seam): android+desktop render real
-            // GFM; the wasmJs actual is a styled plain Text fallback.
-            implementation(libs.multiplatform.markdown.renderer)
-            implementation(libs.multiplatform.markdown.renderer.m3)
         }
         getByName("commonTest").dependencies {
             implementation(kotlin("test"))

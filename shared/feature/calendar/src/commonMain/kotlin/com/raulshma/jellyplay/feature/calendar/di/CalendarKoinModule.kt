@@ -10,14 +10,14 @@ import org.koin.dsl.module
  * §Phase V3 conveyor). The HiltViewModel/@Inject annotations were stripped at
  * the move — Koin is the single constructor owner (one framework per type).
  * Unlike every earlier conveyor module, ALL three ctor deps are already
- * Koin-native in the shared graph — no Hilt interop edges at all:
+ * Koin-native in the shared graph — no platform interop edges at all:
  *  - ArrRepository + SeerrRepository resolve from dataJvmModule
- *    (:shared:core:data; the legacy DataModule reverse-bridges to them);
+ *    (:shared:core:data) on both platforms;
  *  - ExperimentalStore resolves from datastoreCommonModule
  *    (:shared:core:datastore).
- * The desktop registration is therefore fully live-resolvable (first conveyor
- * module with zero latent defs); it stays dormant because the desktop shell has
- * no calendar nav entry yet.
+ * The desktop registration is therefore fully live (first conveyor
+ * module with zero platform-shaped defs): nav v1 renders calendarSection in
+ * the rail.
  */
 val calendarModule: Module = module {
     viewModel {

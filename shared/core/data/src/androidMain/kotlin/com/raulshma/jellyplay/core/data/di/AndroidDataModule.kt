@@ -71,9 +71,8 @@ fun androidDataModule(context: Context): Module {
         // the Android ones. The desktop twins live in desktopDataModule.
 
         // The system-installer intent seam (android.content.Intent +
-        // FileProvider cannot live in the shared interface). Registered here
-        // so the shell's Hilt-side injection rides the DataModule
-        // koin().get() bridge onto this single.
+        // FileProvider cannot live in the shared interface). Registered
+        // here; the shell resolves this single straight from Koin.
         single<ApkInstallBuilder> { ApkInstallBuilderImpl(context) }
 
         single<AppUpdateRepository> {

@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.core.model.LyricsResult
  * so consumers that only fetch/search lyrics — e.g. `AudioLyricsManager` — depend
  * on this narrow contract instead of the full media God-interface. [MediaRepository]
  * extends this interface, therefore `MediaRepositoryImpl` satisfies it and the
- * Hilt binding provides the same singleton instance.
+ * Koin alias single in dataJvmModule provides the same singleton instance.
  */
 interface LyricsRepository {
 

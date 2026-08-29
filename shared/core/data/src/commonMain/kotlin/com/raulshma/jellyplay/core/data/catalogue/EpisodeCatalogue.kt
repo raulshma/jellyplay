@@ -34,8 +34,8 @@ import com.raulshma.jellyplay.core.model.MediaItem
  * **never** on `MediaRepository`. `MediaRepositoryImpl` instead depends on the
  * catalogue, so the three legacy methods (`getSeasons`/`getEpisodes`/
  * `getAllEpisodesGrouped`) become thin passthroughs over the snapshot. This
- * keeps the Hilt graph acyclic (both live in `core:data`, but the direction is
- * explicit).
+ * keeps the Koin construction graph acyclic (both are Koin singles in
+ * `core:data`, but the direction is explicit).
  *
  * ## Offline-ness is a parameter, not a monitor
  *

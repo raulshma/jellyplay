@@ -54,9 +54,8 @@ import org.koin.dsl.module
  * The ViewModel's six former legacy-Hilt ctor deps (PlaybackSessionManager,
  * CastManager, JellyfinRemotePlayCastStrategy, ActivePlayerController,
  * PipController, UserMessageBus) are wave-8C seam slots now: the legacy
- * singletons still resolve through the app-side hiltInteropModule lazy
- * singles (the documented shared-androidMain → legacy-:core:data edge; dies
- * at Phase X) but are wrapped by the Android* adapters registered below —
+ * singletons are Koin-owned by the legacy :core:data's androidCoreDataModule
+ * (since wave 8A) and are wrapped by the Android* adapters registered below —
  * the commonMain ViewModel never sees a legacy type. Every repository and
  * DataStore dep is Koin-native (dataJvmModule / datastoreCommonModule /
  * androidDataModule).

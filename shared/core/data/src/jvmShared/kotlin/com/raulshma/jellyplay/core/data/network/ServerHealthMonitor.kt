@@ -36,7 +36,8 @@ class ServerHealthMonitor(
      * Test-only: run the monitoring loop on [dispatcher] (typically runTest's
      * [kotlinx.coroutines.test.StandardTestDispatcher]) so the loop advances on
      * the test's virtual clock instead of a real IO thread. Production code
-     * constructs via Hilt and keeps [Dispatchers.IO]. Must be called before
+     * constructs this via Koin (dataJvmModule) and keeps [Dispatchers.IO].
+     * Must be called before
      * [startMonitoring].
      */
     fun useDispatcherForTest(dispatcher: CoroutineDispatcher) {

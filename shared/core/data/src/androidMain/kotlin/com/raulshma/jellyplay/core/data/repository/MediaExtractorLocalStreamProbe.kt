@@ -10,8 +10,8 @@ import kotlinx.coroutines.withContext
  * [LocalStreamProbe] backed by the framework [MediaExtractor] (C4 part 2:
  * moved verbatim from the legacy `:core:data` `LocalStreamProbe.kt`; the
  * `@Inject` constructor annotation was stripped — Koin's
- * [com.raulshma.jellyplay.core.data.di.androidDataModule] constructs it, the
- * legacy DataModule bridges Hilt consumers to the same single). Stateless and
+ * [com.raulshma.jellyplay.core.data.di.androidDataModule] constructs it;
+ * consumers resolve the same single straight from Koin). Stateless and
  * cheap to construct; each [probe] opens and releases the extractor on
  * [Dispatchers.IO].
  */

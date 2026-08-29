@@ -22,8 +22,8 @@ import kotlinx.coroutines.flow.stateIn
  * Android implementation of the [NetworkMonitor] seam (C4 part 2 connectivity
  * split): body moved verbatim from the legacy `:core:data` `NetworkMonitor` —
  * the class was renamed and the Hilt annotations stripped (Koin's
- * [com.raulshma.jellyplay.core.data.di.androidDataModule] constructs it; the
- * legacy DataModule bridges Hilt consumers to the same single).
+ * [com.raulshma.jellyplay.core.data.di.androidDataModule] constructs it;
+ * consumers resolve the same single straight from Koin).
  */
 class AndroidNetworkMonitor(
     private val context: Context,

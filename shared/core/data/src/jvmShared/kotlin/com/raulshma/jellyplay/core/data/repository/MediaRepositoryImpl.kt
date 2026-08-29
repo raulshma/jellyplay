@@ -68,8 +68,8 @@ import java.util.concurrent.atomic.AtomicLong
 // :core:data shim (same package/name). Ctor-level transforms only — method
 // bodies are byte-identical:
 //  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's
-//    dataJvmModule constructs this single; the legacy DataModule bridges the
-//    remaining Hilt injectors via koin().get()).
+//    dataJvmModule constructs this single; every consumer resolves it
+//    straight from Koin).
 //  - `android.util.Log` → the module's Log facade.
 //  - `internal suspend fun invalidateCaches` widened to public: its only
 //    production caller (UserDataSyncWorker) lives in the legacy module, and
@@ -87,7 +87,8 @@ class MediaRepositoryImpl(
      * `getSeasons`/`getEpisodes`/`getAllEpisodesGrouped` can delegate to it.
      * The catalogue depends on `JellyfinApiClient` + `OfflineRepository` only
      * (never on `MediaRepository`), so this edge does NOT form a DI cycle —
-     * both live in `core:data` and Hilt resolves the direction.
+     * both are Koin singles in `core:data` and the constructor edge fixes
+     * the direction.
      */
     private val episodeCatalogue: EpisodeCatalogue,
     /**
@@ -102,7 +103,8 @@ class MediaRepositoryImpl(
      * (`HomeFreshness.isRoomSnapshotFresh`), the monotonic read drives the
      * in-memory [TtlCache] clock (whose contract requires a monotonic source
      * — a wall-clock NTP jump would mass-expire or extend every entry).
-     * Already Hilt-bound in `DataModule`; injected here so both ceilings are
+     * Already a Koin single in `dataJvmModule` (`SystemTimeSource`); injected
+     * here so both ceilings are
      * unit-testable with one fake.
      */
     private val timeSource: TimeSource,

@@ -16,7 +16,8 @@ package com.raulshma.jellyplay.core.data.worker
  * `worker/PlaybackSyncScheduler.kt` so `SyncStatusStateHolder` (jvmShared)
  * can reference it; the WorkManager-backed
  * `PlaybackSyncSchedulerImpl` stays in the legacy `:core:data` (workers are
- * Android-side per plan §Phase C4) and keeps its Hilt binding there.
+ * Android-side per plan §Phase C4) as a Koin single in
+ * androidCoreDataModule.
  */
 interface PlaybackSyncScheduler {
     fun enqueuePeriodic()

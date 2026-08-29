@@ -2,18 +2,17 @@ package com.raulshma.jellyplay.feature.editor
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import com.raulshma.jellyplay.core.ui.platform.pickAwtFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.awt.FileDialog
-import java.awt.Frame
 import java.io.File
 import java.io.FilenameFilter
 
 /**
  * Desktop (jvmMain) actual of the [EditorFilePicker] seam (wave 20A): the
- * upload sheets' file-source rows open the native AWT FileDialog — the same
- * modal `FileDialog.LOAD` pattern the player's document-picker seam uses
- * (VideoPlayerScreenSeams.jvm.kt, wave 9) — instead of no-op'ing.
+ * upload sheets' file-source rows open the native AWT FileDialog via the
+ * shared [pickAwtFile] helper (:shared:core:ui jvmMain — the same modal
+ * LOAD pattern every desktop picker seam uses) instead of no-op'ing.
  * [EditorPickedFile.readBytes] defers the disk read to upload time on
  * `Dispatchers.IO`, mirroring the Android actual's contentResolver timing; a
  * file that vanished between pick and upload throws from readBytes (the JDK
@@ -58,18 +57,11 @@ private fun rememberEditorFilePicker(
 ): EditorFilePicker? = remember(onPicked) {
     object : EditorFilePicker {
         override fun launch() {
-            // Native AWT file dialog (modal; blocks until dismissed) — wave 9
-            // document-picker precedent: null parent frame, then read
-            // dialog.directory/dialog.file after isVisible returns.
-            val dialog = FileDialog(null as Frame?, title, FileDialog.LOAD)
-            if (filenameFilter != null) {
-                // Advisory only: the Windows dialog consults the filter for
-                // its file list, but a typed file name still goes through —
-                // the same advisory stance the player seam takes for mimes.
-                dialog.filenameFilter = filenameFilter
-            }
-            dialog.isVisible = true
-            editorPickedFile(dialog.directory, dialog.file)?.let(onPicked)
+            // The shared AWT dialog (modal; blocks until dismissed; filter
+            // advisory — see pickAwtFile's KDoc). Cancel → null → onPicked
+            // never fires.
+            editorPickedFile(pickAwtFile(title = title, filenameFilter = filenameFilter))
+                ?.let(onPicked)
         }
     }
 }
@@ -92,16 +84,16 @@ internal fun editorImageFilenameFilter(): FilenameFilter = FilenameFilter { dir,
 }
 
 /**
- * Builds the seam's picked file from the dialog's post-modal answers, or null
- * when the dialog was cancelled (either half null) — the caller then simply
- * doesn't fire onPicked, so the sheet's prior pick is retained (SAF cancel
- * semantics: the Android actual's `uri?.let` never fires on a null uri).
+ * Builds the seam's picked file from the dialog's answer ([pickAwtFile]
+ * output — null on cancel), or null when the dialog was cancelled — the
+ * caller then simply doesn't fire onPicked, so the sheet's prior pick is
+ * retained (SAF cancel semantics: the Android actual's `uri?.let` never
+ * fires on a null uri).
  */
-internal fun editorPickedFile(directory: String?, file: String?): EditorPickedFile? {
-    if (directory == null || file == null) return null
-    val picked = File(directory, file)
+internal fun editorPickedFile(picked: File?): EditorPickedFile? {
+    if (picked == null) return null
     return EditorPickedFile(
-        fileName = file,
+        fileName = picked.name,
         previewUrl = picked.toURI().toString(),
         readBytes = {
             withContext(Dispatchers.IO) { picked.readBytes() }

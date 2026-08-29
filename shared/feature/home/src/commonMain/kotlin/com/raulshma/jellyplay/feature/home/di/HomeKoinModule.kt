@@ -16,13 +16,13 @@ import org.koin.dsl.module
  *    MediaRepository/UserDataMutator/MediaSearchEngine) plus the platform
  *    data modules (ImageUrlProvider, OfflineModeManager) and the settings
  *    feature's SettingsSearchProvider single.
- *  - 4 deps remain Hilt-owned in the legacy tree (PlaybackSyncScheduler,
- *    TvWatchNextScheduler — WorkManager workers; ContinueWatchingBroadcaster,
- *    LibrarySyncHook — app widget broadcast receivers) and reach Koin on
- *    Android through the app composition root's Hilt interop module. They
- *    have no desktop defs yet, so resolving this VM on desktop throws — the
- *    documented latent state shared with the other pre-cutover feature
- *    modules (no desktop nav wiring constructs it today).
+ *  - the other 4 (PlaybackSyncScheduler, TvWatchNextScheduler — WorkManager
+ *    workers; ContinueWatchingBroadcaster, LibrarySyncHook — app widget
+ *    broadcast receivers) are Android-shaped: Koin singles in
+ *    androidCoreDataModule / the app module on Android, honest no-op defs in
+ *    desktopDataModule on desktop. All 30 deps resolve on BOTH platforms —
+ *    desktop renders homeSection in the rail (live since the wave 8B
+ *    desktop wiring).
  */
 val homeModule: Module = module {
     viewModel {

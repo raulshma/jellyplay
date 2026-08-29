@@ -6,7 +6,7 @@ import org.koin.core.qualifier.named
 /**
  * Koin qualifiers mirroring the legacy javax.inject qualifiers of the Android
  * shim one-to-one (docs/kmp-migration-plan.md §Phase C4). Cross-module: the
- * shared database/network Koin modules and the Android Hilt bridges resolve
+ * shared data/network Koin modules resolve
  * the application scope through [applicationScope].
  *
  * commonMain since §Phase W (was jvmShared): the qualifiers are pure Koin

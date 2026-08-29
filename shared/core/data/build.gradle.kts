@@ -91,9 +91,10 @@ kotlin {
             // Room DAOs/entities: confined to jvmShared since wave 15B (the
             // moved Room-backed repositories above) — never visible to wasmJs.
             api(project(":shared:core:database"))
-            // @Inject/@Singleton/@Named stay on the impl classes; Dagger reads
-            // them from binaries at the legacy shim's KSP processing.
-            implementation(libs.javax.inject)
+            // (No javax.inject dependency: the @Inject/@Singleton decorations
+            // were stripped from these impls when Koin took construction
+            // ownership, and no Dagger/KSP processing exists anywhere in the
+            // repo — jvmShared is compiled by Kotlin only.)
             // okio FileSystem injected into the file-touching repositories.
             implementation(libs.okio)
             implementation(libs.kotlinx.serialization.json)

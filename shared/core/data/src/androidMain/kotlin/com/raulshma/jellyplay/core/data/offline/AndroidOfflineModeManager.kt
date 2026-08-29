@@ -24,8 +24,8 @@ import kotlinx.coroutines.launch
  * Android implementation of the [OfflineModeManager] seam (C4 part 2): body
  * moved verbatim from the legacy `:core:data` `OfflineModeManager` — the
  * class was renamed and the Hilt annotations stripped (Koin's
- * [com.raulshma.jellyplay.core.data.di.androidDataModule] constructs it; the
- * legacy DataModule bridges Hilt consumers to the same single).
+ * [com.raulshma.jellyplay.core.data.di.androidDataModule] constructs it;
+ * consumers resolve the same single straight from Koin).
  */
 class AndroidOfflineModeManager(
     private val context: Context,

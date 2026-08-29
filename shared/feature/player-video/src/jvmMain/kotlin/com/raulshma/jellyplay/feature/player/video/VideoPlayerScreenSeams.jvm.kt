@@ -9,9 +9,8 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.window.FrameWindowScope
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.ui.platform.pickAwtFile
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
-import java.awt.FileDialog
-import java.awt.Frame
 import java.io.File
 import java.text.DateFormat
 import java.util.Locale
@@ -156,19 +155,11 @@ internal actual fun rememberDocumentPicker(
 ): () -> Unit =
     remember(mimeTypes, onResult) {
         {
-            // Native AWT file dialog (modal). mimeTypes is advisory only —
-            // the subtitle flow's list maps to subtitle/font file names, which
+            // Shared AWT dialog (modal). mimeTypes is advisory only — the
+            // subtitle flow's list maps to subtitle/font file names, which
             // the SAF contract filtered on Android; the desktop dialog lets
             // the user pick any file and the screen's own name checks apply.
-            val dialog = FileDialog(null as Frame?, "Choose file", FileDialog.LOAD)
-            dialog.isVisible = true
-            val dir = dialog.directory
-            val file = dialog.file
-            if (dir != null && file != null) {
-                onResult(File(dir, file).toURI().toString())
-            } else {
-                onResult(null)
-            }
+            onResult(pickAwtFile(title = "Choose file")?.toURI()?.toString())
         }
     }
 

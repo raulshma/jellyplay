@@ -63,22 +63,23 @@ dependencies {
     // syncPlaySection renders in the rail.
     implementation(project(":shared:feature:syncplay"))
 
-    // …settings, seventh conveyor item — PARTIAL, omitted from nav v1:
-    // SettingsViewModel + AboutViewModel still need AdminRepository
-    // (Hilt-only, no desktop def); the shell guards the settings routes.
+    // …settings, seventh conveyor item — LIVE since the admin repositories'
+    // Koin flip (Wave wB): nav v1+ renders settingsSection in the rail (with
+    // the desktop platform actuals; Desktop's update-check row since Wave xB).
     implementation(project(":shared:feature:settings"))
 
-    // …admin, eighth conveyor item (DI registration only — latent:
-    // AdminRepository/AdminStatisticsRepository have no desktop defs yet,
-    // resolution is lazy so boot stays safe, and the desktop shell has no
-    // admin nav entry).
+    // …admin, eighth conveyor item — LIVE since the same flip:
+    // AdminRepository + AdminStatisticsRepository are Koin singles in
+    // dataJvmModule on both platforms, and nav v1+ renders adminSection in
+    // the rail (gated by the desktop admin-status state).
     implementation(project(":shared:feature:admin"))
 
 
 
-    // …editor, ninth conveyor item (DI registration only — latent:
-    // StreamingSubtitleStore has no desktop def yet, resolution is lazy so
-    // boot stays safe, and the desktop shell has no editor nav entry).
+    // …editor, ninth conveyor item — LIVE since the wave 18B store
+    // promotion: desktopDataModule binds the real StreamingSubtitleStore and
+    // DesktopAppRoot renders editorSection (the details screen's edit push,
+    // admin-gated like Android).
     implementation(project(":shared:feature:editor"))
 
     // …calendar, conveyor feature — LIVE and wired in nav v1
@@ -115,19 +116,18 @@ dependencies {
     implementation(project(":shared:feature:details"))
 
 
-    // …auth, Phase X cutover (feature-conveyor transform): desktop does
-    // not render the auth screens yet (the shell signs in through its own
-    // DesktopSignInPane, and the settings UserManagement drill-ins stay
-    // dead-end-guarded), but the whole ctor graph is Koin-native here, so
-    // the registration is live-resolvable, not latent.
+    // …auth, Phase X cutover (feature-conveyor transform): LIVE since wave
+    // 19A unified sign-in — the signed-out gate (DesktopSignedOutAuthHost)
+    // and the signed-in settings drill-ins (DesktopAppRoot's authSection
+    // entries) both instantiate these ViewModels; the whole ctor graph is
+    // Koin-native here.
     implementation(project(":shared:feature:auth"))
 
 
-    // …home, Phase X cutover feature (the desktop landing screen) — module
-    // compiles and homeModule is registered LATENT: four HomeViewModel ctor
-    // deps are Android-only Hilt interop singles with no desktop defs yet,
-    // and desktop nav does not wire a home entry, so nothing constructs the
-    // VM. The nav wiring lands with the coordinator's post-merge pass.
+    // …home, Phase X cutover feature (the desktop landing screen) — LIVE
+    // since the wave 8B desktop wiring: the four WorkManager/widget-backed
+    // HomeViewModel ctor deps resolve to the no-op desktop defs in
+    // desktopDataModule, and DesktopAppRoot wires homeSection in the rail.
     implementation(project(":shared:feature:home"))
 
 

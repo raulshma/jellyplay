@@ -19,9 +19,10 @@ import kotlinx.coroutines.flow.stateIn
  * verbose-logging settings without taking a direct dependency on
  * `core:datastore` (which would invert the layered dependency rule).
  *
- * Uses the Hilt-provided `@ApplicationScope CoroutineScope` rather than
- * spinning its own private scope — there is already a single process-wide
- * SupervisorJob tree (`CoroutineScopeModule`) doing this kind of work, so a
+ * Uses the Koin-provided application scope (the DatastoreQualifiers
+ * .applicationScope single) rather than spinning its own private scope —
+ * there is already a single process-wide
+ * SupervisorJob tree doing this kind of work, so a
  * parallel scope would mean two independent SupervisorJob trees and two
  * dispatcher pools for the same purpose (and the private scope was never
  * cancelled).

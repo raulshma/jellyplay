@@ -32,7 +32,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 /**
  * Plain-JVM test over the facade's three mocked seams ([AudioQueueManager],
  * [MediaRepository], [ImageUrlProvider]) — no Robolectric, no concrete
- * AudioPlaybackManager (its Hilt constructor pulls in ~20 collaborators).
+ * AudioPlaybackManager (its constructor pulls in ~20 collaborators).
  *
  * `Main` is the shared [StandardTestDispatcher] so the dispatcher-contract
  * test can prove the queue mutation ran through the Main test scheduler even

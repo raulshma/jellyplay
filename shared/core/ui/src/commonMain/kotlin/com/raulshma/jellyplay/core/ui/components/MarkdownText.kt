@@ -1,35 +1,59 @@
 package com.raulshma.jellyplay.core.ui.components
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownTypography
 
 /**
- * Renders GitHub-flavoured Markdown (release notes, plugin changelogs).
+ * Renders GitHub-flavoured Markdown (release notes, plugin changelogs) via
+ * the Material 3 `multiplatform-markdown-renderer` pipeline — covers
+ * headings, lists (including GFM task-list checkboxes), fenced code blocks,
+ * blockquotes, horizontal rules, tables, inline formatting, and clickable
+ * links (links route through the ambient `UriHandler`, opening in the
+ * browser).
  *
- * The renderer engine sits behind the [MarkdownBody] seam: android + desktop
- * keep the `multiplatform-markdown-renderer` M3 pipeline verbatim; wasm runs
- * its own pure-CMP pipeline ([MiniMarkdownParser] + Column/Text composition)
- * because that dependency's 0.43.0 wasm klibs are built with Kotlin 2.4 and
- * are silently skipped by this repo's 2.3.21 klib loader (and its graph evicts
- * kotlin-stdlib to 2.4) — see spike w-10C class C — so it cannot enter
- * commonMain while the toolchain is on 2.3.x. Wasm fidelity now covers
- * headings/emphasis/inline+fenced code/lists/links/quotes/rules; syntax
- * outside that set stays literal text (matrix on the parser). Divergence from
- * the JVM pipeline is limited to exactly that unparsed tail.
- *
- * Public signature preserved so call sites need no changes.
+ * Wave 21D collapsed the old expect/actual seam onto this ONE
+ * implementation: while the catalog pin sat at 0.43.0 the mikepenz wasm
+ * klibs were Kotlin-2.4-ABI (silently skipped by this repo's 2.3.21 klib
+ * loader — spike w-10C class C), so wasm carried a home-grown
+ * MiniMarkdownParser pipeline and the dependency was confined to jvmShared.
+ * The 0.41.0 pin publishes Kotlin-2.3-built wasm klibs, so every target
+ * renders through the same code and the mini parser (+ its wasm actual and
+ * test matrix) was deleted. Public signature preserved so call sites need
+ * no changes.
  */
 @Composable
 fun MarkdownText(
     text: String,
     modifier: Modifier = Modifier,
 ) {
-    MarkdownBody(text = text, modifier = modifier)
-}
+    // Map the renderer's styles onto the app's typography. Release notes render
+    // in compact surfaces (update sheet, plugin version rows), so body text
+    // stays at bodySmall to match the previous dense feel; headings use the
+    // title styles, all bold.
+    val typography = markdownTypography(
+        h1 = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+        h2 = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+        h3 = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+        h4 = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+        h5 = MaterialTheme.typography.titleSmall,
+        h6 = MaterialTheme.typography.titleSmall,
+        text = MaterialTheme.typography.bodySmall,
+        paragraph = MaterialTheme.typography.bodySmall,
+        ordered = MaterialTheme.typography.bodySmall,
+        bullet = MaterialTheme.typography.bodySmall,
+        list = MaterialTheme.typography.bodySmall,
+        code = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+        inlineCode = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+    )
 
-/**
- * Platform markdown rendering body behind [MarkdownText]: full GFM fidelity
- * via mikepenz on JVM targets; the pure-Kotlin mini pipeline on wasm.
- */
-@Composable
-internal expect fun MarkdownBody(text: String, modifier: Modifier)
+    Markdown(
+        content = text,
+        modifier = modifier,
+        typography = typography,
+    )
+}

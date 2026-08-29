@@ -17,9 +17,10 @@ import org.koin.dsl.module
  *  - SeerrSecureCredentialsStore resolves from the platform datastore
  *    modules (androidMain AndroidDatastoreModule / jvmMain DesktopDatastore
  *    Module — both platforms define it).
- * The registration is fully live on desktop; it stays dormant there only
- * because the desktop shell has no first-run gate wiring (the gate itself is
- * app-side: JellyPlayApp renders OnboardingScreen; TV auto-completes). The
+ * The registration is fully live on desktop; nav v1 registers
+ * onboardingSection (reachable via Shortcuts); a first-run gate is tracked
+ * separately (the Android gate is app-side: JellyPlayApp renders
+ * OnboardingScreen; TV auto-completes). The
  * Android app registers this module in JellyPlayApplication.
  */
 val onboardingModule: Module = module {

@@ -147,6 +147,7 @@ jobs:
         run: >
           ./gradlew
           :shared:core:model:jvmTest
+          :shared:core:designsystem:jvmTest
           :shared:core:datastore:jvmTest
           :shared:core:database:jvmTest
           :shared:core:network:jvmTest

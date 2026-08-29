@@ -18,7 +18,7 @@ package com.raulshma.jellyplay.core.data.worker
  * legacy `worker/TvWatchNextScheduler.kt` (same package) so the shared home
  * feature's commonMain can reference it — the PlaybackSyncScheduler
  * precedent. The WorkManager-backed `TvWatchNextSchedulerImpl` stays in the
- * legacy `:core:data` and keeps its Hilt binding there.
+ * legacy `:core:data` as a Koin single in androidCoreDataModule.
  */
 interface TvWatchNextScheduler {
     fun scheduleRefresh()

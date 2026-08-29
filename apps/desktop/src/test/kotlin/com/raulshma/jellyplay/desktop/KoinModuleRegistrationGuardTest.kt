@@ -74,10 +74,10 @@ class KoinModuleRegistrationGuardTest {
      * each startKoin site registers its own platform actuals plus the shared
      * core graph, so these names are not required to come from a feature's
      * commonMain (e.g. androidDataModule, desktopPlayerModule,
-     * hiltInteropModule, datastoreCommonModule, networkJvmModule…).
+     * desktopMusicMessageBusModule, datastoreCommonModule, networkJvmModule…).
      */
     private val platformPrefixes = listOf(
-        "android", "desktop", "web", "hilt",
+        "android", "desktop", "web",
         "datastore", "database", "network", "data",
     )
 
