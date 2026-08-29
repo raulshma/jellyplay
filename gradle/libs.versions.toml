@@ -48,7 +48,15 @@ androidDesugarJdkLibs = "2.1.5"
 # either side — the pin is only about the wasm target). Revisit on any
 # future Kotlin 2.4 toolchain move.
 coil = "3.4.0"
-multiplatformMarkdownRenderer = "0.43.0"
+# 0.41.0 (wave 21D): the last mikepenz line whose wasm klibs are built with
+# Kotlin 2.3.x — 0.42+ rebuilt them with Kotlin 2.4.0, and those klibs are
+# silently SKIPPED by the 2.3.21 klib loader (spike w-10C class C), which is
+# why wasm used to carry a MiniMarkdownParser fallback while the dependency
+# stayed jvmShared-scoped. At 0.41.0 the klibs resolve on wasm too, so the
+# dependency lives in commonMain and every target renders GFM through the
+# same MarkdownBody (the mini parser + wasm actual were deleted). Revisit on
+# any future Kotlin 2.4 toolchain move.
+multiplatformMarkdownRenderer = "0.41.0"
 room = "2.8.4"
 datastore = "1.2.1"
 okio = "3.9.0"
