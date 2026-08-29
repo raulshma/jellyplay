@@ -780,6 +780,13 @@ data class SessionHarnessReport(
     val fatal: String?,
     val machine: Map<String, String>,
     val steps: List<StepResult>,
+    /**
+     * Harness identity emitted in the report — wave 22F shares the step-ledger
+     * shape with the native-dialog harness (DesktopNativeDialogHarness, which
+     * writes `<logs>/dialog-harness.json` as `desktop-native-dialog`); the
+     * default keeps the session harness's pinned value.
+     */
+    val harness: String = "desktop-session",
 ) {
     /**
      * Hand-rolled JSON (the apps/desktop module does not apply the
@@ -788,7 +795,7 @@ data class SessionHarnessReport(
      */
     fun toJson(): String = buildString {
         append('{')
-        append("\"harness\":\"desktop-session\"")
+        append("\"harness\":").append(jsonString(harness))
         append(",\"overallPass\":").append(overallPass)
         append(",\"startedAtMs\":").append(startedAtMs)
         append(",\"finishedAtMs\":").append(finishedAtMs)
