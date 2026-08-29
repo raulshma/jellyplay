@@ -20,6 +20,21 @@ data class OkHttpConfig(
     val maxCacheSizeMb: Int,
     val networkTimeoutPreset: NetworkTimeoutPreset,
     val verboseNetworkLogging: Boolean,
+    /**
+     * Server addresses the user has explicitly trusted to present a
+     * self-signed / otherwise unverifiable TLS certificate, in the canonical
+     * `scheme://host[:port]` form [com.raulshma.jellyplay.core.network.failover.ServerAddressRouter]
+     * uses for endpoint addresses (no trailing slash, port omitted when it is
+     * the scheme default). Empty by default — trust is strictly opt-in per
+     * server.
+     *
+     * Read dynamically by the network layer's trust manager / hostname
+     * verifier at handshake time (same live-config contract as the timeout /
+     * logging interceptor), so granting or revoking takes effect on the next
+     * TLS handshake without rebuilding any client. Wasm ignores the field:
+     * the browser owns certificate decisions there.
+     */
+    val selfSignedTrustHosts: Set<String> = emptySet(),
 )
 
 interface OkHttpConfigProvider {

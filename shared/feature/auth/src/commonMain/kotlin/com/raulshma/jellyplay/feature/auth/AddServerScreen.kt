@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -61,6 +62,7 @@ import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.auth.generated.resources.Res
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_add_server_subtitle
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_add_server_title
+import com.raulshma.jellyplay.feature.auth.generated.resources.auth_cancel
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_collapse
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_connect
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_connect_to_jellyfin
@@ -82,6 +84,9 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.auth_server_one_f
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_servers_found
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_servers_found_scanning
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_stop
+import com.raulshma.jellyplay.feature.auth.generated.resources.auth_tls_trust_body
+import com.raulshma.jellyplay.feature.auth.generated.resources.auth_tls_trust_confirm
+import com.raulshma.jellyplay.feature.auth.generated.resources.auth_tls_trust_title
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -266,6 +271,28 @@ fun AddServerScreen(
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }
+    }
+
+    // Self-signed certificate offer: shown only when the ViewModel classified
+    // the failure as TLS trust against an https address. Confirm persists the
+    // host grant and retries the exact same connect (the network layer picks
+    // the grant up at the next TLS handshake — no client rebuild).
+    uiState.tlsTrustPromptAddress?.let { address ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissTrustPrompt() },
+            title = { Text(stringResource(Res.string.auth_tls_trust_title)) },
+            text = { Text(stringResource(Res.string.auth_tls_trust_body, address)) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmTrustServer() }) {
+                    Text(stringResource(Res.string.auth_tls_trust_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissTrustPrompt() }) {
+                    Text(stringResource(Res.string.auth_cancel))
+                }
+            },
+        )
     }
 }
 

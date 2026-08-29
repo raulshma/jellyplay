@@ -30,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -96,6 +97,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_serv
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_management
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_switch_hint
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_switch
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trust_self_signed
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trust_self_signed_off
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -190,6 +193,7 @@ fun ServerManagementScreen(
                             isSwitching = isSwitching,
                             isExpanded = expandedServerId == server.id,
                             isAddressOpInProgress = isAddressOpInProgress,
+                            isSelfSignedTrustGranted = viewModel.isSelfSignedTrustGranted(server),
                             onSwitch = {
                                 viewModel.switchServer(server.id) {
                                     onServerSwitched()
@@ -205,6 +209,9 @@ fun ServerManagementScreen(
                             },
                             onSwitchAddress = { address ->
                                 viewModel.switchServerAddress(server.id, address)
+                            },
+                            onToggleSelfSignedTrust = { granted ->
+                                viewModel.setSelfSignedTrust(server, granted)
                             },
                         )
                     }
@@ -232,12 +239,14 @@ private fun ServerCard(
     isSwitching: Boolean,
     isExpanded: Boolean,
     isAddressOpInProgress: Boolean,
+    isSelfSignedTrustGranted: Boolean,
     onSwitch: () -> Unit,
     onDelete: () -> Unit,
     onToggleExpand: () -> Unit,
     onAddAddress: () -> Unit,
     onRemoveAddress: (String) -> Unit,
     onSwitchAddress: (String) -> Unit,
+    onToggleSelfSignedTrust: (Boolean) -> Unit,
 ) {
     val removeServerConfirm = rememberConfirmState()
     Card(
@@ -397,6 +406,17 @@ private fun ServerCard(
                         )
                     }
 
+                    // Per-server self-signed-certificate trust. Only an https
+                    // primary address can present a certificate, so the row is
+                    // hidden for cleartext servers rather than showing a
+                    // no-op toggle.
+                    if (server.address.startsWith("https://")) {
+                        SelfSignedTrustRow(
+                            granted = isSelfSignedTrustGranted,
+                            onCheckedChange = onToggleSelfSignedTrust,
+                        )
+                    }
+
                     val addAddressFocus = rememberTvFocusState(focusedScale = 1.02f)
                     val addShape = ShapeCache.smoothPill
                     Surface(
@@ -518,6 +538,44 @@ private fun AddressRow(
                 )
             }
         }
+    }
+}
+
+/**
+ * Per-server "trust self-signed certificates" toggle inside the expanded
+ * active-server card. On = this server's primary address is in the granted
+ * set (the entry the Add Server trust dialog wrote); off removes every
+ * granted entry belonging to this server. Note the network layer's documented
+ * limitation: already-pooled TLS connections stay trusted until they idle out
+ * or the process restarts.
+ */
+@Composable
+private fun SelfSignedTrustRow(
+    granted: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(Res.string.settings_trust_self_signed),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Text(
+                text = stringResource(Res.string.settings_trust_self_signed_off),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+            )
+        }
+        Switch(
+            checked = granted,
+            onCheckedChange = onCheckedChange,
+        )
     }
 }
 

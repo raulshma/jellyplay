@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.auth
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepository
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.feature.auth.generated.resources.Res
@@ -39,6 +40,12 @@ import org.junit.Test
  * [AuthMessage.Raw]), the blank-address guard, and the SSDP discovery flow's
  * dedupe/complete/failure behavior. The [LocalNetworkStatus] seam is faked
  * inline (hand-rolled lambda over the fun interface).
+ *
+ * Wave 21A extends the suite with the self-signed trust grant flow: TLS-trust
+ * failures surface the trust dialog state, confirm persists the canonical
+ * host through [NetworkOfflineStore] and retries the same connect. The store
+ * is mockk'd (final DataStore-backed class — the pref→config mapping itself
+ * is covered by OkHttpConfigProviderImplTest in core:data).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddServerViewModelTest {
@@ -47,6 +54,7 @@ class AddServerViewModelTest {
 
     private lateinit var authRepository: AuthRepository
     private lateinit var serverDiscoveryRepository: ServerDiscoveryRepository
+    private lateinit var networkOfflineStore: NetworkOfflineStore
     private var blamePermission: Boolean = false
     private lateinit var viewModel: AddServerViewModel
 
@@ -55,10 +63,12 @@ class AddServerViewModelTest {
         Dispatchers.setMain(testDispatcher)
         authRepository = mockk(relaxed = true)
         serverDiscoveryRepository = mockk()
+        networkOfflineStore = mockk(relaxed = true)
         viewModel = AddServerViewModel(
             authRepository = authRepository,
             serverDiscoveryRepository = serverDiscoveryRepository,
             localNetworkStatus = LocalNetworkStatus { _ -> blamePermission },
+            networkOfflineStore = networkOfflineStore,
         )
     }
 
@@ -219,6 +229,126 @@ class AddServerViewModelTest {
 
         assertEquals("http://other", viewModel.uiState.value.manualAddress)
         assertNull(viewModel.uiState.value.connectError)
+    }
+
+    // ------------------------------------------------------ self-signed trust
+
+    @Test
+    fun connectToServer_tlsFailure_onHttps_setsTrustPromptAddress() = runTest(testDispatcher) {
+        coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
+            Result.failure(javax.net.ssl.SSLHandshakeException("PKIX path building failed"))
+
+        viewModel.connectToServer("https://selfsigned.example.com") {}
+
+        advanceUntilIdle()
+        assertEquals(
+            "https://selfsigned.example.com",
+            viewModel.uiState.value.tlsTrustPromptAddress,
+        )
+        // The SSL error message is still surfaced alongside the dialog.
+        assertEquals(
+            AuthMessage.Resource(Res.string.auth_error_ssl),
+            viewModel.uiState.value.connectError,
+        )
+    }
+
+    @Test
+    fun connectToServer_tlsFailure_withoutScheme_promptsNormalizedHttpsAddress() = runTest(testDispatcher) {
+        coEvery { authRepository.addServer("selfsigned.example.com") } returns
+            Result.failure(javax.net.ssl.SSLPeerUnverifiedException("Certificate not trusted"))
+
+        viewModel.connectToServer("selfsigned.example.com") {}
+
+        advanceUntilIdle()
+        // kotlin.test form (message-last) — the file's JUnit imports are
+        // message-first and this assert needs the explanatory message.
+        kotlin.test.assertEquals(
+            "https://selfsigned.example.com",
+            viewModel.uiState.value.tlsTrustPromptAddress,
+            "the grant entry must be the normalized canonical form, not the raw input",
+        )
+    }
+
+    @Test
+    fun connectToServer_tlsFailure_onHttpAddress_neverPrompts() = runTest(testDispatcher) {
+        // Cleartext addresses cannot present a certificate — belt-and-braces
+        // guard even though an SSLException on http is not expected.
+        coEvery { authRepository.addServer("http://server") } returns
+            Result.failure(javax.net.ssl.SSLException("handshake"))
+
+        viewModel.connectToServer("http://server") {}
+
+        advanceUntilIdle()
+        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+    }
+
+    @Test
+    fun connectToServer_nonTlsFailure_neverPrompts() = runTest(testDispatcher) {
+        coEvery { authRepository.addServer("https://server") } returns
+            Result.failure(java.net.ConnectException("refused"))
+
+        viewModel.connectToServer("https://server") {}
+
+        advanceUntilIdle()
+        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+    }
+
+    @Test
+    fun confirmTrustServer_persistsCanonicalHost_andRetriesConnect() = runTest(testDispatcher) {
+        val info = mockk<ServerInfo>()
+        coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
+            Result.failure(javax.net.ssl.SSLHandshakeException("PKIX")) andThen
+            Result.success(info)
+
+        var attempts = 0
+        var finalResult: Result<ServerInfo>? = null
+        viewModel.connectToServer("https://selfsigned.example.com") { attempts++; finalResult = it }
+        advanceUntilIdle()
+        assertEquals(1, attempts)
+
+        viewModel.confirmTrustServer()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { networkOfflineStore.addSelfSignedTrustHost("https://selfsigned.example.com") }
+        kotlin.test.assertEquals(2, attempts, "confirm must retry the same connect")
+        assertTrue(finalResult?.isSuccess == true)
+        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+    }
+
+    @Test
+    fun dismissTrustPrompt_clearsPrompt_withoutPersisting() = runTest(testDispatcher) {
+        coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
+            Result.failure(javax.net.ssl.SSLHandshakeException("PKIX"))
+        viewModel.connectToServer("https://selfsigned.example.com") {}
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.tlsTrustPromptAddress != null)
+
+        viewModel.dismissTrustPrompt()
+
+        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+        coVerify(exactly = 0) { networkOfflineStore.addSelfSignedTrustHost(any()) }
+        coVerify(exactly = 1) { authRepository.addServer(any()) }
+    }
+
+    @Test
+    fun updateManualAddress_clearsTrustPrompt() = runTest(testDispatcher) {
+        coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
+            Result.failure(javax.net.ssl.SSLHandshakeException("PKIX"))
+        viewModel.connectToServer("https://selfsigned.example.com") {}
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.tlsTrustPromptAddress != null)
+
+        viewModel.updateManualAddress("https://other")
+
+        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+    }
+
+    @Test
+    fun confirmTrustServer_withoutPrompt_isANoOp() = runTest(testDispatcher) {
+        viewModel.confirmTrustServer()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { networkOfflineStore.addSelfSignedTrustHost(any()) }
     }
 
     // ------------------------------------------------------------- discovery

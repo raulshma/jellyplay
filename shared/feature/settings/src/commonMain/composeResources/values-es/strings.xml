@@ -38,6 +38,8 @@
     <string name="settings_sign_out_from_server">Cerrar sesión en el servidor</string>
     <string name="settings_sign_out_from_server_subtitle">Revocar la sesión de este dispositivo en el servidor</string>
     <string name="settings_server_management_subtitle">Cambia de servidor o añade nuevas conexiones</string>
+    <string name="settings_trust_self_signed">Confiar en certificados autofirmados</string>
+    <string name="settings_trust_self_signed_off">Confía en el certificado de este servidor aunque no se pueda verificar. Desactívalo para exigir un certificado válido.</string>
     <string name="settings_switch_user_subtitle">Gestiona usuarios y perfiles del servidor</string>
     <string name="settings_activity_insights">Actividad e información</string>
     <string name="settings_activity_insights_subtitle">Favoritos, historial, cola y próximos estrenos</string>

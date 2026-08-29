@@ -38,6 +38,8 @@
     <string name="settings_sign_out_from_server">从服务器退出登录</string>
     <string name="settings_sign_out_from_server_subtitle">撤销本设备在服务器上的会话</string>
     <string name="settings_server_management_subtitle">切换服务器或添加新连接</string>
+    <string name="settings_trust_self_signed">信任自签名证书</string>
+    <string name="settings_trust_self_signed_off">即使无法验证也信任此服务器的证书。关闭后将要求有效证书。</string>
     <string name="settings_switch_user_subtitle">管理服务器用户和配置文件</string>
     <string name="settings_activity_insights">活动 &amp; 洞察</string>
     <string name="settings_activity_insights_subtitle">收藏、历史、队列和即将发布</string>

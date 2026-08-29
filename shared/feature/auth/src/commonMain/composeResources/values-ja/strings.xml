@@ -40,6 +40,9 @@
     <string name="auth_error_ssl">SSL/TLS エラー - サーバー証明書を確認してください</string>
     <string name="auth_error_cleartext">HTTP 接続は許可されていません。HTTPS を使用してください。</string>
     <string name="auth_error_connection_failed">サーバーへの接続に失敗しました</string>
+    <string name="auth_tls_trust_title">このサーバー証明書を信頷しますか？</string>
+    <string name="auth_tls_trust_body">%1$s のサーバーは、JellyPlay が検証できなかった証明書（自己署名または信頷できない）を使用しています。信頷すると、JellyPlay はこのサーバーに安全に接続できます。この設定は後から「設定 → サーバー管理」で取り消せます。</string>
+    <string name="auth_tls_trust_confirm">信頷して接続</string>
 
     <!-- Android 17+ local network permission -->
     <string name="auth_error_local_network_denied">ローカル ネットワークへのアクセスがブロックされています。Wi-Fi 上のサーバーに接続するには、ローカル ネットワークの権限を許可してください。</string>

@@ -33,6 +33,10 @@ val authModule: Module = module {
             authRepository = get(),
             serverDiscoveryRepository = get(),
             localNetworkStatus = get(),
+            // Self-signed trust grants persist into the network DataStore
+            // (datastoreCommonModule single); the OkHttp config StateFlow the
+            // network layer reads at handshake time flows from it.
+            networkOfflineStore = get(),
         )
     }
 }

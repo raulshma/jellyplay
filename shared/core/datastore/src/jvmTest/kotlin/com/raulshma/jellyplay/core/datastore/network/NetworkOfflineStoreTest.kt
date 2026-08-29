@@ -62,4 +62,40 @@ class NetworkOfflineStoreTest {
         store.setMeteredNetworkBehavior(MeteredNetworkBehavior.BLOCK)
         assertEquals(MeteredNetworkBehavior.BLOCK, store.networkOffline.first().meteredNetworkBehavior)
     }
+
+    // ------------------------------- wave 21A: self-signed trust entries
+
+    @Test
+    fun `selfSignedTrustHosts default empty, grants and revokes round-trip`() = runTest {
+        assertEquals(emptySet<String>(), store.networkOffline.first().selfSignedTrustHosts)
+
+        store.addSelfSignedTrustHost("https://192.168.1.10:8920")
+        store.addSelfSignedTrustHost("https://media.example.com")
+        // Idempotent on repeat.
+        store.addSelfSignedTrustHost("https://media.example.com")
+        assertEquals(
+            setOf("https://192.168.1.10:8920", "https://media.example.com"),
+            store.networkOffline.first().selfSignedTrustHosts,
+        )
+
+        store.removeSelfSignedTrustHost("https://media.example.com")
+        assertEquals(
+            setOf("https://192.168.1.10:8920"),
+            store.networkOffline.first().selfSignedTrustHosts,
+        )
+        // Revoking the last entry is fine (and idempotent).
+        store.removeSelfSignedTrustHost("https://192.168.1.10:8920")
+        store.removeSelfSignedTrustHost("https://192.168.1.10:8920")
+        assertEquals(emptySet<String>(), store.networkOffline.first().selfSignedTrustHosts)
+    }
+
+    @Test
+    fun `addSelfSignedTrustHost trims trailing slashes and ignores blanks`() = runTest {
+        store.addSelfSignedTrustHost("  https://media.example.com/ ")
+        assertEquals(setOf("https://media.example.com"), store.networkOffline.first().selfSignedTrustHosts)
+
+        store.addSelfSignedTrustHost("")
+        store.addSelfSignedTrustHost("   ")
+        assertEquals(setOf("https://media.example.com"), store.networkOffline.first().selfSignedTrustHosts)
+    }
 }

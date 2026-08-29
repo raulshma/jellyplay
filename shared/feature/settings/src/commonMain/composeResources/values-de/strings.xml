@@ -38,6 +38,8 @@
     <string name="settings_sign_out_from_server">Vom Server abmelden</string>
     <string name="settings_sign_out_from_server_subtitle">Sitzung dieses Geräts auf dem Server widerrufen</string>
     <string name="settings_server_management_subtitle">Server wechseln oder neue Verbindungen hinzufügen</string>
+    <string name="settings_trust_self_signed">Selbstsignierte Zertifikate vertrauen</string>
+    <string name="settings_trust_self_signed_off">Vertraut dem Zertifikat dieses Servers, auch wenn es nicht überprüfbar ist. Ausschalten, um ein gültiges Zertifikat zu verlangen.</string>
     <string name="settings_switch_user_subtitle">Server-Benutzer und Profile verwalten</string>
     <string name="settings_activity_insights">Aktivität &amp; Einblicke</string>
     <string name="settings_activity_insights_subtitle">Favoriten, Verlauf, Warteschlange und Anstehendes</string>

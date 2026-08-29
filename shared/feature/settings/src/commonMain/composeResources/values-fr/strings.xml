@@ -38,6 +38,8 @@
     <string name="settings_sign_out_from_server">Se déconnecter du serveur</string>
     <string name="settings_sign_out_from_server_subtitle">Révoquer la session de cet appareil sur le serveur</string>
     <string name="settings_server_management_subtitle">Changer de serveur ou ajouter de nouvelles connexions</string>
+    <string name="settings_trust_self_signed">Faire confiance aux certificats auto-signés</string>
+    <string name="settings_trust_self_signed_off">Fait confiance au certificat de ce serveur même s\'il ne peut pas être vérifié. Désactivez pour exiger un certificat valide.</string>
     <string name="settings_switch_user_subtitle">Gérer les utilisateurs et profils du serveur</string>
     <string name="settings_activity_insights">Activité &amp; statistiques</string>
     <string name="settings_activity_insights_subtitle">Favoris, historique, file et à venir</string>

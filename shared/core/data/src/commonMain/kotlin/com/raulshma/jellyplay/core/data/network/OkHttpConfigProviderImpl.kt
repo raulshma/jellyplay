@@ -37,6 +37,11 @@ import kotlinx.coroutines.flow.stateIn
  * of the process so `.value` stays live. `.distinctUntilChanged()` suppresses
  * redundant re-emits on unrelated preference writes (`OkHttpConfig` is a data
  * class).
+ *
+ * That liveness is load-bearing for [OkHttpConfig.selfSignedTrustHosts] in
+ * particular: the network layer's trust manager reads the granted set from
+ * `.value` at TLS-handshake time, so a grant made in the Add Server dialog is
+ * honored by the very next handshake — no client rebuild anywhere.
  */
 class OkHttpConfigProviderImpl(
     networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
@@ -50,6 +55,7 @@ class OkHttpConfigProviderImpl(
                     maxCacheSizeMb = prefs.maxCacheSizeMb,
                     networkTimeoutPreset = prefs.networkTimeoutPreset,
                     verboseNetworkLogging = prefs.verboseNetworkLogging,
+                    selfSignedTrustHosts = prefs.selfSignedTrustHosts,
                 )
             }
             .distinctUntilChanged()
@@ -60,6 +66,7 @@ class OkHttpConfigProviderImpl(
                     maxCacheSizeMb = 0,
                     networkTimeoutPreset = NetworkTimeoutPreset.DEFAULT,
                     verboseNetworkLogging = false,
+                    selfSignedTrustHosts = emptySet(),
                 ),
             )
 }

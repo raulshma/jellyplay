@@ -41,6 +41,8 @@
     <string name="settings_sign_out_from_server">Sign Out from Server</string>
     <string name="settings_sign_out_from_server_subtitle">Revoke this device\'s session on the server</string>
     <string name="settings_server_management_subtitle">Switch servers or add new connections</string>
+    <string name="settings_trust_self_signed">Trust self-signed certificates</string>
+    <string name="settings_trust_self_signed_off">Trusts this server\'s certificate even when it can\'t be verified. Turn off to require a valid certificate.</string>
     <string name="settings_switch_user_subtitle">Manage server users and profiles</string>
     <string name="settings_activity_insights">Activity &amp; Insights</string>
     <string name="settings_activity_insights_subtitle">Favorites, history, queue, and upcoming</string>
