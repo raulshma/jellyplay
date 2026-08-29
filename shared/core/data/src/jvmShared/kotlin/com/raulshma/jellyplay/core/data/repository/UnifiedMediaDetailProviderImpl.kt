@@ -76,8 +76,8 @@ import java.util.concurrent.atomic.AtomicLong
 // :core:data shim (same package/name). Ctor-level transforms only — method
 // bodies are byte-identical:
 //  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's
-//    dataJvmModule constructs this single; the legacy DataModule bridges the
-//    remaining Hilt injectors via koin().get()).
+//    dataJvmModule constructs this single; every consumer resolves it
+//    straight from Koin).
 //  - the `@ApplicationScope` qualifier dropped from the scope param (the
 //    javax qualifier lives in the legacy Hilt graph; the dataJvmModule def
 //    passes the same Koin `named("applicationScope")` single every other

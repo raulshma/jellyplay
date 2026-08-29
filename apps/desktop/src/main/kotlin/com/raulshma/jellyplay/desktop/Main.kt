@@ -250,7 +250,7 @@ fun main() {
             // desktop (AuthRepository + ServerDiscoveryRepository from
             // dataJvmModule, LocalNetworkStatus from the jvmMain platform
             // pick below), so this registration is live-resolvable — NOT
-            // dormant-for-missing-deps like editor. Wave 19A unified sign-in
+            // dormant-for-missing-deps. Wave 19A unified sign-in
             // on these shared screens: the signed-out gate
             // (DesktopSignedOutAuthHost) and the signed-in settings drill-ins
             // (DesktopAppRoot's authSection entries) both instantiate these
@@ -272,14 +272,15 @@ fun main() {
 
             // …details, Phase X cutover wave (legacy :feature:details was the
             // largest never-conveyor module): registration fully
-            // live-resolvable — every data-layer ctor dep is Koin-native
+            // live — every data-layer ctor dep is Koin-native
             // (dataJvmModule/datastoreCommonModule), AudioQueueFacade comes
             // from desktopPlayerModule's DefaultAudioQueueFacade binding
             // (wave 9B), and the module-local platform seams below supply
             // no-op audio/theme playback + the appdata storage probe.
-            // Dormant only for lack of nav wiring — the coordinator wires
-            // the MediaDetail/SeerrDetail routes post-merge; until then no
-            // desktop route instantiates a details VM.
+            // DesktopAppRoot wires detailsSection behind every shared
+            // screen that pushes a detail route (search results, requests/
+            // calendar → SeerrDetail, person rows), so detail VMs
+            // instantiate for real.
             detailsModule,
             desktopDetailsPlatformModule(paths.dataDirNio),
             // Home conveyor: LIVE since the wave 8B desktop wiring — the

@@ -26,8 +26,9 @@ import kotlinx.coroutines.sync.withLock
  * Implementation of [SubtitleProviderRepository].
  *
  * Resolves the configured providers from the preferences + credential stores,
- * then fans out search across the external providers concurrently via the Hilt
- * `Map<SubtitleProviderKind, SubtitleProvider>`. Jellyfin is searched through
+ * then fans out search across the external providers concurrently via the
+ * Koin-built `Map<SubtitleProviderKind, SubtitleProvider>` (networkJvmModule,
+ * the former @IntoMap flip). Jellyfin is searched through
  * [searchJellyfin]/[searchAllStreaming] (server-mediated via [PlaybackRepository],
  * returns [RemoteSubtitleInfo] wrapped with [SubtitleSearchResult.jellyfinInfo]);
  * it is intentionally not part of [search] (it is `itemId`-scoped, while

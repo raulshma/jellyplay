@@ -10,11 +10,10 @@ import org.koin.dsl.module
  * §Phase V3 feature conveyor). The HiltViewModel/@Inject annotations were
  * stripped at the move — Koin is the single constructor owner (one framework
  * per type). The single ctor dep (AuthRepository) was already Koin-native on
- * BOTH platforms before this feature moved: it resolves from dataJvmModule
- * (the legacy AuthModule @Binds is the reverse bridge, Hilt→Koin). The whole
- * dep graph resolves on desktop too — the startKoin there can instantiate it
- * directly once a desktop nav entry exists (the calendar/requests fully-live
- * registration shape; shortcuts stays dormant only for lack of nav wiring).
+ * BOTH platforms before this feature moved: it resolves from dataJvmModule.
+ * The whole dep graph resolves on desktop too — nav v1 renders
+ * shortcutsSection in the rail (the calendar/requests fully-live
+ * registration shape).
  */
 val shortcutsModule: Module = module {
     viewModel {

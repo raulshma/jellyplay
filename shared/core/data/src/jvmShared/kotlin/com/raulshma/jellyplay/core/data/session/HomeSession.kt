@@ -59,7 +59,9 @@ import java.util.concurrent.atomic.AtomicReference
  * their own long-lived scopes for singleton collectors. The constructor's
  * scope parameter is also the cross-module TEST seam: a JVM test passes its
  * own scope (e.g. runTest's `backgroundScope`) to drive the classifier on
- * the test scheduler; production code lets Hilt inject the application one.
+ * the test scheduler; production wiring passes Koin's application scope
+ * (DatastoreQualifiers.applicationScope — see the HomeSession single in
+ * dataJvmModule).
  */
 class HomeSession(
     private val apiClient: JellyfinApiClient,

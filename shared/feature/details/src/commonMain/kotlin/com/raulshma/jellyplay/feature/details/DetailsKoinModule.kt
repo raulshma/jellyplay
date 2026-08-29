@@ -38,12 +38,13 @@ import org.koin.dsl.module
  * (dataJvmModule + datastoreCommonModule); the platform seams are registered
  * per platform:
  * - Android: `androidDetailsModule(context)` (storage probe + the jvm-only
- *   VM/factory defs) + app-side HiltInterop lazy singles for
- *   [DetailAudioPlayback] / [DetailThemeMusic].
+ *   VM/factory defs) + the app composition root's Koin seam adapters for
+ *   [DetailAudioPlayback] / [DetailThemeMusic] (androidAppInteropAdapters
+ *   Module, over the core-data Koin singles).
  * - Desktop: `desktopDetailsPlatformModule(dataDir)` (no-op audio/theme +
  *   appdata storage probe + the same jvm-only VM/factory defs) — the desktop
- *   registration is fully live-resolvable, dormant only for lack of nav
- *   wiring.
+ *   registration is fully live: DesktopAppRoot wires detailsSection behind
+ *   every shared screen that pushes a detail route.
  */
 val detailsModule: Module = module {
     single<DetailStrings> { detailStrings() }

@@ -151,13 +151,14 @@ import org.koin.dsl.module
  * `MediaRepositoryAccess` actual became real — desktop series downloads and
  * the auto-download scheduler are live.
  *
- * Interim DataModule direct-construction providers (types moved here but
- * still Hilt-built pending further flips): `DefaultAudioQueueFacade` only —
- * its AudioQueueManager ctor dep is the media3 AudioPlaybackManager, which
- * is owned by the legacy core:data androidCoreDataModule since wave 8A. `AudioLyricsManager` left that list with this
- * flip (its sole dep, the LyricsRepository view of MediaRepository, is
- * defined below); the `OfflineSyncManager` provider flipped with the V3
- * downloads conveyor.
+ * `DefaultAudioQueueFacade` is the one playback-graph type NOT defined here:
+ * its AudioQueueManager ctor dep is the media3 AudioPlaybackManager, so its
+ * Koin single lives in the legacy core:data androidCoreDataModule (owned
+ * there since wave 8A; desktopPlayerModule binds the desktop twin).
+ * `AudioLyricsManager` left that Android-only set when its sole dep (the
+ * LyricsRepository view of MediaRepository) became the single below;
+ * `OfflineSyncManager` flipped into this module with the V3 downloads
+ * conveyor.
  *
  * The admin flip (Wave wB) moved the last two Hilt-owned repositories here:
  * `AdminRepositoryImpl` (verbatim — no platform surface) and
@@ -190,10 +191,9 @@ val dataJvmModule: Module = module {
 
     single { OrderHomeSectionsUseCase() }
 
-    // V3 library conveyor: Koin owns construction; legacy Hilt injectors
-    // (HomeViewModel, PhotoFolderChildUrlsStore) reach this single through the
-    // DataModule koin().get() bridge. MediaRepository resolves via the app's
-    // Hilt interop on Android.
+    // V3 library conveyor: Koin owns construction; its consumers
+    // (HomeViewModel, PhotoFolderChildUrlsStore) resolve this single
+    // straight from Koin.
     single { PhotoFolderPrefetcher(get()) }
 
     // JellyfinApiClient resolves from :shared:core:network's networkJvmModule.
@@ -323,10 +323,10 @@ val dataJvmModule: Module = module {
 
     // Playback-flips wave: AdaptiveBitrateManager moved from the legacy
     // :core:data shim — ConnectivityManager became the NetworkMonitor seam
-    // (null-network/metered parity documented on the class). Former Hilt
-    // injectors (feature:details DownloadLifecycleActions, feature:player:video
+    // (null-network/metered parity documented on the class). Its consumers
+    // (feature:details DownloadLifecycleActions, feature:player:video
     // PlayerCastController / PlaybackSession / PlayerSessionManager /
-    // VideoPlayerViewModel) ride the DataModule koin().get() bridge.
+    // VideoPlayerViewModel) resolve this single from Koin directly.
     single { AdaptiveBitrateManager(get(), get(), get()) }
 
     // V3 livetv conveyor: the mini-player holder moved from the legacy
@@ -453,10 +453,10 @@ val dataJvmModule: Module = module {
     // :core:data shim (Uri.fromFile → File.toURI, see the impl's URI-shape
     // note) — UnifiedMediaDetailProviderImpl's ctor dep below now resolves
     // from this module on BOTH platforms, and the app's HiltInterop reverse
-    // single for the interface was deleted. Legacy Hilt injectors of the
-    // interface (app MainViewModel, feature:player:video
-    // PlayerSessionManager, the core:data audio trio) ride the DataModule
-    // koin().get() bridge.
+    // single for the interface was deleted with the wave-8 Hilt extinction.
+    // Every consumer of the interface (app MainViewModel,
+    // feature:player:video PlayerSessionManager, the core:data audio trio)
+    // resolves this single from Koin directly.
     single {
         PlaybackSourceResolverImpl(
             downloadRepository = get(),
@@ -493,10 +493,9 @@ val dataJvmModule: Module = module {
     }
     single<OfflineFirstItemResolver> { get<OfflineFirstItemResolverImpl>() }
 
-    // Concrete class (no interface). Playback-flips wave: its one legacy Hilt
-    // injector (PlaybackSourceResolverImpl) moved into this module too, so
-    // construction is all-Koin here; the DataModule koin().get() bridge
-    // carries any remaining Hilt injectors onto this single.
+    // Concrete class (no interface). Playback-flips wave: its one former
+    // Hilt injector (PlaybackSourceResolverImpl) moved into this module too,
+    // so construction AND consumption are all-Koin here.
     single { OfflinePlaybackFacade(get(), get()) }
 
     // AudioLyricsManager left the DataModule interim direct-construction
@@ -543,13 +542,13 @@ val dataJvmModule: Module = module {
     // impl via the app module; desktop: appdata-based impl in desktopDataModule),
     // notification summary + Coil preloading → platform no-op-able fun
     // interfaces, and MediaRepository behind the deferred MediaRepositoryAccess
-    // (Android def: androidDataModule → Hilt interop; desktop def: throws until
-    // Phase X — every mediaRepository use sits on the series paths, which a
-    // single-item startDownload never reaches). `downloadDelegate` keeps the
-    // construction cycle broken via a memoizing kotlin Lazy (the daggerLazy
-    // pattern). Legacy Hilt injectors (PlayedStateSyncImpl,
+    // (both platform defs forward to this module's own MediaRepositoryImpl
+    // single since the Phase X cluster flip — Android in androidDataModule,
+    // desktop in desktopDataModule). `downloadDelegate` keeps the
+    // construction cycle broken via a memoizing kotlin Lazy (the Lazy-deferred
+    // pattern). Consumers (PlayedStateSyncImpl,
     // OfflinePlaybackFacade, AudioLibraryBrowser, workers, feature modules)
-    // reach this single through the DataModule koin().get() bridges.
+    // resolve this single from Koin directly.
     single {
         DownloadRepositoryImpl(
             downloadDao = get(),

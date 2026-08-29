@@ -20,7 +20,7 @@ package com.raulshma.jellyplay.core.model
  * Passive-`now` API: like feature/home's `TtlCacheGate`, [isRoomSnapshotFresh]
  * takes the current time as a parameter instead of reading a clock. This
  * object owns policy, not time; each caller keeps whatever clock it already
- * owns (Hilt-injected `TimeSource` in the repo, test fakes elsewhere).
+ * owns (Koin-injected `TimeSource` in the repo, test fakes elsewhere).
  */
 object HomeFreshness {
 

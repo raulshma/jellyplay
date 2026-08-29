@@ -69,7 +69,7 @@ import org.koin.core.context.stopKoin
 /**
  * Smoke test for the C4 part-2 data construction owner: loads the full
  * desktop graph (datastore + database + network + data, common plus desktop
- * platform picks) and resolves the shapes the Hilt bridges depend on — the
+ * platform picks) and resolves the shapes downstream consumers depend on — the
  * repository facades, the OkHttpConfigProvider whose definition moved here
  * from the app composition root (DI-finalize stage), the shared-single alias
  * contracts, the session / syncplay cluster, and the subtitle-provider map

@@ -8,8 +8,8 @@ import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
  * Android implementation of the [ImageUrlProvider] seam (C4 part 2): body
  * moved verbatim from the legacy `:core:data` `ImageUrlProviderImpl` — the
  * Hilt annotations were stripped (Koin's
- * [com.raulshma.jellyplay.core.data.di.androidDataModule] constructs it; the
- * legacy DataModule bridges Hilt consumers to the same single).
+ * [com.raulshma.jellyplay.core.data.di.androidDataModule] constructs it;
+ * consumers resolve the same single straight from Koin).
  */
 class ImageUrlProviderImpl(
     private val playbackRepository: PlaybackRepository,

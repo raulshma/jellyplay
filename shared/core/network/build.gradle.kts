@@ -75,8 +75,10 @@ kotlin {
             implementation(libs.okhttp.logging.interceptor)
             implementation(libs.slf4j.api)
             implementation(libs.kotlinx.serialization.json)
-            // @Inject/@Singleton/@Named stay on the impl classes; Dagger reads
-            // them from binaries at the legacy shim's KSP processing.
+            // Vestigial javax @Inject/@Singleton/@Named decorations remain on
+            // the impl classes (inert: no Dagger/KSP processing exists
+            // anywhere in the repo — Koin constructs every type). The
+            // dependency only keeps those annotations compiling.
             implementation(libs.javax.inject)
             // dagger.Lazy ctor params on JellyfinApiEngine (deferred SDK +
             // OkHttp construction off the synchronous Hilt graph).
