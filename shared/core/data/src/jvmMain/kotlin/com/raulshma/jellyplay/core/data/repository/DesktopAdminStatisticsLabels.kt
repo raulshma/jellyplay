@@ -4,9 +4,17 @@ package com.raulshma.jellyplay.core.data.repository
  * Desktop actual of [AdminStatisticsLabelProvider]: base-locale English
  * literals, byte-matching the legacy core:data `values/strings.xml` entries
  * the Android def still reads (all format args via Kotlin string templates —
- * no String.format, so the output is locale-stable). English-only on desktop
- * is the accepted locale delta, same as the downloads conveyor's
- * `data_no_media_source_download` copy in DesktopDownloadIntake.
+ * no String.format, so the output is locale-stable).
+ *
+ * English-only on desktop is a FINAL accepted locale delta, not a pending
+ * item: these labels are pre-formatted values the repository bakes into
+ * persisted scan rows and content-breakdown rows — [AdminStatisticsLabelProvider]
+ * returns resolved strings, and even the Android actual resolves them the same
+ * way (`context.getString`) at the same point. Carrying resources instead
+ * would mean a persistable resource-id representation plus render-time
+ * resolution through the admin UI — new translation plumbing for desktop-only
+ * diagnostic labels. Desktop renders them in English, like the downloads
+ * conveyor's `data_no_media_source_download` copy in DesktopDownloadIntake.
  */
 internal object DesktopAdminStatisticsLabels : AdminStatisticsLabelProvider {
     override fun movies(): String = "Movies"
