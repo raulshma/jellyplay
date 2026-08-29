@@ -8,7 +8,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
-import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.savedstate.serialization.SavedStateConfiguration
 
 @Stable
@@ -40,7 +39,13 @@ fun rememberNavigationState(
         },
     )) { mutableStateOf(startRoute) }
 
-    val backStacks = topLevelRoutes.associateWith { key -> rememberNavBackStack(savedStateConfiguration ?: SavedStateConfiguration.DEFAULT, key) }
+    // Platform seam (wave-21 device pass fix): Android takes the reflection
+    // overload (the explicit-configuration overload + DEFAULT module is the
+    // launch-crash the device pass caught); JVM/wasm keep the configuration
+    // path. See NavBackStackSaveable.kt for the full account.
+    val backStacks = topLevelRoutes.associateWith { key ->
+        rememberNavBackStackSaveable(savedStateConfiguration, key)
+    }
 
     // On a state-loss restore (OS-killed process, "Don't keep activities", or
     // low-memory eviction), the saveable Navigation 3 back stack round-trips a
