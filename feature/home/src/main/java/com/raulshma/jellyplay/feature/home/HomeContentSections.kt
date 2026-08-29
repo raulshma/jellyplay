@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
@@ -87,6 +88,11 @@ internal data class HomeContentState(
     val recentlyGrabbed: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>,
     val photoFolderChildUrls: Map<String, List<String>>,
     val offlineLibrary: List<OfflineMediaItem>,
+    /**
+     * Non-blocking informational banner (e.g. the implicit-offline
+     * "couldn't reach the server — showing your downloads" notice). Null hides it.
+     */
+    val statusBanner: String? = null,
 )
 
 @Immutable
@@ -95,6 +101,8 @@ internal data class HomeContentCallbacks(
     val onDismissNewsletterBanner: () -> Unit,
     val onNewsletterClick: () -> Unit,
     val onOfflineLibraryClick: () -> Unit,
+    /** Open a downloaded item's detail from an offline-derived section row. */
+    val onOfflineItemClick: (itemId: String, mediaType: MediaType) -> Unit = { _, _ -> },
     val onItemClick: (String) -> Unit,
     val onFocusChange: (Boolean) -> Unit,
     val mediaOnItemClick: (MediaItem) -> Unit,
@@ -242,6 +250,34 @@ internal fun HomeContentList(
                 item(key = "hero_spacer") { Spacer(Modifier.height(100.dp)) }
             }
 
+            // Non-blocking informational banner (implicit-offline fallback notice).
+            if (state.statusBanner != null) {
+                item(key = "status_banner") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = state.contentPad, vertical = 4.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Tabler.Outline.AlertCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = state.statusBanner,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
+                }
+            }
+
             // Non-blocking notice when some home sections failed to load.
             if (state.partialLoadError) {
                 item(key = "partial_load_banner") {
@@ -346,7 +382,29 @@ internal fun HomeContentList(
                     section.title
                 }
 
-                if (section.type == HomeSectionType.CONTINUE_WATCHING || section.type == HomeSectionType.NEXT_UP) {
+                if (section.type == HomeSectionType.DOWNLOADED) {
+                    // Offline-derived section (see buildOfflineHomeSections):
+                    // re-resolve the offline originals by id so the cards render
+                    // local artwork and clicks route to the offline detail.
+                    val offlineById = remember(state.offlineLibrary) {
+                        state.offlineLibrary.associateBy { it.id }
+                    }
+                    val offlineItems = remember(section, offlineById) {
+                        section.items.mapNotNull { offlineById[it.id] }
+                    }
+                    OfflineHomeMediaRow(
+                        title = sectionTitle,
+                        items = offlineItems,
+                        onItemClick = remember(callbacks) {
+                            { item -> callbacks.onOfflineItemClick(item.id, item.mediaType) }
+                        },
+                        modifier = sectionModifier,
+                        focusRequester = rowFocusRequesters[index],
+                        onRowFocused = { homeFocusRow = index },
+                        clippingEnabled = state.experimentalCardClippingEnabled,
+                        onFocusedItemChange = callbacks.onFocusedMediaItem,
+                    )
+                } else if (section.type == HomeSectionType.CONTINUE_WATCHING || section.type == HomeSectionType.NEXT_UP) {
                     val rowItemClick: (MediaItem) -> Unit = remember(
                         section.type, state.continueWatchingClickBehavior, callbacks.mediaOnItemClick, callbacks.mediaOnPlayClick,
                     ) {
@@ -485,7 +543,10 @@ internal fun HomeContentList(
                 }
             }
 
-            if (dedupedOfflineLibrary.isNotEmpty()) {
+            // While offline, the offline library IS the section list above, so
+            // the inline Downloaded row would duplicate every title.
+            val rendersOfflineSections = sections.any { it.type == HomeSectionType.DOWNLOADED }
+            if (dedupedOfflineLibrary.isNotEmpty() && !rendersOfflineSections) {
                 item(key = "downloaded_row") {
                     // DownloadedSection renders its own "Downloaded" header, so we
                     // intentionally don't emit a separate header item here.

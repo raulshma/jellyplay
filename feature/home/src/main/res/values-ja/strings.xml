@@ -34,7 +34,6 @@
 
     <string name="home_settings">設定</string>
     <string name="home_switch_user">ユーザーを切り替え</string>
-    <string name="home_going_online">オンラインに切り替え中…</string>
     <string name="home_go_online">オンラインにする</string>
     <string name="home_go_offline">オフラインにする</string>
 
@@ -66,7 +65,6 @@
     <string name="home_no_downloads_yet">ダウンロードはまだありません</string>
     <string name="home_no_downloads_description">オンライン中にダウンロードすると、オフラインでも視聴できます。</string>
     <string name="home_go_online_action">オンラインにする</string>
-    <string name="home_your_downloads">あなたのダウンロード</string>
 
     <!-- Home search overlay. -->
     <string name="home_no_results_found">結果が見つかりません</string>

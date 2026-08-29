@@ -46,7 +46,9 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.hasPlaybackPosition
+import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -56,6 +58,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
+import com.raulshma.jellyplay.core.ui.components.OfflineMediaCard
 import com.raulshma.jellyplay.core.ui.components.PlayButtonWithProgress
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.WideMediaCard
@@ -75,8 +78,85 @@ import com.composables.icons.tabler.outline.ChevronRight
  * carousel effect. When false (the default) it falls back to a plain [LazyRow]
  * with `clipToBounds = false` so items and their elevation bleed past the edges.
  */
+/**
+ * Home row for the offline-derived sections ([HomeSectionType.DOWNLOADED]):
+ * the same chrome as [HomeMediaRow] — title, card width, spacing, TV/mobile
+ * scroller, focus wiring — but cards render via [OfflineMediaCard] so artwork
+ * resolves from local files and no server image URL is ever built (issue #147:
+ * the offline home is the normal home, populated from downloads).
+ */
+@Composable
+internal fun OfflineHomeMediaRow(
+    title: String,
+    items: List<OfflineMediaItem>,
+    onItemClick: (OfflineMediaItem) -> Unit,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    onRowFocused: (() -> Unit)? = null,
+    clippingEnabled: Boolean = false,
+    // TV-only: reports the D-pad-focused item so the screen's Menu key can
+    // open its quick actions (the offline card's own long-press handles touch).
+    onFocusedItemChange: ((MediaItem) -> Unit)? = null,
+) {
+    val isTv = LocalTvMode.current
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val cardWidth = adaptiveInfo.rowCardWidth(isTv)
+    val contentPad = adaptiveInfo.contentPadding(isTv)
+    val spacing = adaptiveInfo.itemSpacing(isTv)
+
+    Column(modifier = modifier) {
+        HomeSectionTitle(
+            title = title,
+            contentPad = contentPad,
+            onLongClick = null,
+        )
+        if (isTv) {
+            TvFocusableItemRow(
+                items = items,
+                key = { it.id },
+                contentPadding = PaddingValues(horizontal = contentPad),
+                horizontalArrangement = Arrangement.spacedBy(spacing),
+                focusRequester = focusRequester,
+                onRowFocused = onRowFocused,
+                clipToBounds = clippingEnabled,
+                onFocusedIndexChange = { index ->
+                    onFocusedItemChange?.let { change -> items.getOrNull(index)?.let { change(it.toMediaItem()) } }
+                },
+            ) { _, item, focusModifier ->
+                // Every item here is downloaded by definition, so the
+                // "Downloaded" status badge would be redundant.
+                OfflineMediaCard(
+                    item = item,
+                    onClick = { onItemClick(item) },
+                    modifier = focusModifier.width(cardWidth),
+                    showStatusBadge = false,
+                )
+            }
+        } else {
+            HorizontalMediaScroller(
+                itemCount = items.size,
+                itemWidth = cardWidth,
+                spacing = spacing,
+                contentPad = contentPad,
+                clippingEnabled = clippingEnabled,
+                modifier = Modifier.tvFocusRestorer(),
+                key = { index -> items[index].id },
+            ) { index ->
+                val item = items[index]
+                OfflineMediaCard(
+                    item = item,
+                    onClick = { onItemClick(item) },
+                    modifier = Modifier.width(cardWidth),
+                    showStatusBadge = false,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun HorizontalMediaScroller(
+
     itemCount: Int,
     itemWidth: androidx.compose.ui.unit.Dp,
     spacing: androidx.compose.ui.unit.Dp,

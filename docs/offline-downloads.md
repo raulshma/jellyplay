@@ -188,7 +188,11 @@ bundled offline subtitles and local trickplay sprites automatically.
 
 You can also toggle **Offline mode** manually from the home screen at any
 time — useful to force offline playback even when a flaky connection is
-available.
+available. While offline (manually, automatically on network loss, or when
+the server can't be reached), the home screen keeps its normal layout and
+shows rows derived from your downloads — Continue Watching, Recently
+Downloaded, Movies, Series, Music — served entirely from the on-device
+store.
 
 ## Keeping downloads fresh (resync)
 

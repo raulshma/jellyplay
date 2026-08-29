@@ -34,7 +34,6 @@
 
     <string name="home_settings">设置</string>
     <string name="home_switch_user">切换用户</string>
-    <string name="home_going_online">正在联网…</string>
     <string name="home_go_online">联网</string>
     <string name="home_go_offline">离线</string>
 
@@ -66,7 +65,6 @@
     <string name="home_no_downloads_yet">暂无下载</string>
     <string name="home_no_downloads_description">联网时下载媒体，即可离线访问。</string>
     <string name="home_go_online_action">联网</string>
-    <string name="home_your_downloads">你的下载</string>
 
     <!-- Home search overlay. -->
     <string name="home_no_results_found">未找到结果</string>

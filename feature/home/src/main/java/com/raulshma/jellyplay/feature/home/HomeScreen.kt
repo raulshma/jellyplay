@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -56,6 +57,7 @@ import android.content.Context
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -75,6 +77,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.DeleteDownloadedEpisodesSheet
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
@@ -162,22 +165,6 @@ fun HomeScreen(
         musicContent = musicContent,
         surpriseRequests = surpriseRequests,
     )
-}
-
-/**
- * Filters the offline library by the current home mode: [HomeMode.MUSIC] keeps audio/music
- * types, everything else excludes them so video and music home screens never mix.
- */
-private fun filterOfflineByMode(
-    library: List<OfflineMediaItem>,
-    homeMode: HomeMode,
-): List<OfflineMediaItem> {
-    val musicTypes = setOf(MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM, MediaType.ARTIST)
-    return if (homeMode == HomeMode.MUSIC) {
-        library.filter { it.mediaType in musicTypes }
-    } else {
-        library.filter { it.mediaType !in musicTypes }
-    }
 }
 
 @Composable
@@ -490,11 +477,28 @@ private fun MainHomeContent(
                         }
                         .focusGroup()
                 ) {
+                // Offline home = the normal home content list fed with sections
+                // derived from the offline library (#147) — no dedicated offline
+                // screen. Sections are recomputed only when the library, the
+                // home mode, or the localized titles change.
+                val offlineTitles = rememberOfflineHomeSectionTitles()
+                val offlineSections = remember(state.offlineLibrary, state.homeMode, offlineTitles) {
+                    buildOfflineHomeSections(
+                        filterOfflineByMode(state.offlineLibrary, state.homeMode),
+                        offlineTitles,
+                    )
+                }
+                // Server fetch failed but downloads exist -> implicit offline: the
+                // same integrated home plus a status banner so the fallback isn't
+                // silent. (state.offlineLibrary is only collected while offline or
+                // mid-failure, so this never shadows the online home.)
+                val implicitOffline = state.error != null && state.sections.isEmpty() &&
+                    state.offlineMode == OfflineMode.ONLINE && state.offlineLibrary.isNotEmpty()
+                val renderingOffline = state.offlineMode != OfflineMode.ONLINE || implicitOffline
+
                 when {
-                    // When an online fetch fails but we have downloads, show the offline
-                    // library instead of a hard error — downloads are the
-                    // user's primary use case. Only show ErrorScreen when there's nothing
-                    // offline to fall back on.
+                    // When an online fetch fails but we have no downloads, there is
+                    // nothing to fall back on — show the hard error.
                     state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE &&
                         state.offlineLibrary.isEmpty() -> {
                         ErrorScreen(
@@ -503,53 +507,43 @@ private fun MainHomeContent(
                             modifier = Modifier.padding(horizontal = contentPad),
                         )
                     }
-                    // Fetch failed (online) but downloads are available → fall through to
-                    // the offline rendering below, treating it as an implicit offline state.
-                    state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE &&
-                        state.offlineLibrary.isNotEmpty() -> {
-                        val filteredOfflineLibrary = remember(state.offlineLibrary, state.homeMode) {
-                            filterOfflineByMode(state.offlineLibrary, state.homeMode)
+                    // Explicitly offline (manual or auto) with nothing downloaded.
+                    state.offlineMode != OfflineMode.ONLINE && offlineSections.isEmpty() -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(backgroundColor),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            ScreenEmptyState(
+                                icon = Tabler.Outline.Download,
+                                title = stringResource(R.string.home_no_downloads_yet),
+                                description = stringResource(R.string.home_no_downloads_description),
+                                actionLabel = stringResource(R.string.home_go_online_action),
+                                onAction = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
+                                actionLoading = state.isGoingOnline,
+                                modifier = Modifier.padding(horizontal = contentPad),
+                            )
                         }
-                        OfflineHomeContent(
-                            offlineLibrary = filteredOfflineLibrary,
-                            onItemClick = callbacks.onOfflineLibraryClick,
-                            onOfflineItemClick = callbacks.onOfflineItemClick,
-                            contentPadding = contentPad,
-                            backgroundColor = backgroundColor,
-                            onGoOnline = { viewModel.onEvent(HomeUiEvent.Refresh) },
-                            statusMessage = "Couldn't reach the server — showing your downloads.",
-                            isGoingOnline = state.isGoingOnline || state.isLoading,
-                        )
                     }
-                    state.offlineMode != OfflineMode.ONLINE -> {
-                        val filteredOfflineLibrary = remember(state.offlineLibrary, state.homeMode) {
-                            filterOfflineByMode(state.offlineLibrary, state.homeMode)
-                        }
-                        OfflineHomeContent(
-                            offlineLibrary = filteredOfflineLibrary,
-                            onItemClick = callbacks.onOfflineLibraryClick,
-                            onOfflineItemClick = callbacks.onOfflineItemClick,
-                            contentPadding = contentPad,
-                            backgroundColor = backgroundColor,
-                            onGoOnline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
-                            isGoingOnline = state.isGoingOnline,
-                        )
-                    }
-                    state.homeMode == HomeMode.MUSIC -> {
+                    state.homeMode == HomeMode.MUSIC && state.offlineMode == OfflineMode.ONLINE -> {
                         musicContent()
                     }
                     else -> {
                         HomeContentList(
                             state = HomeContentState(
-                                isLoading = state.isLoading,
+                                // Offline rendering short-circuits the server-only
+                                // surfaces (loading spinner, banners, hero) — the
+                                // content list shows the offline-derived sections.
+                                isLoading = !renderingOffline && state.isLoading,
                                 homeHeroEnabled = state.homeHeroEnabled,
                                 homeBackdropEnabled = state.homeBackdropEnabled,
-                                newsletterBannerVisible = state.newsletterBannerVisible,
+                                newsletterBannerVisible = !renderingOffline && state.newsletterBannerVisible,
                                 discoverEnabled = state.discoverEnabled,
                                 experimentalCardClippingEnabled = state.experimentalCardClippingEnabled,
-                                sections = state.sections,
-                                partialLoadError = state.partialLoadError,
-                                featuredItem = heroController.featuredItem,
+                                sections = if (renderingOffline) offlineSections else state.sections,
+                                partialLoadError = !renderingOffline && state.partialLoadError,
+                                featuredItem = if (renderingOffline) null else heroController.featuredItem,
                                 backgroundColor = backgroundColor,
                                 contentPad = contentPad,
                                 headerHeight = headerHeight,
@@ -559,16 +553,22 @@ private fun MainHomeContent(
                                 allDiscoverItems = allDiscoverItems,
                                 recentlyGrabbed = state.recentlyGrabbed,
                                 photoFolderChildUrls = photoFolderChildUrls,
-                                // Phase 2: only forward offlineLibrary when it can actually
+                                // Only forward offlineLibrary when it can actually
                                 // render (offline branch), so download-progress ticks while
                                 // online never invalidate the content list.
-                                offlineLibrary = if (state.offlineMode != OfflineMode.ONLINE) state.offlineLibrary else emptyList(),
+                                offlineLibrary = if (renderingOffline) state.offlineLibrary else emptyList(),
+                                statusBanner = if (implicitOffline) {
+                                    "Couldn't reach the server — showing your downloads."
+                                } else null,
                             ),
                             callbacks = HomeContentCallbacks(
                                 onRetrySectionLoad = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.Refresh) } },
                                 onDismissNewsletterBanner = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.DismissNewsletterBanner) } },
                                 onNewsletterClick = callbacks.onNewsletterClick,
                                 onOfflineLibraryClick = callbacks.onOfflineLibraryClick,
+                                onOfflineItemClick = remember(callbacks) {
+                                    { itemId: String, mediaType: MediaType -> callbacks.onOfflineItemClick(itemId, mediaType) }
+                                },
                                 onItemClick = remember(callbacks) { { id: String -> callbacks.onItemClick(id, MediaType.UNKNOWN, null, "") } },
                                 onFocusChange = remember { { focused: Boolean -> heroController.onFocusChange(focused) } },
                                 mediaOnItemClick = mediaOnItemClick,
