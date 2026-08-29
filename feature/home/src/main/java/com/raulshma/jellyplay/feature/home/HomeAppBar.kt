@@ -577,10 +577,10 @@ private fun UserSwitcherChip(
 
     val colorScheme = MaterialTheme.colorScheme
     val (containerTriplet, onContainerTriplet) = remember(colorScheme) {
-        avatarColorPairForChip(colorScheme)
+        avatarColorPair(colorScheme)
     }
     val (avatarColor, onAvatarColor) = remember(currentUser.name, containerTriplet, onContainerTriplet) {
-        avatarColorsForName(currentUser.name, containerTriplet, onContainerTriplet)
+        avatarColorsFor(currentUser.name, containerTriplet, onContainerTriplet)
     }
 
     val chipFocusState = rememberTvFocusState()
@@ -652,18 +652,5 @@ private fun UserSwitcherChip(
     }
 }
 
-/** Palette helper duplicating `HomeUserSwitchMenu`'s private pair (kept local to
- * avoid widening that file's API; the colors are the M3 container triplet). */
-private fun avatarColorPairForChip(cs: androidx.compose.material3.ColorScheme) =
-    listOf(cs.primaryContainer, cs.secondaryContainer, cs.tertiaryContainer) to
-        listOf(cs.onPrimaryContainer, cs.onSecondaryContainer, cs.onTertiaryContainer)
-
-private fun avatarColorsForName(
-    name: String,
-    containerTriplet: List<Color>,
-    onContainerTriplet: List<Color>,
-): Pair<Color, Color> {
-    val raw = name.hashCode().mod(containerTriplet.size)
-    val index = if (raw < 0) -raw else raw
-    return containerTriplet[index] to onContainerTriplet[index]
-}
+// The avatar palette helpers live in HomeUserSwitchMenu.kt (avatarColorPair /
+// avatarColorsFor) — the single home of that logic for both surfaces.

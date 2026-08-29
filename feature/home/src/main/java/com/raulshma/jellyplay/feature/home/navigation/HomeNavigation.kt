@@ -58,12 +58,10 @@ fun EntryProviderScope<NavKey>.homeSection(
                 onDownloadsClick = { navigator.navigate(Route.Downloads) },
                 onPlayOnClick = onPlayOnClick,
                 onOfflineLibraryClick = { navigator.navigate(Route.OfflineLibrary) },
-                onOfflineItemClick = { itemId, mediaType ->
+                onOfflineItemClick = { itemId ->
                     // The unified MediaDetail tree renders remote, downloaded,
-                    // and local/offline detail alike, so both series and
-                    // non-series offline items route to MediaDetail. mediaType
-                    // is retained on the callback signature (HomeOfflineContent
-                    // still passes it) but no longer selects the route.
+                    // and local/offline detail alike, so every offline item
+                    // routes to MediaDetail.
                     navigator.navigate(Route.MediaDetail(itemId))
                 },
                 onDownloadDetailClick = { itemId, openDownloadSheet ->

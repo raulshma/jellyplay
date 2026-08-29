@@ -50,6 +50,7 @@
     <string name="home_coming_soon">即将推出</string>
     <string name="home_continue_watching">继续观看</string>
     <string name="home_next_up">接下来播放</string>
+    <string name="home_implicit_offline_banner">无法连接服务器，正在显示你的下载内容。</string>
     <string name="home_recently_downloaded">最近下载</string>
     <string name="home_movies">电影</string>
     <string name="home_series">剧集</string>

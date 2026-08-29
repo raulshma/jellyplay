@@ -58,7 +58,7 @@ internal fun rememberUserSwitchOptions(
     val (containerTriplet, onContainerTriplet) = avatarColorPair(MaterialTheme.colorScheme)
     return remember(users, currentUserId, containerTriplet, onContainerTriplet, onUserSwitch) {
         users.map { user ->
-            val (bg, fg) = pickAvatarColor(
+            val (bg, fg) = avatarColorsFor(
                 name = user.name,
                 containerTriplet = containerTriplet,
                 onContainerTriplet = onContainerTriplet,
@@ -182,8 +182,14 @@ internal fun UserSwitchTvRow(option: UserSwitchOption) {
     }
 }
 
-/** Palette + index selection for the initials avatar. */
-private fun pickAvatarColor(
+/**
+ * THE avatar palette helpers — the single home of this logic (HomeAppBar's
+ * chip avatar used to carry a copy). Internal so both surfaces share one
+ * implementation.
+ */
+
+/** Picks the container/on-container pair for [name]'s initials avatar. */
+internal fun avatarColorsFor(
     name: String,
     containerTriplet: List<Color>,
     onContainerTriplet: List<Color>,
@@ -193,7 +199,7 @@ private fun pickAvatarColor(
 }
 
 /** Reads the M3 container color triplet + matching "on" colors once. */
-private fun avatarColorPair(cs: ColorScheme): Pair<List<Color>, List<Color>> {
+internal fun avatarColorPair(cs: ColorScheme): Pair<List<Color>, List<Color>> {
     val containers = listOf(
         cs.primaryContainer,
         cs.secondaryContainer,

@@ -65,7 +65,7 @@ class HomeNavigationTest {
     @Test
     fun onOfflineItemClick_series_navigatesToMediaDetail() {
         val callbacks = buildTestCallbacks(navigator)
-        callbacks.onOfflineItemClick("series-1", MediaType.SERIES)
+        callbacks.onOfflineItemClick("series-1")
 
         verify { navigator.navigate(Route.MediaDetail("series-1")) }
     }
@@ -73,7 +73,7 @@ class HomeNavigationTest {
     @Test
     fun onOfflineItemClick_movie_navigatesToMediaDetail() {
         val callbacks = buildTestCallbacks(navigator)
-        callbacks.onOfflineItemClick("movie-1", MediaType.MOVIE)
+        callbacks.onOfflineItemClick("movie-1")
 
         verify { navigator.navigate(Route.MediaDetail("movie-1")) }
     }
@@ -139,7 +139,7 @@ class HomeNavigationTest {
             onDownloadsClick = { navigator.navigate(Route.Downloads) },
             onPlayOnClick = onPlayOnClick,
             onOfflineLibraryClick = { navigator.navigate(Route.OfflineLibrary) },
-            onOfflineItemClick = { itemId, mediaType ->
+            onOfflineItemClick = { itemId ->
                 navigator.navigate(Route.MediaDetail(itemId))
             },
             onSeerrItemClick = { tmdbId, mediaType ->

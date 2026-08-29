@@ -121,7 +121,7 @@ data class HomeCallbacks(
     val onOfflineLibraryClick: () -> Unit = {},
     /** Open a specific downloaded item: series go to the offline series
      * browser, everything else to the offline detail screen. */
-    val onOfflineItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType) -> Unit = { _, _ -> },
+    val onOfflineItemClick: (itemId: String) -> Unit = {},
     /** Open an item's detail screen from the inline card long-press Download;
      * [openDownloadSheet] pre-presents the series download sheet there. */
     val onDownloadDetailClick: (itemId: String, openDownloadSheet: Boolean) -> Unit = { _, _ -> },
@@ -249,6 +249,11 @@ private fun MainHomeContent(
     val renderingOffline = state.renderSource == HomeRenderSource.Offline
     val fallbackPending = state.renderSource == HomeRenderSource.FallbackPending
     val implicitOffline = renderingOffline && state.offlineMode == OfflineMode.ONLINE
+    // Server fetch failed but downloads exist -> implicit offline: the same
+    // integrated home plus a status banner so the fallback isn't silent.
+    val implicitOfflineBanner = if (implicitOffline) {
+        stringResource(R.string.home_implicit_offline_banner)
+    } else null
 
     // Hero featured-candidate selection — single-pass (was up to 3x flatMap/filter).
     val featuredCandidates = remember(renderingOffline, state.homeMode, state.sections, offlineSections) {
@@ -618,9 +623,7 @@ private fun MainHomeContent(
                                 // online), so download-progress ticks while
                                 // online never invalidate the content list.
                                 offlineContent = if (renderingOffline) offlineContent else null,
-                                statusBanner = if (implicitOffline) {
-                                    "Couldn't reach the server — showing your downloads."
-                                } else null,
+                                statusBanner = implicitOfflineBanner,
                             ),
                             callbacks = HomeContentCallbacks(
                                 onRetrySectionLoad = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.Refresh) } },
@@ -628,7 +631,7 @@ private fun MainHomeContent(
                                 onNewsletterClick = callbacks.onNewsletterClick,
                                 onOfflineLibraryClick = callbacks.onOfflineLibraryClick,
                                 onOfflineItemClick = remember(callbacks) {
-                                    { itemId: String, mediaType: MediaType -> callbacks.onOfflineItemClick(itemId, mediaType) }
+                                    { itemId: String -> callbacks.onOfflineItemClick(itemId) }
                                 },
                                 onItemClick = remember(callbacks) { { id: String -> callbacks.onItemClick(id, MediaType.UNKNOWN, null, "") } },
                                 onFocusChange = remember { { focused: Boolean -> heroController.onFocusChange(focused) } },

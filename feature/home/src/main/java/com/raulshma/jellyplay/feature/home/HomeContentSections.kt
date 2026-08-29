@@ -115,7 +115,7 @@ internal data class HomeContentCallbacks(
     val onNewsletterClick: () -> Unit,
     val onOfflineLibraryClick: () -> Unit,
     /** Open a downloaded item's detail from an offline-derived section row. */
-    val onOfflineItemClick: (itemId: String, mediaType: MediaType) -> Unit = { _, _ -> },
+    val onOfflineItemClick: (itemId: String) -> Unit = {},
     val onItemClick: (String) -> Unit,
     val onFocusChange: (Boolean) -> Unit,
     val mediaOnItemClick: (MediaItem) -> Unit,
@@ -267,20 +267,12 @@ internal fun HomeContentList(
                 item(key = "hero") {
                     val featured = state.featuredItem
                     // Offline hero clicks open the offline detail screen (the
-                    // online routing would hit the server for item metadata).
-                    // The id arrives fresh from the hero (it follows rotation),
-                    // so the item type is re-resolved through the shared
-                    // offline-library lookup above — read via its State wrapper
-                    // so this lambda keeps its identity across download-progress
-                    // emissions (a remember key on the library itself would
-                    // rebuild it — and re-route the hero — on every tick).
+                    // online routing would hit the server for item metadata);
+                    // the unified detail tree needs only the id.
                     val heroItemClick = remember(state.featuredIsOffline, callbacks) {
                         { id: String ->
                             if (state.featuredIsOffline) {
-                                callbacks.onOfflineItemClick(
-                                    id,
-                                    currentOfflineById[id]?.mediaType ?: MediaType.UNKNOWN,
-                                )
+                                callbacks.onOfflineItemClick(id)
                             } else {
                                 callbacks.onItemClick(id)
                             }
@@ -452,7 +444,7 @@ internal fun HomeContentList(
                         title = sectionTitle,
                         items = offlineItems,
                         onItemClick = remember(callbacks) {
-                            { item -> callbacks.onOfflineItemClick(item.id, item.mediaType) }
+                            { item -> callbacks.onOfflineItemClick(item.id) }
                         },
                         modifier = sectionModifier,
                         focusRequester = rowFocusRequesters[index],
