@@ -9,8 +9,9 @@ package com.raulshma.jellyplay.feature.player.video
  * common code (LiveTvUserMessage precedent, livetv conveyor).
  *
  * The androidMain adapter bridges the app-wide Hilt-owned legacy
- * `UserMessageBus`; the jvmMain actual drops messages (DesktopMusicMessageBus
- * precedent — no desktop host renders them yet).
+ * `UserMessageBus`; the jvmMain actual still drops messages (no desktop host
+ * renders them yet — the music seam's relay, DesktopMusicMessageBus, shows
+ * the shape a future host would collect).
  */
 interface PlayerVideoMessageBus {
 

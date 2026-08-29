@@ -104,9 +104,13 @@ dependencies {
     implementation(project(":shared:feature:arrqueue"))
 
 
-    // …onboarding, conveyor feature — LIVE; nav v1 registers
-    // onboardingSection (reachable from Shortcuts). A desktop first-run
-    // gate remains future work.
+    // …onboarding, conveyor feature — fully live: nav v1 registers
+    // onboardingSection (reachable from Shortcuts and the settings "rerun
+    // setup" row), and since wave 21B the shell gates first run —
+    // DesktopNavScaffold pushes Route.Onboarding once per authenticated
+    // session while the persisted onboarding_completed flag is unset
+    // (Android's JellyPlayApp gate order and pref; completion flows through
+    // the shared OnboardingViewModel, so the gate never re-fires).
     implementation(project(":shared:feature:onboarding"))
     implementation(project(":shared:feature:details"))
 

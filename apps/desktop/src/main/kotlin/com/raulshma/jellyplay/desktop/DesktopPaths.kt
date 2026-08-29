@@ -18,6 +18,13 @@ data class DesktopPaths(
     val dataDirNio: NioPath get() = NioPathOf(dataDir.toString())
 
     /**
+     * The config root as java.nio (desktopSettingsPlatformModule walks the
+     * http-cache subtree under it, wave 21B) — same conversion as
+     * [dataDirNio].
+     */
+    val configDirNio: NioPath get() = NioPathOf(configDir.toString())
+
+    /**
      * Crash-log directory (wave 10A release engineering): `<data>/logs`.
      * Created lazily by [DesktopCrashHandler] on first write — no eager
      * directory for users who never crash.

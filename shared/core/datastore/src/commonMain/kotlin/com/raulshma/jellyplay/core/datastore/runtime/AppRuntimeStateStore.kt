@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
@@ -106,6 +107,17 @@ class AppRuntimeStateStore constructor(
     suspend fun setOnboardingCompleted(completed: Boolean) {
         dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed }
     }
+
+    /**
+     * One-shot persisted read of the first-run flag, for decide-once boot
+     * gates (the desktop shell's one-time onboarding push): unlike [state] —
+     * an Eagerly-shared StateFlow seeded with the all-default
+     * AppRuntimeState before the first file read lands — this reads straight
+     * from the DataStore, so a gate consumer cannot mistake the seed for
+     * "never onboarded" and re-fire the wizard for an already-onboarded user.
+     */
+    suspend fun isOnboardingCompleted(): Boolean =
+        sharedPrefs.first()[Keys.ONBOARDING_COMPLETED] ?: false
 
     suspend fun addRecentDlnaDevice(device: DlnaDeviceRef) {
         dataStore.edit { prefs ->

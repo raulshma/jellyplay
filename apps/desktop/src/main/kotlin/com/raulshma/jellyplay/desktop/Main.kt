@@ -137,8 +137,10 @@ fun main() {
             // real desktop audio core (DesktopAudioQueueManager over an
             // audio-only MpvDesktopEngine + DefaultAudioQueueFacade), so
             // play/enqueue/instant-mix drive real playback and track clicks
-            // navigate to the now-live Route.AudioPlayer. The message-bus
-            // actual still drops messages (no host yet).
+            // navigate to the now-live Route.AudioPlayer. Since wave 21B the
+            // message-bus actual feeds a relay the shell's snackbar host
+            // collects (DesktopAppRoot) — error messages surface instead of
+            // dropping.
             musicModule,
             desktopMusicMessageBusModule(),
             // …livetv, fourth conveyor item — LIVE since the cluster flip
@@ -161,9 +163,16 @@ fun main() {
             // from dataJvmModule, and nav v1+ renders settingsSection in the
             // rail (with the desktop platform actuals below). Desktop's
             // update-check row went live with the AppUpdate split (Wave xB;
-            // AppUpdateRepository resolves from desktopDataModule).
+            // AppUpdateRepository resolves from desktopDataModule), and the
+            // storage actuals went REAL with wave 21B (downloads + http-cache
+            // walked/cleared, Coil's temp-dir disk cache cleared through the
+            // injected image-cache handle).
             settingsModule,
-            desktopSettingsPlatformModule(),
+            desktopSettingsPlatformModule(
+                dataDir = paths.dataDirNio,
+                configDir = paths.configDirNio,
+                imageCache = desktopCoilImageCacheOps(),
+            ),
             // …admin, eighth conveyor item — LIVE since the same flip:
             // AdminRepository + AdminStatisticsRepository are Koin singles in
             // dataJvmModule on both platforms, and nav v1+ renders
@@ -234,9 +243,11 @@ fun main() {
             // SeerrPreferencesStore/PreferencesEditor from datastoreCommon
             // Module, SeerrSecureCredentialsStore from desktopDatastore
             // Module). Nav v1 registers onboardingSection (reachable from
-            // Shortcuts); a desktop first-run gate is still future work —
-            // the wizard is auto-gated by the Android app and TV
-            // auto-completes.
+            // Shortcuts), and wave 21B added the first-run gate: the shell
+            // pushes Route.Onboarding once per authenticated session while
+            // the persisted onboarding_completed flag is unset (same pref
+            // the Android app gates on; completion through the shared wizard
+            // writes it, so the gate never re-fires).
             onboardingModule,
 
             // …arrqueue, conveyor feature — LIVE and wired in nav v1
