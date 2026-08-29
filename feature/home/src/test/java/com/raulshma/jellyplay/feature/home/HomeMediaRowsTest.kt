@@ -2,36 +2,52 @@ package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.components.progressFraction
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * Asserts the PRODUCTION [MediaItem.progressFraction] — the card rows read
+ * progress exclusively through it; previously these tests re-declared the
+ * division inline and asserted against that copy.
+ */
 class HomeMediaRowsTest {
 
     @Test
-    fun playbackProgressRatio_calculatesCorrectPercentage() {
-        val playbackPositionTicks = 300_000_000L // 30 sec
-        val runTimeTicks = 600_000_000L // 60 sec
+    fun progressFraction_halfWatched_isHalf() {
+        val item = MediaItem(
+            id = "i1",
+            name = "Item",
+            mediaType = MediaType.MOVIE,
+            runTimeTicks = 600_000_000L,
+            playbackPositionTicks = 300_000_000L,
+        )
 
-        val progress = playbackPositionTicks.toFloat() / runTimeTicks.toFloat()
-        assertEquals(0.5f, progress, 0.01f)
+        assertEquals(0.5f, item.progressFraction()!!, 0.01f)
     }
 
     @Test
-    fun playbackProgressRatio_handlesZeroRunTime() {
-        val playbackPositionTicks = 100L
-        val runTimeTicks = 0L
+    fun progressFraction_noPosition_isNull() {
+        val item = MediaItem(
+            id = "i1",
+            name = "Item",
+            mediaType = MediaType.MOVIE,
+            runTimeTicks = 600_000_000L,
+        )
 
-        val progress = if (runTimeTicks > 0) playbackPositionTicks.toFloat() / runTimeTicks.toFloat() else 0f
-        assertEquals(0f, progress, 0.001f)
+        assertEquals(null, item.progressFraction())
     }
 
     @Test
-    fun mediaItem_continueWatchingProgress_clampedToOne() {
-        val playbackPositionTicks = 700_000_000L
-        val runTimeTicks = 600_000_000L
+    fun progressFraction_pastRuntime_clampsToOne() {
+        val item = MediaItem(
+            id = "i1",
+            name = "Item",
+            mediaType = MediaType.MOVIE,
+            runTimeTicks = 600_000_000L,
+            playbackPositionTicks = 700_000_000L,
+        )
 
-        val progress = (playbackPositionTicks.toFloat() / runTimeTicks.toFloat()).coerceIn(0f, 1f)
-        assertEquals(1.0f, progress, 0.001f)
+        assertEquals(1.0f, item.progressFraction()!!, 0.001f)
     }
 }

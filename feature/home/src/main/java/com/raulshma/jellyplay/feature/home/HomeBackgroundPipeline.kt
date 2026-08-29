@@ -33,9 +33,7 @@ internal fun rememberHomeBackgroundState(
     backdropUrl: String?,
 ): HomeBackgroundState {
     val bgColor = MaterialTheme.colorScheme.background
-    val isLightTheme = remember(bgColor) {
-        (bgColor.red * 0.299f + bgColor.green * 0.587f + bgColor.blue * 0.114f) > 0.5f
-    }
+    val isLightTheme = remember(bgColor) { isLightBackdropTheme(bgColor) }
     val artworkColors = com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors(
         if (dynamicTheming && !backdropUrl.isNullOrBlank()) backdropUrl else null
     )
@@ -74,3 +72,11 @@ internal class HomeBackgroundState(
     val backgroundColor: Color,
     val isLightTheme: Boolean,
 )
+
+/**
+ * The backdrop luminance rule: Rec. 601 weighted perceived brightness decides
+ * whether the home's derived chrome goes light or dark. Pure and internal so
+ * the test asserts THIS function instead of a copy of its formula.
+ */
+internal fun isLightBackdropTheme(color: androidx.compose.ui.graphics.Color): Boolean =
+    (color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f) > 0.5f

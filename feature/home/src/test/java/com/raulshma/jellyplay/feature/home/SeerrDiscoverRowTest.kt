@@ -5,6 +5,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * Asserts the PRODUCTION partition/normalization functions — previously the
+ * tests reimplemented the pattern constants, the chunking loop and the media
+ * type rule locally and asserted against those local copies.
+ */
 class SeerrDiscoverRowTest {
 
     @Test
@@ -20,7 +25,7 @@ class SeerrDiscoverRowTest {
     }
 
     @Test
-    fun partitionDiscoverItems_chunksListAccordingToPattern() {
+    fun partitionDiscoverRows_chunksListAccordingToPattern() {
         val items = (1..10).map { id ->
             SeerrSearchItem(
                 id = id,
@@ -29,36 +34,39 @@ class SeerrDiscoverRowTest {
             )
         }
 
-        var index = 0
-        val rows = mutableListOf<List<SeerrSearchItem>>()
-        var patternIndex = 0
-        while (index < items.size) {
-            val targetSize = COMPACT_DISCOVER_PATTERN[patternIndex % COMPACT_DISCOVER_PATTERN.size]
-            val chunkSize = targetSize.coerceAtMost(items.size - index)
-            rows.add(items.subList(index, index + chunkSize))
-            index += chunkSize
-            patternIndex++
-        }
+        val rows = partitionDiscoverRows(items, COMPACT_DISCOVER_PATTERN)
 
         assertEquals(4, rows.size)
         assertEquals(3, rows[0].size)
         assertEquals(2, rows[1].size)
         assertEquals(3, rows[2].size)
         assertEquals(2, rows[3].size)
+        // Rows cover the items in order — no drops, no duplicates.
+        assertEquals(items.map { it.id }, rows.flatten().map { it.id })
     }
 
     @Test
-    fun mediaTypeNormalization_mapsMovieAndTvCorrectly() {
-        fun normalizeType(raw: String): String = when {
-            raw.equals("movie", ignoreCase = true) -> "movie"
-            raw.equals("tv", ignoreCase = true) -> "tv"
-            else -> raw
+    fun partitionDiscoverRows_patternCycles_forLongLists() {
+        val items = (1..20).map { id ->
+            SeerrSearchItem(id = id, mediaType = "movie", title = "Item $id")
         }
 
-        assertEquals("movie", normalizeType("MOVIE"))
-        assertEquals("movie", normalizeType("movie"))
-        assertEquals("tv", normalizeType("TV"))
-        assertEquals("tv", normalizeType("tv"))
-        assertEquals("anime", normalizeType("anime"))
+        val rows = partitionDiscoverRows(items, EXPANDED_DISCOVER_PATTERN)
+
+        assertEquals(listOf(5, 4, 6, 5), rows.map { it.size })
+    }
+
+    @Test
+    fun partitionDiscoverRows_emptyInput_yieldsNoRows() {
+        assertTrue(partitionDiscoverRows(emptyList(), COMPACT_DISCOVER_PATTERN).isEmpty())
+    }
+
+    @Test
+    fun normalizeSeerrMediaType_foldsMovieAndTv_passesOthersThrough() {
+        assertEquals("movie", normalizeSeerrMediaType("MOVIE"))
+        assertEquals("movie", normalizeSeerrMediaType("movie"))
+        assertEquals("tv", normalizeSeerrMediaType("TV"))
+        assertEquals("tv", normalizeSeerrMediaType("tv"))
+        assertEquals("anime", normalizeSeerrMediaType("anime"))
     }
 }

@@ -37,6 +37,7 @@ import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
@@ -234,7 +235,7 @@ private fun PendingEntryRow(
  * `S##E##` context (the episode title alone rarely identifies the show); for
  * everything else just the item name.
  */
-private fun formatMediaTitle(item: com.raulshma.jellyplay.core.model.MediaItem): String {
+internal fun formatMediaTitle(item: MediaItem): String {
     if (item.mediaType != MediaType.EPISODE) return item.name
     val prefix = buildString {
         item.seriesName?.let { append(it).append(" ") }

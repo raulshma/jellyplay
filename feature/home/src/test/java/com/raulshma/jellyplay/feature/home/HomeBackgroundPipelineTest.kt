@@ -20,17 +20,17 @@ class HomeBackgroundPipelineTest {
         assertFalse(state.isLightTheme)
     }
 
+    /**
+     * Asserts the PRODUCTION [isLightBackdropTheme] — previously this test
+     * declared its own local copy of the luminance formula and asserted
+     * against that.
+     */
     @Test
     fun luminanceCalculation_identifiesLightVsDarkColors() {
-        fun isLight(color: Color): Boolean {
-            val luminance = color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f
-            return luminance > 0.5f
-        }
-
-        assertTrue(isLight(Color.White))
-        assertTrue(isLight(Color(0xFFEEEEEE)))
-        assertFalse(isLight(Color.Black))
-        assertFalse(isLight(Color(0xFF121212)))
+        assertTrue(isLightBackdropTheme(Color.White))
+        assertTrue(isLightBackdropTheme(Color(0xFFEEEEEE)))
+        assertFalse(isLightBackdropTheme(Color.Black))
+        assertFalse(isLightBackdropTheme(Color(0xFF121212)))
     }
 
     @Test

@@ -65,11 +65,7 @@ internal fun SeerrDiscoverRow(
     // `when(mediaType)` block) on every recomposition.
     val onCardClick = remember(seerrCardLoadingState, seerrPrefetch, onSeerrItemClick) {
         { item: SeerrSearchItem ->
-            val mediaType = when {
-                item.mediaType.equals("movie", ignoreCase = true) -> "movie"
-                item.mediaType.equals("tv", ignoreCase = true) -> "tv"
-                else -> item.mediaType
-            }
+            val mediaType = normalizeSeerrMediaType(item.mediaType)
             seerrCardLoadingState.startLoading(item.id)
             seerrPrefetch(item.id, mediaType) {
                 seerrCardLoadingState.stopLoading(item.id)
@@ -121,4 +117,15 @@ internal fun SeerrDiscoverRow(
             }
         }
     }
+}
+
+/**
+ * Normalizes an *arr media type for the detail routes: case-folded `movie` /
+ * `tv`, everything else passed through. Internal so the test asserts THIS
+ * function instead of a local copy of the rule.
+ */
+internal fun normalizeSeerrMediaType(raw: String): String = when {
+    raw.equals("movie", ignoreCase = true) -> "movie"
+    raw.equals("tv", ignoreCase = true) -> "tv"
+    else -> raw
 }
