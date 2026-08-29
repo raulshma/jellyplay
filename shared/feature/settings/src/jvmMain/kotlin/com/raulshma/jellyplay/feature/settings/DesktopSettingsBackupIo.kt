@@ -18,10 +18,14 @@ import kotlinx.coroutines.withContext
  * runCatching surfaces as "Export/Import failed: …" exactly like a failing
  * contentResolver stream on Android.
  *
- * The cache walk still reports 0 bytes — the desktop storage layout (cache
- * dirs worth surfacing in Settings) remains future work.
+ * The cache estimate (wave 21B) walks the desktop's one persistent cache
+ * root — `<configDir>/http-cache`, the OkHttp response cache — mirroring the
+ * Android actual's cacheDir walk over the roots the platform actually owns
+ * (see DesktopStorageAreas for the full desktop storage layout).
  */
-internal class DesktopSettingsBackupIo : SettingsBackupIo {
+internal class DesktopSettingsBackupIo(
+    private val httpCacheRoot: File,
+) : SettingsBackupIo {
 
     override suspend fun openExportSink(uri: String): OutputStream? =
         withContext(Dispatchers.IO) {
@@ -33,7 +37,10 @@ internal class DesktopSettingsBackupIo : SettingsBackupIo {
             FileInputStream(backupFileFor(uri))
         }
 
-    override suspend fun estimateCacheSizeBytes(): Long = 0L
+    override suspend fun estimateCacheSizeBytes(): Long =
+        withContext(Dispatchers.IO) {
+            directorySizeBytes(httpCacheRoot)
+        }
 }
 
 /**

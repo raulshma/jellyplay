@@ -6,9 +6,12 @@ package com.raulshma.jellyplay.feature.settings
  * bodies walked `Context.cacheDir` / `externalCacheDir` / `filesDir` /
  * `getExternalFilesDir` directly, which is Android-only surface. The Android
  * actual (platform/AndroidStorageAreas) keeps those bodies verbatim; the
- * desktop actual degrades to zeros/no-ops. Suspend so each actual owns its own
- * dispatcher (commonMain has no Dispatchers.IO). Also backs the Privacy & Data
- * hub's clear-cache / clear-image-cache actions (same bodies, one seam).
+ * desktop actual walks the roots the desktop data seams own
+ * (platform/DesktopStorageAreas: `<dataDir>/downloads` +
+ * `<configDir>/http-cache`, image cache through a shell-injected handle).
+ * Suspend so each actual owns its own dispatcher (commonMain has no
+ * Dispatchers.IO). Also backs the Privacy & Data hub's clear-cache /
+ * clear-image-cache actions (same bodies, one seam).
  */
 interface StorageAreas {
 

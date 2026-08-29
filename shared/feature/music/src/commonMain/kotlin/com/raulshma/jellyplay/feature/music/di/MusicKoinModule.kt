@@ -31,7 +31,9 @@ import org.koin.dsl.module
  *    (shared data), HomeDiscoveryStore (shared datastore) and
  *    OfflineModeManager resolve from the C4 shared-module graph;
  *  - MusicMessageBus is app-provided on Android (bridge to the legacy
- *    UserMessageBus) and a no-op on desktop (desktopMusicMessageBusModule).
+ *    UserMessageBus) and a buffering relay on desktop
+ *    (desktopMusicMessageBusModule — the desktop shell's snackbar host
+ *    collects it since wave 21B).
  *
  * GenreDetailViewModel's SavedStateHandle is pulled from the definition
  * parameters: on Android, Koin synthesizes it from the CreationExtras of the

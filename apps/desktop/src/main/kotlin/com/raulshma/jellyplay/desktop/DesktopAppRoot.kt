@@ -58,11 +58,12 @@ import com.composables.icons.tabler.outline.Settings
 import com.composables.icons.tabler.outline.Shield
 import com.composables.icons.tabler.outline.Stack
 import com.composables.icons.tabler.outline.Users
+import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
+import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.HomeMode
-import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
@@ -88,6 +89,8 @@ import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
 import com.raulshma.jellyplay.feature.player.video.DesktopPlayerKeyBridge
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
+import com.raulshma.jellyplay.feature.music.feedback.DesktopMusicMessageBus
+import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.desktop.player.MpvSoftwareSurfaceSupport
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
@@ -165,7 +168,15 @@ import java.util.concurrent.atomic.AtomicReference
  * [musicSection] renders below with its full browse/albums/artists/genres/
  * playlists cluster AND play/enqueue/instant-mix actions drive real playback.
  * Track clicks navigate to the live Route.AudioPlayer (registered by
- * [audioPlayerSection] above).
+ * [audioPlayerSection] above). Since wave 21B the music error-feedback seam
+ * has a host here too: the shell snackbar collects DesktopMusicMessageBus's
+ * relay (one surface shared with the dead-end guard below).
+ *
+ * First-run onboarding gate (wave 21B): once an authenticated session enters
+ * [DesktopNavScaffold], a one-shot read of the persisted `onboarding_completed`
+ * flag (AppRuntimeStateStore.isOnboardingCompleted) pushes Route.Onboarding
+ * for a not-yet-onboarded user — the Android JellyPlayApp gate's order and
+ * pref, so completion through the shared wizard never re-fires it.
  *
  * @param previousCrashLogPath non-null when the previous session wrote a crash
  *   report (DesktopCrashHandler marker consumed at boot); surfaced as a
@@ -289,15 +300,14 @@ private fun DesktopNavScaffold() {
         true
     }
 
-    // App-level composition locals the shared screens read. Desktop v1
-    // provisions static values: the shell does not surface :core:data's
-    // NetworkMonitor yet (wave 17C gave that monitor a real
-    // NetworkInterface probe, but LocalNetworkStatus stays a static Online —
-    // the API client's own reachability/failover probing remains the real
-    // gate), and the server-health banner stays neutral (Unknown). Only
-    // StudioDetailScreen reads LocalServerHealth today; several screens
-    // read LocalNetworkStatus for offline banners.
-    val networkStatus = remember { MutableStateFlow(NetworkStatus.Online) }
+    // App-level composition locals the shared screens read. Network status is
+    // LIVE (wave 21B): the flow comes from :core:data's DesktopNetworkMonitor
+    // (desktopDataModule single — NetworkInterface probing with a 15 s
+    // re-probe and a synchronous construction-time seed), so offline banners
+    // now reflect real connectivity. Server health stays a static Unknown —
+    // deliberate: the desktop shell performs no server health polling, and
+    // only StudioDetailScreen reads LocalServerHealth today.
+    val networkMonitor: NetworkMonitor = koinInject()
     val serverHealth = remember { MutableStateFlow(ServerHealth.Unknown) }
 
     // Home Video/Music mode — the Android shell persists this through
@@ -385,6 +395,43 @@ private fun DesktopNavScaffold() {
                 false
             } else {
                 true
+            }
+        }
+    }
+
+    // First-run onboarding gate (wave 21B): the persisted
+    // `onboarding_completed` flag is read ONCE per scaffold composition —
+    // i.e. once per authenticated session entry — and a not-yet-onboarded
+    // session gets the shared wizard pushed (the same Route.Onboarding the
+    // Shortcuts entry and the settings "rerun setup" row open). The
+    // isOnboardingCompleted() one-shot read (not the Eagerly-shared state
+    // flow, whose seed is all-defaults before the prefs file lands) is what
+    // keeps an already-onboarded user from seeing the wizard at every boot.
+    // Completion flows back through the shared OnboardingViewModel — same
+    // pref on both platforms — so the gate never re-fires for a completer.
+    // isAuthenticated is structurally true here (this scaffold only composes
+    // in DesktopAppRoot's authenticated branch); the parameter keeps the
+    // pure decision honest against the Android gate it mirrors.
+    val appRuntimeStateStore: AppRuntimeStateStore = koinInject()
+    LaunchedEffect(appRuntimeStateStore) {
+        val onboardingCompleted = appRuntimeStateStore.isOnboardingCompleted()
+        desktopOnboardingGateRoute(
+            isAuthenticated = true,
+            onboardingCompleted = onboardingCompleted,
+        )?.let(guardedNavigator::navigate)
+    }
+
+    // Music message-bus host (wave 21B): the desktop MusicMessageBus actual
+    // is a buffering relay (DesktopMusicMessageBus, desktopMusicMessageBus
+    // Module) — surface its error messages in the shell snackbar, the twin
+    // of Android bridging the same seam into the app-wide UserMessageBus.
+    // The is-check (not a cast) is the degrade path: a hypothetical custom
+    // Koin binding for MusicMessageBus simply goes unhosted, never crashes.
+    val musicMessageBus: MusicMessageBus = koinInject()
+    if (musicMessageBus is DesktopMusicMessageBus) {
+        LaunchedEffect(musicMessageBus) {
+            musicMessageBus.messages.collect { message ->
+                snackbarHostState.showSnackbar(message)
             }
         }
     }
@@ -594,7 +641,7 @@ private fun DesktopNavScaffold() {
         }
 
         CompositionLocalProvider(
-            LocalNetworkStatus provides networkStatus,
+            LocalNetworkStatus provides networkMonitor.networkStatus,
             LocalServerHealth provides serverHealth,
         ) {
             Box(Modifier.weight(1f).fillMaxHeight()) {

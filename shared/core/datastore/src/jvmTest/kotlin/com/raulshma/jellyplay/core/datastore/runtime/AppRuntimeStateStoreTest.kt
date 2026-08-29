@@ -53,6 +53,16 @@ class AppRuntimeStateStoreTest {
     }
 
     @Test
+    fun `isOnboardingCompleted reads the persisted flag, not the seeded state`() = runTest {
+        // Wave 21B desktop boot gate: the one-shot read must see the persisted
+        // value (false default, then the setter's write) even though the
+        // Eagerly-shared state flow still carries the pre-read seed at times.
+        assertFalse(store.isOnboardingCompleted(), "fresh install reads as not onboarded")
+        store.setOnboardingCompleted(true)
+        assertTrue(store.isOnboardingCompleted(), "persisted completion reads back true")
+    }
+
+    @Test
     fun `restore(slice) round-trips a fully-populated state`() = runTest {
         val slice = AppRuntimeState(
             favoriteChannels = setOf("music", "news"),

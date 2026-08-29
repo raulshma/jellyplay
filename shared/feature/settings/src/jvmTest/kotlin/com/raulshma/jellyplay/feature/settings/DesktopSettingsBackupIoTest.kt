@@ -42,7 +42,7 @@ class DesktopSettingsBackupIoTest {
 
     @Test
     fun `export sink writes and import source reads back the same bytes`() = runTest {
-        val io = DesktopSettingsBackupIo()
+        val io = DesktopSettingsBackupIo(httpCacheRoot = unusedRoot())
         val dir = createTempDirectory("jp-settings-io").toFile()
         val target = File(dir, "jellyplay-settings.json")
         val payload = """{"schemaVersion":2,"slices":{},"extras":{}}"""
@@ -57,7 +57,7 @@ class DesktopSettingsBackupIoTest {
 
     @Test
     fun `non-file uri fails the stream opener like a dead SAF stream`() = runTest {
-        val io = DesktopSettingsBackupIo()
+        val io = DesktopSettingsBackupIo(httpCacheRoot = unusedRoot())
 
         // File(URI) rejects content-style uris; the ViewModel's runCatching
         // turns this into "Import failed: …" — same shape as Android's
@@ -66,4 +66,23 @@ class DesktopSettingsBackupIoTest {
             io.openImportSource("content://com.android.providers.downloads.documents/42")
         }
     }
+
+    @Test
+    fun `cache estimate walks the http-cache root`() = runTest {
+        // Wave 21B: the desktop's cache estimate is real now — it sums file
+        // lengths under the injected http-cache root (a missing root reads 0,
+        // matching a fresh install whose OkHttp cache was never created).
+        val root = createTempDirectory("jp-settings-hc").toFile()
+        val io = DesktopSettingsBackupIo(httpCacheRoot = root)
+
+        assertEquals(0L, io.estimateCacheSizeBytes(), "empty root estimates zero bytes")
+
+        File(root, "journal").writeBytes(ByteArray(100))
+        val responses = File(root, "responses").apply { mkdirs() }
+        File(responses, "body-1").writeBytes(ByteArray(1_500))
+
+        assertEquals(1_600L, io.estimateCacheSizeBytes(), "estimate sums the journal + nested response file")
+    }
+
+    private fun unusedRoot(): File = createTempDirectory("jp-settings-none").toFile()
 }
