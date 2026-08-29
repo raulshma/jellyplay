@@ -1,36 +1,30 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
-import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.components.OfflineMediaCard
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
 /**
  * Inline "Downloaded" row shown on the online home. Upgraded from the old
  * bespoke poster to the shared [OfflineMediaCard] so it matches the rest of
- * the offline surfaces.
+ * the offline surfaces; title and TV/touch scroller ride the same shared
+ * modules as every other home row ([HomeRowTitle] / [HomeItemRow]) instead of
+ * a hand-rolled Text + LazyRow.
  *
  * (The former dedicated offline home that lived in this file was removed for
  * issue #147: while offline the home now renders the normal
@@ -51,36 +45,25 @@ fun DownloadedSection(
     val cardWidth = adaptiveInfo.rowCardWidth(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
 
-    Text(
-        text = stringResource(R.string.home_downloaded),
-        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = modifier
-            .fillMaxWidth()
-            .background(backgroundColor)
-            .padding(start = contentPad, top = 24.dp, bottom = 8.dp),
-    )
-
-    LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .focusGroup()
-            .tvFocusRestorer()
-            .background(backgroundColor)
-            .padding(horizontal = contentPad, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(spacing),
-    ) {
-        items(
-            count = offlineLibrary.size,
-            key = { index -> "offline_${offlineLibrary[index].id}" },
-            contentType = { "offlineItem" },
-        ) { index ->
-            val offlineItem = offlineLibrary[index]
-            val placementSpec = lazyItemPlacementSpec()
+    Column(modifier = modifier.fillMaxWidth().background(backgroundColor)) {
+        HomeRowTitle(
+            title = stringResource(R.string.home_downloaded),
+            contentPad = contentPad,
+            topPadding = 24.dp,
+        )
+        HomeItemRow(
+            items = offlineLibrary,
+            key = { "offline_${it.id}" },
+            cardWidth = cardWidth,
+            spacing = spacing,
+            contentPad = contentPad,
+            clippingEnabled = false,
+            modifier = Modifier.padding(vertical = 4.dp),
+        ) { offlineItem, mod ->
             OfflineMediaCard(
                 item = offlineItem,
                 onClick = onOfflineLibraryClick,
-                modifier = Modifier.animateItem(placementSpec = placementSpec).width(cardWidth),
+                modifier = mod.width(cardWidth),
             )
         }
     }

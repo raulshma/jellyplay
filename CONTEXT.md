@@ -349,6 +349,14 @@ ticks, so the hero controller never resets rotation) but reads the lookup
 through a `rememberUpdatedState` wrapper, so its content is always the
 aggregate's fresh `itemsById`.
 
+The home rows share one chassis: `HomeItemRow<T>`
+(`HomeMediaRows.kt`) owns the TV (`TvFocusableItemRow`) / touch
+(`HorizontalMediaScroller`) branch with the card as a
+`(item, modifier)` slot, and `HomeRowTitle` is the module's one row
+header (long-press configure, See-All pill, `topPadding` for the
+standalone discover and *arr headers) — the three rows used to duplicate
+the branch six times and there were three title implementations.
+
 Test surfaces: `HomeRefresherTest` (plain JUnit + `MainDispatcherRule`,
 constructs the refresher directly with a fake `awaitOutboxDrained`) pins
 cadence, throttles, the offline transitions, the going-online sequence and

@@ -34,7 +34,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -249,6 +248,11 @@ internal fun HomeContentList(
                 endY = with(density) { 10.dp.toPx() },
             )
         }
+
+        // Standalone headers (discover / *arr) keep their flat fill when the
+        // ambient backdrop is off — the behavior of the former private
+        // SectionHeader.
+        val headerModifier = if (state.homeBackdropEnabled) Modifier else Modifier.background(state.backgroundColor)
 
         CompositionLocalProvider(
             com.raulshma.jellyplay.core.ui.components.LocalScrollIdle provides
@@ -528,11 +532,11 @@ internal fun HomeContentList(
 
             if (state.discoverEnabled && state.allDiscoverItems.isNotEmpty()) {
                 item(key = "seerr_discover_header") {
-                    SectionHeader(
-                        text = stringResource(R.string.home_discover),
-                        backgroundColor = state.backgroundColor,
+                    HomeRowTitle(
+                        title = stringResource(R.string.home_discover),
                         contentPad = state.contentPad,
-                        homeBackdropEnabled = state.homeBackdropEnabled,
+                        modifier = headerModifier,
+                        topPadding = 24.dp,
                     )
                 }
 
@@ -568,11 +572,11 @@ internal fun HomeContentList(
             // off, no *arr is configured, or the calendar window is empty.
             if (state.recentlyGrabbed.isNotEmpty()) {
                 item(key = "arr_recently_grabbed_header") {
-                    SectionHeader(
-                        text = stringResource(R.string.home_coming_soon),
-                        backgroundColor = state.backgroundColor,
+                    HomeRowTitle(
+                        title = stringResource(R.string.home_coming_soon),
                         contentPad = state.contentPad,
-                        homeBackdropEnabled = state.homeBackdropEnabled,
+                        modifier = headerModifier,
+                        topPadding = 24.dp,
                     )
                 }
                 item(key = "arr_recently_grabbed_row") {
@@ -636,24 +640,4 @@ internal fun HomeContentList(
             },
         )
     }
-}
-
-@Composable
-private fun SectionHeader(
-    text: String,
-    backgroundColor: Color,
-    contentPad: Dp,
-    homeBackdropEnabled: Boolean = false,
-) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier
-            .fillMaxWidth()
-            // Transparent over the ambient backdrop so it shows through headers;
-            // opaque flat fill otherwise.
-            .then(if (homeBackdropEnabled) Modifier else Modifier.background(backgroundColor))
-            .padding(start = contentPad, top = 24.dp, bottom = 8.dp),
-    )
 }

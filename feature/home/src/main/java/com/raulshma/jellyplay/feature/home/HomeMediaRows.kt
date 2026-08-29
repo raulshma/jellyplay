@@ -105,51 +105,88 @@ internal fun OfflineHomeMediaRow(
     val spacing = adaptiveInfo.itemSpacing(isTv)
 
     Column(modifier = modifier) {
-        HomeSectionTitle(
+        HomeRowTitle(
             title = title,
             contentPad = contentPad,
             onLongClick = null,
         )
-        if (isTv) {
-            TvFocusableItemRow(
-                items = items,
-                key = { it.id },
-                contentPadding = PaddingValues(horizontal = contentPad),
-                horizontalArrangement = Arrangement.spacedBy(spacing),
-                focusRequester = focusRequester,
-                onRowFocused = onRowFocused,
-                clipToBounds = clippingEnabled,
-                onFocusedIndexChange = { index ->
-                    onFocusedItemChange?.let { change -> items.getOrNull(index)?.let { change(it.toMediaItem()) } }
-                },
-            ) { _, item, focusModifier ->
-                // Every item here is downloaded by definition, so the
-                // "Downloaded" status badge would be redundant.
-                OfflineMediaCard(
-                    item = item,
-                    onClick = { onItemClick(item) },
-                    modifier = focusModifier.width(cardWidth),
-                    showStatusBadge = false,
-                )
-            }
-        } else {
-            HorizontalMediaScroller(
-                itemCount = items.size,
-                itemWidth = cardWidth,
-                spacing = spacing,
-                contentPad = contentPad,
-                clippingEnabled = clippingEnabled,
-                modifier = Modifier.tvFocusRestorer(),
-                key = { index -> items[index].id },
-            ) { index ->
-                val item = items[index]
-                OfflineMediaCard(
-                    item = item,
-                    onClick = { onItemClick(item) },
-                    modifier = Modifier.width(cardWidth),
-                    showStatusBadge = false,
-                )
-            }
+        HomeItemRow(
+            items = items,
+            key = { it.id },
+            cardWidth = cardWidth,
+            spacing = spacing,
+            contentPad = contentPad,
+            clippingEnabled = clippingEnabled,
+            focusRequester = focusRequester,
+            onRowFocused = onRowFocused,
+            onFocusedItemChange = { item ->
+                onFocusedItemChange?.let { change -> change(item.toMediaItem()) }
+            },
+        ) { item, mod ->
+            // Every item here is downloaded by definition, so the
+            // "Downloaded" status badge would be redundant.
+            OfflineMediaCard(
+                item = item,
+                onClick = { onItemClick(item) },
+                modifier = mod.width(cardWidth),
+                showStatusBadge = false,
+            )
+        }
+    }
+}
+
+/**
+ * The home rows' TV/touch chassis — the ONE implementation of the
+ * [TvFocusableItemRow] (TV) / [HorizontalMediaScroller] (touch) branch that
+ * every home row previously duplicated, with the card as a slot. The slot
+ * receives the focus modifier on TV and an empty one on touch; append
+ * [cardWidth] to it so both branches size identically. Fixing card-rendering
+ * or scroller behavior now lands once per row instead of twice.
+ */
+@Composable
+internal fun <T> HomeItemRow(
+    items: List<T>,
+    key: (T) -> Any,
+    cardWidth: Dp,
+    spacing: Dp,
+    contentPad: Dp,
+    clippingEnabled: Boolean,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    onRowFocused: (() -> Unit)? = null,
+    // TV-only: reports the D-pad-focused item so the screen's Menu key can
+    // open its quick actions (the card's own long-press handles touch).
+    onFocusedItemChange: ((T) -> Unit)? = null,
+    itemContent: @Composable (item: T, modifier: Modifier) -> Unit,
+) {
+    val isTv = LocalTvMode.current
+    if (isTv) {
+        TvFocusableItemRow(
+            items = items,
+            key = key,
+            contentPadding = PaddingValues(horizontal = contentPad),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            modifier = modifier,
+            focusRequester = focusRequester,
+            onRowFocused = onRowFocused,
+            clipToBounds = clippingEnabled,
+            onFocusedIndexChange = { index ->
+                onFocusedItemChange?.let { change -> items.getOrNull(index)?.let(change) }
+            },
+        ) { _, item, focusModifier ->
+            itemContent(item, focusModifier)
+        }
+    } else {
+        HorizontalMediaScroller(
+            itemCount = items.size,
+            itemWidth = cardWidth,
+            spacing = spacing,
+            contentPad = contentPad,
+            clippingEnabled = clippingEnabled,
+            modifier = modifier.tvFocusRestorer(),
+            key = { index -> key(items[index]) },
+        ) { index ->
+            itemContent(items[index], Modifier)
         }
     }
 }
@@ -246,62 +283,35 @@ fun ContinueWatchingRow(
     }
 
     Column(modifier = modifier) {
-        HomeSectionTitle(
+        HomeRowTitle(
             title = title,
             contentPad = contentPad,
             onLongClick = onSectionLongClick,
         )
-        if (isTv) {
-            TvFocusableItemRow(
-                items = items,
-                key = { it.id },
-                contentPadding = PaddingValues(horizontal = contentPad),
-                horizontalArrangement = Arrangement.spacedBy(spacing),
-                focusRequester = focusRequester,
-                onRowFocused = onRowFocused,
-                clipToBounds = clippingEnabled,
-                onFocusedIndexChange = { index ->
-                    onFocusedItemChange?.let { change -> items.getOrNull(index)?.let(change) }
-                },
-            ) { _, item, focusModifier ->
-                val memoizedClick = remember(item) { { onItemClick(item) } }
-                val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
-                WideMediaCard(
-                    item = item,
-                    imageUrl = imageUrlBuilder(item),
-                    backdropUrl = backdropUrlBuilder(item),
-                    onClick = memoizedClick,
-                    onPlayClick = memoizedPlayClick,
-                    cardWidth = cardWidth,
-                    surfaceScrimBrush = surfaceScrimBrush,
-                    modifier = focusModifier,
-                    clipToShape = clippingEnabled,
-                )
-            }
-        } else {
-            HorizontalMediaScroller(
-                itemCount = items.size,
-                itemWidth = cardWidth,
-                spacing = spacing,
-                contentPad = contentPad,
-                clippingEnabled = clippingEnabled,
-                modifier = Modifier.tvFocusRestorer(),
-                key = { index -> items[index].id },
-            ) { index ->
-                val item = items[index]
-                val memoizedClick = remember(item) { { onItemClick(item) } }
-                val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
-                WideMediaCard(
-                    item = item,
-                    imageUrl = imageUrlBuilder(item),
-                    backdropUrl = backdropUrlBuilder(item),
-                    onClick = memoizedClick,
-                    onPlayClick = memoizedPlayClick,
-                    cardWidth = cardWidth,
-                    surfaceScrimBrush = surfaceScrimBrush,
-                    clipToShape = clippingEnabled,
-                )
-            }
+        HomeItemRow(
+            items = items,
+            key = { it.id },
+            cardWidth = cardWidth,
+            spacing = spacing,
+            contentPad = contentPad,
+            clippingEnabled = clippingEnabled,
+            focusRequester = focusRequester,
+            onRowFocused = onRowFocused,
+            onFocusedItemChange = { item -> onFocusedItemChange?.invoke(item) },
+        ) { item, mod ->
+            val memoizedClick = remember(item) { { onItemClick(item) } }
+            val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
+            WideMediaCard(
+                item = item,
+                imageUrl = imageUrlBuilder(item),
+                backdropUrl = backdropUrlBuilder(item),
+                onClick = memoizedClick,
+                onPlayClick = memoizedPlayClick,
+                cardWidth = cardWidth,
+                surfaceScrimBrush = surfaceScrimBrush,
+                modifier = mod,
+                clipToShape = clippingEnabled,
+            )
         }
     }
 }
@@ -372,112 +382,68 @@ fun HomeMediaRow(
     }
 
     Column(modifier = modifier) {
-        HomeSectionTitle(
+        HomeRowTitle(
             title = title,
             contentPad = contentPad,
             onLongClick = onSectionLongClick,
             onSeeAllClick = onSeeAllClick,
             seeAllFocusRequester = seeAllFocusRequester,
         )
-        if (isTv) {
-            TvFocusableItemRow(
-                items = effectiveItems,
-                key = { it.id },
-                contentPadding = PaddingValues(horizontal = contentPad),
-                horizontalArrangement = Arrangement.spacedBy(spacing),
-                modifier = rowModifier,
-                focusRequester = focusRequester,
-                onRowFocused = onRowFocused,
-                clipToBounds = clippingEnabled,
-                onFocusedIndexChange = { index ->
-                    onFocusedItemChange?.let { change -> effectiveItems.getOrNull(index)?.let(change) }
-                },
-            ) { _, item, focusModifier ->
-                val memoizedClick = remember(item) { { onItemClick(item) } }
-                val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
-                // Memoize progress so per-card arithmetic runs only when ticks change,
-                // not on every scroll/animation-frame recompose (matches WideMediaCard).
-                val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
-                    item.progressFraction() ?: 0f
-                }
-                val cardImage = rememberEpisodeCardImage(
-                    item = item,
-                    itemImageUrl = remember(item) { imageUrlBuilder(item) },
-                    fallbackImageUrls = fallbackImageUrlBuilder(item),
-                    seriesPosterResolver = seriesPosterResolver,
-                    seriesBackdropResolver = seriesBackdropResolver,
-                    showEpisodeSeriesBadge = showEpisodeSeriesBadge,
-                )
-                PosterCard(
-                    item = item,
-                    imageUrl = cardImage.imageUrl,
-                    fallbackUrls = cardImage.fallbackUrls,
-                    onClick = memoizedClick,
-                    modifier = focusModifier.width(cardWidth),
-                    showProgress = item.hasPlaybackPosition,
-                    progressPercent = progressPercent,
-                    blurHash = cardImage.blurHash,
-                    onPlayClick = memoizedPlayClick,
-                    sharedElementKey = "poster_${item.id}",
-                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
-                    clipToShape = clippingEnabled,
-                    showEpisodeSeriesBadge = cardImage.showSeriesBadge,
-                    gradientBrush = posterScrimBrush,
-                )
+        HomeItemRow(
+            items = effectiveItems,
+            key = { it.id },
+            cardWidth = cardWidth,
+            spacing = spacing,
+            contentPad = contentPad,
+            clippingEnabled = clippingEnabled,
+            modifier = rowModifier,
+            focusRequester = focusRequester,
+            onRowFocused = onRowFocused,
+            onFocusedItemChange = { item -> onFocusedItemChange?.invoke(item) },
+        ) { item, mod ->
+            val memoizedClick = remember(item) { { onItemClick(item) } }
+            val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
+            // Memoize progress so per-card arithmetic runs only when ticks change,
+            // not on every scroll/animation-frame recompose (matches WideMediaCard).
+            val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
+                item.progressFraction() ?: 0f
             }
-        } else {
-            HorizontalMediaScroller(
-                itemCount = effectiveItems.size,
-                itemWidth = cardWidth,
-                spacing = spacing,
-                contentPad = contentPad,
-                clippingEnabled = clippingEnabled,
-                modifier = Modifier.tvFocusRestorer(),
-                key = { index -> effectiveItems[index].id },
-            ) { index ->
-                val item = effectiveItems[index]
-                val memoizedClick = remember(item) { { onItemClick(item) } }
-                val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
-                // Memoize progress so per-card arithmetic runs only when ticks change,
-                // not on every scroll/animation-frame recompose (matches WideMediaCard).
-                val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
-                    item.progressFraction() ?: 0f
-                }
-                val cardImage = rememberEpisodeCardImage(
-                    item = item,
-                    itemImageUrl = remember(item) { imageUrlBuilder(item) },
-                    fallbackImageUrls = fallbackImageUrlBuilder(item),
-                    seriesPosterResolver = seriesPosterResolver,
-                    seriesBackdropResolver = seriesBackdropResolver,
-                    showEpisodeSeriesBadge = showEpisodeSeriesBadge,
-                )
-                PosterCard(
-                    item = item,
-                    imageUrl = cardImage.imageUrl,
-                    fallbackUrls = cardImage.fallbackUrls,
-                    onClick = memoizedClick,
-                    modifier = Modifier.width(cardWidth),
-                    showProgress = item.hasPlaybackPosition,
-                    progressPercent = progressPercent,
-                    blurHash = cardImage.blurHash,
-                    onPlayClick = memoizedPlayClick,
-                    sharedElementKey = "poster_${item.id}",
-                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
-                    clipToShape = clippingEnabled,
-                    showEpisodeSeriesBadge = cardImage.showSeriesBadge,
-                    gradientBrush = posterScrimBrush,
-                )
-            }
+            val cardImage = rememberEpisodeCardImage(
+                item = item,
+                itemImageUrl = remember(item) { imageUrlBuilder(item) },
+                fallbackImageUrls = fallbackImageUrlBuilder(item),
+                seriesPosterResolver = seriesPosterResolver,
+                seriesBackdropResolver = seriesBackdropResolver,
+                showEpisodeSeriesBadge = showEpisodeSeriesBadge,
+            )
+            PosterCard(
+                item = item,
+                imageUrl = cardImage.imageUrl,
+                fallbackUrls = cardImage.fallbackUrls,
+                onClick = memoizedClick,
+                modifier = mod.width(cardWidth),
+                showProgress = item.hasPlaybackPosition,
+                progressPercent = progressPercent,
+                blurHash = cardImage.blurHash,
+                onPlayClick = memoizedPlayClick,
+                sharedElementKey = "poster_${item.id}",
+                photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+                clipToShape = clippingEnabled,
+                showEpisodeSeriesBadge = cardImage.showSeriesBadge,
+                gradientBrush = posterScrimBrush,
+            )
         }
     }
 }
 
 /**
- * The row title for a home section. Renders the heading typography and:
- * - an optional long-press affordance ([onLongClick]) to configure the section
- * (toggle visibility / reorder / open Home Layout settings), and
- * - an optional "See All" affordance ([onSeeAllClick]) that opens the full
- * library screen for that section with pre-applied filters.
+ * THE home row title — one implementation for every row-ish header in the
+ * module (section rows, the discover and *arr headers, the inline Downloaded
+ * row). Renders the heading typography and the optional affordances:
+ * - a long-press ([onLongClick]) to configure the section (toggle visibility
+ *   / reorder / open Home Layout settings), and
+ * - a "See All" affordance ([onSeeAllClick]) that opens the full library
+ *   screen for that section with pre-applied filters.
  *
  * On touch, the title surface still only intercepts long-press so the row's own
  * horizontal scroll and item clicks are unaffected; "See All" is a separate
@@ -486,12 +452,19 @@ fun HomeMediaRow(
  * configuration on TV goes through Settings → Home Layout. The title surface
  * must NOT be focusable on TV: a full-width indication-less clickable between
  * the rows is an invisible focus trap that also steals focus from the pill.
+ *
+ * [topPadding] distinguishes the standalone headers (24 dp, as
+ * [HomeContentList]'s discover and *arr rows and the inline Downloaded row
+ * always rendered) from section-row titles (8 dp, the row already adds its
+ * own top spacing).
  */
 @Composable
-private fun HomeSectionTitle(
+internal fun HomeRowTitle(
     title: String,
     contentPad: androidx.compose.ui.unit.Dp,
-    onLongClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    topPadding: androidx.compose.ui.unit.Dp = 8.dp,
+    onLongClick: (() -> Unit)? = null,
     onSeeAllClick: (() -> Unit)? = null,
     seeAllFocusRequester: FocusRequester? = null,
 ) {
@@ -511,7 +484,7 @@ private fun HomeSectionTitle(
                     )
                 } else Modifier,
             )
-            .padding(horizontal = contentPad, vertical = 8.dp),
+            .padding(start = contentPad, end = contentPad, top = topPadding, bottom = 8.dp),
     ) {
         Text(
             text = title,
