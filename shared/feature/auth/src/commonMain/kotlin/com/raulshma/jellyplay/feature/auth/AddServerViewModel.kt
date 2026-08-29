@@ -17,6 +17,8 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_resolv
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_server_address_required
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_ssl
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 data class AddServerUiState(
     val discoveredServers: List<DiscoveredServer> = emptyList(),
@@ -158,8 +160,14 @@ class AddServerViewModel(
 
     /**
      * User accepted the trust dialog: persist the host grant, then retry the
-     * failed connect. The grant lands in the OkHttp config StateFlow before
-     * the retry's probe runs, so the very next TLS handshake honors it — no
+     * failed connect. `addSelfSignedTrustHost` returning only means the
+     * DataStore EDIT completed — the derived `networkOffline` StateFlow the
+     * network layer reads at handshake time republishes asynchronously, so we
+     * AWAIT the entry appearing in it before retrying (the retry's very first
+     * TLS handshake must already honor the grant; racing it used to fail the
+     * retry on the same certificate). The wait is bounded: on timeout the
+     * retry proceeds anyway — a stuck propagation must not trap the dialog
+     * (the retry then just fails like an ungranted host and re-prompts). No
      * client rebuild anywhere (the network layer reads the set at handshake
      * time).
      */
@@ -169,6 +177,9 @@ class AddServerViewModel(
         pendingTrustRetry = null
         launch {
             networkOfflineStore.addSelfSignedTrustHost(entry)
+            withTimeoutOrNull(TRUST_PROPAGATION_TIMEOUT_MS) {
+                networkOfflineStore.networkOffline.first { entry in it.selfSignedTrustHosts }
+            }
             _uiState.update { it.copy(tlsTrustPromptAddress = null) }
             retry?.invoke()
         }
@@ -185,6 +196,16 @@ class AddServerViewModel(
 
     /** Pending retry for the shown TLS-trust dialog, if any. */
     private var pendingTrustRetry: (() -> Unit)? = null
+
+    private companion object {
+        /**
+         * Upper bound for awaiting the trust grant's propagation into the
+         * `networkOffline` StateFlow before the post-grant retry (see
+         * [confirmTrustServer]). Generous vs. a DataStore round-trip; on
+         * expiry the retry proceeds anyway rather than trapping the dialog.
+         */
+        const val TRUST_PROPAGATION_TIMEOUT_MS = 5_000L
+    }
 }
 
 private fun getRootCause(throwable: Throwable): Throwable {
@@ -199,6 +220,18 @@ private fun getRootCause(throwable: Throwable): Throwable {
  * address can never present a certificate). Mirrors the normalization
  * `connectToServer` applies before probing, so the stored entry is exactly
  * the endpoint that failed the handshake.
+ *
+ * Deliberately narrower than the public classifier
+ * (`core.network.config.isTlsTrustFailure`, behind `ApiException.isTlsTrustError`
+ * on the JVM): this one requires the ROOT cause to be an [javax.net.ssl.SSLException]
+ * and ignores bare `CertificateException`s anywhere in the chain. Two reasons
+ * the seam can't just reuse the public flag: (a) it is jvmShared/JVM-only
+ * (javax types), invisible to this commonMain classifier; (b) the failure
+ * crossing this seam is the raw probe/transport chain — never an `ApiException`
+ * — and this predicate gates a *security consent dialog*, so it stays
+ * conservative: only a root-cause SSL handshake failure (the exact thing a
+ * trust grant fixes) may prompt. Kept file-local for the same reason
+ * `getConnectionErrorMessage` classifies inline.
  */
 internal fun tlsTrustPromptFor(address: String, throwable: Throwable): String? {
     val normalized = address.trim().trimEnd('/').let {
@@ -206,9 +239,9 @@ internal fun tlsTrustPromptFor(address: String, throwable: Throwable): String? {
     }
     if (!normalized.startsWith("https://")) return null
     // SSLHandshakeException / SSLPeerUnverifiedException are both SSLException
-    // subclasses — the file-local twin of the jvmShared ApiException
-    // classifier's predicate (kept local for the same reason
-    // getConnectionErrorMessage classifies inline).
+    // subclasses. The network probe wraps TLS-trust failures in a plain
+    // RuntimeException marker (non-retryable, wave-21 review round) —
+    // getRootCause walks past the wrapper to the underlying SSLException.
     return if (getRootCause(throwable) is javax.net.ssl.SSLException) normalized else null
 }
 

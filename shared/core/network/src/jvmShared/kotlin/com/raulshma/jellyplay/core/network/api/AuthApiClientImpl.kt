@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.NetworkLog
 import com.raulshma.jellyplay.core.network.RetryPolicy
+import com.raulshma.jellyplay.core.network.config.isTlsTrustFailure
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -26,6 +27,20 @@ class AuthApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
     private val addressRouter: ServerAddressRouter,
 ) : AuthApiClient {
+
+    /**
+     * Non-retryable probe signal: wraps a TLS-trust failure out of
+     * `connectToServer`'s probe so [RetryPolicy]'s classifier (which treats
+     * every IOException — SSLException included — as retryable) stops after
+     * the FIRST attempt. A plain `RuntimeException` by design: not an
+     * IOException, and its message matches no "HTTP ###" pattern, so no
+     * classifier branch can mistake it for retryable. The original failure
+     * rides along as the [cause] for upstream root-cause classifiers (the Add
+     * Server trust dialog). Probe-scoped only — the global classifier
+     * semantics are unchanged.
+     */
+    private class ProbeTlsTrustFailure(address: String, cause: Throwable) :
+        RuntimeException("TLS trust failure probing $address", cause)
 
     override val currentServer: Flow<ServerInfo?> = engine.currentServer
     override val currentUser: Flow<UserInfo?> = engine.currentUser
@@ -59,6 +74,19 @@ class AuthApiClientImpl @Inject constructor(
         // discovery — exactly when users are most likely on a flaky LAN —
         // surfaced as a hard failure and prompted re-taps that each fired N
         // independent discovery HTTP calls instead of one call with backoff.
+        //
+        // TLS-trust failures are exempt FROM THIS PROBE ONLY (wave-21 review
+        // round): no retry can fix an untrusted certificate, so retrying just
+        // burned 3 probe rounds before the Add Server trust dialog could
+        // appear. RetryPolicy's classifier treats any IOException as
+        // retryable, so the block rethrows TLS-trust failures wrapped in a
+        // plain [ProbeTlsTrustFailure] (a RuntimeException — deliberately NOT
+        // an IOException, and its message matches no "HTTP ###" pattern), which
+        // the classifier passes through as non-retryable after exactly ONE
+        // attempt. The original cause chain is preserved for upstream
+        // classifiers (the Add Server dialog walks to the root cause). The
+        // global classifier semantics are untouched — non-TLS network failures
+        // below retry exactly as before.
         return RetryPolicy.executeWithRetry(maxRetries = 2) {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -75,6 +103,7 @@ class AuthApiClientImpl @Inject constructor(
                         info
                     } catch (e: Exception) {
                         NetworkLog.e("JellyfinApi", "connectToServer failed for $normalizedAddress", e)
+                        if (isTlsTrustFailure(e)) throw ProbeTlsTrustFailure(normalizedAddress, e)
                         throw e
                     }
                 }

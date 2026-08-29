@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.auth
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepository
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -18,11 +19,13 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -299,6 +302,9 @@ class AddServerViewModelTest {
         coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
             Result.failure(javax.net.ssl.SSLHandshakeException("PKIX")) andThen
             Result.success(info)
+        // The store flow already shows the grant (propagation completed).
+        every { networkOfflineStore.networkOffline } returns
+            MutableStateFlow(NetworkOfflineSlice(selfSignedTrustHosts = setOf("https://selfsigned.example.com")))
 
         var attempts = 0
         var finalResult: Result<ServerInfo>? = null
@@ -312,6 +318,57 @@ class AddServerViewModelTest {
         coVerify(exactly = 1) { networkOfflineStore.addSelfSignedTrustHost("https://selfsigned.example.com") }
         kotlin.test.assertEquals(2, attempts, "confirm must retry the same connect")
         assertTrue(finalResult?.isSuccess == true)
+        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+    }
+
+    @Test
+    fun confirmTrustServer_retriesOnlyAfterTheStoreFlowShowsTheEntry() = runTest(testDispatcher) {
+        val info = mockk<ServerInfo>()
+        coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
+            Result.failure(javax.net.ssl.SSLHandshakeException("PKIX")) andThen
+            Result.success(info)
+        // Grant NOT visible yet: the test controls when the derived flow
+        // republishes the new set (edit-done ≠ flow-propagated — the race the
+        // wave-21 review round closed).
+        val storeFlow = MutableStateFlow(NetworkOfflineSlice())
+        every { networkOfflineStore.networkOffline } returns storeFlow
+
+        var attempts = 0
+        viewModel.connectToServer("https://selfsigned.example.com") { attempts++ }
+        advanceUntilIdle()
+        assertEquals(1, attempts)
+
+        viewModel.confirmTrustServer()
+        // The grant write completed but the flow has not republished: the
+        // retry must still be parked on the await.
+        runCurrent()
+        kotlin.test.assertEquals(1, attempts, "the retry must not run before the store flow shows the entry")
+
+        storeFlow.value = NetworkOfflineSlice(selfSignedTrustHosts = setOf("https://selfsigned.example.com"))
+        advanceUntilIdle()
+        kotlin.test.assertEquals(2, attempts, "the retry runs as soon as the store flow shows the entry")
+        assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
+    }
+
+    @Test
+    fun confirmTrustServer_degradesToProceeding_whenPropagationNeverHappens() = runTest(testDispatcher) {
+        val info = mockk<ServerInfo>()
+        coEvery { authRepository.addServer("https://selfsigned.example.com") } returns
+            Result.failure(javax.net.ssl.SSLHandshakeException("PKIX")) andThen
+            Result.success(info)
+        // Propagation never lands: the bounded wait (5s, virtual time here)
+        // must expire and the retry proceed anyway — a stuck wait must not
+        // trap the dialog.
+        every { networkOfflineStore.networkOffline } returns MutableStateFlow(NetworkOfflineSlice())
+
+        var attempts = 0
+        viewModel.connectToServer("https://selfsigned.example.com") { attempts++ }
+        advanceUntilIdle()
+
+        viewModel.confirmTrustServer()
+        advanceUntilIdle()
+
+        kotlin.test.assertEquals(2, attempts, "timeout degrades to proceeding with the retry")
         assertNull(viewModel.uiState.value.tlsTrustPromptAddress)
     }
 

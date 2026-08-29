@@ -54,7 +54,7 @@ coil = "3.4.0"
 # why wasm used to carry a MiniMarkdownParser fallback while the dependency
 # stayed jvmShared-scoped. At 0.41.0 the klibs resolve on wasm too, so the
 # dependency lives in commonMain and every target renders GFM through the
-# same MarkdownBody (the mini parser + wasm actual were deleted). Revisit on
+# same MarkdownText (the mini parser + wasm actual were deleted). Revisit on
 # any future Kotlin 2.4 toolchain move.
 multiplatformMarkdownRenderer = "0.41.0"
 room = "2.8.4"

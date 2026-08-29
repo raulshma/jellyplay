@@ -19,6 +19,7 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
+import coil3.serviceLoaderEnabled
 import com.raulshma.jellyplay.core.data.di.dataJvmModule
 import com.raulshma.jellyplay.core.data.di.desktopDataModule
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
@@ -261,8 +262,11 @@ fun main() {
             // …auth, Phase X cutover (feature-conveyor transform from the
             // legacy :feature:auth): the entire ctor graph resolves on
             // desktop (AuthRepository + ServerDiscoveryRepository from
-            // dataJvmModule, LocalNetworkStatus from the jvmMain platform
-            // pick below), so this registration is live-resolvable — NOT
+            // dataJvmModule, LocalNetworkStatus — the auth seam's fun-interface
+            // probe in feature/auth (blames a connect failure on the Android
+            // 17+ local-network permission), NOT core/ui's same-named
+            // composition local — from the jvmMain platform pick below), so
+            // this registration is live-resolvable — NOT
             // dormant-for-missing-deps. Wave 19A unified sign-in
             // on these shared screens: the signed-out gate
             // (DesktopSignedOutAuthHost) and the signed-in settings drill-ins
@@ -361,10 +365,17 @@ fun main() {
     // with its OWN default OkHttpClient, which would have kept failing the
     // TLS handshake against a self-signed server the user had granted —
     // every other surface would connect while artwork stayed broken. The
-    // lambda defers the Koin resolution to the first image load (well after
-    // startKoin); crossfade stays the only other tweak.
+    // explicit registration below wins either way (first match loses to it),
+    // but serviceLoaderEnabled(false) makes the exclusivity STRUCTURAL
+    // instead of registration-order luck: the ServiceLoader factory can
+    // never resurrect its default-client fetcher behind our back (wave-21
+    // review round — it was dormant-first-match-loser; keep it that way by
+    // construction). The lambda defers the Koin resolution to the first
+    // image load (well after startKoin); crossfade stays the only other
+    // tweak.
     SingletonImageLoader.setSafe {
         ImageLoader.Builder(it)
+            .serviceLoaderEnabled(false)
             .components {
                 add(
                     OkHttpNetworkFetcherFactory(

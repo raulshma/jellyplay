@@ -33,7 +33,8 @@ import okhttp3.OkHttpClient
  *
  * Entries are canonical `scheme://host[:port]` strings (the
  * `ServerAddressRouter.addressString` form). [SelfSignedTrustHosts.isGranted]
- * matches a handshake peer `(host, port)` when:
+ * (a thin facade over the commonMain [SelfSignedTrustMatcher], the single
+ * home of the decision) matches a handshake peer `(host, port)` when:
  *  - the entry's host equals the peer host, case-insensitively (IPv6 literals
  *    compare bracket-stripped); and
  *  - the entry carries an explicit port → it must equal the peer port; an
@@ -68,82 +69,22 @@ import okhttp3.OkHttpClient
  */
 
 /**
- * Pure matcher between granted trust entries and a handshake peer. No JVM
- * network types — exhaustively unit-tested in
- * `SelfSignedTrustHostsTest` (jvmTest).
+ * JVM-side facade over the pure host matcher: every call delegates verbatim to
+ * the commonMain [SelfSignedTrustMatcher] (the single home of the decision —
+ * extraction wave 21 so commonMain callers like the Server Management trust
+ * toggle answer the exact question the handshake path asks; no behavior
+ * change). Parsing/matching is exhaustively unit-tested against the matcher in
+ * `SelfSignedTrustMatcherTest` (jvmTest).
  */
 object SelfSignedTrustHosts {
-
-    /** Canonical pieces of one granted entry. */
-    internal data class ParsedEntry(val host: String, val port: Int?)
 
     /**
      * Whether `(host, port)` is covered by a granted entry. See the file-level
      * KDoc for the matching rules; `port <= 0` means "unknown" (host-only
      * comparison).
      */
-    fun isGranted(entries: Set<String>, host: String?, port: Int): Boolean {
-        if (host.isNullOrBlank() || entries.isEmpty()) return false
-        val peerHost = normalizeHost(host) ?: return false
-        return entries.any { entry ->
-            val parsed = parseEntry(entry) ?: return@any false
-            parsed.host == peerHost && (parsed.port == null || port <= 0 || parsed.port == port)
-        }
-    }
-
-    /**
-     * Parses `scheme://host[:port]` tolerantly: scheme optional (missing
-     * scheme is treated as a bare authority), userinfo/path/query/fragment and
-     * trailing slashes stripped, host lowercased, IPv6 brackets stripped.
-     * Returns null for anything unparseable — an unparseable entry is never
-     * granted (fail closed).
-     */
-    internal fun parseEntry(entry: String): ParsedEntry? {
-        val raw = entry.trim()
-        if (raw.isEmpty()) return null
-        val afterScheme = if (raw.contains("://")) raw.substringAfter("://") else raw
-        val authority = afterScheme
-            .substringBefore('/')
-            .substringBefore('?')
-            .substringBefore('#')
-        val hostPort = authority.substringAfterLast('@')
-        if (hostPort.isNotEmpty()) {
-            // Bracketed IPv6: [::1] or [::1]:8920
-            if (hostPort.startsWith("[")) {
-                val close = hostPort.indexOf(']')
-                if (close < 0) return null
-                val host = hostPort.substring(1, close).lowercase()
-                if (host.isEmpty()) return null
-                val portPart = hostPort.substring(close + 1)
-                if (portPart.isEmpty()) return ParsedEntry(host, null)
-                val port = portPart.removePrefix(":").toIntOrNull() ?: return null
-                return if (port in 1..65535) ParsedEntry(host, port) else null
-            }
-            if (hostPort.count { it == ':' } == 1) {
-                val host = hostPort.substringBefore(':').lowercase()
-                if (host.isEmpty()) return null
-                val port = hostPort.substringAfter(':').toIntOrNull() ?: return null
-                return if (port in 1..65535) ParsedEntry(host, port) else null
-            }
-            if (hostPort.count { it == ':' } == 0) {
-                return ParsedEntry(hostPort.lowercase(), null)
-            }
-            // Unbracketed IPv6 or garbage — fail closed.
-            return null
-        }
-        return null
-    }
-
-    /** Lowercases + bracket-strips a peer host; null when blank. */
-    internal fun normalizeHost(host: String): String? {
-        val trimmed = host.trim().lowercase()
-        if (trimmed.isEmpty()) return null
-        return if (trimmed.startsWith("[") && trimmed.endsWith("]") && trimmed.length > 2) {
-            trimmed.substring(1, trimmed.length - 1)
-        } else {
-            trimmed
-        }
-    }
+    fun isGranted(entries: Set<String>, host: String?, port: Int): Boolean =
+        SelfSignedTrustMatcher.isGranted(entries, host, port)
 }
 
 /**

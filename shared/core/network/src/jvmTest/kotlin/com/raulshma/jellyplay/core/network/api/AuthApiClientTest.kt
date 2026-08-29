@@ -200,7 +200,7 @@ class AuthApiClientImplTest {
         // Settings → Server Management → Add Server reaches connectToServer
         // while a user is signed in. The adopt must be one atomic step — a
         // single-sided updateServer would publish a synthetic
-        // (newServer, oldUser) ActiveSession that HomeSession classifies as a
+        // (newServer, oldUser) session that HomeSession classifies as a
         // real identity switch, clearing Room under the wrong user.
         val probeRouter = mockk<ServerAddressRouter>(relaxed = true)
         every { probeRouter.activeAddress } returns MutableStateFlow(null)
@@ -233,5 +233,65 @@ class AuthApiClientImplTest {
             probeEngine.session.value,
             "no synthetic (newServer, oldUser) session may be published",
         )
+    }
+
+    @Test
+    fun `connectToServer tls-trust probe failure fails after exactly one attempt`() = runTest {
+        // Wave-21 review round: no retry can fix an untrusted certificate —
+        // retrying just delayed the Add Server trust dialog by 3 probe
+        // rounds. The probe wraps TLS-trust failures into a non-retryable
+        // signal; RetryPolicy must stop after attempt 1 while the original
+        // cause chain (root-cause walk in the dialog classifier) survives.
+        val probeRouter = mockk<ServerAddressRouter>(relaxed = true)
+        every { probeRouter.activeAddress } returns MutableStateFlow(null)
+        coEvery { probeRouter.probe("https://selfsigned.example.com") } returns AddressProbeResult(
+            reachable = false,
+            error = javax.net.ssl.SSLHandshakeException("PKIX path building failed"),
+        )
+        val client = AuthApiClientImpl(
+            engine = JellyfinApiEngine(
+                jellyfinLazy = dagger.Lazy { mockk<Jellyfin>(relaxed = true) },
+                okHttpClientLazy = dagger.Lazy { OkHttpClient() },
+                deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
+                addressRouter = probeRouter,
+            ),
+            addressRouter = probeRouter,
+        )
+
+        val result = client.connectToServer("selfsigned.example.com")
+
+        assertTrue(result.isFailure)
+        io.mockk.coVerify(exactly = 1) { probeRouter.probe(any()) }
+        assertTrue(
+            result.exceptionOrNull()?.cause is javax.net.ssl.SSLHandshakeException,
+            "the wrapped failure must preserve the TLS cause for the root-cause classifier",
+        )
+    }
+
+    @Test
+    fun `connectToServer plain IOException probe failure still retries`() = runTest {
+        // The TLS exemption is probe-and-TLS-scoped only: a transient
+        // transport failure keeps the pre-existing retry behavior (1 attempt
+        // + maxRetries = 3 probes).
+        val probeRouter = mockk<ServerAddressRouter>(relaxed = true)
+        every { probeRouter.activeAddress } returns MutableStateFlow(null)
+        coEvery { probeRouter.probe("https://flaky.example.com") } returns AddressProbeResult(
+            reachable = false,
+            error = java.io.IOException("connection reset"),
+        )
+        val client = AuthApiClientImpl(
+            engine = JellyfinApiEngine(
+                jellyfinLazy = dagger.Lazy { mockk<Jellyfin>(relaxed = true) },
+                okHttpClientLazy = dagger.Lazy { OkHttpClient() },
+                deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
+                addressRouter = probeRouter,
+            ),
+            addressRouter = probeRouter,
+        )
+
+        val result = client.connectToServer("flaky.example.com")
+
+        assertTrue(result.isFailure)
+        io.mockk.coVerify(exactly = 3) { probeRouter.probe(any()) }
     }
 }

@@ -63,6 +63,12 @@ internal class DesktopStorageAreas(
  * (journal + response files) is the wipe; keeping the root means OkHttp's
  * cache directory never vanishes under it. A missing root is a no-op (the
  * cache is created lazily on first use).
+ *
+ * Best-effort on Windows (wave-21 review round): a live OkHttp cache holds
+ * its journal file OPEN, so that one file may survive the wipe with a
+ * delete-access-denied. Harmless — OkHttp treats the journal's missing
+ * entries as cache misses and rewrites it — but callers must not read a
+ * surviving journal as a failed clear.
  */
 internal fun clearDirectoryContents(dir: File) {
     if (!dir.exists()) return
