@@ -239,13 +239,14 @@ private fun MainHomeContent(
     val offlineSections = remember(filteredOfflineLibrary, filteredOfflineEpisodes, offlineTitles, state.offlineSectionPrefs) {
         buildOfflineHomeSections(filteredOfflineLibrary, filteredOfflineEpisodes, offlineTitles, state.offlineSectionPrefs)
     }
-    // Server fetch failed but downloads exist -> implicit offline: the same
-    // integrated home plus a status banner so the fallback isn't silent.
-    // (state.offlineLibrary is only collected while offline or mid-failure, so
-    // this never shadows the online home.)
-    val implicitOffline = state.fetchFailedEmpty &&
-        state.offlineMode == OfflineMode.ONLINE && state.offlineLibrary.isNotEmpty()
-    val renderingOffline = state.offlineMode != OfflineMode.ONLINE || implicitOffline
+    // The offline-render decision arrives pre-computed as one value
+    // (HomeUiState.renderSource — see computeHomeRenderSource): explicit
+    // offline and the implicit fallback both render Offline; FallbackPending
+    // is the gate-open window before the first library emission. Implicit
+    // offline additionally gets a status banner so the fallback isn't silent.
+    val renderingOffline = state.renderSource == HomeRenderSource.Offline
+    val fallbackPending = state.renderSource == HomeRenderSource.FallbackPending
+    val implicitOffline = renderingOffline && state.offlineMode == OfflineMode.ONLINE
 
     // Hero featured-candidate selection — single-pass (was up to 3x flatMap/filter).
     val featuredCandidates = remember(renderingOffline, state.homeMode, state.sections, offlineSections) {
@@ -533,13 +534,14 @@ private fun MainHomeContent(
                 // Offline sections + renderingOffline are derived above the hero
                 // setup so the hero can share the same offline candidates.
                 when {
-                    // When an online fetch fails but we have no downloads, there is
-                    // nothing to fall back on — show the hard error. While the
+                    // When an online fetch fails but downloads are confirmed
+                    // absent (renderSource back to Online), there is nothing to
+                    // fall back on — show the hard error. While the
                     // implicit-offline fallback is still waiting on its first
-                    // offline-library emission (pending), downloads may yet
-                    // exist — the loading state below covers that window.
-                    state.fetchFailedEmpty && state.offlineMode == OfflineMode.ONLINE &&
-                        state.offlineLibrary.isEmpty() && !state.offlineFallbackPending -> {
+                    // offline-library emission (FallbackPending), downloads may
+                    // yet exist — the loading state below covers that window.
+                    state.error != null && state.sections.isEmpty() &&
+                        state.renderSource == HomeRenderSource.Online -> {
                         ErrorScreen(
                             message = stringResource(R.string.home_error_load_content),
                             onRetry = { viewModel.onEvent(HomeUiEvent.Refresh) },
@@ -579,7 +581,7 @@ private fun MainHomeContent(
                                 // pending flag covers the implicit-offline window
                                 // before the first library emission.
                                 isLoading = (!renderingOffline && state.isLoading) ||
-                                    state.offlineFallbackPending,
+                                    fallbackPending,
                                 homeHeroEnabled = state.homeHeroEnabled,
                                 homeBackdropEnabled = state.homeBackdropEnabled,
                                 newsletterBannerVisible = !renderingOffline && state.newsletterBannerVisible,

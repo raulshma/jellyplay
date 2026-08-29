@@ -989,9 +989,10 @@ internal data class HomeRefreshState(
     /**
      * The server fetch failed and left nothing to show — the precondition for
      * the implicit-offline fallback (online mode + downloads present). The
-     * offline-library collection gate in [HomeViewModel] keys on this; the UI
-     * mirror is [com.raulshma.jellyplay.feature.home.HomeUiState.fetchFailedEmpty].
-     * Keep the two in sync.
+     * offline collection gate in [com.raulshma.jellyplay.feature.home.HomeViewModel]
+     * keys on this, and the same gate folds it into
+     * [com.raulshma.jellyplay.feature.home.HomeUiState.renderSource] via
+     * [com.raulshma.jellyplay.feature.home.computeHomeRenderSource].
      */
     val fetchFailedEmpty: Boolean
         get() = error != null && sections.isEmpty()

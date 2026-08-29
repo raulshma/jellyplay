@@ -315,12 +315,31 @@ refresher re-reads through read-only providers, and the scroll reset on
 manual refresh and identity changes (pure VM state the refresher cannot
 see).
 
+**`HomeRenderSource`** (`feature/home/src/main/java/.../HomeRenderSource.kt`)
+is the home screen's single offline-render predicate: `Online` / `Offline` /
+`FallbackPending`, folded ONCE per gate emission by the pure
+`computeHomeRenderSource` and carried as `HomeUiState.renderSource`. The
+screen branches (content vs hard-error vs loading), the implicit-offline
+banner, and the VM's downloads-rendering gate (`isRenderingDownloads`, read
+by the series smart-play funnel) all branch on that one value — no site
+re-derives the predicate from `offlineMode` + error/sections. The gate itself
+is ONE flow in the VM (`offlineGate`: `offlineModeManager.offlineMode` +
+the refresher's `fetchFailedEmpty`), shared by the offline-library and
+offline-episodes collectors (their emissions stay independent so large
+episode batches don't delay the library's pending→loaded transition); the
+same gate emission computes the render source, so the predicate can never
+disagree with what the collectors are doing. Semantics worth remembering: a
+failed fetch over a CONFIRMED-empty offline library is `Online` (the
+hard-error screen) — only unprobed-or-populated downloads make the implicit
+fallback render.
+
 Test surfaces: `HomeRefresherTest` (plain JUnit + `MainDispatcherRule`,
 constructs the refresher directly with a fake `awaitOutboxDrained`) pins
 cadence, throttles, the offline transitions, the going-online sequence and
 its timeout, and `patchItems`; `HomeViewModelTest` (Robolectric, all 30
 constructor collaborators) pins the UiState folds, the event funnel and the
-identity routing through a real `HomeSession`; `HomeUiStateTest` pins the
+identity routing through a real `HomeSession`; `HomeRenderSourceTest` pins
+the render-source fold's five corners; `HomeUiStateTest` pins the
 state-class defaults.
 
 ## Session identity

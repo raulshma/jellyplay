@@ -73,6 +73,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.stateIn
@@ -227,6 +228,29 @@ class HomeViewModel @Inject constructor(
         directArrEnabledProvider = { _uiState.value.directArrEnabled },
         androidTvWatchNextEnabledProvider = { androidTvWatchNextEnabled },
     )
+
+    /**
+     * The offline collection gate — ONE flow shared by the library and
+     * episodes collectors in [init] (the predicate used to be copy-pasted into
+     * each, free to drift), and the input side of [computeHomeRenderSource]
+     * via [offlineGateState]. Downloads collect while any offline mode is
+     * active or an online fetch failed with nothing to show.
+     */
+    private val offlineGate: Flow<OfflineGate> = combine(
+        offlineModeManager.offlineMode,
+        refresher.state.map { it.fetchFailedEmpty },
+    ) { mode, fetchFailedEmpty -> OfflineGate(mode, fetchFailedEmpty) }
+        .distinctUntilChanged()
+        .onEach { offlineGateState = it }
+
+    /**
+     * Latest [offlineGate] emission. Read by the library collector's
+     * render-source fold so [computeHomeRenderSource] sees the same gate
+     * emission the collection keys on (not the uiState mirrors, which lag a
+     * hop behind). `onEach` upstream of `flatMapLatest` keeps it fresh for
+     * every activation.
+     */
+    private var offlineGateState = OfflineGate(OfflineMode.ONLINE, fetchFailedEmpty = false)
 
     /**
      * The home search bar's entire state surface — live query, results slice,
@@ -462,27 +486,25 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Collect the offline library whenever the offline branch can render
-        // it: any offline mode, or while an online fetch failed with nothing
-        // to show (implicit offline — the home falls back to downloads plus a
-        // status banner). The underlying Flow re-emits on every download
-        // progress write, so collecting it unconditionally re-invalidated the
-        // whole home tree during downloads even in normal online browsing
-        // (where the offline branch never renders); the gate keeps the
-        // upstream collection cancelled there.
-        // Emissions are wrapped so the window before the first library
-        // emission (gate just opened, downloads-exist still unknown) carries
-        // [HomeUiState.offlineFallbackPending] — the UI shows a loading state
-        // there instead of flashing the hard error screen.
+        // Collect the offline library (and episodes, collector below) whenever
+        // the offline branch can render them: any offline mode, or while an
+        // online fetch failed with nothing to show (implicit offline — the
+        // home falls back to downloads plus a status banner). The underlying
+        // Flows re-emit on every download progress write, so collecting them
+        // unconditionally re-invalidated the whole home tree during downloads
+        // even in normal online browsing (where the offline branch never
+        // renders); the gate keeps the upstream collection cancelled there.
+        //
+        // ONE gate flow ([offlineGate]) feeds both collectors — the gate
+        // predicate used to be copy-pasted into each, and the copies were
+        // free to drift. The same gate emission also computes
+        // [HomeUiState.renderSource] (via [computeHomeRenderSource]), so the
+        // offline-render predicate has exactly one fold.
         @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
         launch {
-            combine(
-                offlineModeManager.offlineMode,
-                refresher.state.map { it.fetchFailedEmpty },
-            ) { mode, fetchFailedEmpty -> mode != OfflineMode.ONLINE || fetchFailedEmpty }
-                .distinctUntilChanged()
-                .flatMapLatest { collectLibrary ->
-                    if (collectLibrary) {
+            offlineGate
+                .flatMapLatest { gate ->
+                    if (gate.isCollecting) {
                         offlineRepository.getOfflineLibrary()
                             .map { OfflineLibraryEmission(items = it) }
                             .onStart { emit(OfflineLibraryEmission(pending = true)) }
@@ -491,8 +513,16 @@ class HomeViewModel @Inject constructor(
                     }
                 }
                 .collect { emission ->
-                    _uiState.update {
-                        it.copy(offlineLibrary = emission.items, offlineFallbackPending = emission.pending)
+                    _uiState.update { state ->
+                        state.copy(
+                            offlineLibrary = emission.items,
+                            renderSource = computeHomeRenderSource(
+                                offlineMode = offlineGateState.mode,
+                                fetchFailedEmpty = offlineGateState.fetchFailedEmpty,
+                                offlineLibrary = emission.items,
+                                fallbackPending = emission.pending,
+                            ),
+                        )
                     }
                 }
         }
@@ -504,13 +534,9 @@ class HomeViewModel @Inject constructor(
         // transition. First emission while the gate is closed is empty.
         @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
         launch {
-            combine(
-                offlineModeManager.offlineMode,
-                refresher.state.map { it.fetchFailedEmpty },
-            ) { mode, fetchFailedEmpty -> mode != OfflineMode.ONLINE || fetchFailedEmpty }
-                .distinctUntilChanged()
-                .flatMapLatest { collectEpisodes ->
-                    if (collectEpisodes) {
+            offlineGate
+                .flatMapLatest { gate ->
+                    if (gate.isCollecting) {
                         offlineRepository.getOfflineEpisodes()
                     } else {
                         flowOf(emptyList())
@@ -714,15 +740,17 @@ class HomeViewModel @Inject constructor(
 
     /**
      * True when the home screen renders (or would render) downloaded content
-     * rather than server content: explicit offline mode, or the implicit one
-     * — the online fetch failed leaving only downloads to show (the same
-     * condition `MainHomeContent` uses to swap in [OfflineHomeContent]). The
-     * empty-library corner of that render check is deliberately omitted: with
-     * no downloads the error screen shows and no series card can fire this.
+     * rather than server content: explicit offline mode, or the implicit one —
+     * the online fetch failed leaving only downloads to show. Reads the same
+     * [HomeUiState.renderSource] the screen branches on (one fold — see
+     * [computeHomeRenderSource]); previously this re-derived the predicate
+     * with subtly different terms from the screen's copy. The known-empty
+     * corner (fetch failed, downloads confirmed absent →
+     * [HomeRenderSource.Online], hard-error screen) is deliberately excluded:
+     * no series card can fire this while the error screen shows.
      */
-    private fun isRenderingDownloads(): Boolean = _uiState.value.let { state ->
-        state.offlineMode != OfflineMode.ONLINE || (state.error != null && state.sections.isEmpty())
-    }
+    private fun isRenderingDownloads(): Boolean =
+        _uiState.value.renderSource != HomeRenderSource.Online
 
     /**
      * Shared offline-delete module (core/data) — the same collapse/defense
@@ -1001,10 +1029,24 @@ class HomeViewModel @Inject constructor(
 }
 
 /**
+ * The offline collection gate value: [isCollecting] is the predicate both
+ * offline collectors key on, and [mode]/[fetchFailedEmpty] feed
+ * [computeHomeRenderSource] so the render-source fold reads the same gate
+ * emission that opened/closed the collection.
+ */
+private data class OfflineGate(
+    val mode: OfflineMode,
+    val fetchFailedEmpty: Boolean,
+) {
+    val isCollecting: Boolean get() = mode != OfflineMode.ONLINE || fetchFailedEmpty
+}
+
+/**
  * Emission envelope for the offline-library collection gate: [pending] marks
  * the window after the gate opens but before the first real library emission,
  * while the implicit-offline fallback is still deciding whether any downloads
- * exist. Maps onto [HomeUiState.offlineLibrary] + [HomeUiState.offlineFallbackPending].
+ * exist. Maps onto [HomeUiState.offlineLibrary] +
+ * [HomeRenderSource.FallbackPending].
  */
 private data class OfflineLibraryEmission(
     val items: List<OfflineMediaItem> = emptyList(),

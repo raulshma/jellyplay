@@ -47,12 +47,12 @@ data class HomeUiState(
      */
     val offlineSectionPrefs: OfflineHomeSectionPrefs = OfflineHomeSectionPrefs(),
     /**
-     * True while the offline-library collection gate is open but the first
-     * emission hasn't landed — the implicit-offline fallback is still deciding
-     * whether downloads exist. The home shows a loading state (and suppresses
-     * the hard error screen) for that window instead of flashing it.
+     * The single offline-render predicate, computed once per gate/library
+     * emission by [computeHomeRenderSource] (see [HomeRenderSource]). The
+     * screen branches and the VM's downloads-rendering gate read this value —
+     * no site re-derives the predicate from [offlineMode] + error/sections.
      */
-    val offlineFallbackPending: Boolean = false,
+    val renderSource: HomeRenderSource = HomeRenderSource.Online,
     val discoverEnabled: Boolean = false,
     val homeHeroEnabled: Boolean = true,
     val homeBackdropEnabled: Boolean = true,
@@ -122,16 +122,7 @@ data class HomeUiState(
      * the same sheet the media-detail screen hosts.
      */
     val seriesDownload: HomeSeriesDownloadState? = null,
-) {
-    /**
-     * The server fetch failed and left nothing to show — the precondition for
-     * the implicit-offline fallback home. Screen-side mirror of the refresher's
-     * `HomeRefreshState.fetchFailedEmpty` (which the offline-library collection
-     * gate keys on); keep the two in sync.
-     */
-    val fetchFailedEmpty: Boolean
-        get() = error != null && sections.isEmpty()
-}
+)
 
 /**
  * Data backing the offline home's series delete-episodes sheet (the same

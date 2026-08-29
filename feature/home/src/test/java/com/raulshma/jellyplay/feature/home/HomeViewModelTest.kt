@@ -732,7 +732,7 @@ class HomeViewModelTest {
         // The gate stays closed while online with content: no collection, so
         // download-progress writes can't re-invalidated the home tree.
         assertTrue(viewModel.uiState.value.offlineLibrary.isEmpty())
-        assertFalse(viewModel.uiState.value.offlineFallbackPending)
+        assertEquals(HomeRenderSource.Online, viewModel.uiState.value.renderSource)
         verify(exactly = 0) { offlineRepository.getOfflineLibrary() }
         verify(exactly = 0) { offlineRepository.getOfflineEpisodes() }
         stopPeriodicRefresh()
@@ -755,9 +755,9 @@ class HomeViewModelTest {
         runCurrent()
 
         // The failed fetch opened the gate (implicit offline): the
-        // pre-emission window carries the pending flag so the home shows a
-        // loading state instead of flashing the hard error screen.
-        assertTrue(viewModel.uiState.value.offlineFallbackPending)
+        // pre-emission window carries the pending render source so the home
+        // shows a loading state instead of flashing the hard error screen.
+        assertEquals(HomeRenderSource.FallbackPending, viewModel.uiState.value.renderSource)
 
         val downloaded = listOf(OfflineMediaItem(id = "d1", name = "Downloaded", mediaType = MediaType.MOVIE))
         libraryFlow.tryEmit(downloaded)
@@ -767,7 +767,8 @@ class HomeViewModelTest {
         // Downloaded episodes land in their own state slice for the offline
         // CW / Next Up rows (the top-level library excludes episodes).
         assertEquals(episodes, viewModel.uiState.value.offlineEpisodes)
-        assertFalse(viewModel.uiState.value.offlineFallbackPending)
+        // Downloads confirmed present: the implicit-offline fallback renders.
+        assertEquals(HomeRenderSource.Offline, viewModel.uiState.value.renderSource)
         stopPeriodicRefresh()
     }
 
@@ -931,14 +932,21 @@ class HomeViewModelTest {
     fun playSeries_failedFetchWithDownloads_isImplicitOffline() = runTest {
         // The screen's implicit-offline render branch: online mode, but the
         // fetch failed leaving only downloads. Resolution must read local
-        // episodes, not poke the server that just failed.
+        // episodes, not poke the server that just failed. The downloads must
+        // actually exist — the render-source fold treats a failed fetch over a
+        // confirmed-empty offline library as the hard-error screen (Online),
+        // where no card can fire a play at all.
         coEvery { mediaRepository.getHomeSections(any()) } returns
             Result.failure(IOException("server down"))
+        every { offlineRepository.getOfflineLibrary() } returns flowOf(
+            listOf(OfflineMediaItem(id = "dl-1", name = "Downloaded", mediaType = MediaType.MOVIE)),
+        )
         viewModel = buildViewModel()
         signIn("u1")
         runCurrent()
         assertEquals(OfflineMode.ONLINE, viewModel.uiState.value.offlineMode)
         assertNotNull(viewModel.uiState.value.error)
+        assertEquals(HomeRenderSource.Offline, viewModel.uiState.value.renderSource)
 
         coEvery {
             episodeCatalogue.loadSeriesEpisodes("series-1", offline = true)
