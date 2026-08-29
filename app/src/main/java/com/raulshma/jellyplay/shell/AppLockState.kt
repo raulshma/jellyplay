@@ -29,6 +29,11 @@ import kotlinx.coroutines.flow.asStateFlow
  *    flip the compose-local (PIN/biometric unlock in MainActivity, the
  *    auto-lock-on-resume timeout in MainActivity.onResume).
  *
+ *    One deliberate delta vs the old compose-local (documented HERE because
+ *    MainActivity's comment points at this KDoc): the unlocked flag now
+ *    SURVIVES activity recreate() (e.g. the pre-T per-app locale change)
+ *    instead of re-locking mid-session; process death still resets it.
+ *
  * Registered in `androidAppModule`; both hosts resolve it through Koin like
  * the other shell infrastructure.
  */

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.navigation.playbackhost.PlayerActivityArgs
 import com.raulshma.jellyplay.shell.AppLockState
@@ -14,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import io.mockk.mockk
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -134,6 +136,47 @@ class PlayerActivityLockRedirectTest {
         )
     }
 
+    @Test
+    fun `onResume re-checks the gate after the app locks under a live instance`() {
+        // Reviewer D (wave 20 fix round): a live PiP window survives
+        // MainActivity's auto-lock; expanding it back to fullscreen returns
+        // through onResume with NO intent delivered — the gate must be
+        // re-consulted there, not only at onCreate/onNewIntent.
+        primeKoin(unlocked = true, pinLockEnabled = true)
+
+        val controller = playerController(Intent(application, PlayerActivity::class.java))
+        controller.create()
+        // Passed the gate unlocked (no redirect); args-parse finish.
+        assertNull(Shadows.shadowOf(application).nextStartedActivity)
+
+        appLockState.lock()
+        controller.resume()
+
+        assertEquals(
+            MainActivity::class.java.name,
+            Shadows.shadowOf(application).nextStartedActivity?.component?.className,
+        )
+    }
+
+    @Test
+    fun `onResume after a gate redirect does not launch a second MainActivity`() {
+        // The re-check is idempotent: after onCreate redirected, the activity
+        // still walks its finishing lifecycle through onResume — exactly ONE
+        // handoff may fire.
+        primeKoin(unlocked = false, pinLockEnabled = true)
+
+        val controller = playerController(itemIntent("item-1"))
+        controller.create()
+        assertEquals(
+            MainActivity::class.java.name,
+            Shadows.shadowOf(application).nextStartedActivity?.component?.className,
+        )
+
+        controller.resume()
+
+        assertNull("redirect must not double-fire on the finishing lifecycle pass", Shadows.shadowOf(application).nextStartedActivity)
+    }
+
     // ── Non-redirects ──────────────────────────────────────────────────────
 
     @Test
@@ -164,7 +207,7 @@ class PlayerActivityLockRedirectTest {
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
-    /** Starts Koin with exactly the two singles the gate resolves, optionally seeding the persisted gate keys. */
+    /** Starts Koin with the singles the gate + resume path resolve, optionally seeding the persisted gate keys. */
     private fun primeKoin(
         unlocked: Boolean,
         pinLockEnabled: Boolean = false,
@@ -186,6 +229,11 @@ class PlayerActivityLockRedirectTest {
                 module {
                     single { appLockState }
                     single { securityStore }
+                    // onResume's player hook resolves this lazily even on the
+                    // finishing-lifecycle pass (the no-redirect / already
+                    // redirected cases) — a relaxed stub keeps the harness at
+                    // exactly-the-singles-the-path-touches.
+                    single<PlayerLifecycleManager> { mockk(relaxed = true) }
                 },
             )
         }

@@ -340,17 +340,29 @@ class PlayerActivity : FragmentActivity() {
         // firstPersistedSecurity() suspends until DataStore's initial read
         // lands — warm-process callers return from the cached snapshot
         // without disk IO — bounded by a timeout so a pathological read can
-        // never wedge cold start; on timeout fall back to the current
-        // StateFlow value (the pre-20E behavior).
-        val security = runBlocking {
+        // never wedge cold start (timeout handling: fail CLOSED, see below).
+        val persisted = runBlocking {
             withTimeoutOrNull(APP_LOCK_GATE_READ_TIMEOUT_MS) {
                 securityStore.firstPersistedSecurity()
             }
-        } ?: securityStore.security.value
-        val gateConfigured = AppLockRedirect.isGateConfigured(
-            pinLockEnabled = security.pinLockEnabled,
-            biometricLockEnabled = security.biometricLockEnabled,
-        )
+        }
+        // Fail CLOSED on a timed-out read (reviewer D, wave 20 fix round):
+        // falling back to the `.security` StateFlow seed would re-open the
+        // cold-start race this read exists to close whenever the read is
+        // merely slow. Treating "unknown" as gate-configured still lets an
+        // UNLOCKED holder through (that user authenticated this process);
+        // a locked one lands on the lock screen. Residual (pre-existing and
+        // equivalent on both hosts): a CORRUPT prefs read inside
+        // SecurityStore degrades to emptyPreferences → no gate — MainActivity's
+        // own lock screen reads the same store and shows no gate either.
+        val gateConfigured = if (persisted != null) {
+            AppLockRedirect.isGateConfigured(
+                pinLockEnabled = persisted.pinLockEnabled,
+                biometricLockEnabled = persisted.biometricLockEnabled,
+            )
+        } else {
+            true
+        }
         if (!AppLockRedirect.shouldRedirect(gateConfigured = gateConfigured, unlocked = lockState.unlocked.value)) {
             return false
         }
@@ -362,9 +374,19 @@ class PlayerActivity : FragmentActivity() {
         // way its own gate shows the lock screen (and its auto-lock-on-resume
         // check re-locks first if the timer elapsed).
         startActivity(Intent(this, MainActivity::class.java))
+        lockGateRedirected = true
         finish()
         return true
     }
+
+    /**
+     * Set the first time [redirectToLockGateIfNeeded] fired — the onResume /
+     * PiP-expand re-checks (reviewer D, wave 20 fix round) must not launch a
+     * SECOND MainActivity handoff for the same redirect: after onCreate or
+     * onNewIntent redirects, the activity still walks its lifecycle through
+     * onResume while finishing.
+     */
+    private var lockGateRedirected = false
 
     // ── PiP remote actions ──
     private var pipActionReceiver: BroadcastReceiver? = null
@@ -409,6 +431,16 @@ class PlayerActivity : FragmentActivity() {
                 screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             }
         } else {
+            // PiP-expand gate re-check (reviewer D, wave 20 fix round): some
+            // OEMs keep the activity RESUMED through the whole PiP session,
+            // so the onResume re-check may not re-fire on expand — consult
+            // the gate here too (idempotent via lockGateRedirected; the
+            // dismiss paths are already finishing or about to, and a locked
+            // holder being dismissed should still not expand to fullscreen
+            // playback unchallenged).
+            if (!lockGateRedirected && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                redirectToLockGateIfNeeded()
+            }
             unregisterPipActionReceiver()
             window.attributes = window.attributes.apply {
                 screenBrightness = savedBrightness
@@ -467,6 +499,17 @@ class PlayerActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Gate re-check on every resume (reviewer D, wave 20 fix round): the
+        // gate otherwise runs only at intent-delivery moments (onCreate /
+        // onNewIntent), but a live PiP window survives MainActivity's
+        // auto-lock — expanding it returns here with the holder already
+        // locked and no intent delivered. Warm-process reads replay the
+        // in-memory snapshot (no disk IO). lockGateRedirected skips the pass
+        // where onCreate/onNewIntent already redirected and this activity is
+        // merely walking its finishing lifecycle. Early-return on a fresh
+        // redirect so the player lifecycle hook (and its DI graph) never
+        // runs while locked.
+        if (!lockGateRedirected && redirectToLockGateIfNeeded()) return
         justExitedPip = false
         playerLifecycleManager.onActivityResume()
     }
