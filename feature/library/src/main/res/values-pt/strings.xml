@@ -15,6 +15,7 @@
         <item quantity="other">%1$d itens</item>
     </plurals>
     <string name="library_no_items_found">Nenhum item encontrado</string>
+    <string name="library_no_downloads_offline">Ainda sem downloads</string>
     <string name="library_try_adjusting_filters">Tente ajustar os filtros</string>
     <string name="library_list_view">Vista em lista</string>
     <string name="library_grid_view">Vista em grelha</string>

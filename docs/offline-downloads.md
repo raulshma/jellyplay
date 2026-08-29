@@ -89,6 +89,10 @@ library surfaces are download-aware:
   Tags dimension, which has no offline copy. Membership is matched against
   the library folder saved on each download, so downloads from multi-folder
   libraries may not appear until they're re-synced.
+- **Library while offline** — going offline (manually or on network loss)
+  auto-applies the Downloaded filter: the grid switches to the on-device
+  store, the chip renders pinned on, and your real filters are kept
+  untouched so going back online restores the exact view you had.
 
 The dedicated **Downloads** queue and **Offline Library** screens remain the
 power surfaces: transfer control, storage summary, music browsing, and
@@ -192,7 +196,8 @@ available. While offline (manually, automatically on network loss, or when
 the server can't be reached), the home screen keeps its normal layout and
 shows rows derived from your downloads — Continue Watching, Recently
 Downloaded, Movies, Series, Music — served entirely from the on-device
-store.
+store. The library follows the same rule: its grid auto-filters to your
+downloads, exactly as if you'd tapped the **Downloaded** chip yourself.
 
 ## Keeping downloads fresh (resync)
 

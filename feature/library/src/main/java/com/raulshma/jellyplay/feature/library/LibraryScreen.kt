@@ -215,6 +215,9 @@ fun LibraryScreen(
     val tags by viewModel.tags.collectAsStateWithLifecycle()
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
     val resetDialogVisible by viewModel.resetDialogVisible.collectAsStateWithLifecycle()
+    // Offline mode auto-filters the grid to downloads (#147); the flag pins
+    // the Downloaded chip and swaps the empty-state copy.
+    val offlineAutoFilter by viewModel.offlineAutoFilter.collectAsStateWithLifecycle()
 
     // Section mode: configure the VM once with the injected context. Idempotent
     // (configureSection early-returns on an equal context) so recomposition is
@@ -578,14 +581,21 @@ fun LibraryScreen(
                     // dedicated selection sheet (immediate-apply); "All Filters"
                     // falls back to the legacy full sheet.
                     LibraryFilterChipRow(
-                        filters = filters,
+                        // Offline mode pins the Downloaded filter on (#147): the
+                        // chip renders selected and Tags stay hidden while the
+                        // grid is served from the local store. The toggle is a
+                        // no-op then — the grid is downloads-only until the app
+                        // is back online, so tapping could only mislead.
+                        filters = if (offlineAutoFilter) filters.copy(isDownloaded = true) else filters,
                         genres = genres,
                         availableTags = tags,
                         onOpenSheet = { openFilterSheet = it },
                         onToggleDownloaded = {
-                            viewModel.updateFilters(
-                                filters.copy(isDownloaded = !(filters.isDownloaded == true))
-                            )
+                            if (!offlineAutoFilter) {
+                                viewModel.updateFilters(
+                                    filters.copy(isDownloaded = !(filters.isDownloaded == true))
+                                )
+                            }
                         },
                         firstChipFocus = firstFilterChipFocus,
                         modifier = Modifier
@@ -790,8 +800,11 @@ fun LibraryScreen(
                                 // hand-rolled empty state left the screen with zero focusables and
                                 // the drawer rail captured focus.
                                 ScreenEmptyState(
-                                    icon = Tabler.Outline.Search,
-                                    title = stringResource(R.string.library_no_items_found),
+                                    icon = if (offlineAutoFilter) Tabler.Outline.CloudOff else Tabler.Outline.Search,
+                                    title = stringResource(
+                                        if (offlineAutoFilter) R.string.library_no_downloads_offline
+                                        else R.string.library_no_items_found
+                                    ),
                                     actionLabel = if (hasActiveFilters) {
                                         stringResource(com.raulshma.jellyplay.core.ui.R.string.core_clear_filters)
                                     } else {
@@ -1327,7 +1340,10 @@ fun LibraryScreen(
 
     if (showFilters) {
         LibraryFilterSheet(
-            currentFilters = filters,
+            // Same offline pinning as the chip row (#147): the Downloaded
+            // toggle renders on while the grid is auto-served from the local
+            // store, so the sheet can't claim it's off.
+            currentFilters = if (offlineAutoFilter) filters.copy(isDownloaded = true) else filters,
             genres = genres,
             availableTags = tags,
             onApply = { newFilters ->

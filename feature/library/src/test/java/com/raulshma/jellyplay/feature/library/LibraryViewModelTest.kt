@@ -21,12 +21,18 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -40,11 +46,17 @@ class LibraryViewModelTest {
     private lateinit var offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository
     private lateinit var downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository
     private lateinit var downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake
+    private lateinit var offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager
     private lateinit var userDataMutator: UserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var photoFolderPrefetcher: PhotoFolderPrefetcher
     private lateinit var libraryStore: LibraryStore
     private lateinit var userMessageBus: com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
+
+    /** Real flow behind offlineModeManager.offlineMode — tests drive offline
+     *  transitions (#147 auto downloaded filter) by setting its value. */
+    private val offlineModeFlow =
+        MutableStateFlow(com.raulshma.jellyplay.core.model.OfflineMode.ONLINE)
 
     @Before
     fun setUp() {
@@ -52,6 +64,7 @@ class LibraryViewModelTest {
         offlineRepository = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
         downloadIntake = mockk(relaxed = true)
+        offlineModeManager = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         photoFolderPrefetcher = mockk(relaxed = true)
@@ -60,6 +73,7 @@ class LibraryViewModelTest {
 
         every { imageUrlProvider.getImageUrl(any(), any()) } returns "https://example.com/image.jpg"
         every { libraryStore.library } returns MutableStateFlow(LibrarySlice())
+        every { offlineModeManager.offlineMode } returns offlineModeFlow
         // The VM collects this in init for quick-action download gating.
         every {
             downloadRepository.observeCompletedDownloadedIds()
@@ -78,6 +92,7 @@ class LibraryViewModelTest {
         offlineRepository = offlineRepository,
         downloadRepository = downloadRepository,
         downloadIntake = downloadIntake,
+        offlineModeManager = offlineModeManager,
         userDataMutator = userDataMutator,
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
@@ -415,5 +430,51 @@ class LibraryViewModelTest {
         coVerify {
             userDataMutator.setPlayed("m1", true, UserDataMutator.FlipMode.Silent, emptyList(), null)
         }
+    }
+
+    // ── Offline auto downloaded filter (#147) ────────────────────────────────
+
+    @Test
+    fun `offlineAutoFilter mirrors offline mode transitions`() = runTest {
+        val vm = createViewModel()
+        backgroundScope.launch(kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler)) {
+            vm.offlineAutoFilter.collect { }
+        }
+        assertFalse(vm.offlineAutoFilter.value)
+
+        offlineModeFlow.value = com.raulshma.jellyplay.core.model.OfflineMode.OFFLINE_AUTO
+        advanceUntilIdle()
+        assertTrue(vm.offlineAutoFilter.value)
+
+        offlineModeFlow.value = com.raulshma.jellyplay.core.model.OfflineMode.ONLINE
+        advanceUntilIdle()
+        assertFalse(vm.offlineAutoFilter.value)
+    }
+
+    @Test
+    fun `offline mode serves the grid from the offline store without server paging`() = runTest {
+        every {
+            offlineRepository.getOfflineLibrary()
+        } returns kotlinx.coroutines.flow.flowOf(
+            listOf(
+                com.raulshma.jellyplay.core.model.OfflineMediaItem(
+                    id = "dl-1",
+                    name = "Downloaded Movie",
+                    mediaType = MediaType.MOVIE,
+                )
+            )
+        )
+
+        val vm = createViewModel()
+        offlineModeFlow.value = com.raulshma.jellyplay.core.model.OfflineMode.OFFLINE_MANUAL
+
+        val firstPage = backgroundScope.async { vm.pagedItems.first() }
+        advanceUntilIdle()
+
+        assertTrue(firstPage.isCompleted)
+        // The local store is the source, the server pager is never touched…
+        verify(exactly = 0) { mediaRepository.getMediaItemsPaged(any(), any(), any()) }
+        // …and the auto filter never mutated the user's filters.
+        assertNull(vm.state().filters.isDownloaded)
     }
 }

@@ -4,6 +4,7 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -22,6 +23,7 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LibrarySectionContext
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.toFilteredLibraryItems
 import com.raulshma.jellyplay.core.ui.feedback.UiText
@@ -50,6 +52,7 @@ class LibraryViewModel @Inject constructor(
     private val offlineRepository: OfflineRepository,
     private val downloadRepository: DownloadRepository,
     private val downloadIntake: DownloadIntake,
+    private val offlineModeManager: OfflineModeManager,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
@@ -181,20 +184,36 @@ class LibraryViewModel @Inject constructor(
 
     private val _refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
 
+    /**
+     * True while the app is offline (manual toggle or auto network loss): the
+     * grid auto-switches to the downloaded-only local source (#147) and the
+     * Downloaded chip renders pinned on — the library's share of the "auto
+     * filter for downloaded stuff" the offline home already applies. The
+     * user's real filters are never mutated, so going back online restores
+     * them untouched.
+     */
+    val offlineAutoFilter: kotlinx.coroutines.flow.StateFlow<Boolean> = stateIn(
+        initial = false,
+        flow = offlineModeManager.offlineMode.map { it != OfflineMode.ONLINE },
+    )
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val pagedItems: Flow<PagingData<MediaItem>> = combine(
         _browserState.flow,
         _refreshTrigger,
-    ) { browser, _ ->
-        browser.folder to browser.filters
-    }.flatMapLatest { (folder, filters) ->
-        if (filters.isDownloaded == true) {
-            // "Downloaded" filter: serve the grid from the local offline store —
-            // instant, no server paging, and the same projection offline playback
-            // uses. Folder membership matches the offline row's parentId; with no
-            // folder selected ("All") the whole offline library is shown. Filter
-            // dimensions and sort are re-applied client-side over the stored
-            // fields (see toFilteredLibraryItems).
+        offlineModeManager.offlineMode,
+    ) { browser, _, mode ->
+        Triple(browser.folder, browser.filters, mode != OfflineMode.ONLINE)
+    }.flatMapLatest { (folder, filters, servingOffline) ->
+        if (filters.isDownloaded == true || servingOffline) {
+            // "Downloaded" filter — or offline mode, which pins it on
+            // automatically (#147): serve the grid from the local offline
+            // store — instant, no server paging, and the same projection
+            // offline playback uses. Folder membership matches the offline
+            // row's parentId; with no folder selected ("All") the whole
+            // offline library is shown. Filter dimensions and sort are
+            // re-applied client-side over the stored fields (see
+            // toFilteredLibraryItems).
             val items = if (folder != null) {
                 offlineRepository.getOfflineLibraryInFolder(folder.id)
             } else {
