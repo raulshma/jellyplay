@@ -19,6 +19,10 @@ import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
+import com.raulshma.jellyplay.core.ui.feedback.UiText
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
@@ -83,6 +87,7 @@ class HomeViewModel @Inject constructor(
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val downloadRepository: DownloadRepository,
+    private val downloadIntake: DownloadIntake,
     private val offlineRepository: OfflineRepository,
     private val playbackOutboxRepository: PlaybackOutboxRepository,
     private val playbackSyncScheduler: PlaybackSyncScheduler,
@@ -110,6 +115,7 @@ class HomeViewModel @Inject constructor(
     private val continueWatchingBroadcaster: ContinueWatchingBroadcaster,
     private val librarySyncHook: LibrarySyncHook,
     private val timeSource: TimeSource,
+    private val userMessageBus: UserMessageBus,
     /**
      * The settings-search catalog, injected through the core/ui seam. The
      * binding itself lives in feature/settings (see its `SettingsSearchModule`)
@@ -124,6 +130,17 @@ class HomeViewModel @Inject constructor(
 
     val activeDownloadCount: StateFlow<Int> = downloadRepository.getActiveDownloadCount()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    /**
+     * Ids of download-complete items, for quick-action gating: a downloaded
+     * item's long-press offers "Remove download" instead of "Download".
+     * Collected unconditionally — unlike [HomeUiState.offlineLibrary], which is
+     * gated to offline modes because every download-progress tick re-invalidates
+     * it — because the ONLINE home's action sheet needs this set too. The
+     * repository collapses equal id sets, so transfers don't churn it.
+     */
+    val downloadedIds: StateFlow<Set<String>> = downloadRepository.observeCompletedDownloadedIds()
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     /**
      * The home screen's pending-sync surface — outbox badge count, sync
@@ -648,6 +665,31 @@ class HomeViewModel @Inject constructor(
 
     /** Opens the delete-episodes sheet for [series] — see [SeriesDeleteStateHolder.requestSeriesDelete]. */
     private fun requestSeriesDelete(series: MediaItem) = seriesDeleteStateHolder.requestSeriesDelete(series)
+
+    /**
+     * Long-press Download from an online home card. Single-stream items
+     * (movie/episode/music track) start inline at the default quality; series
+     * route to the detail screen with the download sheet pre-presented via
+     * [onOpenDetail] (their flow needs the user's season/episode selection),
+     * and other non-inline types open the detail screen plainly. Failures
+     * surface on the message bus.
+     */
+    fun downloadItem(item: MediaItem, onOpenDetail: (itemId: String, openDownloadSheet: Boolean) -> Unit) {
+        launch {
+            when (val result = downloadIntake.startFromItem(item)) {
+                DownloadRequestResult.Started ->
+                    userMessageBus.info(
+                        UiText.Resource(com.raulshma.jellyplay.core.data.R.string.data_download_started)
+                    )
+                is DownloadRequestResult.SeriesSelectionRequired -> onOpenDetail(result.seriesId, true)
+                is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId, false)
+                is DownloadRequestResult.Failed ->
+                    userMessageBus.error(
+                        UiText.Resource(com.raulshma.jellyplay.core.data.R.string.data_download_start_failed)
+                    )
+            }
+        }
+    }
 
     /** Closes the sheet — see [SeriesDeleteStateHolder.dismiss]. */
     private fun dismissSeriesDelete() = seriesDeleteStateHolder.dismiss()

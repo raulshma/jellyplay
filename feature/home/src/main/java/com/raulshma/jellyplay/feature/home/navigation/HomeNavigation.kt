@@ -66,6 +66,9 @@ fun EntryProviderScope<NavKey>.homeSection(
                     // still passes it) but no longer selects the route.
                     navigator.navigate(Route.MediaDetail(itemId))
                 },
+                onDownloadDetailClick = { itemId, openDownloadSheet ->
+                    navigator.navigate(Route.MediaDetail(itemId, openDownloadSheet))
+                },
                 onSeerrItemClick = { tmdbId, mediaType ->
                     navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
                 },

@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.core.data.worker.awaitResponse
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadQuality
+import com.raulshma.jellyplay.core.model.maxBitrate
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.DownloadFileEntry
 import com.raulshma.jellyplay.core.model.DownloadFileInventory
@@ -148,6 +149,9 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override fun getActiveDownloadCount(): Flow<Int> =
         downloadDao.getActiveDownloadCount()
+
+    override fun observeCompletedDownloadedIds(): Flow<Set<String>> =
+        downloadDao.getCompletedDownloadedItemIds().map(List<String>::toSet).distinctUntilChanged()
 
     override suspend fun getDownloadByMediaItemId(mediaItemId: String): DownloadItem? =
         downloadDao.getDownloadByMediaItemId(mediaItemId)?.toDownloadItem()
@@ -1250,12 +1254,7 @@ class DownloadRepositoryImpl @Inject constructor(
      * the downloaded file matches what the user would see streamed at the
      * equivalent quality.
      */
-    private fun qualityToMaxBitrate(quality: DownloadQuality): Int? = when (quality) {
-        DownloadQuality.ORIGINAL -> null
-        DownloadQuality.HIGH_1080P -> 8_000_000
-        DownloadQuality.MEDIUM_720P -> 3_000_000
-        DownloadQuality.LOW_480P -> 1_500_000
-    }
+    private fun qualityToMaxBitrate(quality: DownloadQuality): Int? = quality.maxBitrate
 
     companion object {
         private const val TAG = "DownloadRepository"

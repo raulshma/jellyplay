@@ -118,6 +118,8 @@ class HomeViewModelTest {
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var photoFolderPrefetcher: PhotoFolderPrefetcher
     private lateinit var downloadRepository: DownloadRepository
+    private lateinit var downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake
+    private lateinit var userMessageBus: com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var offlineModeManager: OfflineModeManager
     private lateinit var newsletterTriggerManager: NewsletterTriggerManager
@@ -223,6 +225,8 @@ class HomeViewModelTest {
         imageUrlProvider = mockk(relaxed = true)
         photoFolderPrefetcher = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
+        downloadIntake = mockk(relaxed = true)
+        userMessageBus = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
         newsletterTriggerManager = mockk(relaxed = true)
@@ -259,6 +263,7 @@ class HomeViewModelTest {
         every { offlineModeManager.networkStatus } returns networkStatusFlow
         every { offlineModeManager.isOffline } returns false
         every { downloadRepository.getActiveDownloadCount() } returns flowOf(0)
+        every { downloadRepository.observeCompletedDownloadedIds() } returns flowOf(emptySet())
         every { offlineRepository.getOfflineLibrary() } returns flowOf(emptyList())
         every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)
     }
@@ -273,6 +278,7 @@ class HomeViewModelTest {
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
         downloadRepository = downloadRepository,
+        downloadIntake = downloadIntake,
         offlineRepository = offlineRepository,
         playbackOutboxRepository = playbackOutboxRepository,
         playbackSyncScheduler = playbackSyncScheduler,
@@ -294,6 +300,7 @@ class HomeViewModelTest {
         continueWatchingBroadcaster = continueWatchingBroadcaster,
         librarySyncHook = librarySyncHook,
         timeSource = fakeTimeSource,
+        userMessageBus = userMessageBus,
         settingsSearchProvider = fakeSettingsSearchProvider,
     )
 

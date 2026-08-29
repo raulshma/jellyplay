@@ -33,6 +33,25 @@ interface OfflineMediaDao {
     )
     fun getTopLevelItems(): Flow<List<OfflineMediaWithPlayback>>
 
+    /**
+     * Downloaded top-level items of one server library folder — the data source
+     * behind the library screen's "Downloaded" filter. A top-level offline
+     * row's `parentId` is the server folder the item was saved from; in
+     * Jellyfin's metadata hierarchy movies and series sit directly under their
+     * library view, so `parentId` matches the view id on standard single-folder
+     * layouts. (Multi-folder libraries that nest extra physical folders under
+     * one view would need a stored view id — rows saved there won't match.)
+     */
+    @Query(
+        """
+        SELECT * FROM offline_media_with_playback
+        WHERE parentId = :libraryId
+          AND mediaType IN ('SERIES', 'MOVIE', 'AUDIO', 'MUSIC')
+        ORDER BY createdAt DESC
+        """
+    )
+    fun getTopLevelItemsInLibrary(libraryId: String): Flow<List<OfflineMediaWithPlayback>>
+
     @Query(
         """
         SELECT * FROM offline_media_with_playback

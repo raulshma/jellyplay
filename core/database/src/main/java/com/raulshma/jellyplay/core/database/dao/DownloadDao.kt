@@ -104,6 +104,29 @@ interface DownloadDao {
     suspend fun getCompletedDownloadByMediaItemId(mediaItemId: String): DownloadEntity?
 
     /**
+     * Reactive id set of everything download-complete, for quick-action gating
+     * on the online home/library (an item offers "Download" or "Remove
+     * download", never both). Leaf ids come straight from [downloads]; series
+     * and season ids are unioned in via their episodes' linkage, since those
+     * parents have no `downloads` row of their own. Room re-emits on progress
+     * writes to the table, so callers must [kotlinx.coroutines.flow.distinctUntilChanged]
+     * the mapped set (the repository does this).
+     */
+    @Query(
+        """
+        SELECT DISTINCT mediaItemId FROM downloads WHERE status = 'COMPLETED'
+        UNION
+        SELECT om.id FROM offline_media om
+        WHERE om.mediaType IN ('SERIES', 'SEASON')
+          AND EXISTS (
+              SELECT 1 FROM downloads d
+              WHERE d.status = 'COMPLETED' AND (d.seriesId = om.id OR d.seasonId = om.id)
+          )
+        """
+    )
+    fun getCompletedDownloadedItemIds(): Flow<List<String>>
+
+    /**
      * Cold-start recovery projection. The recovery initializer on every app
      * launch consumes only [RecoveryRow.id] (and `downloadedBytes` when
      * rewriting a stuck DOWNLOADING row back to PENDING). Materialising up to

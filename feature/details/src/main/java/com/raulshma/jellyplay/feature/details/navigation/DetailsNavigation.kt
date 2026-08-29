@@ -47,6 +47,7 @@ fun EntryProviderScope<NavKey>.detailsSection(
             onManageSeries = { seriesId -> navigator.navigate(Route.ManageSeries(seriesId)) },
             onNavigate = { route -> navigator.navigate(route) },
             onEditClick = { itemId -> navigator.navigate(Route.MetadataEditor(itemId)) },
+            openDownloadSheetOnEntry = key.openDownloadSheet,
             onBack = { navigator.goBack() },
         )
     }

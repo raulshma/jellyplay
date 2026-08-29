@@ -118,67 +118,81 @@ class OfflineRepositoryImpl @Inject constructor(
 
     override fun getOfflineLibrary(): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getTopLevelItems().flatMapLatest { rows ->
-            if (rows.isEmpty()) {
-                kotlinx.coroutines.flow.flowOf(emptyList())
+            buildOfflineLibrary(rows)
+        }.distinctUntilChanged()
+
+    override fun getOfflineLibraryInFolder(folderId: String): Flow<List<OfflineMediaItem>> =
+        offlineMediaDao.getTopLevelItemsInLibrary(folderId).flatMapLatest { rows ->
+            buildOfflineLibrary(rows)
+        }.distinctUntilChanged()
+
+    /**
+     * Assembles the browsable offline library (download rows joined, series
+     * sizes aggregated from episodes, local artwork resolved) from a set of
+     * top-level metadata rows. Shared by the whole-library and per-library-folder
+     * variants — only the row source differs.
+     */
+    private fun buildOfflineLibrary(rows: List<OfflineMediaWithPlayback>): Flow<List<OfflineMediaItem>> {
+        if (rows.isEmpty()) {
+            return kotlinx.coroutines.flow.flowOf(emptyList())
+        }
+        // Partition top-level ids by type: SERIES has no `downloads`
+        // row of its own (episodes are downloaded individually, each
+        // carrying `seriesId`), so its size must be aggregated from its
+        // episodes. Movies/standalone audio keep the direct per-row
+        // join. Querying each partition only by the ids it can match
+        // avoids a wasted left-join against every series id.
+        val seriesIds = rows.asSequence()
+            .filter { it.media.mediaType == MediaType.SERIES.name }
+            .map { it.media.id }
+            .toList()
+        val directIds = rows.asSequence()
+            .filter { it.media.mediaType != MediaType.SERIES.name }
+            .map { it.media.id }
+            .toList()
+        // Map metadata rows to models once per metadata emission: the
+        // mapping depends solely on offline_media/playback_state
+        // columns, so re-running it inside the combine below would only
+        // repeat the JSON/CSV decodes on every downloads re-emission
+        // (2 s progress ticks during transfers). The combine instead
+        // projects just the download-derived fields onto these items
+        // via cheap data-class copies.
+        val baseItems = rows.map { it.toOfflineMediaItem() }
+        val directDownloadsFlow: Flow<Map<String, DownloadEntity>> =
+            if (directIds.isEmpty()) {
+                flowOf(emptyMap())
             } else {
-                // Partition top-level ids by type: SERIES has no `downloads`
-                // row of its own (episodes are downloaded individually, each
-                // carrying `seriesId`), so its size must be aggregated from its
-                // episodes. Movies/standalone audio keep the direct per-row
-                // join. Querying each partition only by the ids it can match
-                // avoids a wasted left-join against every series id.
-                val seriesIds = rows.asSequence()
-                    .filter { it.media.mediaType == MediaType.SERIES.name }
-                    .map { it.media.id }
-                    .toList()
-                val directIds = rows.asSequence()
-                    .filter { it.media.mediaType != MediaType.SERIES.name }
-                    .map { it.media.id }
-                    .toList()
-                // Map metadata rows to models once per metadata emission: the
-                // mapping depends solely on offline_media/playback_state
-                // columns, so re-running it inside the combine below would only
-                // repeat the JSON/CSV decodes on every downloads re-emission
-                // (2 s progress ticks during transfers). The combine instead
-                // projects just the download-derived fields onto these items
-                // via cheap data-class copies.
-                val baseItems = rows.map { it.toOfflineMediaItem() }
-                val directDownloadsFlow: Flow<Map<String, DownloadEntity>> =
-                    if (directIds.isEmpty()) {
-                        flowOf(emptyMap())
-                    } else {
-                        downloadDao.getDownloadsByMediaItemIdsFlow(directIds)
-                            .map { it.associateBy { d -> d.mediaItemId } }
-                    }
-                val seriesAggregatesFlow: Flow<Map<String, SeriesSizeAggregate>> =
-                    if (seriesIds.isEmpty()) {
-                        flowOf(emptyMap())
-                    } else {
-                        downloadDao.getSeriesSizeAggregatesFlow(seriesIds)
-                            .map { it.associateBy { a -> a.seriesId } }
-                    }
-                // Combine both maps so the summary re-emits as episode
-                // downloads progress (Room re-emits each Flow on writes to its
-                // tables). SERIES rows take their bytes from the aggregate;
-                // everything else from its direct download row. Both branches
-                // are cheap copies over the pre-mapped items — only the
-                // download-derived fields are re-projected.
-                combine(directDownloadsFlow, seriesAggregatesFlow) { downloadMap, aggregateMap ->
-                    baseItems.map { item ->
-                        if (item.mediaType == MediaType.SERIES) {
-                            val agg = aggregateMap[item.id]
-                            item.copy(
-                                downloadedBytes = agg?.downloadedBytes ?: 0L,
-                                totalSizeBytes = agg?.totalSizeBytes ?: 0L,
-                            )
-                        } else {
-                            item.withDownload(downloadMap[item.id])
-                        }
-                    }
-                }.distinctUntilChanged()
-                    .flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+                downloadDao.getDownloadsByMediaItemIdsFlow(directIds)
+                    .map { it.associateBy { d -> d.mediaItemId } }
+            }
+        val seriesAggregatesFlow: Flow<Map<String, SeriesSizeAggregate>> =
+            if (seriesIds.isEmpty()) {
+                flowOf(emptyMap())
+            } else {
+                downloadDao.getSeriesSizeAggregatesFlow(seriesIds)
+                    .map { it.associateBy { a -> a.seriesId } }
+            }
+        // Combine both maps so the summary re-emits as episode
+        // downloads progress (Room re-emits each Flow on writes to its
+        // tables). SERIES rows take their bytes from the aggregate;
+        // everything else from its direct download row. Both branches
+        // are cheap copies over the pre-mapped items — only the
+        // download-derived fields are re-projected.
+        return combine(directDownloadsFlow, seriesAggregatesFlow) { downloadMap, aggregateMap ->
+            baseItems.map { item ->
+                if (item.mediaType == MediaType.SERIES) {
+                    val agg = aggregateMap[item.id]
+                    item.copy(
+                        downloadedBytes = agg?.downloadedBytes ?: 0L,
+                        totalSizeBytes = agg?.totalSizeBytes ?: 0L,
+                    )
+                } else {
+                    item.withDownload(downloadMap[item.id])
+                }
             }
         }.distinctUntilChanged()
+            .flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+    }
 
     override fun getSeasonsForSeries(seriesId: String): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getSeasonsForSeries(seriesId).map { rows ->

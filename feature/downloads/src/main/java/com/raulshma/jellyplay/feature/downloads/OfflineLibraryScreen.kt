@@ -106,7 +106,7 @@ fun OfflineLibraryScreen(
                     MediaQuickActionScope.LIBRARY,
                     includeDownload = false,
                     includeAddToPlaylist = false,
-                    includeDelete = true,
+                    includeRemoveDownload = true,
                     includeFavorite = true,
                 )
             }
@@ -126,7 +126,7 @@ fun OfflineLibraryScreen(
                     QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, played = true)
                     QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, played = false)
                     QuickAction.FAVORITE, QuickAction.UNFAVORITE -> viewModel.toggleFavorite(item)
-                    QuickAction.DELETE -> viewModel.delete(item)
+                    QuickAction.REMOVE_DOWNLOAD -> viewModel.delete(item)
                     else -> Unit
                 }
             }

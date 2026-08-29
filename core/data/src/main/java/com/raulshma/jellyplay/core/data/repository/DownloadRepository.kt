@@ -49,6 +49,16 @@ interface DownloadRepository : OfflineDownloadWriter {
 
     fun getActiveDownloadCount(): Flow<Int>
 
+    /**
+     * Reactive set of ids that are download-complete, for coarse per-item
+     * gating (quick actions flip between Download and Remove download).
+     * Series/season ids are included when they have completed episodes. The
+     * underlying query re-emits on every `downloads` write — including 2 s
+     * progress ticks — so the impl collapses equal sets with
+     * `distinctUntilChanged`; the mapped set is small and comparison is cheap.
+     */
+    fun observeCompletedDownloadedIds(): Flow<Set<String>>
+
     suspend fun getDownloadByMediaItemId(mediaItemId: String): DownloadItem?
 
     /**

@@ -127,7 +127,16 @@ sealed class Route : NavKey {
 
     // ───────────────────────── Details ─────────────────────────
 
-    @Serializable data class MediaDetail(val itemId: String) : Route() {
+    /**
+     * @param openDownloadSheet When true, the detail screen pre-presents the
+     *   series download sheet once the item loads — the deep-link from a card
+     *   long-press Download on a series (the series flow needs the user's
+     *   season/episode selection before anything is enqueued).
+     */
+    @Serializable data class MediaDetail(
+        val itemId: String,
+        val openDownloadSheet: Boolean = false,
+    ) : Route() {
         override val isDetail = true
     }
 

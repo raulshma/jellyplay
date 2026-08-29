@@ -35,4 +35,12 @@ data class LibraryFilters(
     // null = "off"). Pair with [SortOption.IN_PROGRESS] for the classic
     // "In Progress" view, but usable independently.
     val isResumable: Boolean? = null,
+    // Downloaded filter: when true, the browse list is served from the local
+    // offline store instead of the server (downloads are device-local; the
+    // server has no equivalent ItemFilter). Unlike [isResumable] this is
+    // tri-state for the same backward-compatibility reason: null/absent in the
+    // persisted blob means "off". While active, only the dimensions stored
+    // offline can apply (media type, year, rating, genres, played status,
+    // sort); [tags] has no offline column and is ignored.
+    val isDownloaded: Boolean? = null,
 )

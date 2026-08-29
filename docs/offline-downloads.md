@@ -24,6 +24,11 @@ series, music, and more — and plays it back with zero network.
   progress, download speed, and ETA from the Android notification shade.
 - 📚 **Offline library browser** — downloaded content is mirrored into a
   dedicated **Offline Library**, fully browsable without your server.
+- 🧩 **Downloads in the normal UI** — downloads live inside the regular
+  home and library too: a long-press on any card offers **Download** (or
+  **Remove download** once downloaded), and the library's **Downloaded**
+  filter serves the grid straight from the local store. See
+  [Browsing downloads inline](#browsing-downloads-inline).
 - 📺 **Series & episode selection** — download single episodes, full
   seasons, or entire series; JellyPlay pre-calculates storage needs.
 - 🔁 **Auto-download** — optionally fetch new episodes of series you
@@ -64,6 +69,30 @@ The movie appears in **Downloads** with a progress badge, and in
 Each episode is queued as a separate download (up to 4 resolve
 concurrently), so you can watch the first one while the rest continue
 downloading.
+
+## Browsing downloads inline
+
+Downloads are not confined to the dedicated screens — the regular home and
+library surfaces are download-aware:
+
+- **Long-press any movie / episode / music track** on Home or in a Library
+  and tap **Download**: the transfer starts immediately at your default
+  quality, with a "Download started" confirmation. Once an item is
+  downloaded, the same menu flips to **Remove download**, which deletes the
+  local copy (server untouched) after a confirmation.
+- **Series** route to the detail screen with the season/episode download
+  sheet pre-opened, because a whole-series grab needs your selection.
+- **Library → Downloaded filter** — the pinned filter row has a one-tap
+  **Downloaded** chip. While active, the grid is served from the on-device
+  offline store instead of the server: it's instant, composes with the other
+  filters (type, genre, year, rating, played status, sort), and hides the
+  Tags dimension, which has no offline copy. Membership is matched against
+  the library folder saved on each download, so downloads from multi-folder
+  libraries may not appear until they're re-synced.
+
+The dedicated **Downloads** queue and **Offline Library** screens remain the
+power surfaces: transfer control, storage summary, music browsing, and
+per-item resync live there.
 
 ### Auto-download new episodes
 
@@ -348,6 +377,7 @@ should remain visible throughout an active transfer.
 | **HLS / DASH streams** | ✅ | Direct play, no re-encoding |
 | **Live TV** | ❌ | Streaming-only by design |
 | **DRM-protected content** | ❌ | Jellyfin doesn't host DRM content |
+| **Downloaded filter in multi-folder libraries** | ⚠️ | Library membership is matched per download; nested-folder layouts may need a resync |
 
 ## Under the hood
 

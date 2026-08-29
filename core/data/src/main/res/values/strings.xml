@@ -51,4 +51,8 @@
 
     <!-- Localized error messages -->
     <string name="data_no_media_source_download">No media source available for download</string>
+
+    <!-- Inline (card long-press) download feedback -->
+    <string name="data_download_started">Download started</string>
+    <string name="data_download_start_failed">Couldn\u2019t start the download</string>
 </resources>

@@ -118,6 +118,9 @@ data class HomeCallbacks(
     /** Open a specific downloaded item: series go to the offline series
      * browser, everything else to the offline detail screen. */
     val onOfflineItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType) -> Unit = { _, _ -> },
+    /** Open an item's detail screen from the inline card long-press Download;
+     * [openDownloadSheet] pre-presents the series download sheet there. */
+    val onDownloadDetailClick: (itemId: String, openDownloadSheet: Boolean) -> Unit = { _, _ -> },
     val onSeerrItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
     val onModeChange: (HomeMode) -> Unit = {},
     val onSearchItemClick: (String) -> Unit = {},
@@ -323,24 +326,38 @@ private fun MainHomeContent(
     val quickActionController = rememberMediaQuickActionController(
         resolveActions = remember(viewModel) {
             { item: com.raulshma.jellyplay.core.model.MediaItem ->
-                // The offline home only renders downloaded items, so a
-                // destructive "delete download" affordance makes sense there.
-                // Online home keeps the original Play / Mark / Details surface.
+                // Download/Remove-download are gated by real download state
+                // (works online and off); the offline home additionally offers
+                // remove-download for series/seasons via includeRemoveDownload.
                 val offline = viewModel.uiState.value.offlineMode != OfflineMode.ONLINE
-                item.quickActions(MediaQuickActionScope.HOME, includeDelete = offline)
+                item.quickActions(
+                    MediaQuickActionScope.HOME,
+                    includeDownload = true,
+                    includeRemoveDownload = offline,
+                    isDownloaded = viewModel.downloadedIds.value.contains(item.id),
+                )
             }
         },
-        executeAction = remember(viewModel, mediaOnItemClick, mediaOnPlayClick) {
+        executeAction = remember(viewModel, mediaOnItemClick, mediaOnPlayClick, callbacks) {
             { item: com.raulshma.jellyplay.core.model.MediaItem, action: QuickAction ->
                 when (action) {
                     QuickAction.PLAY -> mediaOnPlayClick(item)
                     QuickAction.MARK_WATCHED -> viewModel.onEvent(HomeUiEvent.MarkItemPlayed(item))
                     QuickAction.MARK_UNWATCHED -> viewModel.onEvent(HomeUiEvent.MarkItemUnplayed(item))
                     QuickAction.DETAILS -> mediaOnItemClick(item)
+                    // Single-stream items start inline at the default quality;
+                    // series (and other non-inline types) open the detail
+                    // screen — for a series with the download sheet pre-presented.
+                    QuickAction.DOWNLOAD -> viewModel.downloadItem(
+                        item,
+                        onOpenDetail = { itemId, openDownloadSheet ->
+                            callbacks.onDownloadDetailClick(itemId, openDownloadSheet)
+                        },
+                    )
                     // Series opens the advanced delete-episodes sheet
                     // (select episodes / seasons / entire series); anything
                     // else (movie/music) opens the simple confirm dialog below.
-                    QuickAction.DELETE -> {
+                    QuickAction.REMOVE_DOWNLOAD -> {
                         if (item.mediaType == MediaType.SERIES) viewModel.onEvent(HomeUiEvent.RequestSeriesDelete(item))
                         else pendingDelete = item
                     }

@@ -3,9 +3,16 @@ package com.raulshma.jellyplay.core.data.download
 import android.content.Context
 import com.raulshma.jellyplay.core.data.R
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.DownloadResult
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.isMusicTrack
+import com.raulshma.jellyplay.core.model.isVideoType
+import com.raulshma.jellyplay.core.model.maxBitrate
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,9 +35,9 @@ import javax.inject.Singleton
  * lifecycle actions (pause/resume/cancel/delete) and status queries, but is
  * no longer the intake entry point for feature modules.
  *
- * **Depth**: this module's interface is two functions; the implementation
- * absorbs the single-vs-batch routing decision so callers don't branch on it.
- * The bundle policy itself lives one layer down in [DownloadDelegate].
+ * **Depth**: the implementation absorbs the single-vs-batch-vs-browse routing
+ * decision so callers don't branch on it. The bundle policy itself lives one
+ * layer down in [DownloadDelegate].
  */
 interface DownloadIntake {
 
@@ -71,6 +78,43 @@ interface DownloadIntake {
         seriesId: String,
         episodeIds: Map<String, List<String>>? = null,
     ): Result<List<String>>
+
+    /**
+     * Starts a download straight from a browse [item] (card long-press), with
+     * no detail screen in between. Single-stream types (movie, episode, music
+     * track) resolve their detail via [MediaRepository] and start immediately
+     * at the user's default download quality. Types that need the detail
+     * screen's richer flows — series (season/episode selection sheet), seasons,
+     * albums, artists — return a navigation outcome instead so the host routes
+     * there; nothing is enqueued for them.
+     */
+    suspend fun startFromItem(item: MediaItem): DownloadRequestResult
+}
+
+/**
+ * Outcome of [DownloadIntake.startFromItem] — either the transfer started or
+ * the host must route somewhere / surface a failure.
+ */
+sealed interface DownloadRequestResult {
+    /** The transfer (or whole-season batch) was enqueued. */
+    data object Started : DownloadRequestResult
+
+    /**
+     * The item is a series: enqueueing needs the user's season/episode
+     * selection. Hosts open the detail screen for [seriesId] with the series
+     * download sheet pre-presented.
+     */
+    data class SeriesSelectionRequired(val seriesId: String) : DownloadRequestResult
+
+    /**
+     * The item's download flow lives on its detail screen (season, album,
+     * artist, ...). Hosts open the detail screen for [itemId]; no sheet needs
+     * pre-presenting.
+     */
+    data class NeedsDetailScreen(val itemId: String) : DownloadRequestResult
+
+    /** Nothing was enqueued; [message] is a displayable error, when known. */
+    data class Failed(val message: String?) : DownloadRequestResult
 }
 
 @Singleton
@@ -78,6 +122,8 @@ class DownloadIntakeImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val delegate: DownloadDelegate,
     private val downloadRepository: DownloadRepository,
+    private val mediaRepository: MediaRepository,
+    private val downloadsStore: DownloadsStore,
 ) : DownloadIntake {
 
     override suspend fun start(
@@ -99,4 +145,22 @@ class DownloadIntakeImpl @Inject constructor(
         episodeIds: Map<String, List<String>>?,
     ): Result<List<String>> =
         downloadRepository.downloadSeries(seriesId, episodeIds)
+
+    override suspend fun startFromItem(item: MediaItem): DownloadRequestResult {
+        val inline = item.mediaType.isVideoType || item.mediaType.isMusicTrack
+        if (!inline) {
+            return when (item.mediaType) {
+                MediaType.SERIES -> DownloadRequestResult.SeriesSelectionRequired(item.id)
+                else -> DownloadRequestResult.NeedsDetailScreen(item.id)
+            }
+        }
+        val detail = mediaRepository.getMediaDetail(item.id)
+            .getOrElse { return DownloadRequestResult.Failed(it.message) }
+        val result = start(detail, downloadsStore.downloads.value.downloadQuality.maxBitrate)
+        return if (result.error == null) {
+            DownloadRequestResult.Started
+        } else {
+            DownloadRequestResult.Failed(result.error)
+        }
+    }
 }
