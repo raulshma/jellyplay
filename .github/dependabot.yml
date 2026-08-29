@@ -1,8 +1,0 @@
-version: 2
-updates:
-  # Workflows pin third-party actions to commit SHAs (see codeql.yml);
-  # Dependabot keeps those pins current with upstream releases.
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
