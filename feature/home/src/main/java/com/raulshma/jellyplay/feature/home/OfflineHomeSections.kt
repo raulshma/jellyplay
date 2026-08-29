@@ -7,9 +7,11 @@ import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.OfflineMediaTypeGroup
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
-import com.raulshma.jellyplay.core.model.OFFLINE_WATCHED_THRESHOLD
+import com.raulshma.jellyplay.core.model.isFinishedOffline
 import com.raulshma.jellyplay.core.model.toMediaItem
+import com.raulshma.jellyplay.core.model.typeGroup
 import java.util.PriorityQueue
 
 /**
@@ -59,20 +61,20 @@ internal fun buildOfflineHomeContent(
 }
 
 /**
- * Filters the offline items by the current home mode: [HomeMode.MUSIC] keeps audio/music
- * types, everything else excludes them so video and music home screens never mix.
+ * Filters the offline items by the current home mode: [HomeMode.MUSIC] keeps
+ * music-shelf types, everything else excludes them so video and music home
+ * screens never mix. The partition itself is [OfflineMediaTypeGroup] — the
+ * one shared with the downloads screen's filter.
  */
 internal fun filterOfflineByMode(
     items: List<OfflineMediaItem>,
     homeMode: HomeMode,
-): List<OfflineMediaItem> {
-    val musicTypes = setOf(MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM, MediaType.ARTIST)
-    return if (homeMode == HomeMode.MUSIC) {
-        items.filter { it.mediaType in musicTypes }
+): List<OfflineMediaItem> =
+    if (homeMode == HomeMode.MUSIC) {
+        items.filter { it.typeGroup == OfflineMediaTypeGroup.MUSIC }
     } else {
-        items.filter { it.mediaType !in musicTypes }
+        items.filter { it.typeGroup != OfflineMediaTypeGroup.MUSIC }
     }
-}
 
 /**
  * Id → offline-item lookup shared by the DOWNLOADED rows' original
@@ -133,14 +135,6 @@ private const val RECENT_LIMIT = 10
  * default `getNextUp(limit = 20)`.
  */
 private const val NEXT_UP_LIMIT = 20
-
-/**
- * Played percentage at which an item stops counting as in-progress — derived
- * from [OFFLINE_WATCHED_THRESHOLD] (the display normalization in
- * [com.raulshma.jellyplay.core.model.OfflineMediaItem.toMediaItem] and the
- * player's watched trigger) so every surface agrees on "finished".
- */
-private const val WATCHED_PERCENTAGE = OFFLINE_WATCHED_THRESHOLD * 100
 
 /**
  * Derives the home sections shown while offline from the (mode-filtered)
@@ -207,7 +201,7 @@ internal fun buildOfflineHomeSections(
     // not a resume point — the episodes themselves carry the real progress.
     val continueWatching = if (prefs.continueWatchingEnabled) {
         (library.asSequence().filter { it.mediaType != MediaType.SERIES } + episodes.asSequence())
-            .filter { it.playedPercentage >= 1.0 && it.playedPercentage < WATCHED_PERCENTAGE }
+            .filter { it.playedPercentage >= 1.0 && !it.isFinishedOffline }
             .filter { it.id !in prefs.hiddenCwItemIds }
             .sortedWith(
                 compareByDescending<OfflineMediaItem> { it.lastPlayedDate ?: "" }
@@ -339,7 +333,7 @@ private fun computeOfflineNextUp(
                 { it.episodeNumber ?: Int.MIN_VALUE },
             )
         )
-        val next = ordered.firstOrNull { !it.isPlayed && it.playedPercentage < WATCHED_PERCENTAGE } ?: continue
+        val next = ordered.firstOrNull { !it.isPlayed && !it.isFinishedOffline } ?: continue
         candidates += SeriesNextUp(next, ordered.maxOf { it.lastPlayedDate ?: "" })
     }
     return candidates

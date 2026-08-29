@@ -357,12 +357,22 @@ header (long-press configure, See-All pill, `topPadding` for the
 standalone discover and *arr headers) — the three rows used to duplicate
 the branch six times and there were three title implementations.
 
+The offline partition facts live in `core/model/.../OfflineShelf.kt`:
+`OfflineMediaTypeGroup` (VIDEO/MUSIC — the one type partition, shared by the
+home's mode filter and the downloads screen's filter chips; the DAO's SQL
+literals stay the storage contract and may legitimately differ),
+`matchesOfflineQuery` (the name/series/season field set, agreeing with the
+repository's SQL `searchOffline`), and `isFinishedOffline`
+(`OFFLINE_WATCHED_THRESHOLD` on the stored 0–100 percent scale — note
+`playedPercentage` is percent, while `toMediaItem` normalizes via the tick
+ratio).
+
 Test surfaces: `HomeRefresherTest` (plain JUnit + `MainDispatcherRule`,
 constructs the refresher directly with a fake `awaitOutboxDrained`) pins
 cadence, throttles, the offline transitions, the going-online sequence and
 its timeout, and `patchItems`; `HomeViewModelTest` (Robolectric, all 30
 constructor collaborators) pins the UiState folds, the event funnel and the
-identity routing through a real `HomeSession`; `OfflineHomeContentTest` pins the one-pass aggregate (sections/lookup consistency, music-mode filter, empty inputs); `HomeRenderSourceTest` pins
+identity routing through a real `HomeSession`; `OfflineHomeContentTest` pins the one-pass aggregate; `OfflineShelfTest` pins the shared partition/query/threshold rules; `HomeRenderSourceTest` pins
 the render-source fold's five corners; `HomeUiStateTest` pins the
 state-class defaults.
 
