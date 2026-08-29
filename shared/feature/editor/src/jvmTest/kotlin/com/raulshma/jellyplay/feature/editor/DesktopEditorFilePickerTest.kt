@@ -68,12 +68,10 @@ class DesktopEditorFilePickerTest {
 
     @Test
     fun `editorPickedFile returns null on dialog cancel`() {
-        // Cancel leaves the dialog's answers null (Windows clears both; other
-        // peers may clear one) — every combination must read as "no pick", so
-        // the sheet's prior pick survives, matching SAF cancel semantics.
-        assertNull(editorPickedFile(directory = null, file = null))
-        assertNull(editorPickedFile(directory = "C:${File.separator}media", file = null))
-        assertNull(editorPickedFile(directory = null, file = "poster.png"))
+        // Cancel reads as a null pick from pickAwtFile (its pure half maps
+        // the dialog's null directory/file answers to null) — the sheet's
+        // prior pick survives, matching SAF cancel semantics.
+        assertNull(editorPickedFile(picked = null))
     }
 
     @Test
@@ -83,7 +81,7 @@ class DesktopEditorFilePickerTest {
         try {
             temp.writeBytes(bytes)
 
-            val picked = assertNotNull(editorPickedFile(temp.parent, temp.name))
+            val picked = assertNotNull(editorPickedFile(temp))
             assertEquals(temp.name, picked.fileName)
             // The same URI form the player's wave 9 document picker emits;
             // coil3's common FileUriFetcher decodes it for the preview.
@@ -103,7 +101,7 @@ class DesktopEditorFilePickerTest {
         // its message into uiState.error (EditorViewModelUploadTest pins the
         // routing; the "Cannot open input stream…" text is Android-only).
         val temp = File.createTempFile("gone", ".srt")
-        val picked = assertNotNull(editorPickedFile(temp.parent, temp.name))
+        val picked = assertNotNull(editorPickedFile(temp))
         assertTrue(temp.delete())
 
         assertFailsWith<FileNotFoundException> {
