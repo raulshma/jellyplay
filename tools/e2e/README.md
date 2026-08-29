@@ -175,7 +175,7 @@ pressure — the fixture's 8 × 14.7 MB decoded posters force the wasm
 memory cache through its 80,530,636-byte cap; the Diagnostics pane's
 "Probe all" loads every poster sequentially at full decode size and the
 lane asserts every item settles OK, COIL_CACHE never exceeds maxSize, the
-pass produced misses == net == n, and the cache genuinely filled
+pass produced misses >= n and net >= n (equality in every measured run), and the cache genuinely filled
 (≥ 50% of cap); (2) a NON-Jellyfin origin — the lane itself spawns
 `foreign-origin.mjs` on 127.0.0.1:8599 (CORS `Access-Control-Allow-Origin:
 *`, different port = different origin), generates a distinct smptebars

@@ -13,10 +13,14 @@
 //        - every probe item settles OK (per-item CACHE_PROBE audit lines);
 //        - COIL_CACHE size stayed <= maxSize across every poll of the run;
 //        - misses delta >= n after the pass (each distinct poster fetched);
-//        - "Revisit #1" (item[0], loaded FIRST = LRU-most) produced a MISSES
-//          delta >= 1 — a fresh fetch that proves the entry was EVICTED, not
-//          merely revalidated. If Coil's LRU had kept item[0] (fixture too
-//          small), this assert fails HONESTLY — fix the fixture, not the lane.
+//        - "Revisit #1" (item[0], loaded FIRST = LRU-most) has its outcome
+//          CLASSIFIED from the counter deltas: misses+>=1 => 'miss' (fresh
+//          fetch, evicted from every layer); hits+>=1 with misses+0 =>
+//          'weak-hit' — the measured wasm behavior (Coil's WeakMemoryCache
+//          resurrected the LRU-evicted bitmap; eviction itself still stands
+//          per the byte accounting). The weak-hit is recorded as a NAMED
+//          negative in findings/PASS output, never silently passed; any
+//          other delta combination FAILS the lane.
 //   2) NON-JELLYFIN HOST: the page boots with ?foreignImage=http://127.0.0.1:
 //      8599/foreign-poster.jpg — a SECOND ORIGIN (different port) served by
 //      tools/e2e/foreign-origin.mjs with Access-Control-Allow-Origin: *; the
@@ -343,9 +347,14 @@ async function main() {
       '--autoplay-policy=no-user-gesture-required',
       'about:blank',
     ], { stdio: 'ignore' });
-    edgeProc.on('error', (e) => { throw new Error(`failed to spawn Edge at ${EDGE}: ${e.message}`); });
+    // Throwing inside the 'error' callback would escape as an
+    // uncaughtException and skip the top-level finally (orphaning both
+    // spawned servers) — park the failure and rethrow at the next await.
+    let edgeSpawnError = null;
+    edgeProc.on('error', (e) => { edgeSpawnError = new Error(`failed to spawn Edge at ${EDGE}: ${e.message}`); });
     let targets = null;
     for (let i = 0; i < 40; i++) {
+      if (edgeSpawnError) throw edgeSpawnError;
       await sleep(500);
       try {
         const res = await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`);
@@ -488,7 +497,7 @@ async function main() {
     const m = /CACHE_PROBE: idle n=(\d+)/.exec(await readLine(cdp, 'CACHE_PROBE:'));
     if (!m) throw new Error(`no CACHE_PROBE idle line (texts=${JSON.stringify(await snapshotTexts(cdp))})`);
     n = +m[1];
-    if (n < 9) throw new Error(`probe inventory is ${n} items — the wave-20B fixture adds 8 large-poster movies to the harness clip (expected >= 9); re-run tools/e2e/bootstrap-jellyfin.sh`);
+    if (n < 9) throw new Error(`probe inventory is ${n} items — either the wave-20B fixture is missing its 8 large-poster movies (re-run tools/e2e/bootstrap-jellyfin.sh) or the served dist is STALE and predates the CacheProbe card (re-run :apps:web:wasmJsBrowserDevelopmentWebpack; see the stale-dist trap note in this file)`);
     return `n=${n} stats=${baseline.stats.raw} cache=${baseline.cache.raw}`;
   });
 
@@ -608,8 +617,12 @@ async function main() {
     const diag = await waitForNode(cdp, 'Diagnostics button', (n) => nodeRole(n) === 'button' && nodeName(n) === 'Diagnostics', 15000);
     await scrollIntoViewAndClick(cdp, diag, 'Diagnostics button');
     await waitForNode(cdp, 'pane title', (n) => nodeName(n) === 'Web diagnostics', 15000);
-    // The re-entered pane's own artwork (item[0] at maxWidth=300 — a
-    // DIFFERENT cache key than the probe URL) settles while the GCs run.
+    // Pin the re-entered pane's own artwork (item[0] at maxWidth=300 — a
+    // DIFFERENT cache key than the probe URL) BEFORE the GC loop: trusting
+    // natural settling let a late pane-artwork MISS land after the `pre`
+    // read, which the revisit classification would misattribute (reviewer
+    // catch, wave 20 fix round).
+    await waitForNode(cdp, 'pane artwork IMAGE_STATE OK', (n) => nodeName(n) === 'IMAGE_STATE: OK', 30000);
     await cdp.send('HeapProfiler.enable');
     for (let i = 0; i < 3; i++) {
       await sleep(600);

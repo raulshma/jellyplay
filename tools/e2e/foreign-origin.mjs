@@ -45,7 +45,13 @@ const server = http.createServer((req, res) => {
     res.writeHead(204, cors).end();
     return;
   }
-  const urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  let urlPath;
+  try {
+    urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  } catch {
+    res.writeHead(400, cors).end('malformed percent-encoding');
+    return;
+  }
   let file = join(root, urlPath);
   if (urlPath === '/' || urlPath === '') file = join(root, 'index.html');
   // Path traversal guard: keep every response inside the served root.
