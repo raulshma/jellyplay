@@ -130,15 +130,24 @@ private fun historyHashToIndex(hash: String): Int? =
  *    object would need JS interop gymnastics; the hash encodes the same fact
  *    and survives reload-free navigation equally well).
  *  - Pop — the ACTIVE pop paths (the explicit Back button and
- *    NavDisplay.onBack) go through [requestPop]: mutate the list FIRST (UI
- *    stays correct even if the popstate event never arrives), then
- *    history.back() so the browser cursor follows. core/ui's
- *    JellyPlayBackHandler registrations DO land in [LocalWebBackDispatcher],
- *    but nothing invokes WebBackDispatcher.dispatchBack yet — v1 has zero
- *    registrants (screens keep explicit affordances), so no path can bypass
- *    the guard today; if dispatchBack ever gains callers they must route
- *    through the same trimming, never a raw history.back(). That enforcement
- *    is NOT wired — this doc states the gap instead of assuming it away.
+ *    NavDisplay.onBack) go through [requestPop], DISPATCH-FIRST (wave 21C):
+ *    a registered JellyPlayBackHandler (core/ui's seam, fed through
+ *    [LocalWebBackDispatcher]) gets the press FIRST and, when one consumes
+ *    it, the shell pops nothing (the registrant owns that press — dismiss a
+ *    sheet, close an overlay). Only when dispatchBack() reports no consumer
+ *    does the guarded pop run: mutate the list FIRST (UI stays correct even
+ *    if the popstate event never arrives), then history.back() so the
+ *    browser cursor follows. Registrants can therefore never bypass the
+ *    trimming by construction — they either handle the press (no pop at
+ *    all) or decline it into the ONE guarded pop path; a raw
+ *    history.back() from a registrant would break the mirror and remains
+ *    wrong, exactly as before. Registrant count TODAY: zero — none of the
+ *    wasm-composed screens (Requests, UpcomingCalendar, SeerrDetail, the
+ *    web-only panes) calls JellyPlayBackHandler; they keep explicit
+ *    affordances. The wiring is thus exercised only through its no-op arm
+ *    (dispatchBack() returns false) and exists for the first shared screen
+ *    that registers (core/ui's modal sheet / preview overlay are the
+ *    natural first users).
  *  - RELOAD mid-stack: composition restarts on the landing pane whatever
  *    "#wp=N" survives in the address bar, and the boot effect below rewrites
  *    THAT CURRENT entry down to "#wp=0" via history.replaceState (no new
@@ -157,8 +166,11 @@ private fun historyHashToIndex(hash: String): Int? =
  *    (accepted v1 walk-back contract).
  *
  * The root-refuse guard rides [requestPop] only, refusing at size <= 1 (an
- * emptied stack crashes NavDisplay), so the explicit Back button goes inert
- * at the root instead of popping the shell off the page.
+ * emptied stack crashes NavDisplay) — checked AFTER the dispatch-first arm,
+ * so the explicit Back button goes inert at the root instead of popping the
+ * shell off the page, while a registered handler still consumes presses even
+ * at the root pane (Android on-back parity: a sheet over the home screen
+ * dismisses on back).
  *
  * RUNTIME HONESTY (same rule as Main.kt/HtmlVideoEngine): the shell's own
  * panes are browser-verified by the headless-Edge CDP lane
@@ -270,9 +282,14 @@ fun WebAppRoot(
         }
     }
 
-    // THE pop path. Root-refuse guard first (see class KDoc); local trim
-    // before the cursor move so the UI never waits on the async history turn.
+    // THE pop path (wave 21C: dispatch-first). A registered
+    // JellyPlayBackHandler consumes the press first — if one did, the shell
+    // pops NOTHING (the registrant owned that press; the stack and its
+    // history mirror stay untouched). Root-refuse guard next (see class
+    // KDoc); local trim before the cursor move so the UI never waits on the
+    // async history turn.
     fun requestPop() {
+        if (webBackDispatcher.dispatchBack()) return
         if (backStack.size <= 1) return
         backStack.removeAt(backStack.lastIndex)
         window.history.back()

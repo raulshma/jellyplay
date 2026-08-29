@@ -20,6 +20,10 @@
 // honest error state → wave 18A: the Diagnostics REVISIT gate (pop the demo,
 // re-enter Diagnostics cold, re-enter AGAIN, assert the COIL_STATS line:
 // hits>0 / net>0 / fail=0 — the memory cache must serve the second entry) →
+// wave 21C: the DEVICE_ID gate (read localStorage `jellyplay/device-id`,
+// reload the page, wait for the restarted shell's connect form, re-read,
+// assert SAME canonical UUID v4 — the persistent device identity holds
+// across boots) →
 // zero console errors / uncaught exceptions, screenshots.
 //
 // Usage:
@@ -888,6 +892,47 @@ async function main() {
     return `COIL_STATS hits=${hits} misses=${misses} net=${net} fail=${fail}; ${cacheLine ? nodeName(cacheLine) : 'COIL_CACHE line missing'}`;
   });
 
+  // 28c. Wave 21C: PERSISTENT DEVICE IDENTITY. The wasm network stack now
+  // persists the device id to localStorage under `jellyplay/device-id`
+  // (shared/core/network WasmDeviceIdentity.kt — read SYNCHRONOUSLY at the
+  // first identity resolution, plain canonical UUID v4 string; the pure
+  // resolve/format core is unit-tested in commonTest, this step is the
+  // browser half of the proof). Method: read the key NOW (this page context
+  // resolved its identity long ago — sign-in put the id on the wire), then
+  // RELOAD the page cold and wait for the restarted shell's connect form
+  // (composition reaching the form means the Koin identity single already
+  // re-resolved — a per-boot random id, the pre-21C behavior, would have
+  // GENERATED a different value and OVERWRITTEN the key by then), then
+  // re-read and assert SAME value + canonical UUID v4 shape. The fresh Edge
+  // profile this run starts from also exercises the first-boot write arm.
+  await step('DEVICE_ID stable across reload', async () => {
+    const DEVICE_ID_KEY = 'jellyplay/device-id';
+    const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    const readId = async () => {
+      const { result } = await cdp.send('Runtime.evaluate', {
+        expression: `window.localStorage.getItem('${DEVICE_ID_KEY}')`,
+        returnByValue: true,
+      });
+      return result.value;
+    };
+    const before = await readId();
+    if (!before) {
+      const { result } = await cdp.send('Runtime.evaluate', {
+        expression: 'JSON.stringify(Object.keys(window.localStorage))',
+        returnByValue: true,
+      });
+      throw new Error(`${DEVICE_ID_KEY} missing from localStorage after a signed-in session (keys: ${result.value})`);
+    }
+    if (!UUID_V4_RE.test(before)) throw new Error(`stored device id is not a canonical UUID v4: "${before}"`);
+    await cdp.send('Page.navigate', { url: `http://127.0.0.1:${SERVE_PORT}/` });
+    await waitForNode(cdp, 'connect form', (n) => nodeName(n).includes('Connect to your Jellyfin server'), 90000);
+    const after = await readId();
+    if (!after) throw new Error(`${DEVICE_ID_KEY} missing after reload (first-boot write or persistence broken)`);
+    if (!UUID_V4_RE.test(after)) throw new Error(`post-reload device id is not a canonical UUID v4: "${after}"`);
+    if (after !== before) throw new Error(`device id changed across reload: "${before}" -> "${after}" (per-boot regeneration)`);
+    return `same canonical UUID v4 before/after reload: ${after}`;
+  });
+
   // 29. Zero console errors.
   await step('zero console errors', async () => {
     if (consoleErrors.length > 0) throw new Error(`console errors: ${JSON.stringify(consoleErrors.slice(0, 5))}`);
@@ -938,6 +983,7 @@ try {
       secureApiKey: 'jellyplay/secure/seerr/api_key',
       preferencesDataStore: 'jellyplay/datastore/seerr_prefs.preferences_pb',
     },
+    deviceIdStorageKey: 'jellyplay/device-id',
   };
   const jsonPath = join(OUT_DIR, 'result.json');
   writeFileSync(jsonPath, JSON.stringify(result, null, 2));

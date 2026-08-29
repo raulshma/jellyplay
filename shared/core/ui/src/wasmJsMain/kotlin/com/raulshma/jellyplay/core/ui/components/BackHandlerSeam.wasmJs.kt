@@ -14,9 +14,13 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * bookkeeping rather than firing a raw `window.history.back()` per screen.
  *
  * The shell (apps/web's WebAppRoot) provides a [WebBackDispatcher] through
- * [LocalWebBackDispatcher]. Outside such a provider the value is `null` and
- * [JellyPlayBackHandler] stays an inert no-op, so future pages composed
- * outside the web shell simply never intercept anything.
+ * [LocalWebBackDispatcher] and — since wave 21C — consults it FIRST in its
+ * pop path (`requestPop`): a registered, enabled handler consumes the back
+ * press and the shell pops nothing; only when [dispatchBack] returns false
+ * does the shell's own root-refusing, history-mirroring pop run. Outside
+ * such a provider the value is `null` and [JellyPlayBackHandler] stays an
+ * inert no-op, so future pages composed outside the web shell simply never
+ * intercept anything.
  */
 val LocalWebBackDispatcher: ProvidableCompositionLocal<WebBackDispatcher?> =
     staticCompositionLocalOf { null }
@@ -27,8 +31,9 @@ val LocalWebBackDispatcher: ProvidableCompositionLocal<WebBackDispatcher?> =
  * active handler wins dispatch, which mirrors Android's on-back-callback
  * semantics for the nested-composition order Compose produces (parents compose
  * before their children, so children register later and win). The shell's
- * own pop path does NOT run through this class — it only feeds the
- * dispatcher to screens.
+ * own pop path routes THROUGH this class since wave 21C — requestPop
+ * dispatches here first and only falls back to its guarded history-mirroring
+ * pop when nothing is registered.
  *
  * NOT thread-safe by design: registration happens during composition and
  * dispatch on the single UI thread/event loop of the browser page.
@@ -49,8 +54,10 @@ class WebBackDispatcher {
 
     /**
      * Dispatches the most recently registered active handler. Returns whether
-     * anything was armed at all — callers can use this for telemetry or
-     * fallback decisions; the shell ignores it.
+     * anything was armed at all — the shell's requestPop consumes exactly
+     * this as its dispatch-first decision (true: a registrant handled the
+     * press, the shell pops nothing; false: the shell's root-refusing,
+     * history-mirroring pop runs).
      */
     fun dispatchBack(): Boolean {
         val handler = handlers.lastOrNull() ?: return false

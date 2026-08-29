@@ -149,7 +149,11 @@ drives headless Edge over CDP through the accessibility tree (canvas app —
 no DOM locators), and asserts the full flow: sign-in → Diagnostics pane →
 Coil artwork decoded (`IMAGE_STATE: OK`) → HtmlVideoEngine muted autoplay
 reaching `playing=true pos>0` → `DIAG_OVERALL: OK` → zero console
-errors/exceptions → screenshot.
+errors/exceptions → screenshot. Extended by waves 15C/16A/16B/16C/18A (the
+Requests / Calendar / Seerr-credentials / SeerrDetail screens and the Coil
+revisit gate) and wave 21C (the `DEVICE_ID stable across reload` gate:
+localStorage `jellyplay/device-id` read → page reload → re-read → same
+canonical UUID v4 — the persistent wasm device identity).
 
 ```bash
 tools/e2e/web-verify.sh
