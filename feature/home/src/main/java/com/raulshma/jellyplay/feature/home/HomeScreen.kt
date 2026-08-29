@@ -360,11 +360,18 @@ private fun MainHomeContent(
     // leaving composition while it's open.
     var pendingDelete by remember { mutableStateOf<com.raulshma.jellyplay.core.model.MediaItem?>(null) }
 
+    // Collected (not read as a .value snapshot inside the resolve lambda) so
+    // the resolver is rebuilt when the downloaded set changes — a download
+    // completing flips the card's Download↔Remove-download action without
+    // waiting for an unrelated recomposition. The set is distinct-collapsed
+    // upstream, so active transfers don't churn it.
+    val downloadedIds by viewModel.downloadedIds.collectAsStateWithLifecycle()
+
     // Quick actions on card long-press and the TV Menu key on the focused
     // card. Provided to every PosterCard in scope via
     // CompositionLocal — the cards wire their own long-press.
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember(viewModel) {
+        resolveActions = remember(viewModel, downloadedIds) {
             { item: com.raulshma.jellyplay.core.model.MediaItem ->
                 // Download/Remove-download are gated by real download state
                 // (works online and off); the offline home additionally offers
@@ -374,7 +381,7 @@ private fun MainHomeContent(
                     MediaQuickActionScope.HOME,
                     includeDownload = true,
                     includeRemoveDownload = offline,
-                    isDownloaded = viewModel.downloadedIds.value.contains(item.id),
+                    isDownloaded = item.id in downloadedIds,
                 )
             }
         },

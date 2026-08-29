@@ -52,6 +52,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -482,6 +483,13 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override fun observeDownloadedSeriesIds(): Flow<Set<String>> =
         downloadDao.observeDownloadedSeriesIds().map(List<String>::toSet).distinctUntilChanged()
+
+    override fun observeDownloadedIdsIncludingSeries(): Flow<Set<String>> =
+        combine(
+            observeCompletedDownloadedIds(),
+            observeDownloadedSeriesIds(),
+        ) { itemIds, seriesIds -> itemIds + seriesIds }
+            .distinctUntilChanged()
 
     override suspend fun downloadSeries(
         seriesId: String,

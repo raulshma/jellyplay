@@ -265,6 +265,7 @@ class HomeViewModelTest {
         every { offlineModeManager.isOffline } returns false
         every { downloadRepository.getActiveDownloadCount() } returns flowOf(0)
         every { downloadRepository.observeCompletedDownloadedIds() } returns flowOf(emptySet())
+        every { downloadRepository.observeDownloadedIdsIncludingSeries() } returns flowOf(emptySet())
         every { offlineRepository.getOfflineLibrary() } returns flowOf(emptyList())
         every { offlineRepository.getOfflineEpisodes() } returns flowOf(emptyList())
         every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)

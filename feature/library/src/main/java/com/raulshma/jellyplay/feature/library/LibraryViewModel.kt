@@ -254,7 +254,12 @@ class LibraryViewModel @Inject constructor(
         loadLayoutPrefs()
         loadResetConfirmPref()
         launch {
-            downloadRepository.observeCompletedDownloadedIds().collect { ids ->
+            // The full union (completed ids ∪ series ids), not just completed
+            // item ids — a series card's quick actions must offer Remove
+            // download once any episode of it is downloaded. Home used to be
+            // the only consumer honoring the series half; the union lives on
+            // DownloadRepository now (observeDownloadedIdsIncludingSeries).
+            downloadRepository.observeDownloadedIdsIncludingSeries().collect { ids ->
                 _downloadedIds.set(ids)
             }
         }

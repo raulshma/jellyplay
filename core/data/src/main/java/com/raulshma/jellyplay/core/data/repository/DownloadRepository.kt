@@ -106,6 +106,16 @@ interface DownloadRepository : OfflineDownloadWriter {
      */
     fun observeDownloadedSeriesIds(): Flow<Set<String>>
 
+    /**
+     * The union the UI actually gates on: [observeCompletedDownloadedIds] ∪
+     * [observeDownloadedSeriesIds] — a series card's Download action flips to
+     * Remove download once the series has anything downloaded. Consumers used
+     * to build this union themselves and home was the only one honoring the
+     * series half; this member makes the contract the interface's, not a
+     * convention. Collapses equal sets like its inputs.
+     */
+    fun observeDownloadedIdsIncludingSeries(): Flow<Set<String>>
+
     /** Returns the locally-cached subtitle manifest for a downloaded item, if any. */
     suspend fun loadLocalSubtitleManifest(downloadPath: String, itemId: String? = null): com.raulshma.jellyplay.core.model.OfflineSubtitleManifest?
 

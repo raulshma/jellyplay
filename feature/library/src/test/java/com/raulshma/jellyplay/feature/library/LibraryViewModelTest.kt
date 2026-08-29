@@ -76,7 +76,7 @@ class LibraryViewModelTest {
         every { offlineModeManager.offlineMode } returns offlineModeFlow
         // The VM collects this in init for quick-action download gating.
         every {
-            downloadRepository.observeCompletedDownloadedIds()
+            downloadRepository.observeDownloadedIdsIncludingSeries()
         } returns MutableStateFlow(emptySet())
 
         // Stub the init-block repository calls with real Result/Flow values so

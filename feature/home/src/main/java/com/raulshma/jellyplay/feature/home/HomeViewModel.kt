@@ -137,21 +137,21 @@ class HomeViewModel @Inject constructor(
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     /**
-     * Ids of download-complete items, for quick-action gating: a downloaded
-     * item's long-press offers "Remove download" instead of "Download".
-     * Collected unconditionally — unlike [HomeUiState.offlineLibrary], which is
-     * gated to offline modes because every download-progress tick re-invalidates
-     * it — because the ONLINE home's action sheet needs this set too. The
+     * Ids whose quick actions must flip to "Remove download" — completed
+     * downloads ∪ series ids (a series card flips once any episode of it is
+     * downloaded; REMOVE_DOWNLOAD then opens the delete-episodes sheet). The
+     * union contract lives on [DownloadRepository]
+     * ([observeDownloadedIdsIncludingSeries]) so every consumer — home and
+     * the library screen — honors the series half by construction; it used to
+     * be assembled here, and library only took the completed ids. Collected
+     * unconditionally — unlike [HomeUiState.offlineLibrary], which is gated
+     * to offline modes because every download-progress tick re-invalidates it
+     * — because the ONLINE home's action sheet needs this set too. The
      * repository collapses equal id sets, so transfers don't churn it.
      */
-    val downloadedIds: StateFlow<Set<String>> = combine(
-        downloadRepository.observeCompletedDownloadedIds(),
-        // Series ids ride the same set so a series card's Download action
-        // flips to Remove download once the series has a downloaded episode —
-        // REMOVE_DOWNLOAD then opens the delete-episodes sheet.
-        downloadRepository.observeDownloadedSeriesIds(),
-    ) { itemIds, seriesIds -> itemIds + seriesIds }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptySet())
+    val downloadedIds: StateFlow<Set<String>> =
+        downloadRepository.observeDownloadedIdsIncludingSeries()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     /**
      * The home screen's pending-sync surface — outbox badge count, sync
