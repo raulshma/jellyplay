@@ -14,6 +14,14 @@ kotlin {
         namespace = "com.raulshma.jellyplay.shared.feature.library"
         compileSdk = 37
         minSdk = 28
+        // Compose-resources packaging (wave-21 device-pass finding): with the
+        // AGP-9 KMP library plugin, android resources are OFF by default, so
+        // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
+        // app APK ships this module's Res accessors with NO backing .cvr
+        // assets — runtime MissingResourceException on the first string read.
+        androidResources {
+            enable = true
+        }
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
         }
