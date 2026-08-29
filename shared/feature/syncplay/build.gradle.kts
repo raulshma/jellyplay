@@ -27,12 +27,9 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as shared/feature:search/:library/:music/
-    // :livetv): the web shell lands in plan §Phase W; android+jvm covers V3
-    // consumers. This also keeps java.* types (System.currentTimeMillis in
-    // the group-ejection grace-window check) legal in commonMain — same
-    // precedent as shared/core:data, and the SyncPlay stack the feature
-    // rides on (SyncPlayManager) is still jvmShared anyway.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
+    // and the SyncPlay stack the feature rides on (SyncPlayManager) lives in
+    // core:data's jvmShared half — the web stack registers no binding for it.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

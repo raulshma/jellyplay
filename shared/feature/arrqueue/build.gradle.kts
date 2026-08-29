@@ -27,8 +27,10 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as every shared/feature/* module): the web
-    // shell lands in plan §Phase W; android+jvm covers V3 consumers.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details).
+    // Its data deps are wasm-resolvable (ArrRepository has a wasm binding in
+    // DataWasmModule), so the module is web-eligible — web v1 just doesn't
+    // register it.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

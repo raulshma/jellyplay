@@ -26,11 +26,12 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as every shared/feature/* module): the web
-    // shell lands in plan §Phase W; android+jvm covers V3 consumers. This
-    // also keeps java.* types legal in commonMain — java.time LocalDate /
-    // DayOfWeek / DateTimeFormatter / ChronoUnit drive the heatmap grid math,
-    // the same precedent shared/core:data set.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
+    // and its ViewModels bind core:data seams (MediaRepository,
+    // PlaybackRepository, WatchHistoryRepository) that resolve only from the
+    // android+jvm DI graph. The missing target also keeps java.time.* legal
+    // in commonMain — LocalDate / DayOfWeek / DateTimeFormatter / ChronoUnit
+    // drive the heatmap grid math — which a wasm target forbids.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

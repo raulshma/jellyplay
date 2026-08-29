@@ -27,11 +27,10 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as shared/feature:search/:library/:music/
-    // :livetv): the web shell lands in plan §Phase W; android+jvm covers V3
-    // consumers. The downloads queue/offline-library logic is pure
-    // common code, but the feature rides on the still-jvmShared download
-    // engine (OfflineSyncManager), so wasm adds nothing until that flips.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
+    // and the feature rides on the jvmShared download engine
+    // (OfflineSyncManager — the web stack registers no binding). The
+    // downloads queue/offline-library logic itself is pure common code.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

@@ -26,11 +26,13 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as every shared/feature/* module): the web
-    // shell lands in plan §Phase W; android+jvm covers current consumers.
-    // This also keeps java.* types (java.time.LocalDate in HomeViewModel,
-    // java.util.PriorityQueue in HomeRefresher) legal in commonMain — same
-    // precedent as shared/core:data.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
+    // and its ViewModels bind core:data seams (MediaRepository,
+    // OfflineRepository, DownloadRepository, MediaSearchEngine) that resolve
+    // only from the android+jvm DI graph (impls jvmShared; the web stack
+    // registers no bindings). The missing target also keeps java.* types
+    // (java.time.LocalDate in HomeViewModel, java.util.PriorityQueue in
+    // HomeOfflineContent) legal in commonMain, which a wasm target forbids.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

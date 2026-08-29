@@ -27,8 +27,10 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as shared/feature:search): the web shell lands
-    // in plan §Phase W; android+jvm covers V3 consumers.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
+    // and its ViewModels bind core:data seams (MediaRepository,
+    // UserDataMutator) that resolve only from the android+jvm DI graph
+    // (impls jvmShared; the web stack registers no bindings).
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

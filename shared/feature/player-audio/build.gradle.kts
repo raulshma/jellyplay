@@ -27,11 +27,9 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as shared/feature:search and :music): the
-    // web shell lands in plan §Phase W; android+jvm covers V3 consumers. This
-    // also keeps the java.* type (LinkedHashMap behind core.model's
-    // lruMapOf in the VM blur-hash cache) legal in commonMain — same
-    // precedent as shared/core:data.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
+    // and its ViewModels bind core:data seams (repositories, DownloadIntake,
+    // UserDataMutator) that resolve only from the android+jvm DI graph.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

@@ -27,9 +27,12 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as every shared/feature module): the web
-    // shell lands in plan §Phase W. This also keeps java.* legal in
-    // commonMain — same precedent as shared/core:data and :feature:syncplay.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
+    // and its ViewModels bind the full core:data store/repository cluster
+    // (media/auth/seerr/arr/search-history and more), which resolves only
+    // from the android+jvm DI graph. The missing target also keeps java.io.*
+    // (backup/restore and cache-clear file streaming) legal in commonMain,
+    // which a wasm target forbids.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

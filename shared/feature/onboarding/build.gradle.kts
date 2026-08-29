@@ -27,8 +27,7 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as every shared/feature/* module): the web
-    // shell lands in plan §Phase W; android+jvm covers V3 consumers.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details).
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
