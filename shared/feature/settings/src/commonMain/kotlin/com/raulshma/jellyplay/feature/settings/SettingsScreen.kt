@@ -111,7 +111,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchMatcher
-import com.raulshma.jellyplay.core.ui.settingssearch.resolve
 import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
 import androidx.compose.ui.graphics.Brush
 import com.composables.icons.tabler.Tabler
@@ -472,11 +471,11 @@ fun SettingsScreen(
     var activeDialog by remember { mutableStateOf<PickerState<*>?>(null) }
 
     // Debounced + off-main-thread fuzzy search. Each keystroke only re-runs the
-    // matcher after a short quiet period, and the Damerau-Levenshtein work happens
-    // on Dispatchers.Default so typing stays smooth on low-end devices. The catalog's
-    // StringResources are resolved to the current locale once per query via the
-    // suspend resolve(), so matching and the rendered results both reflect the
-    // user's language.
+    // matcher after a short quiet period, and the whole pipeline — the catalog
+    // resolve included — runs on Dispatchers.Default so typing stays smooth on
+    // low-end devices (the resolve is one blocking compose-resources read per
+    // catalog entry when cold; see SettingsSearchCatalog.resolved). Matching
+    // and the rendered results both reflect the user's language.
     val filteredItems by produceState(
         initialValue = emptyList<ResolvedSettingsItem>(),
         searchQuery,
@@ -484,25 +483,24 @@ fun SettingsScreen(
         snapshotFlow { searchQuery }
             .debounce(120)
             .distinctUntilChanged()
-            .map { SettingsSearchMatcher.search(it, SettingsSearchCatalog.items.resolve()) }
+            .map { SettingsSearchMatcher.search(it, SettingsSearchCatalog.resolved()) }
             .flowOn(Dispatchers.Default)
             .collect { value = it }
     }
 
     // The last-used setting ids (most-recent first), resolved back to renderable
     // items against the catalog. Stale ids — a recorded setting whose catalog
-    // entry no longer exists — drop out via mapNotNull and naturally age out as new
-    // ids displace them. Only re-resolved when the persisted id list changes.
+    // entry no longer exists — drop out via mapNotNull and naturally age out as
+    // new ids displace them. Only re-resolved when the persisted id list
+    // changes; the catalog-wide resolve stays off the main thread even though
+    // this producer itself runs on the composition dispatcher
+    // (SettingsSearchCatalog.recentItems owns the Default hop).
     val recentIds by viewModel.recentSettingIds.collectAsStateWithLifecycle()
     val recentItems by produceState(
         initialValue = emptyList<ResolvedSettingsItem>(),
         recentIds,
     ) {
-        value = if (recentIds.isEmpty()) emptyList()
-        else {
-            val byId = SettingsSearchCatalog.items.resolve().associateBy { it.id }
-            recentIds.mapNotNull { byId[it] }
-        }
+        value = SettingsSearchCatalog.recentItems(recentIds)
     }
 
     JellyPlayBackHandler(enabled = isSearchActive) {

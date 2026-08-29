@@ -17,9 +17,11 @@ import com.raulshma.jellyplay.feature.settings.SeerrSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.ServerManagementViewModel
 import com.raulshma.jellyplay.feature.settings.ServerSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.SettingsSearchCatalog
+import com.raulshma.jellyplay.feature.settings.SettingsSearchCatalogPrewarmer
 import com.raulshma.jellyplay.feature.settings.SettingsViewModel
 import com.raulshma.jellyplay.feature.settings.StorageSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.SubtitleProviderSettingsViewModel
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchProvider
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
@@ -64,6 +66,15 @@ val settingsModule: Module = module {
     // graphs — the interim app-side SettingsSearchInteropModule Hilt bridge
     // died with wave 6B's HomeViewModel flip).
     single<SettingsSearchProvider> { SettingsSearchCatalog }
+
+    // Eager at startKoin so the settings string table is warm on a background
+    // dispatcher LONG before the settings screen's first composition can block
+    // on cold per-entry reads (the mechanism behind the settings-open ANR —
+    // see [SettingsSearchCatalogPrewarmer]).
+    single(createdAtStart = true) {
+        SettingsSearchCatalogPrewarmer(get(DatastoreQualifiers.applicationScope))
+            .apply { warm() }
+    }
 
     viewModel {
         SettingsViewModel(
