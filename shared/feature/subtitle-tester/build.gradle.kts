@@ -35,9 +35,9 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as every shared/feature module): the web
-    // shell lands in plan §Phase W. This also keeps java.* legal in
-    // commonMain — same precedent as shared/core:data and :feature:syncplay.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details);
+    // this dev/test utility is android+jvm only (its host surface lives in
+    // androidMain).
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

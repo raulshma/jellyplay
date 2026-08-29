@@ -27,12 +27,12 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as every shared/feature/* module): the web
-    // shell lands in plan §Phase W; android+jvm covers V3 consumers. This
-    // also keeps java.* types legal in commonMain — the newsletter ViewModel
-    // (7-day since-date via java.time) and the header/digest date helpers
-    // (LocalDate/Instant/ZoneId/DateTimeFormatter) rely on it, the same
-    // precedent shared/core:data and the requests/calendar modules set.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
+    // and its ViewModels bind core:data seams (MediaRepository,
+    // AuthRepository) that resolve only from the android+jvm DI graph. The
+    // missing target also keeps java.time.* legal in commonMain (the digest
+    // since-date math and the header date formatting), which a wasm target
+    // forbids.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

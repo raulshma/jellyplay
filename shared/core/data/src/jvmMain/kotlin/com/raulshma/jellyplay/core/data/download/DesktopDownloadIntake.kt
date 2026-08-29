@@ -7,15 +7,25 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 /**
  * Desktop actual of the [DownloadIntake] seam (V3 downloads conveyor): the
  * same single-item / series routing as the legacy Android DownloadIntakeImpl,
- * minus the localized-error `Context.getString` (the desktop uses the same
- * English copy the resource holds until the settings/i18n conveyor lands).
+ * minus the localized-error `Context.getString` — the desktop intake emits
+ * pre-resolved strings, not resource ids.
  *
  * Series batches go through [DownloadRepository.downloadSeries]; on desktop
- * that path fails loudly with the documented Phase X error at its first
- * MediaRepository use (no desktop definition exists yet — see
- * desktopDataModule's MediaRepositoryAccess). Single-item downloads work
- * end-to-end — for episodes, the missing series metadata degrades to the
- * minimal parent-row fallback (see saveOfflineMediaItem's runCatching).
+ * that path is fully live — MediaRepositoryAccess is real (Koin owns
+ * MediaRepositoryImpl on desktop too, see desktopDataModule), so series
+ * downloads and the auto-download loop work end-to-end. Single-item downloads
+ * likewise work end-to-end — for episodes, any missing series metadata
+ * degrades to the minimal parent-row fallback (see saveOfflineMediaItem's
+ * runCatching).
+ *
+ * The no-source error below is a fixed base-locale English literal,
+ * byte-matching Android's `R.string.data_no_media_source_download` base
+ * locale. This is an accepted desktop locale delta, not a pending item: the
+ * intake's consumers (details/player-audio/music message seams) all carry
+ * pre-resolved strings and core:data has no compose-resource access, so
+ * localizing one desktop-only sentinel would require sentinel-matching
+ * translation plumbing across those seams — same rationale as
+ * [com.raulshma.jellyplay.core.data.repository.DesktopAdminStatisticsLabels].
  */
 class DesktopDownloadIntake(
     private val delegate: DownloadDelegate,

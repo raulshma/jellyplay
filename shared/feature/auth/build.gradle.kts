@@ -27,8 +27,10 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as every shared/feature/* module): the web
-    // shell lands in plan §Phase W; android+jvm covers current consumers.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
+    // and its ViewModels resolve AuthRepository/ServerDiscoveryRepository,
+    // whose impls live in core:data's jvmShared half — the web stack
+    // registers no binding for them.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

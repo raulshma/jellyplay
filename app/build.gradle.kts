@@ -97,7 +97,7 @@ android {
 
     // i18n: locales are translated in bulk but added incrementally per module.
     // Without this, release lint fails on the first untranslated key (abortOnError
-    // defaults to true). All three reference apps under scratch/ do the same.
+    // defaults to true).
     lint {
         disable += "MissingTranslation"
     }

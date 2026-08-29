@@ -27,10 +27,12 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as shared/feature:search and :library): the
-    // web shell lands in plan §Phase W; android+jvm covers V3 consumers. This
-    // also keeps java.* types (java.util.UUID in the mood/smart playlist VMs)
-    // legal in commonMain — same precedent as shared/core:data.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
+    // and its ViewModels bind core:data seams (repositories plus the
+    // jvmShared DownloadIntake/AudioQueueFacade) that resolve only from the
+    // android+jvm DI graph. The missing target also keeps java.util.UUID
+    // (mood/smart playlist ids) legal in commonMain, which a wasm target
+    // forbids.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

@@ -225,7 +225,7 @@ all — each controller exposes its own `StateFlow`.
 
 ## Seerr request state
 
-**`SeerrRequestStateHolder`** (`shared/core/data/src/jvmShared/kotlin/.../seerr/SeerrRequestStateHolder.kt`)
+**`SeerrRequestStateHolder`** (`shared/core/data/src/commonMain/kotlin/.../seerr/SeerrRequestStateHolder.kt`)
 is the deep module for the Seerr request lifecycle. Its ONLY state interface is
 `snapshot: Flow<SeerrRequestSnapshot>` (a cold combine of its six internal
 `MutableStateFlow`s — request result, radarr/sonarr service lists, services
@@ -354,7 +354,7 @@ evictions where staleness is benign). `HomeViewModel` subscribes to
 `transitions` directly for its scroll-reset/refresh choreography — that
 stays.
 
-**`SessionCacheRegistry`** (`shared/core/data/src/jvmShared/kotlin/com/raulshma/jellyplay/core/data/session/SessionCacheRegistry.kt`)
+**`SessionCacheRegistry`** (`shared/core/data/src/commonMain/kotlin/com/raulshma/jellyplay/core/data/session/SessionCacheRegistry.kt`)
 is the single home for identity reactions. It owns the ONE collector on
 `HomeSession.transitions`; anything that must react to an identity change
 registers instead of writing a bespoke collector:

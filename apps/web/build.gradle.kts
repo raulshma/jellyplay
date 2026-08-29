@@ -87,8 +87,11 @@ kotlin {
                 implementation(project(":shared:feature:details"))
                 // Wave wC (HtmlVideoEngine): the wasm-visible MediaEngine
                 // contract + EnginePositionTicker/WebPlaybackMappings the
-                // web video engine implements. Not wired into the shell UI
-                // yet — the engine class lands first.
+                // web video engine implements. The engine class is landed and
+                // browser-verified through the WebDiagnostics harness; the
+                // shell's nav UI deliberately hosts no playback — in-shell
+                // playback is a web-v1 scope cut, and this edge exists so the
+                // engine compiles against the real contract.
                 implementation(project(":shared:core:player-contract"))
 
                 // Phase W.4 DONE (was BLOCKED at coil 3.5.0 whose wasmJs

@@ -26,10 +26,11 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as every shared/feature module): the web
-    // shell lands in plan §Phase W. This also keeps java.* legal in
-    // commonMain (java.time.Instant/DateTimeFormatter in the player VM) —
-    // same precedent as shared/core:data and :feature:syncplay.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
+    // and its ViewModels bind core:data seams (MediaRepository,
+    // PlaybackRepository) that resolve only from the android+jvm DI graph.
+    // The missing target also keeps java.time.* (Instant/DateTimeFormatter
+    // in the player VM) legal in commonMain, which a wasm target forbids.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

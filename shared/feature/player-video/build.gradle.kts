@@ -26,11 +26,12 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as every shared/feature module): the web
-    // shell lands in plan §Phase W; android+jvm covers V3/Phase X consumers.
-    // This also keeps java.* legal in commonMain — same precedent as
-    // shared/core:data and :feature:syncplay (the track-scoring / trickplay
-    // helpers use java.io.File, the seek bar java.text.SimpleDateFormat).
+    // No wasmJs target: the Phase W web shell is live but covers
+    // requests/calendar/details only, and this module's commonMain
+    // legitimately carries java.* (the track-scoring / trickplay helpers use
+    // java.io.File, the seek bar java.text.SimpleDateFormat) which a wasm
+    // target forbids — a web slice would need core:data's jvmShared-style
+    // split first.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -113,8 +114,10 @@ kotlin {
         // VideoPlayerViewModel/VideoPlayerScreen pair live here. The pure
         // policy/scoring/state/sheet chrome is commonMain; the Android host
         // surface (PlayerActivity) reaches this module's androidMain only.
-        // Desktop is deliberately latent: no registration, no nav route —
-        // the players stay guarded in DesktopAppRoot.
+        // Desktop is registered and live: desktopPlayerVideoModule sits in
+        // apps/desktop's Koin graph and DesktopAppRoot hosts
+        // entry<Route.VideoPlayer> (mpv engine behind its platform support
+        // guard).
         // Wave 8C: the desktop DI module (desktopPlayerVideoModule) registers
         // the now-commonMain VideoPlayerViewModel plus the jvmMain seam stubs.
         // No media3/legacy deps here — jvmMain sees only commonMain's deps.

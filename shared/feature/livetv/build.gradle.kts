@@ -27,11 +27,11 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as shared/feature:search/:library/:music): the
-    // web shell lands in plan §Phase W; android+jvm covers V3 consumers. This
-    // also keeps java.* types (java.time.* across the EPG/schedule/channel-
-    // detail view models) legal in commonMain — same precedent as
-    // shared/core:data.
+    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
+    // and its ViewModels bind core:data seams (MediaRepository) that resolve
+    // only from the android+jvm DI graph. The missing target also keeps
+    // java.time.* legal in commonMain (EPG/schedule/channel-detail parsing
+    // and formatting), which a wasm target forbids.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

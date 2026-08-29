@@ -27,8 +27,13 @@ kotlin {
         }
     }
 
-    // No wasmJs target yet (same as shared/core/ui): the web shell lands in
-    // plan §Phase W; android+jvm covers V3 consumers.
+    // No wasmJs target: core:ui has one and the Phase W web shell is live,
+    // but web v1 deliberately covers requests/calendar/details only. Search
+    // is one screen+VM unit wired to the Room-backed repository cluster
+    // (MediaRepository/OfflineRepository/MediaSearchEngine impls live in
+    // core:data's jvmShared half — Room has no wasm build), and no purified
+    // commonMain search slice exists to compile alone (details' SeerrDetail
+    // precedent). android+jvm covers this module's consumers.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
