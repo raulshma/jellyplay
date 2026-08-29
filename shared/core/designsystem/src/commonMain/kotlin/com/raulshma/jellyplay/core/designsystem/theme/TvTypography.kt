@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.designsystem.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -10,7 +11,8 @@ import androidx.compose.ui.unit.sp
  * Uses bolder weights and slightly larger sizes for readability
  * while maintaining the expressive visual identity.
  */
-val TvTypography = Typography(
+val TvTypography: Typography
+    @Composable get() = Typography(
     displayLarge = TextStyle(
         fontFamily = displayFontFamily,
         fontWeight = FontWeight.Bold,

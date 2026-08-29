@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.designsystem.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -10,17 +11,30 @@ import androidx.compose.ui.unit.sp
 
 /**
  * Font families are a platform seam: Android resolves Google Fonts through the
- * GMS fonts provider (`FontFamilies.android.kt`); desktop/web fall back to
- * system families until the fonts ship as bundled composeResources (follow-up,
- * identical typography on every target).
+ * GMS fonts provider (`FontFamilies.android.kt`); desktop and web load the
+ * bundled compose-resources statics (`FontFamilies.jvm.kt` /
+ * `FontFamilies.wasmJs.kt`) so every target renders identical brand type.
+ *
+ * The resolution is a `@Composable` read because CMP 1.11.1 only publishes a
+ * composable `Font(resource, weight, style)` loader for font resources (there
+ * is no non-composable or single-shot suspend overload); that is why these
+ * declarations — and the Typography values below that read them — are
+ * composable properties rather than plain vals.
  */
 internal expect val displayFontFamily: FontFamily
+    @Composable get
 internal expect val bodyFontFamily: FontFamily
+    @Composable get
 internal expect val synthwaveDisplayFontFamily: FontFamily
+    @Composable get
 internal expect val synthwaveBodyFontFamily: FontFamily
+    @Composable get
 internal expect val soothingFontFamily: FontFamily
+    @Composable get
 internal expect val monochromeDisplayFontFamily: FontFamily
+    @Composable get
 internal expect val monochromeBodyFontFamily: FontFamily
+    @Composable get
 
 
 
@@ -34,7 +48,8 @@ internal expect val monochromeBodyFontFamily: FontFamily
  * - Wider letter spacing for body text (better readability)
  * - [textGeometricTransform] on display styles for a wider, expressive feel
  */
-val JellyPlayTypography = Typography(
+val JellyPlayTypography: Typography
+    @Composable get() = Typography(
     displayLarge = TextStyle(
         fontFamily = displayFontFamily,
         fontWeight = FontWeight.Bold,
@@ -151,7 +166,8 @@ val JellyPlayTypography = Typography(
  * Expressive title typography for special screens (onboarding, splash, etc.).
  * Uses oversized display text with geometric transforms for maximum impact.
  */
-val JellyPlayExpressiveTitles = Typography(
+val JellyPlayExpressiveTitles: Typography
+    @Composable get() = Typography(
     displayLarge = TextStyle(
         fontFamily = displayFontFamily,
         fontWeight = FontWeight.Bold,
@@ -181,7 +197,8 @@ val JellyPlayExpressiveTitles = Typography(
     ),
 )
 
-val SynthwaveTypography = Typography(
+val SynthwaveTypography: Typography
+    @Composable get() = Typography(
     displayLarge = JellyPlayTypography.displayLarge.copy(fontFamily = synthwaveDisplayFontFamily),
     displayMedium = JellyPlayTypography.displayMedium.copy(fontFamily = synthwaveDisplayFontFamily),
     displaySmall = JellyPlayTypography.displaySmall.copy(fontFamily = synthwaveDisplayFontFamily),
@@ -199,7 +216,8 @@ val SynthwaveTypography = Typography(
     labelSmall = JellyPlayTypography.labelSmall.copy(fontFamily = synthwaveBodyFontFamily),
 )
 
-val SoothingTypography = Typography(
+val SoothingTypography: Typography
+    @Composable get() = Typography(
     displayLarge = JellyPlayTypography.displayLarge.copy(fontFamily = soothingFontFamily, letterSpacing = (-0.01).em),
     displayMedium = JellyPlayTypography.displayMedium.copy(fontFamily = soothingFontFamily, letterSpacing = (-0.01).em),
     displaySmall = JellyPlayTypography.displaySmall.copy(fontFamily = soothingFontFamily, letterSpacing = (-0.01).em),
@@ -217,7 +235,8 @@ val SoothingTypography = Typography(
     labelSmall = JellyPlayTypography.labelSmall.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.Medium),
 )
 
-val MonochromeTypography = Typography(
+val MonochromeTypography: Typography
+    @Composable get() = Typography(
     displayLarge = JellyPlayTypography.displayLarge.copy(fontFamily = monochromeDisplayFontFamily),
     displayMedium = JellyPlayTypography.displayMedium.copy(fontFamily = monochromeDisplayFontFamily),
     displaySmall = JellyPlayTypography.displaySmall.copy(fontFamily = monochromeDisplayFontFamily),
