@@ -54,6 +54,7 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
@@ -68,8 +69,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
@@ -429,21 +433,38 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Only collect the offline library while actually in an offline mode.
-        // The underlying Flow re-emits on every download progress write, so
-        // collecting it unconditionally caused the whole home tree to
-        // re-invalidated during downloads even in online mode (where the
-        // offline branch never renders). flatMapLatest on offlineMode means
-        // the upstream collection is cancelled entirely while online.
+        // Collect the offline library whenever the offline branch can render
+        // it: any offline mode, or while an online fetch failed with nothing
+        // to show (implicit offline — the home falls back to downloads plus a
+        // status banner). The underlying Flow re-emits on every download
+        // progress write, so collecting it unconditionally re-invalidated the
+        // whole home tree during downloads even in normal online browsing
+        // (where the offline branch never renders); the gate keeps the
+        // upstream collection cancelled there.
+        // Emissions are wrapped so the window before the first library
+        // emission (gate just opened, downloads-exist still unknown) carries
+        // [HomeUiState.offlineFallbackPending] — the UI shows a loading state
+        // there instead of flashing the hard error screen.
         @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
         launch {
-            offlineModeManager.offlineMode
-                .flatMapLatest { mode ->
-                    if (mode != OfflineMode.ONLINE) offlineRepository.getOfflineLibrary()
-                    else flowOf(emptyList())
+            combine(
+                offlineModeManager.offlineMode,
+                refresher.state.map { it.fetchFailedEmpty },
+            ) { mode, fetchFailedEmpty -> mode != OfflineMode.ONLINE || fetchFailedEmpty }
+                .distinctUntilChanged()
+                .flatMapLatest { collectLibrary ->
+                    if (collectLibrary) {
+                        offlineRepository.getOfflineLibrary()
+                            .map { OfflineLibraryEmission(items = it) }
+                            .onStart { emit(OfflineLibraryEmission(pending = true)) }
+                    } else {
+                        flowOf(OfflineLibraryEmission())
+                    }
                 }
-                .collect { items ->
-                    _uiState.update { it.copy(offlineLibrary = items) }
+                .collect { emission ->
+                    _uiState.update {
+                        it.copy(offlineLibrary = emission.items, offlineFallbackPending = emission.pending)
+                    }
                 }
         }
 
@@ -900,3 +921,14 @@ class HomeViewModel @Inject constructor(
         refresher.stop()
     }
 }
+
+/**
+ * Emission envelope for the offline-library collection gate: [pending] marks
+ * the window after the gate opens but before the first real library emission,
+ * while the implicit-offline fallback is still deciding whether any downloads
+ * exist. Maps onto [HomeUiState.offlineLibrary] + [HomeUiState.offlineFallbackPending].
+ */
+private data class OfflineLibraryEmission(
+    val items: List<OfflineMediaItem> = emptyList(),
+    val pending: Boolean = false,
+)

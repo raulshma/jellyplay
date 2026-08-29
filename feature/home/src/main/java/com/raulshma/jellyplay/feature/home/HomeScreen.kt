@@ -221,11 +221,49 @@ private fun MainHomeContent(
         }
     }
 
+    // Offline home = the normal home content list fed with sections derived
+    // from the offline library (#147) — no dedicated offline screen. Derived
+    // here (above the hero setup, not inside the content lambda) so the hero
+    // rotates the same offline titles while offline. Sections are recomputed
+    // only when the library, the home mode, or the localized titles change.
+    val offlineTitles = rememberOfflineHomeSectionTitles()
+    val filteredOfflineLibrary = remember(state.offlineLibrary, state.homeMode) {
+        filterOfflineByMode(state.offlineLibrary, state.homeMode)
+    }
+    val offlineSections = remember(filteredOfflineLibrary, offlineTitles) {
+        buildOfflineHomeSections(filteredOfflineLibrary, offlineTitles)
+    }
+    // Server fetch failed but downloads exist -> implicit offline: the same
+    // integrated home plus a status banner so the fallback isn't silent.
+    // (state.offlineLibrary is only collected while offline or mid-failure, so
+    // this never shadows the online home.)
+    val implicitOffline = state.fetchFailedEmpty &&
+        state.offlineMode == OfflineMode.ONLINE && state.offlineLibrary.isNotEmpty()
+    val renderingOffline = state.offlineMode != OfflineMode.ONLINE || implicitOffline
+
     // Hero featured-candidate selection — single-pass (was up to 3x flatMap/filter).
-    val featuredCandidates = remember(state.sections) { selectFeaturedCandidates(state.sections) }
+    val featuredCandidates = remember(renderingOffline, state.homeMode, state.sections, offlineSections) {
+        selectHomeHeroCandidates(renderingOffline, state.homeMode, state.sections, offlineSections)
+    }
     val heroFocusRequester = remember { FocusRequester() }
     val mediaImageUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getImageUrl(item.id) } }
     val mediaBackdropUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getBackdropUrl(item.id) } }
+    // Hero artwork while offline resolves to the downloaded item's local
+    // backdrop (falling back to its poster) instead of a server URL, which is
+    // unreachable offline. Online keeps the server resolver. Keyed on the
+    // id+path triples (structurally equal across download-progress emissions)
+    // rather than the library list itself, so the hero controller below is not
+    // rebuilt — resetting its rotation state — on every progress tick.
+    val offlineBackdropResolver = remember(
+        filteredOfflineLibrary.map { Triple(it.id, it.backdropPath, it.posterPath) }
+    ) {
+        val byId = filteredOfflineLibrary.associateBy { it.id }
+        return@remember { id: String -> byId[id]?.let { it.backdropPath ?: it.posterPath } ?: "" }
+    }
+    val onlineBackdropResolver = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
+    // The single hero backdrop builder the content list consumes — the parent
+    // resolves online-vs-offline once, so the child never re-branches.
+    val heroBackdropUrlBuilder = if (renderingOffline) offlineBackdropResolver else onlineBackdropResolver
 
     // Scroll state must exist before the hero controller (auto-rotate reads
     // listState.isScrollInProgress). Both own Compose side-effects, so order
@@ -240,7 +278,7 @@ private fun MainHomeContent(
         featuredCandidates = featuredCandidates,
         listState = listState,
         heroFocusRequester = heroFocusRequester,
-        getBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } },
+        getBackdropUrl = heroBackdropUrlBuilder,
     )
 
     // Global nav overflow "Surprise Me" (#115): the hero controller lives here
@@ -477,30 +515,16 @@ private fun MainHomeContent(
                         }
                         .focusGroup()
                 ) {
-                // Offline home = the normal home content list fed with sections
-                // derived from the offline library (#147) — no dedicated offline
-                // screen. Sections are recomputed only when the library, the
-                // home mode, or the localized titles change.
-                val offlineTitles = rememberOfflineHomeSectionTitles()
-                val offlineSections = remember(state.offlineLibrary, state.homeMode, offlineTitles) {
-                    buildOfflineHomeSections(
-                        filterOfflineByMode(state.offlineLibrary, state.homeMode),
-                        offlineTitles,
-                    )
-                }
-                // Server fetch failed but downloads exist -> implicit offline: the
-                // same integrated home plus a status banner so the fallback isn't
-                // silent. (state.offlineLibrary is only collected while offline or
-                // mid-failure, so this never shadows the online home.)
-                val implicitOffline = state.error != null && state.sections.isEmpty() &&
-                    state.offlineMode == OfflineMode.ONLINE && state.offlineLibrary.isNotEmpty()
-                val renderingOffline = state.offlineMode != OfflineMode.ONLINE || implicitOffline
-
+                // Offline sections + renderingOffline are derived above the hero
+                // setup so the hero can share the same offline candidates.
                 when {
                     // When an online fetch fails but we have no downloads, there is
-                    // nothing to fall back on — show the hard error.
-                    state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE &&
-                        state.offlineLibrary.isEmpty() -> {
+                    // nothing to fall back on — show the hard error. While the
+                    // implicit-offline fallback is still waiting on its first
+                    // offline-library emission (pending), downloads may yet
+                    // exist — the loading state below covers that window.
+                    state.fetchFailedEmpty && state.offlineMode == OfflineMode.ONLINE &&
+                        state.offlineLibrary.isEmpty() && !state.offlineFallbackPending -> {
                         ErrorScreen(
                             message = stringResource(R.string.home_error_load_content),
                             onRetry = { viewModel.onEvent(HomeUiEvent.Refresh) },
@@ -533,9 +557,14 @@ private fun MainHomeContent(
                         HomeContentList(
                             state = HomeContentState(
                                 // Offline rendering short-circuits the server-only
-                                // surfaces (loading spinner, banners, hero) — the
-                                // content list shows the offline-derived sections.
-                                isLoading = !renderingOffline && state.isLoading,
+                                // surfaces (loading spinner, banners) — the content
+                                // list shows the offline-derived sections, and the
+                                // hero (already fed offline candidates + local
+                                // backdrop paths) features downloaded media. The
+                                // pending flag covers the implicit-offline window
+                                // before the first library emission.
+                                isLoading = (!renderingOffline && state.isLoading) ||
+                                    state.offlineFallbackPending,
                                 homeHeroEnabled = state.homeHeroEnabled,
                                 homeBackdropEnabled = state.homeBackdropEnabled,
                                 newsletterBannerVisible = !renderingOffline && state.newsletterBannerVisible,
@@ -543,7 +572,8 @@ private fun MainHomeContent(
                                 experimentalCardClippingEnabled = state.experimentalCardClippingEnabled,
                                 sections = if (renderingOffline) offlineSections else state.sections,
                                 partialLoadError = !renderingOffline && state.partialLoadError,
-                                featuredItem = if (renderingOffline) null else heroController.featuredItem,
+                                featuredItem = heroController.featuredItem,
+                                featuredIsOffline = renderingOffline,
                                 backgroundColor = backgroundColor,
                                 contentPad = contentPad,
                                 headerHeight = headerHeight,
@@ -576,7 +606,8 @@ private fun MainHomeContent(
                                 mediaImageUrlBuilder = mediaImageUrlBuilder,
                                 mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
                                 getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
-                                getBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } },
+                                getBackdropUrl = onlineBackdropResolver,
+                                heroBackdropUrlBuilder = heroBackdropUrlBuilder,
                                 fallbackImageUrlBuilder = fallbackImageUrlBuilder,
                                 onSeerrItemClick = callbacks.onSeerrItemClick,
                                 onSeerrRequest = remember(viewModel) { { item: SeerrSearchItem -> viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(item)) } },

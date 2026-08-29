@@ -25,6 +25,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -78,6 +79,13 @@ internal data class HomeContentState(
     val sections: List<HomeSection>,
     val partialLoadError: Boolean,
     val featuredItem: MediaItem?,
+    /**
+     * True when [featuredItem] is derived from the offline library (offline or
+     * implicit-offline rendering): the hero resolves artwork through
+     * [HomeContentCallbacks.heroBackdropUrlBuilder] and routes clicks to the
+     * offline detail screen instead of the online one.
+     */
+    val featuredIsOffline: Boolean = false,
     val backgroundColor: Color,
     val contentPad: Dp,
     val headerHeight: Dp,
@@ -111,6 +119,12 @@ internal data class HomeContentCallbacks(
     val mediaBackdropUrlBuilder: (MediaItem) -> String,
     val getImageUrl: (String) -> String,
     val getBackdropUrl: (String) -> String,
+    /**
+     * Backdrop builder for the HERO only — the caller resolves online-vs-offline
+     * once (offline items resolve to their local backdrop/poster file path), so
+     * the list never re-branches. Row artwork keeps using [getBackdropUrl].
+     */
+    val heroBackdropUrlBuilder: (String) -> String,
     val fallbackImageUrlBuilder: (MediaItem) -> List<String>,
     val onSeerrItemClick: (Int, String) -> Unit,
     val onSeerrRequest: (com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem) -> Unit,
@@ -208,6 +222,17 @@ internal fun HomeContentList(
             }
         }
 
+        // Single id→offline-item lookup shared by the offline hero's click
+        // routing and the DOWNLOADED section rows. (The screen only forwards
+        // offlineLibrary when the offline branch can render, so this is free
+        // while online.) It rebuilds on every library change — download-progress
+        // emissions included — so the hero's click lambda reads it through
+        // [currentOfflineById] to stay the same instance across those ticks.
+        val offlineById = remember(state.offlineLibrary) {
+            state.offlineLibrary.associateBy { it.id }
+        }
+        val currentOfflineById by rememberUpdatedState(offlineById)
+
         // Hoisted out of the items() lambda so the gradient brush is built once
         // per (backgroundColor, density) change rather than re-instantiated for
         // every section item in the list, even though only the first section
@@ -231,16 +256,39 @@ internal fun HomeContentList(
         ) {
             if (state.featuredItem != null && state.homeHeroEnabled) {
                 item(key = "hero") {
+                    val featured = state.featuredItem
+                    // Offline hero clicks open the offline detail screen (the
+                    // online routing would hit the server for item metadata).
+                    // The id arrives fresh from the hero (it follows rotation),
+                    // so the item type is re-resolved through the shared
+                    // offline-library lookup above — read via its State wrapper
+                    // so this lambda keeps its identity across download-progress
+                    // emissions (a remember key on the library itself would
+                    // rebuild it — and re-route the hero — on every tick).
+                    val heroItemClick = remember(state.featuredIsOffline, callbacks) {
+                        { id: String ->
+                            if (state.featuredIsOffline) {
+                                callbacks.onOfflineItemClick(
+                                    id,
+                                    currentOfflineById[id]?.mediaType ?: MediaType.UNKNOWN,
+                                )
+                            } else {
+                                callbacks.onItemClick(id)
+                            }
+                        }
+                    }
                     AnimatedHeroHeader(
-                        featuredItem = state.featuredItem,
-                        getBackdropUrl = remember(callbacks.getBackdropUrl) { { callbacks.getBackdropUrl(it) } },
+                        featuredItem = featured,
+                        getBackdropUrl = remember(callbacks.heroBackdropUrlBuilder) {
+                            { id: String -> callbacks.heroBackdropUrlBuilder(id) }
+                        },
                         height = state.headerHeight,
                         backgroundColor = state.backgroundColor,
                         contentPadding = state.contentPad,
                         homeBackdropEnabled = state.homeBackdropEnabled,
                         listState = listState,
-                        onItemClick = callbacks.onItemClick,
-                        onDetailsClick = callbacks.onItemClick,
+                        onItemClick = heroItemClick,
+                        onDetailsClick = heroItemClick,
                         requestInitialFocus = !savedRowIsValid,
                         onFocusChange = callbacks.onFocusChange,
                         focusRequester = heroFocusRequester,
@@ -384,11 +432,9 @@ internal fun HomeContentList(
 
                 if (section.type == HomeSectionType.DOWNLOADED) {
                     // Offline-derived section (see buildOfflineHomeSections):
-                    // re-resolve the offline originals by id so the cards render
-                    // local artwork and clicks route to the offline detail.
-                    val offlineById = remember(state.offlineLibrary) {
-                        state.offlineLibrary.associateBy { it.id }
-                    }
+                    // re-resolve the offline originals by id (shared lookup
+                    // above) so the cards render local artwork and clicks route
+                    // to the offline detail.
                     val offlineItems = remember(section, offlineById) {
                         section.items.mapNotNull { offlineById[it.id] }
                     }

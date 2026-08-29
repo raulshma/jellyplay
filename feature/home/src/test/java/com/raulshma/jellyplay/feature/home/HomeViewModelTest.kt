@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -710,6 +711,54 @@ class HomeViewModelTest {
 
         assertEquals("Connection timeout", viewModel.uiState.value.error)
         assertFalse(viewModel.uiState.value.isLoading)
+        stopPeriodicRefresh()
+    }
+
+    // ── Offline-library collection gate (offline modes + implicit offline) ──
+
+    @Test
+    fun offlineLibraryCollection_onlineFetchSuccess_neverCollected() = runTest {
+        coEvery {
+            mediaRepository.getHomeSections(any())
+        } returns Result.success(
+            HomeSectionsResult(sections = listOf(section(HomeSectionType.LATEST_MEDIA, listOf(item("m1"))))),
+        )
+        viewModel = buildViewModel()
+
+        signIn("u1")
+        runCurrent()
+
+        // The gate stays closed while online with content: no collection, so
+        // download-progress writes can't re-invalidated the home tree.
+        assertTrue(viewModel.uiState.value.offlineLibrary.isEmpty())
+        assertFalse(viewModel.uiState.value.offlineFallbackPending)
+        verify(exactly = 0) { offlineRepository.getOfflineLibrary() }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun offlineLibraryCollection_onlineFetchFailure_collectsLibraryAndClearsPending() = runTest {
+        val libraryFlow = MutableSharedFlow<List<OfflineMediaItem>>(extraBufferCapacity = 8)
+        every { offlineRepository.getOfflineLibrary() } returns libraryFlow
+        coEvery {
+            mediaRepository.getHomeSections(any())
+        } returns Result.failure(RuntimeException("Connection timeout"))
+        viewModel = buildViewModel()
+
+        signIn("u1")
+        runCurrent()
+
+        // The failed fetch opened the gate (implicit offline): the
+        // pre-emission window carries the pending flag so the home shows a
+        // loading state instead of flashing the hard error screen.
+        assertTrue(viewModel.uiState.value.offlineFallbackPending)
+
+        val downloaded = listOf(OfflineMediaItem(id = "d1", name = "Downloaded", mediaType = MediaType.MOVIE))
+        libraryFlow.tryEmit(downloaded)
+        runCurrent()
+
+        assertEquals(downloaded, viewModel.uiState.value.offlineLibrary)
+        assertFalse(viewModel.uiState.value.offlineFallbackPending)
         stopPeriodicRefresh()
     }
 

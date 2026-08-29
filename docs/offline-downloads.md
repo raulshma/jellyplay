@@ -196,8 +196,12 @@ available. While offline (manually, automatically on network loss, or when
 the server can't be reached), the home screen keeps its normal layout and
 shows rows derived from your downloads — Continue Watching, Recently
 Downloaded, Movies, Series, Music — served entirely from the on-device
-store. The library follows the same rule: its grid auto-filters to your
-downloads, exactly as if you'd tapped the **Downloaded** chip yourself.
+store. The hero follows the same rule: it features your downloaded movies
+and series with their locally saved artwork (the downloaded poster when no
+backdrop was stored), and tapping it opens the offline detail screen. The
+music home never shows a hero, online or off. The library follows the same
+rule as the rows: its grid auto-filters to your downloads, exactly as if
+you'd tapped the **Downloaded** chip yourself.
 
 ## Keeping downloads fresh (resync)
 

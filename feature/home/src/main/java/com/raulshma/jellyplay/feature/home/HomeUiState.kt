@@ -31,6 +31,13 @@ data class HomeUiState(
     val accentColorSwatch: String = "dynamic",
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
     val offlineLibrary: List<OfflineMediaItem> = emptyList(),
+    /**
+     * True while the offline-library collection gate is open but the first
+     * emission hasn't landed — the implicit-offline fallback is still deciding
+     * whether downloads exist. The home shows a loading state (and suppresses
+     * the hard error screen) for that window instead of flashing it.
+     */
+    val offlineFallbackPending: Boolean = false,
     val discoverEnabled: Boolean = false,
     val homeHeroEnabled: Boolean = true,
     val homeBackdropEnabled: Boolean = true,
@@ -91,7 +98,16 @@ data class HomeUiState(
      * Rendered by [MainHomeContent] as a `DeleteDownloadedEpisodesSheet`.
      */
     val seriesDelete: HomeSeriesDeleteState? = null,
-)
+) {
+    /**
+     * The server fetch failed and left nothing to show — the precondition for
+     * the implicit-offline fallback home. Screen-side mirror of the refresher's
+     * `HomeRefreshState.fetchFailedEmpty` (which the offline-library collection
+     * gate keys on); keep the two in sync.
+     */
+    val fetchFailedEmpty: Boolean
+        get() = error != null && sections.isEmpty()
+}
 
 /**
  * Data backing the offline home's series delete-episodes sheet (the same

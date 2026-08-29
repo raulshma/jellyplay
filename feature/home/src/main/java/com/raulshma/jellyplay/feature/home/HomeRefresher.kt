@@ -985,4 +985,14 @@ internal data class HomeRefreshState(
     val isGoingOnline: Boolean = false,
     /** Mirror of [OfflineModeManager.offlineMode]; transitions drive the policy in [HomeRefresher.observeOfflineMode]. */
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
-)
+) {
+    /**
+     * The server fetch failed and left nothing to show — the precondition for
+     * the implicit-offline fallback (online mode + downloads present). The
+     * offline-library collection gate in [HomeViewModel] keys on this; the UI
+     * mirror is [com.raulshma.jellyplay.feature.home.HomeUiState.fetchFailedEmpty].
+     * Keep the two in sync.
+     */
+    val fetchFailedEmpty: Boolean
+        get() = error != null && sections.isEmpty()
+}
