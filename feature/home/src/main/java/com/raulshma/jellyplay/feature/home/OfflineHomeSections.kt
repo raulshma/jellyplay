@@ -13,6 +13,52 @@ import com.raulshma.jellyplay.core.model.toMediaItem
 import java.util.PriorityQueue
 
 /**
+ * Everything the offline home renders, derived in one place. The screen
+ * remembers ONE [OfflineHomeContent] per (library, episodes, mode, titles,
+ * prefs) change and passes it down as a single value — the derived sections,
+ * the id→item lookup (built once per emission, shared by the DOWNLOADED rows
+ * and the hero's click routing) and the raw lists the inline Downloaded row's
+ * dedupe reads. Previously each consumer re-derived its own slice from the
+ * UiState mirrors, and [itemsById] was built twice per tree on different
+ * remember keys.
+ *
+ * The row titles are localized strings, so the aggregate is built at the
+ * call site ([rememberOfflineHomeSectionTitles] is composable) — the UiState
+ * mirrors keep carrying the raw repository emissions.
+ */
+@Immutable
+internal data class OfflineHomeContent(
+    /** Mode-filtered library (the render-relevant slice; episodes excluded by design). */
+    val library: List<OfflineMediaItem>,
+    /** Mode-filtered downloaded episodes feeding CW / Next Up. */
+    val episodes: List<OfflineMediaItem>,
+    /** The offline-derived sections (all typed [HomeSectionType.DOWNLOADED]). */
+    val sections: List<HomeSection>,
+    /** Id → item across [library] + [episodes] — built once, here. */
+    val itemsById: Map<String, OfflineMediaItem>,
+)
+
+/**
+ * Derives the offline home's render model in one pass. See [OfflineHomeContent].
+ */
+internal fun buildOfflineHomeContent(
+    library: List<OfflineMediaItem>,
+    episodes: List<OfflineMediaItem>,
+    homeMode: HomeMode,
+    titles: OfflineHomeSectionTitles,
+    prefs: OfflineHomeSectionPrefs,
+): OfflineHomeContent {
+    val filteredLibrary = filterOfflineByMode(library, homeMode)
+    val filteredEpisodes = filterOfflineByMode(episodes, homeMode)
+    return OfflineHomeContent(
+        library = filteredLibrary,
+        episodes = filteredEpisodes,
+        sections = buildOfflineHomeSections(filteredLibrary, filteredEpisodes, titles, prefs),
+        itemsById = offlineItemsById(filteredLibrary, filteredEpisodes),
+    )
+}
+
+/**
  * Filters the offline items by the current home mode: [HomeMode.MUSIC] keeps audio/music
  * types, everything else excludes them so video and music home screens never mix.
  */

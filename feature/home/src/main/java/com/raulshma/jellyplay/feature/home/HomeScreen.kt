@@ -223,22 +223,24 @@ private fun MainHomeContent(
     }
 
     // Offline home = the normal home content list fed with sections derived
-    // from the offline library (#147) — no dedicated offline screen. Derived
-    // here (above the hero setup, not inside the content lambda) so the hero
-    // rotates the same offline titles while offline. Sections are recomputed
-    // only when the library, the home mode, or the localized titles change.
+    // from the offline library (#147) — no dedicated offline screen. The whole
+    // render model (filtered lists, derived sections, id→item lookup) is
+    // derived in ONE place (buildOfflineHomeContent) and passed down as a
+    // single value; derived here (above the hero setup, not inside the content
+    // lambda) so the hero rotates the same offline titles while offline.
     val offlineTitles = rememberOfflineHomeSectionTitles()
-    val filteredOfflineLibrary = remember(state.offlineLibrary, state.homeMode) {
-        filterOfflineByMode(state.offlineLibrary, state.homeMode)
+    val offlineContent = remember(
+        state.offlineLibrary, state.offlineEpisodes, state.homeMode, offlineTitles, state.offlineSectionPrefs,
+    ) {
+        buildOfflineHomeContent(
+            library = state.offlineLibrary,
+            episodes = state.offlineEpisodes,
+            homeMode = state.homeMode,
+            titles = offlineTitles,
+            prefs = state.offlineSectionPrefs,
+        )
     }
-    // Downloaded episodes feed the offline Continue Watching / Next Up rows —
-    // the top-level library excludes episodes by design (browse shows series).
-    val filteredOfflineEpisodes = remember(state.offlineEpisodes, state.homeMode) {
-        filterOfflineByMode(state.offlineEpisodes, state.homeMode)
-    }
-    val offlineSections = remember(filteredOfflineLibrary, filteredOfflineEpisodes, offlineTitles, state.offlineSectionPrefs) {
-        buildOfflineHomeSections(filteredOfflineLibrary, filteredOfflineEpisodes, offlineTitles, state.offlineSectionPrefs)
-    }
+    val offlineSections = offlineContent.sections
     // The offline-render decision arrives pre-computed as one value
     // (HomeUiState.renderSource — see computeHomeRenderSource): explicit
     // offline and the implicit fallback both render Offline; FallbackPending
@@ -258,16 +260,20 @@ private fun MainHomeContent(
     // Hero artwork while offline resolves to the downloaded item's local
     // backdrop (falling back to its poster) instead of a server URL, which is
     // unreachable offline. Episodes are included so an all-episodes offline
-    // library still features artwork. Keyed on the id+path triples
-    // (structurally equal across download-progress emissions) rather than the
-    // library list itself, so the hero controller below is not rebuilt —
-    // resetting its rotation state — on every progress tick.
+    // library still features artwork. The lookup itself is built once per
+    // emission inside [OfflineHomeContent]; the resolver keys on the id+path
+    // triples (structurally equal across download-progress emissions) so its
+    // identity is stable across ticks and the hero controller below is not
+    // rebuilt — resetting its rotation state — while the CONTENT it reads
+    // (via currentOfflineContent) is always fresh.
+    val currentOfflineContent by rememberUpdatedState(offlineContent)
     val offlineBackdropResolver = remember(
-        filteredOfflineLibrary.map { Triple(it.id, it.backdropPath, it.posterPath) } +
-            filteredOfflineEpisodes.map { Triple(it.id, it.backdropPath, it.posterPath) }
+        offlineContent.library.map { Triple(it.id, it.backdropPath, it.posterPath) } +
+            offlineContent.episodes.map { Triple(it.id, it.backdropPath, it.posterPath) }
     ) {
-        val byId = offlineItemsById(filteredOfflineLibrary, filteredOfflineEpisodes)
-        return@remember { id: String -> byId[id]?.let { it.backdropPath ?: it.posterPath } ?: "" }
+        return@remember { id: String ->
+            currentOfflineContent.itemsById[id]?.let { it.backdropPath ?: it.posterPath } ?: ""
+        }
     }
     val onlineBackdropResolver = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
     // The single hero backdrop builder the content list consumes — the parent
@@ -600,12 +606,11 @@ private fun MainHomeContent(
                                 allDiscoverItems = allDiscoverItems,
                                 recentlyGrabbed = state.recentlyGrabbed,
                                 photoFolderChildUrls = photoFolderChildUrls,
-                                // Only forward the offline library + episodes when
-                                // they can actually render (offline branch), so
-                                // download-progress ticks while online never
-                                // invalidate the content list.
-                                offlineLibrary = if (renderingOffline) state.offlineLibrary else emptyList(),
-                                offlineEpisodes = if (renderingOffline) state.offlineEpisodes else emptyList(),
+                                // Forward the whole offline render model only when
+                                // the offline branch can render it (null while
+                                // online), so download-progress ticks while
+                                // online never invalidate the content list.
+                                offlineContent = if (renderingOffline) offlineContent else null,
                                 statusBanner = if (implicitOffline) {
                                     "Couldn't reach the server — showing your downloads."
                                 } else null,

@@ -49,7 +49,6 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -95,13 +94,14 @@ internal data class HomeContentState(
     val allDiscoverItems: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>,
     val recentlyGrabbed: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>,
     val photoFolderChildUrls: Map<String, List<String>>,
-    val offlineLibrary: List<OfflineMediaItem>,
     /**
-     * Downloaded episodes for the offline CW/Next Up rows' id→item re-resolution
-     * (the top-level [offlineLibrary] excludes episodes by design). Mirrors the
-     * same gate as [offlineLibrary]: empty while online.
+     * The offline home's whole render model (see [OfflineHomeContent]) —
+     * sections already derived, id→item lookup already built. Null while the
+     * online home renders: download-progress ticks then never invalidate this
+     * list. Non-null iff the caller renders offline content (offline or
+     * implicit-offline).
      */
-    val offlineEpisodes: List<OfflineMediaItem> = emptyList(),
+    val offlineContent: OfflineHomeContent? = null,
     /**
      * Non-blocking informational banner (e.g. the implicit-offline
      * "couldn't reach the server — showing your downloads" notice). Null hides it.
@@ -217,30 +217,26 @@ internal fun HomeContentList(
     } else {
         // De-duplicate the downloaded row against the online sections so a title
         // that already appears in Continue Watching / Latest / Recently Added
-        // isn't shown twice.
-        val dedupedOfflineLibrary = remember(state.offlineLibrary, sections) {
-            if (state.offlineLibrary.isEmpty()) state.offlineLibrary
+        // isn't shown twice. Reads the aggregate's (already mode-filtered)
+        // library slice.
+        val offlineContent = state.offlineContent
+        val dedupedOfflineLibrary = remember(offlineContent, sections) {
+            val library = offlineContent?.library.orEmpty()
+            if (library.isEmpty()) library
             else {
                 val onlineIds = buildSet {
                     for (section in sections) for (item in section.items) add(item.id)
                 }
-                if (onlineIds.isEmpty()) state.offlineLibrary else state.offlineLibrary.filter { it.id !in onlineIds }
+                if (onlineIds.isEmpty()) library else library.filter { it.id !in onlineIds }
             }
         }
 
-        // Single id→offline-item lookup shared by the offline hero's click
-        // routing and the DOWNLOADED section rows. Includes the downloaded
-        // episodes — the offline CW/Next Up rows are episode-backed and re-
-        // resolve their originals here for local artwork. (The screen only
-        // forwards the offline library when the offline branch can render, so
-        // this is free while online.) It rebuilds on every library change —
-        // download-progress emissions included — so the hero's click lambda
-        // reads it through [currentOfflineById] to stay the same instance
-        // across those ticks.
-        val offlineById = remember(state.offlineLibrary, state.offlineEpisodes) {
-            offlineItemsById(state.offlineLibrary, state.offlineEpisodes)
-        }
-        val currentOfflineById by rememberUpdatedState(offlineById)
+        // Id→offline-item lookup for the offline hero's click routing and the
+        // DOWNLOADED section rows — prebuilt inside [OfflineHomeContent] (one
+        // build per offline emission, shared with the screen's hero backdrop
+        // resolver). Read via [currentOfflineById] so the hero's click lambda
+        // keeps its identity across download-progress emissions.
+        val currentOfflineById by rememberUpdatedState(offlineContent?.itemsById ?: emptyMap())
 
         // Hoisted out of the items() lambda so the gradient brush is built once
         // per (backgroundColor, density) change rather than re-instantiated for
@@ -444,8 +440,9 @@ internal fun HomeContentList(
                     // re-resolve the offline originals by id (shared lookup
                     // above) so the cards render local artwork and clicks route
                     // to the offline detail.
-                    val offlineItems = remember(section, offlineById) {
-                        section.items.mapNotNull { offlineById[it.id] }
+                    val byId = currentOfflineById
+                    val offlineItems = remember(section, byId) {
+                        section.items.mapNotNull { byId[it.id] }
                     }
                     OfflineHomeMediaRow(
                         title = sectionTitle,

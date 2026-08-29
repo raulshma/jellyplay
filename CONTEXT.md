@@ -333,12 +333,28 @@ failed fetch over a CONFIRMED-empty offline library is `Online` (the
 hard-error screen) — only unprobed-or-populated downloads make the implicit
 fallback render.
 
+**`OfflineHomeContent`** (`feature/home/src/main/java/.../OfflineHomeSections.kt`)
+is the offline home's render model, derived in ONE pass by
+`buildOfflineHomeContent` (filtered library + episodes, the derived sections,
+and the id→item lookup built once per emission). The screen remembers one
+aggregate and passes it down as a single value — `HomeContentState` carries
+`offlineContent: OfflineHomeContent?`, null while online so download-progress
+ticks never invalidate the content list. The row titles are localized
+strings, so the aggregate is built at the call site (next to
+`rememberOfflineHomeSectionTitles`) rather than in the VM; the UiState
+mirrors (`offlineLibrary` / `offlineEpisodes` / `offlineSectionPrefs`) stay
+raw repository/prefs emissions with the VM as their single writer. The hero
+backdrop resolver keys on id+path triples (stable across download-progress
+ticks, so the hero controller never resets rotation) but reads the lookup
+through a `rememberUpdatedState` wrapper, so its content is always the
+aggregate's fresh `itemsById`.
+
 Test surfaces: `HomeRefresherTest` (plain JUnit + `MainDispatcherRule`,
 constructs the refresher directly with a fake `awaitOutboxDrained`) pins
 cadence, throttles, the offline transitions, the going-online sequence and
 its timeout, and `patchItems`; `HomeViewModelTest` (Robolectric, all 30
 constructor collaborators) pins the UiState folds, the event funnel and the
-identity routing through a real `HomeSession`; `HomeRenderSourceTest` pins
+identity routing through a real `HomeSession`; `OfflineHomeContentTest` pins the one-pass aggregate (sections/lookup consistency, music-mode filter, empty inputs); `HomeRenderSourceTest` pins
 the render-source fold's five corners; `HomeUiStateTest` pins the
 state-class defaults.
 
