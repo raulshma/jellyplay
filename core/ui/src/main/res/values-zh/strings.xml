@@ -193,6 +193,12 @@
     <string name="detail_season_default">第 %1$d 季</string>
     <string name="detail_cd_collapse">收起</string>
     <string name="detail_cd_expand">展开</string>
+    <string name="detail_download_series_title">下载剧集</string>
+    <string name="detail_download_series_subtitle">点击某一季可查看剧集。选择要下载的内容。</string>
+    <string name="detail_downloaded_count_format">• 已下载 %1$d 集</string>
+    <string name="detail_no_episodes_available">没有可用的剧集</string>
+    <string name="detail_downloaded_status">已下载</string>
+    <string name="detail_queuing">正在加入队列…</string>
     <string name="detail_delete_entire_series">删除整部剧集</string>
     <string name="detail_cancel">取消</string>
     <string name="detail_delete_count">删除 %1$d</string>

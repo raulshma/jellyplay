@@ -49,4 +49,5 @@
 
     <!-- Localized error messages -->
     <string name="data_no_media_source_download">ダウンロード可能なメディアソースがありません</string>
+    <string name="data_series_download_queued">エピソードをダウンロードキューに追加しました</string>
 </resources>

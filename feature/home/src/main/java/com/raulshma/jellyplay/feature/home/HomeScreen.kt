@@ -85,6 +85,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.SeriesDownloadSheet
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.UndoSnackbarOverlay
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
@@ -370,15 +371,22 @@ private fun MainHomeContent(
                     QuickAction.MARK_WATCHED -> viewModel.onEvent(HomeUiEvent.MarkItemPlayed(item))
                     QuickAction.MARK_UNWATCHED -> viewModel.onEvent(HomeUiEvent.MarkItemUnplayed(item))
                     QuickAction.DETAILS -> mediaOnItemClick(item)
-                    // Single-stream items start inline at the default quality;
-                    // series (and other non-inline types) open the detail
-                    // screen — for a series with the download sheet pre-presented.
-                    QuickAction.DOWNLOAD -> viewModel.downloadItem(
-                        item,
-                        onOpenDetail = { itemId, openDownloadSheet ->
-                            callbacks.onDownloadDetailClick(itemId, openDownloadSheet)
-                        },
-                    )
+                    // Single-stream items start inline at the default quality.
+                    // A series opens the same download sheet the detail screen
+                    // hosts, right here on home; other non-inline types open
+                    // the detail screen plainly.
+                    QuickAction.DOWNLOAD -> {
+                        if (item.mediaType == MediaType.SERIES) {
+                            viewModel.onEvent(HomeUiEvent.RequestSeriesDownload(item))
+                        } else {
+                            viewModel.downloadItem(
+                                item,
+                                onOpenDetail = { itemId, openDownloadSheet ->
+                                    callbacks.onDownloadDetailClick(itemId, openDownloadSheet)
+                                },
+                            )
+                        }
+                    }
                     // Series opens the advanced delete-episodes sheet
                     // (select episodes / seasons / entire series); anything
                     // else (movie/music) opens the simple confirm dialog below.
@@ -785,6 +793,18 @@ private fun MainHomeContent(
         )
     }
 
+    // Series download sheet — the same one the media-detail screen uses. Shown
+    // when a series card's quick-action Download is tapped; the ViewModel
+    // assembles the series' seasons/episodes from the episode catalogue.
+    state.seriesDownload?.let { sd ->
+        HomeSeriesDownloadSheet(
+            state = sd,
+            onLoadEpisodes = remember(viewModel) { { seasonId: String -> viewModel.onEvent(HomeUiEvent.LoadSeriesDownloadEpisodes(seasonId)) } },
+            onDownload = remember(viewModel) { { selection: Map<String, List<String>> -> viewModel.onEvent(HomeUiEvent.DownloadSeries(selection)) } },
+            onDismiss = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.DismissSeriesDownload) } },
+        )
+    }
+
     state.seerrRequestState.requestItem?.let { item ->
         androidx.compose.runtime.LaunchedEffect(item.id) {
             viewModel.onEvent(HomeUiEvent.LoadSeerrServiceDetails(item.mediaType))
@@ -894,6 +914,29 @@ private data class SectionConfigTarget(
  * in a [TvSafeSheet]. Renders a centered spinner while the series'
  * seasons/episodes are loading, then the selectable sheet.
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeSeriesDownloadSheet(
+    state: HomeSeriesDownloadState,
+    onLoadEpisodes: (seasonId: String) -> Unit,
+    onDownload: (selectedEpisodes: Map<String, List<String>>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    TvSafeSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        SeriesDownloadSheet(
+            seasons = state.seasons,
+            episodes = state.episodesBySeason,
+            loadingSeasons = state.loadingSeasons,
+            downloadedEpisodeIds = state.downloadedEpisodeIds,
+            onLoadEpisodes = onLoadEpisodes,
+            isDownloading = false,
+            onDownload = onDownload,
+            onDismiss = onDismiss,
+        )
+    }
+}
+
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeSeriesDeleteSheet(

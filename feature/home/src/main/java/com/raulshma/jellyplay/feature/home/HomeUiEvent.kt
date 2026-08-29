@@ -44,6 +44,18 @@ sealed interface HomeUiEvent {
     /** Quick-action delete of a downloaded (non-series) item. */
     data class DeleteOfflineMedia(val item: MediaItem) : HomeUiEvent
 
+    /** Opens the series download sheet for a series card's quick-action Download. */
+    data class RequestSeriesDownload(val series: MediaItem) : HomeUiEvent
+
+    /** Lazily expands one season in the open series download sheet. */
+    data class LoadSeriesDownloadEpisodes(val seasonId: String) : HomeUiEvent
+
+    /** Queues the series download sheet's selected episodes and closes it. */
+    data class DownloadSeries(val selectedEpisodes: Map<String, List<String>>) : HomeUiEvent
+
+    /** Closes the series download sheet. */
+    data object DismissSeriesDownload : HomeUiEvent
+
     /** Opens the delete-episodes sheet for a downloaded series card. */
     data class RequestSeriesDelete(val series: MediaItem) : HomeUiEvent
 

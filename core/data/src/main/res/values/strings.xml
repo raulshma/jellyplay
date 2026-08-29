@@ -55,4 +55,5 @@
     <!-- Inline (card long-press) download feedback -->
     <string name="data_download_started">Download started</string>
     <string name="data_download_start_failed">Couldn\u2019t start the download</string>
+    <string name="data_series_download_queued">Episodes queued for download</string>
 </resources>

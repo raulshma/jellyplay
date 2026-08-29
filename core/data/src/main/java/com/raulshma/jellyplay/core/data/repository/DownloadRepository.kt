@@ -98,6 +98,14 @@ interface DownloadRepository : OfflineDownloadWriter {
 
     suspend fun getDownloadedSeriesIds(): List<String>
 
+    /**
+     * Reactive [getDownloadedSeriesIds] — every series with at least one
+     * downloaded episode. UI surfaces union this with
+     * [observeCompletedDownloadedIds] so a series card's Download action
+     * flips to Remove download once the series has anything downloaded.
+     */
+    fun observeDownloadedSeriesIds(): Flow<Set<String>>
+
     /** Returns the locally-cached subtitle manifest for a downloaded item, if any. */
     suspend fun loadLocalSubtitleManifest(downloadPath: String, itemId: String? = null): com.raulshma.jellyplay.core.model.OfflineSubtitleManifest?
 

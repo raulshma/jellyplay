@@ -193,6 +193,12 @@
     <string name="detail_season_default">시즌 %1$d</string>
     <string name="detail_cd_collapse">접기</string>
     <string name="detail_cd_expand">펼치기</string>
+    <string name="detail_download_series_title">시리즈 다운로드</string>
+    <string name="detail_download_series_subtitle">시즌을 탭하여 에피소드를 확인하세요. 다운로드할 항목을 선택하세요.</string>
+    <string name="detail_downloaded_count_format">• %1$d개 다운로드됨</string>
+    <string name="detail_no_episodes_available">재생 가능한 에피소드 없음</string>
+    <string name="detail_downloaded_status">다운로드됨</string>
+    <string name="detail_queuing">대기열 추가 중…</string>
     <string name="detail_delete_entire_series">전체 시리즈 삭제</string>
     <string name="detail_cancel">취소</string>
     <string name="detail_delete_count">%1$d개 삭제</string>

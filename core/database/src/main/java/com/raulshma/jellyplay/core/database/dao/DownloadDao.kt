@@ -247,6 +247,10 @@ interface DownloadDao {
     @Query("SELECT DISTINCT seriesId FROM downloads WHERE seriesId IS NOT NULL")
     suspend fun getDownloadedSeriesIds(): List<String>
 
+    /** Reactive [getDownloadedSeriesIds] for UI surfaces that observe it (home's quick actions). */
+    @Query("SELECT DISTINCT seriesId FROM downloads WHERE seriesId IS NOT NULL")
+    fun observeDownloadedSeriesIds(): Flow<List<String>>
+
     /**
      * Single projected read of every `(seriesId, mediaItemId)` pair in the
      * table, intended for the periodic [com.raulshma.jellyplay.core.data.worker.AutoDownloadWorker]

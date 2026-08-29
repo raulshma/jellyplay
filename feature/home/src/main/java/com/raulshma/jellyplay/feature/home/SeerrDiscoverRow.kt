@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
 import com.raulshma.jellyplay.core.ui.components.SeerrCardLoadingState
@@ -83,6 +84,11 @@ internal fun SeerrDiscoverRow(
     CompositionLocalProvider(
         LocalSeerrCardLoadingState provides seerrCardLoadingState,
         LocalSeerrPrefetch provides seerrPrefetch,
+        // Home is a no-peek surface: every home media card long-presses into the
+        // quick-action sheet, so the press-and-hold preview is suppressed here.
+        // These TMDB-keyed cards have no server quick actions, so long-press is
+        // simply inert on them rather than opening a different affordance.
+        LocalMediaPreviewController provides null,
     ) {
         LazyRow(
             modifier = Modifier

@@ -98,6 +98,15 @@ data class HomeUiState(
      * Rendered by [MainHomeContent] as a `DeleteDownloadedEpisodesSheet`.
      */
     val seriesDelete: HomeSeriesDeleteState? = null,
+
+    /**
+     * Non-null while the series download sheet is open for a series card's
+     * quick-action Download. Carries the seasons/episodes loaded for the
+     * targeted series (server catalogue) plus which episodes are already
+     * downloaded. Rendered by [MainHomeContent] as a `SeriesDownloadSheet` —
+     * the same sheet the media-detail screen hosts.
+     */
+    val seriesDownload: HomeSeriesDownloadState? = null,
 ) {
     /**
      * The server fetch failed and left nothing to show — the precondition for
@@ -126,6 +135,21 @@ data class HomeSeriesDeleteState(
     val totalSizeBytes: Long,
     val episodeSizeBytes: Map<String, Long> = emptyMap(),
     val isLoading: Boolean,
+)
+
+/**
+ * Data backing the home series download sheet (the `SeriesDownloadSheet` the
+ * media-detail screen also hosts). [episodesBySeason] is keyed by season id;
+ * [loadingSeasons] carries the initial-load sentinel (the series id) plus any
+ * lazily expanding season while the snapshot loads.
+ */
+@Immutable
+data class HomeSeriesDownloadState(
+    val seriesId: String,
+    val seasons: List<MediaItem>,
+    val episodesBySeason: Map<String, List<MediaItem>>,
+    val loadingSeasons: Set<String>,
+    val downloadedEpisodeIds: Set<String>,
 )
 
 @Immutable

@@ -60,7 +60,6 @@
 
     <!-- ── Episode / season card labels ─────────────────────────────────── -->
     <string name="detail_season_format">Stagione %1$d</string>
-    <string name="detail_no_episodes_available">Nessun episodio disponibile</string>
     <string name="detail_spoiler">Spoiler</string>
     <string name="detail_watched_badge">Visto</string>
     <string name="detail_cd_switch_to_list">Passa a elenco episodi verticale</string>
@@ -83,8 +82,6 @@
     <string name="detail_option_technical_info">Informazioni tecniche</string>
 
     <!-- ── Series download sheet ────────────────────────────────────────── -->
-    <string name="detail_download_series_title">Scarica serie</string>
-    <string name="detail_download_series_subtitle">Tocca una stagione per vedere gli episodi. Seleziona quali scaricare.</string>
     <string name="detail_select_all">Seleziona tutto</string>
     <string name="detail_deselect_all">Deseleziona tutto</string>
     <string name="detail_episodes_selected_format">%1$d di %2$d episodi selezionati</string>
@@ -92,9 +89,6 @@
         <item quantity="one">%1$d episodio</item>
         <item quantity="other">%1$d episodi</item>
     </plurals>
-    <string name="detail_downloaded_count_format">• %1$d scaricati</string>
-    <string name="detail_queuing">In coda…</string>
-    <string name="detail_downloaded_status">Scaricato</string>
     <string name="detail_cancel">Annulla</string>
 
     <!-- ── Add to Playlist picker ──────────────────────────────────────── -->

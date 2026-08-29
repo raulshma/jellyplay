@@ -193,6 +193,12 @@
     <string name="detail_season_default">Saison %1$d</string>
     <string name="detail_cd_collapse">Réduire</string>
     <string name="detail_cd_expand">Développer</string>
+    <string name="detail_download_series_title">Télécharger la série</string>
+    <string name="detail_download_series_subtitle">Appuyez sur une saison pour voir les épisodes. Sélectionnez ceux à télécharger.</string>
+    <string name="detail_downloaded_count_format">• %1$d téléchargé(s)</string>
+    <string name="detail_no_episodes_available">Aucun épisode disponible</string>
+    <string name="detail_downloaded_status">Téléchargé</string>
+    <string name="detail_queuing">Mise en file…</string>
     <string name="detail_delete_entire_series">Supprimer toute la série</string>
     <string name="detail_cancel">Annuler</string>
     <string name="detail_delete_count">Supprimer %1$d</string>

@@ -51,4 +51,5 @@
 
     <!-- Localized error messages -->
     <string name="data_no_media_source_download">Keine Medienquelle für den Download verfügbar</string>
+    <string name="data_series_download_queued">Episoden wurden zum Herunterladen in die Warteschlange gestellt</string>
 </resources>

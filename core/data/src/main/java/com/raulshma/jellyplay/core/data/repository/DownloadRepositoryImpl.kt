@@ -480,6 +480,9 @@ class DownloadRepositoryImpl @Inject constructor(
     override suspend fun getDownloadedSeriesIds(): List<String> =
         downloadDao.getDownloadedSeriesIds()
 
+    override fun observeDownloadedSeriesIds(): Flow<Set<String>> =
+        downloadDao.observeDownloadedSeriesIds().map(List<String>::toSet).distinctUntilChanged()
+
     override suspend fun downloadSeries(
         seriesId: String,
         episodeIds: Map<String, List<String>>?,

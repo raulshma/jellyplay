@@ -193,6 +193,12 @@
     <string name="detail_season_default">Staffel %1$d</string>
     <string name="detail_cd_collapse">Einklappen</string>
     <string name="detail_cd_expand">Ausklappen</string>
+    <string name="detail_download_series_title">Serie herunterladen</string>
+    <string name="detail_download_series_subtitle">Tippe auf eine Staffel, um die Episoden zu sehen. Wähle aus, was heruntergeladen werden soll.</string>
+    <string name="detail_downloaded_count_format">• %1$d heruntergeladen</string>
+    <string name="detail_no_episodes_available">Keine Episoden verfügbar</string>
+    <string name="detail_downloaded_status">Heruntergeladen</string>
+    <string name="detail_queuing">Wird in Warteschlange gestellt…</string>
     <string name="detail_delete_entire_series">Ganze Serie löschen</string>
     <string name="detail_cancel">Abbrechen</string>
     <string name="detail_delete_count">%1$d löschen</string>

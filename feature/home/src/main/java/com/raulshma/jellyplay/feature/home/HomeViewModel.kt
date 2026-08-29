@@ -143,7 +143,13 @@ class HomeViewModel @Inject constructor(
      * it — because the ONLINE home's action sheet needs this set too. The
      * repository collapses equal id sets, so transfers don't churn it.
      */
-    val downloadedIds: StateFlow<Set<String>> = downloadRepository.observeCompletedDownloadedIds()
+    val downloadedIds: StateFlow<Set<String>> = combine(
+        downloadRepository.observeCompletedDownloadedIds(),
+        // Series ids ride the same set so a series card's Download action
+        // flips to Remove download once the series has a downloaded episode —
+        // REMOVE_DOWNLOAD then opens the delete-episodes sheet.
+        downloadRepository.observeDownloadedSeriesIds(),
+    ) { itemIds, seriesIds -> itemIds + seriesIds }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     /**
@@ -291,6 +297,22 @@ class HomeViewModel @Inject constructor(
      * unchanged.
      */
     private val seriesDeleteStateHolder = SeriesDeleteStateHolder(scope, offlineRepository)
+
+    /**
+     * The series download sheet opened from a series card's quick-action
+     * Download — the same `SeriesDownloadSheet` the media-detail screen hosts,
+     * fed here from the [EpisodeCatalogue] seam instead of a detail session.
+     * [state][SeriesDownloadStateHolder.state] is folded into
+     * [HomeUiState.seriesDownload] by the init collector; the methods below
+     * are one-line delegates for the sheet's callbacks.
+     */
+    private val seriesDownloadStateHolder = SeriesDownloadStateHolder(
+        scope = scope,
+        episodeCatalogue = episodeCatalogue,
+        downloadRepository = downloadRepository,
+        downloadIntake = downloadIntake,
+        userMessageBus = userMessageBus,
+    )
 
     /**
      * Encapsulates all Seerr request UI state (result, servers, loading, seasons).
@@ -516,6 +538,14 @@ class HomeViewModel @Inject constructor(
             }
         }
 
+        // Fold the series download sheet holder into HomeUiState.seriesDownload
+        // (same fold pattern).
+        launch {
+            seriesDownloadStateHolder.state.collect { seriesDownload ->
+                _uiState.update { it.copy(seriesDownload = seriesDownload) }
+            }
+        }
+
         // Fold the refresher's state slice into HomeUiState (same fold
         // pattern as the SeerrRequestStateHolder collector above) so the UI
         // observes a single state object. The refresher is the SOLE writer of
@@ -574,6 +604,10 @@ class HomeViewModel @Inject constructor(
             is HomeUiEvent.MarkItemPlayed -> setItemPlayed(event.item, played = true)
             is HomeUiEvent.MarkItemUnplayed -> setItemPlayed(event.item, played = false)
             is HomeUiEvent.DeleteOfflineMedia -> deleteOfflineMedia(event.item)
+            is HomeUiEvent.RequestSeriesDownload -> requestSeriesDownload(event.series)
+            is HomeUiEvent.LoadSeriesDownloadEpisodes -> loadSeriesDownloadEpisodes(event.seasonId)
+            is HomeUiEvent.DownloadSeries -> downloadSeries(event.selectedEpisodes)
+            is HomeUiEvent.DismissSeriesDownload -> dismissSeriesDownload()
             is HomeUiEvent.RequestSeriesDelete -> requestSeriesDelete(event.series)
             is HomeUiEvent.DismissSeriesDelete -> dismissSeriesDelete()
             is HomeUiEvent.DeleteOfflineEpisodes -> deleteOfflineEpisodes(event.episodeIds)
@@ -686,6 +720,19 @@ class HomeViewModel @Inject constructor(
 
     /** Opens the delete-episodes sheet for [series] — see [SeriesDeleteStateHolder.requestSeriesDelete]. */
     private fun requestSeriesDelete(series: MediaItem) = seriesDeleteStateHolder.requestSeriesDelete(series)
+
+    /** Opens the series download sheet for [series] — see [SeriesDownloadStateHolder.requestSeriesDownload]. */
+    private fun requestSeriesDownload(series: MediaItem) = seriesDownloadStateHolder.requestSeriesDownload(series)
+
+    /** Lazily expands one season in the open series download sheet — see [SeriesDownloadStateHolder.loadSeasonEpisodes]. */
+    private fun loadSeriesDownloadEpisodes(seasonId: String) = seriesDownloadStateHolder.loadSeasonEpisodes(seasonId)
+
+    /** Queues the selected episodes and closes the sheet — see [SeriesDownloadStateHolder.downloadSeries]. */
+    private fun downloadSeries(selectedEpisodes: Map<String, List<String>>) =
+        seriesDownloadStateHolder.downloadSeries(selectedEpisodes)
+
+    /** Closes the series download sheet — see [SeriesDownloadStateHolder.dismiss]. */
+    private fun dismissSeriesDownload() = seriesDownloadStateHolder.dismiss()
 
     /**
      * Long-press Download from an online home card. Single-stream items

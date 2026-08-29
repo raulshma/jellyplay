@@ -49,4 +49,5 @@
 
     <!-- Localized error messages -->
     <string name="data_no_media_source_download">다운로드할 수 있는 미디어 소스가 없습니다</string>
+    <string name="data_series_download_queued">에피소드가 다운로드 대기열에 추가되었습니다</string>
 </resources>

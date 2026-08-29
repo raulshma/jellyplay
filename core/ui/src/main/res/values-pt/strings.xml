@@ -193,6 +193,12 @@
     <string name="detail_season_default">Temporada %1$d</string>
     <string name="detail_cd_collapse">Recolher</string>
     <string name="detail_cd_expand">Expandir</string>
+    <string name="detail_download_series_title">Transferir série</string>
+    <string name="detail_download_series_subtitle">Toque numa temporada para ver os episódios. Selecione quais transferir.</string>
+    <string name="detail_downloaded_count_format">• %1$d transferidos</string>
+    <string name="detail_no_episodes_available">Sem episódios disponíveis</string>
+    <string name="detail_downloaded_status">Transferido</string>
+    <string name="detail_queuing">A pôr na fila…</string>
     <string name="detail_delete_entire_series">Excluir série inteira</string>
     <string name="detail_cancel">Cancelar</string>
     <string name="detail_delete_count">Excluir %1$d</string>

@@ -46,9 +46,11 @@ private fun MediaQuickActionScope.actionableTypes(): Set<MediaType> = when (this
  * collection/person screens. Execution of each action (navigation, viewModel
  * calls) stays at the call site via [com.raulshma.jellyplay.core.ui.components.MediaQuickActionController].
  *
- * @param includeDownload When true, adds [QuickAction.DOWNLOAD] for audio and
- *   video types. Matches the type half of `MediaOptionsMenu.canDownload`; the
- *   mediaSources half is resolved by the executor once the action fires.
+ * @param includeDownload When true, adds [QuickAction.DOWNLOAD] for audio,
+ *   video, and series types (series resolve their season/episode selection
+ *   through the host's download flow). Matches the type half of
+ *   `MediaOptionsMenu.canDownload`; the mediaSources half is resolved by the
+ *   executor once the action fires.
  * @param isDownloaded Whether this item already has a local download. When true
  *   (and the type is downloadable), the download slot flips to
  *   [QuickAction.REMOVE_DOWNLOAD] so an item is never offered both actions at
@@ -80,7 +82,7 @@ fun MediaItem.quickActions(
         if (includeFavorite) {
             add(if (isFavorite) QuickAction.UNFAVORITE else QuickAction.FAVORITE)
         }
-        if (includeDownload && (mediaType.isAudioType || mediaType.isVideoType)) {
+        if (includeDownload && (mediaType.isAudioType || mediaType.isVideoType || mediaType == MediaType.SERIES)) {
             add(if (isDownloaded) QuickAction.REMOVE_DOWNLOAD else QuickAction.DOWNLOAD)
         } else if (includeRemoveDownload &&
             (mediaType.isVideoType || mediaType == MediaType.SERIES ||

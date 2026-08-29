@@ -226,6 +226,9 @@ fun ContinueWatchingRow(
     onRowFocused: (() -> Unit)? = null,
     clippingEnabled: Boolean = false,
     onSectionLongClick: (() -> Unit)? = null,
+    // TV-only: reports the D-pad-focused item so the screen's Menu key can open
+    // its quick actions (the wide card's own long-press handles touch).
+    onFocusedItemChange: ((MediaItem) -> Unit)? = null,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -257,6 +260,9 @@ fun ContinueWatchingRow(
                 focusRequester = focusRequester,
                 onRowFocused = onRowFocused,
                 clipToBounds = clippingEnabled,
+                onFocusedIndexChange = { index ->
+                    onFocusedItemChange?.let { change -> items.getOrNull(index)?.let(change) }
+                },
             ) { _, item, focusModifier ->
                 val memoizedClick = remember(item) { { onItemClick(item) } }
                 val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }

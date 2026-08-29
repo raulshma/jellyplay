@@ -38,9 +38,9 @@ class QuickActionsPolicyTest {
 
     @Test
     fun `series offer REMOVE_DOWNLOAD via includeRemoveDownload only`() {
-        // A series is not itself a downloadable stream (episodes are), so the
-        // download slot never fires for it; the offline hosts' explicit
-        // remove-download gate covers series and seasons.
+        // A downloaded series resolves to remove-download whether the gate is
+        // the explicit includeRemoveDownload flag (offline hosts) or the
+        // isDownloaded flip of the download slot.
         val actions = item(MediaType.SERIES).quickActions(
             MediaQuickActionScope.HOME,
             includeDownload = true,
@@ -50,6 +50,20 @@ class QuickActionsPolicyTest {
 
         assertTrue(QuickAction.REMOVE_DOWNLOAD in actions)
         assertFalse(QuickAction.DOWNLOAD in actions)
+    }
+
+    @Test
+    fun `series without a download offers DOWNLOAD`() {
+        // Hosts that can resolve a season/episode selection (home's in-place
+        // download sheet; the detail screen's pre-presented one) offer the
+        // download action for series too.
+        val actions = item(MediaType.SERIES).quickActions(
+            MediaQuickActionScope.HOME,
+            includeDownload = true,
+        )
+
+        assertTrue(QuickAction.DOWNLOAD in actions)
+        assertFalse(QuickAction.REMOVE_DOWNLOAD in actions)
     }
 
     @Test

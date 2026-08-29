@@ -75,13 +75,16 @@ downloading.
 Downloads are not confined to the dedicated screens — the regular home and
 library surfaces are download-aware:
 
-- **Long-press any movie / episode / music track** on Home or in a Library
-  and tap **Download**: the transfer starts immediately at your default
-  quality, with a "Download started" confirmation. Once an item is
-  downloaded, the same menu flips to **Remove download**, which deletes the
-  local copy (server untouched) after a confirmation.
-- **Series** route to the detail screen with the season/episode download
-  sheet pre-opened, because a whole-series grab needs your selection.
+- **Long-press any movie / episode / music track / series** on Home or in a
+  Library and tap **Download**: single-stream items start immediately at
+  your default quality, with a "Download started" confirmation. Once an
+  item is downloaded, the same menu flips to **Remove download**, which
+  deletes the local copy (server untouched) after a confirmation — for a
+  series, that's the episode-selection delete sheet.
+- **Series** open the season/episode download sheet right where you are:
+  long-pressing Download on a Home series card presents the sheet in place,
+  and a Library card routes to the detail screen with the sheet
+  pre-opened — either way the whole-series grab gets your selection.
 - **Library → Downloaded filter** — the pinned filter row has a one-tap
   **Downloaded** chip. While active, the grid is served from the on-device
   offline store instead of the server: it's instant, composes with the other

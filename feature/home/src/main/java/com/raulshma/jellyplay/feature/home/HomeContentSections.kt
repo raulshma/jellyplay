@@ -486,6 +486,7 @@ internal fun HomeContentList(
                         onRowFocused = { homeFocusRow = index },
                         clippingEnabled = state.experimentalCardClippingEnabled,
                         onSectionLongClick = sectionLongClick,
+                        onFocusedItemChange = callbacks.onFocusedMediaItem,
                     )
                 } else {
                     val sectionLongClick = remember(section.type, section.libraryId, callbacks) {
