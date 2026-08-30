@@ -434,6 +434,7 @@ internal class HomeViewModel @Inject constructor(
                         hiddenCwItemIds = prefs.home.hiddenCwItemIds,
                         nextUpExcludedSeriesIds = prefs.home.nextUpExcludedSeriesIds,
                         mergeCwAndNextUp = prefs.home.mergeContinueWatchingAndNextUp,
+                        sectionOrder = prefs.home.homeSectionOrder,
                     ),
                 ) }
 

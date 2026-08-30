@@ -30,6 +30,16 @@ data class OfflineMediaItem(
     val downloadedBytes: Long = 0L,
     val totalSizeBytes: Long = 0L,
     val childCount: Int = 0,
+    // Downloaded episodes of this series/season that are not yet finished,
+    // derived at read time by the repository from its episode rows (not
+    // persisted — the count tracks offline playback, so it is recomputed on
+    // every read). It matches the server's `userData.unplayedItemCount` only
+    // for never-watched series; as episodes are watched offline it diverges,
+    // which is correct — the badge must reflect what is watchable ON DEVICE.
+    // Null = nothing to badge (non-series rows, or every downloaded episode
+    // watched); `toMediaItem` only surfaces a positive count, matching the
+    // online cards.
+    val unplayedEpisodeCount: Int? = null,
     // Playback progress. Seeded from server UserData at download
     // time and updated locally as the user watches offline. `playedPercentage` is
     // derived (0–100) and stored so it can be rendered without recomputing.
@@ -107,7 +117,10 @@ const val OFFLINE_WATCHED_THRESHOLD = 0.95
  * Adapts an [OfflineMediaItem] into a [MediaItem] so the shared online card
  * components ([PosterCard], [WideMediaCard], [PersonItem], …) can render
  * offline content unchanged. Only fields present on the offline model are
- * populated; the rest use the [MediaItem] defaults.
+ * populated; the rest use the [MediaItem] defaults. One exception:
+ * [MediaItem.unplayedItemCount] is fed from the derived
+ * [OfflineMediaItem.unplayedEpisodeCount] (see that field), restoring the
+ * unwatched-count badge on offline series cards.
  *
  * Watched-state normalization: an item whose resume position is at or above
  * [OFFLINE_WATCHED_THRESHOLD] of its runtime is reported as played with a
@@ -160,6 +173,7 @@ fun OfflineMediaItem.toMediaItem(): MediaItem {
         episodeNumber = episodeNumber,
         seasonNumber = seasonNumber,
         childCount = if (childCount > 0) childCount else null,
+        unplayedItemCount = unplayedEpisodeCount?.takeIf { it > 0 },
         lastPlayedDate = lastPlayedDate,
         blurHashes = ImageBlurHashes(primary = blurHashPrimary, backdrop = blurHashBackdrop),
     )

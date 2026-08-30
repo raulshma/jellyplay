@@ -37,10 +37,19 @@ fun OfflineMediaItem.matchesOfflineQuery(query: String): Boolean {
 }
 
 /**
+ * [OFFLINE_WATCHED_THRESHOLD] on the stored 0–100 percent scale
+ * (`playback_state.playedPercentage`) — the SQL-facing form of
+ * [isFinishedOffline]'s comparison. DAO count queries take this value instead
+ * of re-deriving `threshold * 100` per module, so the unplayed-count SQL and
+ * the display normalization can't drift apart.
+ */
+val OFFLINE_WATCHED_THRESHOLD_PERCENT: Double = OFFLINE_WATCHED_THRESHOLD * 100
+
+/**
  * Finished by the same rule the display normalization
  * ([OfflineMediaItem.toMediaItem]) and the player's watched trigger use —
  * one fact, owned by [OFFLINE_WATCHED_THRESHOLD]; read it instead of
  * re-deriving the percentage math per surface.
  */
 val OfflineMediaItem.isFinishedOffline: Boolean
-    get() = playedPercentage >= OFFLINE_WATCHED_THRESHOLD * 100
+    get() = playedPercentage >= OFFLINE_WATCHED_THRESHOLD_PERCENT

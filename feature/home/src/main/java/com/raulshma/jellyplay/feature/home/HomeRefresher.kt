@@ -486,12 +486,20 @@ internal class HomeRefresher(
 
     /**
      * Online→offline transition: drop the cached ONLINE sections + discover
-     * rows (the offline home renders the offline library instead). Touches
-     * neither error nor spinners — mirrors the previous inline clear, which
-     * also cleared the going-online spinner separately.
+     * rows + the *arr "Coming Soon" row (the offline home renders the offline
+     * library instead). The *arr row rides the same drop as discover — its
+     * cards route to Seerr/TMDB, unreachable offline, so a stale row would be
+     * dead weight. Touches neither error nor spinners — mirrors the previous
+     * inline clear, which also cleared the going-online spinner separately.
      */
     private fun dropOnlineContent() {
-        _state.update { it.copy(sections = emptyList(), discoverSections = emptyMap()) }
+        _state.update {
+            it.copy(
+                sections = emptyList(),
+                discoverSections = emptyMap(),
+                recentlyGrabbed = emptyList(),
+            )
+        }
     }
 
     /**
