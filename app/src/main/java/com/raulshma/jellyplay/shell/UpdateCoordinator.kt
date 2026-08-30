@@ -99,7 +99,8 @@ class UpdateCoordinator (
             result.onSuccess { info ->
                 if (!info.isUpdateAvailable) return@onSuccess // stay Idle.
                 // Honor a prior dismissal: if the user dismissed this exact
-                // version less than 24h ago, stay quiet on the launch auto-check.
+                // version within the configured suppression window, stay
+                // quiet on the launch auto-check.
                 if (isUpdateRecentlyDismissed(info.latestVersion, experimental)) return@onSuccess
                 surfaceAvailableUpdate(info, experimental, pending = null)
             }
@@ -218,9 +219,11 @@ class UpdateCoordinator (
      * Hides the update sheet and cancels any active download. When dismissed
      * from an [UpdateState.UpdateAvailable] prompt, [UpdateState.Downloading]
      * sheet, or an install-ready [UpdateState.Downloaded] sheet, stamps the
-     * version + time so the launch-time auto-check / restore stays quiet for the
-     * same version for 24h. The downloaded APK (if any) is retained on disk.
-     * Manual checks still surface the result regardless of dismissal.
+     * version + time so the launch-time auto-check / restore stays quiet for
+     * the same version for the user's configured dismiss period (Settings →
+     * About → "Hide Dismissed Updates For"; default 24h). The downloaded APK
+     * (if any) is retained on disk. Manual checks still surface the result
+     * regardless of dismissal.
      */
     fun dismissUpdate() {
         downloadJob?.cancel()
@@ -255,9 +258,10 @@ class UpdateCoordinator (
     }
 
     /**
-     * True when [version] matches the last dismissed update within the 24h
-     * suppression window. Centralizes the experimental-slice unpacking and the
-     * clock so both launch-time update-check sites apply identical rules.
+     * True when [version] matches the last dismissed update within its
+     * configured suppression window. Centralizes the experimental-slice
+     * unpacking and the clock so both launch-time update-check sites apply
+     * identical rules.
      */
     private fun isUpdateRecentlyDismissed(version: String, experimental: ExperimentalSlice): Boolean =
         AppUpdateDecision.isRecentlyDismissed(
@@ -265,5 +269,6 @@ class UpdateCoordinator (
             dismissedVersion = experimental.dismissedUpdateVersion,
             dismissedAtMs = experimental.dismissedUpdateAtMs,
             nowMs = System.currentTimeMillis(),
+            period = experimental.updateDismissPeriod,
         )
 }

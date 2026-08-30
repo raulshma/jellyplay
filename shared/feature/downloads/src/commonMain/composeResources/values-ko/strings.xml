@@ -94,6 +94,8 @@
     <string name="downloads_force_resync_data_header">동기화할 데이터</string>
     <string name="downloads_force_resync_data_metadata">메타데이터</string>
     <string name="downloads_force_resync_data_metadata_desc">개요, 출연진, 평점</string>
+    <string name="downloads_force_resync_data_chapters">챕터</string>
+    <string name="downloads_force_resync_data_chapters_desc">챕터 마커</string>
     <string name="downloads_force_resync_data_poster">포스터</string>
     <string name="downloads_force_resync_data_poster_desc">기본 아트워크</string>
     <string name="downloads_force_resync_data_backdrop">배경</string>

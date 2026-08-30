@@ -260,6 +260,11 @@ class PlayerActivity : FragmentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Safety net for the paths that never reach onPipModeChanged(false):
+        // a destroy while still in PiP (recreate / OEM callback orderings) or a
+        // cancelled entry. Without this the action receiver stays registered on
+        // a dead activity and the framework logs IntentReceiverLeaked.
+        unregisterPipActionReceiver()
         // Drop any orientation lock the player applied so the browse host
         // (MainActivity, UNSPECIFIED) resumes into a clean, system-controlled
         // orientation. VideoPlayerScreen.onDispose skips its orientation restore
@@ -273,8 +278,15 @@ class PlayerActivity : FragmentActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         // gates auto-entry on `!isControlsLocked` so swiping home while
-        // the lock overlay is up doesn't yank the user into PiP.
-        if (pipController.shouldAutoEnterPip.value && !pipController.isControlsLocked) {
+        // the lock overlay is up doesn't yank the user into PiP, and on
+        // `!isScreenOffOrLocked()` because several OEMs fire this callback for
+        // the power button too — entering PiP behind the keyguard arms the
+        // dismiss/finish machinery while nothing can observe it, and unlock
+        // then lands on the browse UI with the player gone (issue #145).
+        if (pipController.shouldAutoEnterPip.value &&
+            !pipController.isControlsLocked &&
+            !isScreenOffOrLocked()
+        ) {
             enterPipMode()
         }
     }
@@ -293,7 +305,11 @@ class PlayerActivity : FragmentActivity() {
             !isInPictureInPictureMode &&
             pipController.shouldAutoEnterPip.value &&
             pipController.isPlaying.value &&
-            !pipController.isControlsLocked
+            !pipController.isControlsLocked &&
+            // Same lock guard as onUserLeaveHint: the keyguard stealing the
+            // top-resumed position is not a "leave" worth auto-PiP for
+            // (issue #145).
+            !isScreenOffOrLocked()
         ) {
             enterPipMode()
         }
@@ -460,13 +476,27 @@ class PlayerActivity : FragmentActivity() {
             //    STARTED the activity is already past onStop and will not resume,
             //    so finish here directly. This drives onDestroy → onDispose →
             //    viewModel.release() (engine stop + playback-stop report) — the
-            //    same teardown as back-close. Background audio is honored only on
-            //    the fullscreen→home path, not an explicit PiP dismiss.
+            //    same teardown as back-close.
+            //
+            //  - Dismiss with background audio enabled (screen interactive):
+            //    only the PiP window closes. The activity stays alive (stopped,
+            //    behind the revealed MainActivity) so its ViewModel, engine and
+            //    media session are never torn down — playback keeps running
+            //    exactly like the fullscreen→home minimise path, and the Media3
+            //    service's now-playing notification remains. Reopening via the
+            //    notification / app icon restarts this stopped instance into
+            //    fullscreen at the live position (same-item onNewIntent does not
+            //    re-initialize). If the keyguard or a screen-off lands inside
+            //    the dismissal transition, fall back to the finish path — that
+            //    is issue #145's lock-dismiss territory where the dismiss
+            //    machinery must stay deterministic.
             if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
                 justExitedPip = false
-                if (!isFinishing) finish()
+                if (!keepPlayerAliveAfterPipDismiss() && !isFinishing) finish()
             } else if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                justExitedPip = true
+                // Arm only when the dismissal should tear down; a keep-alive
+                // dismissal leaves justExitedPip clear so onStop skips finish.
+                justExitedPip = !keepPlayerAliveAfterPipDismiss()
             }
         }
         pipController.setPipMode(isInPictureInPictureMode)
@@ -522,10 +552,13 @@ class PlayerActivity : FragmentActivity() {
             // armed justExitedPip instead of finishing). On OEMs where onStop
             // fires first, onPipModeChanged(false) finishes directly at
             // state < STARTED. finish() here drives the same onDestroy →
-            // onDispose → release() teardown as back-close. Background audio is
-            // honored only on the fullscreen→home path, not an explicit dismiss.
+            // onDispose → release() teardown as back-close. With background
+            // audio enabled the dismissal keeps the player alive instead (the
+            // arming site already skips arming; this re-check covers a keyguard
+            // landing between the callback and onStop), so only the PiP window
+            // closes and playback continues from the notification.
             justExitedPip = false
-            if (!isFinishing) finish()
+            if (!keepPlayerAliveAfterPipDismiss() && !isFinishing) finish()
         } else if (isInPictureInPictureMode) {
             // Distinguish screen-lock (pause so audio doesn't leak with bg audio
             // OFF) from app-minimise (keep playing). onStop
@@ -543,7 +576,11 @@ class PlayerActivity : FragmentActivity() {
     fun enterPipMode(): Boolean {
         if (!isPipCapable()) return false
 
-        registerPipActionReceiver()
+        // No receiver registration here: if the system cancels the entry
+        // (e.g. another window steals top position) onPipModeChanged(true)
+        // never fires and an eager registration would leak. onPipModeChanged
+        // registers on confirmed entry — early enough, since the RemoteActions
+        // only exist inside the PiP window that the mode change precedes.
 
         val params = buildPipParams(preArm = false, includeActions = true)
         return runCatching {
@@ -564,6 +601,19 @@ class PlayerActivity : FragmentActivity() {
         val powerManager = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
         return keyguardManager?.isKeyguardLocked == true || powerManager?.isInteractive == false
     }
+
+    /**
+     * True when a PiP dismissal should close only the window and keep playing:
+     * background video audio is enabled and the screen is interactive. The
+     * activity survives (stopped) with its ViewModel, engine and media session
+     * intact, so audio continues under the revealed MainActivity and the
+     * now-playing notification stays up. Mirrors the fullscreen→home minimise
+     * semantics of [PlayerLifecycleManager.onActivityPause] (a no-op when the
+     * setting is on); a lock/screen-off inside the dismissal transition keeps
+     * the old finish behaviour.
+     */
+    private fun keepPlayerAliveAfterPipDismiss(): Boolean =
+        playerLifecycleManager.isBackgroundAudioEnabled && !isScreenOffOrLocked()
 
     private fun buildPipParams(
         preArm: Boolean,

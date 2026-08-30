@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
+import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import com.raulshma.jellyplay.core.model.MainPreferences
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.wallNowMillis
@@ -43,7 +44,10 @@ fun rememberPreferenceDarkTheme(preferences: MainPreferences): Boolean {
     }
     return remember(preferences, isSystemDark) {
         derivedStateOf {
-            preferences.synthwaveMode || when (preferences.themeMode) {
+            // Dark-locked variants (synthwave, aurora) only read against dark tones.
+            // Parse through ThemeVariant.fromId so a non-canonical casing stored
+            // by an old build still resolves the same way JellyPlayTheme does.
+            ThemeVariant.fromId(preferences.themeVariant).isDarkLocked || when (preferences.themeMode) {
                 ThemeMode.DARK -> true
                 ThemeMode.LIGHT -> false
                 ThemeMode.SYSTEM -> isSystemDark
@@ -96,11 +100,13 @@ fun JellyPlayPreferenceTheme(
         reduceMotion = preferences.reduceMotionEnabled,
         accentColorSwatch = preferences.theme.accentColorSwatch,
         colorStyle = preferences.theme.colorStyle,
-        synthwaveMode = preferences.synthwaveMode,
+        themeVariant = preferences.themeVariant,
         synthwaveAccent = preferences.synthwaveAccent,
-        soothingMode = preferences.soothingMode,
         soothingAccent = preferences.soothingAccent,
-        monochromeMode = preferences.monochromeMode,
+        vividAccent = preferences.vividAccent,
+        auroraAccent = preferences.auroraAccent,
+        sakuraAccent = preferences.sakuraAccent,
+        vectorPopAccent = preferences.vectorPopAccent,
         appFontScale = preferences.appFontScale,
     ) {
         // Provide the motion/performance flags to the whole UI subtree in one place.

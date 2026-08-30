@@ -52,10 +52,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
 import org.jetbrains.compose.resources.stringResource
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
-
+import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -63,7 +61,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -72,20 +69,15 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
-private val SynthwaveBackgroundBrush = Brush.verticalGradient(
-    colors = listOf(
-        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_BACKGROUND,
-        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_BACKGROUND_END,
-    )
-)
-
 @Composable
 fun rememberScreenBackgroundColor(
     artworkColor: Color? = null,
     isLightTheme: Boolean = com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme.current,
 ): Color {
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
-    if (themeVariant == com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE) return Color.Transparent
+    // Gradient variants (Synthwave, Aurora) paint their own full-bleed background,
+    // so the remembered screen background must stay transparent over them.
+    if (themeVariant.backgroundBrush() != null) return Color.Transparent
 
     val baseColor = artworkColor
         ?: MaterialTheme.colorScheme.background
@@ -152,8 +144,9 @@ fun JellyPlayScreenScaffold(
     val isTv = LocalJellyPlayUi.current.isTv
 
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
-    val backgroundModifier = if (themeVariant == com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE) {
-        Modifier.background(SynthwaveBackgroundBrush)
+    val variantBrush = themeVariant.backgroundBrush()
+    val backgroundModifier = if (variantBrush != null) {
+        Modifier.background(variantBrush)
     } else {
         Modifier.background(backgroundColor)
     }

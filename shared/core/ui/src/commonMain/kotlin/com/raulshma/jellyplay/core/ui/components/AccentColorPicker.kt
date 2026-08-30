@@ -1,14 +1,4 @@
 package com.raulshma.jellyplay.core.ui.components
-import com.raulshma.jellyplay.core.ui.generated.resources.Res
-import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_accent_color_subtitle
-import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_accent_color_title
-import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_color_style_subtitle
-import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_color_style_title
-import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_dynamic_colors
-import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_soothing_accent_subtitle
-import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_soothing_accent_title
-import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_synthwave_accent_subtitle
-import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_synthwave_accent_title
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -57,8 +47,17 @@ import com.composables.icons.tabler.outline.ColorFilter
 import com.composables.icons.tabler.outline.Palette
 import com.composables.icons.tabler.outline.Wand
 import com.raulshma.jellyplay.core.designsystem.theme.AccentColorSwatch
-
+import com.raulshma.jellyplay.core.ui.generated.resources.Res
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_accent_color_subtitle
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_accent_color_title
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_color_style_subtitle
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_color_style_title
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_dynamic_colors
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_variant_accent_subtitle
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_variant_accent_title
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
+import com.raulshma.jellyplay.core.designsystem.theme.accentOptions
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -392,11 +391,15 @@ fun ColorStylePicker(
 }
 
 @Composable
-fun SynthwaveAccentPicker(
+fun VariantAccentPicker(
+    variant: ThemeVariant,
     selectedAccent: String,
     onAccentSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
+    isDark: Boolean = isSystemInDarkTheme(),
 ) {
+    val accents = variant.accentOptions().orEmpty()
+    if (accents.isEmpty()) return
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -417,13 +420,13 @@ fun SynthwaveAccentPicker(
             Spacer(modifier = Modifier.width(16.dp))
             Column {
                 Text(
-                    text = stringResource(Res.string.core_ui_synthwave_accent_title),
+                    text = stringResource(Res.string.core_ui_variant_accent_title, variant.displayName),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = stringResource(Res.string.core_ui_synthwave_accent_subtitle),
+                    text = stringResource(Res.string.core_ui_variant_accent_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -432,20 +435,14 @@ fun SynthwaveAccentPicker(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        val accents = listOf(
-            "magenta" to Color(0xFFFF007F), // Neon Magenta
-            "cyan" to Color(0xFF00F0FF), // Neon Cyan
-            "violet" to Color(0xFF9D00FF), // Neon Violet
-            "orange" to Color(0xFFFF5E00) // Neon Orange
-        )
-
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            items(count = accents.size, key = { accents[it].first }, contentType = { "accent" }) { i ->
-                val (accentName, color) = accents[i]
-                val isSelected = selectedAccent.lowercase() == accentName.lowercase()
+            items(count = accents.size, key = { accents[it].id }, contentType = { "accent" }) { i ->
+                val accent = accents[i]
+                val color = if (isDark) accent.darkColor else accent.lightColor
+                val isSelected = selectedAccent.lowercase() == accent.id.lowercase()
 
                 val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
                 val interactionSource = remember { MutableInteractionSource() }
@@ -454,7 +451,7 @@ fun SynthwaveAccentPicker(
                 val scale by animateFloatAsState(
                     targetValue = if (isPressed) 0.9f else if (isSelected) 1.1f else 1.0f,
                     animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                    label = "synthwaveSwatchScale"
+                    label = "variantSwatchScale"
                 )
 
                 val borderStroke = if (isSelected) {
@@ -470,11 +467,10 @@ fun SynthwaveAccentPicker(
                     modifier = Modifier
                         .size(44.dp)
                         // mirror SwatchCircle a11y semantics so
-                        // TalkBack reads "ocean, selected" instead of just
-                        // "selected" (these themed pickers were missed when
-                        // SwatchCircle / DynamicSwatchCircle were labelled).
+                        // TalkBack reads the accent name + selected state
+                        // instead of just "selected".
                         .semantics(mergeDescendants = true) {
-                            contentDescription = accentName
+                            contentDescription = accent.label
                             role = Role.RadioButton
                             selected = isSelected
                         }
@@ -491,129 +487,7 @@ fun SynthwaveAccentPicker(
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
-                            onClick = { onAccentSelected(accentName) }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isSelected) {
-                        Icon(
-                            imageVector = Tabler.Outline.Check,
-                            // Decorative check — the merged-descendants semantics
-                            // above already convey selected state.
-                            contentDescription = null,
-                            tint = checkTint,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SoothingAccentPicker(
-    selectedAccent: String,
-    onAccentSelected: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(ShapeCache.smooth16)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .padding(vertical = 12.dp, horizontal = 16.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                imageVector = Tabler.Outline.Palette,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(
-                    text = stringResource(Res.string.core_ui_soothing_accent_title),
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = stringResource(Res.string.core_ui_soothing_accent_subtitle),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        val accents = listOf(
-            "ocean" to Color(0xFF1877F2),
-            "lavender" to Color(0xFF8B7FE8),
-            "sage" to Color(0xFF4CAF6E),
-            "coral" to Color(0xFFE85D5D),
-            "amber" to Color(0xFFE8A43A),
-            "rose" to Color(0xFFE85A8A)
-        )
-
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            items(count = accents.size, key = { accents[it].first }, contentType = { "accent" }) { i ->
-                val (accentName, color) = accents[i]
-                val isSelected = selectedAccent.lowercase() == accentName.lowercase()
-
-                val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
-                val interactionSource = remember { MutableInteractionSource() }
-                val isPressed by interactionSource.collectIsPressedAsState()
-
-                val scale by animateFloatAsState(
-                    targetValue = if (isPressed) 0.9f else if (isSelected) 1.1f else 1.0f,
-                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                    label = "soothingSwatchScale"
-                )
-
-                val borderStroke = if (isSelected) {
-                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                } else {
-                    Modifier.border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f), CircleShape)
-                }
-
-                val isLight = (color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f) > 0.5f
-                val checkTint = if (isLight) Color.Black else Color.White
-
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        // mirror SwatchCircle a11y semantics so
-                        // TalkBack reads "sage, selected" instead of just
-                        // "selected" (themed pickers were missed when
-                        // SwatchCircle / DynamicSwatchCircle were labelled).
-                        .semantics(mergeDescendants = true) {
-                            contentDescription = accentName
-                            role = Role.RadioButton
-                            selected = isSelected
-                        }
-                        .graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
-                        }
-                        .then(borderStroke)
-                        .padding(4.dp)
-                        .clip(CircleShape)
-                        .background(color)
-                        .then(tvFocusState.focusModifier)
-                        .tvFocusIndicator(tvFocusState, CircleShape)
-                        .clickable(
-                            interactionSource = interactionSource,
-                            indication = null,
-                            onClick = { onAccentSelected(accentName) }
+                            onClick = { onAccentSelected(accent.id) }
                         ),
                     contentAlignment = Alignment.Center
                 ) {

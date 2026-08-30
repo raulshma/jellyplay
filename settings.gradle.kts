@@ -79,7 +79,6 @@ include(":core:testing")
 
 
 include(":baselineprofile")
-include(":baselineprofile-tv")
 
 // KMP shell (docs/kmp-migration-plan.md): the parallel tree that legacy modules
 // migrate into, phase by phase. Lives beside (not inside) the Android tree so

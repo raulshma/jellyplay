@@ -41,6 +41,14 @@ import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.SmartPlaylistEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 
+/**
+ * Current Room schema version. Single source of truth: bumping this requires a
+ * corresponding [com.raulshma.jellyplay.core.database.migration.Migration] from
+ * the previous version in [com.raulshma.jellyplay.core.database.migration.allMigrations];
+ * `allMigrations_coversContiguousRange` enforces that chain.
+ */
+const val JELLY_PLAY_DATABASE_VERSION: Int = 51
+
 @Database(
     entities = [
         ServerEntity::class,
@@ -63,7 +71,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         PlaybackOutboxEntity::class,
         HomeSectionCacheEntity::class,
     ],
-    version = 49,
+    version = JELLY_PLAY_DATABASE_VERSION,
     exportSchema = true,
     views = [OfflineMediaWithPlayback::class],
 )

@@ -34,6 +34,7 @@ import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.feature.library.generated.resources.Res
 import com.raulshma.jellyplay.feature.library.generated.resources.library_all_filters
+import com.raulshma.jellyplay.feature.library.generated.resources.library_filter_downloaded
 import com.raulshma.jellyplay.feature.library.generated.resources.library_any
 import com.raulshma.jellyplay.feature.library.generated.resources.library_filter_resumable
 import com.raulshma.jellyplay.feature.library.generated.resources.library_genres
@@ -71,6 +72,7 @@ fun LibraryFilterChipRow(
     genres: List<Genre>,
     availableTags: List<String>,
     onOpenSheet: (FilterSheetKind) -> Unit,
+    onToggleDownloaded: () -> Unit,
     modifier: Modifier = Modifier,
     /** TV: leaf anchor on the first chip — target of the screen-level vertical
      *  navigation that hops between the header rows. */
@@ -121,6 +123,17 @@ fun LibraryFilterChipRow(
                     filters.isResumable == true,
             )
         }
+        // Downloaded toggle — the one filter that swaps the data source (local
+        // offline store instead of the server), so it gets a one-tap chip of
+        // its own instead of living behind a sheet. While active, the tags
+        // dimension can't apply (no offline column) and its chip hides.
+        item(key = "downloaded") {
+            GlassFilterChip(
+                label = stringResource(Res.string.library_filter_downloaded),
+                selected = filters.isDownloaded == true,
+                onClick = onToggleDownloaded,
+            )
+        }
         if (genres.isNotEmpty()) {
             item(key = "genres") {
                 FilterOptionChip(
@@ -137,7 +150,7 @@ fun LibraryFilterChipRow(
                 selectedCount = filters.years.size,
             )
         }
-        if (availableTags.isNotEmpty()) {
+        if (availableTags.isNotEmpty() && filters.isDownloaded != true) {
             item(key = "tags") {
                 FilterOptionChip(
                     label = stringResource(Res.string.library_tags),

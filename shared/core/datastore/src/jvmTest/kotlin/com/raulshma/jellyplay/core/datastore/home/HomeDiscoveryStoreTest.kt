@@ -117,6 +117,50 @@ class HomeDiscoveryStoreTest {
         assertEquals(types, slice().enabledHomeSectionTypes)
     }
 
+    // ── section-prefs write commands (the shared toggle/move/override algebra) ──
+
+    @Test
+    fun `setSectionVisible toggles membership in the persisted set`() = runTest {
+        activate("userA")
+        store.setSectionVisible(HomeSectionType.NEXT_UP, visible = false)
+        assertEquals(
+            HomeSectionType.CONFIGURABLE.toSet() - HomeSectionType.NEXT_UP,
+            slice().enabledHomeSectionTypes,
+        )
+        store.setSectionVisible(HomeSectionType.NEXT_UP, visible = true)
+        assertEquals(HomeSectionType.CONFIGURABLE.toSet(), slice().enabledHomeSectionTypes)
+    }
+
+    @Test
+    fun `moveSection swaps with neighbour and stays normalized`() = runTest {
+        activate("userA")
+        store.moveSection(HomeSectionType.NEXT_UP, up = true)
+        assertEquals(
+            listOf(HomeSectionType.NEXT_UP, HomeSectionType.CONTINUE_WATCHING) +
+                HomeSectionType.CONFIGURABLE.drop(2),
+            slice().homeSectionOrder,
+        )
+    }
+
+    @Test
+    fun `moveSection at edge is a no-op`() = runTest {
+        activate("userA")
+        store.moveSection(HomeSectionType.CONTINUE_WATCHING, up = true)
+        assertEquals(HomeSectionType.CONFIGURABLE, slice().homeSectionOrder)
+    }
+
+    @Test
+    fun `setLibrarySectionVisible adds override then drops the empty key`() = runTest {
+        activate("userA")
+        store.setLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = false)
+        assertEquals(
+            mapOf("movies" to setOf(HomeSectionType.LATEST_MEDIA)),
+            slice().libraryHomeSectionOverrides,
+        )
+        store.setLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = true)
+        assertTrue(slice().libraryHomeSectionOverrides.isEmpty())
+    }
+
     @Test
     fun `setLastViewedSeason round-trips two series`() = runTest {
         activate("userA")

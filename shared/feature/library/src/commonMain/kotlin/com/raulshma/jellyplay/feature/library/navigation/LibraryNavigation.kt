@@ -24,6 +24,9 @@ fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
             onSmartPlaylistsClick = { navigator.navigate(Route.SmartPlaylists) },
             onMoodPlaylistsClick = { navigator.navigate(Route.MoodPlaylists) },
             onPlaylistsClick = { navigator.navigate(Route.Playlists) },
+            onOpenDownloadDetail = { itemId, openDownloadSheet ->
+                navigator.navigate(Route.MediaDetail(itemId, openDownloadSheet))
+            },
         )
     }
 
@@ -35,6 +38,9 @@ fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
             onSmartPlaylistsClick = { navigator.navigate(Route.SmartPlaylists) },
             onMoodPlaylistsClick = { navigator.navigate(Route.MoodPlaylists) },
             onPlaylistsClick = { navigator.navigate(Route.Playlists) },
+            onOpenDownloadDetail = { itemId, openDownloadSheet ->
+                navigator.navigate(Route.MediaDetail(itemId, openDownloadSheet))
+            },
         )
     }
 
@@ -63,6 +69,9 @@ fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
             onSmartPlaylistsClick = { navigator.navigate(Route.SmartPlaylists) },
             onMoodPlaylistsClick = { navigator.navigate(Route.MoodPlaylists) },
             onPlaylistsClick = { navigator.navigate(Route.Playlists) },
+            onOpenDownloadDetail = { itemId, openDownloadSheet ->
+                navigator.navigate(Route.MediaDetail(itemId, openDownloadSheet))
+            },
         )
     }
 

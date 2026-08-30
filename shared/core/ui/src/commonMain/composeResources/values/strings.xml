@@ -117,6 +117,8 @@
     <string name="core_ui_synthwave_accent_subtitle">Select custom neon accent color swatch</string>
     <string name="core_ui_soothing_accent_title">Soothing Accent</string>
     <string name="core_ui_soothing_accent_subtitle">Select a calming accent color</string>
+    <string name="core_ui_variant_accent_title">%1$s Accent</string>
+    <string name="core_ui_variant_accent_subtitle">Select the accent color for this theme style</string>
 
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Remove</string>
@@ -213,6 +215,14 @@
     <item quantity="one">%1$d episode</item>
     <item quantity="other">%1$d episodes</item>
     </plurals>
+
+    <!-- SeriesDownloadSheet (per-season download picker, shared by detail + home). -->
+    <string name="detail_download_series_title">Download Series</string>
+    <string name="detail_download_series_subtitle">Tap a season to see episodes. Select which to download.</string>
+    <string name="detail_downloaded_count_format">• %1$d downloaded</string>
+    <string name="detail_no_episodes_available">No episodes available</string>
+    <string name="detail_downloaded_status">Downloaded</string>
+    <string name="detail_queuing">Queuing…</string>
 
     <!-- Transcode-reason surfacing ("Why am I transcoding?"). Explanations
          map 1:1 to server TranscodeReasons tokens; hints point at in-app

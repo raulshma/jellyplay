@@ -31,6 +31,8 @@ class LibraryFiltersSerializationTest {
             playedStatus = PlayedStatus.UNPLAYED,
             tags = listOf("fav"),
             minRating = 4.5f,
+            isResumable = true,
+            isDownloaded = true,
         )
 
         val encoded = json.encodeToString(original)
@@ -69,6 +71,10 @@ class LibraryFiltersSerializationTest {
             ),
             decoded,
         )
+        // Booleans added after the legacy format (isResumable, isDownloaded)
+        // default to "off" when absent from the blob.
+        assertEquals(null, decoded.isResumable)
+        assertEquals(null, decoded.isDownloaded)
     }
 
     @Test

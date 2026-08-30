@@ -90,6 +90,7 @@ import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -244,15 +245,10 @@ fun VideoPlayerScreen(
 
     // Resume-reminder chip: when playback resumes from a saved position, offer a
     // one-tap "Restart" so the user isn't forced to scrub back.
+    // Upstream c64d5baf4 removed the seekbar resume-position marker; only the
+    // chip remains, so no marker state is collected here.
     val resumedMessage = stringResource(Res.string.player_resumed_message)
     val restartLabel = stringResource(CoreUiRes.string.core_restart)
-    // Resume-position marker on the seekbar (§2.2). Mirrors the resume chip:
-    // the value comes from viewModel.resumeReminder, collected once per screen.
-    // Keyed on itemId so the marker clears when switching media (the VM is
-    // Activity-scoped and reused); otherwise the previous item's resume tick
-    // persists until the new item emits its own resumeReminder.
-    var resumePositionMs by remember(itemId) { mutableLongStateOf(0L) }
-    LaunchedEffect(Unit) { viewModel.resumeReminder.collect { resumePositionMs = it } }
     LaunchedEffect(viewModel) {
         viewModel.resumeReminder.collect {
             // Specified as a 3s chip. SnackbarDuration has no 3s
@@ -392,24 +388,27 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Observe PiP dismiss as a StateFlow boolean. Using StateFlow (instead of SharedFlow)
-    // ensures the dismiss signal survives lifecycle STOPPED→STARTED transitions.
-    // The old SharedFlow approach lost the event because LaunchedEffect's coroutine is
-    // cancelled during STOPPED and SharedFlow(replay=0) doesn't replay to new subscribers.
-    val pipDismissed by viewModel.pipController.pipDismissed.collectAsStateWithLifecycle()
-    LaunchedEffect(pipDismissed) {
-        if (pipDismissed) {
-            viewModel.pipController.clearPipDismissed()
-            onBack()
-        }
-    }
     // Capture the latest onBack via rememberUpdatedState — the collector
     // below keys on Unit, so without this the screen keeps invoking the
     // onBack lambda captured at first composition (a nav lambda that may have
     // been rebuilt by the parent).
     val currentOnBack by rememberUpdatedState(onBack)
-    LaunchedEffect(Unit) {
-        viewModel.closePlayer.collect { currentOnBack() }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    // Issue #145: programmatic closes must never run against a STOPPED
+    // activity. The old collectors were plain LaunchedEffects, which keep
+    // collecting behind the keyguard — an episode ending (background audio,
+    // SyncPlay, a lockscreen play) or a late PiP-dismiss signal while the
+    // phone was locked called finish() on a hidden window, and unlock revealed
+    // the browse UI with the player silently gone. PiP dismiss is now handled
+    // solely by the ViewModel (its collector folds it into closePlayer); the
+    // screen consumes only closePlayer, parked via repeatOnLifecycle(RESUMED).
+    // closePlayer is Channel(BUFFERED), so events raised while stopped are
+    // deferred and delivered on the next resume instead of tearing the window
+    // down unseen.
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            viewModel.closePlayer.collect { currentOnBack() }
+        }
     }
     // Restore immersive mode when leaving PiP
     LaunchedEffect(isInPipMode) {
@@ -505,13 +504,34 @@ fun VideoPlayerScreen(
     // chosen brightness survives navigation away and back.
     val brightnessLevel = uiState.gestures.brightnessLevel
     val rememberBrightness = uiState.gestures.rememberBrightness
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    // lifecycleOwner (LocalLifecycleOwner.current) is declared above with the
+    // Issue #145 programmatic-close observers — reused here, no re-declaration.
     androidx.compose.runtime.DisposableEffect(windowOps, rememberBrightness, brightnessLevel, lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME &&
                 rememberBrightness && brightnessLevel >= 0f
             ) {
                 windowOps.applyWindowBrightness(brightnessLevel)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Issue #145: uiState.isScreenLocked has no lifecycle reset anywhere, and
+    // its overlay is a transparent fillMaxSize layer that consumes every
+    // pointer event (LockScreenOverlay). If it stayed engaged across a system
+    // lock/unlock, the player silently swallowed all input after unlock.
+    // Leaving fullscreen entirely always disengages the lock; setScreenLocked
+    // also mirrors isControlsLocked for the PiP auto-entry gate.
+    // The observer reads the lock through rememberUpdatedState: keyed only on
+    // lifecycleOwner, a captured uiState would freeze at install time and the
+    // ON_STOP reset would silently no-op for any lock engaged afterwards.
+    val screenLockedAtStop by rememberUpdatedState(uiState.isScreenLocked)
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP && screenLockedAtStop) {
+                viewModel.setScreenLocked(false)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -601,6 +621,9 @@ fun VideoPlayerScreen(
     val activeSegment = segmentOverlay.activeSegment
     val activeSegmentBehavior = segmentOverlay.activeSegmentBehavior
     val cinemaIntroState = uiState.cinemaIntroState
+    // Drives the Up Next overlay's in-flight state: play button shows progress
+    // and stops accepting clicks until the next-episode load settles (#146).
+    val isNextEpisodeLoading by viewModel.isNextEpisodeLoading.collectAsStateWithLifecycle()
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
         val effectiveRatio = if (aspectRatio == AspectRatio.AUTO) {
@@ -1430,6 +1453,7 @@ fun VideoPlayerScreen(
                     onToggleAutoplay = { viewModel.setVideoAutoplayNext(!uiState.autoplay.videoAutoplayNext) },
                     isPlaying = isPlaying,
                     pauseCountdown = currentSheet != PlayerSheet.None || isScreenLocked,
+                    isLoading = isNextEpisodeLoading,
                     focusRequester = tvNextEpisodeFocusRequester,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -1702,7 +1726,6 @@ fun VideoPlayerScreen(
                 nightModeStrength = effectsState.nightModeStrength,
                 audioPassthrough = effectsState.audioPassthrough,
                 segments = uiState.segmentState.segments,
-                resumePositionMs = resumePositionMs,
                 playMethod = uiState.media.playMethod,
                 isDirectPlayForced = uiState.media.isDirectPlayForced,
                 hdrType = uiState.hdrType,
@@ -2252,6 +2275,7 @@ private fun PlayerSheetRouter(
                 // Get tab
                 downloadSubtitles = subtitleState.remoteSubtitles,
                 isDownloading = subtitleState.isLoadingRemoteSubtitles,
+                remoteSubtitlesError = subtitleState.remoteSubtitlesError,
                 onDownload = { viewModel.subtitles.downloadSubtitle(it) },
                 onLoadLocalFile = onLoadLocalSubtitle,
                 searchResults = subtitleState.searchedSubtitles,
@@ -2268,9 +2292,11 @@ private fun PlayerSheetRouter(
                 onSearchAllProviders = { viewModel.subtitles.searchAllProviders(it) },
                 onDownloadProviderSubtitle = { viewModel.subtitles.downloadProviderSubtitle(it) },
                 downloadingSubtitles = subtitleState.downloadingSubtitles,
-                // "Use" affordance: the hub switches to its Tracks tab itself;
-                // this callback is a no-op placeholder for the host.
-                onUseSubtitle = {},
+                // "Use" activates the downloaded subtitle as the current track
+                // (resolved from the manager's ready hints); on success the hub
+                // shows the Tracks tab with the new selection, otherwise it
+                // stays on Get while the pending selection auto-applies.
+                onUseSubtitle = { rowKey -> viewModel.useDownloadedSubtitle(rowKey) },
                 isUploading = subtitleState.isUploadingSubtitle,
                 onUpload = { uriStr, fileName, language, isForced, isHearingImpaired ->
                     // KMP seam (wave 7C): the sheets hand the picked SAF

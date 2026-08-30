@@ -111,11 +111,6 @@
     <string name="core_ui_color_style_title">Farbstil</string>
     <string name="core_ui_color_style_subtitle">Bestimmen Sie die visuelle Stimmung generierter Paletten</string>
     <string name="core_ui_dynamic_colors">Dynamische Hintergrundfarben</string>
-    <string name="core_ui_synthwave_accent_title">Synthwave-Akzent</string>
-    <string name="core_ui_synthwave_accent_subtitle">Benutzerdefinierte Neon-Akzentfarbe auswählen</string>
-    <string name="core_ui_soothing_accent_title">Sanfter Akzent</string>
-    <string name="core_ui_soothing_accent_subtitle">Beruhigende Akzentfarbe auswählen</string>
-
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Entfernen</string>
     <string name="core_ui_play">Wiedergeben</string>
@@ -198,6 +193,12 @@
     <string name="detail_season_default">Staffel %1$d</string>
     <string name="detail_cd_collapse">Einklappen</string>
     <string name="detail_cd_expand">Ausklappen</string>
+    <string name="detail_download_series_title">Serie herunterladen</string>
+    <string name="detail_download_series_subtitle">Tippe auf eine Staffel, um die Episoden zu sehen. Wähle aus, was heruntergeladen werden soll.</string>
+    <string name="detail_downloaded_count_format">• %1$d heruntergeladen</string>
+    <string name="detail_no_episodes_available">Keine Episoden verfügbar</string>
+    <string name="detail_downloaded_status">Heruntergeladen</string>
+    <string name="detail_queuing">Wird in Warteschlange gestellt…</string>
     <string name="detail_delete_entire_series">Ganze Serie löschen</string>
     <string name="detail_cancel">Abbrechen</string>
     <string name="detail_delete_count">%1$d löschen</string>
@@ -241,4 +242,6 @@
     <string name="transcode_reason_hint_decoder">Den Dekoder auf Software/FFmpeg umzustellen könnte das beheben.</string>
     <string name="transcode_reason_hint_quality">Erhöhe das Streaming-Qualitätslimit in der Qualitätsauswahl.</string>
     <string name="transcode_reason_hint_subtitle">Wähle einen SRT-/externen Untertitel, um das Einbrennen zu vermeiden.</string>
+    <string name="core_ui_variant_accent_title">%1$s-Akzent</string>
+    <string name="core_ui_variant_accent_subtitle">Akzentfarbe für diesen Designstil auswählen</string>
 </resources>

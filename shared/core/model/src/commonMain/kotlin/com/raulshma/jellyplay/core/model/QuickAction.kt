@@ -24,6 +24,11 @@ enum class QuickAction {
     UNFAVORITE,
     DOWNLOAD,
     ADD_TO_PLAYLIST,
-    DELETE,
+    /**
+     * Removes the local download for an item (artifacts + offline rows).
+     * Named for what it actually does — no host deletes from the server via
+     * this surface — and labeled "Delete download" in the sheet.
+     */
+    REMOVE_DOWNLOAD,
     DETAILS,
 }

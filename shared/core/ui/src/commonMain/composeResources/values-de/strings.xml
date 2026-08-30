@@ -107,6 +107,8 @@
     <string name="core_ui_synthwave_accent_subtitle">Benutzerdefinierte Neon-Akzentfarbe auswählen</string>
     <string name="core_ui_soothing_accent_title">Sanfter Akzent</string>
     <string name="core_ui_soothing_accent_subtitle">Beruhigende Akzentfarbe auswählen</string>
+    <string name="core_ui_variant_accent_title">%1$s-Akzent</string>
+    <string name="core_ui_variant_accent_subtitle">Akzentfarbe für diesen Designstil auswählen</string>
 
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Entfernen</string>
@@ -197,6 +199,14 @@
     <item quantity="one">%1$d Episode</item>
     <item quantity="other">%1$d Episoden</item>
     </plurals>
+
+    <!-- SeriesDownloadSheet (per-season download picker, shared by detail + home). -->
+    <string name="detail_download_series_title">Serie herunterladen</string>
+    <string name="detail_download_series_subtitle">Tippe auf eine Staffel, um die Episoden zu sehen. Wähle aus, was heruntergeladen werden soll.</string>
+    <string name="detail_downloaded_count_format">• %1$d heruntergeladen</string>
+    <string name="detail_no_episodes_available">Keine Episoden verfügbar</string>
+    <string name="detail_downloaded_status">Heruntergeladen</string>
+    <string name="detail_queuing">Wird in Warteschlange gestellt…</string>
 
     <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
     <string name="transcode_reasons_title">Warum wird transcodiert?</string>

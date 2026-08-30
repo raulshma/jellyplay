@@ -283,10 +283,11 @@ val verifyPhoneDebugComposeResources = tasks.register<VerifyPhoneDebugComposeRes
 // resolves producers per variant: dependencies are the merge of the `main`,
 // flavor, build type and variant entries below. The global `baselineProfile`
 // configuration cannot hold both producers — it extends into every variant
-// and would run each generator against both flavors — so each platform
-// flavor names its own producer module instead:
-// - phone → :baselineprofile    (phone applicationId, ciPixel8 GMD)
-// - tv    → :baselineprofile-tv (TV applicationId, ciTv1080p GMD)
+// and would run each generator against both flavors — so the phone flavor
+// names its own producer module instead. TV has none: AGP cannot run TV
+// images on Gradle Managed Devices, so the tv flavor ships without
+// generated profiles.
+// - phone → :baselineprofile (phone applicationId, ciPixel8 GMD)
 baselineProfile {
     // Generated profiles are written into the flavor source sets
     // (src/<variant>Release/generated/baselineProfiles) so they can be
@@ -297,9 +298,6 @@ baselineProfile {
     variants {
         create("phone") {
             from(project(":baselineprofile"))
-        }
-        create("tv") {
-            from(project(":baselineprofile-tv"))
         }
     }
 }
@@ -315,6 +313,10 @@ dependencies {
     implementation(project(":shared:core:datastore"))
     implementation(project(":core:data"))
     implementation(project(":core:ui"))
+    // Shared core:ui (core.ui.message bus seam) + compose-resources runtime
+    // for the shared UserMessageBus collector (UiText resolution on Android).
+    implementation(project(":shared:core:ui"))
+    implementation(libs.jb.compose.resources)
     implementation(project(":core:notification"))
     implementation(project(":shared:feature:auth"))
     implementation(project(":shared:feature:home"))
@@ -402,7 +404,7 @@ dependencies {
     debugImplementation(libs.compose.ui.test.manifest)
 
     // Baseline profile producers are wired per flavor in the `baselineProfile`
-    // extension block above (:baselineprofile for phone,
-    // :baselineprofile-tv for tv) instead of a global `baselineProfile`
+    // extension block above (:baselineprofile for phone only — tv ships
+    // without generated profiles) instead of a global `baselineProfile`
     // configuration entry, which cannot disambiguate the two flavors.
 }

@@ -4,33 +4,24 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 import kotlin.test.Test
-import java.util.Locale
 
+/**
+ * Pins the PRODUCTION result-row subtitle builders
+ * ([jellyfinResultSubtitle] / [seerrResultSubtitle]). The previous suite
+ * re-implemented the buildStrings inline and asserted the copies — a
+ * production regression passed it untouched.
+ */
 class HomeSearchOverlayTest {
 
-    @Test
-    fun totalItems_sumsAllResultSources() {
-        val jellyfinCount = 3
-        val seerrCount = 2
-        val settingsCount = 1
+    private val movieLabel = "Movie"
+    private val seriesLabel = "TV Show"
+    private val musicLabel = "Music"
 
-        val totalItems = jellyfinCount + seerrCount + settingsCount
-        assertEquals(6, totalItems)
-        assertTrue(totalItems > 0)
-    }
+    // ── jellyfinResultSubtitle ─────────────────────────────────────────────
 
     @Test
-    fun totalItems_whenEmpty_returnsZero() {
-        val totalItems = 0 + 0 + 0
-        assertEquals(0, totalItems)
-        assertFalse(totalItems > 0)
-    }
-
-    @Test
-    fun jellyfinSubtitle_formatMovieWithYear() {
+    fun jellyfinSubtitle_movieWithYear() {
         val item = MediaItem(
             id = "m1",
             name = "Inception",
@@ -38,22 +29,11 @@ class HomeSearchOverlayTest {
             mediaType = MediaType.MOVIE,
         )
 
-        val subtitle = buildString {
-            item.year?.let { append(it) }
-            if (item.year != null) append(" · ")
-            when (item.mediaType) {
-                MediaType.MOVIE -> append("Movie")
-                MediaType.SERIES -> append("TV Show")
-                MediaType.AUDIO, MediaType.MUSIC -> append("Music")
-                else -> append(item.mediaType.name.lowercase().replaceFirstChar { it.uppercase() })
-            }
-        }
-
-        assertEquals("2010 · Movie", subtitle)
+        assertEquals("2010 · Movie", jellyfinResultSubtitle(item, movieLabel, seriesLabel, musicLabel))
     }
 
     @Test
-    fun jellyfinSubtitle_formatSeriesWithoutYear() {
+    fun jellyfinSubtitle_seriesWithoutYear() {
         val item = MediaItem(
             id = "s1",
             name = "Breaking Bad",
@@ -61,22 +41,37 @@ class HomeSearchOverlayTest {
             mediaType = MediaType.SERIES,
         )
 
-        val subtitle = buildString {
-            item.year?.let { append(it) }
-            if (item.year != null) append(" · ")
-            when (item.mediaType) {
-                MediaType.MOVIE -> append("Movie")
-                MediaType.SERIES -> append("TV Show")
-                MediaType.AUDIO, MediaType.MUSIC -> append("Music")
-                else -> append(item.mediaType.name.lowercase().replaceFirstChar { it.uppercase() })
-            }
-        }
-
-        assertEquals("TV Show", subtitle)
+        assertEquals("TV Show", jellyfinResultSubtitle(item, movieLabel, seriesLabel, musicLabel))
     }
 
     @Test
-    fun seerrSubtitle_formatMovieWithRating() {
+    fun jellyfinSubtitle_musicUsesMusicLabel() {
+        val item = MediaItem(
+            id = "a1",
+            name = "Track",
+            year = 1999,
+            mediaType = MediaType.AUDIO,
+        )
+
+        assertEquals("1999 · Music", jellyfinResultSubtitle(item, movieLabel, seriesLabel, musicLabel))
+    }
+
+    @Test
+    fun jellyfinSubtitle_otherTypeFallsBackToOwnName() {
+        val item = MediaItem(
+            id = "b1",
+            name = "Album",
+            year = null,
+            mediaType = MediaType.ALBUM,
+        )
+
+        assertEquals("Album", jellyfinResultSubtitle(item, movieLabel, seriesLabel, musicLabel))
+    }
+
+    // ── seerrResultSubtitle ────────────────────────────────────────────────
+
+    @Test
+    fun seerrSubtitle_movieWithRating() {
         val item = SeerrSearchItem(
             id = 101,
             mediaType = "movie",
@@ -89,28 +84,11 @@ class HomeSearchOverlayTest {
             voteAverage = 8.2f,
         )
 
-        val subtitle = buildString {
-            item.year?.let { append(it) }
-            val typeLabel = when {
-                item.mediaType.equals("movie", ignoreCase = true) -> "Movie"
-                item.mediaType.equals("tv", ignoreCase = true) -> "TV Show"
-                else -> item.mediaType
-            }
-            if (item.year != null) append(" · ")
-            append(typeLabel)
-            item.voteAverage?.let { rating ->
-                if (rating > 0) {
-                    append(" · ★ ")
-                    append(String.format(Locale.US, "%.1f", rating))
-                }
-            }
-        }
-
-        assertEquals("2021 · Movie · ★ 8.2", subtitle)
+        assertEquals("2021 · Movie · ★ 8.2", seerrResultSubtitle(item, movieLabel, seriesLabel))
     }
 
     @Test
-    fun seerrSubtitle_formatTvWithoutRating() {
+    fun seerrSubtitle_tvWithZeroRating_omitsStarSegment() {
         val item = SeerrSearchItem(
             id = 102,
             mediaType = "tv",
@@ -123,23 +101,40 @@ class HomeSearchOverlayTest {
             voteAverage = 0.0f,
         )
 
-        val subtitle = buildString {
-            item.year?.let { append(it) }
-            val typeLabel = when {
-                item.mediaType.equals("movie", ignoreCase = true) -> "Movie"
-                item.mediaType.equals("tv", ignoreCase = true) -> "TV Show"
-                else -> item.mediaType
-            }
-            if (item.year != null) append(" · ")
-            append(typeLabel)
-            item.voteAverage?.let { rating ->
-                if (rating > 0) {
-                    append(" · ★ ")
-                    append(String.format(Locale.US, "%.1f", rating))
-                }
-            }
-        }
+        assertEquals("2022 · TV Show", seerrResultSubtitle(item, movieLabel, seriesLabel))
+    }
 
-        assertEquals("2022 · TV Show", subtitle)
+    @Test
+    fun seerrSubtitle_nullRating_omitsStarSegment() {
+        val item = SeerrSearchItem(
+            id = 103,
+            mediaType = "tv",
+            title = null,
+            name = "No Votes",
+            releaseDate = null,
+            firstAirDate = "2020-01-01",
+            posterPath = null,
+            overview = null,
+            voteAverage = null,
+        )
+
+        assertEquals("2020 · TV Show", seerrResultSubtitle(item, movieLabel, seriesLabel))
+    }
+
+    @Test
+    fun seerrSubtitle_unknownMediaType_passesThrough() {
+        val item = SeerrSearchItem(
+            id = 104,
+            mediaType = "anime",
+            title = null,
+            name = "Cowboy Bebop",
+            releaseDate = null,
+            firstAirDate = "1998-04-03",
+            posterPath = null,
+            overview = null,
+            voteAverage = null,
+        )
+
+        assertEquals("1998 · anime", seerrResultSubtitle(item, movieLabel, seriesLabel))
     }
 }

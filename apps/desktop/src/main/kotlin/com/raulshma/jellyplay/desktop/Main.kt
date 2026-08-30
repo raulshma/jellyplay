@@ -63,6 +63,7 @@ import com.raulshma.jellyplay.feature.details.detailsModule
 import com.raulshma.jellyplay.feature.player.audio.di.playerAudioModule
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
+import com.raulshma.jellyplay.core.ui.di.coreUiMessageModule
 import com.raulshma.jellyplay.feature.home.di.homeModule
 import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
 import com.raulshma.jellyplay.feature.auth.di.authModule
@@ -308,6 +309,7 @@ fun main() {
             // wires homeSection in the rail (HomeLifecycleSeam's jvm actual
             // stays a no-op, so sections refresh on their own flows rather
             // than a process start/stop signal).
+            coreUiMessageModule,
             homeModule,
             // …player-audio, wave 7A conveyor (legacy :feature:player:audio
             // deleted): LIVE since wave 9B — desktopPlayerModule provides the

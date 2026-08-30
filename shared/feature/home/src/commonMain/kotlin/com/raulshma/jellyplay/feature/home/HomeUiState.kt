@@ -13,6 +13,36 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 
 import com.raulshma.jellyplay.core.model.UserInfo
 
+/**
+ * The appearance/theme slice of [HomeUiState] — the five fields that always
+ * change together (one [AppearanceSlice] emission) and are read together (the
+ * ArtworkThemeWrapper + backdrop pair). Embedded as one value, following the
+ * [SeerrRequestState] precedent: the prefs fold stays a one-line copy instead
+ * of a per-field hand-sync.
+ */
+@Immutable
+data class AppearanceUiState(
+    val dynamicTheming: Boolean = true,
+    val oledMode: Boolean = false,
+    val colorStyle: com.raulshma.jellyplay.core.model.ColorStyle = com.raulshma.jellyplay.core.model.ColorStyle.TONAL_SPOT,
+    val accentColorSwatch: String = "dynamic",
+    val performanceMode: Boolean = false,
+)
+
+/**
+ * The inline section-config sheet's whole input surface — the three pref
+ * mirrors it reads (see [sectionConfigCapabilities]). Embedded as one value
+ * so the prefs fold hands the sheet one slice instead of re-mirroring
+ * [HomeSectionPrefs] field by field.
+ */
+@Immutable
+data class SectionConfigState(
+    val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
+    val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
+    /** Per-library DISABLED types keyed by library (folder) id. */
+    val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
+)
+
 @Immutable
 data class HomeUiState(
     val sections: List<HomeSection> = emptyList(),
@@ -25,16 +55,35 @@ data class HomeUiState(
     /** Non-blocking notice shown when some (not all) home sections failed to load. */
     val partialLoadError: Boolean = false,
     val homeMode: HomeMode = HomeMode.VIDEO,
-    val dynamicTheming: Boolean = true,
-    val oledMode: Boolean = false,
-    val colorStyle: com.raulshma.jellyplay.core.model.ColorStyle = com.raulshma.jellyplay.core.model.ColorStyle.TONAL_SPOT,
-    val accentColorSwatch: String = "dynamic",
+    /** The appearance/theme quintet — see [AppearanceUiState]. */
+    val appearance: AppearanceUiState = AppearanceUiState(),
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
     val offlineLibrary: List<OfflineMediaItem> = emptyList(),
+    /**
+     * Downloaded episodes (playback state joined, local artwork resolved),
+     * collected under the same gate as [offlineLibrary]. Episodes are excluded
+     * from the library itself by design — the offline library browse shows
+     * series — so this is the offline home's only episode source, feeding the
+     * Continue Watching and Next Up rows via [buildOfflineHomeSections].
+     */
+    val offlineEpisodes: List<OfflineMediaItem> = emptyList(),
+    /**
+     * The CW/NextUp prefs the offline home rows must honor (enabled flags,
+     * hidden CW items, excluded Next Up series, CW+NextUp merge). Built from
+     * the same prefs snapshot that drives the online section query so the
+     * offline home never contradicts the user's online home layout.
+     */
+    val offlineSectionPrefs: OfflineHomeSectionPrefs = OfflineHomeSectionPrefs(),
+    /**
+     * The single offline-render predicate, computed once per gate/library
+     * emission by [computeHomeRenderSource] (see [HomeRenderSource]). The
+     * screen branches and the VM's downloads-rendering gate read this value —
+     * no site re-derives the predicate from [offlineMode] + error/sections.
+     */
+    val renderSource: HomeRenderSource = HomeRenderSource.Online,
     val discoverEnabled: Boolean = false,
     val homeHeroEnabled: Boolean = true,
     val homeBackdropEnabled: Boolean = true,
-    val performanceMode: Boolean = false,
     val showClock: Boolean = false,
     /**
      * Whether the home top header dock auto-hides on scroll-down and reappears
@@ -64,25 +113,10 @@ data class HomeUiState(
     val directArrEnabled: Boolean = false,
     val currentUser: UserInfo? = null,
     /**
-     * Mirror of the user's enabled home section types (from prefs). Consumed
-     * only by the inline section-config sheet so it can show the current
-     * toggle state without reading the store directly.
+     * The inline section-config sheet's three pref mirrors — see
+     * [SectionConfigState]. Read only by the sheet's capabilities derivation.
      */
-    val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
-    /**
-     * Mirror of the user's home section ordering (from prefs). Consumed only
-     * by the inline section-config sheet to enable/disable the Move Up/Down
-     * buttons relative to the section's current position.
-     */
-    val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
-    /**
-     * Mirror of the user's per-library section overrides (from prefs). Keyed by
-     * library (folder) id, value is the set of DISABLED [HomeSectionType]s for
-     * that library. Consumed by the inline section-config sheet so a per-library
-     * LATEST_MEDIA row shows its real toggle state. Mirrors the Settings →
-     * Configure Libraries semantics.
-     */
-    val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
+    val sectionConfig: SectionConfigState = SectionConfigState(),
     /**
      * Non-null while the offline home's advanced "delete downloaded episodes"
      * sheet is open for a series card. Carries the seasons/episodes loaded for
@@ -91,6 +125,15 @@ data class HomeUiState(
      * Rendered by [MainHomeContent] as a `DeleteDownloadedEpisodesSheet`.
      */
     val seriesDelete: HomeSeriesDeleteState? = null,
+
+    /**
+     * Non-null while the series download sheet is open for a series card's
+     * quick-action Download. Carries the seasons/episodes loaded for the
+     * targeted series (server catalogue) plus which episodes are already
+     * downloaded. Rendered by [MainHomeContent] as a `SeriesDownloadSheet` —
+     * the same sheet the media-detail screen hosts.
+     */
+    val seriesDownload: HomeSeriesDownloadState? = null,
 )
 
 /**
@@ -110,6 +153,21 @@ data class HomeSeriesDeleteState(
     val totalSizeBytes: Long,
     val episodeSizeBytes: Map<String, Long> = emptyMap(),
     val isLoading: Boolean,
+)
+
+/**
+ * Data backing the home series download sheet (the `SeriesDownloadSheet` the
+ * media-detail screen also hosts). [episodesBySeason] is keyed by season id;
+ * [loadingSeasons] carries the initial-load sentinel (the series id) plus any
+ * lazily expanding season while the snapshot loads.
+ */
+@Immutable
+data class HomeSeriesDownloadState(
+    val seriesId: String,
+    val seasons: List<MediaItem>,
+    val episodesBySeason: Map<String, List<MediaItem>>,
+    val loadingSeasons: Set<String>,
+    val downloadedEpisodeIds: Set<String>,
 )
 
 @Immutable

@@ -34,6 +34,7 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.HasDisplayName
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
+import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.SegmentBehavior
@@ -368,6 +369,11 @@ private fun newsletterFields(prefs: UserPreferences, factory: UserPreferences): 
     PreferenceField("Day Of Week", prefs.newsletterDayOfWeek.toString(), factory.newsletterDayOfWeek.toString()),
     PreferenceField("Enabled Sections", prefs.enabledNewsletterSections.size.toString(), factory.enabledNewsletterSections.size.toString()),
     PreferenceField("Section Order", prefs.newsletterSectionOrder.size.toString(), factory.newsletterSectionOrder.size.toString()),
+    PreferenceField(
+        "Last Viewed",
+        if (prefs.newsletterLastViewedMs == 0L) "Never" else "${prefs.newsletterLastViewedMs}ms",
+        if (factory.newsletterLastViewedMs == 0L) "Never" else "${factory.newsletterLastViewedMs}ms",
+    ),
 )
 
 private fun syncplayCastingFields(prefs: UserPreferences, factory: UserPreferences): List<PreferenceField> = listOf(
@@ -428,12 +434,63 @@ private fun miscAppFields(prefs: UserPreferences, factory: UserPreferences): Lis
     PreferenceField("Haptics", prefs.hapticsEnabled.onOff(), factory.hapticsEnabled.onOff()),
     PreferenceField("Self-Update Check", prefs.selfUpdateCheckEnabled.onOff(), factory.selfUpdateCheckEnabled.onOff()),
     PreferenceField("Self-Update Auto Download", prefs.selfUpdateDownloadEnabled.onOff(), factory.selfUpdateDownloadEnabled.onOff()),
+    PreferenceField("Update Dismiss Period", prefs.updateDismissPeriod.enumDisplay(), factory.updateDismissPeriod.enumDisplay()),
     PreferenceField("App Language", prefs.appLanguage ?: "System", factory.appLanguage ?: "System"),
     PreferenceField("User Data Sync", prefs.userDataSyncEnabled.onOff(), factory.userDataSyncEnabled.onOff()),
     PreferenceField("Share Media Option", prefs.showShareMediaOption.onOff(), factory.showShareMediaOption.onOff()),
     PreferenceField("Hide Search History", prefs.hideSearchHistory.onOff(), factory.hideSearchHistory.onOff()),
     PreferenceField("Android TV Watch Next", prefs.androidTvWatchNextEnabled.onOff(), factory.androidTvWatchNextEnabled.onOff()),
     PreferenceField("Prefer Audio Description", prefs.preferAudioDescription.onOff(), factory.preferAudioDescription.onOff()),
+)
+
+// ---------------------------------------------------------------------------
+// App runtime fields — surfaced only in import preview ("everything").
+// Not part of `PreferenceResetCategory`; factory reset intentionally omits them.
+// Kept in this file (not a separate module) because `core:datastore` cannot
+// depend on `feature:settings` for the presentation registry — the registry
+// already lives here and `AppRuntimeState` is a pure model type (no UI dep).
+// ---------------------------------------------------------------------------
+
+/**
+ * User-facing diff for the `AppRuntimeState` extras carried in a v2 backup.
+ * Mirrors the [PreferenceField] shape so import-preview can reuse
+ * `PreferenceDiffCategoryItem` / `PreferenceFieldRow`.
+ *
+ * @param noneLabel localized label for empty/absent values (pass
+ * `stringResource(R.string.settings_unknown)` from the composable caller so
+ * this pure function does not need a @Composable context and can be used
+ * inside `remember`).
+ */
+fun appRuntimeFields(
+    current: AppRuntimeState,
+    incoming: AppRuntimeState,
+    noneLabel: String = "None",
+): List<PreferenceField> = listOf(
+    PreferenceField(
+        "Favorite Channels",
+        current.favoriteChannels.sorted().joinToString(", ").ifEmpty { noneLabel },
+        incoming.favoriteChannels.sorted().joinToString(", ").ifEmpty { noneLabel },
+    ),
+    PreferenceField(
+        "Last Live-TV Channel",
+        current.liveTvLastChannelId ?: noneLabel,
+        incoming.liveTvLastChannelId ?: noneLabel,
+    ),
+    PreferenceField(
+        "Watch Later Playlist",
+        current.watchLaterPlaylistId ?: noneLabel,
+        incoming.watchLaterPlaylistId ?: noneLabel,
+    ),
+    PreferenceField(
+        "Onboarding Completed",
+        current.onboardingCompleted.onOff(),
+        incoming.onboardingCompleted.onOff(),
+    ),
+    PreferenceField(
+        "Recent DLNA Devices",
+        if (current.recentDlnaDevices.isEmpty()) noneLabel else "${current.recentDlnaDevices.size} devices",
+        if (incoming.recentDlnaDevices.isEmpty()) noneLabel else "${incoming.recentDlnaDevices.size} devices",
+    ),
 )
 
 // ---------------------------------------------------------------------------

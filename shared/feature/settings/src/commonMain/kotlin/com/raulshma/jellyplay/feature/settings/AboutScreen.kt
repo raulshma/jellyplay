@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Activity
+import com.composables.icons.tabler.outline.Clock
 import com.composables.icons.tabler.outline.DeviceMobile
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.ExternalLink
@@ -31,6 +32,7 @@ import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.License
 import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Server
+import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -54,6 +56,13 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_chan
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_check_for_updates
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_check_updates_automatically
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_check_updates_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_update_dismiss_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_update_dismiss_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_update_dismiss_12_hours
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_update_dismiss_24_hours
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_update_dismiss_3_days
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_update_dismiss_1_week
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_update_dismiss_never
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_collecting_logs
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_diagnostics
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_download_updates_automatically
@@ -95,6 +104,7 @@ fun AboutScreen(
     val sendLogsChooserTitle = stringResource(Res.string.settings_send_logs_chooser)
 
     val focusRequester = remember { FocusRequester() }
+    var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
     TvGrabInitialFocus(
         focusRequester = focusRequester,
         itemCount = 1,
@@ -290,6 +300,30 @@ fun AboutScreen(
                             onCheckForUpdates()
                         },
                     )
+                    val dismissTitle = stringResource(Res.string.settings_update_dismiss_title)
+                    val dismissSubtitle = stringResource(Res.string.settings_update_dismiss_subtitle)
+                    val dismissPeriodLabels = mapOf(
+                        UpdateDismissPeriod.HOURS_12 to stringResource(Res.string.settings_update_dismiss_12_hours),
+                        UpdateDismissPeriod.HOURS_24 to stringResource(Res.string.settings_update_dismiss_24_hours),
+                        UpdateDismissPeriod.DAYS_3 to stringResource(Res.string.settings_update_dismiss_3_days),
+                        UpdateDismissPeriod.WEEK_1 to stringResource(Res.string.settings_update_dismiss_1_week),
+                        UpdateDismissPeriod.NEVER to stringResource(Res.string.settings_update_dismiss_never),
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.Clock,
+                        title = dismissTitle,
+                        subtitle = dismissSubtitle,
+                        trailingText = dismissPeriodLabels.getValue(viewModel.updateDismissPeriod),
+                        onClick = {
+                            activePicker = PickerState.List(
+                                title = dismissTitle,
+                                items = UpdateDismissPeriod.entries.toList(),
+                                label = { period -> dismissPeriodLabels.getValue(period) },
+                                isSelected = { it == viewModel.updateDismissPeriod },
+                                onSelect = { viewModel.updateDismissPeriodPref(it) },
+                            )
+                        },
+                    )
                 }
             }
 
@@ -309,4 +343,9 @@ fun AboutScreen(
             }
         }
     }
+
+    SettingsPickerDialog(
+        state = activePicker,
+        onDismiss = { activePicker = null },
+    )
 }

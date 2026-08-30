@@ -130,6 +130,7 @@ setting simply won't appear in the player UI).
 | Subtitle vertical position | ✅ | ✅ | ✅ | ✗ |
 | ASS/SSA *rendering* | ✅ | ✅ | ✗ | ✗ |
 | ASS/SSA *user style override* | ✗ | ✅ | ✗ | ✗ |
+| Image subtitles (PGS/VobSub sidecars) | ✗ | ✅ | ✗ | ✗ |
 | Font family | ✅ | ✅ | ✅ | ✗ |
 | Free-form subtitle colors | ✅ | ✅ | ✗ | ✗ |
 | Border styles | ✅ | ✅ | ✗ | ✗ |
@@ -146,6 +147,16 @@ Only **mpv** also applies *your* style overrides (colors, borders,
 Force) on top of ASS/SSA tracks (`--ass-override=force`). ExoPlayer
 renders ASS as-authored — your style overrides take effect on SRT/VTT
 only. LibVLC does not render ASS at all.
+
+Image subtitles delivered as files (bitmap PGS `.sup`, VobSub) play on
+mpv only, via its libav decoders — this gates offline side-loading:
+downloads bundle such sidecars, but engines without the capability skip
+them at playback instead of failing silently at render time. Embedded
+image tracks are unaffected: direct-play hands them to the engine's own
+demuxer (again mpv-only), and transcode burn-in serves every engine.
+VobSub is bundled as the full `.idx`+`.sub` pair (the palette alone or
+the bitmap alone renders nothing); PGS `.sup` sidecars are
+self-contained.
 
 ## How to switch engines
 

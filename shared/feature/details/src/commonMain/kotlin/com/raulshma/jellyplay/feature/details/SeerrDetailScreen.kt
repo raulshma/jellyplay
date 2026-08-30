@@ -81,6 +81,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.model.MediaType
@@ -400,12 +401,14 @@ private fun SeerrDetailContent(
 
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
+    val isAurora = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current ==
+        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.AURORA
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
     val outline = MaterialTheme.colorScheme.outline
     // Rebuilt only when the theme flags / palette change so the consuming
     // Cards see a stable BorderStroke instance between scroll frames.
-    val cardBorder = remember(isSynthwave, isSoothing, primary, secondary, outline) {
+    val cardBorder = remember(isSynthwave, isSoothing, isAurora, primary, secondary, outline) {
         when {
             isSynthwave -> {
                 androidx.compose.foundation.BorderStroke(
@@ -421,6 +424,8 @@ private fun SeerrDetailContent(
                     color = outline.copy(alpha = 0.35f)
                 )
             }
+            // Aurora: soft accent glow border matching the gradient background.
+            isAurora -> com.raulshma.jellyplay.core.designsystem.theme.auroraCardBorder(primary)
             else -> null
         }
     }
@@ -470,10 +475,9 @@ private fun SeerrDetailContent(
         }
     }
 
-    val backgroundModifier = if (isSynthwave) {
-        Modifier.background(
-            com.raulshma.jellyplay.core.designsystem.theme.synthwaveBackgroundBrush()
-        )
+    val variantBrush = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current.backgroundBrush()
+    val backgroundModifier = if (variantBrush != null) {
+        Modifier.background(variantBrush)
     } else {
         Modifier.background(backgroundColor)
     }

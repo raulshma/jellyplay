@@ -107,6 +107,8 @@
     <string name="core_ui_synthwave_accent_subtitle">Sélectionnez un échantillon de couleur d\'accent néon personnalisée</string>
     <string name="core_ui_soothing_accent_title">Accent apaisant</string>
     <string name="core_ui_soothing_accent_subtitle">Sélectionnez une couleur d\'accent apaisante</string>
+    <string name="core_ui_variant_accent_title">Accent %1$s</string>
+    <string name="core_ui_variant_accent_subtitle">Sélectionner la couleur d'accent de ce style de thème</string>
 
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Supprimer</string>
@@ -197,6 +199,14 @@
     <item quantity="one">%1$d épisode</item>
     <item quantity="other">%1$d épisodes</item>
     </plurals>
+
+    <!-- SeriesDownloadSheet (per-season download picker, shared by detail + home). -->
+    <string name="detail_download_series_title">Télécharger la série</string>
+    <string name="detail_download_series_subtitle">Appuyez sur une saison pour voir les épisodes. Sélectionnez ceux à télécharger.</string>
+    <string name="detail_downloaded_count_format">• %1$d téléchargé(s)</string>
+    <string name="detail_no_episodes_available">Aucun épisode disponible</string>
+    <string name="detail_downloaded_status">Téléchargé</string>
+    <string name="detail_queuing">Mise en file…</string>
 
     <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
     <string name="transcode_reasons_title">Pourquoi une transcodification ?</string>

@@ -96,3 +96,40 @@ internal actual val monochromeBodyFontFamily: FontFamily
         Font(Res.font.space_grotesk_semibold, FontWeight.SemiBold, FontStyle.Normal),
         Font(Res.font.space_grotesk_bold, FontWeight.Bold, FontStyle.Normal),
     )
+
+// Accepted delta (v0.10.6 merge): the four variant faces (Manrope/Quicksand/
+// Poppins/Outfit) are NOT bundled for desktop and web yet — Android resolves
+// them on demand from GMS (see FontFamilies.android.kt); here they map to the
+// closest bundled faces (geometric sans -> Space Grotesk, rounded sans ->
+// Nunito Sans). Bundling the real statics is a tracked follow-up.
+internal actual val auroraFontFamily: FontFamily
+    @Composable get() = FontFamily(
+        Font(Res.font.space_grotesk_regular, FontWeight.Normal, FontStyle.Normal),
+        Font(Res.font.space_grotesk_medium, FontWeight.Medium, FontStyle.Normal),
+        Font(Res.font.space_grotesk_semibold, FontWeight.SemiBold, FontStyle.Normal),
+        Font(Res.font.space_grotesk_bold, FontWeight.Bold, FontStyle.Normal),
+    )
+
+internal actual val sakuraFontFamily: FontFamily
+    @Composable get() = FontFamily(
+        Font(Res.font.nunito_sans_regular, FontWeight.Normal, FontStyle.Normal),
+        Font(Res.font.nunito_sans_medium, FontWeight.Medium, FontStyle.Normal),
+        Font(Res.font.nunito_sans_semibold, FontWeight.SemiBold, FontStyle.Normal),
+        Font(Res.font.nunito_sans_bold, FontWeight.Bold, FontStyle.Normal),
+    )
+
+internal actual val vectorPopFontFamily: FontFamily
+    @Composable get() = FontFamily(
+        Font(Res.font.space_grotesk_regular, FontWeight.Normal, FontStyle.Normal),
+        Font(Res.font.space_grotesk_medium, FontWeight.Medium, FontStyle.Normal),
+        Font(Res.font.space_grotesk_semibold, FontWeight.SemiBold, FontStyle.Normal),
+        Font(Res.font.space_grotesk_bold, FontWeight.Bold, FontStyle.Normal),
+    )
+
+internal actual val vividFontFamily: FontFamily
+    @Composable get() = FontFamily(
+        Font(Res.font.space_grotesk_regular, FontWeight.Normal, FontStyle.Normal),
+        Font(Res.font.space_grotesk_medium, FontWeight.Medium, FontStyle.Normal),
+        Font(Res.font.space_grotesk_semibold, FontWeight.SemiBold, FontStyle.Normal),
+        Font(Res.font.space_grotesk_bold, FontWeight.Bold, FontStyle.Normal),
+    )

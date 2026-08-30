@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -71,26 +72,18 @@ class LibraryLayoutViewModelTest {
     }
 
     @Test
-    fun `setLibrarySectionEnabled false adds type to overrides`() = runTest {
+    fun `setLibrarySectionEnabled routes to the store section-prefs command`() = runTest {
         val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository)
 
         viewModel.setLibrarySectionEnabled("movies", HomeSectionType.LATEST_MEDIA, enabled = false)
+        advanceUntilIdle()
 
-        verify {
-            editor.setLibraryHomeSectionOverrides(match { it["movies"] == setOf(HomeSectionType.LATEST_MEDIA) })
+        // The toggle/override POLICY lives in the store command (pinned by
+        // HomeDiscoveryStoreTest + core/model's HomeSectionPrefsTest); this
+        // pins only the routing.
+        coVerify {
+            homeDiscoveryStore.setLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, false)
         }
-    }
-
-    @Test
-    fun `setLibrarySectionEnabled true removes type and drops empty key`() = runTest {
-        every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(
-            HomeDiscoverySlice(libraryHomeSectionOverrides = mapOf("movies" to setOf(HomeSectionType.LATEST_MEDIA)))
-        )
-        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository)
-
-        viewModel.setLibrarySectionEnabled("movies", HomeSectionType.LATEST_MEDIA, enabled = true)
-
-        verify { editor.setLibraryHomeSectionOverrides(emptyMap()) }
     }
 
     @Test

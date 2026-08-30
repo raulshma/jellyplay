@@ -3,6 +3,11 @@ package com.raulshma.jellyplay.core.data.download
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.isMusicTrack
+import com.raulshma.jellyplay.core.model.isVideoType
+import com.raulshma.jellyplay.core.model.maxBitrate
 
 /**
  * Desktop actual of the [DownloadIntake] seam (V3 downloads conveyor): the
@@ -30,6 +35,8 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 class DesktopDownloadIntake(
     private val delegate: DownloadDelegate,
     private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
+    private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
+    private val downloadsStore: com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore,
 ) : DownloadIntake {
 
     override suspend fun start(
@@ -52,4 +59,22 @@ class DesktopDownloadIntake(
         episodeIds: Map<String, List<String>>?,
     ): Result<List<String>> =
         downloadRepository.downloadSeries(seriesId, episodeIds)
+
+    override suspend fun startFromItem(item: MediaItem): DownloadRequestResult {
+        val inline = item.mediaType.isVideoType || item.mediaType.isMusicTrack
+        if (!inline) {
+            return when (item.mediaType) {
+                MediaType.SERIES -> DownloadRequestResult.SeriesSelectionRequired(item.id)
+                else -> DownloadRequestResult.NeedsDetailScreen(item.id)
+            }
+        }
+        val detail = mediaRepository.getMediaDetail(item.id)
+            .getOrElse { return DownloadRequestResult.Failed(it.message) }
+        val result = start(detail, downloadsStore.downloads.value.downloadQuality.maxBitrate)
+        return if (result.error == null) {
+            DownloadRequestResult.Started
+        } else {
+            DownloadRequestResult.Failed(result.error)
+        }
+    }
 }

@@ -12,8 +12,8 @@ import kotlin.test.Test
  *
  * Asserts the persisted fields with a direct target, the watched-state
  * normalization inherited from [OfflineMediaItem.toMediaItem], `tagline` →
- * `taglines`, provider ids, urls, people, and that no fake studio id is ever
- * invented. Also pins the lossy defaults (empty chapters / mediaSources /
+ * `taglines`, provider ids, urls, people, persisted chapters, and that no fake
+ * studio id is ever invented. Also pins the lossy defaults (empty mediaSources /
  * relatedItems / lockData) so nulls are never silently inherited, and confirms
  * local cast artwork paths are represented *outside* [MediaDetail] (on the
  * source [OfflinePersonInfo]) rather than dropped.
@@ -36,6 +36,15 @@ class OfflineMediaItemDetailProjectionTest {
         originalTitle = "Original",
         providerIds = mapOf("Tmdb" to "123", "Imdb" to "tt456"),
         externalUrls = listOf(ExternalUrl("Site", "https://example.com")),
+        chapters = listOf(
+            ChapterInfo(name = "Opening", startPositionTicks = 0L),
+            ChapterInfo(
+                name = "Credits",
+                startPositionTicks = 100_000_000L,
+                imageTag = "chapter-tag",
+                imageDateModified = "2024-01-01T00:00:00Z",
+            ),
+        ),
         cast = listOf(
             OfflinePersonInfo(
                 id = "person-1",
@@ -150,8 +159,20 @@ detail.studios.isEmpty(),
     }
 
     @Test
+    fun toMediaDetail_carriesChapters() {
+        val chapters = fixture().toMediaDetail().chapters
+
+        assertEquals(2, chapters.size)
+        assertEquals("Opening", chapters[0].name)
+        assertEquals(0L, chapters[0].startPositionTicks)
+        assertEquals("Credits", chapters[1].name)
+        assertEquals(100_000_000L, chapters[1].startPositionTicks)
+        assertEquals("chapter-tag", chapters[1].imageTag)
+    }
+
+    @Test
     fun toMediaDetail_lossyServerCollectionsDefaultToEmpty() {
-        val detail = fixture().toMediaDetail()
+        val detail = fixture().copy(chapters = emptyList()).toMediaDetail()
 
         assertTrue(detail.chapters.isEmpty())
         assertTrue(detail.mediaSources.isEmpty())

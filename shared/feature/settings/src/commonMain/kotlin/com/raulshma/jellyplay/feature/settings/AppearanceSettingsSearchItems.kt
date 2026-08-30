@@ -9,10 +9,6 @@ import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_accent_color_s
 import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_accent_color_title
 import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_color_style_subtitle
 import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_color_style_title
-import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_soothing_accent_subtitle
-import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_soothing_accent_title
-import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_synthwave_accent_subtitle
-import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_synthwave_accent_title
 import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_appearance
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light_filter_subtitle
@@ -61,8 +57,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_library_vi
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_library_view_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_merge_continue_next_up_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_merge_continue_next_up_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_monochrome_mode_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_monochrome_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_bar_customization_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_bar_customization_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_hide_on_scroll_subtitle
@@ -103,16 +97,16 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_watch
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_watched_checkmark_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_specials_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_specials_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_soothing_mode_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_soothing_mode_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_synthwave_mode_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_synthwave_mode_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_style_accent_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_style_accent_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_music_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_music_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_scheduler_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_scheduler_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_style_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_unhide_cw_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_unhide_cw_title
 
@@ -218,39 +212,20 @@ internal val AppearanceSettingsSearchItems = listOf(
         icon = Tabler.Outline.Moon
     ),
     SettingsSearchItem(
-        id = "synthwave_mode",
-        titleRes = Res.string.ss_synthwave_mode_title,
-        subtitleRes = Res.string.ss_synthwave_mode_subtitle,
+        id = "theme_style",
+        titleRes = Res.string.ss_theme_style_title,
+        subtitleRes = Res.string.ss_theme_style_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_appearance,
-        keywords = listOf("synthwave", "retro", "neon", "theme", "colors"),
+        keywords = listOf("theme", "style", "variant", "synthwave", "soothing", "monochrome", "vivid", "aurora", "sakura", "vector", "pop", "pastel", "neon", "retro", "look"),
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.Palette
     ),
     SettingsSearchItem(
-        id = "synthwave_accent",
-        titleRes = CoreUiRes.string.core_ui_synthwave_accent_title,
-        subtitleRes = CoreUiRes.string.core_ui_synthwave_accent_subtitle,
+        id = "style_accent",
+        titleRes = Res.string.ss_style_accent_title,
+        subtitleRes = Res.string.ss_style_accent_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_appearance,
-        keywords = listOf("synthwave", "accent", "neon", "color", "swatch"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Palette,
-        isAdvanced = true
-    ),
-    SettingsSearchItem(
-        id = "soothing_mode",
-        titleRes = Res.string.ss_soothing_mode_title,
-        subtitleRes = Res.string.ss_soothing_mode_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_appearance,
-        keywords = listOf("soothing", "soft", "rounded", "calm", "theme"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Palette
-    ),
-    SettingsSearchItem(
-        id = "soothing_accent",
-        titleRes = CoreUiRes.string.core_ui_soothing_accent_title,
-        subtitleRes = CoreUiRes.string.core_ui_soothing_accent_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_appearance,
-        keywords = listOf("soothing", "accent", "color", "calm", "swatch"),
+        keywords = listOf("accent", "color", "swatch", "synthwave", "soothing", "vivid", "aurora", "sakura", "vector", "neon", "theme"),
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.Palette,
         isAdvanced = true
@@ -558,16 +533,6 @@ internal val AppearanceSettingsSearchItems = listOf(
         keywords = listOf("blue light", "strength", "amber", "intensity", "overlay"),
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.Adjustments,
-        isAdvanced = true
-    ),
-    SettingsSearchItem(
-        id = "monochrome_mode",
-        titleRes = Res.string.ss_monochrome_mode_title,
-        subtitleRes = Res.string.ss_monochrome_mode_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_appearance,
-        keywords = listOf("monochrome", "black", "white", "nothing", "grayscale", "minimal"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Palette,
         isAdvanced = true
     ),
     SettingsSearchItem(

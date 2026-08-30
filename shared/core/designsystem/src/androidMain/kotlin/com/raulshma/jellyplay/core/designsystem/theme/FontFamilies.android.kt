@@ -40,3 +40,15 @@ internal actual val monochromeDisplayFontFamily: FontFamily
 
 internal actual val monochromeBodyFontFamily: FontFamily
     @Composable get() = googleFont("Space Grotesk")
+
+internal actual val auroraFontFamily: FontFamily
+    @Composable get() = googleFont("Manrope")
+
+internal actual val sakuraFontFamily: FontFamily
+    @Composable get() = googleFont("Quicksand")
+
+internal actual val vectorPopFontFamily: FontFamily
+    @Composable get() = googleFont("Poppins")
+
+internal actual val vividFontFamily: FontFamily
+    @Composable get() = googleFont("Outfit")

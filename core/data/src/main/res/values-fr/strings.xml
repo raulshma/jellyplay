@@ -51,4 +51,5 @@
 
     <!-- Localized error messages -->
     <string name="data_no_media_source_download">Aucune source multimédia disponible pour le téléchargement</string>
+    <string name="data_series_download_queued">Épisodes mis en file pour téléchargement</string>
 </resources>

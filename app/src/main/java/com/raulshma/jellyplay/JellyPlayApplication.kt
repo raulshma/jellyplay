@@ -63,6 +63,7 @@ import com.raulshma.jellyplay.feature.shortcuts.di.shortcutsModule
 import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
 
 import com.raulshma.jellyplay.feature.insights.di.insightsModule
+import com.raulshma.jellyplay.core.ui.di.coreUiMessageModule
 import com.raulshma.jellyplay.feature.home.di.homeModule
 import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
 import com.raulshma.jellyplay.feature.auth.di.androidAuthModule
@@ -305,6 +306,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // ContinueWatchingBroadcaster + LibrarySyncHook from
                 // androidAppModule above) resolve from Koin too.
                 // SettingsSearchProvider resolves from settingsModule.
+                coreUiMessageModule,
                 homeModule,
 
                 // V3 subtitle-tester conveyor (final feature): the whole

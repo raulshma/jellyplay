@@ -469,7 +469,6 @@ private fun DesktopNavScaffold() {
                 navigator = guardedNavigator,
                 homeMode = homeMode,
                 onModeChange = onHomeModeChange,
-                onPlayOnClick = {},
                 musicContent = {},
             )
             searchSection(guardedNavigator)

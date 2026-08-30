@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.download
 
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaItem
 
 /**
  * Feature-facing intake seam for offline downloads.
@@ -21,9 +22,9 @@ import com.raulshma.jellyplay.core.model.MediaDetail
  * lifecycle actions (pause/resume/cancel/delete) and status queries, but is
  * no longer the intake entry point for feature modules.
  *
- * **Depth**: this module's interface is two functions; the implementation
- * absorbs the single-vs-batch routing decision so callers don't branch on it.
- * The bundle policy itself lives one layer down in the download delegate.
+ * **Depth**: the implementation absorbs the single-vs-batch-vs-browse routing
+ * decision so callers don't branch on it. The bundle policy itself lives one
+ * layer down in the download delegate.
  */
 interface DownloadIntake {
 
@@ -64,4 +65,41 @@ interface DownloadIntake {
         seriesId: String,
         episodeIds: Map<String, List<String>>? = null,
     ): Result<List<String>>
+
+    /**
+     * Starts a download straight from a browse [item] (card long-press), with
+     * no detail screen in between. Single-stream types (movie, episode, music
+     * track) resolve their detail via [com.raulshma.jellyplay.core.data.repository.MediaRepository]
+     * and start immediately at the user's default download quality. Types that
+     * need the detail screen's richer flows — series (season/episode selection
+     * sheet), seasons, albums, artists — return a navigation outcome instead so
+     * the host routes there; nothing is enqueued for them.
+     */
+    suspend fun startFromItem(item: MediaItem): DownloadRequestResult
+}
+
+/**
+ * Outcome of [DownloadIntake.startFromItem] — either the transfer started or
+ * the host must route somewhere / surface a failure.
+ */
+sealed interface DownloadRequestResult {
+    /** The transfer (or whole-season batch) was enqueued. */
+    data object Started : DownloadRequestResult
+
+    /**
+     * The item is a series: enqueueing needs the user's season/episode
+     * selection. Hosts open the detail screen for [seriesId] with the series
+     * download sheet pre-presented.
+     */
+    data class SeriesSelectionRequired(val seriesId: String) : DownloadRequestResult
+
+    /**
+     * The item's download flow lives on its detail screen (season, album,
+     * artist, ...). Hosts open the detail screen for [itemId]; no sheet needs
+     * pre-presenting.
+     */
+    data class NeedsDetailScreen(val itemId: String) : DownloadRequestResult
+
+    /** Nothing was enqueued; [message] is a displayable error, when known. */
+    data class Failed(val message: String?) : DownloadRequestResult
 }

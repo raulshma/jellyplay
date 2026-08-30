@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.OfflineSyncState
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
 import com.raulshma.jellyplay.core.model.ResyncCheckResult
 import com.raulshma.jellyplay.core.model.ResyncItemProgress
+import com.raulshma.jellyplay.core.model.ResyncCategory
 import com.raulshma.jellyplay.core.model.ResyncOptions
 import com.raulshma.jellyplay.core.model.ResyncPhase
 import com.raulshma.jellyplay.core.model.ResyncResult
@@ -149,11 +150,17 @@ class OfflineSyncManager(
                 fresh = fresh,
                 result = result,
                 hadBaseline = baseline.hasStoredBaseline(),
-                // Segments aren't part of MediaDetail and aren't fetched on the
-                // proactive check, so retain the prior segments signature rather
-                // than wipe it to empty (which would re-seed on next segments
-                // resync and swallow a real change).
-                retainedSegmentsSignature = baseline.syncedSegmentsSignature,
+                retained = CheckRetainedState(
+                    // Segments aren't part of MediaDetail and aren't fetched on
+                    // the proactive check, so retain the prior signature rather
+                    // than wipe it to empty (which would re-seed on next
+                    // segments resync and swallow a real change).
+                    segmentsSignature = baseline.syncedSegmentsSignature,
+                    // A check never fetches sidecars, so a pending subtitle
+                    // bundle must survive it: retaining the prior flag is what
+                    // keeps the badge lit until a resync lands the files.
+                    subtitlesPending = baseline.syncSubtitlesPending == 1,
+                ),
             )
             checkingFlagCleared = true
             return result
@@ -240,13 +247,14 @@ class OfflineSyncManager(
             val downloadPath = downloadRepository.getDownloadByMediaItemId(itemId)?.downloadPath
             val parentDir = downloadPath?.let { File(it).parentFile }
 
-            // Metadata: re-persist the offline detail row. Skipped when the user
-            // only asked for images/sidecars — the existing metadata row is left as-is.
-            if (options.metadata) {
+            // Metadata: re-persist the offline detail row whenever the selection
+            // writes it (see ResyncOptions.writesMetadataRow for why chapters
+            // count). Preserves the existing local image paths so the
+            // re-persisted row keeps pointing at the on-disk files; only changed
+            // image bytes are overwritten below. Falls back to remote URLs if
+            // none persisted yet.
+            if (options.writesMetadataRow) {
                 setProgress(itemId, ResyncPhase.WORKING, ResyncStep.PERSIST_METADATA)
-                // Preserve the existing local image paths so the re-persisted row
-                // keeps pointing at the on-disk files; only changed image bytes are
-                // overwritten below. Falls back to remote URLs if none persisted yet.
                 val paths = offlineMediaDao.getLocalImagePaths(itemId)
                 val posterPath = paths?.posterPath
                 val backdropPath = paths?.backdropPath
@@ -255,7 +263,7 @@ class OfflineSyncManager(
             }
 
             if (parentDir != null) {
-                if (options.poster) {
+                if (ResyncCategory.POSTER in options) {
                     val posterChanged = baseline == null || comparator.isImageChanged(baseline.posterTag, detail.posterImageTag)
                     if (posterChanged) {
                         setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_POSTER)
@@ -265,7 +273,7 @@ class OfflineSyncManager(
                         steps += ResyncStepResult(itemId, ResyncStep.DOWNLOAD_POSTER, success = poster != null)
                     }
                 }
-                if (options.backdrop) {
+                if (ResyncCategory.BACKDROP in options) {
                     val backdropChanged = baseline == null || comparator.isImageChanged(baseline.backdropTag, detail.backdropImageTag)
                     if (backdropChanged) {
                         setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_BACKDROP)
@@ -285,29 +293,35 @@ class OfflineSyncManager(
             // a best-effort failure is reported honestly and — see the baseline
             // masking below — not re-seeded as if it had landed on disk.
             var subtitlesOk = true
+            // True only when a subtitle fetch actually ran. The block is
+            // skipped when the option is off (mergePartial then retains the
+            // prior flag) or when the download row vanished mid-resync — and
+            // in neither case may the pending flag be cleared below.
+            var subtitlesAttempted = false
             var trickplayOk = true
             var segmentsOk = true
             if (downloadPath != null && freshSource != null) {
-                if (options.subtitles) {
+                if (ResyncCategory.SUBTITLES in options) {
                     val subsChanged = baseline == null ||
-                        comparator.isSubtitleChanged(baseline.subtitleSignature, detail)
+                        comparator.isSubtitleChanged(baseline, detail)
                     if (subsChanged) {
                         setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_SUBTITLES)
                         // The writer mirrors a genuine server-side removal (no
                         // deliverable streams) by clearing the dir, but leaves
                         // existing sidecars untouched when fetches fail and
                         // returns false so the baseline rolls back and retries.
+                        subtitlesAttempted = true
                         subtitlesOk = writer.downloadExternalSubtitles(
                             itemId, freshSource.id, freshSource.mediaStreams, downloadPath,
                         )
                         steps += ResyncStepResult(itemId, ResyncStep.DOWNLOAD_SUBTITLES, success = subtitlesOk)
                     }
                 }
-                if (options.trickplay) {
+                if (ResyncCategory.TRICKPLAY in options) {
                     val info = freshSource.trickplayInfo
                     if (info != null) {
                         val trickplayChanged = baseline == null ||
-                            comparator.isTrickplayChanged(baseline.trickplaySignature, detail)
+                            comparator.isTrickplayChanged(baseline, detail)
                         if (trickplayChanged) {
                             setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_TRICKPLAY)
                             trickplayOk = writer.downloadTrickplayData(itemId, info, downloadPath)
@@ -325,7 +339,7 @@ class OfflineSyncManager(
             // the option is on (no change-gate) because the detection fetch would
             // otherwise double the round-trips for a rarely-changing artifact.
             var freshSegments: List<com.raulshma.jellyplay.core.model.MediaSegment>? = null
-            if (options.segments && downloadPath != null) {
+            if (ResyncCategory.SEGMENTS in options && downloadPath != null) {
                 setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_SEGMENTS)
                 playbackRepository.invalidateSegmentsCache(itemId)
                 segmentsOk = writer.downloadMediaSegments(itemId, downloadPath)
@@ -339,14 +353,30 @@ class OfflineSyncManager(
             // axis back to the prior baseline value (empty on first contact) so
             // the next check still flags it as changed instead of reporting
             // CURRENT for artifacts the disk never received. Successful (or
-            // un-attempted) axes keep the freshly computed signature.
+            // un-attempted) axes keep the freshly computed signature. For the
+            // subtitle pending flag, only an attempt that ran AND succeeded may
+            // clear it; a first-contact item has no prior flag to retain, so
+            // its rolled-back signature alone carries the retry signal.
             val seededBaseline = freshBaseline.copy(
-                subtitleSignature = if (subtitlesOk) freshBaseline.subtitleSignature
-                    else baseline?.subtitleSignature ?: "",
-                trickplaySignature = if (trickplayOk) freshBaseline.trickplaySignature
-                    else baseline?.trickplaySignature ?: "",
-                segmentsSignature = if (segmentsOk) freshBaseline.segmentsSignature
-                    else baseline?.segmentsSignature ?: "",
+                subtitleSignature = rollbackOnFailure(
+                    fetchSucceeded = subtitlesOk,
+                    fresh = freshBaseline.subtitleSignature,
+                    prior = baseline?.subtitleSignature,
+                ),
+                // The pending flag clears only when an attempt ran AND
+                // succeeded — deliberately not the shared signature rule.
+                subtitlesPending = if (subtitlesAttempted && subtitlesOk) false
+                    else baseline?.subtitlesPending == true,
+                trickplaySignature = rollbackOnFailure(
+                    fetchSucceeded = trickplayOk,
+                    fresh = freshBaseline.trickplaySignature,
+                    prior = baseline?.trickplaySignature,
+                ),
+                segmentsSignature = rollbackOnFailure(
+                    fetchSucceeded = segmentsOk,
+                    fresh = freshBaseline.segmentsSignature,
+                    prior = baseline?.segmentsSignature,
+                ),
             )
             // Effective baseline blends synced-fresh values with the retained
             // (skipped-category) values from the prior baseline. Re-running the
@@ -409,29 +439,37 @@ class OfflineSyncManager(
         fresh: MediaDetail,
         result: ResyncCheckResult,
         hadBaseline: Boolean,
-        retainedSegmentsSignature: String?,
+        retained: CheckRetainedState,
     ) {
         val state = result.state
         // First-contact (no prior baseline): record the fresh baseline as
         // CURRENT instead of flagging an update on the very first check, so
         // opening a long-dormant download doesn't prompt an immediate resync.
         val firstContact = !hadBaseline
+        val firstContactState = if (firstContact) state.copy(
+            metadataChanged = false,
+            imagesChanged = false,
+            // A retained pending flag is NOT spurious first-contact noise — the
+            // stub row exists precisely because the bundle never landed — so
+            // the subtitle axis (and with it the badge) stays lit. The flag
+            // alone suffices: the comparator's rule already ORs pending into
+            // state.subtitlesChanged, so this is that value under another name.
+            subtitlesChanged = retained.subtitlesPending,
+            trickplayChanged = false,
+            segmentsChanged = false,
+            mediaFileChanged = false,
+        ) else state
         val freshBaseline = comparator.baseline(fresh)
+            // The check never fetches sidecars, so carried-forward values come
+            // from the prior row rather than freshly computed defaults (fresh
+            // pending is always false; the fresh segments signature is empty).
+            .copy(subtitlesPending = retained.subtitlesPending)
         syncBaselineDao.upsert(
             baselineEntity(
                 itemId = itemId,
                 baseline = freshBaseline,
-                state = if (firstContact) state.copy(
-                    metadataChanged = false,
-                    imagesChanged = false,
-                    subtitlesChanged = false,
-                    trickplayChanged = false,
-                    segmentsChanged = false,
-                    mediaFileChanged = false,
-                ) else state,
-                // Check never fetches segments, so carry the prior signature
-                // forward (empty when never recorded) instead of clobbering it.
-                segmentsSignatureOverride = retainedSegmentsSignature,
+                state = firstContactState,
+                segmentsSignatureOverride = retained.segmentsSignature,
                 lastSyncedAt = state.lastCheckedAt,
                 error = false,
             )
@@ -491,6 +529,10 @@ class OfflineSyncManager(
             syncSubtitlesChanged = subtitlesChanged,
             syncTrickplayChanged = trickplayChanged,
             syncSegmentsChanged = segmentsChanged,
+            // Callers hand in the pending flag pre-blended on [baseline]
+            // (checks retain the prior flag; resyncs clear it only on a
+            // successful fetch), so it round-trips untouched here.
+            syncSubtitlesPending = if (baseline.subtitlesPending) 1 else 0,
         )
     }
 
@@ -511,11 +553,42 @@ private fun SyncBaselineEntity.toSyncBaseline(): SyncBaseline = SyncBaseline(
     backdropTag = syncedBackdropTag,
     metadataSignature = syncedMetadataSignature ?: "",
     subtitleSignature = syncedSubtitleSignature ?: "",
+    subtitlesPending = syncSubtitlesPending == 1,
     trickplaySignature = syncedTrickplaySignature ?: "",
     segmentsSignature = syncedSegmentsSignature ?: "",
     mediaSourceId = syncedMediaSourceId,
     mediaSizeBytes = syncedMediaSizeBytes,
 )
+
+/**
+ * Baseline values a freshness check must carry forward unchanged into the
+ * upserted row: a check never fetches sidecars, so anything it would otherwise
+ * overwrite with a freshly computed default (an empty segments signature, a
+ * false pending flag) must be re-supplied from the prior row. Bundling these
+ * instead of threading one parameter per axis forces every new retained axis
+ * to be added here — and therefore decided at the call site — explicitly.
+ *
+ * Note the two fields reach the row by different routes: [subtitlesPending]
+ * rides on `freshBaseline.copy(...)` because it is part of the comparator's
+ * input baseline, while [segmentsSignature] goes through
+ * `baselineEntity`'s `segmentsSignatureOverride` because the segments axis has
+ * no detail-derived fresh value to blend with.
+ */
+private data class CheckRetainedState(
+    val segmentsSignature: String?,
+    val subtitlesPending: Boolean,
+)
+
+/**
+ * One rollback rule for every sidecar signature axis: a fetch that ran and
+ * succeeded adopts the freshly computed value; anything else rolls back to the
+ * prior baseline (empty on first contact) so the next check still flags the
+ * axis instead of reporting CURRENT for bytes that never reached disk. Shared
+ * by the signature arms of [resyncItem]'s seeded baseline; the subtitle pending
+ * flag has its own attempted-guard and lives beside them.
+ */
+private fun rollbackOnFailure(fetchSucceeded: Boolean, fresh: String, prior: String?): String =
+    if (fetchSucceeded) fresh else prior ?: ""
 
 /**
  * Blends this (prior) baseline with a [fresh] one according to [options]:
@@ -533,12 +606,13 @@ private fun SyncBaseline?.mergePartial(
     fresh
 } else {
     SyncBaseline(
-        posterTag = if (options.poster) fresh.posterTag else posterTag,
-        backdropTag = if (options.backdrop) fresh.backdropTag else backdropTag,
-        metadataSignature = if (options.metadata) fresh.metadataSignature else metadataSignature,
-        subtitleSignature = if (options.subtitles) fresh.subtitleSignature else subtitleSignature,
-        trickplaySignature = if (options.trickplay) fresh.trickplaySignature else trickplaySignature,
-        segmentsSignature = if (options.segments) fresh.segmentsSignature else segmentsSignature,
+        posterTag = if (ResyncCategory.POSTER in options) fresh.posterTag else posterTag,
+        backdropTag = if (ResyncCategory.BACKDROP in options) fresh.backdropTag else backdropTag,
+        metadataSignature = if (options.writesMetadataRow) fresh.metadataSignature else metadataSignature,
+        subtitleSignature = if (ResyncCategory.SUBTITLES in options) fresh.subtitleSignature else subtitleSignature,
+        subtitlesPending = if (ResyncCategory.SUBTITLES in options) fresh.subtitlesPending else subtitlesPending,
+        trickplaySignature = if (ResyncCategory.TRICKPLAY in options) fresh.trickplaySignature else trickplaySignature,
+        segmentsSignature = if (ResyncCategory.SEGMENTS in options) fresh.segmentsSignature else segmentsSignature,
         // Media-source id/size are always recomputed from the fresh detail
         // (not user-selectable); they never retain a stale value.
         mediaSourceId = fresh.mediaSourceId,

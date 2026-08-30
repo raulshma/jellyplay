@@ -63,6 +63,9 @@ object EngineCapabilityMatrix {
         supportsBorderStyles = true,
         supportsSecondarySubtitles = false,
         supportsScreenshot = true,
+        // Media3 parses embedded APPLICATION_PGS bitmaps inside a container but
+        // cannot reliably decode an external .sup sidecar file.
+        supportsImageSubtitles = false,
         // Zoom-safe subtitle strategy is declared per-engine via
         // [MediaEngine.zoomSafeSubtitleStrategy] (ExoPlayer = NATIVE_PINNED),
         // not as a capability flag here.
@@ -92,6 +95,9 @@ object EngineCapabilityMatrix {
         supportsBorderStyles = true,
         supportsSecondarySubtitles = true,
         supportsScreenshot = true,
+        // libav decodes bitmap subtitles (PGS/VOBSUB/DVB) from content — mime
+        // is irrelevant to sub-add, so offline .sup sidecars just work.
+        supportsImageSubtitles = true,
         // mpv's zoom-safe subtitle strategy (COMPOSE_CUE, via
         // [MediaEngine.zoomSafeSubtitleStrategy]) is declared on the engine, not
         // as a capability flag here.
@@ -121,6 +127,8 @@ object EngineCapabilityMatrix {
         supportsBorderStyles = false,
         supportsSecondarySubtitles = false,
         supportsScreenshot = true,
+        // No bitmap-subtitle decoder at all.
+        supportsImageSubtitles = false,
         // libVLC 3.7.x composites subs into a native surface with no text/event
         // callback, so no zoom-safe path is available (strategy = DISABLED on
         // the engine). Only unblocked by a libvlc 4.x aar, a JNI fork, or
@@ -152,6 +160,8 @@ object EngineCapabilityMatrix {
         supportsFontFamily = false,
         supportsFreeFormColors = false,
         supportsBorderStyles = false,
+        // Never decodes anything.
+        supportsImageSubtitles = false,
     )
 
     /** All declared matrices, keyed by [PlayerType]. Asserted total in tests. */

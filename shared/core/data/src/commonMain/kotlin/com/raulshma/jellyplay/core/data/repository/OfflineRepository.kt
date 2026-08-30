@@ -8,6 +8,25 @@ import kotlinx.coroutines.flow.Flow
 
 interface OfflineRepository {
     fun getOfflineLibrary(): Flow<List<OfflineMediaItem>>
+
+    /**
+     * Every downloaded episode in one reactive query (season/index ordered per
+     * series), with download rows joined and local artwork resolved — the data
+     * source behind the offline home's Continue Watching / Next Up rows.
+     * Episodes are excluded from [getOfflineLibrary] by design (top-level
+     * browse shows series, not loose episodes).
+     */
+    fun getOfflineEpisodes(): Flow<List<OfflineMediaItem>>
+
+    /**
+     * The [getOfflineLibrary] subset that belongs to one server library folder
+     * ([folderId] matched against the offline row's `parentId` — see
+     * [com.raulshma.jellyplay.core.database.dao.OfflineMediaDao.getTopLevelItemsInLibrary]
+     * for the matching semantics). Data source behind the library screen's
+     * "Downloaded" filter.
+     */
+    fun getOfflineLibraryInFolder(folderId: String): Flow<List<OfflineMediaItem>>
+
     fun getSeasonsForSeries(seriesId: String): Flow<List<OfflineMediaItem>>
     fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaItem>>
 

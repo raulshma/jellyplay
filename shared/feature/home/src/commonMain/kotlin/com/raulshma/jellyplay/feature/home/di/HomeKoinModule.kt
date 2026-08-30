@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.home.di
 
+import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolderFactory
+import com.raulshma.jellyplay.feature.home.HomeRefresherFactory
 import com.raulshma.jellyplay.feature.home.HomeViewModel
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
@@ -11,33 +13,50 @@ import org.koin.dsl.module
  * the move, Koin is the single constructor owner).
  *
  * Dep resolution:
- *  - 26 of the 30 ctor deps are Koin-native on BOTH platforms — the
- *    dataJvmModule/datastoreCommonModule singles (incl. the cluster-flipped
+ *  - the VM's ctor deps are Koin-native singles from the
+ *    dataJvmModule/datastoreCommonModule modules (incl. the cluster-flipped
  *    MediaRepository/UserDataMutator/MediaSearchEngine) plus the platform
  *    data modules (ImageUrlProvider, OfflineModeManager) and the settings
  *    feature's SettingsSearchProvider single.
- *  - the other 4 (PlaybackSyncScheduler, TvWatchNextScheduler — WorkManager
- *    workers; ContinueWatchingBroadcaster, LibrarySyncHook — app widget
- *    broadcast receivers) are Android-shaped: Koin singles in
- *    androidCoreDataModule / the app module on Android, honest no-op defs in
- *    desktopDataModule on desktop. All 30 deps resolve on BOTH platforms —
- *    desktop renders homeSection in the rail (live since the wave 8B
- *    desktop wiring).
+ *  - the refresher's pure-DI collaborators and the sync holder's factory
+ *    (PlaybackSyncScheduler — WorkManager worker; ContinueWatchingBroadcaster,
+ *    LibrarySyncHook — app widget broadcast receivers) are Android-shaped:
+ *    Koin singles in androidCoreDataModule / the app module on Android,
+ *    honest no-op defs in desktopDataModule on desktop. All resolve on BOTH
+ *    platforms — desktop renders homeSection in the rail (live since the
+ *    wave 8B desktop wiring).
  */
 val homeModule: Module = module {
+    single {
+        HomeRefresherFactory(
+            timeSource = get(),
+            mediaRepository = get(),
+            seerrRepository = get(),
+            arrRepository = get(),
+            orderHomeSections = get(),
+            widgetDataStore = get(),
+            continueWatchingBroadcaster = get(),
+            tvWatchNextScheduler = get(),
+            librarySyncHook = get(),
+        )
+    }
+    single {
+        SyncStatusStateHolderFactory(
+            playbackOutboxRepository = get(),
+            playbackSyncScheduler = get(),
+            offlineFirstItemResolver = get(),
+        )
+    }
     viewModel {
         HomeViewModel(
-            mediaRepository = get(),
+            episodeCatalogue = get(),
             userDataMutator = get(),
             mediaSearchEngine = get(),
-            offlineFirstItemResolver = get(),
-            orderHomeSections = get(),
             imageUrlProvider = get(),
             photoFolderPrefetcher = get(),
             downloadRepository = get(),
+            downloadIntake = get(),
             offlineRepository = get(),
-            playbackOutboxRepository = get(),
-            playbackSyncScheduler = get(),
             offlineModeManager = get(),
             newsletterTriggerManager = get(),
             homeDiscoveryStore = get(),
@@ -45,18 +64,14 @@ val homeModule: Module = module {
             experimentalStore = get(),
             playbackStore = get(),
             preferencesEditor = get(),
-            widgetDataStore = get(),
-            seerrRepository = get(),
             seerrRequestDelegate = get(),
             seerrPreferencesStore = get(),
             authRepository = get(),
             homeSession = get(),
-            arrRepository = get(),
-            tvWatchNextScheduler = get(),
-            continueWatchingBroadcaster = get(),
-            librarySyncHook = get(),
-            timeSource = get(),
+            userMessageBus = get(),
             settingsSearchProvider = get(),
+            homeRefresherFactory = get(),
+            syncStatusStateHolderFactory = get(),
         )
     }
 }

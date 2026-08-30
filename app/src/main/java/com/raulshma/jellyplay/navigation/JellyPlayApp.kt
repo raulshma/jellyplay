@@ -117,7 +117,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.rememberJellyPlayUiEnvironment
 import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -204,7 +204,17 @@ fun JellyPlayApp(
         }
     }
 
-    CompositionLocalProvider(LocalUserMessageBus provides infra.userMessageBus) {
+    // The shared (commonMain) UserMessageBus — the single the migrated
+    // ViewModels (home, player session, library) post through. Provided
+    // alongside the legacy bus below so both message stacks render.
+    val sharedUserMessageBus = remember {
+        org.koin.mp.KoinPlatform.getKoin()!!.get<com.raulshma.jellyplay.core.ui.message.UserMessageBus>()
+    }
+
+    CompositionLocalProvider(
+        LocalUserMessageBus provides infra.userMessageBus,
+        com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus provides sharedUserMessageBus,
+    ) {
         when {
             isRestoring -> {}
             isAuthenticated && !preferences.onboardingCompleted && !isTv -> {
@@ -339,7 +349,6 @@ private fun MainContent(
     audioPlaybackManager: AudioPlaybackManager,
 ) {
     val homeMode = preferences.homeMode
-    val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current
     val isSoothing = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme.current
     val isMonochrome = com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme.current
 
@@ -360,6 +369,9 @@ private fun MainContent(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val userMessageBus = LocalUserMessageBus.current
+    // Shared (commonMain) bus — same instance the root provider supplies to
+    // the migrated ViewModels; collected alongside the legacy bus below.
+    val sharedUserMessageBus = com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus.current
     var pendingExternalLaunch by remember { mutableStateOf<com.raulshma.jellyplay.ExternalPlayerLaunch?>(null) }
     val externalPlayerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -438,11 +450,12 @@ private fun MainContent(
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value]
     val isFullScreenRoute = currentBackStack?.any { it is Route && it.isFullScreen } ?: false
 
-    // App-wide offline state. Library + Live TV have no offline fallback (they
-    // always fetch live and degrade to a dead-end ErrorScreen), so while offline
-    // they are hidden from the floating nav. Home is the offline hub, Search has
-    // an offline-results path, Shortcuts are device-local, and MusicBrowse's
-    // home surfaces the downloaded music library — all stay visible.
+    // App-wide offline state. Live TV has no offline fallback (live streams
+    // are always server-bound and degrade to a dead-end ErrorScreen), so while
+    // offline it is hidden from the floating nav. Home is the offline hub,
+    // Search has an offline-results path, Shortcuts are device-local,
+    // MusicBrowse's home surfaces the downloaded music library, and Library
+    // auto-filters to downloads (#147) — all stay visible.
     val offlineMode by viewModel.offlineMode.collectAsStateWithLifecycle()
     val isGoingOnline by viewModel.isGoingOnline.collectAsStateWithLifecycle()
     val downloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
@@ -469,9 +482,10 @@ private fun MainContent(
                 val order = preferences.navItemOrder
                 // Server-bound destinations with no offline fallback. Hidden
                 // by simpleName to stay consistent with the user hidden-item
-                // filter below (also keyed on simpleName).
+                // filter below (also keyed on simpleName). Library is NOT in
+                // here: its grid auto-switches to the offline store (#147).
                 val offlineHidden = if (isOffline) {
-                    setOf(Route.Library::class.simpleName, Route.LiveTv::class.simpleName)
+                    setOf(Route.LiveTv::class.simpleName)
                 } else {
                     emptySet()
                 }
@@ -637,6 +651,41 @@ private fun MainContent(
                     message = resolvedText,
                     withDismissAction = true,
                     duration = if (message is UserMessage.Error) {
+                        androidx.compose.material3.SnackbarDuration.Long
+                    } else {
+                        androidx.compose.material3.SnackbarDuration.Short
+                    },
+                )
+            }
+        }
+    }
+
+    // Same severity→duration mapping as the legacy bus above, but for the
+    // shared (commonMain) bus the migrated ViewModels post through. Resource
+    // messages resolve via compose-resources' suspend getString (asString()
+    // is @Composable-only, unavailable inside a collect lambda).
+    androidx.compose.runtime.LaunchedEffect(sharedUserMessageBus, isTv) {
+        sharedUserMessageBus.messages.collect { message ->
+            val resolvedText = when (val text = message.text) {
+                is com.raulshma.jellyplay.core.ui.message.UiText.Raw -> text.value
+                is com.raulshma.jellyplay.core.ui.message.UiText.Resource ->
+                    org.jetbrains.compose.resources.getString(text.res, *text.args.toTypedArray())
+            }
+            if (isTv) {
+                android.widget.Toast.makeText(
+                    context,
+                    resolvedText,
+                    if (message is com.raulshma.jellyplay.core.ui.message.UserMessage.Error) {
+                        android.widget.Toast.LENGTH_LONG
+                    } else {
+                        android.widget.Toast.LENGTH_SHORT
+                    },
+                ).show()
+            } else {
+                snackbarHostState.showSnackbar(
+                    message = resolvedText,
+                    withDismissAction = true,
+                    duration = if (message is com.raulshma.jellyplay.core.ui.message.UserMessage.Error) {
                         androidx.compose.material3.SnackbarDuration.Long
                     } else {
                         androidx.compose.material3.SnackbarDuration.Short
@@ -822,7 +871,6 @@ private fun MainContent(
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
                         isAudioPlayerScreen = isAudioPlayerScreen,
-                        isSynthwave = isSynthwave,
                         isExpanded = isExpanded,
                         isBottomNavVisibleState = isBottomNavVisibleState,
                         hideBottomNavOnScroll = preferences.hideBottomNavOnScroll,
@@ -1067,7 +1115,6 @@ private fun PhoneContent(
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
     isAudioPlayerScreen: Boolean,
-    isSynthwave: Boolean,
     isExpanded: Boolean,
     isBottomNavVisibleState: androidx.compose.runtime.MutableState<Boolean>,
     hideBottomNavOnScroll: Boolean,
@@ -1183,11 +1230,12 @@ private fun PhoneContent(
                 navigationRailContainerColor = animatedNavBarColor,
             ),
         ) {
-            val synthwaveBrush = remember {
-                com.raulshma.jellyplay.core.designsystem.theme.synthwaveBackgroundBrush()
-            }
-            val appBackgroundModifier = if (isSynthwave) {
-                Modifier.background(synthwaveBrush)
+            // Gradient variants (Synthwave, Aurora) paint a full-bleed vertical
+            // gradient instead of the flat M3 background colour.
+            val variantBrush = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
+                .backgroundBrush()
+            val appBackgroundModifier = if (variantBrush != null) {
+                Modifier.background(variantBrush)
             } else {
                 Modifier.background(MaterialTheme.colorScheme.background)
             }
@@ -1209,7 +1257,6 @@ private fun PhoneContent(
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
-                        onPlayOnClick = onPlayOnClick,
                         playOnStrategy = playOnViewModel.strategy,
                         surpriseRequests = surpriseRequests,
                     )
@@ -1474,7 +1521,6 @@ private fun MainNavDisplay(
     modifier: Modifier = Modifier,
     onNowPlayingClick: () -> Unit = {},
     onAmbientClick: () -> Unit = {},
-    onPlayOnClick: () -> Unit = {},
     playOnStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy? = null,
     surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
@@ -1562,7 +1608,6 @@ private fun MainNavDisplay(
         onNowPlayingClick,
         onAmbientClick,
         onLogout,
-        onPlayOnClick,
         playOnStrategy,
     ) {
         entryProvider {
@@ -1570,7 +1615,6 @@ private fun MainNavDisplay(
                 navigator = navigator,
                 homeMode = homeMode,
                 onModeChange = onModeChange,
-                onPlayOnClick = onPlayOnClick,
                 // The shared home module narrows the Play-On surface to its
                 // HomePlayOnRedirect seam (the concrete cast strategy is
                 // Android-bound); adapt the real strategy here — probe +

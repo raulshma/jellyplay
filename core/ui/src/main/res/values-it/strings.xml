@@ -111,11 +111,6 @@
     <string name="core_ui_color_style_title">Stile colore</string>
     <string name="core_ui_color_style_subtitle">Definisci l\'atmosfera visiva delle tavolozze generate</string>
     <string name="core_ui_dynamic_colors">Colori dinamici dello sfondo</string>
-    <string name="core_ui_synthwave_accent_title">Accento Synthwave</string>
-    <string name="core_ui_synthwave_accent_subtitle">Seleziona una tonalità di colore di accento neon personalizzata</string>
-    <string name="core_ui_soothing_accent_title">Accento rilassante</string>
-    <string name="core_ui_soothing_accent_subtitle">Seleziona un colore di accento rilassante</string>
-
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Rimuovi</string>
     <string name="core_ui_play">Riproduci</string>
@@ -198,6 +193,12 @@
     <string name="detail_season_default">Stagione %1$d</string>
     <string name="detail_cd_collapse">Comprimi</string>
     <string name="detail_cd_expand">Espandi</string>
+    <string name="detail_download_series_title">Scarica serie</string>
+    <string name="detail_download_series_subtitle">Tocca una stagione per vedere gli episodi. Seleziona quali scaricare.</string>
+    <string name="detail_downloaded_count_format">• %1$d scaricati</string>
+    <string name="detail_no_episodes_available">Nessun episodio disponibile</string>
+    <string name="detail_downloaded_status">Scaricato</string>
+    <string name="detail_queuing">In coda…</string>
     <string name="detail_delete_entire_series">Elimina l\'intera serie</string>
     <string name="detail_cancel">Annulla</string>
     <string name="detail_delete_count">Elimina %1$d</string>
@@ -241,4 +242,6 @@
     <string name="transcode_reason_hint_decoder">Impostare il decoder su Software/FFmpeg potrebbe risolvere.</string>
     <string name="transcode_reason_hint_quality">Aumenta il limite di qualità streaming nel selettore qualità.</string>
     <string name="transcode_reason_hint_subtitle">Scegli un sottotitolo SRT/esterno per evitare l\'incorporamento.</string>
+    <string name="core_ui_variant_accent_title">Accento %1$s</string>
+    <string name="core_ui_variant_accent_subtitle">Seleziona il colore d\'accento per questo stile tema</string>
 </resources>

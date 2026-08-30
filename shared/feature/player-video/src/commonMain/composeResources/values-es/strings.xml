@@ -114,6 +114,7 @@
     <string name="player_video_use">Usar</string>
     <string name="player_video_failed_tap_to_retry">Falló — toca para reintentar</string>
     <string name="player_video_search_failed">La búsqueda falló</string>
+    <string name="player_video_load_subtitles_failed">No se pudieron cargar los subtítulos</string>
     <string name="player_video_no_results_found">No se encontraron resultados</string>
     <string name="player_video_pick_language_hint">Elige un idioma y busca para encontrar subtítulos.</string>
     <string name="player_video_change_file">Cambiar: %1$s</string>
@@ -251,6 +252,8 @@
     <string name="player_video_remember_subtitles_off">Mantener subtítulos desactivados para esta serie</string>
     <string name="player_video_error_offline_file_missing">Error: falta el archivo sin conexión</string>
     <string name="player_video_error_loading_media">Error al cargar los medios</string>
+    <string name="player_video_error_offline_stream">Sin conexión \u2014 reconéctate para reproducir este título</string>
+    <string name="player_video_error_next_episode_load">No se pudo cargar el siguiente episodio. Comprueba tu conexión e inténtalo de nuevo</string>
     <string name="player_video_trickplay_thumbnail">Miniatura de trickplay</string>
 
     <plurals name="player_video_participants">

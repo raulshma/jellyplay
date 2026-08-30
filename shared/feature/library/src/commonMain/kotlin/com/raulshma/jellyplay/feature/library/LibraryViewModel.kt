@@ -1,8 +1,16 @@
 package com.raulshma.jellyplay.feature.library
 
+import androidx.paging.LoadState
+import androidx.paging.LoadStates
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
@@ -17,7 +25,14 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LibrarySectionContext
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.SortOption
+import com.raulshma.jellyplay.core.model.toFilteredLibraryItems
+import com.raulshma.jellyplay.core.ui.message.UiText
+import com.raulshma.jellyplay.core.ui.message.UserMessageBus
+import com.raulshma.jellyplay.feature.library.generated.resources.Res
+import com.raulshma.jellyplay.feature.library.generated.resources.data_download_start_failed
+import com.raulshma.jellyplay.feature.library.generated.resources.data_download_started
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -36,6 +51,11 @@ private data class ViewModePrefs(
 
 class LibraryViewModel(
     private val mediaRepository: MediaRepository,
+    private val offlineRepository: OfflineRepository,
+    private val downloadRepository: DownloadRepository,
+    private val downloadIntake: DownloadIntake,
+    private val offlineModeManager: OfflineModeManager,
+    private val userMessageBus: UserMessageBus,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
@@ -68,6 +88,15 @@ class LibraryViewModel(
 
     private val _showFilters = stateFlow(false)
     val showFilters = _showFilters.flow
+
+    /**
+     * Ids of download-complete items, for quick-action gating: a downloaded
+     * item's long-press offers "Remove download" instead of "Download". The
+     * repository collapses progress-tick re-emissions, so this stays quiet
+     * while transfers run.
+     */
+    private val _downloadedIds = stateFlow<Set<String>>(emptySet())
+    val downloadedIds = _downloadedIds.flow
 
     private val _photoFolderChildUrls = stateFlow<Map<String, List<String>>>(emptyMap())
     val photoFolderChildUrls = _photoFolderChildUrls.flow
@@ -121,28 +150,112 @@ class LibraryViewModel(
         }
     }
 
+    /**
+     * Long-press Download from a browse card. Single-stream items
+     * (movie/episode/music track) start inline at the default quality; series
+     * route to the detail screen with the download sheet pre-presented via
+     * [onOpenDetail] (their flow needs the user's season/episode selection),
+     * and other non-inline types (season, album, ...) open the detail screen
+     * plainly. Failures surface on the message bus.
+     */
+    fun downloadItem(item: MediaItem, onOpenDetail: (itemId: String, openDownloadSheet: Boolean) -> Unit) {
+        launch {
+            when (val result = downloadIntake.startFromItem(item)) {
+                DownloadRequestResult.Started ->
+                    userMessageBus.info(
+                        UiText.Resource(Res.string.data_download_started)
+                    )
+                is DownloadRequestResult.SeriesSelectionRequired -> onOpenDetail(result.seriesId, true)
+                is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId, false)
+                is DownloadRequestResult.Failed ->
+                    userMessageBus.error(
+                        UiText.Resource(Res.string.data_download_start_failed)
+                    )
+            }
+        }
+    }
+
+    /**
+     * Long-press Remove download — deletes the local download (artifacts +
+     * offline rows) via the shared routing: a series card removes the whole
+     * series download, anything else the single item. Never touches the server.
+     */
+    fun removeItemDownload(item: MediaItem) {
+        deleteActions.deleteDownload(item)
+    }
+
     private val _refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
+
+    /**
+     * True while the app is offline (manual toggle or auto network loss): the
+     * grid auto-switches to the downloaded-only local source (#147) and the
+     * Downloaded chip renders pinned on — the library's share of the "auto
+     * filter for downloaded stuff" the offline home already applies. The
+     * user's real filters are never mutated, so going back online restores
+     * them untouched.
+     */
+    val offlineAutoFilter: kotlinx.coroutines.flow.StateFlow<Boolean> = stateIn(
+        initial = false,
+        flow = offlineModeManager.offlineMode.map { it != OfflineMode.ONLINE },
+    )
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val pagedItems: Flow<PagingData<MediaItem>> = combine(
         _browserState.flow,
         _refreshTrigger,
-    ) { browser, _ ->
-        browser.folder to browser.filters
-    }.flatMapLatest { (folder, filters) ->
-      mediaRepository.getMediaItemsPaged(
-          parentId = folder?.id,
-          filters = filters,
-          // Section mode ("See All" from a home Latest row) shows the same
-          // top-level items as the default library tab — series for a TV library,
-          // movies for a movie library — just sorted by latest. (Previously this
-          // returned leaf episodes for a TV library, which stacked flat episode
-          // blocks; issue #113.) Filtering to a specific leaf type is still
-          // possible via the Media Type filter.
-          kindFilter = ItemKindFilter.TOP_LEVEL,
-      )
+        offlineModeManager.offlineMode,
+    ) { browser, _, mode ->
+        Triple(browser.folder, browser.filters, mode != OfflineMode.ONLINE)
+    }.flatMapLatest { (folder, filters, servingOffline) ->
+        if (filters.isDownloaded == true || servingOffline) {
+            // "Downloaded" filter — or offline mode, which pins it on
+            // automatically (#147): serve the grid from the local offline
+            // store — instant, no server paging, and the same projection
+            // offline playback uses. Folder membership matches the offline
+            // row's parentId; with no folder selected ("All") the whole
+            // offline library is shown. Filter dimensions and sort are
+            // re-applied client-side over the stored fields (see
+            // toFilteredLibraryItems).
+            val items = if (folder != null) {
+                offlineRepository.getOfflineLibraryInFolder(folder.id)
+            } else {
+                offlineRepository.getOfflineLibrary()
+            }
+            // Static paging only dispatches load states when explicit source
+            // states are provided — without them a fresh LazyPagingItems keeps
+            // its initial refresh = Loading forever, leaving the pull-to-refresh
+            // spinner stuck on while offline content renders fine.
+            val idleStates = LoadStates(
+                refresh = LoadState.NotLoading(endOfPaginationReached = false),
+                prepend = LoadState.NotLoading(endOfPaginationReached = false),
+                append = LoadState.NotLoading(endOfPaginationReached = false),
+            )
+            items.map { PagingData.from(it.toFilteredLibraryItems(filters), idleStates) }
+        } else {
+            mediaRepository.getMediaItemsPaged(
+                parentId = folder?.id,
+                filters = filters,
+                // Section mode ("See All" from a home Latest row) shows the same
+                // top-level items as the default library tab — series for a TV library,
+                // movies for a movie library — just sorted by latest. (Previously this
+                // returned leaf episodes for a TV library, which stacked flat episode
+                // blocks; issue #113.) Filtering to a specific leaf type is still
+                // possible via the Media Type filter.
+                kindFilter = ItemKindFilter.TOP_LEVEL,
+            )
+        }
     }
     .cachedIn(scope)
+
+    /**
+     * Shared offline-delete module (core/data) — the same series-vs-item
+     * routing the offline hosts use. No `onContentMutated`: the paged flows
+     * (server or offline) refresh on their own once rows are gone.
+     */
+    private val deleteActions = OfflineDeleteActions(
+        scope = scope,
+        offlineRepository = offlineRepository,
+    )
 
     init {
         loadFolders()
@@ -151,6 +264,16 @@ class LibraryViewModel(
         loadViewMode()
         loadLayoutPrefs()
         loadResetConfirmPref()
+        launch {
+            // The full union (completed ids ∪ series ids), not just completed
+            // item ids — a series card's quick actions must offer Remove
+            // download once any episode of it is downloaded. Home used to be
+            // the only consumer honoring the series half; the union lives on
+            // DownloadRepository now (observeDownloadedIdsIncludingSeries).
+            downloadRepository.observeDownloadedIdsIncludingSeries().collect { ids ->
+                _downloadedIds.set(ids)
+            }
+        }
     }
 
     /**

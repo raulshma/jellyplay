@@ -107,6 +107,8 @@
     <string name="core_ui_synthwave_accent_subtitle">사용자 지정 네온 강조 색상 견본 선택</string>
     <string name="core_ui_soothing_accent_title">부드러운 강조 색상</string>
     <string name="core_ui_soothing_accent_subtitle">차분한 강조 색상 선택</string>
+    <string name="core_ui_variant_accent_title">%1$s 강조색</string>
+    <string name="core_ui_variant_accent_subtitle">이 테마 스타일의 강조색을 선택하세요</string>
 
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">제거</string>
@@ -196,6 +198,14 @@
 <plurals name="detail_episode_count">
     <item quantity="other">에피소드 %1$d개</item>
     </plurals>
+
+    <!-- SeriesDownloadSheet (per-season download picker, shared by detail + home). -->
+    <string name="detail_download_series_title">시리즈 다운로드</string>
+    <string name="detail_download_series_subtitle">시즌을 탭하여 에피소드를 확인하세요. 다운로드할 항목을 선택하세요.</string>
+    <string name="detail_downloaded_count_format">• %1$d개 다운로드됨</string>
+    <string name="detail_no_episodes_available">재생 가능한 에피소드 없음</string>
+    <string name="detail_downloaded_status">다운로드됨</string>
+    <string name="detail_queuing">대기열 추가 중…</string>
 
     <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
     <string name="transcode_reasons_title">왜 트랜스코딩하나요?</string>

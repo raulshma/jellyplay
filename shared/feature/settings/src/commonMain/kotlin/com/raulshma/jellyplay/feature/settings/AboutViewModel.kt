@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.settings
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
+import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -47,12 +48,16 @@ class AboutViewModel(
     var selfUpdateDownloadEnabled by composeState(false)
         private set
 
+    var updateDismissPeriod by composeState(UpdateDismissPeriod.DEFAULT)
+        private set
+
     init {
         loadServerInfo()
         launch {
             experimentalStore.experimental.collect { prefs ->
                 selfUpdateCheckEnabled = prefs.selfUpdateCheckEnabled
                 selfUpdateDownloadEnabled = prefs.selfUpdateDownloadEnabled
+                updateDismissPeriod = prefs.updateDismissPeriod
             }
         }
     }
@@ -94,5 +99,9 @@ class AboutViewModel(
 
     fun updateSelfUpdateDownloadPref(enabled: Boolean) {
         launch { experimentalStore.setSelfUpdateDownloadEnabled(enabled) }
+    }
+
+    fun updateDismissPeriodPref(period: UpdateDismissPeriod) {
+        launch { experimentalStore.setUpdateDismissPeriod(period) }
     }
 }

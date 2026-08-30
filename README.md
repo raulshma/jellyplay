@@ -51,7 +51,7 @@ If you self-host Jellyfin and want a truly native, beautiful, capable client —
 | 👯 **SyncPlay & Play On** | Real-time watch parties with speed/skip-to-sync correction and in-player chat, plus cast-to and control other Jellyfin sessions. |
 | 🛠️ **Server admin dashboard** | System health, active sessions, scheduled tasks, server logs, user stats, and stale-media cleanup — without leaving the app. |
 | 📺 **Live TV & DVR** | Browse live channels, an Electronic Program Guide, **delivery-method selection** (Auto / Direct Stream / Transcode), and manage DVR recordings. |
-| 🎨 **Fully customizable** | 4 themes (Standard, Synthwave, Soothing, Monochrome), OLED mode, **390+ settings**, 4 home-screen widgets, and a 10-step onboarding wizard. |
+| 🎨 **Fully customizable** | 8 themes (Standard, Synthwave, Soothing, Monochrome, Vivid, Aurora, Sakura, Vector Pop), OLED mode, **390+ settings**, 4 home-screen widgets, and a 10-step onboarding wizard. |
 
 <table align="center" cellpadding="0" cellspacing="0" style="border-collapse: collapse; border-spacing: 0;">
 	<tr>
@@ -387,7 +387,7 @@ Click any section to expand. The full feature list is preserved — collapsed on
 - Android TV screensaver (Daydream) with configurable slideshow and Ken Burns effect
 - PIN lock and biometric authentication (fingerprint/face) with auto-lock timer
 - Kids Mode with content filtering
-- **4 theme variants**: Standard (Material 3 dynamic), Synthwave (neon/retro), Soothing (GitHub-dark-inspired), and Monochrome (black-and-white)
+- **8 theme variants**: Standard (Material 3 dynamic), Synthwave (neon/retro), Soothing (GitHub-dark-inspired), Monochrome (black-and-white), Vivid (bold two-tone pop), Aurora (night-sky gradient, dark-only), Sakura (soft pastels), and Vector Pop (flat poster look with thick outlines)
 - 9 accent color swatches (Dynamic, Brand, Sapphire Blue, Emerald Green, Amethyst Purple, Rose Pink, Coral Orange, Amber Gold, Crimson Red)
 - 3 contrast levels (Default, Medium, High) with full light/dark variants
 - OLED mode for AMOLED displays
@@ -429,7 +429,7 @@ Click any section to expand. The full feature list is preserved — collapsed on
 - **SyncPlay**: progress reporting, auto-join, sync correction parameters
 - **Downloads**: connections preference, max cache size (with unlimited/0 option support)
 - **Storage**: offline media management, cache size, download location
-- **Visual**: dynamic theming, theme variant (Standard/Synthwave/Soothing/Monochrome), accent color, contrast level, OLED mode, streaming quality, performance mode, home backdrop
+- **Visual**: dynamic theming, theme variant (Standard/Synthwave/Soothing/Monochrome/Vivid/Aurora/Sakura/Vector Pop), accent color, contrast level, OLED mode, streaming quality, performance mode, home backdrop
 - **Navigation**: overflow menu visibility, tablet navigation-rail toggle, hide header on scroll
 - **Security**: PIN lock, biometric lock, auto-lock timer
 - **Privacy & Data**: clear cache/image cache/search history, sign out, factory reset
@@ -592,10 +592,10 @@ apps/
 app/                      Android application module (deep links, widgets, Cast, PiP host activity, shortcuts, TV)
 shared/
   core/
-    model/                Pure Kotlin data models (88 model files)
-    designsystem/         Theming (4 variants), colors, shapes, typography, motion
+    model/                Pure Kotlin data models (93 model files)
+    designsystem/         Theming (8 variants), colors, shapes, typography, motion
     datastore/            DataStore preferences (~391 settings), encrypted credentials, OS keyring seam
-    database/             Room KMP database (17 DAOs), v49 migration chain
+    database/             Room KMP database (18 DAOs), v51 migration chain
     network/              Jellyfin API clients, Radarr/Sonarr (Arr) clients, Seerr client, TMDB, LRCLIB, Wyzie/OpenSubtitles, GitHub Releases, server discovery, address failover
     data/                 Repositories, playback managers, audio effects, SyncPlay, downloads
     ui/                   Shared UI components, adaptive layouts, TV focus, animations, navigation
@@ -603,15 +603,15 @@ shared/
   feature/
     auth/                 Server selection and authentication
     onboarding/           First-run setup wizard (10-step preferences)
-    home/                 Home screen, Kids home, newsletter banner, and discover sections
-    library/              Library browsing and media collections
+    home/                 Home screen, Kids home, newsletter banner, discover sections, and the offline home (downloaded content shelf + gate)
+    library/              Library browsing and media collections (auto-filters to downloads while offline)
     search/               Search experience with history
     details/              Media detail, person detail, collection detail, Seerr detail
     player-video/         Video playback UI, multi-engine support, SyncPlay integration, Play On
     player-audio/         Audio playback UI, lyrics, equalizer, ambient mode
     player-live/          Live TV playback UI, delivery-method selection, play-method badge, error recovery
     downloads/            Download management, offline library, and offline playback
-    settings/             Settings, server/user management, Seerr & Arr configuration, settings search
+    settings/             Settings, server/user management, Seerr & Arr configuration, settings search, import preview
     music/                Music browsing, smart/mood playlists, artist/album details
     livetv/               Live TV channels, EPG guide, and DVR
     syncplay/             SyncPlay group management and watch party UI
@@ -630,7 +630,6 @@ core/
   notification/           New media notification system (worker, scheduler, dispatcher, channels)
   testing/                Shared test utilities
 baselineprofile/         Baseline profile generator for phone startup optimization
-baselineprofile-tv/      Baseline profile generator for TV startup optimization
 tools/                   Dev/CI drivers: e2e/ (web-verify, web-cache-eviction, web-soak, foreign-origin, serve.mjs, bootstrap-jellyfin, desktop-session/msi-boot passes, input-probe — headless-Edge CDP lane scripts; device-locale/device-pip passes — physical-phone adb+uiautomator lanes), perf/ (desktop-baseline.sh), and the gitignored mpv/ drop-in dir for libmpv-2.dll (wired into :apps:desktop:test, see Building)
 website/                 Landing page (GitHub Pages)
 docs/                    Documentation guides

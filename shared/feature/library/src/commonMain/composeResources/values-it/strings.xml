@@ -15,6 +15,8 @@
         <item quantity="other">%1$d elementi</item>
     </plurals>
     <string name="library_no_items_found">Nessun elemento trovato</string>
+    <string name="library_no_downloads_offline">Nessun download ancora</string>
+    <string name="library_try_adjusting_filters">Prova ad aggiustare i filtri</string>
     <string name="library_list_view">Vista a elenco</string>
     <string name="library_grid_view">Vista a griglia</string>
     <string name="library_thumb_view">Vista miniature</string>
@@ -29,6 +31,10 @@
     <string name="library_media_type">Tipo di contenuto</string>
     <string name="library_status">Stato</string>
     <string name="library_filter_resumable">In corso</string>
+    <string name="library_filter_downloaded">Scaricato</string>
+    <string name="library_remove_download_title">Eliminare il download?</string>
+    <string name="library_remove_download_message">Questa azione elimina la copia scaricata di “%1$s” da questo dispositivo. La copia sul server non viene modificata.</string>
+    <string name="library_remove_download_confirm">Elimina</string>
     <string name="library_genres">Generi</string>
     <string name="library_year_range">Intervallo anni</string>
     <string name="library_tags">Tag</string>

@@ -4,7 +4,9 @@ import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.OfflineMediaTypeGroup
+import com.raulshma.jellyplay.core.model.matchesOfflineQuery
+import com.raulshma.jellyplay.core.model.typeGroup
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -118,24 +120,21 @@ class OfflineLibraryViewModel(
         filter: OfflineLibraryFilter,
         sort: OfflineLibrarySort,
     ): List<OfflineMediaItem> {
+        // The type partition and the query-field match are the shared
+        // OfflineShelf rules — the same partition the home's mode filter uses,
+        // the same field set the repository's searchOffline matches.
         val filtered = when (filter) {
             OfflineLibraryFilter.VIDEOS ->
-                items.filter { it.mediaType == MediaType.SERIES || it.mediaType == MediaType.MOVIE }
+                items.filter { it.typeGroup == OfflineMediaTypeGroup.VIDEO }
             OfflineLibraryFilter.MUSIC ->
-                items.filter {
-                    it.mediaType == MediaType.AUDIO || it.mediaType == MediaType.MUSIC || it.mediaType == MediaType.ALBUM
-                }
+                items.filter { it.typeGroup == OfflineMediaTypeGroup.MUSIC }
             OfflineLibraryFilter.ALL -> items
         }
         val q = query.trim()
         val matched = if (q.length < 2) {
             filtered
         } else {
-            filtered.filter {
-                it.name.contains(q, ignoreCase = true) ||
-                    it.seriesName?.contains(q, ignoreCase = true) == true ||
-                    it.seasonName?.contains(q, ignoreCase = true) == true
-            }
+            filtered.filter { it.matchesOfflineQuery(q) }
         }
         return when (sort) {
             OfflineLibrarySort.RECENT -> matched.sortedByDescending { it.createdAt }

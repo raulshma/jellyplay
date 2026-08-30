@@ -291,11 +291,13 @@ class MainActivity : FragmentActivity() {
                 reduceMotion = preferences.reduceMotionEnabled,
                 accentColorSwatch = preferences.theme.accentColorSwatch,
                 colorStyle = preferences.theme.colorStyle,
-                synthwaveMode = preferences.synthwaveMode,
+                themeVariant = preferences.themeVariant,
                 synthwaveAccent = preferences.synthwaveAccent,
-                soothingMode = preferences.soothingMode,
                 soothingAccent = preferences.soothingAccent,
-                monochromeMode = preferences.monochromeMode,
+                vividAccent = preferences.vividAccent,
+                auroraAccent = preferences.auroraAccent,
+                sakuraAccent = preferences.sakuraAccent,
+                vectorPopAccent = preferences.vectorPopAccent,
                 appFontScale = preferences.appFontScale,
             ) {
                 // Provide the motion/performance flags to the whole UI subtree in one place.

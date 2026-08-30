@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.feature.settings.ArrSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.AudioSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.ExperimentalSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.FactoryResetViewModel
+import com.raulshma.jellyplay.feature.settings.ImportPreviewViewModel
 import com.raulshma.jellyplay.feature.settings.LanguageSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.LicensesViewModel
 import com.raulshma.jellyplay.feature.settings.LibraryLayoutViewModel
@@ -154,6 +155,32 @@ val settingsModule: Module = module {
             appRuntimeStateStore = get(),
             pinRateLimiter = get(),
             editor = get(),
+        )
+    }
+    viewModel {
+        ImportPreviewViewModel(
+            settingsBackupIo = get(),
+            userPreferencesStore = get(),
+            playbackStore = get(),
+            appearanceStore = get(),
+            videoPlayerStore = get(),
+            downloadsStore = get(),
+            engineStore = get(),
+            homeDiscoveryStore = get(),
+            audioStore = get(),
+            audioEffectsStore = get(),
+            audioCacheStore = get(),
+            libraryStore = get(),
+            navigationStore = get(),
+            networkOfflineStore = get(),
+            notificationStore = get(),
+            screensaverStore = get(),
+            securityStore = get(),
+            subtitleLanguageStore = get(),
+            syncPlayCastStore = get(),
+            experimentalStore = get(),
+            appRuntimeStateStore = get(),
+            pinRateLimiter = get(),
         )
     }
     // ── Wave 1b: storage / privacy / server / security / integrations / about ──

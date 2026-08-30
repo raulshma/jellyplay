@@ -20,6 +20,15 @@ interface DownloadRepository : OfflineDownloadWriter {
     fun getAllDownloads(): Flow<List<DownloadItem>>
 
     /**
+     * One-shot read of every download row, uncapped — unlike [getAllDownloads],
+     * whose 500-row window exists for list rendering. The force-resync picker
+     * resolves its candidates from this so every downloaded item stays
+     * resyncable regardless of library size, and so the picker is correct even
+     * when opened before the reactive list has emitted its first value.
+     */
+    suspend fun getAllDownloadsSnapshot(): List<DownloadItem>
+
+    /**
      * Download rows for exactly [mediaItemIds] — the scoped reactive read for
      * screens tracking a known set of items (e.g. an album's tracks). Fetching
      * only the matching rows costs far less per re-emission than collecting
@@ -39,6 +48,16 @@ interface DownloadRepository : OfflineDownloadWriter {
     fun getDownloadByMediaItemIdFlow(mediaItemId: String): Flow<DownloadItem?>
 
     fun getActiveDownloadCount(): Flow<Int>
+
+    /**
+     * Reactive set of ids that are download-complete, for coarse per-item
+     * gating (quick actions flip between Download and Remove download).
+     * Series/season ids are included when they have completed episodes. The
+     * underlying query re-emits on every `downloads` write — including 2 s
+     * progress ticks — so the impl collapses equal sets with
+     * `distinctUntilChanged`; the mapped set is small and comparison is cheap.
+     */
+    fun observeCompletedDownloadedIds(): Flow<Set<String>>
 
     suspend fun getDownloadByMediaItemId(mediaItemId: String): DownloadItem?
 
@@ -78,6 +97,24 @@ interface DownloadRepository : OfflineDownloadWriter {
     suspend fun getDownloadedEpisodeIdsBySeries(): Map<String, Set<String>>
 
     suspend fun getDownloadedSeriesIds(): List<String>
+
+    /**
+     * Reactive [getDownloadedSeriesIds] — every series with at least one
+     * downloaded episode. UI surfaces union this with
+     * [observeCompletedDownloadedIds] so a series card's Download action
+     * flips to Remove download once the series has anything downloaded.
+     */
+    fun observeDownloadedSeriesIds(): Flow<Set<String>>
+
+    /**
+     * The union the UI actually gates on: [observeCompletedDownloadedIds] ∪
+     * [observeDownloadedSeriesIds] — a series card's Download action flips to
+     * Remove download once the series has anything downloaded. Consumers used
+     * to build this union themselves and home was the only one honoring the
+     * series half; this member makes the contract the interface's, not a
+     * convention. Collapses equal sets like its inputs.
+     */
+    fun observeDownloadedIdsIncludingSeries(): Flow<Set<String>>
 
     /** Returns the locally-cached subtitle manifest for a downloaded item, if any. */
     suspend fun loadLocalSubtitleManifest(downloadPath: String, itemId: String? = null): com.raulshma.jellyplay.core.model.OfflineSubtitleManifest?

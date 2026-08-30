@@ -792,7 +792,12 @@ class UnifiedMediaDetailProviderImpl(
             remoteWorkAllowed = connectivity == RemoteConnectivity.AVAILABLE,
             localDownloadManagement = isCompletedLocal,
             tagNavigation = isRemote,
-            chapters = isRemote && content.detail.chapters.isNotEmpty(),
+            // Chapters work for both origins: remote details fetch them live
+            // and local projections carry the download-time snapshot (the
+            // tile row degrades to a placeholder when its server thumbnail
+            // URL can't load offline). Legacy rows persist no chapters and
+            // stay gated off via the emptiness check.
+            chapters = content.detail.chapters.isNotEmpty(),
         )
         val context = DetailContext(
             origin = content.origin,

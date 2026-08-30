@@ -6,48 +6,125 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.Test
 
+/**
+ * Pins the PRODUCTION [sectionConfigCapabilities] derivation — the sheet's
+ * toggle state, position and move-enablement. The previous suite recomputed
+ * `canMoveUp`/`canMoveDown` inline with a DIFFERENT rule
+ * (`position < total - 1`, true for absent types) than production's
+ * (`index in 0..(order.lastIndex - 1)`, false for absent types) — a
+ * production regression passed it untouched.
+ */
 class HomeSectionConfigSheetTest {
 
+    private val order = listOf(
+        HomeSectionType.CONTINUE_WATCHING,
+        HomeSectionType.NEXT_UP,
+        HomeSectionType.LATEST_MEDIA,
+        HomeSectionType.RECENTLY_ADDED,
+        HomeSectionType.RECOMMENDATIONS,
+    )
+
     @Test
-    fun moveUpAndDown_boundsCalculations_atFirstPosition() {
-        val position = 0
-        val total = 5
+    fun capabilities_atFirstPosition_cannotMoveUp() {
+        val caps = sectionConfigCapabilities(
+            type = HomeSectionType.CONTINUE_WATCHING,
+            libraryId = null,
+            order = order,
+            enabledTypes = HomeSectionType.CONFIGURABLE.toSet(),
+            libraryOverrides = emptyMap(),
+        )
 
-        val canMoveUp = position > 0
-        val canMoveDown = position < total - 1
-        val positionLabel = "Position ${position + 1} of $total"
-
-        assertFalse(canMoveUp)
-        assertTrue(canMoveDown)
-        assertEquals("Position 1 of 5", positionLabel)
+        assertFalse(caps.canMoveUp)
+        assertTrue(caps.canMoveDown)
+        assertEquals(0, caps.position)
+        assertEquals(5, caps.total)
+        assertFalse(caps.perLibrary)
     }
 
     @Test
-    fun moveUpAndDown_boundsCalculations_atMiddlePosition() {
-        val position = 2
-        val total = 5
+    fun capabilities_atMiddlePosition_movesBothWays() {
+        val caps = sectionConfigCapabilities(
+            type = HomeSectionType.LATEST_MEDIA,
+            libraryId = null,
+            order = order,
+            enabledTypes = HomeSectionType.CONFIGURABLE.toSet(),
+            libraryOverrides = emptyMap(),
+        )
 
-        val canMoveUp = position > 0
-        val canMoveDown = position < total - 1
-        val positionLabel = "Position ${position + 1} of $total"
-
-        assertTrue(canMoveUp)
-        assertTrue(canMoveDown)
-        assertEquals("Position 3 of 5", positionLabel)
+        assertTrue(caps.canMoveUp)
+        assertTrue(caps.canMoveDown)
+        assertEquals(2, caps.position)
     }
 
     @Test
-    fun moveUpAndDown_boundsCalculations_atLastPosition() {
-        val position = 4
-        val total = 5
+    fun capabilities_atLastPosition_cannotMoveDown() {
+        val caps = sectionConfigCapabilities(
+            type = HomeSectionType.RECOMMENDATIONS,
+            libraryId = null,
+            order = order,
+            enabledTypes = HomeSectionType.CONFIGURABLE.toSet(),
+            libraryOverrides = emptyMap(),
+        )
 
-        val canMoveUp = position > 0
-        val canMoveDown = position < total - 1
-        val positionLabel = "Position ${position + 1} of $total"
+        assertTrue(caps.canMoveUp)
+        assertFalse(caps.canMoveDown)
+        assertEquals(4, caps.position)
+    }
 
-        assertTrue(canMoveUp)
-        assertFalse(canMoveDown)
-        assertEquals("Position 5 of 5", positionLabel)
+    @Test
+    fun capabilities_typeAbsentFromOrder_cannotMoveEitherWay() {
+        val caps = sectionConfigCapabilities(
+            type = HomeSectionType.RECOMMENDATIONS,
+            libraryId = null,
+            order = listOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP),
+            enabledTypes = HomeSectionType.CONFIGURABLE.toSet(),
+            libraryOverrides = emptyMap(),
+        )
+
+        assertFalse(caps.canMoveUp)
+        assertFalse(caps.canMoveDown)
+        assertEquals(-1, caps.position)
+    }
+
+    @Test
+    fun capabilities_globalEnabled_readsEnabledSet() {
+        val caps = sectionConfigCapabilities(
+            type = HomeSectionType.NEXT_UP,
+            libraryId = null,
+            order = order,
+            enabledTypes = setOf(HomeSectionType.NEXT_UP),
+            libraryOverrides = emptyMap(),
+        )
+
+        assertTrue(caps.enabled)
+    }
+
+    @Test
+    fun capabilities_perLibrary_defaultsToEnabledWhenOverrideAbsent() {
+        val caps = sectionConfigCapabilities(
+            type = HomeSectionType.LATEST_MEDIA,
+            libraryId = "movies",
+            order = order,
+            enabledTypes = emptySet(),
+            libraryOverrides = emptyMap(),
+        )
+
+        assertTrue(caps.enabled)
+        assertTrue(caps.perLibrary)
+    }
+
+    @Test
+    fun capabilities_perLibrary_disabledWhenInOverrideSet() {
+        val caps = sectionConfigCapabilities(
+            type = HomeSectionType.LATEST_MEDIA,
+            libraryId = "movies",
+            order = order,
+            enabledTypes = HomeSectionType.CONFIGURABLE.toSet(),
+            libraryOverrides = mapOf("movies" to setOf(HomeSectionType.LATEST_MEDIA)),
+        )
+
+        assertFalse(caps.enabled)
+        assertTrue(caps.perLibrary)
     }
 
     @Test

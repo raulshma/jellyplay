@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.ui.components
 import com.raulshma.jellyplay.core.ui.generated.resources.Res
 import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_downloaded
-import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_watched
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Box
@@ -76,18 +75,8 @@ fun OfflineMediaCard(
             progressPercent = progressFraction,
         )
 
-        // Read the normalized isPlayed (from toMediaItem) so this chip agrees
-        // with PosterCard's watched badge — both treat >=95% resume as played.
-        if (mediaItem.isPlayed) {
-            OfflineStatusChip(
-                label = stringResource(Res.string.core_ui_watched),
-                icon = Tabler.Outline.Check,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(6.dp),
-            )
-        }
+        // Watched state is rendered solely by PosterCard's pref-gated tick
+        // badge — adding a label chip here produced two indicators at once.
 
         // Offline-status badge. Suppressed on the offline home (where every
         // item is already downloaded and the badge is redundant); shown on the

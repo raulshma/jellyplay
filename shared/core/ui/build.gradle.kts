@@ -99,6 +99,9 @@ kotlin {
             implementation(libs.lifecycle.viewmodel)
             implementation(libs.paging.compose)
             implementation(libs.kotlinx.serialization.json)
+            // v0.10.6 merge: coreUiMessageModule owns the shared
+            // UserMessageBus single (see di/CoreUiMessageModule.kt).
+            implementation(libs.koin.core)
         }
         getByName("jvmShared").dependencies {
         }

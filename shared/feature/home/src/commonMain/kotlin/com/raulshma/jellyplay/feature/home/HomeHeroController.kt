@@ -16,6 +16,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveHeroHeight
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -57,6 +58,25 @@ internal fun selectFeaturedCandidates(sections: List<HomeSection>): List<MediaIt
             }
         }
     }.ifEmpty { sections.flatMap { it.items } }
+
+/**
+ * Picks the hero candidate pool for the current render source. While offline
+ * (or implicit-offline: server fetch failed with downloads present) the hero
+ * features downloaded media, so candidates come from the offline-derived
+ * sections. The music home is excluded to match the online music home, which
+ * never renders a hero — and stale online sections painted by the user-switch
+ * SWR path must not leak into it. Online rendering uses the server sections.
+ */
+internal fun selectHomeHeroCandidates(
+    renderingOffline: Boolean,
+    homeMode: HomeMode,
+    onlineSections: List<HomeSection>,
+    offlineSections: List<HomeSection>,
+): List<MediaItem> = when {
+    renderingOffline && homeMode != HomeMode.MUSIC -> selectFeaturedCandidates(offlineSections)
+    renderingOffline -> emptyList()
+    else -> selectFeaturedCandidates(onlineSections)
+}
 
 /**
  * Resolves the hero height for the current form factor.

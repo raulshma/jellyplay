@@ -184,6 +184,15 @@ data class EngineCapabilities(
      * this so it is hidden for engines that cannot capture.
      */
     val supportsScreenshot: Boolean = false,
+    /**
+     * Renders side-loaded **image** subtitle files (PGS `.sup`, VobSub/DVB) —
+     * mpv only, via its libav bitmap-subtitle decoders. ExoPlayer's bitmap-cue
+     * path exists but is not reliable for external `.sup` sidecars, and LibVLC
+     * has no image-subtitle decoder at all. Gates offline side-loading of image
+     * entries from the download manifest (`OfflineSubtitleEntry.isImage`):
+     * engines with `false` silently skip them.
+     */
+    val supportsImageSubtitles: Boolean = false,
 )
 
 enum class EnginePlaybackState {

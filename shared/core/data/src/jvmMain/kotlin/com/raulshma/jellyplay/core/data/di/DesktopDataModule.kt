@@ -128,7 +128,14 @@ fun desktopDataModule(dataDir: Path): Module {
         }
         single<DownloadEnqueueCoordinator> { get<DesktopDownloadManager>() }
 
-        single { DesktopDownloadIntake(delegate = get(), downloadRepository = get()) }
+        single {
+            DesktopDownloadIntake(
+                delegate = get(),
+                downloadRepository = get(),
+                mediaRepository = get(),
+                downloadsStore = get(),
+            )
+        }
         single<DownloadIntake> { get<DesktopDownloadIntake>() }
 
         single {

@@ -16,6 +16,15 @@ interface DownloadDao {
     fun getAllDownloads(limit: Int = 500): Flow<List<DownloadEntity>>
 
     /**
+     * One-shot read of every download row, newest first — deliberately uncapped,
+     * unlike [getAllDownloads]' 500-row UI window. The force-resync picker uses
+     * this so a library larger than the UI window still offers all of its
+     * downloaded items for resync.
+     */
+    @Query("SELECT * FROM downloads ORDER BY createdAt DESC")
+    suspend fun getAllDownloadsSnapshot(): List<DownloadEntity>
+
+    /**
      * One page of `COMPLETED` audio (`MUSIC`/`AUDIO`) downloads, newest
      * first. The media-library DOWNLOADS browse page previously fetched
      * [getAllDownloads]' full 500-row window and filtered/sliced it in
@@ -93,6 +102,29 @@ interface DownloadDao {
 
     @Query("SELECT * FROM downloads WHERE mediaItemId = :mediaItemId AND status = 'COMPLETED'")
     suspend fun getCompletedDownloadByMediaItemId(mediaItemId: String): DownloadEntity?
+
+    /**
+     * Reactive id set of everything download-complete, for quick-action gating
+     * on the online home/library (an item offers "Download" or "Remove
+     * download", never both). Leaf ids come straight from [downloads]; series
+     * and season ids are unioned in via their episodes' linkage, since those
+     * parents have no `downloads` row of their own. Room re-emits on progress
+     * writes to the table, so callers must [kotlinx.coroutines.flow.distinctUntilChanged]
+     * the mapped set (the repository does this).
+     */
+    @Query(
+        """
+        SELECT DISTINCT mediaItemId FROM downloads WHERE status = 'COMPLETED'
+        UNION
+        SELECT om.id FROM offline_media om
+        WHERE om.mediaType IN ('SERIES', 'SEASON')
+          AND EXISTS (
+              SELECT 1 FROM downloads d
+              WHERE d.status = 'COMPLETED' AND (d.seriesId = om.id OR d.seasonId = om.id)
+          )
+        """
+    )
+    fun getCompletedDownloadedItemIds(): Flow<List<String>>
 
     /**
      * Cold-start recovery projection. The recovery initializer on every app
@@ -214,6 +246,10 @@ interface DownloadDao {
 
     @Query("SELECT DISTINCT seriesId FROM downloads WHERE seriesId IS NOT NULL")
     suspend fun getDownloadedSeriesIds(): List<String>
+
+    /** Reactive [getDownloadedSeriesIds] for UI surfaces that observe it (home's quick actions). */
+    @Query("SELECT DISTINCT seriesId FROM downloads WHERE seriesId IS NOT NULL")
+    fun observeDownloadedSeriesIds(): Flow<List<String>>
 
     /**
      * Single projected read of every `(seriesId, mediaItemId)` pair in the

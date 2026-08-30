@@ -14,6 +14,8 @@
         <item quantity="other">항목 %1$d개</item>
     </plurals>
     <string name="library_no_items_found">항목을 찾을 수 없습니다</string>
+    <string name="library_no_downloads_offline">아직 다운로드가 없습니다</string>
+    <string name="library_try_adjusting_filters">필터를 조정해 보세요</string>
     <string name="library_list_view">목록 보기</string>
     <string name="library_grid_view">격자 보기</string>
     <string name="library_thumb_view">섬네일 보기</string>
@@ -28,6 +30,10 @@
     <string name="library_media_type">미디어 유형</string>
     <string name="library_status">상태</string>
     <string name="library_filter_resumable">재생 중</string>
+    <string name="library_filter_downloaded">다운로드됨</string>
+    <string name="library_remove_download_title">다운로드를 삭제할까요?</string>
+    <string name="library_remove_download_message">이 기기에서 “%1$s”의 다운로드된 사본을 삭제합니다. 서버의 사본은 영향을 받지 않습니다.</string>
+    <string name="library_remove_download_confirm">삭제</string>
     <string name="library_genres">장르</string>
     <string name="library_year_range">연도 범위</string>
     <string name="library_tags">태그</string>

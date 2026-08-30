@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
+import com.raulshma.jellyplay.core.model.ResyncCategory
 import com.raulshma.jellyplay.core.model.ResyncOptions
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -54,6 +55,9 @@ class DownloadsViewModelTest {
         syncManager = mockk(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
         every { downloadRepository.getAllDownloads() } returns downloadsFlow
+        // forceResyncCandidates() reads the suspend snapshot; answer with the
+        // flow's current value so pushItems drives both paths.
+        coEvery { downloadRepository.getAllDownloadsSnapshot() } answers { downloadsFlow.value }
         // batchProgress is a non-suspend val → stub with `every`, not `coEvery`.
         every { syncManager.batchProgress } returns MutableStateFlow(ResyncBatchProgress())
         // Flow-returning repo reads are non-suspend → `every` as well.
@@ -416,13 +420,13 @@ class DownloadsViewModelTest {
 
     @Test
     fun forceResync_delegates_with_options_and_skips_empty_selections() = runTest(mainDispatcher) {
-        val options = ResyncOptions(metadata = true, poster = false, backdrop = false, subtitles = false, trickplay = false, segments = false)
+        val options = ResyncOptions(categories = setOf(ResyncCategory.METADATA))
 
         viewModel.forceResync(listOf("i1"), options)
         verify(exactly = 1) { syncManager.resyncBatch(listOf("i1"), options) }
 
         viewModel.forceResync(emptyList(), options)
-        viewModel.forceResync(listOf("i1"), ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = false, trickplay = false, segments = false))
+        viewModel.forceResync(listOf("i1"), ResyncOptions(categories = emptySet()))
         verify(exactly = 1) { syncManager.resyncBatch(any(), any()) }
     }
 

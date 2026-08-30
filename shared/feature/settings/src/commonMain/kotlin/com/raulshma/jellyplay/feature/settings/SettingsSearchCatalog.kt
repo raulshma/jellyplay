@@ -52,7 +52,7 @@ object SettingsSearchCatalog : SettingsSearchProvider {
      * The whole catalog resolved to the current locale for fuzzy matching and
      * rendering. Dispatched onto [Dispatchers.Default] as a hard rule: one
      * resolve call fans out to a compose-resources read per catalog entry
-     * (260 items × title/subtitle/category = 780 reads today), and each
+     * (257 items × title/subtitle/category = 771 reads today), and each
      * not-yet-cached read blocks its caller — on Android the runtime resolves
      * a string via `runBlocking` on the composition thread and re-opens the
      * per-locale asset, inflating from byte 0 to the entry offset (the app's

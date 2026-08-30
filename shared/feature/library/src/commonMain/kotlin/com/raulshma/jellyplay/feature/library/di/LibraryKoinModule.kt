@@ -33,6 +33,11 @@ val libraryModule: Module = module {
     viewModel {
         LibraryViewModel(
             mediaRepository = get(),
+            offlineRepository = get(),
+            downloadRepository = get(),
+            downloadIntake = get(),
+            offlineModeManager = get(),
+            userMessageBus = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
             photoFolderPrefetcher = get(),

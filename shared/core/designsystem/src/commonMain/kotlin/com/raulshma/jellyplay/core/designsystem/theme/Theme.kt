@@ -287,16 +287,22 @@ fun JellyPlayTheme(
     reduceMotion: Boolean = false,
     accentColorSwatch: String = "dynamic",
     colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
-    synthwaveMode: Boolean = false,
+    themeVariant: String = "standard",
     synthwaveAccent: String = "magenta",
-    soothingMode: Boolean = false,
     soothingAccent: String = "ocean",
-    monochromeMode: Boolean = false,
+    vividAccent: String = "punch",
+    auroraAccent: String = "emerald",
+    sakuraAccent: String = "rose",
+    vectorPopAccent: String = "cobalt",
     appFontScale: AppFontScale = AppFontScale.DEFAULT,
     content: @Composable () -> Unit,
 ) {
-    val effectiveDarkTheme = darkTheme || isTv || synthwaveMode
-    val effectiveOledMode = (oledMode || monochromeMode) && effectiveDarkTheme && !synthwaveMode && !soothingMode
+    val variant = ThemeVariant.fromId(themeVariant)
+    val synthwaveMode = variant == ThemeVariant.SYNTHWAVE
+    val soothingMode = variant == ThemeVariant.SOOTHING
+    val monochromeMode = variant == ThemeVariant.MONOCHROME
+    val effectiveDarkTheme = darkTheme || isTv || variant.isDarkLocked
+    val effectiveOledMode = (oledMode || monochromeMode) && effectiveDarkTheme && variant.allowsOled
 
     // Bridge the Compose-visible synthwave flag to the global state that
     // `SynthwaveDynamicShape` reads from `Shape.createOutline` (which runs outside of
@@ -318,14 +324,30 @@ fun JellyPlayTheme(
     }
 
     val colorScheme = when {
-        synthwaveMode -> {
-            remember(synthwaveAccent) { getSynthwaveColorScheme(synthwaveAccent) }
-        }
-        soothingMode -> {
-            remember(soothingAccent, effectiveDarkTheme) { getSoothingColorScheme(soothingAccent, effectiveDarkTheme) }
-        }
-        monochromeMode -> {
-            remember(effectiveDarkTheme) { getMonochromeColorScheme(effectiveDarkTheme) }
+        variant != ThemeVariant.STANDARD -> {
+            remember(
+                variant, synthwaveAccent, soothingAccent, vividAccent, auroraAccent,
+                sakuraAccent, vectorPopAccent, effectiveDarkTheme, effectiveOledMode, contrastLevel,
+            ) {
+                // OLED surfaces apply only where they don't fight the variant's own
+                // background treatment (gradient fills, tinted inks). High Contrast
+                // takes precedence over OLED — same rule as the standard cascade
+                // below — because the high-contrast ramps need their lighter
+                // surfaces to stay legible.
+                val applyOled = effectiveOledMode && contrastLevel != ContrastLevel.HIGH
+                fun withOled(build: () -> ColorScheme): ColorScheme =
+                    if (applyOled) build().withOledSurfaces() else build()
+                when (variant) {
+                    ThemeVariant.SYNTHWAVE -> getSynthwaveColorScheme(synthwaveAccent)
+                    ThemeVariant.SOOTHING -> getSoothingColorScheme(soothingAccent, effectiveDarkTheme)
+                    ThemeVariant.MONOCHROME -> getMonochromeColorScheme(effectiveDarkTheme)
+                    ThemeVariant.VIVID -> withOled { getVividColorScheme(vividAccent, effectiveDarkTheme) }
+                    ThemeVariant.AURORA -> getAuroraColorScheme(auroraAccent)
+                    ThemeVariant.SAKURA -> withOled { getSakuraColorScheme(sakuraAccent, effectiveDarkTheme) }
+                    ThemeVariant.VECTOR_POP -> withOled { getVectorPopColorScheme(vectorPopAccent, effectiveDarkTheme) }
+                    ThemeVariant.STANDARD -> error("handled by the standard cascade below")
+                }
+            }
         }
         platformDynamic != null -> {
             if (effectiveOledMode && contrastLevel != ContrastLevel.HIGH) {
@@ -365,8 +387,8 @@ fun JellyPlayTheme(
         }
     }
 
-    val shapes = when {
-        synthwaveMode -> {
+    val shapes = when (variant) {
+        ThemeVariant.SYNTHWAVE -> {
             Shapes(
                 extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
                 small = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
@@ -375,7 +397,16 @@ fun JellyPlayTheme(
                 extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
             )
         }
-        soothingMode -> {
+        ThemeVariant.AURORA -> {
+            Shapes(
+                extraSmall = AbsoluteSmoothCornerShape(12.dp, 60),
+                small = AbsoluteSmoothCornerShape(16.dp, 60),
+                medium = AbsoluteSmoothCornerShape(22.dp, 60),
+                large = AbsoluteSmoothCornerShape(30.dp, 60),
+                extraLarge = AbsoluteSmoothCornerShape(38.dp, 60),
+            )
+        }
+        ThemeVariant.SOOTHING -> {
             Shapes(
                 extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
                 small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
@@ -384,7 +415,16 @@ fun JellyPlayTheme(
                 extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
             )
         }
-        monochromeMode -> {
+        ThemeVariant.SAKURA -> {
+            Shapes(
+                extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                small = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                medium = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                large = androidx.compose.foundation.shape.RoundedCornerShape(26.dp),
+                extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
+            )
+        }
+        ThemeVariant.MONOCHROME -> {
             Shapes(
                 extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
                 small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
@@ -393,17 +433,38 @@ fun JellyPlayTheme(
                 extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
             )
         }
-        else -> {
+        ThemeVariant.VECTOR_POP -> {
+            Shapes(
+                extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
+                small = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                medium = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                large = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+            )
+        }
+        ThemeVariant.VIVID -> {
+            Shapes(
+                extraSmall = AbsoluteSmoothCornerShape(14.dp, 60),
+                small = AbsoluteSmoothCornerShape(18.dp, 60),
+                medium = AbsoluteSmoothCornerShape(24.dp, 60),
+                large = AbsoluteSmoothCornerShape(30.dp, 60),
+                extraLarge = AbsoluteSmoothCornerShape(36.dp, 60),
+            )
+        }
+        ThemeVariant.STANDARD -> {
             DefaultShapes
         }
     }
 
-    val typography = when {
-        synthwaveMode -> SynthwaveTypography
-        soothingMode -> SoothingTypography
-        monochromeMode -> MonochromeTypography
-        isTv -> TvTypography
-        else -> JellyPlayTypography
+    val typography = when (variant) {
+        ThemeVariant.SYNTHWAVE -> SynthwaveTypography
+        ThemeVariant.SOOTHING -> SoothingTypography
+        ThemeVariant.MONOCHROME -> MonochromeTypography
+        ThemeVariant.VIVID -> VividTypography
+        ThemeVariant.AURORA -> AuroraTypography
+        ThemeVariant.SAKURA -> SakuraTypography
+        ThemeVariant.VECTOR_POP -> VectorPopTypography
+        ThemeVariant.STANDARD -> if (isTv) TvTypography else JellyPlayTypography
     }.let { base ->
         if (appFontScale != AppFontScale.DEFAULT) {
             base.copy(
@@ -435,12 +496,7 @@ fun JellyPlayTheme(
         LocalIsSynthwave provides synthwaveMode,
         LocalIsSoothingTheme provides soothingMode,
         LocalIsMonochromeTheme provides monochromeMode,
-        LocalThemeVariant provides when {
-            synthwaveMode -> ThemeVariant.SYNTHWAVE
-            soothingMode -> ThemeVariant.SOOTHING
-            monochromeMode -> ThemeVariant.MONOCHROME
-            else -> ThemeVariant.STANDARD
-        },
+        LocalThemeVariant provides variant,
     ) {
         MaterialExpressiveTheme(
             colorScheme = colorScheme,

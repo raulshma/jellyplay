@@ -8,7 +8,7 @@ internal object SubtitleMimeMapper {
             "ass", "ssa" -> "text/x-ssa"
             "vtt", "webvtt" -> "text/vtt"
             "ttml", "dfxp", "tt" -> "application/ttml+xml"
-            "pgs" -> "application/pgs"
+            "pgs", "pgssub", "hdmv_pgs_subtitle" -> "application/pgs"
             "mov_text" -> "application/x-quicktime-tx3g"
             else -> null
         }

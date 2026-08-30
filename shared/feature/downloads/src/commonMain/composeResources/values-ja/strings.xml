@@ -94,6 +94,8 @@
     <string name="downloads_force_resync_data_header">同期するデータ</string>
     <string name="downloads_force_resync_data_metadata">メタデータ</string>
     <string name="downloads_force_resync_data_metadata_desc">概要、キャスト、評価</string>
+    <string name="downloads_force_resync_data_chapters">チャプター</string>
+    <string name="downloads_force_resync_data_chapters_desc">チャプターマーカー</string>
     <string name="downloads_force_resync_data_poster">ポスター</string>
     <string name="downloads_force_resync_data_poster_desc">メインアートワーク</string>
     <string name="downloads_force_resync_data_backdrop">背景</string>

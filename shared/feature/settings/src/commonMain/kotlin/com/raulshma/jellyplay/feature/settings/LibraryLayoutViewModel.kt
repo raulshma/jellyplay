@@ -80,15 +80,12 @@ class LibraryLayoutViewModel(
 
     /**
      * Enables or disables a home sub-section ([type]) for a single library
-     * ([libraryId]). Disabling adds the type to the library's override set;
-     * enabling removes it and drops the key when the set becomes empty.
+     * ([libraryId]). Delegates to the store's section-prefs command — the
+     * shared toggle/override algebra home's inline sheet also routes through
+     * (this used to hold a verbatim policy copy that could drift).
      */
     fun setLibrarySectionEnabled(libraryId: String, type: HomeSectionType, enabled: Boolean) {
-        val current = homeDiscoveryStore.homeDiscovery.value.libraryHomeSectionOverrides.toMutableMap()
-        val set = current[libraryId].orEmpty().toMutableSet()
-        if (enabled) set.remove(type) else set.add(type)
-        if (set.isEmpty()) current.remove(libraryId) else current[libraryId] = set
-        editor.setLibraryHomeSectionOverrides(current)
+        launch { homeDiscoveryStore.setLibrarySectionVisible(libraryId, type, enabled) }
     }
 
     // ----- Pinned home sections -------------------------------------------

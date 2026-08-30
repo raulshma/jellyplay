@@ -34,7 +34,6 @@
 
     <string name="home_settings">설정</string>
     <string name="home_switch_user">사용자 전환</string>
-    <string name="home_going_online">온라인으로 전환 중…</string>
     <string name="home_go_online">온라인으로 전환</string>
 
     <!-- Home empty / partial-load states. -->
@@ -49,6 +48,8 @@
     <string name="home_discover">발견</string>
     <string name="home_coming_soon">공개 예정</string>
     <string name="home_continue_watching">이어보기</string>
+    <string name="home_next_up">다음 시청</string>
+    <string name="home_implicit_offline_banner">서버에 연결할 수 없어 다운로드를 표시합니다.</string>
     <string name="home_recently_downloaded">최근 다운로드</string>
     <string name="home_movies">영화</string>
     <string name="home_series">시리즈</string>
@@ -65,7 +66,6 @@
     <string name="home_no_downloads_yet">아직 다운로드가 없습니다</string>
     <string name="home_no_downloads_description">온라인일 때 미디어를 다운로드하면 오프라인에서도 이용할 수 있습니다.</string>
     <string name="home_go_online_action">온라인으로 전환</string>
-    <string name="home_your_downloads">내 다운로드</string>
 
     <!-- Home search overlay. -->
     <string name="home_no_results_found">결과를 찾을 수 없음</string>
@@ -98,4 +98,7 @@
     <string name="home_delete_download_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까? %2$s이(가) 확보됩니다.</string>
     <string name="home_delete_download_message_no_size">\"%1$s\"을(를) 기기에서 제거하시겠습니까?</string>
     <string name="home_delete_download_confirm">삭제</string>
+    <string name="home_download_started">다운로드가 시작되었습니다</string>
+    <string name="home_download_start_failed">다운로드를 시작하지 못했습니다</string>
+    <string name="home_series_download_queued">에피소드 다운로드가 대기열에 추가되었습니다</string>
 </resources>

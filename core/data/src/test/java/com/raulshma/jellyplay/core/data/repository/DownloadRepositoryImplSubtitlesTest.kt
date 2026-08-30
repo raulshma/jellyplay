@@ -14,13 +14,20 @@ import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -37,7 +44,13 @@ import java.io.File
  *   disk by clearing the sidecar dir and reports success;
  * - a transient fetch failure (deliverable streams exist but none downloaded)
  *   leaves existing sidecars untouched and reports failure, so the resync
- *   baseline rolls its subtitle axis back instead of wiping working subs.
+ *   baseline rolls its subtitle axis back instead of wiping working subs;
+ * - an error page arriving as HTTP 200 HTML/JSON is rejected instead of being
+ *   persisted as an unparseable sidecar;
+ * - the fetch carries the `X-Emby-Token` header fallback alongside the
+ *   baked-in api_key query param;
+ * - [DownloadRepositoryImpl.markSubtitlesPending] delegates to the DAO's
+ *   atomic mark (the flag-raising SQL itself lives in SyncBaselineDaoTest).
  *
  * Constructed like [DownloadRepositoryImplResumeTest]; the subtitle path touches
  * only `playbackRepository` (URL resolution) and on-disk files, so the rest are
@@ -72,7 +85,7 @@ class DownloadRepositoryImplSubtitlesTest {
     private lateinit var downloadPath: File
     private val itemId = "item-1"
 
-    private fun repository() = DownloadRepositoryImpl(
+    private fun repository(testClient: OkHttpClient = httpClient) = DownloadRepositoryImpl(
         downloadDao = downloadDao,
         offlineMediaDao = offlineMediaDao,
         playbackStateDao = playbackStateDao,
@@ -81,7 +94,7 @@ class DownloadRepositoryImplSubtitlesTest {
         mediaRepository = MediaRepositoryAccess { mediaRepository },
         episodeCatalogue = episodeCatalogue,
         playbackRepository = playbackRepository,
-        httpClient = httpClient,
+        httpClient = testClient,
         downloadsStore = preferencesStore,
         json = json,
         downloadDelegate = downloadDelegate,
@@ -125,10 +138,9 @@ class DownloadRepositoryImplSubtitlesTest {
         seedWorkingSubtitles()
         // Deliverable stream exists, but URL resolution yields a blank URL, so
         // every iteration `continue`s and nothing lands on disk.
-        val streams = listOf(MediaStream(index = 0, type = StreamType.SUBTITLE, codec = "srt", language = "eng", isExternal = true, displayTitle = "English"))
         coEvery { playbackRepository.buildSubtitleDeliveryUrl(itemId, "src-1", 0, "srt") } returns ""
 
-        val ok = repository().downloadExternalSubtitles(itemId, "src-1", streams, downloadPath.absolutePath)
+        val ok = repository().downloadExternalSubtitles(itemId, "src-1", listOf(deliverableSrtStream()), downloadPath.absolutePath)
 
         assertFalse("fetch failure must report failure so the baseline rolls back", ok)
         val dir = subtitlesDir()
@@ -171,5 +183,91 @@ class DownloadRepositoryImplSubtitlesTest {
 
         assertTrue(ok)
         assertFalse(subtitlesDir().exists())
+    }
+
+    @Test
+    fun `markSubtitlesPending delegates to the dao's atomic mark`() = runTest {
+        repository().markSubtitlesPending(itemId)
+
+        // The stub-insert/flag-raise pairing lives inside the DAO's
+        // @Transaction method — the caller issues one call.
+        coVerify(exactly = 1) { syncBaselineDao.markSubtitlesPending(itemId) }
+    }
+
+    @Test
+    fun `http 200 html error page is rejected instead of persisted as a sidecar`() = runTest {
+        withServedSubtitle(contentType = "text/html; charset=utf-8", body = "<html><body>Please log in</body></html>") { ok, _ ->
+            assertFalse("an HTML body must not count as a fetched subtitle", ok)
+            assertNull(subtitlesDir().listFiles()?.firstOrNull { it.name == "0.srt" })
+        }
+    }
+
+    @Test
+    fun `http 200 json error body is rejected instead of persisted as a sidecar`() = runTest {
+        withServedSubtitle(contentType = "application/json", body = """{"error":"NotAuthorized"}""") { ok, _ ->
+            assertFalse("a JSON body must not count as a fetched subtitle", ok)
+            assertNull(subtitlesDir().listFiles()?.firstOrNull { it.name == "0.srt" })
+        }
+    }
+
+    @Test
+    fun `subtitle fetch carries the X-Emby-Token header fallback`() = runTest {
+        withServedSubtitle(
+            contentType = "application/x-subrip",
+            body = "1\n00:00:01,000 --> 00:00:02,000\nhi\n",
+            accessToken = "token-123",
+        ) { ok, recorded ->
+            assertTrue(ok)
+            assertEquals("token-123", recorded.getHeader("X-Emby-Token"))
+            // The sidecar landed with manifest + file.
+            val dir = subtitlesDir()
+            assertTrue(File(dir, "0.srt").exists())
+            assertTrue(File(dir, DownloadArtifacts.SUBTITLE_MANIFEST_FILE).exists())
+        }
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    /** The one deliverable external SRT stream every fetch test bundles. */
+    private fun deliverableSrtStream() = MediaStream(
+        index = 0,
+        type = StreamType.SUBTITLE,
+        codec = "srt",
+        language = "eng",
+        isExternal = true,
+        displayTitle = "English",
+    )
+
+    /**
+     * Starts a [MockWebServer] answering exactly one HTTP 200 with
+     * [contentType]/[body], wires it as the delivery endpoint for stream index
+     * 0, runs [downloadExternalSubtitles] against a real OkHttp client, and
+     * hands the result plus the single recorded request to [assert]. The token
+     * stub defaults to a fixed value so the header-fallback test can assert on
+     * it; rejection tests ignore the header.
+     */
+    private fun withServedSubtitle(
+        contentType: String,
+        body: String,
+        accessToken: String = "token-123",
+        assert: (downloadResult: Boolean, recordedRequest: RecordedRequest) -> Unit,
+    ) = runTest {
+        val server = MockWebServer()
+        try {
+            server.enqueue(
+                MockResponse().setResponseCode(200).setHeader("Content-Type", contentType).setBody(body),
+            )
+            server.start()
+            every { playbackRepository.getAccessToken() } returns accessToken
+            every { playbackRepository.buildSubtitleDeliveryUrl(itemId, "src-1", 0, "srt") } returns
+                server.url("/Videos/item/src-1/Subtitles/0/Stream.srt").toString()
+
+            val ok = repository(testClient = OkHttpClient())
+                .downloadExternalSubtitles(itemId, "src-1", listOf(deliverableSrtStream()), downloadPath.absolutePath)
+
+            assert(ok, server.takeRequest())
+        } finally {
+            server.close()
+        }
     }
 }

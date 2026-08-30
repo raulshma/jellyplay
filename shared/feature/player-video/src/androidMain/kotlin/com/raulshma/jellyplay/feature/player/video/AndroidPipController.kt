@@ -45,6 +45,7 @@ internal class AndroidPipController(
     override fun requestAutoEnterPip(shouldEnter: Boolean) = delegate.requestAutoEnterPip(shouldEnter)
 
     override fun requestAutoExitPip() = delegate.requestAutoExitPip()
+    override fun consumeAutoExitPip() = delegate.consumeAutoExitPip()
 
     override fun clearPipDismissed() = delegate.clearPipDismissed()
 

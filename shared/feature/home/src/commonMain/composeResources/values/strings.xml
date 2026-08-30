@@ -35,7 +35,6 @@
 
     <string name="home_settings">Settings</string>
     <string name="home_switch_user">Switch User</string>
-    <string name="home_going_online">Going online…</string>
     <string name="home_go_online">Go Online</string>
 
     <!-- Home empty / partial-load states. -->
@@ -50,6 +49,8 @@
     <string name="home_discover">Discover</string>
     <string name="home_coming_soon">Coming Soon</string>
     <string name="home_continue_watching">Continue Watching</string>
+    <string name="home_next_up">Next Up</string>
+    <string name="home_implicit_offline_banner">Couldn\'t reach the server — showing your downloads.</string>
     <string name="home_recently_downloaded">Recently Downloaded</string>
     <string name="home_movies">Movies</string>
     <string name="home_series">Series</string>
@@ -66,7 +67,6 @@
     <string name="home_no_downloads_yet">No downloads yet</string>
     <string name="home_no_downloads_description">Download media while online to access it offline.</string>
     <string name="home_go_online_action">Go online</string>
-    <string name="home_your_downloads">Your Downloads</string>
 
     <!-- Home search overlay. -->
     <string name="home_no_results_found">No results found</string>
@@ -99,4 +99,7 @@
     <string name="home_delete_download_message">Remove \"%1$s\" from your device? This frees up %2$s.</string>
     <string name="home_delete_download_message_no_size">Remove \"%1$s\" from your device?</string>
     <string name="home_delete_download_confirm">Delete</string>
+    <string name="home_download_started">Download started</string>
+    <string name="home_download_start_failed">Couldn't start the download</string>
+    <string name="home_series_download_queued">Episodes queued for download</string>
 </resources>

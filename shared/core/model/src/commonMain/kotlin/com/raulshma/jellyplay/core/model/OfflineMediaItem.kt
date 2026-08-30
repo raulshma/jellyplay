@@ -53,6 +53,13 @@ data class OfflineMediaItem(
     // title search, matching the pre-fix behaviour.
     val providerIds: Map<String, String> = emptyMap(),
     val externalUrls: List<ExternalUrl> = emptyList(),
+    // Chapter list persisted at download time so chapter markers, the player's
+    // chapter picker sheet, chapter-based intro/credits segment synthesis and
+    // the detail screen's chapter row all work offline. This KDoc is the
+    // canonical contract; persistence sites point here instead of restating it.
+    // Empty for items downloaded before this field existed (migration 50→51)
+    // or with no server chapters.
+    val chapters: List<ChapterInfo> = emptyList(),
     // Epoch millis the offline_media row was created (download date).
     val createdAt: Long = 0L,
 )
@@ -89,8 +96,12 @@ data class OfflinePersonInfo(
  * a near-finished item can have a resume position of 95–99% with `played =
  * false`. Without this normalization the offline episode cards would show
  * "0m left" instead of "Watched".
+ *
+ * Public because every surface that partitions "in progress" vs "finished"
+ * (offline home Continue Watching / Next Up) must agree with the display
+ * normalization above — the threshold is one fact, owned here.
  */
-private const val OFFLINE_WATCHED_THRESHOLD = 0.95
+const val OFFLINE_WATCHED_THRESHOLD = 0.95
 
 /**
  * Adapts an [OfflineMediaItem] into a [MediaItem] so the shared online card
@@ -181,11 +192,12 @@ fun OfflinePersonInfo.toPersonInfo(): PersonInfo = PersonInfo(
  *   left on [MediaItem.studios] (populated by [toMediaItem]) and rendered as
  *   non-navigable labels; [MediaDetail.studios] is left empty so no server id is
  *   ever invented or navigated.
- * - **No chapters**, no metadata-lock info (`lockData = false`, `lockedFields`
- *   empty), and the server-only collections (`tagItems`, `productionLocations`,
- *   `airDays`, `airTime`, `displayOrder`, `dateCreated`, `imageInfos`,
- *   `relatedItems`, `sortName`, `customRating`, `logoImageTag`,
- *   `overviewImageTag`, `mediaSources`) map to empty/null.
+ * - No metadata-lock info (`lockData = false`, `lockedFields` empty), and the
+ *   server-only collections (`tagItems`, `productionLocations`, `airDays`,
+ *   `airTime`, `displayOrder`, `dateCreated`, `imageInfos`, `relatedItems`,
+ *   `sortName`, `customRating`, `logoImageTag`, `overviewImageTag`,
+ *   `mediaSources`) map to empty/null. Chapters are NOT a loss — they are
+ *   persisted on the offline row and carried through.
  * - `tagline` (scalar) becomes a one-element `taglines` list. The unified body
  *   must keep the italic rendering the offline screen used.
  *
@@ -199,4 +211,5 @@ fun OfflineMediaItem.toMediaDetail(): MediaDetail = MediaDetail(
     people = cast.map { it.toPersonInfo() },
     providerIds = providerIds,
     externalUrls = externalUrls,
+    chapters = chapters,
 )

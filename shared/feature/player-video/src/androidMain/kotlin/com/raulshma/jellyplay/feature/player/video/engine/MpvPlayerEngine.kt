@@ -1508,25 +1508,92 @@ class MpvPlayerEngine(
         emptySet()
     }
 
+    /**
+     * Label-uniquify + id-register core shared by the two side-load gates
+     * below ([dedupeRuntimeSideLoad] / [dedupePendingSideLoad]).
+     *
+     * The returned label is both the `title` passed to sub-add AND the
+     * registry key buildTracks looks up, so they stay in lockstep by
+     * construction. Same-label-but-different-source subs are NOT skipped:
+     * their label is uniquified against [usedLabels] ("Label (2)", ...) —
+     * skipping them made the second sidecar of a same-titled pair permanently
+     * unselectable (it never entered the track-list, so neither its
+     * side-loaded id nor any other resolution key existed).
+     *
+     * On success the caller-supplied id (when present) is registered in
+     * [sideLoadedSubtitleIds] so buildTracks can stamp it onto the resulting
+     * MediaTrack.id instead of the synthetic mpv id — mirroring ExoPlayer's
+     * SubtitleConfiguration.id propagation.
+     */
+    private fun registerSideLoadedLabel(source: SubtitleSource, usedLabels: MutableSet<String>): String {
+        var label = source.label.ifBlank { "External subtitle" }
+        if (label in usedLabels) {
+            var n = 2
+            while ("$label ($n)" in usedLabels) n++
+            label = "$label ($n)"
+        }
+        usedLabels += label
+        if (source.id.isNotBlank()) {
+            sideLoadedSubtitleIds = sideLoadedSubtitleIds + (label to source.id)
+        }
+        return label
+    }
+
+    /**
+     * True when a source with [source]'s label is already in the tracked
+     * track-list ([usedLabels]) — a true duplicate to skip, logged here.
+     * Shared by both side-load gates; same-label-but-different-source subs
+     * that arrive through other paths are uniquified by
+     * [registerSideLoadedLabel] instead of skipped.
+     */
+    private fun skipDuplicateByLabel(source: SubtitleSource, usedLabels: Set<String>): Boolean {
+        if (source.label !in usedLabels) return false
+        Log.d(TAG, "Skipping duplicate subtitle (already in track-list): label=${source.label}")
+        return true
+    }
+
+    /**
+     * Runtime side-load gate ([addExternalSubtitle]): skips true re-adds — by
+     * registered id when the source supplies one, by live track-list label
+     * otherwise (the id check can't fire for legacy id-less sources) — then
+     * delegates to [registerSideLoadedLabel].
+     */
+    private fun dedupeRuntimeSideLoad(source: SubtitleSource, usedLabels: MutableSet<String>): String? {
+        if (source.id.isNotBlank()) {
+            if (sideLoadedSubtitleIds.containsValue(source.id)) {
+                Log.d(TAG, "Skipping duplicate subtitle (id already registered): id=${source.id}")
+                return null
+            }
+        } else if (skipDuplicateByLabel(source, usedLabels)) {
+            return null
+        }
+        return registerSideLoadedLabel(source, usedLabels)
+    }
+
+    /**
+     * Load-time batch gate ([addPendingSubtitles]). load() pre-seeds
+     * [sideLoadedSubtitleIds] from request.externalSubtitles so buildTracks can
+     * stamp ids before sub-add runs — an id-based skip here would drop EVERY
+     * batch entry. The authoritative guard is therefore the live track-list
+     * label check only (the file just started; its track-list is fresh);
+     * everything else delegates to [registerSideLoadedLabel].
+     */
+    private fun dedupePendingSideLoad(source: SubtitleSource, usedLabels: MutableSet<String>): String? {
+        if (skipDuplicateByLabel(source, usedLabels)) return null
+        return registerSideLoadedLabel(source, usedLabels)
+    }
+
     private fun addPendingSubtitles(mpv: MPV) {
         val subtitles = pendingSubtitles
         if (subtitles.isEmpty()) return
 
-        // Guard against duplicate sub-add. mpv lists every track (demuxed +
-        // previously sub-add'd) in track-list; if a side-load with the same
-        // label is already present, skip it. hit the same class of bug
-        // (START_FILE re-firing re-flushed its initialCommands) and fixed it by
-        // clearing the buffer; here the equivalent is checking the live
-        // track-list, which also covers a load() called twice without a
-        // release() in between. Matching on label (the title passed to sub-add)
-        // is robust because that's the exact arg we pass below.
-        val existingSubLabels = existingSubLabels()
+        // [dedupePendingSideLoad] guards against duplicate sub-add against
+        // the live track-list; usedLabels keeps growing across the batch so
+        // two same-titled pending subs don't collide with each other either.
+        val usedLabels = existingSubLabels().toMutableSet()
 
         subtitles.forEach { sub ->
-            if (sub.label in existingSubLabels) {
-                Log.d(TAG, "Skipping duplicate Jellyfin subtitle (already in track-list): id=${sub.id}, label=${sub.label}")
-                return@forEach
-            }
+            val label = dedupePendingSideLoad(sub, usedLabels) ?: return@forEach
             // "select" forces the track active; "auto" leaves selection to mpv's
             // slang/sub-auto heuristics, which drop a side-loaded track that has
             // no language and no matching slang. A subtitle flagged isDefault is
@@ -1535,19 +1602,19 @@ class MpvPlayerEngine(
             try {
                 Log.d(
                     TAG,
-                    "Adding Jellyfin subtitle to MPV: id=${sub.id}, label=${sub.label}, lang=${sub.language}, " +
+                    "Adding Jellyfin subtitle to MPV: id=${sub.id}, label='$label', lang=${sub.language}, " +
                         "codec=${sub.codec}, default=${sub.isDefault}, forced=${sub.isForced}, flags=$flags, " +
                         "url=${redactSensitive(sub.url)}"
                 )
                 if (sub.language.isNullOrBlank()) {
-                    mpv.command("sub-add", sub.url, flags, sub.label)
+                    mpv.command("sub-add", mpvOpenableUrl(sub.url), flags, label)
                 } else {
                     // Local val captures the non-null value: SubtitleSource.language
                     // now lives in :feature:player:core (different module), so
                     // Kotlin can no longer smart-cast the cross-module property.
                     // The else branch proves non-blank (hence non-null).
                     val language = sub.language!!
-                    mpv.command("sub-add", sub.url, flags, sub.label, language)
+                    mpv.command("sub-add", mpvOpenableUrl(sub.url), flags, label, language)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to add Jellyfin subtitle: ${redactSensitive(sub.url)}", e)
@@ -1559,30 +1626,25 @@ class MpvPlayerEngine(
 
     override fun addExternalSubtitle(source: SubtitleSource) {
         val mpv = mpvView?.mpv ?: return
-        // Skip if a track with the same label is already present (double-tap in
-        // the picker, or a re-add after a config reload). See addPendingSubtitles
-        // for the rationale on label-keyed dedup.
-        if (source.label in existingSubLabels()) {
-            Log.d(TAG, "Skipping duplicate external subtitle (already in track-list): label=${source.label}")
-            return
-        }
-        // Register the caller-supplied id (when present) so buildTracks can
-        // stamp it onto the resulting MediaTrack.id instead of the synthetic
-        // mpv id — mirroring ExoPlayer's SubtitleConfiguration.id propagation.
-        if (source.id.isNotBlank()) {
-            sideLoadedSubtitleIds = sideLoadedSubtitleIds + (source.label to source.id)
-        }
+        // [dedupeRuntimeSideLoad] skips true re-adds (double-tap, re-attach
+        // after a config reload) and uniquifies same-label different-source
+        // subs — see its KDoc for why skipping those would strand the row.
+        val label = dedupeRuntimeSideLoad(source, existingSubLabels().toMutableSet()) ?: return
         try {
+            // mpv cannot open File.toURI()'s single-slash file:/ URIs — see
+            // [mpvOpenableUrl].
+            val openUrl = mpvOpenableUrl(source.url)
             if (source.language.isNullOrBlank()) {
-                mpv.command("sub-add", source.url, "select", source.label)
+                mpv.command("sub-add", openUrl, "select", label)
             } else {
                 // Local val captures the non-null value: SubtitleSource.language
                 // now lives in :feature:player:core (different module), so
                 // Kotlin can no longer smart-cast the cross-module property.
                 // The else branch proves non-blank (hence non-null).
                 val language = source.language!!
-                mpv.command("sub-add", source.url, "select", source.label, language)
+                mpv.command("sub-add", openUrl, "select", label, language)
             }
+            Log.d("SubtitleUse", "mpv sub-add ok: id=${source.id}, label='$label', url=${redactSensitive(openUrl)}")
             refreshTracks("addExternalSubtitle", delayMs = 500)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to add external subtitle: ${redactSensitive(source.url)}", e)
@@ -1848,6 +1910,10 @@ class MpvPlayerEngine(
  * `setOptionString`) and `updateConfig` (live, `setPropertyString`).
  * Keeping the mapping in one place stops the two sites from drifting.
  */
+
+// [mpvOpenableUrl] moved to commonMain (MpvOpenableUrl.kt) so the pure JVM
+// string logic stays unit-testable from jvmTest; same package, call-sites
+// unchanged.
 
 internal fun decoderModeToHwdec(mode: DecoderMode): String = when (mode) {
     // Zero-copy `mediacodec` first: mpv picks the first entry that inits, and

@@ -107,6 +107,8 @@
     <string name="core_ui_synthwave_accent_subtitle">选择自定义霓虹强调色板</string>
     <string name="core_ui_soothing_accent_title">柔和强调色</string>
     <string name="core_ui_soothing_accent_subtitle">选择舒缓的强调色</string>
+    <string name="core_ui_variant_accent_title">%1$s强调色</string>
+    <string name="core_ui_variant_accent_subtitle">选择此主题样式的强调色</string>
 
     <!-- core/ui connection-state & quick actions -->
     <string name="core_ui_backspace">退格</string>
@@ -196,6 +198,14 @@
 <plurals name="detail_episode_count">
     <item quantity="other">%1$d 集</item>
     </plurals>
+
+    <!-- SeriesDownloadSheet (per-season download picker, shared by detail + home). -->
+    <string name="detail_download_series_title">下载剧集</string>
+    <string name="detail_download_series_subtitle">点击某一季可查看剧集。选择要下载的内容。</string>
+    <string name="detail_downloaded_count_format">• 已下载 %1$d 集</string>
+    <string name="detail_no_episodes_available">没有可用的剧集</string>
+    <string name="detail_downloaded_status">已下载</string>
+    <string name="detail_queuing">正在加入队列…</string>
 
     <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
     <string name="transcode_reasons_title">为什么正在转码？</string>

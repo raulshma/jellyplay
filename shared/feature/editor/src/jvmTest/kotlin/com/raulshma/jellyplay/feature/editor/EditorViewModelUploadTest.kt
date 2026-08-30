@@ -81,6 +81,11 @@ class EditorViewModelUploadTest {
                 override suspend fun loadAll(itemId: String) = emptyList<com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle>()
                 override suspend fun fileFor(itemId: String, saved: com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle) = java.io.File(saved.fileRelativePath)
                 override suspend fun delete(itemId: String, saved: com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle) = Unit
+                override suspend fun markServerStreamIndex(
+                    itemId: String,
+                    saved: com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle,
+                    index: Int,
+                ) = Unit
                 override suspend fun clear(itemId: String) = Unit
             },
         )

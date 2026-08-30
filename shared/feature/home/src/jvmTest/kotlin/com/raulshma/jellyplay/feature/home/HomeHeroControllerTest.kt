@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.home
 
+import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -64,6 +65,72 @@ class HomeHeroControllerTest {
         )
         val candidates = selectFeaturedCandidates(listOf(audioSection))
         assertEquals(listOf("aud1", "photo1"), candidates.map { it.id })
+    }
+
+    @Test
+    fun selectHomeHeroCandidates_offlineVideoHome_featuresOfflineMoviesAndSeries() {
+        val offlineSections = listOf(
+            HomeSection(
+                id = "offline_recent",
+                title = "Recently Downloaded",
+                type = HomeSectionType.DOWNLOADED,
+                items = listOf(
+                    item("d-m1", MediaType.MOVIE),
+                    item("d-s1", MediaType.SERIES),
+                    item("d-a1", MediaType.AUDIO),
+                ),
+            ),
+        )
+        val onlineSections = listOf(section("latest", item("m1", MediaType.MOVIE)))
+
+        val candidates = selectHomeHeroCandidates(
+            renderingOffline = true,
+            homeMode = HomeMode.VIDEO,
+            onlineSections = onlineSections,
+            offlineSections = offlineSections,
+        )
+
+        // Server titles are never featured offline; audio is skipped.
+        assertEquals(listOf("d-m1", "d-s1"), candidates.map { it.id })
+    }
+
+    @Test
+    fun selectHomeHeroCandidates_offlineMusicHome_isEmpty() {
+        val candidates = selectHomeHeroCandidates(
+            renderingOffline = true,
+            homeMode = HomeMode.MUSIC,
+            onlineSections = listOf(section("latest", item("m1", MediaType.MOVIE))),
+            offlineSections = listOf(
+                HomeSection(
+                    id = "offline_music",
+                    title = "Music",
+                    type = HomeSectionType.DOWNLOADED,
+                    items = listOf(item("alb1", MediaType.ALBUM)),
+                ),
+            ),
+        )
+
+        // The online music home never renders a hero; neither does the offline one.
+        assertTrue(candidates.isEmpty())
+    }
+
+    @Test
+    fun selectHomeHeroCandidates_online_ignoresOfflineSections() {
+        val candidates = selectHomeHeroCandidates(
+            renderingOffline = false,
+            homeMode = HomeMode.VIDEO,
+            onlineSections = listOf(section("latest", item("m1", MediaType.MOVIE))),
+            offlineSections = listOf(
+                HomeSection(
+                    id = "offline_movies",
+                    title = "Movies",
+                    type = HomeSectionType.DOWNLOADED,
+                    items = listOf(item("d-m1", MediaType.MOVIE)),
+                ),
+            ),
+        )
+
+        assertEquals(listOf("m1"), candidates.map { it.id })
     }
 
     @Test
@@ -217,5 +284,12 @@ class HomeHeroControllerTest {
         id = id,
         name = id,
         mediaType = type,
+    )
+
+    private fun section(id: String, vararg items: MediaItem) = HomeSection(
+        id = id,
+        title = id,
+        type = HomeSectionType.LATEST_MEDIA,
+        items = items.toList(),
     )
 }

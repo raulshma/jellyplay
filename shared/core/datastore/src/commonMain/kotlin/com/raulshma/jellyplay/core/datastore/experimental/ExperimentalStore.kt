@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,7 +29,8 @@ import kotlinx.serialization.encodeToString
 /**
  * Deep module owning the **experimental features + misc app / update** preference
  * domain: the opt-in experimental feature set (JSON), the self-update check
- * + auto-download toggles, the app language override, the share-media /
+ * + auto-download toggles, the dismissed-update suppression window, the app
+ * language override, the share-media /
  * search-history / audio-description toggles, and the dismissed-update
  * one-time state.
  *
@@ -83,6 +85,9 @@ class ExperimentalStore constructor(
         // One-time update-dismissal state — written by setDismissedUpdate, never reset.
         val DISMISSED_UPDATE_VERSION = stringPreferencesKey("dismissed_update_version")
         val DISMISSED_UPDATE_AT_MS = longPreferencesKey("dismissed_update_at_ms")
+
+        // How long a dismissed update stays suppressed for the same version.
+        val UPDATE_DISMISS_PERIOD = stringPreferencesKey("update_dismiss_period")
     }
 
     private val sharedPrefs: Flow<Preferences> = dataStore.data
@@ -106,6 +111,7 @@ class ExperimentalStore constructor(
         preferAudioDescription = prefs[Keys.PREFER_AUDIO_DESCRIPTION] ?: false,
         dismissedUpdateVersion = prefs[Keys.DISMISSED_UPDATE_VERSION],
         dismissedUpdateAtMs = prefs[Keys.DISMISSED_UPDATE_AT_MS] ?: 0L,
+        updateDismissPeriod = UpdateDismissPeriod.fromName(prefs[Keys.UPDATE_DISMISS_PERIOD]),
     )
 
     private fun readEnabledExperimentalFeatures(prefs: Preferences): Set<ExperimentalFeature> {
@@ -168,9 +174,10 @@ class ExperimentalStore constructor(
 
     /**
      * Records that the user dismissed the prompt for [version], stamping [atMs]
-     * so the auto-check can suppress the same version for 24 hours. Pass `null`
-     * to clear a prior dismissal (e.g. on a fresh update check or after
-     * installing). One-time state — these keys are **not** in [resetKeys].
+     * so the auto-check can suppress the same version for the configured
+     * [UpdateDismissPeriod]. Pass `null` to clear a prior dismissal (e.g. on a
+     * fresh update check or after installing). One-time state — these keys are
+     * **not** in [resetKeys].
      */
     suspend fun setDismissedUpdate(version: String?, atMs: Long = wallNowMillis()) {
         dataStore.edit {
@@ -182,6 +189,11 @@ class ExperimentalStore constructor(
                 it[Keys.DISMISSED_UPDATE_AT_MS] = atMs
             }
         }
+    }
+
+    /** Persists the "hide dismissed updates for" window (Settings → About). */
+    suspend fun setUpdateDismissPeriod(period: UpdateDismissPeriod) {
+        dataStore.edit { it[Keys.UPDATE_DISMISS_PERIOD] = period.name }
     }
 
     /**
@@ -210,6 +222,7 @@ class ExperimentalStore constructor(
         PreferenceResetCategory.MISC_APP -> listOf(
             Keys.SELF_UPDATE_CHECK_ENABLED,
             Keys.SELF_UPDATE_DOWNLOAD_ENABLED,
+            Keys.UPDATE_DISMISS_PERIOD,
             Keys.SHOW_SHARE_MEDIA_OPTION,
             Keys.HIDE_SEARCH_HISTORY,
         )
@@ -231,6 +244,7 @@ class ExperimentalStore constructor(
             it[Keys.ENABLED_EXPERIMENTAL_FEATURES] = json.encodeToString(userPreferences.enabledExperimentalFeatures.map { feature -> feature.name }.toSet())
             it[Keys.SELF_UPDATE_CHECK_ENABLED] = userPreferences.selfUpdateCheckEnabled
             it[Keys.SELF_UPDATE_DOWNLOAD_ENABLED] = userPreferences.selfUpdateDownloadEnabled
+            it[Keys.UPDATE_DISMISS_PERIOD] = userPreferences.updateDismissPeriod.name
             userPreferences.appLanguage?.let { language -> it[Keys.APP_LANGUAGE] = language }
             it[Keys.SHOW_SHARE_MEDIA_OPTION] = userPreferences.showShareMediaOption
             it[Keys.HIDE_SEARCH_HISTORY] = userPreferences.hideSearchHistory
@@ -253,6 +267,7 @@ class ExperimentalStore constructor(
             it[Keys.ENABLED_EXPERIMENTAL_FEATURES] = json.encodeToString(slice.enabledExperimentalFeatures.map { feature -> feature.name }.toSet())
             it[Keys.SELF_UPDATE_CHECK_ENABLED] = slice.selfUpdateCheckEnabled
             it[Keys.SELF_UPDATE_DOWNLOAD_ENABLED] = slice.selfUpdateDownloadEnabled
+            it[Keys.UPDATE_DISMISS_PERIOD] = slice.updateDismissPeriod.name
             slice.appLanguage?.let { language -> it[Keys.APP_LANGUAGE] = language }
             it[Keys.SHOW_SHARE_MEDIA_OPTION] = slice.showShareMediaOption
             it[Keys.HIDE_SEARCH_HISTORY] = slice.hideSearchHistory
@@ -283,4 +298,5 @@ data class ExperimentalSlice(
     val preferAudioDescription: Boolean = false,
     val dismissedUpdateVersion: String? = null,
     val dismissedUpdateAtMs: Long = 0L,
+    val updateDismissPeriod: UpdateDismissPeriod = UpdateDismissPeriod.DEFAULT,
 )

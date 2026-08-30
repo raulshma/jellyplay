@@ -56,3 +56,18 @@ enum class DownloadQuality(val displayName: String) {
     MEDIUM_720P("Medium (720p)"),
     LOW_480P("Low (480p)"),
 }
+
+/**
+ * Max bitrate (bits/s) this quality caps a download transcode at; `null` means
+ * no cap (original quality). Values are aligned with the player's adaptive
+ * streaming presets so a downloaded file matches what the user would see
+ * streamed at the equivalent quality.
+ */
+val DownloadQuality.maxBitrate: Int?
+    get() = when (this) {
+        DownloadQuality.ORIGINAL -> null
+        DownloadQuality.HIGH_1080P -> 8_000_000
+        DownloadQuality.MEDIUM_720P -> 3_000_000
+        DownloadQuality.LOW_480P -> 1_500_000
+    }
+

@@ -115,6 +115,8 @@
     <string name="player_video_use">Use</string>
     <string name="player_video_failed_tap_to_retry">Failed — tap to retry</string>
     <string name="player_video_search_failed">Search failed</string>
+    <!-- Shown inline on the Get tab when the server-default remote-subtitle list fails to load (replaces the former global toast). -->
+    <string name="player_video_load_subtitles_failed">Couldn\'t load subtitles</string>
     <string name="player_video_no_results_found">No results found</string>
     <string name="player_video_pick_language_hint">Pick a language and search to find subtitles.</string>
     <string name="player_video_subtitle_provider_all">All</string>
@@ -255,6 +257,8 @@
     <string name="player_video_remember_subtitles_off">Keep subtitles off for this series</string>
     <string name="player_video_error_offline_file_missing">Error: offline file missing</string>
     <string name="player_video_error_loading_media">Error loading media</string>
+    <string name="player_video_error_offline_stream">You\u2019re offline \u2014 reconnect to stream this title</string>
+    <string name="player_video_error_next_episode_load">Couldn\u2019t load the next episode. Check your connection and try again</string>
     <string name="player_video_trickplay_thumbnail">Trickplay thumbnail</string>
 
     <plurals name="player_video_participants">

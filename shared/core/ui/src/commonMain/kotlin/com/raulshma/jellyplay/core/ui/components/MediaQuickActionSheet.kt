@@ -31,6 +31,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.filled.Heart
 import com.composables.icons.tabler.outline.Bookmark
 import com.composables.icons.tabler.outline.Download
+import com.composables.icons.tabler.outline.DownloadOff
 import com.composables.icons.tabler.outline.Eye
 import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.Heart
@@ -68,7 +69,7 @@ val QuickAction.labelRes: org.jetbrains.compose.resources.StringResource
         QuickAction.UNFAVORITE -> Res.string.core_action_unfavorite
         QuickAction.DOWNLOAD -> Res.string.core_action_download
         QuickAction.ADD_TO_PLAYLIST -> Res.string.core_action_add_to_playlist
-        QuickAction.DELETE -> Res.string.core_action_delete
+        QuickAction.REMOVE_DOWNLOAD -> Res.string.core_action_delete
         QuickAction.DETAILS -> Res.string.core_action_details
     }
 
@@ -83,7 +84,7 @@ val QuickAction.icon: ImageVector
         QuickAction.UNFAVORITE -> Tabler.Filled.Heart
         QuickAction.DOWNLOAD -> Tabler.Outline.Download
         QuickAction.ADD_TO_PLAYLIST -> Tabler.Outline.Bookmark
-        QuickAction.DELETE -> Tabler.Outline.Trash
+        QuickAction.REMOVE_DOWNLOAD -> Tabler.Outline.DownloadOff
         QuickAction.DETAILS -> Tabler.Outline.InfoCircle
     }
 

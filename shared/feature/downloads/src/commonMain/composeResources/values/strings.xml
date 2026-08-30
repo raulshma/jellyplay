@@ -97,6 +97,8 @@
     <string name="downloads_force_resync_data_header">Data to sync</string>
     <string name="downloads_force_resync_data_metadata">Metadata</string>
     <string name="downloads_force_resync_data_metadata_desc">Overview, cast, ratings</string>
+    <string name="downloads_force_resync_data_chapters">Chapters</string>
+    <string name="downloads_force_resync_data_chapters_desc">Chapter markers</string>
     <string name="downloads_force_resync_data_poster">Poster</string>
     <string name="downloads_force_resync_data_poster_desc">Primary artwork</string>
     <string name="downloads_force_resync_data_backdrop">Backdrop</string>

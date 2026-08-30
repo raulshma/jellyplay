@@ -25,6 +25,7 @@ import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +47,9 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.hasPlaybackPosition
+import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -56,6 +59,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
+import com.raulshma.jellyplay.core.ui.components.OfflineMediaCard
 import com.raulshma.jellyplay.core.ui.components.PlayButtonWithProgress
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.WideMediaCard
@@ -77,8 +81,150 @@ import com.raulshma.jellyplay.feature.home.generated.resources.Res
  * carousel effect. When false (the default) it falls back to a plain [LazyRow]
  * with `clipToBounds = false` so items and their elevation bleed past the edges.
  */
+/**
+ * Home row for the offline-derived poster-card sections
+ * ([HomeSectionType.DOWNLOADED]): the same chrome as [HomeMediaRow] — title,
+ * card width, spacing, TV/mobile scroller, focus wiring — but cards render via
+ * [OfflineMediaCard] so artwork resolves from local files and no server image
+ * URL is ever built (issue #147: the offline home is the normal home,
+ * populated from downloads). The offline Continue Watching / Next Up rows
+ * render through [ContinueWatchingRow] with local-file resolvers instead.
+ */
+@Composable
+internal fun OfflineHomeMediaRow(
+    title: String,
+    items: List<OfflineMediaItem>,
+    onItemClick: (OfflineMediaItem) -> Unit,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    onRowFocused: (() -> Unit)? = null,
+    clippingEnabled: Boolean = false,
+    // TV-only: reports the D-pad-focused item so the screen's Menu key can
+    // open its quick actions (the offline card's own long-press handles touch).
+    onFocusedItemChange: ((MediaItem) -> Unit)? = null,
+) {
+    val metrics = homeRowMetrics()
+
+    Column(modifier = modifier) {
+        HomeRowTitle(
+            title = title,
+            contentPad = metrics.contentPad,
+            onLongClick = null,
+        )
+        HomeItemRow(
+            items = items,
+            key = { it.id },
+            cardWidth = metrics.cardWidth,
+            spacing = metrics.spacing,
+            contentPad = metrics.contentPad,
+            clippingEnabled = clippingEnabled,
+            focusRequester = focusRequester,
+            onRowFocused = onRowFocused,
+            onFocusedItemChange = { item ->
+                onFocusedItemChange?.let { change -> change(item.toMediaItem()) }
+            },
+        ) { item, mod ->
+            // Every item here is downloaded by definition, so the
+            // "Downloaded" status badge would be redundant.
+            OfflineMediaCard(
+                item = item,
+                onClick = { onItemClick(item) },
+                modifier = mod.width(metrics.cardWidth),
+                showStatusBadge = false,
+            )
+        }
+    }
+}
+
+
+/**
+ * The row chrome metrics every home row derives from the adaptive info —
+ * card width, content padding, item spacing — as ONE value so the rows stop
+ * repeating the three-line preamble (four copies when [DownloadedSection]
+ * counted). A non-null [widthScale] selects a wide-card row (Continue
+ * Watching / Next Up scale ~1.6× with a 260 dp floor); null (the default) is
+ * the plain poster width.
+ */
+@Immutable
+internal data class HomeRowMetrics(
+    val cardWidth: Dp,
+    val contentPad: Dp,
+    val spacing: Dp,
+)
+
+@Composable
+internal fun homeRowMetrics(widthScale: Float? = null): HomeRowMetrics {
+    val isTv = LocalTvMode.current
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val baseWidth = adaptiveInfo.rowCardWidth(isTv)
+    return HomeRowMetrics(
+        cardWidth = widthScale
+            ?.let { scale -> (baseWidth * scale).coerceAtLeast(260.dp) }
+            ?: baseWidth,
+        contentPad = adaptiveInfo.contentPadding(isTv),
+        spacing = adaptiveInfo.itemSpacing(isTv),
+    )
+}
+
+/**
+ * The home rows' TV/touch chassis — the ONE implementation of the
+ * [TvFocusableItemRow] (TV) / [HorizontalMediaScroller] (touch) branch that
+ * every home row previously duplicated, with the card as a slot. The slot
+ * receives the focus modifier on TV and an empty one on touch; append
+ * [cardWidth] to it so both branches size identically. Fixing card-rendering
+ * or scroller behavior now lands once per row instead of twice.
+ */
+@Composable
+internal fun <T> HomeItemRow(
+    items: List<T>,
+    key: (T) -> Any,
+    cardWidth: Dp,
+    spacing: Dp,
+    contentPad: Dp,
+    clippingEnabled: Boolean,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    onRowFocused: (() -> Unit)? = null,
+    // TV-only: reports the D-pad-focused item so the screen's Menu key can
+    // open its quick actions (the card's own long-press handles touch).
+    onFocusedItemChange: ((T) -> Unit)? = null,
+    itemContent: @Composable (item: T, modifier: Modifier) -> Unit,
+) {
+    val isTv = LocalTvMode.current
+    if (isTv) {
+        TvFocusableItemRow(
+            items = items,
+            key = key,
+            contentPadding = PaddingValues(horizontal = contentPad),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            modifier = modifier,
+            focusRequester = focusRequester,
+            onRowFocused = onRowFocused,
+            clipToBounds = clippingEnabled,
+            onFocusedIndexChange = { index ->
+                onFocusedItemChange?.let { change -> items.getOrNull(index)?.let(change) }
+            },
+        ) { _, item, focusModifier ->
+            itemContent(item, focusModifier)
+        }
+    } else {
+        HorizontalMediaScroller(
+            itemCount = items.size,
+            itemWidth = cardWidth,
+            spacing = spacing,
+            contentPad = contentPad,
+            clippingEnabled = clippingEnabled,
+            modifier = modifier.tvFocusRestorer(),
+            key = { index -> key(items[index]) },
+        ) { index ->
+            itemContent(items[index], Modifier)
+        }
+    }
+}
+
 @Composable
 private fun HorizontalMediaScroller(
+
     itemCount: Int,
     itemWidth: androidx.compose.ui.unit.Dp,
     spacing: androidx.compose.ui.unit.Dp,
@@ -135,27 +281,43 @@ private fun HorizontalMediaScroller(
     }
 }
 
+/**
+ * The wide-card Continue Watching / Next Up row, generic over the item type:
+ * online rows pass [MediaItem] with server image-URL builders, offline-derived
+ * rows (typed as their online counterparts by [buildOfflineHomeSections])
+ * pass [OfflineMediaItem] with resolvers that lift to [MediaItem] and read the
+ * local poster/backdrop file paths. Same chrome for both sources: 16:9
+ * [WideMediaCard] at ~1.6× the poster width, hoisted scrim, progress + meta
+ * footer. [onPlayClick] mirrors the row's play affordance for both sources —
+ * the video player resolves the local download (`PlayerSessionManager.loadMedia`
+ * → `PlaybackSourceResolver`), so offline playback needs no dedicated intent.
+ */
 @Composable
-fun ContinueWatchingRow(
+fun <T> ContinueWatchingRow(
     title: String,
-    items: List<MediaItem>,
-    imageUrlBuilder: (MediaItem) -> String,
-    backdropUrlBuilder: (MediaItem) -> String,
-    onItemClick: (MediaItem) -> Unit,
-    onPlayClick: ((MediaItem) -> Unit)? = null,
+    items: List<T>,
+    toMediaItem: (T) -> MediaItem,
+    imageUrl: (T) -> String,
+    backdropUrl: (T) -> String,
+    onItemClick: (T) -> Unit,
+    onPlayClick: ((T) -> Unit)? = null,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
     onRowFocused: (() -> Unit)? = null,
     clippingEnabled: Boolean = false,
     onSectionLongClick: (() -> Unit)? = null,
+    // Row identity for the lazy list — defaults to the lifted MediaItem's id;
+    // callers whose T already carries the id pass it directly so key lookups
+    // don't allocate a MediaItem per item.
+    key: (T) -> Any = { toMediaItem(it).id },
+    // TV-only: reports the D-pad-focused item so the screen's Menu key can open
+    // its quick actions (the wide card's own long-press handles touch).
+    onFocusedItemChange: ((MediaItem) -> Unit)? = null,
 ) {
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = LocalTvMode.current
     // Continue-watching cards are wide (landscape thumbnails + progress/metadata), so they
     // scale ~1.6× the portrait poster-card width rather than using [rowCardWidth] directly.
-    val cardWidth = (adaptiveInfo.rowCardWidth(isTv) * 1.6f).coerceAtLeast(260.dp)
-    val contentPad = adaptiveInfo.contentPadding(isTv)
-    val spacing = adaptiveInfo.itemSpacing(isTv)
+    val metrics = homeRowMetrics(widthScale = 1.6f)
+    val cardWidth = metrics.cardWidth
     // The bottom scrim gradient is identical across every card in the same theme
     // state, so compute it once per row instead of allocating a Brush per card
     // as cards scroll in/out of view.
@@ -165,59 +327,35 @@ fun ContinueWatchingRow(
     }
 
     Column(modifier = modifier) {
-        HomeSectionTitle(
+        HomeRowTitle(
             title = title,
-            contentPad = contentPad,
+            contentPad = metrics.contentPad,
             onLongClick = onSectionLongClick,
         )
-        if (isTv) {
-            TvFocusableItemRow(
-                items = items,
-                key = { it.id },
-                contentPadding = PaddingValues(horizontal = contentPad),
-                horizontalArrangement = Arrangement.spacedBy(spacing),
-                focusRequester = focusRequester,
-                onRowFocused = onRowFocused,
-                clipToBounds = clippingEnabled,
-            ) { _, item, focusModifier ->
-                val memoizedClick = remember(item) { { onItemClick(item) } }
-                val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
-                WideMediaCard(
-                    item = item,
-                    imageUrl = imageUrlBuilder(item),
-                    backdropUrl = backdropUrlBuilder(item),
-                    onClick = memoizedClick,
-                    onPlayClick = memoizedPlayClick,
-                    cardWidth = cardWidth,
-                    surfaceScrimBrush = surfaceScrimBrush,
-                    modifier = focusModifier,
-                    clipToShape = clippingEnabled,
-                )
-            }
-        } else {
-            HorizontalMediaScroller(
-                itemCount = items.size,
-                itemWidth = cardWidth,
-                spacing = spacing,
-                contentPad = contentPad,
-                clippingEnabled = clippingEnabled,
-                modifier = Modifier.tvFocusRestorer(),
-                key = { index -> items[index].id },
-            ) { index ->
-                val item = items[index]
-                val memoizedClick = remember(item) { { onItemClick(item) } }
-                val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
-                WideMediaCard(
-                    item = item,
-                    imageUrl = imageUrlBuilder(item),
-                    backdropUrl = backdropUrlBuilder(item),
-                    onClick = memoizedClick,
-                    onPlayClick = memoizedPlayClick,
-                    cardWidth = cardWidth,
-                    surfaceScrimBrush = surfaceScrimBrush,
-                    clipToShape = clippingEnabled,
-                )
-            }
+        HomeItemRow(
+            items = items,
+            key = key,
+            cardWidth = metrics.cardWidth,
+            spacing = metrics.spacing,
+            contentPad = metrics.contentPad,
+            clippingEnabled = clippingEnabled,
+            focusRequester = focusRequester,
+            onRowFocused = onRowFocused,
+            onFocusedItemChange = { item -> onFocusedItemChange?.invoke(toMediaItem(item)) },
+        ) { item, mod ->
+            val memoizedClick = remember(item) { { onItemClick(item) } }
+            val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
+            WideMediaCard(
+                item = toMediaItem(item),
+                imageUrl = imageUrl(item),
+                backdropUrl = backdropUrl(item),
+                onClick = memoizedClick,
+                onPlayClick = memoizedPlayClick,
+                cardWidth = cardWidth,
+                surfaceScrimBrush = surfaceScrimBrush,
+                modifier = mod,
+                clipToShape = clippingEnabled,
+            )
         }
     }
 }
@@ -251,12 +389,10 @@ fun HomeMediaRow(
     // not yet generated a poster). See [EpisodePosterResolver].
     seriesBackdropResolver: (String) -> String = { "" },
 ) {
-    val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val cardPrefs = com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences.current
-    val cardWidth = adaptiveInfo.rowCardWidth(isTv)
-    val contentPad = adaptiveInfo.contentPadding(isTv)
-    val spacing = adaptiveInfo.itemSpacing(isTv)
+    val metrics = homeRowMetrics()
+    val cardWidth = metrics.cardWidth
     // Apply "hide watched items" filter at the row wrapper so the entire card
     // (and its slot in the scroller) disappears rather than leaving a gap.
     val effectiveItems = remember(items, cardPrefs.hideWatchedItems) {
@@ -288,112 +424,68 @@ fun HomeMediaRow(
     }
 
     Column(modifier = modifier) {
-        HomeSectionTitle(
+        HomeRowTitle(
             title = title,
-            contentPad = contentPad,
+            contentPad = metrics.contentPad,
             onLongClick = onSectionLongClick,
             onSeeAllClick = onSeeAllClick,
             seeAllFocusRequester = seeAllFocusRequester,
         )
-        if (isTv) {
-            TvFocusableItemRow(
-                items = effectiveItems,
-                key = { it.id },
-                contentPadding = PaddingValues(horizontal = contentPad),
-                horizontalArrangement = Arrangement.spacedBy(spacing),
-                modifier = rowModifier,
-                focusRequester = focusRequester,
-                onRowFocused = onRowFocused,
-                clipToBounds = clippingEnabled,
-                onFocusedIndexChange = { index ->
-                    onFocusedItemChange?.let { change -> effectiveItems.getOrNull(index)?.let(change) }
-                },
-            ) { _, item, focusModifier ->
-                val memoizedClick = remember(item) { { onItemClick(item) } }
-                val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
-                // Memoize progress so per-card arithmetic runs only when ticks change,
-                // not on every scroll/animation-frame recompose (matches WideMediaCard).
-                val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
-                    item.progressFraction() ?: 0f
-                }
-                val cardImage = rememberEpisodeCardImage(
-                    item = item,
-                    itemImageUrl = remember(item) { imageUrlBuilder(item) },
-                    fallbackImageUrls = fallbackImageUrlBuilder(item),
-                    seriesPosterResolver = seriesPosterResolver,
-                    seriesBackdropResolver = seriesBackdropResolver,
-                    showEpisodeSeriesBadge = showEpisodeSeriesBadge,
-                )
-                PosterCard(
-                    item = item,
-                    imageUrl = cardImage.imageUrl,
-                    fallbackUrls = cardImage.fallbackUrls,
-                    onClick = memoizedClick,
-                    modifier = focusModifier.width(cardWidth),
-                    showProgress = item.hasPlaybackPosition,
-                    progressPercent = progressPercent,
-                    blurHash = cardImage.blurHash,
-                    onPlayClick = memoizedPlayClick,
-                    sharedElementKey = "poster_${item.id}",
-                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
-                    clipToShape = clippingEnabled,
-                    showEpisodeSeriesBadge = cardImage.showSeriesBadge,
-                    gradientBrush = posterScrimBrush,
-                )
+        HomeItemRow(
+            items = effectiveItems,
+            key = { it.id },
+            cardWidth = cardWidth,
+            spacing = metrics.spacing,
+            contentPad = metrics.contentPad,
+            clippingEnabled = clippingEnabled,
+            modifier = rowModifier,
+            focusRequester = focusRequester,
+            onRowFocused = onRowFocused,
+            onFocusedItemChange = { item -> onFocusedItemChange?.invoke(item) },
+        ) { item, mod ->
+            val memoizedClick = remember(item) { { onItemClick(item) } }
+            val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
+            // Memoize progress so per-card arithmetic runs only when ticks change,
+            // not on every scroll/animation-frame recompose (matches WideMediaCard).
+            val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
+                item.progressFraction() ?: 0f
             }
-        } else {
-            HorizontalMediaScroller(
-                itemCount = effectiveItems.size,
-                itemWidth = cardWidth,
-                spacing = spacing,
-                contentPad = contentPad,
-                clippingEnabled = clippingEnabled,
-                modifier = Modifier.tvFocusRestorer(),
-                key = { index -> effectiveItems[index].id },
-            ) { index ->
-                val item = effectiveItems[index]
-                val memoizedClick = remember(item) { { onItemClick(item) } }
-                val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
-                // Memoize progress so per-card arithmetic runs only when ticks change,
-                // not on every scroll/animation-frame recompose (matches WideMediaCard).
-                val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
-                    item.progressFraction() ?: 0f
-                }
-                val cardImage = rememberEpisodeCardImage(
-                    item = item,
-                    itemImageUrl = remember(item) { imageUrlBuilder(item) },
-                    fallbackImageUrls = fallbackImageUrlBuilder(item),
-                    seriesPosterResolver = seriesPosterResolver,
-                    seriesBackdropResolver = seriesBackdropResolver,
-                    showEpisodeSeriesBadge = showEpisodeSeriesBadge,
-                )
-                PosterCard(
-                    item = item,
-                    imageUrl = cardImage.imageUrl,
-                    fallbackUrls = cardImage.fallbackUrls,
-                    onClick = memoizedClick,
-                    modifier = Modifier.width(cardWidth),
-                    showProgress = item.hasPlaybackPosition,
-                    progressPercent = progressPercent,
-                    blurHash = cardImage.blurHash,
-                    onPlayClick = memoizedPlayClick,
-                    sharedElementKey = "poster_${item.id}",
-                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
-                    clipToShape = clippingEnabled,
-                    showEpisodeSeriesBadge = cardImage.showSeriesBadge,
-                    gradientBrush = posterScrimBrush,
-                )
-            }
+            val cardImage = rememberEpisodeCardImage(
+                item = item,
+                itemImageUrl = remember(item) { imageUrlBuilder(item) },
+                fallbackImageUrls = fallbackImageUrlBuilder(item),
+                seriesPosterResolver = seriesPosterResolver,
+                seriesBackdropResolver = seriesBackdropResolver,
+                showEpisodeSeriesBadge = showEpisodeSeriesBadge,
+            )
+            PosterCard(
+                item = item,
+                imageUrl = cardImage.imageUrl,
+                fallbackUrls = cardImage.fallbackUrls,
+                onClick = memoizedClick,
+                modifier = mod.width(cardWidth),
+                showProgress = item.hasPlaybackPosition,
+                progressPercent = progressPercent,
+                blurHash = cardImage.blurHash,
+                onPlayClick = memoizedPlayClick,
+                sharedElementKey = "poster_${item.id}",
+                photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+                clipToShape = clippingEnabled,
+                showEpisodeSeriesBadge = cardImage.showSeriesBadge,
+                gradientBrush = posterScrimBrush,
+            )
         }
     }
 }
 
 /**
- * The row title for a home section. Renders the heading typography and:
- * - an optional long-press affordance ([onLongClick]) to configure the section
- * (toggle visibility / reorder / open Home Layout settings), and
- * - an optional "See All" affordance ([onSeeAllClick]) that opens the full
- * library screen for that section with pre-applied filters.
+ * THE home row title — one implementation for every row-ish header in the
+ * module (section rows, the discover and *arr headers, the inline Downloaded
+ * row). Renders the heading typography and the optional affordances:
+ * - a long-press ([onLongClick]) to configure the section (toggle visibility
+ *   / reorder / open Home Layout settings), and
+ * - a "See All" affordance ([onSeeAllClick]) that opens the full library
+ *   screen for that section with pre-applied filters.
  *
  * On touch, the title surface still only intercepts long-press so the row's own
  * horizontal scroll and item clicks are unaffected; "See All" is a separate
@@ -402,12 +494,20 @@ fun HomeMediaRow(
  * configuration on TV goes through Settings → Home Layout. The title surface
  * must NOT be focusable on TV: a full-width indication-less clickable between
  * the rows is an invisible focus trap that also steals focus from the pill.
+ *
+ * [standalone] distinguishes the standalone headers ([HomeContentList]'s
+ * discover and *arr rows and the inline Downloaded row) from section-row
+ * titles: they get 24 dp of top spacing (section rows take 8 dp, the row
+ * already adds its own) and keep the titleLarge style on every form factor,
+ * as their former bespoke implementations did.
  */
 @Composable
-private fun HomeSectionTitle(
+internal fun HomeRowTitle(
     title: String,
     contentPad: androidx.compose.ui.unit.Dp,
-    onLongClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    standalone: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     onSeeAllClick: (() -> Unit)? = null,
     seeAllFocusRequester: FocusRequester? = null,
 ) {
@@ -415,7 +515,7 @@ private fun HomeSectionTitle(
     val interactionSource = remember { MutableInteractionSource() }
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .then(
                 if (onLongClick != null && !isTv) {
@@ -427,12 +527,19 @@ private fun HomeSectionTitle(
                     )
                 } else Modifier,
             )
-            .padding(horizontal = contentPad, vertical = 8.dp),
+            .padding(
+                start = contentPad,
+                end = contentPad,
+                top = if (standalone) 24.dp else 8.dp,
+                bottom = 8.dp,
+            ),
     ) {
         Text(
             text = title,
-            style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
-            else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            style = (
+                if (isTv && !standalone) MaterialTheme.typography.headlineSmall
+                else MaterialTheme.typography.titleLarge
+                ).copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

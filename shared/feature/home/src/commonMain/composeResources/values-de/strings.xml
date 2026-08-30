@@ -34,7 +34,6 @@
 
     <string name="home_settings">Einstellungen</string>
     <string name="home_switch_user">Benutzer wechseln</string>
-    <string name="home_going_online">Verbindung wird hergestellt…</string>
     <string name="home_go_online">Online gehen</string>
 
     <!-- Home empty / partial-load states. -->
@@ -49,6 +48,8 @@
     <string name="home_discover">Entdecken</string>
     <string name="home_coming_soon">Demnächst</string>
     <string name="home_continue_watching">Weiter ansehen</string>
+    <string name="home_next_up">Als Nächstes</string>
+    <string name="home_implicit_offline_banner">Server nicht erreichbar – deine Downloads werden angezeigt.</string>
     <string name="home_recently_downloaded">Zuletzt heruntergeladen</string>
     <string name="home_movies">Filme</string>
     <string name="home_series">Serien</string>
@@ -65,7 +66,6 @@
     <string name="home_no_downloads_yet">Noch keine Downloads</string>
     <string name="home_no_downloads_description">Lade Medien herunter, während du online bist, um offline darauf zuzugreifen.</string>
     <string name="home_go_online_action">Online gehen</string>
-    <string name="home_your_downloads">Deine Downloads</string>
 
     <!-- Home search overlay. -->
     <string name="home_no_results_found">Keine Ergebnisse gefunden</string>
@@ -98,4 +98,7 @@
     <string name="home_delete_download_message">"%1$s" vom Gerät entfernen? Das gibt %2$s frei.</string>
     <string name="home_delete_download_message_no_size">"%1$s" vom Gerät entfernen?</string>
     <string name="home_delete_download_confirm">Löschen</string>
+    <string name="home_download_started">Download gestartet</string>
+    <string name="home_download_start_failed">Download konnte nicht gestartet werden</string>
+    <string name="home_series_download_queued">Folgen für den Download vorgemerkt</string>
 </resources>

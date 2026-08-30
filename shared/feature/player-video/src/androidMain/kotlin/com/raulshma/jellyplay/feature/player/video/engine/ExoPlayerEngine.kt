@@ -1698,6 +1698,11 @@ class ExoPlayerEngine(
         fun processType(exoType: Int, trackType: TrackType) {
             val groupCount = tracks.groups.size
             var groupIndex = 0
+            // Known side-loaded configuration ids — the stable-id recovery in
+            // [resolveStableSideloadedTrackId] only strips a merge prefix when
+            // the suffix matches one of THESE, so container-demuxed formats
+            // (whose ids happen to share the "{n}:{m}" shape) pass through.
+            val configIds = currentSubtitleConfigs.mapNotNull { it.id }.toSet()
             for (i in 0 until groupCount) {
                 val group = tracks.groups[i]
                 if (group.type != exoType) continue
@@ -1717,12 +1722,13 @@ class ExoPlayerEngine(
                 )
                 result.add(
                     MediaTrack(
-                        // For side-loaded subtitles Media3 propagates the
-                        // MediaItem.SubtitleConfiguration id (== SubtitleSource.id)
-                        // into the track format, so prefer it over the synthetic
-                        // group index — the subtitle-sync preview resolves the
-                        // active external source by that id.
-                        id = format.id?.takeIf { it.isNotBlank() }
+                        // For side-loaded subtitles prefer the stable
+                        // SubtitleSource.id over the synthetic group index — the
+                        // subtitle-sync preview and the track-selection ladder
+                        // resolve side-loaded sources by that id. See
+                        // [resolveStableSideloadedTrackId] for why this is NOT
+                        // simply `format.id`.
+                        id = resolveStableSideloadedTrackId(format.id, configIds)
                             ?: "${trackType.name}_${groupIndex}",
                         index = groupIndex,
                         label = TrackLabelFormatter.primary(info),
@@ -1745,7 +1751,15 @@ class ExoPlayerEngine(
     override fun addExternalSubtitle(source: SubtitleSource) = runOnPlayerThread {
         val exo = player ?: return@runOnPlayerThread
         val item = currentMediaItem ?: return@runOnPlayerThread
-        val mimeType = source.mimeType ?: SubtitleMimeMapper.mapCodecToMime(source.codec ?: source.label) ?: return@runOnPlayerThread
+        val mimeType = source.mimeType
+            ?: SubtitleMimeMapper.mapCodecToMime(source.codec ?: source.label)
+            ?: run {
+                // A silent drop here used to strand the subtitle-download flow:
+                // the row flipped to "Use" but no track ever surfaced, so the
+                // activation could never resolve it. Log loudly instead.
+                Log.w(TAG, "Dropping external subtitle with unmappable codec: codec=${source.codec}, label=${source.label}")
+                return@runOnPlayerThread
+            }
 
         val newSubConfig = MediaItem.SubtitleConfiguration.Builder(Uri.parse(source.url))
             .setId(source.id)
@@ -1764,6 +1778,8 @@ class ExoPlayerEngine(
             .setSubtitleConfigurations(currentSubtitleConfigs.toList())
             .build()
         currentMediaItem = newItem
+
+        Log.d("SubtitleUse", "exo side-load: id=${source.id}, mime=$mimeType, url=${source.url}, configs=${currentSubtitleConfigs.size}")
 
         withPreservedPlayback { snap ->
             exo.setMediaItem(newItem, snap.positionMs)
@@ -1796,6 +1812,10 @@ internal fun selectedTextTrackIsAss(tracks: androidx.media3.common.Tracks): Bool
             (0 until group.length).any { group.isTrackSelected(it) } &&
             isAssFormat(group.getTrackFormat(0))
     }
+
+// [resolveStableSideloadedTrackId] moved to commonMain
+// (StableSideloadedTrackId.kt) so the pure string logic stays unit-testable
+// from jvmTest; same package, call-sites unchanged.
 
 /**
  * ASS/SSA format predicate shared by the selectTrack visibility toggle and

@@ -9,7 +9,7 @@ import java.io.File
 /**
  * Ratchet against reintroducing the settings-open ANR
  * (docs/e2e/device-locale-pass.md): the whole-catalog compose-resources
- * resolve — one blocking read per entry when cold, 780 reads over 534
+ * resolve — one blocking read per entry when cold, 771 reads over 528
  * distinct entries today — must
  * stay confined to the sanctioned off-main homes:
  *

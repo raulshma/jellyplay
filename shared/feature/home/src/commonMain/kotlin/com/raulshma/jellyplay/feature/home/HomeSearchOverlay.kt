@@ -257,47 +257,15 @@ fun HomeSearchResultsOverlay(
                         // recompositions don't re-run buildString + branches for every
                         // visible row.
                         val subtitle = remember(item.id, item.year, item.mediaType) {
-                            buildString {
-                                item.year?.let { append(it) }
-                                if (item.year != null && item.mediaType != null) append(" · ")
-                                when (item.mediaType) {
-                                    MediaType.MOVIE -> append(movieLabel)
-                                    MediaType.SERIES -> append(seriesLabel)
-                                    MediaType.AUDIO, MediaType.MUSIC -> append(musicLabel)
-                                    else -> item.mediaType?.name?.lowercase()?.replaceFirstChar { it.uppercase() }?.let { append(it) }
-                                }
-                            }
+                            jellyfinResultSubtitle(item, movieLabel, seriesLabel, musicLabel)
                         }
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
-                            val imageUrl = getImageUrl(item.id)
                             HomeSearchResultRow(
                                 title = item.name,
                                 subtitle = subtitle,
                                 onClick = { onJellyfinClick(item) },
                                 tileBackground = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                                leading = {
-                                    if (imageUrl.isNotBlank()) {
-                                        MediaImage(
-                                            url = imageUrl,
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .clip(ShapeCache.smooth10),
-                                            contentScale = ContentScale.Crop,
-                                            // 44dp thumbnail at 3× density ≈ 132px; decode at 128² instead
-                                            // of the 384² default to cut memory and decode cost during
-                                            // search-as-you-type.
-                                            size = CoilSize(128, 128),
-                                        )
-                                    } else {
-                                        androidx.compose.material3.Icon(
-                                            Tabler.Outline.Search,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(20.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                },
+                                leading = { HomeResultTile(getImageUrl(item.id)) },
                             )
                         }
                     }
@@ -324,50 +292,15 @@ fun HomeSearchResultsOverlay(
                         val item = seerrResults[index]
                         val placementSpec = lazyItemPlacementSpec()
                         val subtitle = remember(item.id, item.year, item.mediaType, item.voteAverage) {
-                            buildString {
-                                item.year?.let { append(it) }
-                                val typeLabel = when {
-                                    item.mediaType.equals("movie", ignoreCase = true) -> movieLabel
-                                    item.mediaType.equals("tv", ignoreCase = true) -> seriesLabel
-                                    else -> item.mediaType
-                                }
-                                if (item.year != null) append(" · ")
-                                append(typeLabel)
-                                item.voteAverage?.let { rating ->
-                                    if (rating > 0) {
-                                        append(" · ★ ")
-                                        append(String.format("%.1f", rating))
-                                    }
-                                }
-                            }
+                            seerrResultSubtitle(item, movieLabel, seriesLabel)
                         }
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
-                            val posterUrl = item.posterUrl ?: ""
                             HomeSearchResultRow(
                                 title = item.displayName,
                                 subtitle = subtitle,
                                 onClick = { onSeerrClick(item) },
                                 tileBackground = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                                leading = {
-                                    if (posterUrl.isNotBlank()) {
-                                        MediaImage(
-                                            url = posterUrl,
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .clip(ShapeCache.smooth10),
-                                            contentScale = ContentScale.Crop,
-                                            size = CoilSize(128, 128),
-                                        )
-                                    } else {
-                                        androidx.compose.material3.Icon(
-                                            Tabler.Outline.Search,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(20.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                },
+                                leading = { HomeResultTile(item.posterUrl) },
                             )
                         }
                     }
@@ -453,6 +386,84 @@ fun HomeSearchResultsOverlay(
             onConfirm = onClearHistory,
             onDismiss = { showClearHistoryDialog = false },
         )
+    }
+}
+
+/**
+ * The result row's ONE lead tile (both result kinds — Jellyfin and Seerr —
+ * used to duplicate this block verbatim): the artwork when a URL exists,
+ * else the neutral search-icon placeholder.
+ */
+@Composable
+private fun HomeResultTile(imageUrl: String?) {
+    if (!imageUrl.isNullOrBlank()) {
+        MediaImage(
+            url = imageUrl,
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(ShapeCache.smooth10),
+            contentScale = ContentScale.Crop,
+            // 44dp thumbnail at 3x density ~= 132px; decode at 128^2 instead
+            // of the 384^2 default to cut memory and decode cost during
+            // search-as-you-type.
+            size = CoilSize(128, 128),
+        )
+    } else {
+        androidx.compose.material3.Icon(
+            Tabler.Outline.Search,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * The Jellyfin result-row subtitle: "year · type-label" (year omitted when
+ * unknown; the label falls back to the media type's own name for types with
+ * no dedicated label — e.g. "Book", "Photo"). Pure and internal so the test
+ * asserts THIS function instead of a copy of its buildString.
+ */
+internal fun jellyfinResultSubtitle(
+    item: MediaItem,
+    movieLabel: String,
+    seriesLabel: String,
+    musicLabel: String,
+): String = buildString {
+    item.year?.let { append(it) }
+    if (item.year != null && item.mediaType != null) append(" · ")
+    when (item.mediaType) {
+        MediaType.MOVIE -> append(movieLabel)
+        MediaType.SERIES -> append(seriesLabel)
+        MediaType.AUDIO, MediaType.MUSIC -> append(musicLabel)
+        else -> item.mediaType?.name?.lowercase()?.replaceFirstChar { it.uppercase() }?.let { append(it) }
+    }
+}
+
+/**
+ * The Seerr result-row subtitle: "year · type-label [· ★ rating]" (rating
+ * omitted when absent or zero). Pure and internal for the same reason as
+ * [jellyfinResultSubtitle].
+ */
+internal fun seerrResultSubtitle(
+    item: SeerrSearchItem,
+    movieLabel: String,
+    seriesLabel: String,
+): String = buildString {
+    item.year?.let { append(it) }
+    val typeLabel = when {
+        item.mediaType.equals("movie", ignoreCase = true) -> movieLabel
+        item.mediaType.equals("tv", ignoreCase = true) -> seriesLabel
+        else -> item.mediaType
+    }
+    if (item.year != null) append(" · ")
+    append(typeLabel)
+    item.voteAverage?.let { rating ->
+        if (rating > 0) {
+            append(" · ★ ")
+            append(String.format("%.1f", rating))
+        }
     }
 }
 

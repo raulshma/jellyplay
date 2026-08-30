@@ -14,6 +14,8 @@
         <item quantity="other">%1$d items</item>
     </plurals>
     <string name="library_no_items_found">No items found</string>
+    <string name="library_no_downloads_offline">No downloads yet</string>
+    <string name="library_try_adjusting_filters">Try adjusting your filters</string>
     <string name="library_list_view">List view</string>
     <string name="library_grid_view">Grid view</string>
     <string name="library_thumb_view">Thumbnail view</string>
@@ -55,6 +57,10 @@
     <string name="library_media_type">Filter by Type</string>
     <string name="library_status">Status</string>
     <string name="library_filter_resumable">In Progress</string>
+    <string name="library_filter_downloaded">Downloaded</string>
+    <string name="library_remove_download_title">Delete download?</string>
+    <string name="library_remove_download_message">This deletes the downloaded copy of “%1$s” from this device. The server copy is not affected.</string>
+    <string name="library_remove_download_confirm">Delete</string>
     <string name="library_genres">Genres</string>
     <string name="library_year_range">Year Range</string>
     <!-- %1$d = selected start year -->
@@ -102,4 +108,8 @@
     <string name="library_cd_adjust">Adjust</string>
     <string name="library_cd_previous">Previous</string>
     <string name="library_cd_next">Next</string>
+    <!-- Smart-play funnel download feedback (emitted by LibraryViewModel through
+         the shared UserMessageBus; upstream keeps these untranslated). -->
+    <string name="data_download_started">Download started</string>
+    <string name="data_download_start_failed">Couldn\u2019t start the download</string>
 </resources>

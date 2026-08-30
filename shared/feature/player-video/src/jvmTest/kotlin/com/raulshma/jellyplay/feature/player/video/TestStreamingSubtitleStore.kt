@@ -61,6 +61,14 @@ internal fun noOpStreamingSubtitleStore(): StreamingSubtitleStore =
             }
         }
 
+        override suspend fun markServerStreamIndex(itemId: String, saved: SavedSubtitle, index: Int) {
+            val list = this.saved[itemId] ?: return
+            val at = list.indexOfFirst {
+                it.provider == saved.provider && it.providerSubtitleId == saved.providerSubtitleId
+            }
+            if (at >= 0) list[at] = list[at].copy(serverStreamIndex = index)
+        }
+
         override suspend fun clear(itemId: String) {
             saved.remove(itemId)
         }

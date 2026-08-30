@@ -33,20 +33,18 @@ internal fun rememberHomeBackgroundState(
     backdropUrl: String?,
 ): HomeBackgroundState {
     val bgColor = MaterialTheme.colorScheme.background
-    val isLightTheme = remember(bgColor) {
-        (bgColor.red * 0.299f + bgColor.green * 0.587f + bgColor.blue * 0.114f) > 0.5f
-    }
+    val isLightTheme = remember(bgColor) { isLightBackdropTheme(bgColor) }
     val artworkColors = com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors(
         if (dynamicTheming && !backdropUrl.isNullOrBlank()) backdropUrl else null
     )
     val baseOverlayColor = artworkColors?.darkMuted
         ?: artworkColors?.dominant
         ?: MaterialTheme.colorScheme.background
-    val targetBackgroundColor = if (isLightTheme) {
-        MaterialTheme.colorScheme.background
-    } else {
-        lerp(baseOverlayColor, Color.Black, 0.65f)
-    }
+    val targetBackgroundColor = resolveHomeTargetBackgroundColor(
+        baseOverlayColor = baseOverlayColor,
+        isLightTheme = isLightTheme,
+        themeBackground = MaterialTheme.colorScheme.background,
+    )
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
         animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
@@ -74,3 +72,23 @@ internal class HomeBackgroundState(
     val backgroundColor: Color,
     val isLightTheme: Boolean,
 )
+
+/**
+ * The backdrop luminance rule: Rec. 601 weighted perceived brightness decides
+ * whether the home's derived chrome goes light or dark. Pure and internal so
+ * the test asserts THIS function instead of a copy of its formula.
+ */
+internal fun isLightBackdropTheme(color: androidx.compose.ui.graphics.Color): Boolean =
+    (color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f) > 0.5f
+
+/**
+ * The background target rule: light themes use the raw theme background
+ * (artwork tinting would fight it); dark themes blend the overlay colour
+ * toward black so palette tones read as a tinted scrim rather than a flat
+ * fill. Pure and internal for the same reason as [isLightBackdropTheme].
+ */
+internal fun resolveHomeTargetBackgroundColor(
+    baseOverlayColor: Color,
+    isLightTheme: Boolean,
+    themeBackground: Color,
+): Color = if (isLightTheme) themeBackground else lerp(baseOverlayColor, Color.Black, 0.65f)

@@ -28,6 +28,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import org.koin.compose.viewmodel.koinViewModel
+import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
+import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
+import com.raulshma.jellyplay.core.designsystem.theme.accentOptions
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.AppFontScale
@@ -136,9 +139,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merg
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_morning_starts_at
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_morning_starts_at_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_monochrome_mode
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_monochrome_mode_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_monochrome_nothing
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_labels_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_labels_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_activity_log
@@ -164,9 +164,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nigh
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_mode_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_overridden_monochrome
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_overridden_soothing
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_overridden_synthwave
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_overridden_variant
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode_subtitle
@@ -202,10 +200,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_watched_checkmark_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_soothing_accent
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_soothing_mode
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_soothing_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_standard_experience
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_style_summary
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_all_hidden
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_external_ratings
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_hide_thumbnails
@@ -214,15 +210,14 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summ
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_skip_specials
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_unwatched_badges
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_watched_checkmarks
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_synthwave_accent
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_synthwave_mode
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_synthwave_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_always_dark
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_always_light
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_follow_system
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_scheduled
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhide_continue_watching
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhide_continue_watching_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unlimited
@@ -233,6 +228,21 @@ private val APPEARANCE_LIBRARY_GROUP_IDS = setOf("show_unwatched_badge", "show_w
 private val PERFORMANCE_GROUP_IDS = setOf("performance_mode", "reduce_motion")
 private val BLUE_LIGHT_GROUP_IDS = setOf("blue_light_filter", "blue_light_strength")
 private val NEWSLETTER_GROUP_IDS = setOf("newsletter_enabled", "newsletter_delivery_day", "newsletter_sections")
+
+/**
+ * The persisted accent id for a themed variant, or null when the variant has
+ * no accent (standard uses the global swatch; monochrome is fixed). Single
+ * source for both the group summary and the style_accent picker.
+ */
+private fun accentIdFor(variant: ThemeVariant, preferences: AppearanceScreenPreferences): String? = when (variant) {
+    ThemeVariant.SYNTHWAVE -> preferences.synthwaveAccent
+    ThemeVariant.SOOTHING -> preferences.soothingAccent
+    ThemeVariant.VIVID -> preferences.vividAccent
+    ThemeVariant.AURORA -> preferences.auroraAccent
+    ThemeVariant.SAKURA -> preferences.sakuraAccent
+    ThemeVariant.VECTOR_POP -> preferences.vectorPopAccent
+    ThemeVariant.STANDARD, ThemeVariant.MONOCHROME -> null
+}
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -259,7 +269,7 @@ fun AppearanceSettingsScreen(
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId, showAdvanced) {
         val themeGroup = listOf(
-            "theme_mode", "theme_scheduler", "synthwave_mode", "soothing_mode", "monochrome_mode",
+            "theme_mode", "theme_scheduler", "theme_style", "style_accent",
             "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "home_backdrop",
             "clock_home", "settings_in_home_search", "continue_watching_click", "unhide_cw", "merge_continue_next_up", "next_up_max_days",
             "next_up_rewatching", "theme_music", "nav_labels", "date_format", "font_scale", "color_blind_mode",
@@ -346,13 +356,18 @@ fun AppearanceSettingsScreen(
                     icon = Tabler.Outline.Palette,
                     title = stringResource(Res.string.settings_theme),
                     summary = {
+                        val variant = ThemeVariant.fromId(preferences.themeVariant)
                         val parts = mutableListOf<String>()
-                        if (preferences.synthwaveMode) {
-                            parts.add(stringResource(Res.string.settings_synthwave_accent, preferences.synthwaveAccent.lowercase().replaceFirstChar { it.uppercase() }))
-                        } else if (preferences.soothingMode) {
-                            parts.add(stringResource(Res.string.settings_soothing_accent, preferences.soothingAccent.lowercase().replaceFirstChar { it.uppercase() }))
-                        } else if (preferences.monochromeMode) {
-                            parts.add(stringResource(Res.string.settings_monochrome_nothing))
+                        if (variant != ThemeVariant.STANDARD) {
+                            val accentId = accentIdFor(variant, preferences)
+                            if (accentId != null) {
+                                val accentLabel = variant.accentOptions()
+                                    ?.find { it.id == accentId.lowercase() }?.label
+                                    ?: accentId.lowercase().replaceFirstChar { it.uppercase() }
+                                parts.add(stringResource(Res.string.settings_style_summary, variant.displayName, accentLabel))
+                            } else {
+                                parts.add(variant.displayName)
+                            }
                         } else {
                             parts.add(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() })
                             val accentName = preferences.accentColorSwatch.lowercase().replaceFirstChar { it.uppercase() }
@@ -380,10 +395,14 @@ fun AppearanceSettingsScreen(
                         }
                     }
 
+                    // Accent swatches must preview the shade the applied scheme
+                    // actually uses — the effective dark flag (themeMode plus the
+                    // dark-locked variants), not the raw system setting.
+                    val effectiveDarkForSwatches = isDarkActive ||
+                        ThemeVariant.fromId(preferences.themeVariant).isDarkLocked
+
                     val appearanceItems = remember(
-                        preferences.synthwaveMode,
-                        preferences.soothingMode,
-                        preferences.monochromeMode,
+                        preferences.themeVariant,
                         preferences.themeMode,
                         preferences.hiddenCwItemIds,
                         showAdvanced,
@@ -391,22 +410,19 @@ fun AppearanceSettingsScreen(
                         isAndroid12,
                     ) {
                         buildList {
+                            val variant = ThemeVariant.fromId(preferences.themeVariant)
+                            val isStandard = variant == ThemeVariant.STANDARD
                             add("theme_mode")
-                            add("synthwave_mode")
-                            if (preferences.synthwaveMode) {
-                                add("synthwave_accent")
+                            add("theme_style")
+                            if (variant.accentOptions() != null) {
+                                add("style_accent")
                             }
-                            add("soothing_mode")
-                            if (preferences.soothingMode) {
-                                add("soothing_accent")
-                            }
-                            add("monochrome_mode")
-                            if (!preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) {
+                            if (isStandard) {
                                 add("accent_color")
                                 add("color_style")
                                 if (isAndroid12) add("dynamic_theming")
                             }
-                            if (isDarkActive && !preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) add("oled_mode")
+                            if (isDarkActive && variant.allowsOled) add("oled_mode")
                             if (showAdvanced) {
                                 add("contrast")
                                 add("library_view_mode")
@@ -444,15 +460,14 @@ fun AppearanceSettingsScreen(
                                 val themeFollowSystem = stringResource(Res.string.settings_theme_follow_system)
                                 val themeAlwaysLight = stringResource(Res.string.settings_theme_always_light)
                                 val themeAlwaysDark = stringResource(Res.string.settings_theme_always_dark)
+                                val themeVariant = ThemeVariant.fromId(preferences.themeVariant)
+                                // Aurora/Synthwave force dark, so the light/dark choice is inert.
+                                val isDarkLocked = themeVariant.isDarkLocked
                                 SettingListItem(
                                     icon = Tabler.Outline.Moon,
                                     title = themeTitle,
-                                    subtitle = if (preferences.synthwaveMode) {
-                                        stringResource(Res.string.settings_overridden_synthwave)
-                                    } else if (preferences.soothingMode) {
-                                        stringResource(Res.string.settings_overridden_soothing)
-                                    } else if (preferences.monochromeMode) {
-                                        stringResource(Res.string.settings_overridden_monochrome)
+                                    subtitle = if (isDarkLocked) {
+                                        stringResource(Res.string.settings_overridden_variant, themeVariant.displayName)
                                     } else {
                                         when (preferences.themeMode) {
                                             ThemeMode.SYSTEM -> themeFollowSystem
@@ -461,10 +476,10 @@ fun AppearanceSettingsScreen(
                                             ThemeMode.SCHEDULED -> stringResource(Res.string.settings_theme_scheduled, preferences.scheduledThemeStartHour, preferences.scheduledThemeEndHour)
                                         }
                                     },
-                                    trailingText = if (preferences.synthwaveMode) "-" else if (preferences.soothingMode) "-" else if (preferences.monochromeMode) "-" else preferences.themeMode.name,
+                                    trailingText = if (isDarkLocked) "-" else preferences.themeMode.name,
                                     highlighted = highlightSettingId in THEME_HIGHLIGHT_IDS,
                                     onClick = {
-                                        if (!preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) {
+                                        if (!isDarkLocked) {
                                             val themeLabels = mapOf(
                                                 ThemeMode.SYSTEM to themeFollowSystem,
                                                 ThemeMode.LIGHT to themeAlwaysLight,
@@ -482,48 +497,36 @@ fun AppearanceSettingsScreen(
                                     },
                                 )
                             }
-                            "synthwave_mode" -> {
-                                SettingToggleItem(
+                            "theme_style" -> {
+                                val styleTitle = stringResource(Res.string.settings_theme_style)
+                                val styleSubtitle = stringResource(Res.string.settings_theme_style_subtitle)
+                                SettingListItem(
                                     icon = Tabler.Outline.Palette,
-                                    title = stringResource(Res.string.settings_synthwave_mode),
-                                    subtitle = stringResource(Res.string.settings_synthwave_mode_subtitle),
-                                    checked = preferences.synthwaveMode,
-                                    highlighted = highlightSettingId == "synthwave_mode",
-                                    onCheckedChange = { viewModel.setSynthwaveMode(it) },
+                                    title = styleTitle,
+                                    subtitle = styleSubtitle,
+                                    trailingText = ThemeVariant.fromId(preferences.themeVariant).displayName,
+                                    highlighted = highlightSettingId == "theme_style",
+                                    onClick = {
+                                        activePicker = PickerState.List(
+                                            title = styleTitle,
+                                            items = ThemeVariant.entries,
+                                            label = { it.displayName },
+                                            isSelected = { it == ThemeVariant.fromId(preferences.themeVariant) },
+                                            onSelect = { viewModel.setThemeVariant(it.name.lowercase()) },
+                                        )
+                                    },
                                 )
                             }
-                            "synthwave_accent" -> {
+                            "style_accent" -> {
                                 ConsumeSettingsItemIndex()
-                                com.raulshma.jellyplay.core.ui.components.SynthwaveAccentPicker(
-                                    selectedAccent = preferences.synthwaveAccent,
-                                    onAccentSelected = { viewModel.setSynthwaveAccent(it) },
-                                )
-                            }
-                            "soothing_mode" -> {
-                                SettingToggleItem(
-                                    icon = Tabler.Outline.Palette,
-                                    title = stringResource(Res.string.settings_soothing_mode),
-                                    subtitle = stringResource(Res.string.settings_soothing_mode_subtitle),
-                                    checked = preferences.soothingMode,
-                                    highlighted = highlightSettingId == "soothing_mode",
-                                    onCheckedChange = { viewModel.setSoothingMode(it) },
-                                )
-                            }
-                            "soothing_accent" -> {
-                                ConsumeSettingsItemIndex()
-                                com.raulshma.jellyplay.core.ui.components.SoothingAccentPicker(
-                                    selectedAccent = preferences.soothingAccent,
-                                    onAccentSelected = { viewModel.setSoothingAccent(it) },
-                                )
-                            }
-                            "monochrome_mode" -> {
-                                SettingToggleItem(
-                                    icon = Tabler.Outline.Palette,
-                                    title = stringResource(Res.string.settings_monochrome_mode),
-                                    subtitle = stringResource(Res.string.settings_monochrome_mode_subtitle),
-                                    checked = preferences.monochromeMode,
-                                    highlighted = highlightSettingId == "monochrome_mode",
-                                    onCheckedChange = { viewModel.setMonochromeMode(it) },
+                                val styleVariant = ThemeVariant.fromId(preferences.themeVariant)
+                                com.raulshma.jellyplay.core.ui.components.VariantAccentPicker(
+                                    variant = styleVariant,
+                                    isDark = effectiveDarkForSwatches,
+                                    selectedAccent = accentIdFor(styleVariant, preferences) ?: "",
+                                    onAccentSelected = { accent ->
+                                        viewModel.setVariantAccent(preferences.themeVariant, accent)
+                                    },
                                 )
                             }
                             "accent_color" -> {
@@ -1129,9 +1132,7 @@ fun AppearanceSettingsScreen(
                             count = homeSectionOrder.size,
                             modifier = Modifier.onSizeChanged { itemHeights[sectionType] = it.height },
                             onCheckedChange = { checked ->
-                                val current = preferences.enabledHomeSectionTypes.toMutableSet()
-                                if (checked) current.add(sectionType) else current.remove(sectionType)
-                                viewModel.setEnabledHomeSectionTypes(current)
+                                viewModel.setSectionVisible(sectionType, checked)
                             },
                             onDrag = { delta -> moveSection(sectionType, delta) },
                             onDragStart = { draggingSection = sectionType; dragOffsetY = 0f },

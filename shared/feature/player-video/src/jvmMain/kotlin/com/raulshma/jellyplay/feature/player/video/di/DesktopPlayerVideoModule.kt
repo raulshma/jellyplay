@@ -90,6 +90,7 @@ val desktopPlayerVideoModule: Module = module {
             pipController = get(),
             videoMiniPlayerState = get(),
             sleepTimerManager = get(),
+            offlineModeManager = get(),
             userMessageBus = get(),
             playerEngineFactory = get(),
             fontProvider = get(),

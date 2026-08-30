@@ -213,6 +213,8 @@ fun androidCoreDataModule(context: Context): Module = module {
             context = context,
             delegate = get(),
             downloadRepository = get(),
+            mediaRepository = get(),
+            downloadsStore = get(),
         )
     }
     single<DownloadIntake> { get<DownloadIntakeImpl>() }

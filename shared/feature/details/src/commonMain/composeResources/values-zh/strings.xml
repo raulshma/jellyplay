@@ -59,7 +59,6 @@
 
     <!-- ── Episode / season card labels ─────────────────────────────────── -->
     <string name="detail_season_format">第 %1$d 季</string>
-    <string name="detail_no_episodes_available">没有可用的剧集</string>
     <string name="detail_spoiler">剧透</string>
     <string name="detail_watched_badge">已观看</string>
     <string name="detail_cd_switch_to_list">切换到垂直剧集列表</string>
@@ -81,17 +80,12 @@
     <string name="detail_option_technical_info">技术信息</string>
 
     <!-- ── Series download sheet ────────────────────────────────────────── -->
-    <string name="detail_download_series_title">下载剧集</string>
-    <string name="detail_download_series_subtitle">点击某一季可查看剧集。选择要下载的内容。</string>
     <string name="detail_select_all">全选</string>
     <string name="detail_deselect_all">取消全选</string>
     <string name="detail_episodes_selected_format">已选择 %2$d 集中的 %1$d 集</string>
     <plurals name="detail_episode_count">
         <item quantity="other">%1$d 集</item>
     </plurals>
-    <string name="detail_downloaded_count_format">• 已下载 %1$d 集</string>
-    <string name="detail_queuing">正在加入队列…</string>
-    <string name="detail_downloaded_status">已下载</string>
     <string name="detail_cancel">取消</string>
 
     <!-- ── Add to Playlist picker ──────────────────────────────────────── -->

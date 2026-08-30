@@ -212,6 +212,7 @@ internal fun DetailContentBody(
     val item = detail.item
     val isAudio = item.mediaType.isAudioType
     val isAlbum = item.mediaType == MediaType.ALBUM
+    val isLocalOrigin = state.origin?.isLocal == true
     val showContent = true
 
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -643,11 +644,12 @@ internal fun DetailContentBody(
         }
 
         // ── Chapters ──
-        // MediaDetail.chapters is loaded for every item but was never surfaced
-        // on the detail screen (only the player's ChapterPickerSheet used it).
-        // Render it as a tappable thumbnail row that resumes the player at the
-        // chapter's start position. Gated by capabilities.chapters (remote +
-        // non-empty) so a local origin never offers a drill-in it can't fulfill.
+        // Rendered as a tappable thumbnail row that resumes the player at the
+        // chapter's start position. Gated by capabilities.chapters (non-empty,
+        // remote OR persisted on the offline row) so an item without chapter
+        // data never offers a drill-in it can't fulfill. Offline, the tile
+        // thumbnails fall back to the placeholder icon; names, timestamps and
+        // resume-on-tap are local.
         StaggeredDetailSection(visible = showContent && state.capabilities.chapters, delayIndex = 4) {
             val chapters = state.detail.chapters
             if (chapters.isNotEmpty()) {
@@ -691,33 +693,6 @@ internal fun DetailContentBody(
                         )
                     }
                 }
-            }
-        }
-
-        // ── Download info card + freshness banner ──
-        // Rendered for a snapshot with an attached download (remote-with-download
-        // OR local origin). Gated so a plain remote-no-download item never shows
-        // it. Placed after the overview to match the offline screen's ordering.
-        // The seriesAggregate-only local series (no per-item download) is handled
-        // by the header above; this card is per-item.
-        val attachedDownload = state.detailContext?.download
-        val isLocalOrigin = state.origin?.isLocal == true
-        val showDownloadCard = showContent && (attachedDownload != null || isLocalOrigin)
-        if (showDownloadCard) StaggeredDetailSection(visible = true, delayIndex = 4) {
-            Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
-                // Freshness banner: surfaces a server-detected update or a media-file
-                // change that needs a full re-download. Tappable -> opens the resync
-                // sheet. Hidden when there's nothing to act on.
-                SyncUpdateBanner(
-                    syncState = state.detailContext?.syncState,
-                    resyncState = state.resyncState,
-                    onClick = callbacks.onOpenResync,
-                )
-                DownloadInfoCard(
-                    download = attachedDownload,
-                    item = item,
-                    onClick = callbacks.onOpenDownloadDetails,
-                )
             }
         }
 
@@ -977,7 +952,6 @@ internal fun DetailContentBody(
             // titles mined from the offline library (localRelatedItems) instead;
             // remote keeps the server-sourced relatedItems. Either way the row
             // renders identically — only the source + an "On-device" badge differ.
-            val isLocalOrigin = state.origin?.isLocal == true
             val moreLikeThis = if (isLocalOrigin) state.localRelatedItems else state.relatedItems
             if (moreLikeThis.isNotEmpty()) {
                 Column {
@@ -1127,6 +1101,34 @@ internal fun DetailContentBody(
             delayIndex = 14,
         ) {
             ReviewsSection(reviews = state.tmdbReviews)
+        }
+
+        // ── Download info card + freshness banner ──
+        // Rendered for a snapshot with an attached download (remote-with-download
+        // OR local origin). Gated so a plain remote-no-download item never shows
+        // it. Placed at the end of the body so it reads as a footer below all
+        // content sections (delayIndex 15 = one past the last content section,
+        // so the footer is the final step of the entrance stagger). The
+        // seriesAggregate-only local series (no per-item download) is handled
+        // by the header above; this card is per-item.
+        val attachedDownload = state.detailContext?.download
+        val showDownloadCard = showContent && (attachedDownload != null || isLocalOrigin)
+        if (showDownloadCard) StaggeredDetailSection(visible = true, delayIndex = 15) {
+            Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
+                // Freshness banner: surfaces a server-detected update or a media-file
+                // change that needs a full re-download. Tappable -> opens the resync
+                // sheet. Hidden when there's nothing to act on.
+                SyncUpdateBanner(
+                    syncState = state.detailContext?.syncState,
+                    resyncState = state.resyncState,
+                    onClick = callbacks.onOpenResync,
+                )
+                DownloadInfoCard(
+                    download = attachedDownload,
+                    item = item,
+                    onClick = callbacks.onOpenDownloadDetails,
+                )
+            }
         }
     }
     }

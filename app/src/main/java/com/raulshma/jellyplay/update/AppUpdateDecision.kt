@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.update
 
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
+import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
 import com.raulshma.jellyplay.core.model.compareVersions
 
 /**
@@ -13,25 +14,24 @@ import com.raulshma.jellyplay.core.model.compareVersions
  */
 object AppUpdateDecision {
 
-    /** How long a dismissed version is suppressed on the launch auto-check. */
-    internal const val DISMISSED_UPDATE_SUPPRESS_MS: Long = 24L * 60 * 60 * 1000
-
     /**
      * True when [version] matches the last dismissed update and that dismissal
-     * happened within [suppressMs] of [nowMs]. Manual checks bypass this by not
-     * calling it. A null/blank dismissed version or a clock-skewed negative
-     * elapsed both read as "not recently dismissed".
+     * is still inside its configured [UpdateDismissPeriod] window. Manual
+     * checks bypass this by not calling it. A null/blank dismissed version or a
+     * clock-skewed negative elapsed both read as "not recently dismissed";
+     * [UpdateDismissPeriod.NEVER] suppresses the version unconditionally.
      */
     fun isRecentlyDismissed(
         version: String,
         dismissedVersion: String?,
         dismissedAtMs: Long,
         nowMs: Long,
-        suppressMs: Long = DISMISSED_UPDATE_SUPPRESS_MS,
+        period: UpdateDismissPeriod = UpdateDismissPeriod.DEFAULT,
     ): Boolean {
         if (dismissedVersion.isNullOrBlank() || dismissedVersion != version) return false
+        val window = period.suppressMs ?: return true // null = never re-prompt.
         val elapsed = nowMs - dismissedAtMs
-        return elapsed in 0..suppressMs
+        return elapsed in 0..window
     }
 
     /**
@@ -65,7 +65,7 @@ object AppUpdateDecision {
     /**
      * The version a [dismissUpdate] of [state] should stamp, or `null` when the
      * state isn't dismissible from an update sheet (Idle, Checking, NoUpdate,
-     * Error). Used so the 24h suppression only applies to versions the user
+     * Error). Used so dismissal suppression only applies to versions the user
      * actually saw and dismissed.
      */
     fun dismissedVersion(state: UpdateState): String? = when (state) {

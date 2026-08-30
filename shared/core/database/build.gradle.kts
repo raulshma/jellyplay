@@ -60,6 +60,7 @@ kotlin {
             implementation(libs.androidx.sqlite.bundled)
             implementation(libs.koin.test)
         }
+        getByName("jvmTest").resources.srcDir("$projectDir/schemas")
 
     }
 }

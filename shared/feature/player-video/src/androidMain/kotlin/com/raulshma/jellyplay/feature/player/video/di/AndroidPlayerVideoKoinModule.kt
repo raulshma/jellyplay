@@ -134,6 +134,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
             pipController = get(),
             videoMiniPlayerState = get(),
             sleepTimerManager = get(),
+            offlineModeManager = get(),
             userMessageBus = get(),
             playerEngineFactory = get(),
             fontProvider = get(),

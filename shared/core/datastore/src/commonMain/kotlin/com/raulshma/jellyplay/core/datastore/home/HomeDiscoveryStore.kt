@@ -18,6 +18,8 @@ import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.HomeLayoutPreset
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.HomeSectionPrefs
+import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -575,11 +577,19 @@ class HomeDiscoveryStore constructor(
     }
 
     suspend fun setHomeSectionOrder(order: List<HomeSectionType>) = editForUser { prefs, userId ->
-        val normalized = buildList {
-            addAll(order.filter { it in HomeSectionType.CONFIGURABLE }.distinct())
-            addAll(HomeSectionType.CONFIGURABLE.filterNot { it in this })
-        }
-        prefs[userStringKey(userId, Keys.HOME_SECTION_ORDER)] = json.encodeToString(normalized.map { t -> t.name })
+        prefs[userStringKey(userId, Keys.HOME_SECTION_ORDER)] =
+            json.encodeToString(normalizedSectionOrder(order).map { t -> t.name })
+    }
+
+    /**
+     * Keeps the persisted section order a permutation of the configurable
+     * set: drops unknown types, dedupes, then appends any configurables the
+     * list was missing (a newly-shipped section slots in at the end instead
+     * of disappearing from the reorder UI).
+     */
+    private fun normalizedSectionOrder(order: List<HomeSectionType>): List<HomeSectionType> = buildList {
+        addAll(order.filter { it in HomeSectionType.CONFIGURABLE }.distinct())
+        addAll(HomeSectionType.CONFIGURABLE.filterNot { it in this })
     }
 
     suspend fun setLibraryHomeSectionOverrides(overrides: Map<String, Set<HomeSectionType>>) = editForUser { prefs, userId ->
@@ -587,6 +597,39 @@ class HomeDiscoveryStore constructor(
         // "fully enabled" libraries simply have no key.
         val cleaned = overrides.filterValues { it.isNotEmpty() }
         prefs[userStringKey(userId, Keys.HOME_LIBRARY_SECTION_OVERRIDES)] = json.encodeToString(cleaned)
+    }
+
+    /**
+     * The section-prefs WRITE COMMANDS — the sanctioned read-modify-write
+     * path for section visibility, order and per-library overrides, applying
+     * the shared [HomeSectionPrefs] algebra to the CURRENT persisted state.
+     * Every feature (home's inline section-config sheet, Settings → Configure
+     * Libraries, the Appearance toggle) routes through these; holding a local
+     * toggle/override policy copy is how the two features drifted before.
+     */
+    suspend fun setSectionVisible(type: HomeSectionType, visible: Boolean) = editForUser { prefs, userId ->
+        val updated = read(prefs).toSectionPrefs().withSectionVisible(type, visible)
+        prefs[userStringKey(userId, Keys.HOME_ENABLED_SECTION_TYPES)] =
+            json.encodeToString(updated.query.enabledSections.map { t -> t.name }.toSet())
+    }
+
+    suspend fun moveSection(type: HomeSectionType, up: Boolean) = editForUser { prefs, userId ->
+        val updated = read(prefs).toSectionPrefs().withSectionMoved(type, up) ?: return@editForUser
+        prefs[userStringKey(userId, Keys.HOME_SECTION_ORDER)] =
+            json.encodeToString(normalizedSectionOrder(updated.homeSectionOrder).map { t -> t.name })
+    }
+
+    suspend fun setLibrarySectionVisible(
+        libraryId: String,
+        type: HomeSectionType,
+        visible: Boolean,
+    ) = editForUser { prefs, userId ->
+        val updated = read(prefs).toSectionPrefs()
+            .withLibrarySectionVisible(libraryId, type, visible)
+        // Same empty-set drop as [setLibraryHomeSectionOverrides]: a library
+        // whose disabled-set empties again simply loses its key.
+        prefs[userStringKey(userId, Keys.HOME_LIBRARY_SECTION_OVERRIDES)] =
+            json.encodeToString(updated.query.libraryHomeSectionOverrides.filterValues { it.isNotEmpty() })
     }
 
     suspend fun setPinnedHomeSections(sections: List<PinnedHomeSection>) = editForUser { prefs, userId ->
@@ -897,4 +940,24 @@ data class HomeDiscoverySlice(
      * `hideBottomNavOnScroll` toggle.
      */
     val hideTopHeaderOnScroll: Boolean = false,
+)
+
+/**
+ * The slice as one [HomeSectionPrefs] — the single field mapping, shared by
+ * the store's command methods (their read side) and HomeViewModel's prefs
+ * collector, so a new [HomeSectionQuery] input can never drift between the
+ * two (a second hand-copied mapping is how the write policies drifted).
+ */
+fun HomeDiscoverySlice.toSectionPrefs(): HomeSectionPrefs = HomeSectionPrefs(
+    query = HomeSectionQuery(
+        enabledSections = enabledHomeSectionTypes,
+        libraryHomeSectionOverrides = libraryHomeSectionOverrides,
+        nextUpRewatching = nextUpRewatching,
+        nextUpMaxDays = nextUpMaxDays,
+        nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
+        hiddenCwItemIds = hiddenCwItemIds,
+        pinnedSections = pinnedHomeSections,
+    ),
+    homeSectionOrder = homeSectionOrder,
+    mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
 )

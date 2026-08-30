@@ -34,9 +34,22 @@ data class SubtitleState(
     val subtitleSearchError: String? = null,
     val isUploadingSubtitle: Boolean = false,
     val isLoadingRemoteSubtitles: Boolean = false,
+    /**
+     * Failure message from the last [remoteSubtitles] fetch, rendered inline on
+     * the Get tab's Download section. Deliberately not a global toast: the
+     * fetch's retry chain can outlive the hub (even the player), and a late
+     * global toast over an unrelated screen reads as an error with no context.
+     */
+    val remoteSubtitlesError: String? = null,
     val defaultSearchLanguage: String = "eng",
     /** Per-subtitle-id download status for the "Get Subtitles" sheet. */
     val downloadingSubtitles: Map<String, SubtitleDownloadStatus> = emptyMap(),
+    /**
+     * Row key → where a download has surfaced and is usable right now, backing
+     * the sheet's "Use" action so it can activate the exact track without
+     * guessing by label.
+     */
+    val readySubtitles: Map<String, ReadySubtitleHint> = emptyMap(),
     /** Merged cross-provider search results (Jellyfin + external providers). */
     val providerSearchResults: List<SubtitleSearchResult> = emptyList(),
     /** Per-provider failure message from the last multi-provider search. */
@@ -44,3 +57,36 @@ data class SubtitleState(
     /** Providers the user has configured (drives chip visibility). */
     val configuredSubtitleProviders: Set<SubtitleProviderKind> = emptySet(),
 )
+
+/**
+ * Where a downloaded subtitle has surfaced, recorded per sheet row so the
+ * "Use" action can activate it exactly. [trackId] is the side-loaded
+ * [com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource.id]
+ * (`external:{index}` for server downloads, `provider:{kind}:{id}` for
+ * external-provider side-loads); [serverStreamIndex] is the server
+ * `MediaStream.index` the download surfaced as — the picker lists synthetic
+ * server rows keyed by that index on transcoded playback.
+ */
+@Immutable
+data class ReadySubtitleHint(
+    val trackId: String,
+    val serverStreamIndex: Int? = null,
+)
+
+/**
+ * The Subtitle Manager's per-row key namespaces — the single home for how
+ * status and ready-hint map entries are keyed. Jellyfin rows key on the plain
+ * remote-subtitle id; external-provider rows on this composite. Producer
+ * ([com.raulshma.jellyplay.feature.player.video.SubtitleManager]) and consumer
+ * (the sheets' "Use" / status lookups) must both go through these builders so
+ * a format change cannot silently desynchronize them.
+ */
+fun providerSubtitleRowKey(provider: SubtitleProviderKind, providerSubtitleId: String): String =
+    "${provider}:$providerSubtitleId"
+
+/**
+ * The engine-side [com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource.id]
+ * namespace for a provider row's side-loaded local copy — deliberately distinct
+ * from the row key (which keys sheet maps) so the two id spaces can't collide.
+ */
+fun providerSubtitleEngineId(rowKey: String): String = "provider:$rowKey"

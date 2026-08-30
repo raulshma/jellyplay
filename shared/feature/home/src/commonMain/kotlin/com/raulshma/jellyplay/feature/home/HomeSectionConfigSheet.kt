@@ -23,6 +23,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -49,21 +50,74 @@ import com.raulshma.jellyplay.feature.home.generated.resources.home_move_down
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 
 /**
+ * The inline sheet's whole derived-input surface, computed by
+ * [sectionConfigCapabilities]: the current toggle state (global or
+ * per-library), the row's position in the user's ordering, and the
+ * Move Up/Down enablement. One value so the sheet's interface stays flat and
+ * the derivation is assertable in one place.
+ */
+@Immutable
+internal data class SectionConfigCapabilities(
+    val enabled: Boolean,
+    val perLibrary: Boolean,
+    val position: Int,
+    val total: Int,
+    val canMoveUp: Boolean,
+    val canMoveDown: Boolean,
+)
+
+/**
+ * Derives the section-config sheet's inputs from the preference mirrors.
+ *
+ * - **Enabled**: globally, membership in [enabledTypes]; per-library
+ *   ([libraryId] non-null, LATEST_MEDIA), absence from that library's
+ *   DISABLED override set (defaulting to enabled when absent).
+ * - **Move enablement**: [SectionConfigCapabilities.canMoveUp] /
+ *   [canMoveDown] are false at the respective edges AND when the type is
+ *   absent from [order] entirely (position -1). Pure and internal so the
+ *   test asserts THIS rule instead of a copy.
+ */
+internal fun sectionConfigCapabilities(
+    type: HomeSectionType,
+    libraryId: String?,
+    order: List<HomeSectionType>,
+    enabledTypes: Set<HomeSectionType>,
+    libraryOverrides: Map<String, Set<HomeSectionType>>,
+): SectionConfigCapabilities {
+    val perLibrary = libraryId != null
+    val index = order.indexOf(type)
+    return SectionConfigCapabilities(
+        enabled = if (perLibrary) {
+            type !in libraryOverrides[libraryId].orEmpty()
+        } else {
+            type in enabledTypes
+        },
+        perLibrary = perLibrary,
+        position = index,
+        total = order.size,
+        canMoveUp = index > 0,
+        canMoveDown = index in 0..(order.lastIndex - 1),
+    )
+}
+
+/**
  * Inline bottom sheet for configuring a single home section — opened by
- * long-pressing the section title on Home. Writes through the same
- * `PreferencesEditor` setters as the Settings screens so there is one source of
- * truth, no duplicated logic.
+ * long-pressing the section title on Home. Its action lambdas route through
+ * the `HomeDiscoveryStore` section-prefs commands (`setSectionVisible`,
+ * `moveSection`, `setLibrarySectionVisible`) — the same sanctioned write path
+ * as the Settings screens, so there is one source of truth, no duplicated
+ * logic.
  *
  * Two modes, selected by [perLibrary]:
  *
  * - **Global** ([perLibrary] = false): the common configurable sections
  *   (CONTINUE_WATCHING, NEXT_UP, RECENTLY_ADDED, RECOMMENDATIONS). Exposes a
- *   global Show/Hide toggle (`setEnabledHomeSectionTypes`) plus Move Up / Move
- *   Down (`setHomeSectionOrder`) relative to the user's section ordering, with a
- *   live position indicator ("Position 2 of 5").
+ *   global Show/Hide toggle (`setSectionVisible`) plus Move Up / Move Down
+ *   (`moveSection`) relative to the user's section ordering, with a live
+ *   position indicator ("Position 2 of 5").
  * - **Per-library** ([perLibrary] = true): LATEST_MEDIA rows, of which there is
  *   one per Jellyfin library. Exposes a per-library Show/Hide toggle
- *   (`setLibraryHomeSectionOverrides`) — identical to Settings → Configure
+ *   (`setLibrarySectionVisible`) — identical to Settings → Configure
  *   Libraries. Per-library rows are not individually ordered (they move as a
  *   group), so Move Up/Down is hidden in this mode.
  *
@@ -85,12 +139,7 @@ import com.raulshma.jellyplay.feature.home.generated.resources.Res
 @Composable
 internal fun HomeSectionConfigSheet(
     sectionType: HomeSectionType,
-    enabled: Boolean,
-    perLibrary: Boolean,
-    position: Int,
-    total: Int,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
+    capabilities: SectionConfigCapabilities,
     onToggleVisible: (Boolean) -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
@@ -128,13 +177,13 @@ internal fun HomeSectionConfigSheet(
             ) {
                 VisibilityToggleRow(
                     icon = sectionIcon,
-                    enabled = enabled,
+                    enabled = capabilities.enabled,
                     onCheckedChange = onToggleVisible,
                 )
 
                 // Per-library rows aren't individually ordered — only the
                 // global path exposes reorder controls and a position chip.
-                if (!perLibrary) {
+                if (!capabilities.perLibrary) {
                     HorizontalDivider(
                         color = colorScheme.outlineVariant.copy(alpha = 0.4f),
                         modifier = Modifier.padding(vertical = 2.dp),
@@ -144,7 +193,7 @@ internal fun HomeSectionConfigSheet(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
-                            text = "Position ${position + 1} of $total",
+                            text = "Position ${capabilities.position + 1} of ${capabilities.total}",
                             style = MaterialTheme.typography.labelMedium,
                             color = colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f),
@@ -157,14 +206,14 @@ internal fun HomeSectionConfigSheet(
                         MoveButton(
                             label = stringResource(Res.string.home_move_up),
                             icon = Tabler.Outline.ArrowUp,
-                            enabled = canMoveUp,
+                            enabled = capabilities.canMoveUp,
                             onClick = onMoveUp,
                             modifier = Modifier.weight(1f),
                         )
                         MoveButton(
                             label = stringResource(Res.string.home_move_down),
                             icon = Tabler.Outline.ArrowDown,
-                            enabled = canMoveDown,
+                            enabled = capabilities.canMoveDown,
                             onClick = onMoveDown,
                             modifier = Modifier.weight(1f),
                         )
@@ -191,7 +240,7 @@ internal fun HomeSectionConfigSheet(
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.width(6.dp))
-                Text(if (perLibrary) "Configure Libraries" else "Configure Home Layout")
+                Text(if (capabilities.perLibrary) "Configure Libraries" else "Configure Home Layout")
             }
         }
     }

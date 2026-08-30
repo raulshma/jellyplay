@@ -44,6 +44,13 @@ interface PipController {
     /** Requests the system to exit the PiP window (used on end/error). */
     fun requestAutoExitPip()
 
+    /**
+     * Defensively resets the auto-exit latch before a fresh load: the
+     * controller is a process singleton whose one-shot flags outlive the
+     * Activity (issue #145).
+     */
+    fun consumeAutoExitPip()
+
     /** Clears the [pipDismissed] latch after the screen handled it. */
     fun clearPipDismissed()
 

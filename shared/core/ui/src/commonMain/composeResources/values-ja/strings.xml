@@ -107,6 +107,8 @@
     <string name="core_ui_synthwave_accent_subtitle">カスタムネオンアクセントカラーを選択</string>
     <string name="core_ui_soothing_accent_title">落ち着いたアクセント</string>
     <string name="core_ui_soothing_accent_subtitle">穏やかなアクセントカラーを選択</string>
+    <string name="core_ui_variant_accent_title">%1$sアクセント</string>
+    <string name="core_ui_variant_accent_subtitle">このテーマスタイルのアクセントカラーを選択</string>
 
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">削除</string>
@@ -196,6 +198,14 @@
 <plurals name="detail_episode_count">
     <item quantity="other">%1$d 件のエピソード</item>
     </plurals>
+
+    <!-- SeriesDownloadSheet (per-season download picker, shared by detail + home). -->
+    <string name="detail_download_series_title">シリーズをダウンロード</string>
+    <string name="detail_download_series_subtitle">シーズンをタップしてエピソードを表示します。ダウンロードするものを選択してください。</string>
+    <string name="detail_downloaded_count_format">• %1$d 件ダウンロード済み</string>
+    <string name="detail_no_episodes_available">視聴可能なエピソードはありません</string>
+    <string name="detail_downloaded_status">ダウンロード済み</string>
+    <string name="detail_queuing">キューに追加中…</string>
 
     <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
     <string name="transcode_reasons_title">なぜトランスコード中？</string>

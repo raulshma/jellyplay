@@ -34,7 +34,6 @@
 
     <string name="home_settings">Impostazioni</string>
     <string name="home_switch_user">Cambia utente</string>
-    <string name="home_going_online">Connessione in corso…</string>
     <string name="home_go_online">Vai online</string>
 
     <!-- Home empty / partial-load states. -->
@@ -49,6 +48,8 @@
     <string name="home_discover">Scopri</string>
     <string name="home_coming_soon">In arrivo</string>
     <string name="home_continue_watching">Continua a guardare</string>
+    <string name="home_next_up">Prossimi contenuti</string>
+    <string name="home_implicit_offline_banner">Impossibile raggiungere il server — vengono mostrati i tuoi download.</string>
     <string name="home_recently_downloaded">Scaricati di recente</string>
     <string name="home_movies">Film</string>
     <string name="home_series">Serie</string>
@@ -65,7 +66,6 @@
     <string name="home_no_downloads_yet">Nessun download</string>
     <string name="home_no_downloads_description">Scarica contenuti da online per accedervi offline.</string>
     <string name="home_go_online_action">Vai online</string>
-    <string name="home_your_downloads">I tuoi download</string>
 
     <!-- Home search overlay. -->
     <string name="home_no_results_found">Nessun risultato trovato</string>
@@ -98,4 +98,7 @@
     <string name="home_delete_download_message">Rimuovere \"%1$s\" dal dispositivo? Libera %2$s.</string>
     <string name="home_delete_download_message_no_size">Rimuovere \"%1$s\" dal dispositivo?</string>
     <string name="home_delete_download_confirm">Elimina</string>
+    <string name="home_download_started">Download avviato</string>
+    <string name="home_download_start_failed">Impossibile avviare il download</string>
+    <string name="home_series_download_queued">Episodi in coda per il download</string>
 </resources>

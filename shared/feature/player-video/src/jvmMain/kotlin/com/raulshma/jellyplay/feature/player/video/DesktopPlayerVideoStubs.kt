@@ -169,6 +169,7 @@ internal class NoOpPipController : PipController {
     override fun setControlsLocked(locked: Boolean) {}
     override fun requestAutoEnterPip(shouldEnter: Boolean) {}
     override fun requestAutoExitPip() {}
+    override fun consumeAutoExitPip() {}
     override fun clearPipDismissed() {}
     override fun setPipAspectRatio(aspect: Pair<Int, Int>?) {}
     override fun updatePipSourceRect(left: Int, top: Int, right: Int, bottom: Int) {}

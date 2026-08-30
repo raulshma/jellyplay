@@ -56,6 +56,14 @@ fun WideMediaCard(
     val progressPercent = item.rememberProgressFraction() ?: 0f
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
+    // Same rule as PosterCard: when the host screen provides a quick-action
+    // controller, long-press opens the action sheet. Wide cards never wired the
+    // peek preview, so there is no previewFactory to supersede here.
+    val quickActionController = LocalMediaQuickActionController.current
+    val onQuickActionsLongPress = quickActionController?.let { controller ->
+        remember(item, controller) { { controller.show(item) } }
+    }
+
     MediaCardScaffold(
         onClick = onClick,
         image = { imageModifier ->
@@ -79,6 +87,7 @@ fun WideMediaCard(
         playButtonSize = playButtonSize,
         scrimBrush = surfaceScrimBrush,
         scrimHeight = 50.dp,
+        onLongPress = onQuickActionsLongPress,
         titleColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
         showProgress = progressPercent > 0f,
         progressFraction = progressPercent,

@@ -36,6 +36,18 @@ internal expect val monochromeDisplayFontFamily: FontFamily
 internal expect val monochromeBodyFontFamily: FontFamily
     @Composable get
 
+// v0.10.6 variant families (Aurora/Sakura/VectorPop/Vivid). Android resolves
+// the real Google Fonts faces; desktop/web actuals map to the closest bundled
+// faces (the four statics are not bundled — follow-up, see FontFamilies.jvm.kt).
+internal expect val auroraFontFamily: FontFamily
+    @Composable get
+internal expect val sakuraFontFamily: FontFamily
+    @Composable get
+internal expect val vectorPopFontFamily: FontFamily
+    @Composable get
+internal expect val vividFontFamily: FontFamily
+    @Composable get
+
 
 
 /**
