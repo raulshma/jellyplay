@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,7 +30,6 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
  * [HomeContentList] with sections derived from the offline library — see
  * [buildOfflineHomeSections] and [OfflineHomeMediaRow].)
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DownloadedSection(
     offlineLibrary: List<OfflineMediaItem>,
@@ -49,7 +47,7 @@ fun DownloadedSection(
         HomeRowTitle(
             title = stringResource(R.string.home_downloaded),
             contentPad = contentPad,
-            topPadding = 24.dp,
+            standalone = true,
         )
         HomeItemRow(
             items = offlineLibrary,

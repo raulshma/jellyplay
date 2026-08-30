@@ -528,7 +528,7 @@ internal fun HomeContentList(
                         title = stringResource(R.string.home_discover),
                         contentPad = state.contentPad,
                         modifier = headerModifier,
-                        topPadding = 24.dp,
+                        standalone = true,
                     )
                 }
 
@@ -568,7 +568,7 @@ internal fun HomeContentList(
                         title = stringResource(R.string.home_coming_soon),
                         contentPad = state.contentPad,
                         modifier = headerModifier,
-                        topPadding = 24.dp,
+                        standalone = true,
                     )
                 }
                 item(key = "arr_recently_grabbed_row") {

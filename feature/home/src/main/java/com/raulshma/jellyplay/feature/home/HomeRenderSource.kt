@@ -15,9 +15,23 @@ sealed interface HomeRenderSource {
     /** Server content: normal online browsing (including the hard-error screen). */
     data object Online : HomeRenderSource
 
-    /** Downloaded content: explicit offline mode, or the implicit fallback —
-     * an online fetch failed leaving only downloads to show. */
-    data object Offline : HomeRenderSource
+    /**
+     * Downloaded content. The split matters to the screen: only [Implicit]
+     * (the fetch-failure fallback) shows the implicit-offline banner, and
+     * deriving that from the same single fold — instead of re-comparing the
+     * (slower, mirror-hopping) [HomeUiState.offlineMode] — keeps the banner
+     * from flashing on a deliberate offline toggle while the mirror lags.
+     */
+    sealed interface Offline : HomeRenderSource {
+        /** An offline mode is active (manual or auto) — the user's choice. */
+        data object Explicit : Offline
+
+        /**
+         * An online fetch failed leaving only downloads to show — the
+         * fallback nobody asked for, hence the status banner.
+         */
+        data object Implicit : Offline
+    }
 
     /**
      * The implicit-offline gate just opened and the first offline-library
@@ -34,7 +48,7 @@ sealed interface HomeRenderSource {
  * Priority order matters: explicit offline wins outright; online requires a
  * healthy fetch. A failed, empty fetch is the implicit-offline precondition —
  * [FallbackPending] until the first library emission proves downloads exist
- * ([Offline]) or don't (back to [Online], the hard-error screen).
+ * ([Offline.Implicit]) or don't (back to [Online], the hard-error screen).
  *
  * Public because [HomeUiState.renderSource] exposes it.
  */
@@ -44,9 +58,9 @@ fun computeHomeRenderSource(
     offlineLibrary: List<OfflineMediaItem>,
     fallbackPending: Boolean,
 ): HomeRenderSource = when {
-    offlineMode != OfflineMode.ONLINE -> HomeRenderSource.Offline
+    offlineMode != OfflineMode.ONLINE -> HomeRenderSource.Offline.Explicit
     !fetchFailedEmpty -> HomeRenderSource.Online
     fallbackPending -> HomeRenderSource.FallbackPending
-    offlineLibrary.isNotEmpty() -> HomeRenderSource.Offline
+    offlineLibrary.isNotEmpty() -> HomeRenderSource.Offline.Implicit
     else -> HomeRenderSource.Online
 }

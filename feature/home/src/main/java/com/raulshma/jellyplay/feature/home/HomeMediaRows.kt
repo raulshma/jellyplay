@@ -453,17 +453,18 @@ fun HomeMediaRow(
  * must NOT be focusable on TV: a full-width indication-less clickable between
  * the rows is an invisible focus trap that also steals focus from the pill.
  *
- * [topPadding] distinguishes the standalone headers (24 dp, as
- * [HomeContentList]'s discover and *arr rows and the inline Downloaded row
- * always rendered) from section-row titles (8 dp, the row already adds its
- * own top spacing).
+ * [standalone] distinguishes the standalone headers ([HomeContentList]'s
+ * discover and *arr rows and the inline Downloaded row) from section-row
+ * titles: they get 24 dp of top spacing (section rows take 8 dp, the row
+ * already adds its own) and keep the titleLarge style on every form factor,
+ * as their former bespoke implementations did.
  */
 @Composable
 internal fun HomeRowTitle(
     title: String,
     contentPad: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier,
-    topPadding: androidx.compose.ui.unit.Dp = 8.dp,
+    standalone: Boolean = false,
     onLongClick: (() -> Unit)? = null,
     onSeeAllClick: (() -> Unit)? = null,
     seeAllFocusRequester: FocusRequester? = null,
@@ -472,7 +473,7 @@ internal fun HomeRowTitle(
     val interactionSource = remember { MutableInteractionSource() }
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .then(
                 if (onLongClick != null && !isTv) {
@@ -484,12 +485,19 @@ internal fun HomeRowTitle(
                     )
                 } else Modifier,
             )
-            .padding(start = contentPad, end = contentPad, top = topPadding, bottom = 8.dp),
+            .padding(
+                start = contentPad,
+                end = contentPad,
+                top = if (standalone) 24.dp else 8.dp,
+                bottom = 8.dp,
+            ),
     ) {
         Text(
             text = title,
-            style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
-            else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            style = (
+                if (isTv && !standalone) MaterialTheme.typography.headlineSmall
+                else MaterialTheme.typography.titleLarge
+                ).copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

@@ -769,7 +769,7 @@ class HomeViewModelTest {
         // CW / Next Up rows (the top-level library excludes episodes).
         assertEquals(episodes, viewModel.uiState.value.offlineEpisodes)
         // Downloads confirmed present: the implicit-offline fallback renders.
-        assertEquals(HomeRenderSource.Offline, viewModel.uiState.value.renderSource)
+        assertEquals(HomeRenderSource.Offline.Implicit, viewModel.uiState.value.renderSource)
         stopPeriodicRefresh()
     }
 
@@ -947,7 +947,7 @@ class HomeViewModelTest {
         runCurrent()
         assertEquals(OfflineMode.ONLINE, viewModel.uiState.value.offlineMode)
         assertNotNull(viewModel.uiState.value.error)
-        assertEquals(HomeRenderSource.Offline, viewModel.uiState.value.renderSource)
+        assertEquals(HomeRenderSource.Offline.Implicit, viewModel.uiState.value.renderSource)
 
         coEvery {
             episodeCatalogue.loadSeriesEpisodes("series-1", offline = true)

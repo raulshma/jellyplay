@@ -244,11 +244,13 @@ private fun MainHomeContent(
     // The offline-render decision arrives pre-computed as one value
     // (HomeUiState.renderSource — see computeHomeRenderSource): explicit
     // offline and the implicit fallback both render Offline; FallbackPending
-    // is the gate-open window before the first library emission. Implicit
-    // offline additionally gets a status banner so the fallback isn't silent.
-    val renderingOffline = state.renderSource == HomeRenderSource.Offline
+    // is the gate-open window before the first library emission. Which of the
+    // two Offline flavors it is decides the banner — read from this same
+    // value, NOT by re-comparing the offlineMode mirror, which lags a hop
+    // behind and would flash the banner on a deliberate offline toggle.
+    val renderingOffline = state.renderSource is HomeRenderSource.Offline
     val fallbackPending = state.renderSource == HomeRenderSource.FallbackPending
-    val implicitOffline = renderingOffline && state.offlineMode == OfflineMode.ONLINE
+    val implicitOffline = state.renderSource == HomeRenderSource.Offline.Implicit
     // Server fetch failed but downloads exist -> implicit offline: the same
     // integrated home plus a status banner so the fallback isn't silent.
     val implicitOfflineBanner = if (implicitOffline) {

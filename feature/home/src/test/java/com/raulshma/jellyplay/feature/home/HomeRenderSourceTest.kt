@@ -18,7 +18,7 @@ class HomeRenderSourceTest {
     fun explicitOffline_wins_regardlessOfFetchState() {
         for (fetchFailedEmpty in listOf(false, true)) {
             assertEquals(
-                HomeRenderSource.Offline,
+                HomeRenderSource.Offline.Explicit,
                 computeHomeRenderSource(OfflineMode.OFFLINE_MANUAL, fetchFailedEmpty, emptyList(), fallbackPending = false),
             )
         }
@@ -43,7 +43,7 @@ class HomeRenderSourceTest {
     @Test
     fun failedFetch_withDownloads_isImplicitOffline() {
         assertEquals(
-            HomeRenderSource.Offline,
+            HomeRenderSource.Offline.Implicit,
             computeHomeRenderSource(OfflineMode.ONLINE, fetchFailedEmpty = true, offlineLibrary = library, fallbackPending = false),
         )
     }
