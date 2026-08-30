@@ -38,10 +38,7 @@ fun DownloadedSection(
     backgroundColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = LocalTvMode.current
-    val cardWidth = adaptiveInfo.rowCardWidth(isTv)
-    val spacing = adaptiveInfo.itemSpacing(isTv)
+    val metrics = homeRowMetrics()
 
     Column(modifier = modifier.fillMaxWidth().background(backgroundColor)) {
         HomeRowTitle(
@@ -52,8 +49,8 @@ fun DownloadedSection(
         HomeItemRow(
             items = offlineLibrary,
             key = { "offline_${it.id}" },
-            cardWidth = cardWidth,
-            spacing = spacing,
+            cardWidth = metrics.cardWidth,
+            spacing = metrics.spacing,
             contentPad = contentPad,
             clippingEnabled = false,
             modifier = Modifier.padding(vertical = 4.dp),
@@ -61,7 +58,7 @@ fun DownloadedSection(
             OfflineMediaCard(
                 item = offlineItem,
                 onClick = onOfflineLibraryClick,
-                modifier = mod.width(cardWidth),
+                modifier = mod.width(metrics.cardWidth),
             )
         }
     }

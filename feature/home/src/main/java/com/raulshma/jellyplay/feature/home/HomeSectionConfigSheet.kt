@@ -99,20 +99,22 @@ internal fun sectionConfigCapabilities(
 
 /**
  * Inline bottom sheet for configuring a single home section — opened by
- * long-pressing the section title on Home. Writes through the same
- * `PreferencesEditor` setters as the Settings screens so there is one source of
- * truth, no duplicated logic.
+ * long-pressing the section title on Home. Its action lambdas route through
+ * the `HomeDiscoveryStore` section-prefs commands (`setSectionVisible`,
+ * `moveSection`, `setLibrarySectionVisible`) — the same sanctioned write path
+ * as the Settings screens, so there is one source of truth, no duplicated
+ * logic.
  *
  * Two modes, selected by [perLibrary]:
  *
  * - **Global** ([perLibrary] = false): the common configurable sections
  *   (CONTINUE_WATCHING, NEXT_UP, RECENTLY_ADDED, RECOMMENDATIONS). Exposes a
- *   global Show/Hide toggle (`setEnabledHomeSectionTypes`) plus Move Up / Move
- *   Down (`setHomeSectionOrder`) relative to the user's section ordering, with a
- *   live position indicator ("Position 2 of 5").
+ *   global Show/Hide toggle (`setSectionVisible`) plus Move Up / Move Down
+ *   (`moveSection`) relative to the user's section ordering, with a live
+ *   position indicator ("Position 2 of 5").
  * - **Per-library** ([perLibrary] = true): LATEST_MEDIA rows, of which there is
  *   one per Jellyfin library. Exposes a per-library Show/Hide toggle
- *   (`setLibraryHomeSectionOverrides`) — identical to Settings → Configure
+ *   (`setLibrarySectionVisible`) — identical to Settings → Configure
  *   Libraries. Per-library rows are not individually ordered (they move as a
  *   group), so Move Up/Down is hidden in this mode.
  *

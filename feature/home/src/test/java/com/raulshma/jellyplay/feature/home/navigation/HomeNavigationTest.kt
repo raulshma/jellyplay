@@ -71,14 +71,6 @@ class HomeNavigationTest {
     }
 
     @Test
-    fun onSearchItemClick_navigatesToMediaDetail() {
-        val callbacks = buildTestCallbacks(navigator)
-        callbacks.onSearchItemClick("search-item-1")
-
-        verify { navigator.navigate(Route.MediaDetail("search-item-1")) }
-    }
-
-    @Test
     fun onConfigureHomeLayout_navigatesToAppearanceSettings() {
         val callbacks = buildTestCallbacks(navigator)
         callbacks.onConfigureHomeLayout()
@@ -97,7 +89,6 @@ class HomeNavigationTest {
     private fun buildTestCallbacks(
         navigator: Navigator,
         playOnStrategy: JellyfinRemotePlayCastStrategy? = null,
-        onPlayOnClick: () -> Unit = {},
         onModeChange: (HomeMode) -> Unit = {},
     ): HomeCallbacks {
         return HomeCallbacks(
@@ -118,16 +109,11 @@ class HomeNavigationTest {
                     navigator.navigate(Route.VideoPlayer(itemId, mediaSourceId, startPosition))
                 }
             },
-            onSettingsClick = { navigator.navigate(Route.Settings) },
-            onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
-            onDownloadsClick = { navigator.navigate(Route.Downloads) },
-            onPlayOnClick = onPlayOnClick,
             onOfflineLibraryClick = { navigator.navigate(Route.OfflineLibrary) },
             onSeerrItemClick = { tmdbId, mediaType ->
                 navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
             },
             onModeChange = onModeChange,
-            onSearchItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
             onSearchSeerrClick = { tmdbId, mediaType ->
                 navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
             },

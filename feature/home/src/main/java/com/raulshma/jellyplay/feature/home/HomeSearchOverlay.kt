@@ -245,35 +245,12 @@ fun HomeSearchResultsOverlay(
                             jellyfinResultSubtitle(item, movieLabel, seriesLabel, musicLabel)
                         }
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
-                            val imageUrl = getImageUrl(item.id)
                             HomeSearchResultRow(
                                 title = item.name,
                                 subtitle = subtitle,
                                 onClick = { onJellyfinClick(item) },
                                 tileBackground = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                                leading = {
-                                    if (imageUrl.isNotBlank()) {
-                                        MediaImage(
-                                            url = imageUrl,
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .clip(ShapeCache.smooth10),
-                                            contentScale = ContentScale.Crop,
-                                            // 44dp thumbnail at 3× density ≈ 132px; decode at 128² instead
-                                            // of the 384² default to cut memory and decode cost during
-                                            // search-as-you-type.
-                                            size = CoilSize(128, 128),
-                                        )
-                                    } else {
-                                        androidx.compose.material3.Icon(
-                                            Tabler.Outline.Search,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(20.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                },
+                                leading = { HomeResultTile(getImageUrl(item.id)) },
                             )
                         }
                     }
@@ -303,32 +280,12 @@ fun HomeSearchResultsOverlay(
                             seerrResultSubtitle(item, movieLabel, seriesLabel)
                         }
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
-                            val posterUrl = item.posterUrl ?: ""
                             HomeSearchResultRow(
                                 title = item.displayName,
                                 subtitle = subtitle,
                                 onClick = { onSeerrClick(item) },
                                 tileBackground = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                                leading = {
-                                    if (posterUrl.isNotBlank()) {
-                                        MediaImage(
-                                            url = posterUrl,
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .clip(ShapeCache.smooth10),
-                                            contentScale = ContentScale.Crop,
-                                            size = CoilSize(128, 128),
-                                        )
-                                    } else {
-                                        androidx.compose.material3.Icon(
-                                            Tabler.Outline.Search,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(20.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                },
+                                leading = { HomeResultTile(item.posterUrl) },
                             )
                         }
                     }
@@ -413,6 +370,36 @@ fun HomeSearchResultsOverlay(
             dismissText = stringResource(R.string.home_cancel),
             onConfirm = onClearHistory,
             onDismiss = { showClearHistoryDialog = false },
+        )
+    }
+}
+
+/**
+ * The result row's ONE lead tile (both result kinds — Jellyfin and Seerr —
+ * used to duplicate this block verbatim): the artwork when a URL exists,
+ * else the neutral search-icon placeholder.
+ */
+@Composable
+private fun HomeResultTile(imageUrl: String?) {
+    if (!imageUrl.isNullOrBlank()) {
+        MediaImage(
+            url = imageUrl,
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(ShapeCache.smooth10),
+            contentScale = ContentScale.Crop,
+            // 44dp thumbnail at 3x density ~= 132px; decode at 128^2 instead
+            // of the 384^2 default to cut memory and decode cost during
+            // search-as-you-type.
+            size = CoilSize(128, 128),
+        )
+    } else {
+        androidx.compose.material3.Icon(
+            Tabler.Outline.Search,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

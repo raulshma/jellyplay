@@ -306,7 +306,7 @@ re-exposures, `searchQuery`, `searchHistory`, `undoActions`,
 (mark played/unplayed, delete download, inline download via `DownloadItem`,
 the series delete-episodes sheet), search-history edits, settings-result
 clicks, section-config sheet writes, user switching and the offline
-toggle — arrives as a `HomeUiEvent` (`HomeUiEvent.kt`, 36 cases) and is
+toggle — arrives as a `HomeUiEvent` (`HomeUiEvent.kt`, 35 cases) and is
 routed once to a private handler; there is no per-action command method to
 keep in sync with the screen. The VM's remaining orchestration is folding
 `HomeRefresher.state` and `OfflineHomeGate.state` into `HomeUiState` (the
@@ -353,8 +353,9 @@ routing table as data: the pure `homeQuickActionEffect(item, action,
 onOpenDetail)` decides series-vs-movie (Download → series sheet vs inline
 `DownloadItem`; Remove-download → delete-episodes sheet vs confirm
 dialog), and the screen's execute lambda is a mechanical effect dispatch.
-Pinned by `HomeQuickActionsTest`; the `resolveActions` gate reads the
-COLLECTED `state.offlineMode`, not a `.value` snapshot of the VM singleton.
+Pinned by `HomeQuickActionsTest`; the `resolveActions` gate keys on
+`explicitOffline` — a read of the render source carried by
+`HomeSurface.Content`, not a `.value` snapshot of any VM singleton.
 
 **`HomeRenderSource`** (`feature/home/src/main/java/.../HomeRenderSource.kt`)
 is the home screen's single offline-render predicate: `Online` / `Offline` /
@@ -422,8 +423,10 @@ ratio).
 Test surfaces: `HomeRefresherTest` (plain JUnit + `MainDispatcherRule`,
 constructs the refresher directly with a fake `awaitOutboxDrained`) pins
 cadence, throttles, the offline transitions, the going-online sequence and
-its timeout, and `patchItems`; `HomeViewModelTest` (Robolectric, all 33
-constructor collaborators) pins the UiState folds, the event funnel and the
+its timeout, and `patchItems`; `HomeViewModelTest` (Robolectric — the
+refresher's and sync holder's collaborators are folded into the two
+injected factories below, so those sub-module dependencies no longer
+surface on the VM) pins the UiState folds, the event funnel and the
 identity routing through a real `HomeSession` — every test runs through a
 `vmTest` helper whose `finally` stops the periodic loop INSIDE the
 coroutine (an `@After` is too late: runTest's completion never returns
@@ -431,9 +434,13 @@ while its scheduler drives the infinite loop); `OfflineHomeGateTest`
 drives the gate module through its interface with one mocked repository
 (no VM, no Robolectric); `OfflineHomeContentTest` pins the one-pass
 aggregate; `OfflineShelfTest` pins the shared partition/query/threshold
-rules; `HomeRenderSourceTest` pins the render-source fold's five corners;
-`HomeSectionPrefsTest` pins the three section-config write policies
-directly (formerly reachable only through the VM harness);
+rules; `HomeRenderSourceTest` pins the render-source fold's corners and the
+render-source/offline-mode equivalence in BOTH directions;
+`HomeSectionPrefsTest` (core/model, beside the algebra) pins the three
+section-config write policies directly (formerly reachable only through
+the VM harness), and `HomeDiscoveryStoreTest` pins the store commands'
+read-modify-write + normalization; `HomeSurfaceTest` pins the render-branch
+fold's precedence (and that `Content` carries the winning render source);
 `HomeQuickActionsTest` pins the quick-action routing table;
 `HomeSearchSessionTest` pins the close ordering;
 `HomeSectionConfigSheetTest` pins the production `sectionConfigCapabilities`
@@ -562,6 +569,80 @@ field. `SettingsSearchCatalogTest` (feature/settings, JVM-only — parses
 both modules' `strings.xml` from disk like the old matcher test did) pins
 id uniqueness, string resolvability and the 256-item aggregation;
 `SettingsSearchMatcherTest` (core/ui) is synthetic and pins matching only.
+
+## Decided deepenings (2026-08-30 architecture review)
+
+**`HomeSurface`** (IMPLEMENTED, `feature/home/.../HomeSurface.kt`) is the
+home screen's render-branch fold: ONE pure `homeSurface(state, offlineContent)`
+computation producing a sealed surface — fixed precedence `HardError` →
+`NoDownloads` → `Music` → `Content` — where `Content` carries the
+pre-folded `HomeFeed` plus the winning render source carried whole (the
+screen's hero/banner/quick-action facts are single reads of it, not
+re-encoded booleans). The fold
+relies on the equivalence `offlineMode != ONLINE` ⟺
+`renderSource == Offline.Explicit` (both directions pinned by
+`HomeRenderSourceTest`); every
+predicate reads `renderSource`, never the offline-mode mirror (the raw
+mirror read in the quick-action resolver died with it). The screen's
+`when` is exhaustive over the result and decides nothing;
+`computeHomeRenderSource` stays the VM-side emission fold. Rejected
+alternative: a configurable flavour/policy engine — one production caller,
+so it buys width, not depth. The remove-download quick action stays
+Explicit-offline-only (pinned as-is); revisit if the implicit fallback
+should offer it.
+
+**`HomeRefresherFactory`** (IMPLEMENTED, `feature/home`) is the refresher's
+construction seam: an `@Inject` factory owning the nine pure-DI
+collaborators, `create()` taking only VM-owned runtime inputs (scope, the
+sync holder's drain gate, the preference-mirror providers) — plus
+`offlineModeManager`, a DI bean the VM itself uses for ToggleOfflineMode,
+so it stays on `create()` rather than the factory.
+`SyncStatusStateHolderFactory` (core/data) is the same move for the sync
+holder. `HomeViewModel`'s constructor dropped 33 → 23 parameters;
+`HomeRefresherTest` still constructs the refresher directly — the factory
+delegates, it adds no behavioural seam.
+
+**`HomeSectionPrefs`** (IMPLEMENTED, core/model beside `HomeSectionType`)
+is the section-prefs write algebra: the prefs snapshot type plus
+`withSectionVisible` / `withSectionMoved` / `withLibrarySectionVisible` —
+the single policy behind every section toggle/move. The sanctioned write
+path is `HomeDiscoveryStore`'s command methods (`setSectionVisible`,
+`moveSection`, `setLibrarySectionVisible`): read-modify-write over the
+current persisted state with order re-normalization. Home's inline sheet,
+Settings → Configure Libraries and the Appearance toggle all issue
+commands; the two verbatim policy copies and the inline composable toggle
+are gone. Bulk restore paths (preset apply, onboarding) keep the raw
+setters — they write whole lists, not toggles. The Appearance
+drag-to-reorder also keeps the raw whole-list setter: it persists the
+dragged final order in one write, not a replay of per-swap moves.
+
+**Row chrome consolidation** (IMPLEMENTED): `HomeRowMetrics` +
+`homeRowMetrics(widthScale)` replace the four hand-derived
+cardWidth/pad/spacing preambles; `HomeStatusBannerRow` is the content
+list's one notice row (was twin verbatim blocks, optional Retry);
+`HomeResultTile` is the search result row's one lead tile (was duplicated
+per result kind — the extracted subtitle builders stay as the
+Jellyfin/Seerr adapter mapping).
+
+**Dead surface deleted** (IMPLEMENTED): `HomeUiEvent.ExcludeSeriesFromNextUp`
+(zero senders) and five never-read `HomeCallbacks` fields (incl. the
+`onPlayOnClick` plumbing chain through `homeSection`/`MainNavDisplay`).
+The three continuation-carrying events stay — `HomeSurface` +
+`homeQuickActionEffect` already shrink their when-maps to terminal
+adapters.
+
+**DEFERRED — audio playback snapshots**: `AudioPlaybackManager`'s 52
+StateFlow members fold into now-playing / queue / effects / connection
+snapshots per the `SeerrRequestStateHolder` pattern. Deferred because ten
+consumer files across app/widgets/tile rewrite onto it at once and nothing
+pins current behaviour — do it when audio/cast churn resumes, tests first.
+
+**DEFERRED — settings category-merge module** (`SettingsCategoryMerge`):
+one `merge(category, incoming, current)` interface in core/datastore with
+legacy v0/v1 and factory-reset as adapters, folding
+`ImportPreviewViewModel.mergeForCategory` (~250 lines) and the duplicate
+snapshot builders. Deferred because backup/restore is the destructive path
+and deserves a dedicated session with the diff UI in the loop.
 
 ## TV drawer and focus wiring
 

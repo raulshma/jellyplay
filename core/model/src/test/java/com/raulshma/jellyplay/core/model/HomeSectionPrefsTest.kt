@@ -1,7 +1,4 @@
-package com.raulshma.jellyplay.feature.home
-
-import com.raulshma.jellyplay.core.model.HomeSectionQuery
-import com.raulshma.jellyplay.core.model.HomeSectionType
+package com.raulshma.jellyplay.core.model
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -12,7 +9,7 @@ import org.junit.Test
  * Pins [HomeSectionPrefs]' three write policies directly — the behaviour the
  * inline section-config sheet's toggle/move actions route through. Previously
  * these were reachable only through the full VM harness (33 collaborators +
- * Robolectric); the VM-level tests now pin only the event → editor routing.
+ * Robolectric); the VM-level tests now pin only the event → store-command routing.
  */
 class HomeSectionPrefsTest {
 

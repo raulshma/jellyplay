@@ -5,19 +5,15 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.NextEpisode
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
-import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
-import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
@@ -29,10 +25,9 @@ import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.HomeSessionTransition
 import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolder
-import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
+import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolderFactory
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
-import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
@@ -41,18 +36,13 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
+import com.raulshma.jellyplay.core.datastore.home.toSectionPrefs
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
-import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
-import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
-import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
-import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
-import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
-import com.raulshma.jellyplay.core.model.HomeSectionQuery
+import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
@@ -78,20 +68,15 @@ import javax.inject.Inject
 import dagger.hilt.android.lifecycle.HiltViewModel
 
 @HiltViewModel
-class HomeViewModel @Inject constructor(
-    private val mediaRepository: MediaRepository,
+internal class HomeViewModel @Inject constructor(
     private val episodeCatalogue: EpisodeCatalogue,
     private val userDataMutator: UserDataMutator,
     private val mediaSearchEngine: MediaSearchEngine,
-    private val offlineFirstItemResolver: OfflineFirstItemResolver,
-    private val orderHomeSections: OrderHomeSectionsUseCase,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val downloadRepository: DownloadRepository,
     private val downloadIntake: DownloadIntake,
     private val offlineRepository: OfflineRepository,
-    private val playbackOutboxRepository: PlaybackOutboxRepository,
-    private val playbackSyncScheduler: PlaybackSyncScheduler,
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: NewsletterTriggerManager,
     private val homeDiscoveryStore: HomeDiscoveryStore,
@@ -99,8 +84,6 @@ class HomeViewModel @Inject constructor(
     private val experimentalStore: ExperimentalStore,
     private val playbackStore: PlaybackStore,
     private val preferencesEditor: PreferencesEditor,
-    private val widgetDataStore: WidgetDataStore,
-    private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val authRepository: AuthRepository,
@@ -111,11 +94,6 @@ class HomeViewModel @Inject constructor(
      * purely as the uiState.currentUser mirror.
      */
     private val homeSession: HomeSession,
-    private val arrRepository: ArrRepository,
-    private val tvWatchNextScheduler: TvWatchNextScheduler,
-    private val continueWatchingBroadcaster: ContinueWatchingBroadcaster,
-    private val librarySyncHook: LibrarySyncHook,
-    private val timeSource: TimeSource,
     private val userMessageBus: UserMessageBus,
     /**
      * The settings-search catalog, injected through the core/ui seam. The
@@ -124,6 +102,14 @@ class HomeViewModel @Inject constructor(
      * feature/settings, only on the core/ui interface.
      */
     private val settingsSearchProvider: SettingsSearchProvider,
+    /**
+     * The construction seams for the two big sub-modules below: each factory
+     * owns its module's pure-DI collaborators so they never surface on this
+     * VM's constructor (a new refresher or sync-holder dependency used to
+     * widen THIS interface by one parameter, and the test harness with it).
+     */
+    private val homeRefresherFactory: HomeRefresherFactory,
+    private val syncStatusStateHolderFactory: SyncStatusStateHolderFactory,
 ) : JellyPlayViewModel(), DefaultLifecycleObserver {
 
     private val _uiState = stateFlow(HomeUiState())
@@ -154,11 +140,8 @@ class HomeViewModel @Inject constructor(
      * [SyncStatusStateHolder]); re-exposed SearchViewModel-style so the
      * header/sheet call sites observe the same flows as before.
      */
-    private val syncStatus = SyncStatusStateHolder(
+    private val syncStatus = syncStatusStateHolderFactory.create(
         scope = scope,
-        playbackOutboxRepository = playbackOutboxRepository,
-        playbackSyncScheduler = playbackSyncScheduler,
-        offlineFirstItemResolver = offlineFirstItemResolver,
         offlineModeManager = offlineModeManager,
     )
 
@@ -179,7 +162,7 @@ class HomeViewModel @Inject constructor(
      * The section-preference mirrors, bundled in one [HomeSectionPrefs] value
      * so the prefs collector below diffs and adopts each emission with a
      * single comparison/assignment; the refresher consumes the snapshot
-     * directly via its planProvider.
+     * directly via its sectionPrefsProvider.
      */
     private var sectionPrefs = HomeSectionPrefs()
     private var androidTvWatchNextEnabled = true
@@ -209,25 +192,16 @@ class HomeViewModel @Inject constructor(
      * collector below, same fold pattern as [SeerrRequestStateHolder]) and
      * the scroll resets on manual refresh and identity changes.
      *
-     * Constructed here rather than injected: its collaborators are exactly
-     * this VM's own constructor collaborators, and its per-call inputs are
-     * the preference mirrors above, exposed as read-only providers so the
-     * mirrors stay owned by the prefs collector in one place.
+     * Constructed through [homeRefresherFactory] (the construction seam that
+     * owns its pure-DI collaborators); the per-call inputs are the preference
+     * mirrors above, exposed as read-only providers so the mirrors stay
+     * owned by the prefs collector in one place.
      */
-    private val refresher = HomeRefresher(
+    private val refresher = homeRefresherFactory.create(
         scope = scope,
-        timeSource = timeSource,
-        mediaRepository = mediaRepository,
-        seerrRepository = seerrRepository,
-        arrRepository = arrRepository,
-        orderHomeSections = orderHomeSections,
-        widgetDataStore = widgetDataStore,
-        continueWatchingBroadcaster = continueWatchingBroadcaster,
-        tvWatchNextScheduler = tvWatchNextScheduler,
-        librarySyncHook = librarySyncHook,
         offlineModeManager = offlineModeManager,
         awaitOutboxDrained = syncStatus::awaitOutboxDrained,
-        planProvider = { sectionPrefs },
+        sectionPrefsProvider = { sectionPrefs },
         seerrPreferencesProvider = { seerrPreferences },
         discoverEnabledProvider = { discoverEnabled },
         directArrEnabledProvider = { directArrEnabled },
@@ -419,19 +393,9 @@ class HomeViewModel @Inject constructor(
             ) { home, appearance, experimental, playback ->
                 HomePrefs(home, appearance, experimental, playback)
             }.collect { prefs ->
-                val newSectionPrefs = HomeSectionPrefs(
-                    query = HomeSectionQuery(
-                        enabledSections = prefs.home.enabledHomeSectionTypes,
-                        libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides,
-                        nextUpRewatching = prefs.home.nextUpRewatching,
-                        nextUpMaxDays = prefs.home.nextUpMaxDays,
-                        nextUpExcludedSeriesIds = prefs.home.nextUpExcludedSeriesIds,
-                        hiddenCwItemIds = prefs.home.hiddenCwItemIds,
-                        pinnedSections = prefs.home.pinnedHomeSections,
-                    ),
-                    homeSectionOrder = prefs.home.homeSectionOrder,
-                    mergeContinueWatchingAndNextUp = prefs.home.mergeContinueWatchingAndNextUp,
-                )
+                // The shared slice→prefs mapping (the store's commands read
+                // through the same function) — no hand-copied field list here.
+                val newSectionPrefs = prefs.home.toSectionPrefs()
                 val homeSectionPrefsChanged = hasSeenHomePreferences && newSectionPrefs != sectionPrefs
 
                 hasSeenHomePreferences = true
@@ -635,7 +599,6 @@ class HomeViewModel @Inject constructor(
             is HomeUiEvent.DeleteSearchHistoryItem -> deleteSearchHistoryItem(event.id)
             is HomeUiEvent.ClearSearchHistory -> clearSearchHistory()
             is HomeUiEvent.SettingsResultClicked -> onSettingsResultClicked(event.item)
-            is HomeUiEvent.ExcludeSeriesFromNextUp -> excludeSeriesFromNextUp(event.seriesId)
             is HomeUiEvent.SetSectionVisible -> setSectionVisible(event.type, event.visible)
             is HomeUiEvent.MoveSection -> moveSection(event.type, event.up)
             is HomeUiEvent.SetLibrarySectionVisible -> setLibrarySectionVisible(event.libraryId, event.type, event.visible)
@@ -930,44 +893,35 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun excludeSeriesFromNextUp(seriesId: String) {
-        launch {
-            homeDiscoveryStore.excludeSeriesFromNextUp(seriesId)
-        }
-    }
-
     /**
-     * Toggles a home section's visibility from the inline section-config sheet.
-     * Writes through [preferencesEditor] exactly as the Settings screen does —
-     * the prefs collector above then triggers a refresher request so the
-     * row appears/disappears with no extra wiring.
+     * Toggles a home section's visibility from the inline section-config
+     * sheet. The write goes through the store's section-prefs command (the
+     * shared algebra applied to the CURRENT persisted state) — the same
+     * command Settings' Appearance toggle routes through; the prefs collector
+     * above then triggers a refresher request so the row appears/disappears
+     * with no extra wiring.
      */
     private fun setSectionVisible(type: HomeSectionType, visible: Boolean) {
-        preferencesEditor.setEnabledHomeSectionTypes(
-            sectionPrefs.withSectionVisible(type, visible).query.enabledSections,
-        )
+        launch { homeDiscoveryStore.setSectionVisible(type, visible) }
     }
 
     /**
      * Moves a home section up/down within the user's ordering, from the inline
-     * section-config sheet. Swaps with the neighbour in the cached order and
-     * persists via [preferencesEditor]; the prefs collector + ordering use case
+     * section-config sheet. Store command: swap with the neighbour in the
+     * persisted order, re-normalized; the prefs collector + ordering use case
      * re-apply it on the next emission.
      */
     private fun moveSection(type: HomeSectionType, up: Boolean) {
-        val updated = sectionPrefs.withSectionMoved(type, up) ?: return
-        preferencesEditor.edit { homeDiscovery.setHomeSectionOrder(updated.homeSectionOrder) }
+        launch { homeDiscoveryStore.moveSection(type, up) }
     }
 
     /**
      * Toggles a per-library section (currently LATEST_MEDIA) from the inline
-     * section-config sheet, mirroring Settings → Configure Libraries.
+     * section-config sheet, mirroring Settings → Configure Libraries — both
+     * route through the same store command.
      */
     private fun setLibrarySectionVisible(libraryId: String, type: HomeSectionType, visible: Boolean) {
-        preferencesEditor.setLibraryHomeSectionOverrides(
-            sectionPrefs.withLibrarySectionVisible(libraryId, type, visible)
-                .query.libraryHomeSectionOverrides,
-        )
+        launch { homeDiscoveryStore.setLibrarySectionVisible(libraryId, type, visible) }
     }
 
     override fun onStart(owner: LifecycleOwner) {

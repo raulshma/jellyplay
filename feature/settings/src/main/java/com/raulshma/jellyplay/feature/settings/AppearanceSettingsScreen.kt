@@ -973,9 +973,7 @@ fun AppearanceSettingsScreen(
                             count = homeSectionOrder.size,
                             modifier = Modifier.onSizeChanged { itemHeights[sectionType] = it.height },
                             onCheckedChange = { checked ->
-                                val current = preferences.enabledHomeSectionTypes.toMutableSet()
-                                if (checked) current.add(sectionType) else current.remove(sectionType)
-                                viewModel.setEnabledHomeSectionTypes(current)
+                                viewModel.setSectionVisible(sectionType, checked)
                             },
                             onDrag = { delta -> moveSection(sectionType, delta) },
                             onDragStart = { draggingSection = sectionType; dragOffsetY = 0f },

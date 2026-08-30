@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
+import javax.inject.Inject
 
 /**
  * Deep module for the home screen's pending-sync surface: everything the UI
@@ -43,7 +44,9 @@ import java.util.concurrent.ConcurrentHashMap
  * Placement (core/data, per the OfflineDeleteActions precedent): every
  * collaborator is a core/data type, and the holder holds no UI shaping. Same
  * construction contract as SeerrRequestStateHolder — not a DI bean; built by
- * the consumer with its own scope, which all launches run on.
+ * the consumer with its own scope, which all launches run on. Consumers that
+ * build from DI collaborators use [Factory] so those collaborators never
+ * surface on the consumer's own constructor.
  */
 class SyncStatusStateHolder(
     /** The consumer's scope: resolve/collect jobs must die with it. */
@@ -173,4 +176,28 @@ class SyncStatusStateHolder(
             playbackOutboxRepository.countFlow().first { it == 0 }
         }
     }
+}
+
+/**
+ * Construction seam for [SyncStatusStateHolder]: owns the pure-DI
+ * collaborators so they never surface on a consumer ViewModel's constructor
+ * (same rationale as the home refresher's factory). [create] takes only the
+ * consumer-owned runtime inputs — its scope and the shared offline-mode
+ * manager. Delegates only; no behavioural seam.
+ */
+class SyncStatusStateHolderFactory @Inject constructor(
+    private val playbackOutboxRepository: PlaybackOutboxRepository,
+    private val playbackSyncScheduler: PlaybackSyncScheduler,
+    private val offlineFirstItemResolver: OfflineFirstItemResolver,
+) {
+    fun create(
+        scope: CoroutineScope,
+        offlineModeManager: OfflineModeManager,
+    ): SyncStatusStateHolder = SyncStatusStateHolder(
+        scope = scope,
+        playbackOutboxRepository = playbackOutboxRepository,
+        playbackSyncScheduler = playbackSyncScheduler,
+        offlineFirstItemResolver = offlineFirstItemResolver,
+        offlineModeManager = offlineModeManager,
+    )
 }

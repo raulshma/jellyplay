@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.search.MediaSearchPreviewState
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolderFactory
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
@@ -272,19 +273,14 @@ class HomeViewModelTest {
     }
 
     private fun buildViewModel(): HomeViewModel = HomeViewModel(
-        mediaRepository = mediaRepository,
         episodeCatalogue = episodeCatalogue,
         userDataMutator = userDataMutator,
         mediaSearchEngine = mediaSearchEngine,
-        offlineFirstItemResolver = offlineFirstItemResolver,
-        orderHomeSections = OrderHomeSectionsUseCase(),
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
         downloadRepository = downloadRepository,
         downloadIntake = downloadIntake,
         offlineRepository = offlineRepository,
-        playbackOutboxRepository = playbackOutboxRepository,
-        playbackSyncScheduler = playbackSyncScheduler,
         offlineModeManager = offlineModeManager,
         newsletterTriggerManager = newsletterTriggerManager,
         homeDiscoveryStore = homeDiscoveryStore,
@@ -292,19 +288,28 @@ class HomeViewModelTest {
         experimentalStore = experimentalStore,
         playbackStore = playbackStore,
         preferencesEditor = preferencesEditor,
-        widgetDataStore = widgetDataStore,
-        seerrRepository = seerrRepository,
         seerrRequestDelegate = seerrRequestDelegate,
         seerrPreferencesStore = seerrPreferencesStore,
         authRepository = authRepository,
         homeSession = homeSession,
-        arrRepository = arrRepository,
-        tvWatchNextScheduler = tvWatchNextScheduler,
-        continueWatchingBroadcaster = continueWatchingBroadcaster,
-        librarySyncHook = librarySyncHook,
-        timeSource = fakeTimeSource,
         userMessageBus = userMessageBus,
         settingsSearchProvider = fakeSettingsSearchProvider,
+        homeRefresherFactory = HomeRefresherFactory(
+            timeSource = fakeTimeSource,
+            mediaRepository = mediaRepository,
+            seerrRepository = seerrRepository,
+            arrRepository = arrRepository,
+            orderHomeSections = OrderHomeSectionsUseCase(),
+            widgetDataStore = widgetDataStore,
+            continueWatchingBroadcaster = continueWatchingBroadcaster,
+            tvWatchNextScheduler = tvWatchNextScheduler,
+            librarySyncHook = librarySyncHook,
+        ),
+        syncStatusStateHolderFactory = SyncStatusStateHolderFactory(
+            playbackOutboxRepository = playbackOutboxRepository,
+            playbackSyncScheduler = playbackSyncScheduler,
+            offlineFirstItemResolver = offlineFirstItemResolver,
+        ),
     )
 
     /**
@@ -542,53 +547,37 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun setSectionVisible_removesTypeFromEnabledSet() = vmTest {
-        // Start with all configurable types enabled.
-        homeDiscoveryFlow.value = HomeDiscoverySlice(
-            enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE.toSet(),
-        )
+    fun setSectionVisible_routesToStoreCommand() = vmTest {
         viewModel = buildViewModel()
         runCurrent()
 
         viewModel.onEvent(HomeUiEvent.SetSectionVisible(HomeSectionType.NEXT_UP, visible = false))
+        runCurrent()
 
-        val expected = HomeSectionType.CONFIGURABLE.toSet() - HomeSectionType.NEXT_UP
-        verify { preferencesEditor.setEnabledHomeSectionTypes(expected) }
+        coVerify { homeDiscoveryStore.setSectionVisible(HomeSectionType.NEXT_UP, visible = false) }
     }
 
     @Test
-    fun moveSection_down_atLastIndex_isNoOp() = vmTest {
-        val order = listOf(
-            HomeSectionType.CONTINUE_WATCHING,
-            HomeSectionType.NEXT_UP,
-        )
-        homeDiscoveryFlow.value = HomeDiscoverySlice(homeSectionOrder = order)
-        every { preferencesEditor.edit(any()) } returns mockk()
+    fun moveSection_routesToStoreCommand() = vmTest {
         viewModel = buildViewModel()
         runCurrent()
 
         viewModel.onEvent(HomeUiEvent.MoveSection(HomeSectionType.NEXT_UP, up = false))
+        runCurrent()
 
-        // NEXT_UP is already last → editor must not be touched.
-        verify(exactly = 0) { preferencesEditor.edit(any()) }
+        coVerify { homeDiscoveryStore.moveSection(HomeSectionType.NEXT_UP, up = false) }
     }
 
     @Test
-    fun setLibrarySectionVisible_disabled_addsTypeToOverrideSet() = vmTest {
-        homeDiscoveryFlow.value = HomeDiscoverySlice(
-            libraryHomeSectionOverrides = mapOf("movies" to setOf(HomeSectionType.RECENTLY_ADDED)),
-        )
+    fun setLibrarySectionVisible_routesToStoreCommand() = vmTest {
         viewModel = buildViewModel()
         runCurrent()
 
-        // Hiding LATEST_MEDIA for the "movies" library adds it to the disabled
-        // set alongside the existing RECENTLY_ADDED entry.
         viewModel.onEvent(HomeUiEvent.SetLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = false))
+        runCurrent()
 
-        verify {
-            preferencesEditor.setLibraryHomeSectionOverrides(
-                mapOf("movies" to setOf(HomeSectionType.RECENTLY_ADDED, HomeSectionType.LATEST_MEDIA)),
-            )
+        coVerify {
+            homeDiscoveryStore.setLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = false)
         }
     }
 

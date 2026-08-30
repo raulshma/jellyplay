@@ -358,60 +358,18 @@ internal fun HomeContentList(
             // Non-blocking informational banner (implicit-offline fallback notice).
             if (state.statusBanner != null) {
                 item(key = "status_banner") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = state.contentPad, vertical = 4.dp)
-                            .clip(MaterialTheme.shapes.medium)
-                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            Tabler.Outline.AlertCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onErrorContainer,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = state.statusBanner,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                        )
-                    }
+                    HomeStatusBannerRow(text = state.statusBanner, contentPad = state.contentPad)
                 }
             }
 
             // Non-blocking notice when some home sections failed to load.
             if (state.online?.partialLoadError == true) {
                 item(key = "partial_load_banner") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = state.contentPad, vertical = 4.dp)
-                            .clip(MaterialTheme.shapes.medium)
-                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            Tabler.Outline.AlertCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onErrorContainer,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = stringResource(R.string.home_sections_load_failed),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(onClick = callbacks.onRetrySectionLoad) {
-                            Text(stringResource(R.string.home_retry))
-                        }
-                    }
+                    HomeStatusBannerRow(
+                        text = stringResource(R.string.home_sections_load_failed),
+                        onRetry = callbacks.onRetrySectionLoad,
+                        contentPad = state.contentPad,
+                    )
                 }
             }
 
@@ -721,5 +679,46 @@ internal fun HomeContentList(
                 }) { Text(stringResource(R.string.home_details)) }
             },
         )
+    }
+}
+
+/**
+ * The content list's ONE non-blocking notice row (the implicit-offline
+ * banner and the partial-load banner used to duplicate this block verbatim).
+ * [onRetry] optional: the partial-load variant carries a Retry button.
+ */
+@Composable
+private fun HomeStatusBannerRow(
+    text: String,
+    contentPad: Dp,
+    onRetry: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = contentPad, vertical = 4.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Tabler.Outline.AlertCircle,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onErrorContainer,
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+            modifier = if (onRetry != null) Modifier.weight(1f) else Modifier,
+        )
+        if (onRetry != null) {
+            TextButton(onClick = onRetry) {
+                Text(stringResource(R.string.home_retry))
+            }
+        }
     }
 }

@@ -69,8 +69,11 @@ class AppearanceSettingsViewModel @Inject constructor(
     fun setDateFormatPreference(preference: DateFormatPreference) =
         editor.setDateFormatPreference(preference)
     fun setHomeMode(mode: HomeMode) = editor.setHomeMode(mode)
-    fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) =
-        editor.setEnabledHomeSectionTypes(types)
+
+    /** Single-section toggle — the store's shared section-prefs command, so
+     * this screen and home's inline sheet apply the same policy. */
+    fun setSectionVisible(type: HomeSectionType, visible: Boolean) =
+        editor.edit { homeDiscovery.setSectionVisible(type, visible) }
     fun setHomeSectionOrder(order: List<HomeSectionType>) =
         editor.edit { homeDiscovery.setHomeSectionOrder(order) }
     fun setHomeHeroEnabled(enabled: Boolean) = editor.setHomeHeroEnabled(enabled)

@@ -92,9 +92,6 @@ sealed interface HomeUiEvent {
      */
     data class SettingsResultClicked(val item: ResolvedSettingsItem) : HomeUiEvent
 
-    /** Hides a series from the Next Up row. */
-    data class ExcludeSeriesFromNextUp(val seriesId: String) : HomeUiEvent
-
     /** Toggles a home section's visibility from the inline section-config sheet. */
     data class SetSectionVisible(val type: HomeSectionType, val visible: Boolean) : HomeUiEvent
 

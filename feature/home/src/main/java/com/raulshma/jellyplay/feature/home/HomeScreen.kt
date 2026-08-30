@@ -67,7 +67,6 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.quickActions
-import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -114,17 +113,12 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 data class HomeCallbacks(
     val onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
     val onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit = { _, _, _, _, _, _ -> },
-    val onSettingsClick: () -> Unit = {},
-    val onSyncPlayClick: () -> Unit = {},
-    val onDownloadsClick: () -> Unit = {},
-    val onPlayOnClick: () -> Unit = {},
     val onOfflineLibraryClick: () -> Unit = {},
     /** Open an item's detail screen from the inline card long-press Download;
      * [openDownloadSheet] pre-presents the series download sheet there. */
     val onDownloadDetailClick: (itemId: String, openDownloadSheet: Boolean) -> Unit = { _, _ -> },
     val onSeerrItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
     val onModeChange: (HomeMode) -> Unit = {},
-    val onSearchItemClick: (String) -> Unit = {},
     val onSearchSeerrClick: (Int, String) -> Unit = { _, _ -> },
     /** Open a settings destination surfaced by the home search bar. The passed
      * [com.raulshma.jellyplay.core.ui.navigation.Route] already has its
@@ -147,7 +141,7 @@ data class HomeCallbacks(
 )
 
 @Composable
-fun HomeScreen(
+internal fun HomeScreen(
     callbacks: HomeCallbacks,
     homeMode: HomeMode = HomeMode.VIDEO,
     musicContent: @Composable () -> Unit = {},
@@ -237,19 +231,21 @@ private fun MainHomeContent(
         )
     }
     val offlineSections = offlineContent.sections
-    // The offline-render decision arrives pre-computed as one value
-    // (HomeUiState.renderSource — see computeHomeRenderSource): explicit
-    // offline and the implicit fallback both render Offline; FallbackPending
-    // is the gate-open window before the first library emission. Which of the
-    // two Offline flavors it is decides the banner — read from this same
-    // value, NOT by re-comparing the offlineMode mirror, which lags a hop
-    // behind and would flash the banner on a deliberate offline toggle.
-    val renderingOffline = state.renderSource is HomeRenderSource.Offline
-    val fallbackPending = state.renderSource == HomeRenderSource.FallbackPending
-    val implicitOffline = state.renderSource == HomeRenderSource.Offline.Implicit
+    // The screen's entire render-branch policy folded ONCE into a typed
+    // surface (see [homeSurface]): which of the four surfaces renders, the
+    // content feed, and the hero/banner/quick-action facts derived from the
+    // render source — no site below re-derives the predicate from the
+    // offlineMode mirror or a private mix of error/sections/mode inputs.
+    val surface = remember(state, offlineContent) { homeSurface(state, offlineContent) }
+    val contentSurface = surface as? HomeSurface.Content
+    // The three render facts as reads of the ONE carried source — a new
+    // offline flavour changes no shape here.
+    val contentRenderSource = contentSurface?.renderSource
+    val renderingOffline = contentRenderSource is HomeRenderSource.Offline
+    val explicitOffline = contentRenderSource == HomeRenderSource.Offline.Explicit
     // Server fetch failed but downloads exist -> implicit offline: the same
     // integrated home plus a status banner so the fallback isn't silent.
-    val implicitOfflineBanner = if (implicitOffline) {
+    val implicitOfflineBanner = if (contentRenderSource == HomeRenderSource.Offline.Implicit) {
         stringResource(R.string.home_implicit_offline_banner)
     } else null
 
@@ -374,16 +370,16 @@ private fun MainHomeContent(
     // card. Provided to every PosterCard in scope via
     // CompositionLocal — the cards wire their own long-press.
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember(viewModel, downloadedIds, state.offlineMode) {
+        resolveActions = remember(viewModel, downloadedIds, explicitOffline) {
             { item: com.raulshma.jellyplay.core.model.MediaItem ->
                 // Download/Remove-download are gated by real download state
                 // (works online and off); the offline home additionally offers
-                // remove-download for series/seasons via includeRemoveDownload.
-                val offline = state.offlineMode != OfflineMode.ONLINE
+                // remove-download for series/seasons via includeRemoveDownload
+                // — Explicit offline only (pinned behaviour; see HomeSurface).
                 item.quickActions(
                     MediaQuickActionScope.HOME,
                     includeDownload = true,
-                    includeRemoveDownload = offline,
+                    includeRemoveDownload = explicitOffline,
                     isDownloaded = item.id in downloadedIds,
                 )
             }
@@ -547,17 +543,11 @@ private fun MainHomeContent(
                         }
                         .focusGroup()
                 ) {
-                // Offline sections + renderingOffline are derived above the hero
-                // setup so the hero can share the same offline candidates.
-                when {
-                    // When an online fetch fails but downloads are confirmed
-                    // absent (renderSource back to Online), there is nothing to
-                    // fall back on — show the hard error. While the
-                    // implicit-offline fallback is still waiting on its first
-                    // offline-library emission (FallbackPending), downloads may
-                    // yet exist — the loading state below covers that window.
-                    state.error != null && state.sections.isEmpty() &&
-                        state.renderSource == HomeRenderSource.Online -> {
+                // The render branch is one exhaustive `when` over the folded
+                // surface (see [homeSurface]) — this scope decides nothing
+                // about WHICH surface renders; each case only renders it.
+                when (val s = surface) {
+                    is HomeSurface.HardError -> {
                         ErrorScreen(
                             message = stringResource(R.string.home_error_load_content),
                             onRetry = { viewModel.onEvent(HomeUiEvent.Refresh) },
@@ -565,7 +555,7 @@ private fun MainHomeContent(
                         )
                     }
                     // Explicitly offline (manual or auto) with nothing downloaded.
-                    state.offlineMode != OfflineMode.ONLINE && offlineSections.isEmpty() -> {
+                    is HomeSurface.NoDownloads -> {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -578,37 +568,23 @@ private fun MainHomeContent(
                                 description = stringResource(R.string.home_no_downloads_description),
                                 actionLabel = stringResource(R.string.home_go_online_action),
                                 onAction = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
-                                actionLoading = state.isGoingOnline,
+                                actionLoading = s.isGoingOnline,
                                 modifier = Modifier.padding(horizontal = contentPad),
                             )
                         }
                     }
-                    state.homeMode == HomeMode.MUSIC && state.offlineMode == OfflineMode.ONLINE -> {
+                    HomeSurface.Music -> {
                         musicContent()
                     }
-                    else -> {
+                    is HomeSurface.Content -> {
                         HomeContentList(
                             state = HomeContentState(
-                                // WHAT renders is decided once, here, from
-                                // the render source: the server feed or the
-                                // offline one. Each branch's constructor IS
-                                // the former offline-short-circuit mask — the
-                                // online-only surfaces (loading spinner,
-                                // banners) simply don't exist on the offline
-                                // feed, and FallbackPending renders the
-                                // offline feed with its loading window.
-                                feed = when (state.renderSource) {
-                                    HomeRenderSource.Online -> HomeFeed.Online(
-                                        sections = state.sections,
-                                        isLoading = state.isLoading,
-                                        partialLoadError = state.partialLoadError,
-                                        newsletterBannerVisible = state.newsletterBannerVisible,
-                                    )
-                                    HomeRenderSource.FallbackPending ->
-                                        HomeFeed.Offline(offlineContent, isLoading = true)
-                                    is HomeRenderSource.Offline ->
-                                        HomeFeed.Offline(offlineContent)
-                                },
+                                // WHAT renders was decided by the fold — the
+                                // feed carries the online or offline surface
+                                // with the offline-only masks (spinner,
+                                // banners) and the FallbackPending loading
+                                // window already applied.
+                                feed = s.feed,
                                 homeHeroEnabled = state.homeHeroEnabled,
                                 homeBackdropEnabled = state.homeBackdropEnabled,
                                 discoverEnabled = state.discoverEnabled,

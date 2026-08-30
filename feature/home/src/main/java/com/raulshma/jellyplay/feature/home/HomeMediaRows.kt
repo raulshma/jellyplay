@@ -25,6 +25,7 @@ import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,24 +101,20 @@ internal fun OfflineHomeMediaRow(
     // open its quick actions (the offline card's own long-press handles touch).
     onFocusedItemChange: ((MediaItem) -> Unit)? = null,
 ) {
-    val isTv = LocalTvMode.current
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    val cardWidth = adaptiveInfo.rowCardWidth(isTv)
-    val contentPad = adaptiveInfo.contentPadding(isTv)
-    val spacing = adaptiveInfo.itemSpacing(isTv)
+    val metrics = homeRowMetrics()
 
     Column(modifier = modifier) {
         HomeRowTitle(
             title = title,
-            contentPad = contentPad,
+            contentPad = metrics.contentPad,
             onLongClick = null,
         )
         HomeItemRow(
             items = items,
             key = { it.id },
-            cardWidth = cardWidth,
-            spacing = spacing,
-            contentPad = contentPad,
+            cardWidth = metrics.cardWidth,
+            spacing = metrics.spacing,
+            contentPad = metrics.contentPad,
             clippingEnabled = clippingEnabled,
             focusRequester = focusRequester,
             onRowFocused = onRowFocused,
@@ -130,13 +127,42 @@ internal fun OfflineHomeMediaRow(
             OfflineMediaCard(
                 item = item,
                 onClick = { onItemClick(item) },
-                modifier = mod.width(cardWidth),
+                modifier = mod.width(metrics.cardWidth),
                 showStatusBadge = false,
             )
         }
     }
 }
 
+
+/**
+ * The row chrome metrics every home row derives from the adaptive info —
+ * card width, content padding, item spacing — as ONE value so the rows stop
+ * repeating the three-line preamble (four copies when [DownloadedSection]
+ * counted). A non-null [widthScale] selects a wide-card row (Continue
+ * Watching / Next Up scale ~1.6× with a 260 dp floor); null (the default) is
+ * the plain poster width.
+ */
+@Immutable
+internal data class HomeRowMetrics(
+    val cardWidth: Dp,
+    val contentPad: Dp,
+    val spacing: Dp,
+)
+
+@Composable
+internal fun homeRowMetrics(widthScale: Float? = null): HomeRowMetrics {
+    val isTv = LocalTvMode.current
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val baseWidth = adaptiveInfo.rowCardWidth(isTv)
+    return HomeRowMetrics(
+        cardWidth = widthScale
+            ?.let { scale -> (baseWidth * scale).coerceAtLeast(260.dp) }
+            ?: baseWidth,
+        contentPad = adaptiveInfo.contentPadding(isTv),
+        spacing = adaptiveInfo.itemSpacing(isTv),
+    )
+}
 
 /**
  * The home rows' TV/touch chassis — the ONE implementation of the
@@ -286,13 +312,10 @@ fun <T> ContinueWatchingRow(
     // its quick actions (the wide card's own long-press handles touch).
     onFocusedItemChange: ((MediaItem) -> Unit)? = null,
 ) {
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = LocalTvMode.current
     // Continue-watching cards are wide (landscape thumbnails + progress/metadata), so they
     // scale ~1.6× the portrait poster-card width rather than using [rowCardWidth] directly.
-    val cardWidth = (adaptiveInfo.rowCardWidth(isTv) * 1.6f).coerceAtLeast(260.dp)
-    val contentPad = adaptiveInfo.contentPadding(isTv)
-    val spacing = adaptiveInfo.itemSpacing(isTv)
+    val metrics = homeRowMetrics(widthScale = 1.6f)
+    val cardWidth = metrics.cardWidth
     // The bottom scrim gradient is identical across every card in the same theme
     // state, so compute it once per row instead of allocating a Brush per card
     // as cards scroll in/out of view.
@@ -304,15 +327,15 @@ fun <T> ContinueWatchingRow(
     Column(modifier = modifier) {
         HomeRowTitle(
             title = title,
-            contentPad = contentPad,
+            contentPad = metrics.contentPad,
             onLongClick = onSectionLongClick,
         )
         HomeItemRow(
             items = items,
             key = key,
-            cardWidth = cardWidth,
-            spacing = spacing,
-            contentPad = contentPad,
+            cardWidth = metrics.cardWidth,
+            spacing = metrics.spacing,
+            contentPad = metrics.contentPad,
             clippingEnabled = clippingEnabled,
             focusRequester = focusRequester,
             onRowFocused = onRowFocused,
@@ -364,12 +387,10 @@ fun HomeMediaRow(
     // not yet generated a poster). See [EpisodePosterResolver].
     seriesBackdropResolver: (String) -> String = { "" },
 ) {
-    val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val cardPrefs = com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences.current
-    val cardWidth = adaptiveInfo.rowCardWidth(isTv)
-    val contentPad = adaptiveInfo.contentPadding(isTv)
-    val spacing = adaptiveInfo.itemSpacing(isTv)
+    val metrics = homeRowMetrics()
+    val cardWidth = metrics.cardWidth
     // Apply "hide watched items" filter at the row wrapper so the entire card
     // (and its slot in the scroller) disappears rather than leaving a gap.
     val effectiveItems = remember(items, cardPrefs.hideWatchedItems) {
@@ -403,7 +424,7 @@ fun HomeMediaRow(
     Column(modifier = modifier) {
         HomeRowTitle(
             title = title,
-            contentPad = contentPad,
+            contentPad = metrics.contentPad,
             onLongClick = onSectionLongClick,
             onSeeAllClick = onSeeAllClick,
             seeAllFocusRequester = seeAllFocusRequester,
@@ -412,8 +433,8 @@ fun HomeMediaRow(
             items = effectiveItems,
             key = { it.id },
             cardWidth = cardWidth,
-            spacing = spacing,
-            contentPad = contentPad,
+            spacing = metrics.spacing,
+            contentPad = metrics.contentPad,
             clippingEnabled = clippingEnabled,
             modifier = rowModifier,
             focusRequester = focusRequester,

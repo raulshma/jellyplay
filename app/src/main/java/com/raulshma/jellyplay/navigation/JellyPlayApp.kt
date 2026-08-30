@@ -1205,7 +1205,6 @@ private fun PhoneContent(
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
-                        onPlayOnClick = onPlayOnClick,
                         playOnStrategy = playOnViewModel.strategy,
                         surpriseRequests = surpriseRequests,
                     )
@@ -1470,7 +1469,6 @@ private fun MainNavDisplay(
     modifier: Modifier = Modifier,
     onNowPlayingClick: () -> Unit = {},
     onAmbientClick: () -> Unit = {},
-    onPlayOnClick: () -> Unit = {},
     playOnStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy? = null,
     surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
@@ -1552,7 +1550,6 @@ private fun MainNavDisplay(
         onNowPlayingClick,
         onAmbientClick,
         onLogout,
-        onPlayOnClick,
         playOnStrategy,
     ) {
         entryProvider {
@@ -1560,7 +1557,6 @@ private fun MainNavDisplay(
                 navigator = navigator,
                 homeMode = homeMode,
                 onModeChange = onModeChange,
-                onPlayOnClick = onPlayOnClick,
                 playOnStrategy = playOnStrategy,
                 surpriseRequests = surpriseRequests,
                 musicContent = {

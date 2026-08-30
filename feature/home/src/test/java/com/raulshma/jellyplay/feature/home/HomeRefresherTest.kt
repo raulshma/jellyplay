@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
@@ -162,7 +163,7 @@ class HomeRefresherTest {
                 drainCalls++
                 drainGate?.await()
             },
-            planProvider = {
+            sectionPrefsProvider = {
                 HomeSectionPrefs(
                     query = HomeSectionQuery(),
                     homeSectionOrder = HomeSectionType.CONFIGURABLE,
