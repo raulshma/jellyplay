@@ -13,6 +13,36 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 
 import com.raulshma.jellyplay.core.model.UserInfo
 
+/**
+ * The appearance/theme slice of [HomeUiState] — the five fields that always
+ * change together (one [AppearanceSlice] emission) and are read together (the
+ * ArtworkThemeWrapper + backdrop pair). Embedded as one value, following the
+ * [SeerrRequestState] precedent: the prefs fold stays a one-line copy instead
+ * of a per-field hand-sync.
+ */
+@Immutable
+data class AppearanceUiState(
+    val dynamicTheming: Boolean = true,
+    val oledMode: Boolean = false,
+    val colorStyle: com.raulshma.jellyplay.core.model.ColorStyle = com.raulshma.jellyplay.core.model.ColorStyle.TONAL_SPOT,
+    val accentColorSwatch: String = "dynamic",
+    val performanceMode: Boolean = false,
+)
+
+/**
+ * The inline section-config sheet's whole input surface — the three pref
+ * mirrors it reads (see [sectionConfigCapabilities]). Embedded as one value
+ * so the prefs fold hands the sheet one slice instead of re-mirroring
+ * [HomeSectionPrefs] field by field.
+ */
+@Immutable
+data class SectionConfigState(
+    val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
+    val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
+    /** Per-library DISABLED types keyed by library (folder) id. */
+    val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
+)
+
 @Immutable
 data class HomeUiState(
     val sections: List<HomeSection> = emptyList(),
@@ -25,10 +55,8 @@ data class HomeUiState(
     /** Non-blocking notice shown when some (not all) home sections failed to load. */
     val partialLoadError: Boolean = false,
     val homeMode: HomeMode = HomeMode.VIDEO,
-    val dynamicTheming: Boolean = true,
-    val oledMode: Boolean = false,
-    val colorStyle: com.raulshma.jellyplay.core.model.ColorStyle = com.raulshma.jellyplay.core.model.ColorStyle.TONAL_SPOT,
-    val accentColorSwatch: String = "dynamic",
+    /** The appearance/theme quintet — see [AppearanceUiState]. */
+    val appearance: AppearanceUiState = AppearanceUiState(),
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
     val offlineLibrary: List<OfflineMediaItem> = emptyList(),
     /**
@@ -56,7 +84,6 @@ data class HomeUiState(
     val discoverEnabled: Boolean = false,
     val homeHeroEnabled: Boolean = true,
     val homeBackdropEnabled: Boolean = true,
-    val performanceMode: Boolean = false,
     val showClock: Boolean = false,
     /**
      * Whether the home top header dock auto-hides on scroll-down and reappears
@@ -86,25 +113,10 @@ data class HomeUiState(
     val directArrEnabled: Boolean = false,
     val currentUser: UserInfo? = null,
     /**
-     * Mirror of the user's enabled home section types (from prefs). Consumed
-     * only by the inline section-config sheet so it can show the current
-     * toggle state without reading the store directly.
+     * The inline section-config sheet's three pref mirrors — see
+     * [SectionConfigState]. Read only by the sheet's capabilities derivation.
      */
-    val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
-    /**
-     * Mirror of the user's home section ordering (from prefs). Consumed only
-     * by the inline section-config sheet to enable/disable the Move Up/Down
-     * buttons relative to the section's current position.
-     */
-    val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
-    /**
-     * Mirror of the user's per-library section overrides (from prefs). Keyed by
-     * library (folder) id, value is the set of DISABLED [HomeSectionType]s for
-     * that library. Consumed by the inline section-config sheet so a per-library
-     * LATEST_MEDIA row shows its real toggle state. Mirrors the Settings →
-     * Configure Libraries semantics.
-     */
-    val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
+    val sectionConfig: SectionConfigState = SectionConfigState(),
     /**
      * Non-null while the offline home's advanced "delete downloaded episodes"
      * sheet is open for a series card. Carries the seasons/episodes loaded for

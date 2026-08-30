@@ -202,7 +202,6 @@ private fun MainHomeContent(
         }
     }
 
-    val activeDownloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
     val currentServerUsers by viewModel.currentServerUsers.collectAsStateWithLifecycle()
     var showSyncDetails by remember { mutableStateOf(false) }
@@ -310,7 +309,7 @@ private fun MainHomeContent(
     val headerHeight = rememberHeroHeight()
 
     val bgState = rememberHomeBackgroundState(
-        dynamicTheming = state.dynamicTheming,
+        dynamicTheming = state.appearance.dynamicTheming,
         backdropUrl = heroController.backdropUrl,
     )
     val backgroundColor = bgState.backgroundColor
@@ -375,12 +374,12 @@ private fun MainHomeContent(
     // card. Provided to every PosterCard in scope via
     // CompositionLocal — the cards wire their own long-press.
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember(viewModel, downloadedIds) {
+        resolveActions = remember(viewModel, downloadedIds, state.offlineMode) {
             { item: com.raulshma.jellyplay.core.model.MediaItem ->
                 // Download/Remove-download are gated by real download state
                 // (works online and off); the offline home additionally offers
                 // remove-download for series/seasons via includeRemoveDownload.
-                val offline = viewModel.uiState.value.offlineMode != OfflineMode.ONLINE
+                val offline = state.offlineMode != OfflineMode.ONLINE
                 item.quickActions(
                     MediaQuickActionScope.HOME,
                     includeDownload = true,
@@ -391,35 +390,32 @@ private fun MainHomeContent(
         },
         executeAction = remember(viewModel, mediaOnItemClick, mediaOnPlayClick, callbacks) {
             { item: com.raulshma.jellyplay.core.model.MediaItem, action: QuickAction ->
-                when (action) {
-                    QuickAction.PLAY -> mediaOnPlayClick(item)
-                    QuickAction.MARK_WATCHED -> viewModel.onEvent(HomeUiEvent.MarkItemPlayed(item))
-                    QuickAction.MARK_UNWATCHED -> viewModel.onEvent(HomeUiEvent.MarkItemUnplayed(item))
-                    QuickAction.DETAILS -> mediaOnItemClick(item)
-                    // Single-stream items start inline at the default quality.
-                    // A series opens the same download sheet the detail screen
-                    // hosts, right here on home; other non-inline types open
-                    // the detail screen plainly.
-                    QuickAction.DOWNLOAD -> {
-                        if (item.mediaType == MediaType.SERIES) {
-                            viewModel.onEvent(HomeUiEvent.RequestSeriesDownload(item))
-                        } else {
-                            viewModel.downloadItem(
-                                item,
-                                onOpenDetail = { itemId, openDownloadSheet ->
-                                    callbacks.onDownloadDetailClick(itemId, openDownloadSheet)
-                                },
-                            )
-                        }
-                    }
-                    // Series opens the advanced delete-episodes sheet
-                    // (select episodes / seasons / entire series); anything
-                    // else (movie/music) opens the simple confirm dialog below.
-                    QuickAction.REMOVE_DOWNLOAD -> {
-                        if (item.mediaType == MediaType.SERIES) viewModel.onEvent(HomeUiEvent.RequestSeriesDelete(item))
-                        else pendingDelete = item
-                    }
-                    else -> Unit
+                // The routing table lives in homeQuickActionEffect (pure,
+                // pinned by HomeQuickActionsTest); this dispatch is mechanical.
+                when (
+                    val effect = homeQuickActionEffect(
+                        item,
+                        action,
+                        onOpenDetail = { itemId, openDownloadSheet ->
+                            callbacks.onDownloadDetailClick(itemId, openDownloadSheet)
+                        },
+                    )
+                ) {
+                    is HomeQuickActionEffect.Play -> mediaOnPlayClick(effect.item)
+                    is HomeQuickActionEffect.MarkPlayed ->
+                        viewModel.onEvent(
+                            if (effect.played) HomeUiEvent.MarkItemPlayed(effect.item)
+                            else HomeUiEvent.MarkItemUnplayed(effect.item),
+                        )
+                    is HomeQuickActionEffect.ShowDetails -> mediaOnItemClick(effect.item)
+                    is HomeQuickActionEffect.OpenSeriesDownloadSheet ->
+                        viewModel.onEvent(HomeUiEvent.RequestSeriesDownload(effect.series))
+                    is HomeQuickActionEffect.StartDownload ->
+                        viewModel.onEvent(HomeUiEvent.DownloadItem(effect.item, effect.onOpenDetail))
+                    is HomeQuickActionEffect.OpenSeriesDeleteSheet ->
+                        viewModel.onEvent(HomeUiEvent.RequestSeriesDelete(effect.series))
+                    is HomeQuickActionEffect.ConfirmDeleteDownload -> pendingDelete = effect.item
+                    HomeQuickActionEffect.None -> Unit
                 }
             }
         },
@@ -455,8 +451,13 @@ private fun MainHomeContent(
     }
     val discoverRows = rememberDiscoverRows(allDiscoverItems)
 
-    var isSearchExpanded by remember { mutableStateOf(false) }
-    val isSearchFocused by remember { derivedStateOf { state.isSearchActive || isSearchExpanded } }
+    // The search SESSION (expanded flag + close ordering) lives in one holder
+    // — see HomeSearchSession. The data half stays in the VM's search holder;
+    // `isSearchFocused` folds both: VM-active (a live query) OR locally
+    // expanded (the field is open even before/after typing).
+    val searchSession = remember(viewModel) { HomeSearchSession(viewModel::onEvent) }
+    val closeSearch = remember(searchSession) { { searchSession.close { focusManager.clearFocus() } } }
+    val isSearchFocused by remember { derivedStateOf { state.isSearchActive || searchSession.isExpanded } }
 
     // Inline section-config sheet target — set by long-pressing a configurable
     // section title. Hoisted here (not in the LazyColumn item) so opening the
@@ -473,18 +474,16 @@ private fun MainHomeContent(
     val dismissSectionConfig = remember { { sectionConfigTarget = null } }
 
     BackHandler(enabled = isSearchFocused) {
-        isSearchExpanded = false
-        viewModel.onEvent(HomeUiEvent.ClearSearch)
-        focusManager.clearFocus()
+        closeSearch()
     }
 
     ArtworkThemeWrapper(
         imageUrl = heroController.backdropUrl,
-        dynamicTheming = state.dynamicTheming,
+        dynamicTheming = state.appearance.dynamicTheming,
         darkTheme = !isLightTheme,
-        oledMode = state.oledMode,
-        colorStyle = state.colorStyle,
-        accentColorSwatch = state.accentColorSwatch,
+        oledMode = state.appearance.oledMode,
+        colorStyle = state.appearance.colorStyle,
+        accentColorSwatch = state.appearance.accentColorSwatch,
     ) {
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
@@ -523,8 +522,8 @@ private fun MainHomeContent(
             HomeBackdrop(
                 state = HomeBackdropState(
                     enabled = state.homeBackdropEnabled,
-                    performanceMode = state.performanceMode,
-                    oledMode = state.oledMode,
+                    performanceMode = state.appearance.performanceMode,
+                    oledMode = state.appearance.oledMode,
                     isLightTheme = isLightTheme,
                     blurHash = heroController.featuredItem?.blurHashes?.backdrop,
                     backdropUrl = heroController.backdropUrl,
@@ -590,22 +589,30 @@ private fun MainHomeContent(
                     else -> {
                         HomeContentList(
                             state = HomeContentState(
-                                // Offline rendering short-circuits the server-only
-                                // surfaces (loading spinner, banners) — the content
-                                // list shows the offline-derived sections, and the
-                                // hero (already fed offline candidates + local
-                                // backdrop paths) features downloaded media. The
-                                // pending flag covers the implicit-offline window
-                                // before the first library emission.
-                                isLoading = (!renderingOffline && state.isLoading) ||
-                                    fallbackPending,
+                                // WHAT renders is decided once, here, from
+                                // the render source: the server feed or the
+                                // offline one. Each branch's constructor IS
+                                // the former offline-short-circuit mask — the
+                                // online-only surfaces (loading spinner,
+                                // banners) simply don't exist on the offline
+                                // feed, and FallbackPending renders the
+                                // offline feed with its loading window.
+                                feed = when (state.renderSource) {
+                                    HomeRenderSource.Online -> HomeFeed.Online(
+                                        sections = state.sections,
+                                        isLoading = state.isLoading,
+                                        partialLoadError = state.partialLoadError,
+                                        newsletterBannerVisible = state.newsletterBannerVisible,
+                                    )
+                                    HomeRenderSource.FallbackPending ->
+                                        HomeFeed.Offline(offlineContent, isLoading = true)
+                                    is HomeRenderSource.Offline ->
+                                        HomeFeed.Offline(offlineContent)
+                                },
                                 homeHeroEnabled = state.homeHeroEnabled,
                                 homeBackdropEnabled = state.homeBackdropEnabled,
-                                newsletterBannerVisible = !renderingOffline && state.newsletterBannerVisible,
                                 discoverEnabled = state.discoverEnabled,
                                 experimentalCardClippingEnabled = state.experimentalCardClippingEnabled,
-                                sections = if (renderingOffline) offlineSections else state.sections,
-                                partialLoadError = !renderingOffline && state.partialLoadError,
                                 featuredItem = heroController.featuredItem,
                                 backgroundColor = backgroundColor,
                                 contentPad = contentPad,
@@ -616,11 +623,6 @@ private fun MainHomeContent(
                                 allDiscoverItems = allDiscoverItems,
                                 recentlyGrabbed = state.recentlyGrabbed,
                                 photoFolderChildUrls = photoFolderChildUrls,
-                                // Forward the whole offline render model only when
-                                // the offline branch can render it (null while
-                                // online), so download-progress ticks while
-                                // online never invalidate the content list.
-                                offlineContent = if (renderingOffline) offlineContent else null,
                                 statusBanner = implicitOfflineBanner,
                             ),
                             callbacks = HomeContentCallbacks(
@@ -660,19 +662,15 @@ private fun MainHomeContent(
                 // below) into remembered locals so HomeSearchResultsOverlay's
                 // results LazyColumn stops being re-scored each keystroke.
                 val searchGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
-                val searchOnJellyfinClick = remember(viewModel, callbacks) {
+                val searchOnJellyfinClick = remember(viewModel, callbacks, closeSearch) {
                     { item: com.raulshma.jellyplay.core.model.MediaItem ->
-                        isSearchExpanded = false
-                        viewModel.onEvent(HomeUiEvent.ClearSearch)
-                        focusManager.clearFocus()
+                        closeSearch()
                         callbacks.onItemClick(item.id, item.mediaType, item.parentId, item.name)
                     }
                 }
-                val searchOnSeerrClick = remember(viewModel, callbacks) {
+                val searchOnSeerrClick = remember(viewModel, callbacks, closeSearch) {
                     { item: SeerrSearchItem ->
-                        isSearchExpanded = false
-                        viewModel.onEvent(HomeUiEvent.ClearSearch)
-                        focusManager.clearFocus()
+                        closeSearch()
                         callbacks.onSearchSeerrClick(item.id, item.mediaType)
                     }
                 }
@@ -683,11 +681,9 @@ private fun MainHomeContent(
                     { id: Long -> viewModel.onEvent(HomeUiEvent.DeleteSearchHistoryItem(id)) }
                 }
                 val searchOnClearHistory = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.ClearSearchHistory) } }
-                val searchOnSettingsClick = remember(viewModel, callbacks) {
+                val searchOnSettingsClick = remember(viewModel, callbacks, closeSearch) {
                     { item: com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem ->
-                        isSearchExpanded = false
-                        viewModel.onEvent(HomeUiEvent.ClearSearch)
-                        focusManager.clearFocus()
+                        closeSearch()
                         viewModel.onEvent(HomeUiEvent.SettingsResultClicked(item))
                         // Inject the matched setting's id as the deep-link scroll/
                         // focus target so the destination screen scrolls to and
@@ -701,16 +697,14 @@ private fun MainHomeContent(
                 // HomeTopDockScrim leaf via viewModel.searchQuery), but the
                 // lambdas are still hoisted so HomeTopDock stays skippable on
                 // the recompositions that DO reach it (scroll, search focus).
-                // `isSearchExpanded` is a MutableState delegate and stable.
-                val dockOnSearchExpanded = remember { { v: Boolean -> isSearchExpanded = v } }
+                val dockOnSearchExpanded = remember(searchSession, closeSearch) {
+                    { v: Boolean -> if (v) searchSession.open() else closeSearch() }
+                }
                 val dockOnSearchQueryChange = remember(viewModel) {
                     { q: String -> viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(q)) }
                 }
-                val dockOnClearSearch = remember(viewModel) {
-                    {
-                        isSearchExpanded = false
-                        viewModel.onEvent(HomeUiEvent.ClearSearch)
-                    }
+                val dockOnClearSearch = remember(viewModel, closeSearch) {
+                    { closeSearch() }
                 }
                 val dockOnToggleOffline = remember(viewModel) {
                     { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) }
@@ -723,29 +717,32 @@ private fun MainHomeContent(
                     settingsSearch = viewModel::settingsSearchResults,
                     homeScrollState = homeScrollState,
                     isLightTheme = isLightTheme,
-                    isSearchFocused = isSearchFocused,
                     searchQuery = viewModel.searchQuery,
                     includeSettingsResults = state.showSettingsInHomeSearch,
-                    offlineMode = state.offlineMode,
-                    homeMode = state.homeMode,
-                    headerStatus = headerStatus,
-                    activeDownloadCount = activeDownloadCount,
-                    pendingSyncCount = pendingSyncCount,
-                    showClock = state.showClock,
-                    homeHeroEnabled = state.homeHeroEnabled,
-                    hasFeaturedItem = heroController.featuredItem != null,
                     isTv = isTv,
-                    hideTopHeaderOnScroll = state.hideTopHeaderOnScroll,
-                    currentUser = state.currentUser,
-                    currentServerUsers = currentServerUsers,
-                    onUserSwitch = onUserSwitch,
-                    onModeChange = callbacks.onModeChange,
-                    onSearchExpanded = dockOnSearchExpanded,
-                    onSearchQueryChange = dockOnSearchQueryChange,
-                    onClearSearch = dockOnClearSearch,
-                    onToggleOffline = dockOnToggleOffline,
-                    isGoingOnline = state.isGoingOnline,
-                    onShowSyncDetails = dockOnShowSyncDetails,
+                    dockState = HomeDockState(
+                        offlineMode = state.offlineMode,
+                        homeMode = state.homeMode,
+                        headerStatus = headerStatus,
+                        pendingSyncCount = pendingSyncCount,
+                        showClock = state.showClock,
+                        currentUser = state.currentUser,
+                        currentServerUsers = currentServerUsers,
+                        isSearchFocused = isSearchFocused,
+                        isGoingOnline = state.isGoingOnline,
+                        homeHeroEnabled = state.homeHeroEnabled,
+                        hasFeaturedItem = heroController.featuredItem != null,
+                        hideTopHeaderOnScroll = state.hideTopHeaderOnScroll,
+                    ),
+                    dockCallbacks = HomeDockCallbacks(
+                        onUserSwitch = onUserSwitch,
+                        onModeChange = callbacks.onModeChange,
+                        onSearchExpanded = dockOnSearchExpanded,
+                        onSearchQueryChange = dockOnSearchQueryChange,
+                        onClearSearch = dockOnClearSearch,
+                        onToggleOffline = dockOnToggleOffline,
+                        onShowSyncDetails = dockOnShowSyncDetails,
+                    ),
                     onHeroFocusDown = remember(heroFocusRequester) {
                         { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }
                     },
@@ -883,24 +880,20 @@ private fun MainHomeContent(
     val target = sectionConfigTarget
     if (target != null && target.type.isConfigurable) {
         val libraryId = target.libraryId
-        val perLibrary = libraryId != null
-        val order = state.homeSectionOrder
-        val index = order.indexOf(target.type)
-        val enabled = if (perLibrary) {
-            // Per-library: enabled unless the type is in this library's
-            // disabled override set (defaults to enabled when absent).
-            target.type !in state.libraryHomeSectionOverrides[libraryId].orEmpty()
-        } else {
-            target.type in state.enabledHomeSectionTypes
+        val capabilities = remember(
+            target, state.sectionConfig,
+        ) {
+            sectionConfigCapabilities(
+                type = target.type,
+                libraryId = target.libraryId,
+                order = state.sectionConfig.homeSectionOrder,
+                enabledTypes = state.sectionConfig.enabledHomeSectionTypes,
+                libraryOverrides = state.sectionConfig.libraryHomeSectionOverrides,
+            )
         }
         HomeSectionConfigSheet(
             sectionType = target.type,
-            enabled = enabled,
-            perLibrary = perLibrary,
-            position = index,
-            total = order.size,
-            canMoveUp = index > 0,
-            canMoveDown = index in 0..(order.lastIndex - 1),
+            capabilities = capabilities,
             onToggleVisible = remember(viewModel, target) {
                 { visible ->
                     if (libraryId != null) {
@@ -912,7 +905,7 @@ private fun MainHomeContent(
             },
             onMoveUp = remember(viewModel, target) { { viewModel.onEvent(HomeUiEvent.MoveSection(target.type, up = true)) } },
             onMoveDown = remember(viewModel, target) { { viewModel.onEvent(HomeUiEvent.MoveSection(target.type, up = false)) } },
-            onConfigureLayout = if (perLibrary) onConfigureLibraries else onConfigureHomeLayout,
+            onConfigureLayout = if (capabilities.perLibrary) onConfigureLibraries else onConfigureHomeLayout,
             onDismiss = dismissSectionConfig,
         )
     }
@@ -1009,30 +1002,12 @@ private fun HomeSeriesDeleteSheet(
 private fun HomeTopDockScrim(
     homeScrollState: HomeScrollState,
     isLightTheme: Boolean,
-    isSearchFocused: Boolean,
     searchQuery: StateFlow<String>,
     includeSettingsResults: Boolean,
-    offlineMode: com.raulshma.jellyplay.core.model.OfflineMode,
-    homeMode: HomeMode,
-    headerStatus: HeaderStatus,
-    activeDownloadCount: Int,
-    pendingSyncCount: Int,
-    showClock: Boolean,
-    homeHeroEnabled: Boolean,
-    hasFeaturedItem: Boolean,
     isTv: Boolean,
-    hideTopHeaderOnScroll: Boolean,
-    currentUser: com.raulshma.jellyplay.core.model.UserInfo?,
-    currentServerUsers: List<com.raulshma.jellyplay.core.model.UserInfo>,
+    dockState: HomeDockState,
+    dockCallbacks: HomeDockCallbacks,
     settingsSearch: (Flow<String>, Context) -> Flow<List<ResolvedSettingsItem>>,
-    onUserSwitch: (String) -> Unit,
-    onModeChange: (HomeMode) -> Unit,
-    onSearchExpanded: (Boolean) -> Unit,
-    onSearchQueryChange: (String) -> Unit,
-    onClearSearch: () -> Unit,
-    onToggleOffline: () -> Unit,
-    isGoingOnline: Boolean = false,
-    onShowSyncDetails: () -> Unit = {},
     onHeroFocusDown: () -> Boolean,
     searchResultsContent: @Composable (List<ResolvedSettingsItem>) -> Unit,
 ) {
@@ -1072,11 +1047,11 @@ private fun HomeTopDockScrim(
     // isolation discipline as scrollFraction above. Forced visible while
     // search is focused and disabled entirely on TV.
     val listState = homeScrollState.listState
-    val canHide = hideTopHeaderOnScroll && !isTv
+    val canHide = dockState.hideTopHeaderOnScroll && !isTv
     var isHeaderVisible by remember { mutableStateOf(true) }
     val hideThresholdPx = with(LocalDensity.current) { 12.dp.toPx() }
-    LaunchedEffect(canHide, isSearchFocused) {
-        if (!canHide || isSearchFocused) {
+    LaunchedEffect(canHide, dockState.isSearchFocused) {
+        if (!canHide || dockState.isSearchFocused) {
             isHeaderVisible = true
             return@LaunchedEffect
         }
@@ -1107,31 +1082,16 @@ private fun HomeTopDockScrim(
         HomeTopDock(
         appBarIconColor = appBarIconColor,
         appBarIconColorFaded = appBarIconColorFaded,
-        isSearchFocused = isSearchFocused,
         searchQuery = query,
-        offlineMode = offlineMode,
-        homeMode = homeMode,
-        headerStatus = headerStatus,
-        activeDownloadCount = activeDownloadCount,
-        pendingSyncCount = pendingSyncCount,
-        showClock = showClock,
-        currentUser = currentUser,
-        currentServerUsers = currentServerUsers,
-        onUserSwitch = onUserSwitch,
-        onModeChange = onModeChange,
-        onSearchExpanded = onSearchExpanded,
-        onSearchQueryChange = onSearchQueryChange,
-        onClearSearch = onClearSearch,
-        onToggleOffline = onToggleOffline,
-        isGoingOnline = isGoingOnline,
-        onShowSyncDetails = onShowSyncDetails,
+        state = dockState,
+        callbacks = dockCallbacks,
         searchResultsContent = { searchResultsContent(settingsResults) },
         modifier = Modifier
             .then(
                 if (isTv) {
                     Modifier.onDpadKey(
                         onDown = {
-                            if (!isSearchFocused && homeHeroEnabled && hasFeaturedItem) {
+                            if (!dockState.isSearchFocused && dockState.homeHeroEnabled && dockState.hasFeaturedItem) {
                                 onHeroFocusDown()
                             } else false
                         }

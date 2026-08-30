@@ -40,6 +40,7 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,7 +53,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -97,35 +97,59 @@ import com.composables.icons.tabler.outline.Refresh
 /** Translucency of the home app-bar capsules and the expanded-search surface scrim. */
 private const val AppBarScrimAlpha = 0.85f
 
+/**
+ * The dock's whole data surface, bundled — the former 15 flat params (plus
+ * the callbacks' 7 lambdas) meant every dock feature was a 3-signature
+ * lockstep edit (screen → scrim → dock); same disease [HomeContentState]
+ * cured for the content list. Constructed inline at the call site:
+ * `@Immutable` + value equality keep the dock skippable.
+ */
+@Immutable
+internal data class HomeDockState(
+    val offlineMode: OfflineMode,
+    val homeMode: HomeMode,
+    val headerStatus: HeaderStatus,
+    val pendingSyncCount: Int,
+    val showClock: Boolean,
+    val currentUser: UserInfo?,
+    val currentServerUsers: List<UserInfo>,
+    /** True while the search field is focused/expanded (branch + dpad routing). */
+    val isSearchFocused: Boolean,
+    val isGoingOnline: Boolean = false,
+    /** Scrim-side D-pad-down-to-hero gate; not read by the dock body itself. */
+    val homeHeroEnabled: Boolean = true,
+    /** Scrim-side D-pad-down-to-hero gate; not read by the dock body itself. */
+    val hasFeaturedItem: Boolean = false,
+    /** Scrim-side auto-hide gate; not read by the dock body itself. */
+    val hideTopHeaderOnScroll: Boolean = false,
+)
+
+/** The dock's whole interaction surface — see [HomeDockState]. */
+@Immutable
+internal data class HomeDockCallbacks(
+    val onUserSwitch: (String) -> Unit,
+    val onModeChange: (HomeMode) -> Unit,
+    val onSearchExpanded: (Boolean) -> Unit,
+    val onSearchQueryChange: (String) -> Unit,
+    val onClearSearch: () -> Unit,
+    val onToggleOffline: () -> Unit,
+    val onShowSyncDetails: () -> Unit = {},
+)
+
 @Composable
-fun HomeTopDock(
+internal fun HomeTopDock(
     appBarIconColor: Color,
     appBarIconColorFaded: Color,
-    isSearchFocused: Boolean,
     searchQuery: String,
-    offlineMode: OfflineMode,
-    homeMode: HomeMode,
-    headerStatus: HeaderStatus,
-    activeDownloadCount: Int,
-    pendingSyncCount: Int,
-    showClock: Boolean,
-    currentUser: UserInfo?,
-    currentServerUsers: List<UserInfo>,
-    onUserSwitch: (String) -> Unit,
-    onModeChange: (HomeMode) -> Unit,
-    onSearchExpanded: (Boolean) -> Unit,
-    onSearchQueryChange: (String) -> Unit,
-    onClearSearch: () -> Unit,
-    onToggleOffline: () -> Unit,
-    isGoingOnline: Boolean = false,
-    onShowSyncDetails: () -> Unit = {},
+    state: HomeDockState,
+    callbacks: HomeDockCallbacks,
     searchResultsContent: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val focusManager = LocalFocusManager.current
     val isTv = LocalTvMode.current
 
-    val hasStatusIndicators = headerStatus !is HeaderStatus.None || showClock || pendingSyncCount > 0 || offlineMode != OfflineMode.ONLINE
+    val hasStatusIndicators = state.headerStatus !is HeaderStatus.None || state.showClock ||
+        state.pendingSyncCount > 0 || state.offlineMode != OfflineMode.ONLINE
 
     Box(
         modifier = modifier
@@ -143,18 +167,21 @@ fun HomeTopDock(
                 end = 16.dp,
                 bottom = 0.dp,
             )
+            // Back while the search field is focused collapses it. The
+            // teardown ordering (collapse → clear query → drop keyboard
+            // focus) lives in the caller's HomeSearchSession — the dock only
+            // forwards, it never re-implements parts of the sequence.
             .onDpadKey(
                 onBack = {
-                    if (isSearchFocused) {
-                        onClearSearch()
-                        focusManager.clearFocus()
+                    if (state.isSearchFocused) {
+                        callbacks.onClearSearch()
                         true
                     } else false
                 },
             ),
         contentAlignment = Alignment.TopStart
     ) {
-        if (isSearchFocused) {
+        if (state.isSearchFocused) {
             Surface(
                 shape = ShapeCache.smooth24,
                 color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = AppBarScrimAlpha),
@@ -186,16 +213,13 @@ fun HomeTopDock(
                             searchQuery = searchQuery,
                             appBarIconColor = appBarIconColor,
                             appBarIconColorFaded = appBarIconColorFaded,
-                            onBack = {
-                                onSearchExpanded(false)
-                                onClearSearch()
-                                focusManager.clearFocus()
-                            },
-                            onQueryChange = onSearchQueryChange,
-                            onClear = {
-                                onClearSearch()
-                                focusManager.clearFocus()
-                            },
+                            // Both forward to the caller's HomeSearchSession
+                            // close (collapse + clear + defocus as ONE
+                            // ordered sequence) — formerly each path here
+                            // hand-assembled a partial copy of that triple.
+                            onBack = { callbacks.onSearchExpanded(false) },
+                            onQueryChange = callbacks.onSearchQueryChange,
+                            onClear = callbacks.onClearSearch,
                         )
                     }
 
@@ -221,20 +245,9 @@ fun HomeTopDock(
             ) {
                 CollapsedDockContent(
                     hasStatusIndicators = hasStatusIndicators,
-                    offlineMode = offlineMode,
-                    homeMode = homeMode,
-                    headerStatus = headerStatus,
+                    state = state,
+                    callbacks = callbacks,
                     appBarIconColorFaded = appBarIconColorFaded,
-                    pendingSyncCount = pendingSyncCount,
-                    showClock = showClock,
-                    currentUser = currentUser,
-                    currentServerUsers = currentServerUsers,
-                    onUserSwitch = onUserSwitch,
-                    onToggleOffline = onToggleOffline,
-                    isGoingOnline = isGoingOnline,
-                    onShowSyncDetails = onShowSyncDetails,
-                    onModeChange = onModeChange,
-                    onSearchExpand = { onSearchExpanded(true) },
                 )
             }
         }
@@ -419,20 +432,9 @@ private fun SyncStatusIcon(
 @Composable
 private fun CollapsedDockContent(
     hasStatusIndicators: Boolean,
-    offlineMode: OfflineMode,
-    homeMode: HomeMode,
-    headerStatus: HeaderStatus,
+    state: HomeDockState,
+    callbacks: HomeDockCallbacks,
     appBarIconColorFaded: Color,
-    pendingSyncCount: Int,
-    showClock: Boolean,
-    currentUser: UserInfo?,
-    currentServerUsers: List<UserInfo>,
-    onUserSwitch: (String) -> Unit,
-    onToggleOffline: () -> Unit,
-    isGoingOnline: Boolean = false,
-    onShowSyncDetails: () -> Unit = {},
-    onModeChange: (HomeMode) -> Unit,
-    onSearchExpand: () -> Unit,
 ) {
     // ── Start Side: Connectivity & Status Expressive Capsule (Only shown when indicators exist) ──
     if (hasStatusIndicators) {
@@ -454,13 +456,13 @@ private fun CollapsedDockContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (headerStatus !is HeaderStatus.None) {
+                if (state.headerStatus !is HeaderStatus.None) {
                     HeaderStatusIndicator(
-                        status = headerStatus,
+                        status = state.headerStatus,
                         tint = appBarIconColorFaded,
                     )
                 }
-                if (showClock) {
+                if (state.showClock) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -481,15 +483,15 @@ private fun CollapsedDockContent(
                         )
                     }
                 }
-                if (pendingSyncCount > 0) {
+                if (state.pendingSyncCount > 0) {
                     SyncStatusIcon(
-                        pendingCount = pendingSyncCount,
-                        isDraining = offlineMode == OfflineMode.ONLINE,
+                        pendingCount = state.pendingSyncCount,
+                        isDraining = state.offlineMode == OfflineMode.ONLINE,
                         tint = appBarIconColorFaded,
-                        onClick = onShowSyncDetails,
+                        onClick = callbacks.onShowSyncDetails,
                     )
                 }
-                if (offlineMode != OfflineMode.ONLINE) {
+                if (state.offlineMode != OfflineMode.ONLINE) {
                     val onlineFocusState = rememberTvFocusState()
                     Box(
                         modifier = Modifier
@@ -497,8 +499,8 @@ private fun CollapsedDockContent(
                             .tvFocusIndicator(onlineFocusState, CircleShape)
                     ) {
                         OfflineToggleIcon(
-                            isGoingOnline = isGoingOnline,
-                            onToggleOffline = onToggleOffline,
+                            isGoingOnline = state.isGoingOnline,
+                            onToggleOffline = callbacks.onToggleOffline,
                         )
                     }
                 }
@@ -525,16 +527,16 @@ private fun CollapsedDockContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            if (currentUser != null && currentServerUsers.size >= 2) {
+            if (state.currentUser != null && state.currentServerUsers.size >= 2) {
                 UserSwitcherChip(
-                    currentUser = currentUser,
-                    users = currentServerUsers,
-                    onUserSwitch = onUserSwitch,
+                    currentUser = state.currentUser,
+                    users = state.currentServerUsers,
+                    onUserSwitch = callbacks.onUserSwitch,
                 )
             }
             ModeSwitch(
-                currentMode = homeMode,
-                onModeChange = onModeChange,
+                currentMode = state.homeMode,
+                onModeChange = callbacks.onModeChange,
             )
             val searchFocusState = rememberTvFocusState()
             Box(
@@ -543,7 +545,7 @@ private fun CollapsedDockContent(
                     .tvFocusIndicator(searchFocusState, CircleShape)
             ) {
                 IconButton(
-                    onClick = onSearchExpand,
+                    onClick = { callbacks.onSearchExpanded(true) },
                     modifier = Modifier.size(38.dp),
                 ) {
                     Icon(

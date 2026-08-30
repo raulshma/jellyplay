@@ -67,15 +67,11 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.onSubscription
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 import javax.inject.Inject
@@ -133,9 +129,6 @@ class HomeViewModel @Inject constructor(
     private val _uiState = stateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.flow
 
-    val activeDownloadCount: StateFlow<Int> = downloadRepository.getActiveDownloadCount()
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
-
     /**
      * Ids whose quick actions must flip to "Remove download" — completed
      * downloads ∪ series ids (a series card flips once any episode of it is
@@ -192,6 +185,18 @@ class HomeViewModel @Inject constructor(
     private var androidTvWatchNextEnabled = true
     private var seerrPreferences = SeerrPreferences()
 
+    /**
+     * The discover / *arr flags the refresher re-reads per fetch. Private
+     * mirrors owned by the prefs collectors below, like [seerrPreferences] —
+     * NOT reads of the render state: `HomeUiState.discoverEnabled` /
+     * `directArrEnabled` are render fields a screen reads, and letting the
+     * refresher consume them made its fetch gating depend on uiState write
+     * timing (the mirrors lag no hop and are written exactly where the
+     * refresher's input changes).
+     */
+    private var discoverEnabled = false
+    private var directArrEnabled = false
+
     /** Saved home-list scroll anchor (see [ScrollPositionStore]); the VM's get/save/reset methods are delegates. */
     private val scrollPositionStore = ScrollPositionStore()
 
@@ -224,33 +229,24 @@ class HomeViewModel @Inject constructor(
         awaitOutboxDrained = syncStatus::awaitOutboxDrained,
         planProvider = { sectionPrefs },
         seerrPreferencesProvider = { seerrPreferences },
-        discoverEnabledProvider = { _uiState.value.discoverEnabled },
-        directArrEnabledProvider = { _uiState.value.directArrEnabled },
+        discoverEnabledProvider = { discoverEnabled },
+        directArrEnabledProvider = { directArrEnabled },
         androidTvWatchNextEnabledProvider = { androidTvWatchNextEnabled },
     )
 
     /**
-     * The offline collection gate — ONE flow shared by the library and
-     * episodes collectors in [init] (the predicate used to be copy-pasted into
-     * each, free to drift), and the input side of [computeHomeRenderSource]
-     * via [offlineGateState]. Downloads collect while any offline mode is
-     * active or an online fetch failed with nothing to show.
+     * The offline collection gate — when the home renders downloads — as one
+     * module (see [OfflineHomeGate]): the gate flow, both gated collectors
+     * and the render-source fold, behind a single [OfflineHomeGate.state]
+     * flow. The refresher's `fetchFailedEmpty` is its only input from the
+     * refresh machinery.
      */
-    private val offlineGate: Flow<OfflineGate> = combine(
-        offlineModeManager.offlineMode,
-        refresher.state.map { it.fetchFailedEmpty },
-    ) { mode, fetchFailedEmpty -> OfflineGate(mode, fetchFailedEmpty) }
-        .distinctUntilChanged()
-        .onEach { offlineGateState = it }
-
-    /**
-     * Latest [offlineGate] emission. Read by the library collector's
-     * render-source fold so [computeHomeRenderSource] sees the same gate
-     * emission the collection keys on (not the uiState mirrors, which lag a
-     * hop behind). `onEach` upstream of `flatMapLatest` keeps it fresh for
-     * every activation.
-     */
-    private var offlineGateState = OfflineGate(OfflineMode.ONLINE, fetchFailedEmpty = false)
+    private val offlineHomeGate = OfflineHomeGate(
+        scope = scope,
+        offlineMode = offlineModeManager.offlineMode,
+        offlineRepository = offlineRepository,
+        fetchFailedEmpty = refresher.state.map { it.fetchFailedEmpty },
+    )
 
     /**
      * The home search bar's entire state surface — live query, results slice,
@@ -441,24 +437,33 @@ class HomeViewModel @Inject constructor(
                 hasSeenHomePreferences = true
                 sectionPrefs = newSectionPrefs
                 androidTvWatchNextEnabled = prefs.playback.androidTvWatchNextEnabled
+                directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.experimental.enabledExperimentalFeatures
                 _uiState.update { it.copy(
                     homeMode = prefs.home.homeMode,
-                    dynamicTheming = prefs.appearance.dynamicTheming,
-                    oledMode = prefs.appearance.oledMode,
-                    colorStyle = prefs.appearance.colorStyle,
-                    accentColorSwatch = prefs.appearance.accentColorSwatch,
+                    // The appearance quintet as one embedded slice (the
+                    // SeerrRequestState precedent) — one assignment, no
+                    // per-field hand-sync.
+                    appearance = AppearanceUiState(
+                        dynamicTheming = prefs.appearance.dynamicTheming,
+                        oledMode = prefs.appearance.oledMode,
+                        colorStyle = prefs.appearance.colorStyle,
+                        accentColorSwatch = prefs.appearance.accentColorSwatch,
+                        performanceMode = prefs.appearance.performanceMode,
+                    ),
                     homeHeroEnabled = prefs.home.homeHeroEnabled,
                     homeBackdropEnabled = prefs.home.homeBackdropEnabled,
-                    performanceMode = prefs.appearance.performanceMode,
                     showClock = prefs.home.showClockOnHome,
                     showSettingsInHomeSearch = prefs.home.showSettingsInHomeSearch,
                     hideTopHeaderOnScroll = prefs.home.hideTopHeaderOnScroll,
                     continueWatchingClickBehavior = prefs.home.continueWatchingClickBehavior,
                     experimentalCardClippingEnabled = ExperimentalFeature.HOME_CARD_CLIPPING in prefs.experimental.enabledExperimentalFeatures,
                     directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.experimental.enabledExperimentalFeatures,
-                    enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes,
-                    homeSectionOrder = prefs.home.homeSectionOrder,
-                    libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides,
+                    // The section-config sheet's mirrors, likewise one slice.
+                    sectionConfig = SectionConfigState(
+                        enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes,
+                        homeSectionOrder = prefs.home.homeSectionOrder,
+                        libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides,
+                    ),
                     offlineSectionPrefs = OfflineHomeSectionPrefs(
                         continueWatchingEnabled = HomeSectionType.CONTINUE_WATCHING in prefs.home.enabledHomeSectionTypes,
                         nextUpEnabled = HomeSectionType.NEXT_UP in prefs.home.enabledHomeSectionTypes,
@@ -476,9 +481,10 @@ class HomeViewModel @Inject constructor(
 
         launch {
             seerrPreferencesStore.preferences.collect { prefs ->
-                val wasEnabled = _uiState.value.discoverEnabled
+                val wasEnabled = discoverEnabled
                 seerrPreferences = prefs
                 val nowEnabled = prefs.enabled && prefs.discoverEnabled
+                discoverEnabled = nowEnabled
                 _uiState.update { it.copy(discoverEnabled = nowEnabled) }
                 if (nowEnabled && !wasEnabled) {
                     refresher.request(RefreshTrigger.DiscoverEnabled)
@@ -486,65 +492,21 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Collect the offline library (and episodes, collector below) whenever
-        // the offline branch can render them: any offline mode, or while an
-        // online fetch failed with nothing to show (implicit offline — the
-        // home falls back to downloads plus a status banner). The underlying
-        // Flows re-emit on every download progress write, so collecting them
-        // unconditionally re-invalidated the whole home tree during downloads
-        // even in normal online browsing (where the offline branch never
-        // renders); the gate keeps the upstream collection cancelled there.
-        //
-        // ONE gate flow ([offlineGate]) feeds both collectors — the gate
-        // predicate used to be copy-pasted into each, and the copies were
-        // free to drift. The same gate emission also computes
-        // [HomeUiState.renderSource] (via [computeHomeRenderSource]), so the
-        // offline-render predicate has exactly one fold.
-        @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+        // Fold the offline gate's state slice into HomeUiState (same fold
+        // pattern as the refresher collector below): the render-source
+        // decision, the offline library, and the offline episodes. The gate
+        // module owns the collectors and the fold's inputs; the VM only
+        // mirrors emissions into the single state object.
         launch {
-            offlineGate
-                .flatMapLatest { gate ->
-                    if (gate.isCollecting) {
-                        offlineRepository.getOfflineLibrary()
-                            .map { OfflineLibraryEmission(items = it) }
-                            .onStart { emit(OfflineLibraryEmission(pending = true)) }
-                    } else {
-                        flowOf(OfflineLibraryEmission())
-                    }
+            offlineHomeGate.state.collect { offline ->
+                _uiState.update {
+                    it.copy(
+                        renderSource = offline.renderSource,
+                        offlineLibrary = offline.offlineLibrary,
+                        offlineEpisodes = offline.offlineEpisodes,
+                    )
                 }
-                .collect { emission ->
-                    _uiState.update { state ->
-                        state.copy(
-                            offlineLibrary = emission.items,
-                            renderSource = computeHomeRenderSource(
-                                offlineMode = offlineGateState.mode,
-                                fetchFailedEmpty = offlineGateState.fetchFailedEmpty,
-                                offlineLibrary = emission.items,
-                                fallbackPending = emission.pending,
-                            ),
-                        )
-                    }
-                }
-        }
-
-        // Downloaded episodes ride the SAME gate as the library above but are
-        // collected independently — they feed only the offline CW/Next Up rows
-        // via [buildOfflineHomeSections], so their (potentially large, artwork-
-        // resolving) emissions must not delay the library's pending→loaded
-        // transition. First emission while the gate is closed is empty.
-        @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-        launch {
-            offlineGate
-                .flatMapLatest { gate ->
-                    if (gate.isCollecting) {
-                        offlineRepository.getOfflineEpisodes()
-                    } else {
-                        flowOf(emptyList())
-                    }
-                }
-                .collect { episodes ->
-                    _uiState.update { it.copy(offlineEpisodes = episodes) }
-                }
+            }
         }
 
         launch {
@@ -680,6 +642,7 @@ class HomeViewModel @Inject constructor(
             is HomeUiEvent.PrefetchPhotoFolderChildUrls -> prefetchPhotoFolderChildUrls(event.items)
             is HomeUiEvent.EnsurePendingItemDetails -> ensurePendingItemDetails(event.itemIds)
             is HomeUiEvent.PlaySeries -> resolveSeriesPlay(event)
+            is HomeUiEvent.DownloadItem -> downloadItem(event)
         }
     }
 
@@ -797,11 +760,12 @@ class HomeViewModel @Inject constructor(
      * Long-press Download from an online home card. Single-stream items
      * (movie/episode/music track) start inline at the default quality; series
      * route to the detail screen with the download sheet pre-presented via
-     * [onOpenDetail] (their flow needs the user's season/episode selection),
-     * and other non-inline types open the detail screen plainly. Failures
-     * surface on the message bus.
+     * [HomeUiEvent.DownloadItem.onOpenDetail] (their flow needs the user's
+     * season/episode selection), and other non-inline types open the detail
+     * screen plainly. Failures surface on the message bus.
      */
-    fun downloadItem(item: MediaItem, onOpenDetail: (itemId: String, openDownloadSheet: Boolean) -> Unit) {
+    private fun downloadItem(event: HomeUiEvent.DownloadItem) {
+        val (item, onOpenDetail) = event
         launch {
             when (val result = downloadIntake.startFromItem(item)) {
                 DownloadRequestResult.Started ->
@@ -1027,28 +991,3 @@ class HomeViewModel @Inject constructor(
         refresher.stop()
     }
 }
-
-/**
- * The offline collection gate value: [isCollecting] is the predicate both
- * offline collectors key on, and [mode]/[fetchFailedEmpty] feed
- * [computeHomeRenderSource] so the render-source fold reads the same gate
- * emission that opened/closed the collection.
- */
-private data class OfflineGate(
-    val mode: OfflineMode,
-    val fetchFailedEmpty: Boolean,
-) {
-    val isCollecting: Boolean get() = mode != OfflineMode.ONLINE || fetchFailedEmpty
-}
-
-/**
- * Emission envelope for the offline-library collection gate: [pending] marks
- * the window after the gate opens but before the first real library emission,
- * while the implicit-offline fallback is still deciding whether any downloads
- * exist. Maps onto [HomeUiState.offlineLibrary] +
- * [HomeRenderSource.FallbackPending].
- */
-private data class OfflineLibraryEmission(
-    val items: List<OfflineMediaItem> = emptyList(),
-    val pending: Boolean = false,
-)

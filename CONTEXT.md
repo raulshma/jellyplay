@@ -303,17 +303,58 @@ re-exposures, `searchQuery`, `searchHistory`, `undoActions`,
 (`getImageUrl`/`getBackdropUrl`, the scroll-position pair), `onStart`/
 `onStop`/`onCleared`, and one command funnel:
 `onEvent(HomeUiEvent)`. Every user intent — including the quick actions
-(mark played/unplayed, delete download, the series delete-episodes sheet),
-search-history edits, settings-result clicks, section-config sheet writes,
-user switching and the offline toggle — arrives as a
-`HomeUiEvent` (`HomeUiEvent.kt`, 30 cases) and is routed once to a private
-handler; there is no per-action command method to keep in sync with the
-screen. The VM's remaining orchestration is folding `HomeRefresher.state`
-into `HomeUiState` (nine fields including `sections`, `isGoingOnline` and
-`offlineMode` — single writer, VM only folds), the preference mirrors the
-refresher re-reads through read-only providers, and the scroll reset on
-manual refresh and identity changes (pure VM state the refresher cannot
-see).
+(mark played/unplayed, delete download, inline download via `DownloadItem`,
+the series delete-episodes sheet), search-history edits, settings-result
+clicks, section-config sheet writes, user switching and the offline
+toggle — arrives as a `HomeUiEvent` (`HomeUiEvent.kt`, 36 cases) and is
+routed once to a private handler; there is no per-action command method to
+keep in sync with the screen. The VM's remaining orchestration is folding
+`HomeRefresher.state` and `OfflineHomeGate.state` into `HomeUiState` (the
+refresher fold covers nine fields including `sections`, `isGoingOnline`
+and `offlineMode` — single writer, VM only folds), the preference mirrors
+the refresher re-reads through read-only providers (`sectionPrefs`,
+`seerrPreferences`, `discoverEnabled`, `directArrEnabled`,
+`androidTvWatchNextEnabled` — ALL private mirrors owned by the prefs
+collectors; uiState's render fields are never a refresher input), and the
+scroll reset on manual refresh and identity changes (pure VM state the
+refresher cannot see).
+
+`HomeUiState` embeds two value slices rather than mirroring fields:
+`appearance: AppearanceUiState` (the theme quintet — dynamicTheming, oled,
+colorStyle, swatch, performanceMode; one `AppearanceSlice` emission,
+written as one assignment) and `sectionConfig: SectionConfigState` (the
+inline section-config sheet's three pref mirrors). Same precedent as
+`SeerrRequestState`'s embedded snapshot: no per-field hand-sync.
+
+**`HomeSearchSession`**
+(`feature/home/src/main/java/com/raulshma/jellyplay/feature/home/HomeSearchSession.kt`)
+is the search bar's SESSION half: it owns the expanded flag (snapshot
+state) and the close ordering — collapse the surface → `ClearSearch` →
+drop keyboard focus — as one method (`close(clearFocus)`), with
+`closeThen` as the result-click shape. That triple used to be hand-copied
+at seven sites (BackHandler, three result-click lambdas, the dock's
+clear/back/dpad paths); `HomeTopDock` now only FORWARDS
+(`onBack = onSearchExpanded(false)`, `onClear = onClearSearch`) and holds
+no FocusManager. The data half (query, results, history, undo) stays on
+the VM's `HomeSearchStateHolder`; `isSearchFocused` folds
+`state.isSearchActive || session.isExpanded`.
+
+The home dock is bundled, not flat: **`HomeDockState`** +
+**`HomeDockCallbacks`** (`HomeAppBar.kt`) carry the dock's whole data +
+interaction surface, so a dock feature edits the two bundles and the dock
+body — not three signatures in lockstep (screen → scrim → dock).
+`HomeTopDock` and the scroll-coupled `HomeTopDockScrim` leaf (which still
+owns the icon-colour lerp, hide-on-scroll, and the query/settings-search
+leaf collections) forward the bundles; the former dead
+`activeDownloadCount` parameter is gone.
+
+**`HomeQuickActionEffect`** (`HomeQuickActions.kt`) is the quick-action
+routing table as data: the pure `homeQuickActionEffect(item, action,
+onOpenDetail)` decides series-vs-movie (Download → series sheet vs inline
+`DownloadItem`; Remove-download → delete-episodes sheet vs confirm
+dialog), and the screen's execute lambda is a mechanical effect dispatch.
+Pinned by `HomeQuickActionsTest`; the `resolveActions` gate reads the
+COLLECTED `state.offlineMode`, not a `.value` snapshot of the VM singleton.
 
 **`HomeRenderSource`** (`feature/home/src/main/java/.../HomeRenderSource.kt`)
 is the home screen's single offline-render predicate: `Online` / `Offline` /
@@ -322,24 +363,35 @@ is the home screen's single offline-render predicate: `Online` / `Offline` /
 screen branches (content vs hard-error vs loading), the implicit-offline
 banner, and the VM's downloads-rendering gate (`isRenderingDownloads`, read
 by the series smart-play funnel) all branch on that one value — no site
-re-derives the predicate from `offlineMode` + error/sections. The gate itself
-is ONE flow in the VM (`offlineGate`: `offlineModeManager.offlineMode` +
-the refresher's `fetchFailedEmpty`), shared by the offline-library and
-offline-episodes collectors (their emissions stay independent so large
-episode batches don't delay the library's pending→loaded transition); the
-same gate emission computes the render source, so the predicate can never
-disagree with what the collectors are doing. Semantics worth remembering: a
-failed fetch over a CONFIRMED-empty offline library is `Online` (the
-hard-error screen) — only unprobed-or-populated downloads make the implicit
-fallback render.
+re-derives the predicate from `offlineMode` + error/sections.
+
+**`OfflineHomeGate`**
+(`feature/home/src/main/java/com/raulshma/jellyplay/feature/home/OfflineHomeGate.kt`)
+owns "when does the home render downloads?": the offline collection gate,
+BOTH gated collectors (library + episodes — their emissions stay
+independent so large episode batches don't delay the library's
+pending→loaded transition), and the render-source fold, behind one
+`state: StateFlow<OfflineHomeState>` (render source + both offline lists).
+Inputs: `offlineModeManager.offlineMode` and the refresher's
+`fetchFailedEmpty`. The fold keys on the SAME gate emission that opened
+the collection (the gate value is paired into every library emission
+inside `flatMapLatest`), so the old mutable-mirror lag race is
+structurally impossible. The VM only folds `OfflineHomeState` into
+uiState. Semantics worth remembering: a failed fetch over a
+CONFIRMED-empty offline library is `Online` (the hard-error screen) — only
+unprobed-or-populated downloads make the implicit fallback render.
 
 **`OfflineHomeContent`** (`feature/home/src/main/java/.../OfflineHomeSections.kt`)
 is the offline home's render model, derived in ONE pass by
 `buildOfflineHomeContent` (filtered library + episodes, the derived sections,
 and the id→item lookup built once per emission). The screen remembers one
 aggregate and passes it down as a single value — `HomeContentState` carries
-`offlineContent: OfflineHomeContent?`, null while online so download-progress
-ticks never invalidate the content list. The row titles are localized
+it inside the sealed **`HomeFeed`** (`Online(sections, isLoading,
+partialLoadError, newsletterBannerVisible)` / `Offline(content,
+isLoading)`), built ONCE at the construction site from `renderSource`;
+each branch's constructor IS the former offline-short-circuit mask, so the
+online-only surfaces cannot exist on the offline feed and the two halves
+cannot disagree. The row titles are localized
 strings, so the aggregate is built at the call site (next to
 `rememberOfflineHomeSectionTitles`) rather than in the VM; the UiState
 mirrors (`offlineLibrary` / `offlineEpisodes` / `offlineSectionPrefs`) stay
@@ -370,11 +422,25 @@ ratio).
 Test surfaces: `HomeRefresherTest` (plain JUnit + `MainDispatcherRule`,
 constructs the refresher directly with a fake `awaitOutboxDrained`) pins
 cadence, throttles, the offline transitions, the going-online sequence and
-its timeout, and `patchItems`; `HomeViewModelTest` (Robolectric, all 30
+its timeout, and `patchItems`; `HomeViewModelTest` (Robolectric, all 33
 constructor collaborators) pins the UiState folds, the event funnel and the
-identity routing through a real `HomeSession`; `OfflineHomeContentTest` pins the one-pass aggregate; `OfflineShelfTest` pins the shared partition/query/threshold rules; `HomeRenderSourceTest` pins
-the render-source fold's five corners; `HomeUiStateTest` pins the
-state-class defaults.
+identity routing through a real `HomeSession` — every test runs through a
+`vmTest` helper whose `finally` stops the periodic loop INSIDE the
+coroutine (an `@After` is too late: runTest's completion never returns
+while its scheduler drives the infinite loop); `OfflineHomeGateTest`
+drives the gate module through its interface with one mocked repository
+(no VM, no Robolectric); `OfflineHomeContentTest` pins the one-pass
+aggregate; `OfflineShelfTest` pins the shared partition/query/threshold
+rules; `HomeRenderSourceTest` pins the render-source fold's five corners;
+`HomeSectionPrefsTest` pins the three section-config write policies
+directly (formerly reachable only through the VM harness);
+`HomeQuickActionsTest` pins the quick-action routing table;
+`HomeSearchSessionTest` pins the close ordering;
+`HomeSectionConfigSheetTest` pins the production `sectionConfigCapabilities`
+derivation (the old suite asserted a local copy with a DIFFERENT rule);
+`HomeSearchOverlayTest` and `HomeBackgroundPipelineTest` assert the
+extracted production subtitle/target-colour functions, not local copies;
+`HomeUiStateTest` pins only the state-class defaults.
 
 ## Session identity
 

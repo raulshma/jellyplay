@@ -242,16 +242,7 @@ fun HomeSearchResultsOverlay(
                         // recompositions don't re-run buildString + branches for every
                         // visible row.
                         val subtitle = remember(item.id, item.year, item.mediaType) {
-                            buildString {
-                                item.year?.let { append(it) }
-                                if (item.year != null && item.mediaType != null) append(" · ")
-                                when (item.mediaType) {
-                                    MediaType.MOVIE -> append(movieLabel)
-                                    MediaType.SERIES -> append(seriesLabel)
-                                    MediaType.AUDIO, MediaType.MUSIC -> append(musicLabel)
-                                    else -> item.mediaType?.name?.lowercase()?.replaceFirstChar { it.uppercase() }?.let { append(it) }
-                                }
-                            }
+                            jellyfinResultSubtitle(item, movieLabel, seriesLabel, musicLabel)
                         }
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
                             val imageUrl = getImageUrl(item.id)
@@ -309,22 +300,7 @@ fun HomeSearchResultsOverlay(
                         val item = seerrResults[index]
                         val placementSpec = lazyItemPlacementSpec()
                         val subtitle = remember(item.id, item.year, item.mediaType, item.voteAverage) {
-                            buildString {
-                                item.year?.let { append(it) }
-                                val typeLabel = when {
-                                    item.mediaType.equals("movie", ignoreCase = true) -> movieLabel
-                                    item.mediaType.equals("tv", ignoreCase = true) -> seriesLabel
-                                    else -> item.mediaType
-                                }
-                                if (item.year != null) append(" · ")
-                                append(typeLabel)
-                                item.voteAverage?.let { rating ->
-                                    if (rating > 0) {
-                                        append(" · ★ ")
-                                        append(String.format("%.1f", rating))
-                                    }
-                                }
-                            }
+                            seerrResultSubtitle(item, movieLabel, seriesLabel)
                         }
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
                             val posterUrl = item.posterUrl ?: ""
@@ -438,6 +414,54 @@ fun HomeSearchResultsOverlay(
             onConfirm = onClearHistory,
             onDismiss = { showClearHistoryDialog = false },
         )
+    }
+}
+
+/**
+ * The Jellyfin result-row subtitle: "year · type-label" (year omitted when
+ * unknown; the label falls back to the media type's own name for types with
+ * no dedicated label — e.g. "Book", "Photo"). Pure and internal so the test
+ * asserts THIS function instead of a copy of its buildString.
+ */
+internal fun jellyfinResultSubtitle(
+    item: MediaItem,
+    movieLabel: String,
+    seriesLabel: String,
+    musicLabel: String,
+): String = buildString {
+    item.year?.let { append(it) }
+    if (item.year != null && item.mediaType != null) append(" · ")
+    when (item.mediaType) {
+        MediaType.MOVIE -> append(movieLabel)
+        MediaType.SERIES -> append(seriesLabel)
+        MediaType.AUDIO, MediaType.MUSIC -> append(musicLabel)
+        else -> item.mediaType?.name?.lowercase()?.replaceFirstChar { it.uppercase() }?.let { append(it) }
+    }
+}
+
+/**
+ * The Seerr result-row subtitle: "year · type-label [· ★ rating]" (rating
+ * omitted when absent or zero). Pure and internal for the same reason as
+ * [jellyfinResultSubtitle].
+ */
+internal fun seerrResultSubtitle(
+    item: SeerrSearchItem,
+    movieLabel: String,
+    seriesLabel: String,
+): String = buildString {
+    item.year?.let { append(it) }
+    val typeLabel = when {
+        item.mediaType.equals("movie", ignoreCase = true) -> movieLabel
+        item.mediaType.equals("tv", ignoreCase = true) -> seriesLabel
+        else -> item.mediaType
+    }
+    if (item.year != null) append(" · ")
+    append(typeLabel)
+    item.voteAverage?.let { rating ->
+        if (rating > 0) {
+            append(" · ★ ")
+            append(String.format("%.1f", rating))
+        }
     }
 }
 

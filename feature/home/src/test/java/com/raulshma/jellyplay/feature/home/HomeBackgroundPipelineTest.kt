@@ -33,18 +33,30 @@ class HomeBackgroundPipelineTest {
         assertFalse(isLightBackdropTheme(Color(0xFF121212)))
     }
 
+    /**
+     * Asserts the PRODUCTION [resolveHomeTargetBackgroundColor] — previously
+     * this test re-implemented the blend locally with `lerp` and asserted
+     * lerp's own endpoints.
+     */
     @Test
-    fun targetBackgroundColor_darkTheme_blendsOverlayWithBlack() {
-        val baseOverlayColor = Color.Red
-        val darkTarget = lerp(baseOverlayColor, Color.Black, 0.65f)
+    fun targetBackgroundColor_lightTheme_usesThemeBackgroundUntinted() {
+        val overlay = Color.Red
+        val themeBackground = Color(0xFFFAFAFA)
 
-        assertNotEquals(baseOverlayColor, darkTarget)
-        assertNotEquals(Color.Black, darkTarget)
+        assertEquals(themeBackground, resolveHomeTargetBackgroundColor(overlay, isLightTheme = true, themeBackground = themeBackground))
+    }
 
-        val fullStart = lerp(baseOverlayColor, Color.Black, 0f)
-        val fullEnd = lerp(baseOverlayColor, Color.Black, 1f)
+    @Test
+    fun targetBackgroundColor_darkTheme_blendsOverlayTowardBlack() {
+        val overlay = Color.Red
+        val themeBackground = Color(0xFF121212)
 
-        assertEquals(baseOverlayColor, fullStart)
-        assertEquals(Color.Black, fullEnd)
+        val target = resolveHomeTargetBackgroundColor(overlay, isLightTheme = false, themeBackground = themeBackground)
+
+        // 65% of the way from the overlay to black: distinct from both ends,
+        // and exactly the production blend (the sheet's tinted-scrim rule).
+        assertEquals(lerp(overlay, Color.Black, 0.65f), target)
+        assertNotEquals(overlay, target)
+        assertNotEquals(Color.Black, target)
     }
 }

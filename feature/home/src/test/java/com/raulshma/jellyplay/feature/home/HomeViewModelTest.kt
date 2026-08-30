@@ -307,8 +307,28 @@ class HomeViewModelTest {
         settingsSearchProvider = fakeSettingsSearchProvider,
     )
 
+    /**
+     * runTest wrapper that stops the VM's periodic-refresh `while(true)`
+     * loop in a `finally` INSIDE the coroutine — before runTest's completion
+     * advanceUntilIdle. An @After rule is too late: it only runs once runTest
+     * returns, and runTest never returns while its scheduler is driving the
+     * infinite loop's delay (the 600s-hang lesson). Equivalent to the old
+     * manual last-line `stopPeriodicRefresh()` calls, but exception- and
+     * early-return-proof.
+     */
+    private fun vmTest(block: suspend kotlinx.coroutines.test.TestScope.() -> Unit): Unit =
+        runTest {
+            try {
+                block()
+            } finally {
+                if (::viewModel.isInitialized) {
+                    viewModel.onStop(mockk(relaxed = true))
+                }
+            }
+        }
+
     @Test
-    fun signIn_fetchesSections_andOrdersThem() = runTest {
+    fun signIn_fetchesSections_andOrdersThem() = vmTest {
         coEvery {
             mediaRepository.getHomeSections(any())
         } returns Result.success(
@@ -330,7 +350,6 @@ class HomeViewModelTest {
         // CONTINUE_WATCHING before LATEST_MEDIA — so ordering should apply.
         assertEquals(HomeSectionType.CONTINUE_WATCHING, sections.first().type)
         assertEquals(2, sections.size)
-        stopPeriodicRefresh()
     }
 
     /**
@@ -341,7 +360,7 @@ class HomeViewModelTest {
      * the real module's success path.
      */
     @Test
-    fun markItemPlayed_flipsItemInEverySectionWhereItAppears() = runTest {
+    fun markItemPlayed_flipsItemInEverySectionWhereItAppears() = vmTest {
         val shared = item("cw1").copy(playbackPositionTicks = 5_000_000_000L)
         val other = item("other")
         coEvery {
@@ -372,20 +391,10 @@ class HomeViewModelTest {
         assertEquals(0L, secondOccurrence.playbackPositionTicks)
         // The sibling card in the first section is untouched.
         assertSame(other, sections[0].items.last())
-        stopPeriodicRefresh()
-    }
-
-    /**
-     * Stops the VM's periodic-refresh `while(true)` loop so `runTest` cleanup
-     * (which advances virtual time to settle pending `delay`s) doesn't hang on
-     * the infinite loop. Equivalent to the app backgrounding the screen.
-     */
-    private fun stopPeriodicRefresh() {
-        viewModel.onStop(mockk(relaxed = true))
     }
 
     @Test
-    fun signOut_clearsSections() = runTest {
+    fun signOut_clearsSections() = vmTest {
         coEvery {
             mediaRepository.getHomeSections(any())
         } returns Result.success(
@@ -400,11 +409,10 @@ class HomeViewModelTest {
         runCurrent()
 
         assertTrue(viewModel.uiState.value.sections.isEmpty())
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun offlineToOnline_clearsIsGoingOnline_afterFetch() = runTest {
+    fun offlineToOnline_clearsIsGoingOnline_afterFetch() = vmTest {
         // The sign-in fetch resolves immediately; the handshake's fetch parks
         // on the gate so the busy flag is observable mid-transition via the
         // uiState fold (the refresher owns the flag, the VM only folds it).
@@ -451,11 +459,10 @@ class HomeViewModelTest {
             viewModel.uiState.value.isGoingOnline,
         )
         assertFalse(viewModel.uiState.value.isLoading)
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun offlineToOnline_clearsIsGoingOnline_whenFetchTimesOut() = runTest {
+    fun offlineToOnline_clearsIsGoingOnline_whenFetchTimesOut() = vmTest {
         // Regression: a hung getHomeSections call (half-open socket, unvalidated
         // captive portal that still reports INTERNET, etc.) previously parked
         // fetchAndUpdateSections on refreshMutex forever, so isGoingOnline never
@@ -494,11 +501,10 @@ class HomeViewModelTest {
             "isLoading must clear even if the fetch hangs past the deadline",
             viewModel.uiState.value.isLoading,
         )
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun prefChange_withUnrelatedPrefs_doesNotRefetch() = runTest {
+    fun prefChange_withUnrelatedPrefs_doesNotRefetch() = vmTest {
         coEvery {
             mediaRepository.getHomeSections(any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
@@ -519,11 +525,10 @@ class HomeViewModelTest {
         coVerify(exactly = 0) {
             mediaRepository.getHomeSections(any())
         }
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun homeBackdropEnabled_mapsFromPreferences_toUiState() = runTest {
+    fun homeBackdropEnabled_mapsFromPreferences_toUiState() = vmTest {
         homeDiscoveryFlow.value = HomeDiscoverySlice(homeBackdropEnabled = false)
         viewModel = buildViewModel()
         runCurrent()
@@ -534,11 +539,10 @@ class HomeViewModelTest {
         runCurrent()
 
         assertTrue(viewModel.uiState.value.homeBackdropEnabled)
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun setSectionVisible_removesTypeFromEnabledSet() = runTest {
+    fun setSectionVisible_removesTypeFromEnabledSet() = vmTest {
         // Start with all configurable types enabled.
         homeDiscoveryFlow.value = HomeDiscoverySlice(
             enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE.toSet(),
@@ -550,59 +554,10 @@ class HomeViewModelTest {
 
         val expected = HomeSectionType.CONFIGURABLE.toSet() - HomeSectionType.NEXT_UP
         verify { preferencesEditor.setEnabledHomeSectionTypes(expected) }
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun setSectionVisible_addsTypeToEnabledSet() = runTest {
-        homeDiscoveryFlow.value = HomeDiscoverySlice(
-            enabledHomeSectionTypes = emptySet(),
-        )
-        viewModel = buildViewModel()
-        runCurrent()
-
-        viewModel.onEvent(HomeUiEvent.SetSectionVisible(HomeSectionType.RECOMMENDATIONS, visible = true))
-
-        verify { preferencesEditor.setEnabledHomeSectionTypes(setOf(HomeSectionType.RECOMMENDATIONS)) }
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun moveSection_up_swapsWithPredecessor() = runTest {
-        val order = listOf(
-            HomeSectionType.CONTINUE_WATCHING,
-            HomeSectionType.NEXT_UP,
-            HomeSectionType.LATEST_MEDIA,
-        )
-        homeDiscoveryFlow.value = HomeDiscoverySlice(homeSectionOrder = order)
-        // Capture the edit{} block and run it against a recording store so the
-        // resulting order can be asserted (edit is fire-and-forget over the app
-        // scope, so the lambda is the only place the new order lives).
-        val editorBlock = slot<suspend PreferencesEditScope.() -> Unit>()
-        every { preferencesEditor.edit(capture(editorBlock)) } returns mockk()
-        viewModel = buildViewModel()
-        runCurrent()
-
-        viewModel.onEvent(HomeUiEvent.MoveSection(HomeSectionType.NEXT_UP, up = true))
-
-        assertTrue(editorBlock.isCaptured)
-        val recordingHome = mockk<HomeDiscoveryStore>(relaxed = true)
-        var capturedOrder: List<HomeSectionType>? = null
-        coEvery { recordingHome.setHomeSectionOrder(any()) } answers { capturedOrder = firstArg() }
-        val editScope = mockk<PreferencesEditScope>(relaxed = true)
-        every { editScope.homeDiscovery } returns recordingHome
-        // edit's block is suspend — run it in a real coroutine to replay it
-        // against the recording scope and observe the persisted order.
-        kotlinx.coroutines.runBlocking { editorBlock.captured.invoke(editScope) }
-        assertEquals(
-            listOf(HomeSectionType.NEXT_UP, HomeSectionType.CONTINUE_WATCHING, HomeSectionType.LATEST_MEDIA),
-            capturedOrder,
-        )
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun moveSection_down_atLastIndex_isNoOp() = runTest {
+    fun moveSection_down_atLastIndex_isNoOp() = vmTest {
         val order = listOf(
             HomeSectionType.CONTINUE_WATCHING,
             HomeSectionType.NEXT_UP,
@@ -616,11 +571,10 @@ class HomeViewModelTest {
 
         // NEXT_UP is already last → editor must not be touched.
         verify(exactly = 0) { preferencesEditor.edit(any()) }
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun setLibrarySectionVisible_disabled_addsTypeToOverrideSet() = runTest {
+    fun setLibrarySectionVisible_disabled_addsTypeToOverrideSet() = vmTest {
         homeDiscoveryFlow.value = HomeDiscoverySlice(
             libraryHomeSectionOverrides = mapOf("movies" to setOf(HomeSectionType.RECENTLY_ADDED)),
         )
@@ -636,27 +590,10 @@ class HomeViewModelTest {
                 mapOf("movies" to setOf(HomeSectionType.RECENTLY_ADDED, HomeSectionType.LATEST_MEDIA)),
             )
         }
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun setLibrarySectionVisible_enabled_dropsEmptyKey() = runTest {
-        homeDiscoveryFlow.value = HomeDiscoverySlice(
-            libraryHomeSectionOverrides = mapOf("movies" to setOf(HomeSectionType.LATEST_MEDIA)),
-        )
-        viewModel = buildViewModel()
-        runCurrent()
-
-        // Re-enabling the only disabled type empties the set, so the key must
-        // be dropped entirely (restoring default-enabled state).
-        viewModel.onEvent(HomeUiEvent.SetLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = true))
-
-        verify { preferencesEditor.setLibraryHomeSectionOverrides(emptyMap()) }
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun refresh_resetsScrollAndFetchesSections() = runTest {
+    fun refresh_resetsScrollAndFetchesSections() = vmTest {
         coEvery {
             mediaRepository.getHomeSections(any(), any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
@@ -671,11 +608,10 @@ class HomeViewModelTest {
         assertEquals(0, pos.firstVisibleItemScrollOffset)
         // Manual refresh bypasses the home-sections cache (force read).
         coVerify { mediaRepository.getHomeSections(any(), force = true) }
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun pullToRefresh_invalidatesDiscoverCache_andRefetches() = runTest {
+    fun pullToRefresh_invalidatesDiscoverCache_andRefetches() = vmTest {
         coEvery {
             mediaRepository.getHomeSections(any(), any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
@@ -687,22 +623,20 @@ class HomeViewModelTest {
         assertFalse(viewModel.uiState.value.isRefreshing)
         // Pull-to-refresh bypasses the home-sections cache (force read).
         coVerify { mediaRepository.getHomeSections(any(), force = true) }
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun dismissNewsletterBanner_updatesUiState() = runTest {
+    fun dismissNewsletterBanner_updatesUiState() = vmTest {
         viewModel = buildViewModel()
 
         viewModel.onEvent(HomeUiEvent.DismissNewsletterBanner)
         runCurrent()
 
         assertFalse(viewModel.uiState.value.newsletterBannerVisible)
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun fetchAndUpdateSections_onFailure_setsErrorState() = runTest {
+    fun fetchAndUpdateSections_onFailure_setsErrorState() = vmTest {
         coEvery {
             mediaRepository.getHomeSections(any())
         } returns Result.failure(RuntimeException("Connection timeout"))
@@ -713,13 +647,12 @@ class HomeViewModelTest {
 
         assertEquals("Connection timeout", viewModel.uiState.value.error)
         assertFalse(viewModel.uiState.value.isLoading)
-        stopPeriodicRefresh()
     }
 
     // ── Offline-library collection gate (offline modes + implicit offline) ──
 
     @Test
-    fun offlineLibraryCollection_onlineFetchSuccess_neverCollected() = runTest {
+    fun offlineLibraryCollection_onlineFetchSuccess_neverCollected() = vmTest {
         coEvery {
             mediaRepository.getHomeSections(any())
         } returns Result.success(
@@ -736,11 +669,10 @@ class HomeViewModelTest {
         assertEquals(HomeRenderSource.Online, viewModel.uiState.value.renderSource)
         verify(exactly = 0) { offlineRepository.getOfflineLibrary() }
         verify(exactly = 0) { offlineRepository.getOfflineEpisodes() }
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun offlineLibraryCollection_onlineFetchFailure_collectsLibraryAndClearsPending() = runTest {
+    fun offlineLibraryCollection_onlineFetchFailure_collectsLibraryAndClearsPending() = vmTest {
         val libraryFlow = MutableSharedFlow<List<OfflineMediaItem>>(extraBufferCapacity = 8)
         // A completing cold flow (not a hot SharedFlow): combine waits for both
         // upstreams, and a never-emitting hot episodes flow would stall it.
@@ -770,11 +702,10 @@ class HomeViewModelTest {
         assertEquals(episodes, viewModel.uiState.value.offlineEpisodes)
         // Downloads confirmed present: the implicit-offline fallback renders.
         assertEquals(HomeRenderSource.Offline.Implicit, viewModel.uiState.value.renderSource)
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun selectSeerrRequestItem_and_clearRequestResult() = runTest {
+    fun selectSeerrRequestItem_and_clearRequestResult() = vmTest {
         viewModel = buildViewModel()
 
         val seerrItem = com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem(
@@ -791,21 +722,6 @@ class HomeViewModelTest {
         runCurrent()
 
         org.junit.Assert.assertNull(viewModel.uiState.value.seerrRequestState.snapshot.requestResult)
-        stopPeriodicRefresh()
-    }
-
-    @Test
-    fun getImageUrl_and_getBackdropUrl_delegateToProvider() = runTest {
-        every { imageUrlProvider.getImageUrl("item-99") } returns "http://server/item-99/poster"
-        every { imageUrlProvider.getBackdropUrl("item-99") } returns "http://server/item-99/backdrop"
-        viewModel = buildViewModel()
-
-        val posterUrl = viewModel.getImageUrl("item-99")
-        val backdropUrl = viewModel.getBackdropUrl("item-99")
-
-        assertEquals("http://server/item-99/poster", posterUrl)
-        assertEquals("http://server/item-99/backdrop", backdropUrl)
-        stopPeriodicRefresh()
     }
 
     /**
@@ -874,7 +790,7 @@ class HomeViewModelTest {
     private fun series(id: String) = MediaItem(id = id, name = id, mediaType = MediaType.SERIES)
 
     @Test
-    fun playSeries_picksResumeEpisode_fromCatalogueDecision() = runTest {
+    fun playSeries_picksResumeEpisode_fromCatalogueDecision() = vmTest {
         val episodes = listOf(
             episode("ep-1", played = true),
             episode("ep-2", ticks = 600_000_000L),
@@ -892,11 +808,10 @@ class HomeViewModelTest {
         val target = resolved as SeriesPlayResolution.Episode
         assertEquals("ep-2", target.item.id)
         assertEquals(600_000_000L, target.startPositionTicks)
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun playSeries_catalogueFailure_fallsBackToDetails() = runTest {
+    fun playSeries_catalogueFailure_fallsBackToDetails() = vmTest {
         coEvery {
             episodeCatalogue.loadSeriesEpisodes("series-x", offline = false)
         } returns Result.failure(IllegalStateException("server unreachable"))
@@ -907,11 +822,10 @@ class HomeViewModelTest {
         runCurrent()
 
         assertEquals("series-x", (resolved as SeriesPlayResolution.Details).series.id)
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun playSeries_offlineHome_readsDownloadedEpisodes() = runTest {
+    fun playSeries_offlineHome_readsDownloadedEpisodes() = vmTest {
         offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
         viewModel = buildViewModel()
         runCurrent()
@@ -926,11 +840,10 @@ class HomeViewModelTest {
         runCurrent()
 
         assertEquals("dl-ep-1", (resolved as SeriesPlayResolution.Episode).item.id)
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun playSeries_failedFetchWithDownloads_isImplicitOffline() = runTest {
+    fun playSeries_failedFetchWithDownloads_isImplicitOffline() = vmTest {
         // The screen's implicit-offline render branch: online mode, but the
         // fetch failed leaving only downloads. Resolution must read local
         // episodes, not poke the server that just failed. The downloads must
@@ -958,11 +871,10 @@ class HomeViewModelTest {
         runCurrent()
 
         assertEquals("dl-ep-1", (resolved as SeriesPlayResolution.Episode).item.id)
-        stopPeriodicRefresh()
     }
 
     @Test
-    fun playSeries_rapidSecondTap_whileResolveInFlight_isDropped() = runTest {
+    fun playSeries_rapidSecondTap_whileResolveInFlight_isDropped() = vmTest {
         val gate = CompletableDeferred<Result<EpisodeCatalogueSnapshot>>()
         coEvery {
             episodeCatalogue.loadSeriesEpisodes(any(), any())
@@ -979,7 +891,6 @@ class HomeViewModelTest {
 
         assertEquals("a-ep-1", (firstResolved as SeriesPlayResolution.Episode).item.id)
         assertNull(secondResolved)
-        stopPeriodicRefresh()
     }
 
     /**

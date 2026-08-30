@@ -125,6 +125,17 @@ sealed interface HomeUiEvent {
         val series: MediaItem,
         val onResolved: (SeriesPlayResolution) -> Unit,
     ) : HomeUiEvent
+
+    /**
+     * Long-press Download from an online home card. Single-stream items start
+     * inline; series and other non-inline types open the detail screen via
+     * [onOpenDetail] (`openDownloadSheet` pre-presents the series download
+     * sheet there). Same callback-carries-navigation shape as [PlaySeries].
+     */
+    data class DownloadItem(
+        val item: MediaItem,
+        val onOpenDetail: (itemId: String, openDownloadSheet: Boolean) -> Unit = { _, _ -> },
+    ) : HomeUiEvent
 }
 
 /**

@@ -62,6 +62,48 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberInt
 
 /**
+ * WHAT the content list renders, decided once at the construction site from
+ * [HomeRenderSource]: the server feed ([Online]) or the offline-derived one
+ * ([Offline]). The former pairing — a nullable `offlineContent` plus
+ * `sections`/`isLoading`/banners that each had to be masked with
+ * `!renderingOffline &&` at every construction — allowed the two halves to
+ * disagree (silently empty rows); here each branch's constructor IS the mask,
+ * and the banner fields simply do not exist on the offline feed.
+ */
+internal sealed interface HomeFeed {
+
+    /** The rendered section list — server sections online, derived offline. */
+    val sections: List<HomeSection>
+
+    /** True while this feed's content is still arriving (spinner). */
+    val isLoading: Boolean
+
+    /**
+     * The server feed. [partialLoadError] and [newsletterBannerVisible] are
+     * online-only surfaces — offline rendering short-circuits them by
+     * construction, not by boolean masks at the read sites.
+     */
+    data class Online(
+        override val sections: List<HomeSection>,
+        override val isLoading: Boolean,
+        val partialLoadError: Boolean,
+        val newsletterBannerVisible: Boolean,
+    ) : HomeFeed
+
+    /**
+     * The offline feed: the whole [OfflineHomeContent] render model.
+     * [isLoading] covers the FallbackPending window after the gate opens but
+     * before the first library emission (downloads may yet exist).
+     */
+    data class Offline(
+        val content: OfflineHomeContent,
+        override val isLoading: Boolean = false,
+    ) : HomeFeed {
+        override val sections: List<HomeSection> get() = content.sections
+    }
+}
+
+/**
  * Bundles the (previously 38) flat parameters of the home content list into a
  * single `@Immutable` value so the composable is skippable without relying on
  * every caller `remember`-ing dozens of unstable lambdas. Lambdas that must
@@ -70,14 +112,11 @@ import com.raulshma.jellyplay.core.ui.tv.rememberInt
  */
 @Immutable
 internal data class HomeContentState(
-    val isLoading: Boolean,
+    val feed: HomeFeed,
     val homeHeroEnabled: Boolean,
     val homeBackdropEnabled: Boolean,
-    val newsletterBannerVisible: Boolean,
     val discoverEnabled: Boolean,
     val experimentalCardClippingEnabled: Boolean,
-    val sections: List<HomeSection>,
-    val partialLoadError: Boolean,
     val featuredItem: MediaItem?,
     val backgroundColor: Color,
     val contentPad: Dp,
@@ -89,19 +128,17 @@ internal data class HomeContentState(
     val recentlyGrabbed: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>,
     val photoFolderChildUrls: Map<String, List<String>>,
     /**
-     * The offline home's whole render model (see [OfflineHomeContent]) —
-     * sections already derived, id→item lookup already built. Null while the
-     * online home renders: download-progress ticks then never invalidate this
-     * list. Non-null iff the caller renders offline content (offline or
-     * implicit-offline).
-     */
-    val offlineContent: OfflineHomeContent? = null,
-    /**
      * Non-blocking informational banner (e.g. the implicit-offline
      * "couldn't reach the server — showing your downloads" notice). Null hides it.
      */
     val statusBanner: String? = null,
-)
+) {
+    /** The online feed, null while the offline branch renders. */
+    val online: HomeFeed.Online? get() = feed as? HomeFeed.Online
+
+    /** The offline render model, null while the online branch renders. */
+    val offlineContent: OfflineHomeContent? get() = (feed as? HomeFeed.Offline)?.content
+}
 
 @Immutable
 internal data class HomeContentCallbacks(
@@ -199,7 +236,7 @@ internal fun HomeContentList(
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val sections = state.sections
+    val sections = state.feed.sections
 
     // Discover-row dimensions computed once at the composable scope (not inside
     // the LazyColumn's LazyListScope, where LocalConfiguration isn't readable).
@@ -222,12 +259,12 @@ internal fun HomeContentList(
         listState = listState,
         savedRow = homeFocusRow,
         sectionCount = sections.size,
-        newsletterBannerVisible = state.newsletterBannerVisible,
+        newsletterBannerVisible = state.online?.newsletterBannerVisible == true,
         rowFocusRequesters = { rowFocusRequesters },
     )
 
     if (sections.isEmpty()) {
-        if (state.isLoading) {
+        if (state.feed.isLoading) {
             // Initial online fetch with nothing to show yet — a real loading state
             // instead of a blank screen. Delayed so fast loads don't flicker.
             DelayedLoadingScreen(modifier = Modifier.padding(horizontal = state.contentPad))
@@ -347,7 +384,7 @@ internal fun HomeContentList(
             }
 
             // Non-blocking notice when some home sections failed to load.
-            if (state.partialLoadError) {
+            if (state.online?.partialLoadError == true) {
                 item(key = "partial_load_banner") {
                     Row(
                         modifier = Modifier
@@ -378,7 +415,7 @@ internal fun HomeContentList(
                 }
             }
 
-            if (state.newsletterBannerVisible) {
+            if (state.online?.newsletterBannerVisible == true) {
                 item(key = "newsletter_banner") {
                     NewsletterBanner(
                         onClick = callbacks.onNewsletterClick,
