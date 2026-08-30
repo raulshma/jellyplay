@@ -58,7 +58,9 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 // every section still settles at exactly alpha 1. If this max is bumped, the
 // driver target must cover it too, otherwise high-index sections are left dim.
 internal const val DETAIL_STAGGER_STEP = 0.045f
-internal const val DETAIL_MAX_STAGGER_INDEX = 14
+// Highest delayIndex the body uses: content sections run 0–14, the download
+// info footer (moved to the end of the body) is 15.
+internal const val DETAIL_MAX_STAGGER_INDEX = 15
 
 /**
  * Compact quality pill label ("<bucket> <RANGE>") for a video stream — the 4K/HD/SD

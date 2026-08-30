@@ -119,9 +119,6 @@ data class HomeCallbacks(
     val onDownloadsClick: () -> Unit = {},
     val onPlayOnClick: () -> Unit = {},
     val onOfflineLibraryClick: () -> Unit = {},
-    /** Open a specific downloaded item: series go to the offline series
-     * browser, everything else to the offline detail screen. */
-    val onOfflineItemClick: (itemId: String) -> Unit = {},
     /** Open an item's detail screen from the inline card long-press Download;
      * [openDownloadSheet] pre-presents the series download sheet there. */
     val onDownloadDetailClick: (itemId: String, openDownloadSheet: Boolean) -> Unit = { _, _ -> },
@@ -610,7 +607,6 @@ private fun MainHomeContent(
                                 sections = if (renderingOffline) offlineSections else state.sections,
                                 partialLoadError = !renderingOffline && state.partialLoadError,
                                 featuredItem = heroController.featuredItem,
-                                featuredIsOffline = renderingOffline,
                                 backgroundColor = backgroundColor,
                                 contentPad = contentPad,
                                 headerHeight = headerHeight,
@@ -632,9 +628,6 @@ private fun MainHomeContent(
                                 onDismissNewsletterBanner = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.DismissNewsletterBanner) } },
                                 onNewsletterClick = callbacks.onNewsletterClick,
                                 onOfflineLibraryClick = callbacks.onOfflineLibraryClick,
-                                onOfflineItemClick = remember(callbacks) {
-                                    { itemId: String -> callbacks.onOfflineItemClick(itemId) }
-                                },
                                 onItemClick = remember(callbacks) { { id: String -> callbacks.onItemClick(id, MediaType.UNKNOWN, null, "") } },
                                 onFocusChange = remember { { focused: Boolean -> heroController.onFocusChange(focused) } },
                                 mediaOnItemClick = mediaOnItemClick,

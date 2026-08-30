@@ -79,11 +79,13 @@ import com.composables.icons.tabler.outline.ChevronRight
  * with `clipToBounds = false` so items and their elevation bleed past the edges.
  */
 /**
- * Home row for the offline-derived sections ([HomeSectionType.DOWNLOADED]):
- * the same chrome as [HomeMediaRow] — title, card width, spacing, TV/mobile
- * scroller, focus wiring — but cards render via [OfflineMediaCard] so artwork
- * resolves from local files and no server image URL is ever built (issue #147:
- * the offline home is the normal home, populated from downloads).
+ * Home row for the offline-derived poster-card sections
+ * ([HomeSectionType.DOWNLOADED]): the same chrome as [HomeMediaRow] — title,
+ * card width, spacing, TV/mobile scroller, focus wiring — but cards render via
+ * [OfflineMediaCard] so artwork resolves from local files and no server image
+ * URL is ever built (issue #147: the offline home is the normal home,
+ * populated from downloads). The offline Continue Watching / Next Up rows
+ * render through [ContinueWatchingRow] with local-file resolvers instead.
  */
 @Composable
 internal fun OfflineHomeMediaRow(
@@ -134,6 +136,7 @@ internal fun OfflineHomeMediaRow(
         }
     }
 }
+
 
 /**
  * The home rows' TV/touch chassis — the ONE implementation of the
@@ -250,19 +253,35 @@ private fun HorizontalMediaScroller(
     }
 }
 
+/**
+ * The wide-card Continue Watching / Next Up row, generic over the item type:
+ * online rows pass [MediaItem] with server image-URL builders, offline-derived
+ * rows (typed as their online counterparts by [buildOfflineHomeSections])
+ * pass [OfflineMediaItem] with resolvers that lift to [MediaItem] and read the
+ * local poster/backdrop file paths. Same chrome for both sources: 16:9
+ * [WideMediaCard] at ~1.6× the poster width, hoisted scrim, progress + meta
+ * footer. [onPlayClick] mirrors the row's play affordance for both sources —
+ * the video player resolves the local download (`PlayerSessionManager.loadMedia`
+ * → `PlaybackSourceResolver`), so offline playback needs no dedicated intent.
+ */
 @Composable
-fun ContinueWatchingRow(
+fun <T> ContinueWatchingRow(
     title: String,
-    items: List<MediaItem>,
-    imageUrlBuilder: (MediaItem) -> String,
-    backdropUrlBuilder: (MediaItem) -> String,
-    onItemClick: (MediaItem) -> Unit,
-    onPlayClick: ((MediaItem) -> Unit)? = null,
+    items: List<T>,
+    toMediaItem: (T) -> MediaItem,
+    imageUrl: (T) -> String,
+    backdropUrl: (T) -> String,
+    onItemClick: (T) -> Unit,
+    onPlayClick: ((T) -> Unit)? = null,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
     onRowFocused: (() -> Unit)? = null,
     clippingEnabled: Boolean = false,
     onSectionLongClick: (() -> Unit)? = null,
+    // Row identity for the lazy list — defaults to the lifted MediaItem's id;
+    // callers whose T already carries the id pass it directly so key lookups
+    // don't allocate a MediaItem per item.
+    key: (T) -> Any = { toMediaItem(it).id },
     // TV-only: reports the D-pad-focused item so the screen's Menu key can open
     // its quick actions (the wide card's own long-press handles touch).
     onFocusedItemChange: ((MediaItem) -> Unit)? = null,
@@ -290,21 +309,21 @@ fun ContinueWatchingRow(
         )
         HomeItemRow(
             items = items,
-            key = { it.id },
+            key = key,
             cardWidth = cardWidth,
             spacing = spacing,
             contentPad = contentPad,
             clippingEnabled = clippingEnabled,
             focusRequester = focusRequester,
             onRowFocused = onRowFocused,
-            onFocusedItemChange = { item -> onFocusedItemChange?.invoke(item) },
+            onFocusedItemChange = { item -> onFocusedItemChange?.invoke(toMediaItem(item)) },
         ) { item, mod ->
             val memoizedClick = remember(item) { { onItemClick(item) } }
             val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
             WideMediaCard(
-                item = item,
-                imageUrl = imageUrlBuilder(item),
-                backdropUrl = backdropUrlBuilder(item),
+                item = toMediaItem(item),
+                imageUrl = imageUrl(item),
+                backdropUrl = backdropUrl(item),
                 onClick = memoizedClick,
                 onPlayClick = memoizedPlayClick,
                 cardWidth = cardWidth,

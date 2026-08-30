@@ -2,6 +2,9 @@
 
 package com.raulshma.jellyplay.feature.library
 
+import androidx.paging.LoadState
+import androidx.paging.PagingDataEvent
+import androidx.paging.PagingDataPresenter
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -15,6 +18,8 @@ import com.raulshma.jellyplay.core.model.LibrarySectionContext
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
@@ -25,7 +30,9 @@ import io.mockk.verify
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -433,6 +440,52 @@ class LibraryViewModelTest {
     }
 
     // ── Offline auto downloaded filter (#147) ────────────────────────────────
+
+    @Test
+    fun `offline static paging settles refresh load state so pull-to-refresh spinner clears`() = runTest {
+        // Offline BEFORE the tab opens: the VM's first (and only) paging
+        // generation is the static offline PagingData.from(...) path.
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        every {
+            offlineRepository.getOfflineLibrary()
+        } returns flowOf(
+            listOf(
+                OfflineMediaItem(
+                    id = "dl-1",
+                    name = "Downloaded Movie",
+                    mediaType = MediaType.MOVIE,
+                )
+            )
+        )
+        val vm = createViewModel()
+
+        // Same construction LazyPagingItems performs in LibraryScreen: a fresh
+        // presenter with no cached paging data, whose initial load state is
+        // refresh = Loading.
+        val presenter = object : PagingDataPresenter<MediaItem>(
+            mainContext = UnconfinedTestDispatcher(testScheduler),
+        ) {
+            override suspend fun presentPagingDataEvent(event: PagingDataEvent<MediaItem>) {}
+        }
+
+        val collectJob = backgroundScope.launch {
+            vm.pagedItems.collect { presenter.collectFrom(it) }
+        }
+        advanceUntilIdle()
+
+        // The grid renders the offline item (mirrors pagedItems.itemCount > 0)…
+        assertEquals(1, presenter.snapshot().items.size)
+        // …but PullToRefreshBox stays spinning unless loadState.refresh leaves
+        // Loading — a static PagingData.from without explicit source load states
+        // never dispatches them (dispatchLoadStates = false).
+        val refreshState = presenter.loadStateFlow.value?.refresh
+        assertTrue(
+            "refresh stuck at $refreshState — pull-to-refresh spinner would never clear",
+            refreshState is LoadState.NotLoading,
+        )
+
+        collectJob.cancel()
+    }
 
     @Test
     fun `offlineAutoFilter mirrors offline mode transitions`() = runTest {

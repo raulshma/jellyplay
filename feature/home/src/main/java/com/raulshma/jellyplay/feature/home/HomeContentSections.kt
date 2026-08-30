@@ -48,6 +48,8 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -77,13 +79,6 @@ internal data class HomeContentState(
     val sections: List<HomeSection>,
     val partialLoadError: Boolean,
     val featuredItem: MediaItem?,
-    /**
-     * True when [featuredItem] is derived from the offline library (offline or
-     * implicit-offline rendering): the hero resolves artwork through
-     * [HomeContentCallbacks.heroBackdropUrlBuilder] and routes clicks to the
-     * offline detail screen instead of the online one.
-     */
-    val featuredIsOffline: Boolean = false,
     val backgroundColor: Color,
     val contentPad: Dp,
     val headerHeight: Dp,
@@ -114,8 +109,6 @@ internal data class HomeContentCallbacks(
     val onDismissNewsletterBanner: () -> Unit,
     val onNewsletterClick: () -> Unit,
     val onOfflineLibraryClick: () -> Unit,
-    /** Open a downloaded item's detail from an offline-derived section row. */
-    val onOfflineItemClick: (itemId: String) -> Unit = {},
     val onItemClick: (String) -> Unit,
     val onFocusChange: (Boolean) -> Unit,
     val mediaOnItemClick: (MediaItem) -> Unit,
@@ -148,6 +141,41 @@ internal data class HomeContentCallbacks(
      * quick actions */
     val onFocusedMediaItem: (MediaItem) -> Unit = {},
 )
+
+/**
+ * One implementation of the CW / NEXT_UP click routing, shared by the online
+ * and offline rows — only the sinks differ per source. CONTINUE_WATCHING
+ * honors [ContinueWatchingClickBehavior]; NEXT_UP always opens details. Every
+ * sink lands in the same unified MediaDetail / player tree: it renders remote
+ * and downloaded items alike, so no source-specific routing is needed.
+ */
+private fun <T> continueWatchingRowItemClick(
+    sectionType: HomeSectionType,
+    behavior: ContinueWatchingClickBehavior,
+    onDetails: (T) -> Unit,
+    onPlay: (T) -> Unit,
+    onAsk: (T) -> Unit,
+): (T) -> Unit = { item ->
+    if (sectionType == HomeSectionType.CONTINUE_WATCHING) {
+        when (behavior) {
+            ContinueWatchingClickBehavior.DETAILS -> onDetails(item)
+            ContinueWatchingClickBehavior.PLAY -> onPlay(item)
+            ContinueWatchingClickBehavior.ASK -> onAsk(item)
+        }
+    } else {
+        onDetails(item)
+    }
+}
+
+/**
+ * Re-resolves an offline-derived section's [HomeSection.items] back to their
+ * [OfflineMediaItem] originals by id (the shared [OfflineHomeContent.itemsById]
+ * lookup) so the row cards render local artwork and clicks route offline.
+ */
+private fun offlineSectionItems(
+    section: HomeSection,
+    byId: Map<String, OfflineMediaItem>,
+): List<OfflineMediaItem> = section.items.mapNotNull { byId[it.id] }
 
 /**
  * The home LazyColumn: hero, partial-load / newsletter banners, media rows,
@@ -266,18 +294,9 @@ internal fun HomeContentList(
             if (state.featuredItem != null && state.homeHeroEnabled) {
                 item(key = "hero") {
                     val featured = state.featuredItem
-                    // Offline hero clicks open the offline detail screen (the
-                    // online routing would hit the server for item metadata);
-                    // the unified detail tree needs only the id.
-                    val heroItemClick = remember(state.featuredIsOffline, callbacks) {
-                        { id: String ->
-                            if (state.featuredIsOffline) {
-                                callbacks.onOfflineItemClick(id)
-                            } else {
-                                callbacks.onItemClick(id)
-                            }
-                        }
-                    }
+                    // Online and offline heroes alike open the unified detail
+                    // tree — it renders remote and downloaded items alike, so
+                    // the id is all the routing needs.
                     AnimatedHeroHeader(
                         featuredItem = featured,
                         getBackdropUrl = remember(callbacks.heroBackdropUrlBuilder) {
@@ -288,8 +307,8 @@ internal fun HomeContentList(
                         contentPadding = state.contentPad,
                         homeBackdropEnabled = state.homeBackdropEnabled,
                         listState = listState,
-                        onItemClick = heroItemClick,
-                        onDetailsClick = heroItemClick,
+                        onItemClick = callbacks.onItemClick,
+                        onDetailsClick = callbacks.onItemClick,
                         requestInitialFocus = !savedRowIsValid,
                         onFocusChange = callbacks.onFocusChange,
                         focusRequester = heroFocusRequester,
@@ -431,20 +450,27 @@ internal fun HomeContentList(
                     section.title
                 }
 
+                // Long-press affordance only for user-configurable section
+                // types; non-configurable rows (FAVORITES, PINNED, …) are
+                // managed from their own surfaces and pass null.
+                val sectionLongClick = remember(section.type, section.libraryId, callbacks) {
+                    if (section.type.isConfigurable) {
+                        { callbacks.onConfigureSection(section.type, section.libraryId) }
+                    } else null
+                }
+
                 if (section.type == HomeSectionType.DOWNLOADED) {
                     // Offline-derived section (see buildOfflineHomeSections):
                     // re-resolve the offline originals by id (shared lookup
-                    // above) so the cards render local artwork and clicks route
-                    // to the offline detail.
+                    // above) so the cards render local artwork; clicks go to
+                    // the unified detail tree like any online item.
                     val byId = currentOfflineById
-                    val offlineItems = remember(section, byId) {
-                        section.items.mapNotNull { byId[it.id] }
-                    }
+                    val offlineItems = remember(section, byId) { offlineSectionItems(section, byId) }
                     OfflineHomeMediaRow(
                         title = sectionTitle,
                         items = offlineItems,
                         onItemClick = remember(callbacks) {
-                            { item -> callbacks.onOfflineItemClick(item.id) }
+                            { item -> callbacks.onItemClick(item.id) }
                         },
                         modifier = sectionModifier,
                         focusRequester = rowFocusRequesters[index],
@@ -453,49 +479,76 @@ internal fun HomeContentList(
                         onFocusedItemChange = callbacks.onFocusedMediaItem,
                     )
                 } else if (section.type == HomeSectionType.CONTINUE_WATCHING || section.type == HomeSectionType.NEXT_UP) {
-                    val rowItemClick: (MediaItem) -> Unit = remember(
-                        section.type, state.continueWatchingClickBehavior, callbacks.mediaOnItemClick, callbacks.mediaOnPlayClick,
-                    ) {
-                        { item ->
-                            if (section.type == HomeSectionType.CONTINUE_WATCHING) {
-                                when (state.continueWatchingClickBehavior) {
-                                    ContinueWatchingClickBehavior.DETAILS -> callbacks.mediaOnItemClick(item)
-                                    ContinueWatchingClickBehavior.PLAY -> callbacks.mediaOnPlayClick(item)
-                                    ContinueWatchingClickBehavior.ASK -> { askContinueItem = item }
-                                }
-                            } else {
-                                callbacks.mediaOnItemClick(item)
-                            }
+                    if (offlineContent != null) {
+                        // Offline-derived Continue Watching / Next Up (see
+                        // buildOfflineHomeSections): same wide-card row and the
+                        // same Resume-vs-Details click behavior as the online
+                        // home, but re-resolved to the offline originals by id
+                        // (shared lookup above) so cards render local artwork.
+                        // Every sink — Details, PLAY, the ASK dialog — rides
+                        // the same unified funnels as online: MediaDetail and
+                        // the player resolve downloaded items themselves, so no
+                        // offline-specific routing exists.
+                        val byId = currentOfflineById
+                        val offlineItems = remember(section, byId) { offlineSectionItems(section, byId) }
+                        val rowItemClick: (OfflineMediaItem) -> Unit = remember(
+                            section.type, state.continueWatchingClickBehavior, callbacks,
+                        ) {
+                            continueWatchingRowItemClick(
+                                sectionType = section.type,
+                                behavior = state.continueWatchingClickBehavior,
+                                onDetails = { item -> callbacks.mediaOnItemClick(item.toMediaItem()) },
+                                onPlay = { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) },
+                                onAsk = { item -> askContinueItem = item.toMediaItem() },
+                            )
                         }
+                        ContinueWatchingRow(
+                            title = sectionTitle,
+                            items = offlineItems,
+                            toMediaItem = { it.toMediaItem() },
+                            imageUrl = { it.posterPath.orEmpty() },
+                            backdropUrl = { it.backdropPath.orEmpty() },
+                            key = { it.id },
+                            onItemClick = rowItemClick,
+                            onPlayClick = remember(callbacks) {
+                                { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) }
+                            },
+                            modifier = sectionModifier,
+                            focusRequester = rowFocusRequesters[index],
+                            onRowFocused = { homeFocusRow = index },
+                            clippingEnabled = state.experimentalCardClippingEnabled,
+                            onSectionLongClick = sectionLongClick,
+                            onFocusedItemChange = callbacks.onFocusedMediaItem,
+                        )
+                    } else {
+                        val rowItemClick: (MediaItem) -> Unit = remember(
+                            section.type, state.continueWatchingClickBehavior, callbacks.mediaOnItemClick, callbacks.mediaOnPlayClick,
+                        ) {
+                            continueWatchingRowItemClick(
+                                sectionType = section.type,
+                                behavior = state.continueWatchingClickBehavior,
+                                onDetails = callbacks.mediaOnItemClick,
+                                onPlay = callbacks.mediaOnPlayClick,
+                                onAsk = { item -> askContinueItem = item },
+                            )
+                        }
+                        ContinueWatchingRow(
+                            title = sectionTitle,
+                            items = section.items,
+                            toMediaItem = { it },
+                            imageUrl = callbacks.mediaImageUrlBuilder,
+                            backdropUrl = callbacks.mediaBackdropUrlBuilder,
+                            onItemClick = rowItemClick,
+                            onPlayClick = callbacks.mediaOnPlayClick,
+                            modifier = sectionModifier,
+                            focusRequester = rowFocusRequesters[index],
+                            onRowFocused = { homeFocusRow = index },
+                            clippingEnabled = state.experimentalCardClippingEnabled,
+                            onSectionLongClick = sectionLongClick,
+                            onFocusedItemChange = callbacks.onFocusedMediaItem,
+                        )
                     }
-                    // Long-press affordance only for user-configurable section
-                    // types; non-configurable rows (FAVORITES, PINNED, …) are
-                    // managed from their own surfaces and pass null.
-                    val sectionLongClick = remember(section.type, section.libraryId, callbacks) {
-                        if (section.type.isConfigurable) {
-                            { callbacks.onConfigureSection(section.type, section.libraryId) }
-                        } else null
-                    }
-                    ContinueWatchingRow(
-                        title = sectionTitle,
-                        items = section.items,
-                        imageUrlBuilder = callbacks.mediaImageUrlBuilder,
-                        backdropUrlBuilder = callbacks.mediaBackdropUrlBuilder,
-                        onItemClick = rowItemClick,
-                        onPlayClick = callbacks.mediaOnPlayClick,
-                        modifier = sectionModifier,
-                        focusRequester = rowFocusRequesters[index],
-                        onRowFocused = { homeFocusRow = index },
-                        clippingEnabled = state.experimentalCardClippingEnabled,
-                        onSectionLongClick = sectionLongClick,
-                        onFocusedItemChange = callbacks.onFocusedMediaItem,
-                    )
                 } else {
-                    val sectionLongClick = remember(section.type, section.libraryId, callbacks) {
-                        if (section.type.isConfigurable) {
-                            { callbacks.onConfigureSection(section.type, section.libraryId) }
-                        } else null
-                    }
                     HomeMediaRow(
                         title = sectionTitle,
                         items = section.items,
@@ -592,10 +645,10 @@ internal fun HomeContentList(
                 }
             }
 
-            // While offline, the offline library IS the section list above, so
-            // the inline Downloaded row would duplicate every title.
-            val rendersOfflineSections = sections.any { it.type == HomeSectionType.DOWNLOADED }
-            if (dedupedOfflineLibrary.isNotEmpty() && !rendersOfflineSections) {
+            // While offline (offlineContent != null — every rendered section is
+            // offline-derived then), the offline library IS the section list
+            // above, so the inline Downloaded row would duplicate every title.
+            if (dedupedOfflineLibrary.isNotEmpty() && offlineContent == null) {
                 item(key = "downloaded_row") {
                     // DownloadedSection renders its own "Downloaded" header, so we
                     // intentionally don't emit a separate header item here.

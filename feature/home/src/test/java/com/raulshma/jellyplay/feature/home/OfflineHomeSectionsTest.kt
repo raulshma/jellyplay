@@ -89,7 +89,11 @@ class OfflineHomeSectionsTest {
             listOf("offline_continue_watching", "offline_recently_downloaded", "offline_movies", "offline_series", "offline_music"),
             sections.map { it.id },
         )
-        assertTrue(sections.all { it.type == HomeSectionType.DOWNLOADED })
+        // Continue Watching keeps its online type so the content list renders
+        // it through the same wide-card row; the poster-card rows stay
+        // DOWNLOADED.
+        assertEquals(HomeSectionType.CONTINUE_WATCHING, sections[0].type)
+        assertTrue(sections.drop(1).all { it.type == HomeSectionType.DOWNLOADED })
         assertEquals(listOf("cw"), sections[0].items.map { it.id })
         // Recent row is newest-download first; with fewer than ten downloads it
         // holds the whole library (same behavior the dedicated screen had).
@@ -219,6 +223,9 @@ class OfflineHomeSectionsTest {
         val nextUp = sections.first { it.id == "offline_next_up" }
         // s1 was watched most recently (Jan 8) so its next episode leads.
         assertEquals(listOf("s1e2", "s2e2"), nextUp.items.map { it.id })
+        // Next Up keeps its online type so the content list renders it through
+        // the same wide-card row.
+        assertEquals(HomeSectionType.NEXT_UP, nextUp.type)
     }
 
     @Test

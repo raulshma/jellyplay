@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.library
 
+import androidx.paging.LoadState
+import androidx.paging.LoadStates
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
@@ -219,7 +221,16 @@ class LibraryViewModel @Inject constructor(
             } else {
                 offlineRepository.getOfflineLibrary()
             }
-            items.map { PagingData.from(it.toFilteredLibraryItems(filters)) }
+            // Static paging only dispatches load states when explicit source
+            // states are provided — without them a fresh LazyPagingItems keeps
+            // its initial refresh = Loading forever, leaving the pull-to-refresh
+            // spinner stuck on while offline content renders fine.
+            val idleStates = LoadStates(
+                refresh = LoadState.NotLoading(endOfPaginationReached = false),
+                prepend = LoadState.NotLoading(endOfPaginationReached = false),
+                append = LoadState.NotLoading(endOfPaginationReached = false),
+            )
+            items.map { PagingData.from(it.toFilteredLibraryItems(filters), idleStates) }
         } else {
             mediaRepository.getMediaItemsPaged(
                 parentId = folder?.id,

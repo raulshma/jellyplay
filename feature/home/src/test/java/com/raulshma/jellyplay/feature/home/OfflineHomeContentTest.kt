@@ -48,7 +48,10 @@ class OfflineHomeContentTest {
                 assertTrue(content.itemsById.containsKey(item.id))
             }
         }
-        assertEquals(HomeSectionType.DOWNLOADED, content.sections[0].type)
+        // Continue Watching is empty here, so Next Up leads — and keeps its
+        // online type so the content list renders it through the wide-card row.
+        assertEquals(HomeSectionType.NEXT_UP, content.sections[0].type)
+        assertEquals("offline_next_up", content.sections[0].id)
     }
 
     @Test

@@ -34,7 +34,8 @@ internal data class OfflineHomeContent(
     val library: List<OfflineMediaItem>,
     /** Mode-filtered downloaded episodes feeding CW / Next Up. */
     val episodes: List<OfflineMediaItem>,
-    /** The offline-derived sections (all typed [HomeSectionType.DOWNLOADED]). */
+    /** The offline-derived sections (CW/Next Up keep their online types so
+     * they render through the same wide-card row; the rest are [HomeSectionType.DOWNLOADED]). */
     val sections: List<HomeSection>,
     /** Id → item across [library] + [episodes] — built once, here. */
     val itemsById: Map<String, OfflineMediaItem>,
@@ -138,11 +139,14 @@ private const val NEXT_UP_LIMIT = 20
 
 /**
  * Derives the home sections shown while offline from the (mode-filtered)
- * offline library and its downloaded episodes. Every section is typed
- * [HomeSectionType.DOWNLOADED] so [com.raulshma.jellyplay.feature.home.HomeContentList]
- * renders it through the offline card row (local artwork, offline click
- * routing) while keeping the online home's section chrome — the offline home IS
- * the normal home, just populated from downloads (issue #147).
+ * offline library and its downloaded episodes. Continue Watching and Next Up
+ * keep their online types ([HomeSectionType.CONTINUE_WATCHING] /
+ * [HomeSectionType.NEXT_UP]) so [com.raulshma.jellyplay.feature.home.HomeContentList]
+ * renders them through the same wide-card row as the online home — the offline
+ * home IS the normal home, just populated from downloads (issue #147); the
+ * wide row resolves artwork from local files and routes clicks offline. Every
+ * other section is typed [HomeSectionType.DOWNLOADED] and renders through the
+ * offline poster-card row.
  *
  * Rows, each omitted when empty or disabled by [OfflineHomeSectionPrefs]:
  *  - Continue Watching — movies + episodes with 1–95% progress, most recently
@@ -234,7 +238,7 @@ internal fun buildOfflineHomeSections(
                 HomeSection(
                     id = "offline_continue_watching",
                     title = titles.continueWatching,
-                    type = HomeSectionType.DOWNLOADED,
+                    type = HomeSectionType.CONTINUE_WATCHING,
                     items = mergedContinueWatching.map { it.toMediaItem() },
                 )
             )
@@ -244,7 +248,7 @@ internal fun buildOfflineHomeSections(
                 HomeSection(
                     id = "offline_next_up",
                     title = titles.nextUp,
-                    type = HomeSectionType.DOWNLOADED,
+                    type = HomeSectionType.NEXT_UP,
                     items = nextUp.map { it.toMediaItem() },
                 )
             )
