@@ -106,6 +106,9 @@ kotlin {
             // The UI test needs a real skia scene: currentOs pulls the
             // skiko-awt runtime (native lib) the ui-test scene renders with.
             implementation(compose.desktop.currentOs)
+            // Scratch Robot repro (DesktopSheetWheelRobotTest) drives a real
+            // ComposeWindow — that AWT window type lives in ui-desktop.
+            implementation(libs.jb.compose.ui.desktop)
         }
         // Wave 7C shape (subtitle-tester androidMain-heavy precedent, one
         // notch further): every media3/libmpv/libVLC/cast type, the engine

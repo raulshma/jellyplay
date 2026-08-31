@@ -142,10 +142,24 @@ private fun MobileBottomSheet(
     val colorScheme = MaterialTheme.colorScheme
     val typography = MaterialTheme.typography
 
+    // On wheel-driven platforms (desktop/web) a PartlyExpanded sheet can never
+    // grow: scroll leftovers reach the sheet's nested-scroll connection as
+    // SideEffect, which it ignores — only touch (UserInput) scroll-expands.
+    // Substitute a skip-partial state so such sheets open fully expanded
+    // instead of sitting stuck at half height (sheetExpandsFromContentScroll
+    // KDoc; regression-proven in DesktopSheetWheelRobotTest). Android keeps
+    // the caller's state and its touch scroll-to-expand behavior.
+    val effectiveSheetState =
+        if (sheetExpandsFromContentScroll()) {
+            sheetState
+        } else {
+            rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        }
+
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
-        sheetState = sheetState,
+        sheetState = effectiveSheetState,
         shape = ShapeCache.smoothTop28,
         // surface (not surfaceContainer) so the sheet matches the app/screen
         // background in every mode — pure #000 in OLED, identical to Library /
