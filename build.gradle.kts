@@ -92,23 +92,26 @@ if (enableCoverage.get()) {
 }
 
 // KGP wasm tool-download repo suppression (wave 13C) — the second half of the
-// settings.gradle.kts node/yarn governance note. KGP 2.3.21's setup tasks add
-// their ivy download repository to the PROJECT at task-graph time, which
-// FAIL_ON_PROJECT_REPOS must keep rejecting; per the documented EnvSpec
+// settings.gradle.kts node/yarn/binaryen governance note. KGP 2.3.21's setup
+// tasks add their ivy download repository to the PROJECT at task-graph time,
+// which FAIL_ON_PROJECT_REPOS must keep rejecting; per the documented EnvSpec
 // contract ("If the property has no value, repository is not added, so this
 // can be used to add your own repository"), nulling downloadBaseUrl makes KGP
 // skip that registration so the settings-declared ivy repos (org.nodejs /
-// com.yarnpkg) serve the downloads instead. Both the per-project specs and the
-// ROOT-project ones (where the ':kotlinWasmNodeJsSetup' / ':kotlinWasmYarnSetup'
-// tasks live) are covered: the specs exist by the time any KMP project's build
-// script has run (KGP creates them while wiring the wasmJs target), so an
-// afterEvaluate in every KMP subproject configures that project's specs plus
-// the root's. Binaryen/d8/swc distributions are NOT covered — no lane in this
-// repo runs them; extend the same pattern if one ever does.
+// com.yarnpkg / com.github.webassembly) serve the downloads instead. Both the
+// per-project specs and the ROOT-project ones (where the ':kotlinWasmNodeJsSetup'
+// / ':kotlinWasmYarnSetup' / ':kotlinWasmBinaryenSetup' tasks live) are covered:
+// the specs exist by the time any KMP project's build script has run (KGP
+// creates them while wiring the wasmJs target), so an afterEvaluate in every
+// KMP subproject configures that project's specs plus the root's. d8/swc
+// distributions remain uncovered — no lane in this repo runs them; extend the
+// same pattern if one ever does.
 fun Project.suppressKgpWasmToolRepoRegistration() {
     extensions.findByType(org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsEnvSpec::class.java)
         ?.downloadBaseUrl?.set(null as String?)
     extensions.findByType(org.jetbrains.kotlin.gradle.targets.wasm.yarn.WasmYarnRootEnvSpec::class.java)
+        ?.downloadBaseUrl?.set(null as String?)
+    extensions.findByType(org.jetbrains.kotlin.gradle.targets.wasm.binaryen.BinaryenEnvSpec::class.java)
         ?.downloadBaseUrl?.set(null as String?)
 }
 

@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.datastore
 
+import kotlin.concurrent.Volatile
+
 /**
  * Encrypted store for Overseerr secrets (API key, password, session cookie).
  *

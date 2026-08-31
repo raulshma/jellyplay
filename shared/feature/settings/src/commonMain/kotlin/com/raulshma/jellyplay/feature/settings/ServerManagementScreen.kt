@@ -118,8 +118,8 @@ fun ServerManagementScreen(
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
-val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
-    val userMessageBus = LocalUserMessageBus.current
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
+    val messenger = rememberSettingsMessenger()
 
     var expandedServerId by remember { mutableStateOf<String?>(null) }
     var showAddAddressFor by remember { mutableStateOf<String?>(null) }

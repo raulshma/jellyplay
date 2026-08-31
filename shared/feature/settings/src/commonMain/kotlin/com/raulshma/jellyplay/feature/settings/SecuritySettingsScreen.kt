@@ -135,8 +135,8 @@ fun SecuritySettingsScreen(
     var qcLoading by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
-val biometricAvailability = rememberBiometricAvailability()
-    val canShowBiometric = biometricAvailability == BiometricAuthHelper.Availability.AVAILABLE
+val biometricGate = rememberBiometricGate()
+    val canShowBiometric = biometricGate != null
     val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     val pinMustBe4Digits = stringResource(Res.string.settings_pin_must_be_4_digits)

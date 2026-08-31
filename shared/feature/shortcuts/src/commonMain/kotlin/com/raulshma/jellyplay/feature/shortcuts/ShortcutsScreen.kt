@@ -89,6 +89,9 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
+import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
+import com.raulshma.jellyplay.core.ui.generated.resources.core_search
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.Res
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_admin_badge
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_empty_action
@@ -145,7 +148,6 @@ fun ShortcutsScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
-val context = LocalContext.current
     val backgroundColorState = rememberScreenBackgroundColorState()
 
     var searchQuery by rememberSaveable { mutableStateOf("") }

@@ -58,11 +58,6 @@ fun BackupSettingsScreen(
         onImportUriSelected = { viewModel.importSettings(it) },
     )
 
-val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        uri?.let { viewModel.importSettings(it) }
-    }
     val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
