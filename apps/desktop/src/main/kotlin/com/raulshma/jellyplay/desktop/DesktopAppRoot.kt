@@ -67,6 +67,8 @@ import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
+import com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch
+import com.raulshma.jellyplay.core.ui.components.SurpriseLaunchController
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
@@ -656,9 +658,22 @@ private fun DesktopNavScaffold(
             }
         }
 
+        // The shared HomeHeroController reads LocalSurpriseOnLaunch
+        // unconditionally; Android arms it from the launcher-shortcut
+        // ("Surprise Me") intent, a seam desktop has no equivalent of.
+        // Provide a never-armed controller so the read resolves — desktop's
+        // in-app "Surprise Me" path is the surpriseRequests flow parameter,
+        // which never touches this local.
+        val surpriseController = remember {
+            SurpriseLaunchController(
+                armed = MutableStateFlow(false),
+                consume = {},
+            )
+        }
         CompositionLocalProvider(
             LocalNetworkStatus provides networkMonitor.networkStatus,
             LocalServerHealth provides serverHealth,
+            LocalSurpriseOnLaunch provides surpriseController,
         ) {
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 NavDisplay(
