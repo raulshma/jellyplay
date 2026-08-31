@@ -523,16 +523,25 @@ Click any section to expand. The full feature list is preserved — collapsed on
 The project uses product flavors — `phone` (standard mobile) and `tv` (Android TV with Leanback launcher). Release builds ship `arm64-v8a` and universal APKs; debug builds additionally produce `x86_64` and `x86` APKs for emulators and legacy Android TV system images.
 
 <details>
-<summary><strong>Desktop playback prerequisite: libmpv</strong></summary>
+<summary><strong>Desktop playback: bundled libmpv (Windows)</strong></summary>
 
-Desktop video playback goes through **libmpv** loaded via JNA. The app boots
-without it (the engine is created lazily), but playback needs the library
-discoverable: JNA tries `libmpv-2` / `mpv-2` / `mpv` (i.e. the Windows dev
-package's `libmpv-2.dll` on your `PATH`, or your distro's shared library), and
-the `MPV_LIBRARY` environment variable can point at an absolute path as an
-override. For `:apps:desktop:test` specifically, dropping `libmpv-2.dll` into
-the gitignored `tools/mpv/` directory wires it in automatically — without it,
-the engine tests skip.
+Desktop video/audio playback goes through **libmpv** loaded via JNA. On
+**Windows nothing is required from the user**: the build fetches a pinned,
+sha256-verified `libmpv-2.dll` (LGPL build from the
+[mpv-winbuild](https://github.com/zhongfly/mpv-winbuild) project) into the
+gitignored `tools/mpv/` directory — the `fetchBundledLibmpv` task in
+`apps/desktop/build.gradle.kts` — and ships it inside the installed app
+image, so both `gradlew :apps:desktop:run` and the packaged MSI resolve it
+automatically. The fetch needs a 7-Zip binary on the machine (the dev
+package ships as `.7z`; standard on Windows dev boxes and CI runners); a
+manually dropped `tools/mpv/libmpv-2.dll` always wins over the fetch, and
+`-Pjellyplay.mpvDevUrl=…` pins a different archive.
+
+On **Linux/macOS** (build-from-source, untested) the app still loads the
+system `libmpv.so` / `libmpv.dylib` through JNA's normal search path. The
+`MPV_LIBRARY` environment variable pointing at an absolute path overrides
+everything on every OS, and a load failure now surfaces as a playback-error
+dialog instead of a silent black screen.
 
 </details>
 

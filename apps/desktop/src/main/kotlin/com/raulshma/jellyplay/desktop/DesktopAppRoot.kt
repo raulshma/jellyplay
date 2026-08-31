@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -502,11 +504,13 @@ private fun DesktopNavScaffold(
             // appdata streaming-subtitles subtree.
             editorSection(guardedNavigator)
             // …player-video, wave 9A conveyor — live where a surface story
-            // exists: the commonMain VideoPlayerScreen renders the
-            // SwingPanel/HWND mpv surface (Windows) or the wave-12B
-            // software-render pane, and the per-session engine resolves
-            // through PlayerEngineFactory (desktopPlayerModule). OSes with
-            // neither story keep the dead-end guard below.
+            // exists: the commonMain VideoPlayerScreen renders the wave-12B
+            // software-render pane wherever its probe smoke-passed (primary —
+            // the video sits inside the compose tree, so controls and clicks
+            // work), falling back to the SwingPanel/HWND mpv surface, and the
+            // per-session engine resolves through PlayerEngineFactory
+            // (desktopPlayerModule). OSes with neither story keep the
+            // dead-end guard below.
             // The subtitle-tester overlay stays Android-only: its push target
             // remains in the dead-end list.
             if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported ||
@@ -624,14 +628,26 @@ private fun DesktopNavScaffold(
         val topRouteIsFullscreen = (backStack.lastOrNull() as? Route)?.isFullScreen == true
         if (!topRouteIsFullscreen) {
             NavigationRail(
-                header = {
-                    Text(
-                        "JellyPlay",
-                        Modifier.padding(vertical = 16.dp),
-                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                    )
-                },
+                // No header: branding lives in the custom title bar
+                // (DesktopTitleBar) — a second "JellyPlay" here duplicated it.
+                header = null,
             ) {
+                // The rail holds 15 destinations (~1100dp of items) — far more
+                // than the default 800dp window height. NavigationRail's own
+                // column never scrolls, so without this scrollable wrapper the
+                // lower destinations (Requests…Admin) are clipped and
+                // unreachable. weight(1f) keeps the header pinned and scrolls
+                // only the item list.
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                // Breathing room now that the rail header is gone (the rail's
+                // own vertical padding is only 4dp) and under the last item
+                // when the list is scrolled to the bottom.
+                Spacer(Modifier.height(12.dp))
                 DesktopRailItem(Route.Home, "Home", Tabler.Outline.Home, currentTopLevel, guardedNavigator)
                 DesktopRailItem(Route.Search, "Search", Tabler.Outline.Search, currentTopLevel, guardedNavigator)
                 DesktopRailItem(Route.Library, "Library", Tabler.Outline.Library, currentTopLevel, guardedNavigator)
@@ -655,6 +671,8 @@ private fun DesktopNavScaffold(
 
                 DesktopRailItem(Route.Settings, "Settings", Tabler.Outline.Settings, currentTopLevel, guardedNavigator)
                 DesktopRailItem(Route.AdminDashboard, "Admin", Tabler.Outline.Shield, currentTopLevel, guardedNavigator)
+                    Spacer(Modifier.height(12.dp))
+                }
             }
         }
 

@@ -169,7 +169,14 @@ open class MpvDesktopEngine(
     private val _liveSubtitleCue = MutableStateFlow<CharSequence?>(null)
     override val liveSubtitleCue: StateFlow<CharSequence?> = _liveSubtitleCue.asStateFlow()
 
-    private val _errorFlow = MutableSharedFlow<EngineError>(extraBufferCapacity = 8)
+    // replay=1: construction-time failures (libmpv missing/unloadable,
+    // render-context create) are emitted BEFORE the EngineEventCoordinator
+    // subscribes — PlayerSessionManager publishes the engine into its
+    // StateFlow and the collector attaches a beat later, so with replay=0
+    // those emissions hit zero subscribers and vanish. That is exactly how
+    // a missing libmpv used to become a silent black player screen; the
+    // replay hands the last error to the late subscriber instead.
+    private val _errorFlow = MutableSharedFlow<EngineError>(replay = 1, extraBufferCapacity = 8)
     override val errorFlow: Flow<EngineError> = _errorFlow.asSharedFlow()
 
     private val _subtitleEvents = MutableSharedFlow<SubtitleEvent>(extraBufferCapacity = 8)

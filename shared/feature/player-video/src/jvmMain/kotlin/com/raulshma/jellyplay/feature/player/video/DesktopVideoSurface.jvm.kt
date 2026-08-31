@@ -22,17 +22,21 @@ import javax.swing.JPanel
  * Wave 12B dispatch: engines implementing [SoftwareFrameVideoSurface] (mpv
  * render-API software renderer) render through DesktopSoftwareVideoPane — a
  * plain Compose Canvas — when the machine's sw support smoke-passed; see that
- * pane for the pixel pipeline. The SwingPanel path below is unchanged and
- * remains the primary host on Windows.
+ * pane for the pixel pipeline. The engine factory prefers that path EVERYWHERE
+ * the probe passes (overlay/pointer fix), leaving the SwingPanel path below as
+ * the Windows-only fallback for machines whose sw probe failed.
  *
  * Sizing: SwingPanel lays its child out to the composable's bounds and the
  * Canvas fills the wrapping JPanel (BorderLayout/CENTER), so window resizes
  * reach the embedded child window through AWT layout.
  *
- * Known desktop v1 limitation (heavyweight z-order): the native child window
- * composites ABOVE all Compose content, so the overlay controls render under
- * the video while it plays. Keyboard paths (the non-TV shortcut layer, Esc
- * back via the shell) are unaffected; dialogs are separate OS windows.
+ * Known desktop limitation of THIS fallback path (heavyweight z-order): the
+ * native child window composites ABOVE all Compose content, so the overlay
+ * controls render under the video while it plays and mouse clicks land on the
+ * native window instead of the compose gesture layer (tap-to-toggle-controls
+ * never fires). Keyboard paths (the non-TV shortcut layer, Esc back via the
+ * shell) are unaffected; dialogs are separate OS windows. Machines on the
+ * software-render pane are unaffected entirely — it sits inside the tree.
  *
  * [engine] is unused here by design: on desktop the wiring is inverted — the
  * surface publishes its HWND through [DesktopVideoSurfaceBridge] and the

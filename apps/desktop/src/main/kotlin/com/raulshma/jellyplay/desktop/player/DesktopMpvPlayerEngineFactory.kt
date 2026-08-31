@@ -26,14 +26,18 @@ import kotlinx.coroutines.delay
  * is exactly one publishing surface at any time; engine teardown is owned by
  * PlayerSessionManager's release paths, not this factory.
  *
- * Surface selection (wave 12B): a realized HWND wins (Windows-primary path,
- * MpvDesktopEngine with `wid`). When no handle appears within the existing
- * budget — ALWAYS on non-Windows, exceptionally on Windows when AWT never
- * realizes the child window — and the software-surface prober smoke-passed,
- * the session gets [MpvSoftwareRenderEngine] instead: mpv renders CPU frames
- * the commonMain screen hosts through DesktopSoftwareVideoPane, no child
- * window needed. Only when neither surface story applies does the pre-12B
- * degrade survive (no-wid engine → empty surface/audio-only).
+ * Surface selection (wave 12B, precedence inverted for the overlay fix): the
+ * SOFTWARE renderer wins whenever the prober smoke-passed. The SwingPanel/HWND
+ * embed renders into a heavyweight child window that composites ABOVE all
+ * Compose content — the overlay controls paint under the video and mouse
+ * clicks land on the native window, so the commonMain tap-to-toggle-controls
+ * handler never fires. [MpvSoftwareRenderEngine] instead renders CPU frames
+ * the commonMain screen hosts through DesktopSoftwareVideoPane INSIDE the
+ * compose tree, where controls stack correctly and pointer input reaches the
+ * normal gesture layer. Only when the probe fails does the embedded HWND path
+ * take over (a realized handle within the existing wait budget → MpvDesktopEngine
+ * with `wid`), and when neither surface story applies does the pre-12B degrade
+ * survive (no-wid engine → empty surface/audio-only).
  *
  * Engine selection: mpv is the only real desktop backend, so media3/libVLC
  * picks ride it too (the decoder picker still functions as an engine-reload).
@@ -65,37 +69,41 @@ class DesktopMpvPlayerEngineFactory(
             PlayerType.EXO_PLAYER,
             PlayerType.LIBVLC,
             -> {
-                val windowed = if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported) {
-                    awaitSurfaceHandle()
+                if (DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported) {
+                    // Overlay fix: sw-first precedence — the software pane lives
+                    // inside the compose tree (controls above video, clicks
+                    // reach the gesture layer), the HWND embed does not. See
+                    // the class KDoc; the probe is cached per process, so this
+                    // check is free after the first read.
+                    engine = MpvSoftwareRenderEngine()
+                    surface = SURFACE_SOFTWARE
                 } else {
-                    null
-                }
-                when {
-                    windowed != null -> {
-                        engine = MpvDesktopEngine(extraOptions = emptyMap(), windowHandle = windowed)
-                        surface = SURFACE_HWND
+                    val windowed = if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported) {
+                        awaitSurfaceHandle()
+                    } else {
+                        null
                     }
+                    when {
+                        windowed != null -> {
+                            engine = MpvDesktopEngine(extraOptions = emptyMap(), windowHandle = windowed)
+                            surface = SURFACE_HWND
+                        }
 
-                    DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported -> {
-                        // Wave 12B: no (or late) embedded surface — fall back to the
-                        // mpv render-API software renderer. On non-Windows this is
-                        // the PRIMARY path; on Windows it fires only when the HWND
-                        // never materialized within HANDLE_WAIT_TIMEOUT_MS, which is
-                        // worth a line of stderr because it means AWT did not
-                        // realize the child window in time.
-                        System.err.println(
-                            "[JellyPlay] video session: no embedded HWND available — " +
-                                "using mpv software-render surface",
-                        )
-                        engine = MpvSoftwareRenderEngine()
-                        surface = SURFACE_SOFTWARE
-                    }
-
-                    else -> {
-                        // Legacy degrade chain: engine without wid → empty-surface
-                        // audio-only playback, exactly the pre-12B behavior.
-                        engine = MpvDesktopEngine(extraOptions = emptyMap(), windowHandle = null)
-                        surface = SURFACE_WID_NULL
+                        else -> {
+                            // Legacy degrade chain: engine without wid → empty-surface
+                            // audio-only playback, exactly the pre-12B behavior. On
+                            // Windows this also means AWT never realized the child
+                            // window inside the budget — worth a line of stderr
+                            // because the session silently loses video otherwise.
+                            if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported) {
+                                System.err.println(
+                                    "[JellyPlay] video session: no embedded HWND available and sw " +
+                                        "probe failed — degrading to audio-only",
+                                )
+                            }
+                            engine = MpvDesktopEngine(extraOptions = emptyMap(), windowHandle = null)
+                            surface = SURFACE_WID_NULL
+                        }
                     }
                 }
             }

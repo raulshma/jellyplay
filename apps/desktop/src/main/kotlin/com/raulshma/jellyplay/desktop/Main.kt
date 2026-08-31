@@ -1,15 +1,25 @@
 package com.raulshma.jellyplay.desktop
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyShortcut
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.MenuBar
 import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
@@ -84,6 +94,19 @@ fun main() {
     val paths = DesktopPaths.resolve()
     java.io.File(paths.dataDir.toString()).mkdirs()
     java.io.File(paths.configDir.toString()).mkdirs()
+
+    // Bundled libmpv (packaged builds): jpackage installs the app-resources
+    // dir (fetchBundledLibmpv's windows-x64 subtree, apps/desktop/
+    // build.gradle.kts) next to the jars and the Compose launcher exposes it
+    // as compose.application.resources.dir — point JNA at it so playback
+    // works with zero user setup. Dev `gradlew run` covers the same need via
+    // the run task's jna.library.path, and an explicit MPV_LIBRARY env still
+    // wins (MpvLib.load checks it before JNA's search path).
+    System.getProperty("compose.application.resources.dir")?.let { resourcesDir ->
+        if (java.io.File(resourcesDir, "libmpv-2.dll").isFile) {
+            System.setProperty("jna.library.path", resourcesDir)
+        }
+    }
 
     // Wave 10A crash scaffold: hooks the JVM-wide uncaught-exception handler
     // BEFORE anything that can throw (Koin graph, player engines, compose
@@ -423,11 +446,43 @@ fun main() {
             kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         }
 
+        // F11 fullscreen toggle — shared by the window key handler and the
+        // title bar's View menu (the old MenuBar item's exact behavior).
+        val toggleFullscreen = {
+            windowState.placement =
+                if (windowState.placement == WindowPlacement.Fullscreen) WindowPlacement.Floating
+                else WindowPlacement.Fullscreen
+        }
+
         Window(
             state = windowState,
             title = "JellyPlay",
             icon = appIcon,
+            undecorated = true,
             onCloseRequest = ::exitApplication,
+            // Keyboard accelerators for the DesktopTitleBar menus. The old
+            // AWT MenuBar delivered these natively even without Compose
+            // focus; the window-level preview handler is the closest
+            // equivalent — it sees every key before the Compose focus chain
+            // (and also when nothing is focused), then declines everything
+            // it doesn't own so route-level handlers (Esc/back, media keys
+            // in DesktopAppRoot) are unaffected.
+            onPreviewKeyEvent = { event ->
+                if (event.type != KeyEventType.KeyDown) {
+                    false
+                } else if (event.isCtrlPressed && event.key == Key.R) {
+                    homeRefreshRequests.tryEmit(Unit)
+                    true
+                } else if (event.isCtrlPressed && event.key == Key.Q) {
+                    exitApplication()
+                    true
+                } else if (event.key == Key.F11) {
+                    toggleFullscreen()
+                    true
+                } else {
+                    false
+                }
+            },
         ) {
             DisposableEffect(startupPerf) {
                 val composeWindow = window
@@ -445,43 +500,60 @@ fun main() {
                 }
             }
 
-            MenuBar {
-                Menu("File") {
-                    Item("Refresh", shortcut = KeyShortcut(Key.R, ctrl = true)) {
-                        // Dropped, not queued, when the home entry is not
-                        // composed (see DesktopAppRoot's homeRefreshRequests).
-                        homeRefreshRequests.tryEmit(Unit)
-                    }
-                    Separator()
-                    Item("Exit", shortcut = KeyShortcut(Key.Q, ctrl = true)) {
-                        exitApplication()
-                    }
-                }
-                Menu("View") {
-                    Item(
-                        if (windowState.placement == WindowPlacement.Fullscreen) "Exit Fullscreen" else "Fullscreen",
-                        shortcut = KeyShortcut(Key.F11),
-                    ) {
-                        windowState.placement =
-                            if (windowState.placement == WindowPlacement.Fullscreen) WindowPlacement.Floating
-                            else WindowPlacement.Fullscreen
-                    }
-                }
-                Menu("Help") {
-                    Item("About JellyPlay") { showAbout.value = true }
+            // Manual maximize state. WindowPlacement.Maximized (AWT
+            // MAXIMIZED_BOTH) is unusable on an undecorated window: the frame
+            // is a WS_POPUP, which Windows never zooms natively, so AWT only
+            // applies the maximized SIZE (position ignored, restore broken).
+            // We swap bounds ourselves instead — work area on maximize, saved
+            // bounds on restore.
+            var maximizedRestoreBounds by remember {
+                mutableStateOf<java.awt.Rectangle?>(null)
+            }
+            val toggleMaximize: () -> Unit = {
+                if (maximizedRestoreBounds != null) {
+                    window.bounds = maximizedRestoreBounds
+                    maximizedRestoreBounds = null
+                } else {
+                    maximizedRestoreBounds = window.bounds
+                    window.workAreaOrNull()?.let { window.bounds = it }
                 }
             }
 
             JellyPlayTheme(darkTheme = isSystemInDarkTheme(), dynamicColor = false) {
-                DesktopAppRoot(
-                    showAbout = showAbout.value,
-                    onDismissAbout = { showAbout.value = false },
-                    previousCrashLogPath = previousCrash?.logFile?.toString(),
-                    // Wave 13B session harness only (screenshots + key
-                    // injection); unused on every normal boot path.
-                    windowRef = windowRef,
-                    homeRefreshRequests = homeRefreshRequests,
-                )
+                // Themed fallback surface: the undecorated window has no
+                // native chrome, so without this the pre-theme AWT white
+                // would flash through the splash/signed-out panes in dark
+                // mode.
+                Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    // The custom title bar replaces the OS caption (theme
+                    // mismatch) AND the AWT MenuBar (an undecorated frame has
+                    // no menu strip on Windows — the menus moved into the
+                    // bar, see DesktopTitleBar). Hidden in true fullscreen so
+                    // F11 video playback gets the whole screen.
+                    if (windowState.placement != WindowPlacement.Fullscreen) {
+                        DesktopTitleBar(
+                            icon = appIcon,
+                            isMaximized = maximizedRestoreBounds != null,
+                            onMinimize = { windowState.isMinimized = true },
+                            onToggleMaximize = toggleMaximize,
+                            onClose = ::exitApplication,
+                            onRefresh = { homeRefreshRequests.tryEmit(Unit) },
+                            onExit = ::exitApplication,
+                            onToggleFullscreen = toggleFullscreen,
+                            isFullscreenActive = windowState.placement == WindowPlacement.Fullscreen,
+                            onAbout = { showAbout.value = true },
+                        )
+                    }
+                    DesktopAppRoot(
+                        showAbout = showAbout.value,
+                        onDismissAbout = { showAbout.value = false },
+                        previousCrashLogPath = previousCrash?.logFile?.toString(),
+                        // Wave 13B session harness only (screenshots + key
+                        // injection); unused on every normal boot path.
+                        windowRef = windowRef,
+                        homeRefreshRequests = homeRefreshRequests,
+                    )
+                }
             }
         }
 
@@ -516,4 +588,21 @@ fun main() {
             )
         }
     }
+}
+
+/**
+ * The current monitor's work area (screen minus taskbar) in the window's own
+ * coordinate space, or null when the graphics configuration is unavailable.
+ * Used for the manual maximize of the undecorated window — see the
+ * maximizedRestoreBounds comment in the Window content.
+ */
+private fun java.awt.Window.workAreaOrNull(): java.awt.Rectangle? {
+    val gc = graphicsConfiguration ?: return null
+    val insets = java.awt.Toolkit.getDefaultToolkit().getScreenInsets(gc)
+    return java.awt.Rectangle(
+        gc.bounds.x + insets.left,
+        gc.bounds.y + insets.top,
+        gc.bounds.width - insets.left - insets.right,
+        gc.bounds.height - insets.top - insets.bottom,
+    )
 }

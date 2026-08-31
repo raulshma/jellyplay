@@ -10,10 +10,13 @@ import com.sun.jna.Pointer
 import com.sun.jna.ptr.PointerByReference
 
 /**
- * Desktop playback backend for machines WITHOUT the embedded-child-window
- * path (non-Windows today): libmpv renders through the **render-API software
- * backend** ("sw") into CPU buffers the Compose layer blits into a compose
- * ImageBitmap (see DesktopSoftwareVideoPane).
+ * Desktop playback backend hosting video INSIDE the compose tree: libmpv
+ * renders through the **render-API software backend** ("sw") into CPU buffers
+ * the Compose layer blits into a compose ImageBitmap (see
+ * DesktopSoftwareVideoPane). The engine factory picks this path on every
+ * machine whose sw probe smoke-passed (primary, incl. Windows) because the
+ * embedded-child-window alternative composites above all Compose content —
+ * no overlay controls, no pointer input.
  *
  * Everything else — event pump, property surface, error taxonomy, release
  * discipline — is the [MpvDesktopEngine] contract verbatim, which is why this

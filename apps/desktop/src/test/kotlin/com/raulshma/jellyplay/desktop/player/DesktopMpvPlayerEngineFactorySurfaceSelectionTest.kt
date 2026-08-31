@@ -17,13 +17,19 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assumptions.assumeTrue
 
 /**
- * Surface-selection contract of [DesktopMpvPlayerEngineFactory] (wave 14B):
- * which engine — and which [EngineActivitySnapshot] surface tag — a session
- * gets for each bridge state. The bridge is a global object, so every test
- * installs its provider/probe and removes them again in a finally block.
+ * Surface-selection contract of [DesktopMpvPlayerEngineFactory] (wave 14B,
+ * precedence inverted for the overlay fix): which engine — and which
+ * [EngineActivitySnapshot] surface tag — a session gets for each bridge
+ * state. Software-render support WINS over an available HWND (the sw pane
+ * lives inside the compose tree: controls stack above the video and pointer
+ * input reaches the gesture layer; the HWND child window composites above all
+ * Compose content and starves both). The HWND wait only runs when the probe
+ * failed, and the pre-12B audio-only degrade survives behind both. The bridge
+ * is a global object, so every test installs its provider/probe and removes
+ * them again in a finally block.
  *
- * The "HWND never appears" tests cost the factory's full 4 s wait budget on
- * Windows (the budget under test); they are kept to the two fallback branches
+ * The "HWND never appears" test costs the factory's full 4 s wait budget on
+ * Windows (the budget under test); it is kept to the single fallback branch
  * only. The wid-engine tests need a real libmpv (the engine ctor initializes
  * a core) and skip without tools/mpv — same gating as MpvDesktopEngineTest.
  * The fake HWND value is never dereferenced by these tests: mpv only opens
@@ -63,6 +69,8 @@ class DesktopMpvPlayerEngineFactorySurfaceSelectionTest {
 
     @Test
     fun hwndAvailable_selectsWidEngine() = runBlocking {
+        // No sw probe installed → software support reads false → the HWND wait
+        // path runs (the fallback for machines whose sw probe failed).
         assumeTrue(DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported)
         assumeTrue(libmpvAvailable(), { "libmpv not available on this machine" })
         val recorder = EngineActivityRecorder()
@@ -73,6 +81,27 @@ class DesktopMpvPlayerEngineFactorySurfaceSelectionTest {
             val engine = factory.create(PlayerType.MPV)
             assertIs<MpvDesktopEngine>(engine)
             assertEquals(SURFACE_HWND, recorder.latestVideoEngine().surface)
+        } finally {
+            DesktopVideoSurfaceBridge.clear(provider)
+            recorder.dispose()
+        }
+    }
+
+    @Test
+    fun softwareProbePassing_beatsAvailableHwnd() = runBlocking {
+        // The overlay-fix precedence: with BOTH a published HWND and a passing
+        // sw probe, software wins — the HWND child window would composite
+        // above all Compose content (no overlay controls, no clicks).
+        val recorder = EngineActivityRecorder()
+        val provider: () -> Long? = { 0x12345678L }
+        DesktopVideoSurfaceBridge.register(provider)
+        try {
+            withSoftwareProbe(probe = { true }) {
+                val factory = DesktopMpvPlayerEngineFactory(recorder = recorder)
+                val engine = factory.create(PlayerType.MPV)
+                assertIs<MpvSoftwareRenderEngine>(engine)
+                assertEquals(SURFACE_SOFTWARE, recorder.latestVideoEngine().surface)
+            }
         } finally {
             DesktopVideoSurfaceBridge.clear(provider)
             recorder.dispose()
