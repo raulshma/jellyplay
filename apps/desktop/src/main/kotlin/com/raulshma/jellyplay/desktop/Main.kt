@@ -1,10 +1,10 @@
 package com.raulshma.jellyplay.desktop
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,7 +38,9 @@ import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.database.di.desktopDatabaseModule
 import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
 import com.raulshma.jellyplay.core.datastore.di.desktopDatastoreModule
-import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
+import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
 import com.raulshma.jellyplay.core.network.di.desktopNetworkModule
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
@@ -82,6 +84,7 @@ import com.raulshma.jellyplay.feature.player.live.di.playerLiveModule
 import com.raulshma.jellyplay.feature.player.video.di.desktopPlayerVideoModule
 
 
+import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
 
 fun main() {
@@ -519,7 +522,19 @@ fun main() {
                 }
             }
 
-            JellyPlayTheme(darkTheme = isSystemInDarkTheme(), dynamicColor = false) {
+            // Preference-driven theming, the shared wrapper the Android
+            // Activities use (JellyPlayPreferenceTheme): every appearance pref —
+            // theme variant (Synthwave/Aurora/Sakura/…), theme mode (DARK/LIGHT/
+            // SYSTEM/SCHEDULED), OLED, contrast, accent swatch, font scale —
+            // resolves from PreferenceProjections.mainPreferences (Koin single,
+            // datastoreCommonModule), so the desktop Settings appearance rows
+            // re-theme the window live. Material You dynamicTheming is a no-op
+            // seam on desktop (dynamicPlatformColorScheme returns null there and
+            // the scheme cascade falls through to the brand palettes).
+            val projections: PreferenceProjections = koinInject()
+            val preferences by projections.mainPreferences.collectAsState()
+            val darkTheme = rememberPreferenceDarkTheme(preferences)
+            JellyPlayPreferenceTheme(preferences = preferences, darkTheme = darkTheme) {
                 // Themed fallback surface: the undecorated window has no
                 // native chrome, so without this the pre-theme AWT white
                 // would flash through the splash/signed-out panes in dark
