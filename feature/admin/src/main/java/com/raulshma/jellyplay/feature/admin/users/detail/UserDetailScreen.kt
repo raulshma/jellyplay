@@ -57,7 +57,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.PasswordTextField
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -79,7 +79,7 @@ fun UserDetailScreen(
 ) {
     LaunchedEffect(userId) { viewModel.loadUser(userId) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     val isTv = LocalTvMode.current
 
     // TV focus-on-launch: land on the first editor tab once the user loads so
@@ -160,7 +160,7 @@ fun UserDetailScreen(
     JellyPlayScreenScaffold(
         title = user?.name ?: stringResource(R.string.admin_user_fallback),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) {
         when {
             state.isLoading -> ScreenLoadingState(modifier = Modifier.fillMaxSize())
@@ -193,7 +193,7 @@ fun UserDetailScreen(
                             accessCount = viewModel.accessDirtyCount(),
                             parentalCount = viewModel.parentalDirtyCount(),
                             onTabSelected = { index -> scope.launch { pagerState.animateScrollToPage(index) } },
-                            backgroundColor = backgroundColor,
+                            backgroundColor = backgroundColorState.value,
                             firstTabFocusRequester = initialFocusRequester,
                         )
 

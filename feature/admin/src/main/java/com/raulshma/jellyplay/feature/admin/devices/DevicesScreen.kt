@@ -68,7 +68,7 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.SearchField
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -85,7 +85,7 @@ fun DevicesScreen(
     val state = viewModel.state
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
 
     // TV focus-on-launch: focus the first device once the list arrives so D-pad input lands on
     // content, not the navigation drawer.
@@ -133,7 +133,7 @@ fun DevicesScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.admin_devices_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             val refreshFocusState = rememberTvFocusState()
             IconButton(
@@ -321,7 +321,7 @@ private fun DeviceItem(
                         Spacer(Modifier.width(6.dp))
                     }
                     if (device.dateLastActivity.isNotBlank()) {
-                        val relative = formatRelativeTime(device.dateLastActivity)
+                        val relative = remember(device.dateLastActivity) { formatRelativeTime(device.dateLastActivity) }
                         Text(
                             when (relative) {
                                 is RelativeTime.Formatted -> relative.value

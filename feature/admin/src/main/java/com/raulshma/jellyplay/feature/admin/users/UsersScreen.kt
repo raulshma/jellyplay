@@ -47,7 +47,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -66,7 +66,7 @@ fun UsersScreen(
     val state = viewModel.state
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     val navOffsetPx = LocalFloatingNavOffset.current
 
     // TV focus-on-launch: focus the first user once the list arrives so D-pad input lands on
@@ -117,7 +117,7 @@ fun UsersScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.admin_users_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             IconButton(
                 onClick = { viewModel.refresh() },

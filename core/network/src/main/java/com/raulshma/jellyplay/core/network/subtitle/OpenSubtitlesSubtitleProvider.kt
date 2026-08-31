@@ -241,7 +241,7 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
                         val bytes = body.toByteArray()
                         SubtitleFile(
                             bytes = bytes,
-                            fileName = result.fileName ?: defaultFileName(result),
+                            fileName = result.fileName ?: defaultSubtitleFileName(result),
                             format = result.format?.lowercase(),
                             language = result.language,
                         )
@@ -518,13 +518,6 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
             else -> e.message ?: "OpenSubtitles request failed"
         }
         return ApiException.fromNetwork(e, friendly)
-    }
-
-    private fun defaultFileName(result: SubtitleSearchResult): String {
-        val ext = result.format?.lowercase()?.let { if (it.isBlank()) "srt" else it } ?: "srt"
-        val base = result.releaseName?.takeIf { it.isNotBlank() }?.replace(Regex("[^A-Za-z0-9._-]"), "_")
-            ?: "subtitle"
-        return "$base.$ext"
     }
 
     private fun inferFormat(fileName: String?): String? {

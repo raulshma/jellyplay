@@ -49,7 +49,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
-import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
+import com.raulshma.jellyplay.core.designsystem.theme.rememberThemeCardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.containerTint
 import com.raulshma.jellyplay.core.designsystem.theme.shadowElevation
 import com.raulshma.jellyplay.core.designsystem.theme.tonalElevation
@@ -146,11 +146,7 @@ fun MiniPlayer(
             }
         } else Modifier
 
-        val border = themeVariant.cardBorder(
-            primary = MaterialTheme.colorScheme.primary,
-            secondary = MaterialTheme.colorScheme.secondary,
-            outline = MaterialTheme.colorScheme.outline,
-        )
+        val border = rememberThemeCardBorder(themeVariant)
 
         val shape = when (themeVariant) {
             com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SOOTHING -> ShapeCache.smooth16

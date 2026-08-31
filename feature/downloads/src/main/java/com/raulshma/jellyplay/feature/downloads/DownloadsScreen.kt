@@ -160,7 +160,7 @@ fun DownloadsScreen(
     val hasAnyDownloading = remember(downloads) { downloads.any { it.status == DownloadStatus.DOWNLOADING } }
     val hasAnyFailed = remember(downloads) { downloads.any { it.status == DownloadStatus.FAILED } }
 
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     // TV focus-on-launch: focus the first download row once data arrives so D-pad input lands on
     // content, not the navigation drawer.
@@ -174,7 +174,7 @@ fun DownloadsScreen(
     com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold(
         title = stringResource(R.string.downloads_screen_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             // Global actions (reachable without entering selection mode).
             // Pause All halts every active transfer; Retry all failed
@@ -1254,15 +1254,22 @@ private fun ForceResyncSheet(
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                         }
-                        candidates.forEach { candidate ->
-                            ForceResyncItemRow(
-                                candidate = candidate,
-                                checked = candidate.id in selectedIds,
-                                onToggle = {
-                                    selectedIds = if (candidate.id in selectedIds) selectedIds - candidate.id
-                                    else selectedIds + candidate.id
-                                },
-                            )
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 360.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            itemsIndexed(candidates, key = { _, candidate -> candidate.id }) { _, candidate ->
+                                ForceResyncItemRow(
+                                    candidate = candidate,
+                                    checked = candidate.id in selectedIds,
+                                    onToggle = {
+                                        selectedIds = if (candidate.id in selectedIds) selectedIds - candidate.id
+                                        else selectedIds + candidate.id
+                                    },
+                                )
+                            }
                         }
 
                         // ── Data section ───────────────────────────────────────

@@ -26,7 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.feature.livetv.channels.ChannelsScreen
 import com.raulshma.jellyplay.feature.livetv.epg.EpgScreen
 import com.raulshma.jellyplay.feature.livetv.programs.ProgramsScreen
@@ -66,12 +66,12 @@ fun LiveTvScreen(
     val tabs = LiveTvTab.entries
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     val badges by overviewViewModel.badges.collectAsStateWithLifecycle()
 
     JellyPlayScreenScaffold(
         title = stringResource(R.string.livetv_screen_title),
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -82,7 +82,7 @@ fun LiveTvScreen(
                 selectedTabIndex = pagerState.currentPage,
                 badges = badges,
                 onTabSelected = { index -> scope.launch { pagerState.animateScrollToPage(index) } },
-                backgroundColor = backgroundColor,
+                backgroundColor = backgroundColorState.value,
             )
 
             val onProgramClick = remember(onChannelClick) { { program: LiveTvProgram -> onChannelClick(program.channelId, program.name) } }

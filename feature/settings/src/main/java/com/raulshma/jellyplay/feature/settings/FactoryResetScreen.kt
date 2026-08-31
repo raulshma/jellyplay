@@ -72,7 +72,7 @@ fun FactoryResetScreen(
     val totalChanged = categoryDiffs.sumOf { it.changed.size }
     val totalFields = categoryDiffs.sumOf { it.total }
 
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     // Grab focus into the list so the first D-pad press lands on content, not the drawer rail.
     val focusRequester = remember { FocusRequester() }
@@ -81,7 +81,7 @@ fun FactoryResetScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_factory_reset),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier

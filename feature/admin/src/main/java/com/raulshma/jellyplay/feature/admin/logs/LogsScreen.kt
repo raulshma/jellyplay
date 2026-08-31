@@ -80,7 +80,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.SearchField
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -97,7 +97,7 @@ fun LogsScreen(
     val state = viewModel.state
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     val tabs = listOf(R.string.admin_tab_log_files, R.string.admin_tab_activity_log)
 
     // TV focus-on-launch: focus the active tab's list once data arrives so D-pad input lands on
@@ -116,7 +116,7 @@ fun LogsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.admin_logs_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             if (state.selectedTabIndex == 1) {
                 val liveFocusState = rememberTvFocusState()

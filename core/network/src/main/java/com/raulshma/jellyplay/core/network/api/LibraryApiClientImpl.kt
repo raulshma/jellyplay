@@ -445,13 +445,7 @@ class LibraryApiClientImpl @Inject constructor(
                     ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
                 ),
             ).content ?: emptyList()
-            response.map { it.toMediaItem() }.filter { item ->
-                engine.currentMaxParentalRating?.let { max ->
-                    item.officialRating?.let { rating ->
-                        engine.ratingToAge(rating)?.let { age -> age <= max }
-                    } != false
-                } != false
-            }
+            engine.run { response.toFilteredMediaItems() }
         }
 
     override suspend fun getNextUp(
@@ -473,7 +467,7 @@ class LibraryApiClientImpl @Inject constructor(
                 ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
             ),
         ).content
-        engine.run { (response?.items ?: emptyList()).map { it.toMediaItem() }.filterByParentalRating() }
+        engine.run { (response?.items ?: emptyList()).toFilteredMediaItems() }
     }
 
     override suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>> = engine.apiResultWithRetry {
@@ -485,7 +479,7 @@ class LibraryApiClientImpl @Inject constructor(
             ),
         ).content
         engine.run {
-            (response?.items ?: emptyList()).map { it.toMediaItem() }.filterByParentalRating()
+            (response?.items ?: emptyList()).toFilteredMediaItems()
                 .distinctBy { it.id }
         }
     }
@@ -599,7 +593,7 @@ class LibraryApiClientImpl @Inject constructor(
         }
         val totalCount = if (response.items.isEmpty() && rawItems.isNotEmpty()) rawItems.size else response.totalRecordCount
         SearchResult(
-            items = engine.run { rawItems.map { it.toMediaItem() }.filterByParentalRating() },
+            items = engine.run { rawItems.toFilteredMediaItems() },
             totalRecordCount = totalCount,
             startIndex = startIndex,
         )
@@ -615,7 +609,7 @@ class LibraryApiClientImpl @Inject constructor(
         // concurrently and merges it into state so the screen renders
         // incrementally.
         //
-        // filterByParentalRating() is intentionally not applied here: the server
+        // The parental-rating filter (toFilteredMediaItems) is intentionally not applied here: the server
         // applies its own parental controls to userLibraryApi.getItem, and the
         // detail screen is reached only after the item already surfaced in a
         // filtered list — double-filtering a single detail adds no protection.
@@ -702,7 +696,7 @@ class LibraryApiClientImpl @Inject constructor(
             userId = userId,
         ).content
         engine.run {
-            (response?.items ?: emptyList()).map { it.toMediaItem() }.filterByParentalRating()
+            (response?.items ?: emptyList()).toFilteredMediaItems()
         }
     }
 
@@ -718,7 +712,7 @@ class LibraryApiClientImpl @Inject constructor(
             userId = userId,
         ).content
         engine.run {
-            (response ?: emptyList()).map { it.toMediaItem() }.filterByParentalRating()
+            (response ?: emptyList()).toFilteredMediaItems()
         }
     }
 
@@ -740,7 +734,7 @@ class LibraryApiClientImpl @Inject constructor(
             ),
         ).content
         SearchResult(
-            items = engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() },
+            items = engine.run { response.items.toFilteredMediaItems() },
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -767,7 +761,7 @@ class LibraryApiClientImpl @Inject constructor(
             ),
         ).content
         SearchResult(
-            items = engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() },
+            items = engine.run { response.items.toFilteredMediaItems() },
             totalRecordCount = response.totalRecordCount,
             startIndex = 0,
         )
@@ -775,7 +769,7 @@ class LibraryApiClientImpl @Inject constructor(
 
     override suspend fun findItemByProviderId(provider: String, id: String): Result<String?> =
         engine.apiResultWithRetry {
-            // filterByParentalRating() is intentionally not applied: the result
+            // The parental-rating filter (toFilteredMediaItems) is intentionally not applied: the result
             // is a bare item id used for matching, not display, and the server
             // scopes the query to the authenticated user's libraries.
             //
@@ -821,7 +815,7 @@ class LibraryApiClientImpl @Inject constructor(
             recursive = true,
         ).content
         SearchResult(
-            items = engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() },
+            items = engine.run { response.items.toFilteredMediaItems() },
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -862,7 +856,7 @@ class LibraryApiClientImpl @Inject constructor(
             ),
         ).content
         SearchResult(
-            items = engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() },
+            items = engine.run { response.items.toFilteredMediaItems() },
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -880,7 +874,7 @@ class LibraryApiClientImpl @Inject constructor(
                 ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
             ),
         ).content
-        engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() }
+        engine.run { response.items.toFilteredMediaItems() }
     }
 
     override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
@@ -895,7 +889,7 @@ class LibraryApiClientImpl @Inject constructor(
                 ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
             ),
         ).content
-        engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() }
+        engine.run { response.items.toFilteredMediaItems() }
     }
 
     override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
@@ -904,7 +898,7 @@ class LibraryApiClientImpl @Inject constructor(
                 engine.requireApi().libraryApi.getSimilarItems(
                     itemId = itemId.toUUID(),
                     limit = limit,
-                ).content.items.map { it.toMediaItem() }.filterByParentalRating()
+                ).content.items.toFilteredMediaItems()
             }
         }
 
@@ -921,7 +915,7 @@ class LibraryApiClientImpl @Inject constructor(
                         ItemFields.OVERVIEW,
                         ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
                     ),
-                ).content.items.map { it.toMediaItem() }.filterByParentalRating()
+                ).content.items.toFilteredMediaItems()
             }
         }
 
@@ -992,7 +986,7 @@ class LibraryApiClientImpl @Inject constructor(
                     ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
                 ),
             ).content
-            engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() }
+            engine.run { response.items.toFilteredMediaItems() }
         }
 
     override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =
@@ -1000,14 +994,14 @@ class LibraryApiClientImpl @Inject constructor(
             val response = engine.requireApi().libraryApi.getThemeSongs(
                 itemId = itemId.toUUID(),
             ).content
-            engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() }
+            engine.run { response.items.toFilteredMediaItems() }
         }
 
     override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
         engine.run {
             engine.requireApi().tvShowsApi.getSeasons(
                 seriesId = seriesId.toUUID(),
-            ).content.items.map { it.toMediaItem() }.filterByParentalRating()
+            ).content.items.toFilteredMediaItems()
         }
     }
 
@@ -1017,7 +1011,7 @@ class LibraryApiClientImpl @Inject constructor(
                 engine.requireApi().tvShowsApi.getEpisodes(
                     seriesId = seriesId.toUUID(),
                     seasonId = seasonId.toUUID(),
-                ).content.items.map { it.toMediaItem() }.filterByParentalRating()
+                ).content.items.toFilteredMediaItems()
             }
         }
 
@@ -1026,7 +1020,7 @@ class LibraryApiClientImpl @Inject constructor(
             engine.run {
                 engine.requireApi().tvShowsApi.getEpisodes(
                     seriesId = seriesId.toUUID(),
-                ).content.items.map { it.toMediaItem() }.filterByParentalRating()
+                ).content.items.toFilteredMediaItems()
             }
         }
 
@@ -1046,7 +1040,7 @@ class LibraryApiClientImpl @Inject constructor(
             ),
         ).content
         SearchResult(
-            items = engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() },
+            items = engine.run { response.items.toFilteredMediaItems() },
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -1096,7 +1090,7 @@ class LibraryApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
     ): Result<List<String>> = engine.apiResultWithRetry {
-        // filterByParentalRating() is intentionally not applied: tags are
+        // The parental-rating filter (toFilteredMediaItems) is intentionally not applied: tags are
         // plain strings with no rating attribute to filter on, and the server
         // already enforces library-access scoping on the underlying item query.
         val response = engine.requireApi().itemsApi.getItems(
@@ -1126,7 +1120,7 @@ class LibraryApiClientImpl @Inject constructor(
             ),
         ).content
         SearchResult(
-            items = engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() },
+            items = engine.run { response.items.toFilteredMediaItems() },
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -1171,7 +1165,7 @@ class LibraryApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
     ): Result<List<PlaylistItem>> = engine.apiResultWithRetry {
-        // filterByParentalRating() is intentionally not applied: PlaylistItem
+        // The parental-rating filter (toFilteredMediaItems) is intentionally not applied: PlaylistItem
         // does not carry an officialRating, and the server enforces playlist
         // ACLs plus parental controls on the underlying item query.
         val response = engine.requireApi().itemsApi.getItems(

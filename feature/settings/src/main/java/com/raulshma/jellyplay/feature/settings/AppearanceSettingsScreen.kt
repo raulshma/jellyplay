@@ -97,7 +97,7 @@ fun AppearanceSettingsScreen(
     val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
@@ -156,7 +156,7 @@ fun AppearanceSettingsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_appearance_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             AdvancedSettingsToggleButton(
                 showAdvanced = showAdvanced,

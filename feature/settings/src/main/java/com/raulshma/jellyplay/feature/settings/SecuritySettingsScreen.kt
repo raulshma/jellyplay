@@ -91,7 +91,7 @@ fun SecuritySettingsScreen(
 
     val biometricAvailability = rememberBiometricAvailability()
     val canShowBiometric = biometricAvailability == BiometricAuthHelper.Availability.AVAILABLE
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     val pinMustBe4Digits = stringResource(R.string.settings_pin_must_be_4_digits)
     val pinsDoNotMatch = stringResource(R.string.settings_pins_do_not_match)
@@ -120,7 +120,7 @@ fun SecuritySettingsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_security),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             AdvancedSettingsToggleButton(
                 showAdvanced = showAdvanced,

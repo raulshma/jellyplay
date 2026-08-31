@@ -48,6 +48,19 @@ private data class ViewModePrefs(
     val libraryViewModes: Map<String, String>,
 )
 
+/**
+ * Identity of the paged query: folder, filters, offline mode, refresh trigger.
+ * Deduped before the pager is built so browser-state re-emissions that leave
+ * the query untouched (view mode, poster size, grouping) don't tear it down,
+ * while [LibraryViewModel.refresh] always does — the trigger is part of the key.
+ */
+private data class PagedQueryKey(
+    val folder: LibraryFolder?,
+    val filters: LibraryFilters,
+    val servingOffline: Boolean,
+    val refreshTrigger: Int,
+)
+
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
@@ -204,9 +217,9 @@ class LibraryViewModel @Inject constructor(
         _browserState.flow,
         _refreshTrigger,
         offlineModeManager.offlineMode,
-    ) { browser, _, mode ->
-        Triple(browser.folder, browser.filters, mode != OfflineMode.ONLINE)
-    }.flatMapLatest { (folder, filters, servingOffline) ->
+    ) { browser, refreshTrigger, mode ->
+        PagedQueryKey(browser.folder, browser.filters, mode != OfflineMode.ONLINE, refreshTrigger)
+    }.distinctUntilChanged().flatMapLatest { (folder, filters, servingOffline) ->
         if (filters.isDownloaded == true || servingOffline) {
             // "Downloaded" filter — or offline mode, which pins it on
             // automatically (#147): serve the grid from the local offline
@@ -374,7 +387,10 @@ class LibraryViewModel @Inject constructor(
 
     fun setPosterSize(size: Float) {
         _browserState.set(LibraryBrowserReducer.setPosterSize(_browserState.value, size))
-        launch { libraryStore.setLibraryPosterSize(size) }
+    }
+
+    fun persistPosterSize() {
+        launch { libraryStore.setLibraryPosterSize(_browserState.value.posterSize) }
     }
 
     fun setGroupBy(groupBy: GroupBy) {

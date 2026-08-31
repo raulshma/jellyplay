@@ -1420,6 +1420,7 @@ fun LibraryScreen(
                     onValueChange = { viewModel.setPosterSize(it) },
                     valueRange = 0.7f..1.4f,
                     isTv = isTv,
+                    onValueChangeFinished = { viewModel.persistPosterSize() },
                 )
             }
         }

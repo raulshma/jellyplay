@@ -4,6 +4,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -26,8 +28,8 @@ import androidx.compose.ui.unit.dp
  * Usage:
  * ```
  * val scrollState = rememberBackdropScrollState(listState, backdropHeight)
- * BackdropLayer(scrollTranslationY = -scrollState.scrollOffset * 0.5f,
- *               scrollAlpha = 1f - (scrollState.scrollFraction * 0.8f), ...)
+ * BackdropLayer(scrollTranslationY = { -scrollState.scrollOffsetState.value * 0.5f },
+ *               scrollAlpha = { 1f - (scrollState.scrollFractionState.value * 0.8f) }, ...)
  * TransparentTopBar(containerColor = scrollState.containerColor,
  *                   titleAlpha = scrollState.titleAlpha,
  *                   scrollCollapsed = scrollState.scrollCollapsed, ...)
@@ -51,19 +53,24 @@ fun rememberBackdropScrollState(
     val spacerHeightPx = with(density) { (baseBackdropHeight - 150.dp).toPx() }
     val collapsedHeightPx = with(density) { backdropHeight.toPx() }
 
-    val scrollOffset by remember(spacerHeightPx) {
+    val scrollOffsetState = remember(spacerHeightPx) {
         derivedStateOf {
             (if (listState.firstVisibleItemIndex > 0) spacerHeightPx else 0f) +
                 listState.firstVisibleItemScrollOffset.toFloat()
         }
     }
-    val scrollFraction by remember(spacerHeightPx, collapsedHeightPx) {
-        derivedStateOf { (scrollOffset / collapsedHeightPx).coerceIn(0f, 1f) }
+    val scrollFractionState = remember(spacerHeightPx, collapsedHeightPx) {
+        derivedStateOf { (scrollOffsetState.value / collapsedHeightPx).coerceIn(0f, 1f) }
     }
 
     // Collapse the top bar once the user has scrolled past ~70% of the backdrop.
+    // The threshold is itself derived state, so the composition only invalidates
+    // when the boolean flips — not on every scrolled pixel.
+    val scrollPastCollapse by remember {
+        derivedStateOf { scrollFractionState.value > 0.7f }
+    }
     val scrollCollapsed by animateFloatAsState(
-        targetValue = if (scrollFraction > 0.7f) 1f else 0f,
+        targetValue = if (scrollPastCollapse) 1f else 0f,
         animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "backdropScrollCollapsed",
     )
@@ -75,8 +82,8 @@ fun rememberBackdropScrollState(
     )
 
     return BackdropScrollState(
-        scrollOffset = scrollOffset,
-        scrollFraction = scrollFraction,
+        scrollOffsetState = scrollOffsetState,
+        scrollFractionState = scrollFractionState,
         scrollCollapsed = scrollCollapsed,
         containerColor = containerColor,
         titleAlpha = scrollCollapsed,
@@ -84,20 +91,26 @@ fun rememberBackdropScrollState(
 }
 
 /**
- * Snapshot of a detail screen's backdrop parallax + top-bar collapse state.
- * Produced by [rememberBackdropScrollState]; read its properties directly.
+ * Parallax scroll + top-bar collapse state for a detail screen. Produced by
+ * [rememberBackdropScrollState].
  *
- * @param scrollOffset raw px the backdrop spacer has scrolled (0 until item 0
- *   is fully scrolled away).
- * @param scrollFraction [scrollOffset] normalized to 0..1 across the backdrop.
+ * [scrollOffsetState] and [scrollFractionState] are exposed as [State]s so
+ * scroll-driven consumers can read `.value` inside graphicsLayer/draw lambdas
+ * — the backdrop subtree then updates in the draw phase only, without
+ * recomposing on every scrolled pixel.
+ *
+ * @param scrollOffsetState [State] of the raw px the backdrop spacer has
+ *   scrolled (0 until item 0 is fully scrolled away).
+ * @param scrollFractionState [State] of [scrollOffsetState] normalized to 0..1
+ *   across the backdrop.
  * @param scrollCollapsed animated 0f→1f; crosses 0.5f once past 70% scroll.
  * @param containerColor lerped top-bar container color (transparent → background).
  * @param titleAlpha top-bar title alpha (tracks [scrollCollapsed]).
  */
-@androidx.compose.runtime.Immutable
-data class BackdropScrollState(
-    val scrollOffset: Float,
-    val scrollFraction: Float,
+@Stable
+class BackdropScrollState(
+    val scrollOffsetState: State<Float>,
+    val scrollFractionState: State<Float>,
     val scrollCollapsed: Float,
     val containerColor: Color,
     val titleAlpha: Float,

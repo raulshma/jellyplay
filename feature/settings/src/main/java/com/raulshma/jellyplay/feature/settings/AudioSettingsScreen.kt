@@ -76,7 +76,7 @@ fun AudioSettingsScreen(
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<AudioSettingsDialog>(AudioSettingsDialog.None) }
     var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
@@ -88,7 +88,7 @@ fun AudioSettingsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_audio_player_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             AdvancedSettingsToggleButton(
                 showAdvanced = showAdvanced,

@@ -41,8 +41,8 @@ data class SeerrSearchItem(
             (releaseDate ?: firstAirDate)?.take(4)?.toInt()
         } catch (_: Exception) { null }
 
-    val posterUrl: String? = buildPosterUrl(posterPath)
-    val backdropUrl: String? = buildBackdropUrl(backdropPath)
+    val posterUrl: String? by lazy { buildPosterUrl(posterPath) }
+    val backdropUrl: String? by lazy { buildBackdropUrl(backdropPath) }
 }
 
 @Immutable
@@ -121,8 +121,8 @@ data class SeerrMovieDetails(
     val watchProviders: List<SeerrWatchProviderRegion> = emptyList(),
     val releases: SeerrReleases? = null,
 ) {
-    val posterUrl: String? = buildPosterUrl(posterPath)
-    val backdropUrl: String? = buildBackdropUrl(backdropPath)
+    val posterUrl: String? by lazy { buildPosterUrl(posterPath) }
+    val backdropUrl: String? by lazy { buildBackdropUrl(backdropPath) }
 }
 
 @Immutable
@@ -164,8 +164,8 @@ data class SeerrTvDetails(
     val watchProviders: List<SeerrWatchProviderRegion> = emptyList(),
     val contentRatings: SeerrContentRatingsResponse? = null,
 ) {
-    val posterUrl: String? = buildPosterUrl(posterPath)
-    val backdropUrl: String? = buildBackdropUrl(backdropPath)
+    val posterUrl: String? by lazy { buildPosterUrl(posterPath) }
+    val backdropUrl: String? by lazy { buildBackdropUrl(backdropPath) }
 
     /**
      * TMDB keyword 210024 ("anime") — the same signal Overseerr/Jellyseerr use
@@ -260,7 +260,7 @@ data class SeerrAggregateCast(
     val totalEpisodeCount: Int = 0,
     val order: Int = 0,
 ) {
-    val profileUrl: String? = buildProfileUrl(profilePath)
+    val profileUrl: String? by lazy { buildProfileUrl(profilePath) }
 }
 
 @Immutable
@@ -274,7 +274,7 @@ data class SeerrAggregateCrew(
     val totalEpisodeCount: Int = 0,
     val department: String? = null,
 ) {
-    val profileUrl: String? = buildProfileUrl(profilePath)
+    val profileUrl: String? by lazy { buildProfileUrl(profilePath) }
 }
 
 @Immutable
@@ -382,7 +382,7 @@ data class SeerrCast(
     val order: Int = 0,
     val profilePath: String? = null,
 ) {
-    val profileUrl: String? = buildProfileUrl(profilePath)
+    val profileUrl: String? by lazy { buildProfileUrl(profilePath) }
 }
 
 @Immutable
@@ -396,7 +396,7 @@ data class SeerrCrew(
     val department: String? = null,
     val profilePath: String? = null,
 ) {
-    val profileUrl: String? = buildProfileUrl(profilePath)
+    val profileUrl: String? by lazy { buildProfileUrl(profilePath) }
 }
 
 @Immutable
@@ -429,7 +429,7 @@ data class SeerrSeason(
     val posterPath: String? = null,
     val seasonNumber: Int = 0,
 ) {
-    val posterUrl: String? = buildPosterUrl(posterPath)
+    val posterUrl: String? by lazy { buildPosterUrl(posterPath) }
 }
 
 @Immutable

@@ -78,7 +78,7 @@ fun ImportPreviewScreen(
     // Blank uri (e.g. direct deep-link without file) should not spin forever.
     val isBlankUri = uri.isBlank()
 
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(focusRequester = focusRequester, itemCount = 1, tag = "import_preview_init")
 
@@ -104,7 +104,7 @@ fun ImportPreviewScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_import_preview_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) { innerPadding ->
         if (isBlankUri) {
             Column(

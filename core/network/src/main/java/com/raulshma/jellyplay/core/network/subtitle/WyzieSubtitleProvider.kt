@@ -131,7 +131,7 @@ class WyzieSubtitleProvider @Inject constructor(
                             ?: throw IOException("Empty subtitle response from Wyzie")
                         SubtitleFile(
                             bytes = bytes,
-                            fileName = result.fileName ?: defaultFileName(result),
+                            fileName = result.fileName ?: defaultSubtitleFileName(result),
                             format = result.format?.lowercase(),
                             language = result.language,
                         )
@@ -240,16 +240,9 @@ class WyzieSubtitleProvider @Inject constructor(
     private fun redactSecrets(message: String?): String? {
         if (message.isNullOrBlank()) return null
         val redacted = message
-            .replace(Regex("(?i)(\\b(?:key|api[_-]?key|token)\\s*=\\s*)[^&\\s]+"), "$1<redacted>")
-            .replace(Regex("https?://[^\\s]*[?&](?:key|api[_-]?key|token)=[^&\\s]+"), "<request url with key redacted>")
+            .replace(SECRET_PARAM_REGEX, "$1<redacted>")
+            .replace(SECRET_URL_REGEX, "<request url with key redacted>")
         return redacted.ifBlank { null }
-    }
-
-    private fun defaultFileName(result: SubtitleSearchResult): String {
-        val ext = result.format?.lowercase()?.let { if (it.isBlank()) "srt" else it } ?: "srt"
-        val base = result.releaseName?.takeIf { it.isNotBlank() }?.replace(Regex("[^A-Za-z0-9._-]"), "_")
-            ?: "subtitle"
-        return "$base.$ext"
     }
 
     @Serializable
@@ -284,5 +277,8 @@ class WyzieSubtitleProvider @Inject constructor(
     companion object {
         internal const val BASE = "https://sub.wyzie.io"
         private const val TAG = "WyzieSubs"
+
+        private val SECRET_PARAM_REGEX = Regex("(?i)(\\b(?:key|api[_-]?key|token)\\s*=\\s*)[^&\\s]+")
+        private val SECRET_URL_REGEX = Regex("https?://[^\\s]*[?&](?:key|api[_-]?key|token)=[^&\\s]+")
     }
 }

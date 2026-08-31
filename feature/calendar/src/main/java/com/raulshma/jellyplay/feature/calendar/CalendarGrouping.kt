@@ -95,8 +95,14 @@ fun LocalDate.isInMonth(month: YearMonth): Boolean =
  * app follows the device locale (matching [java.time] usage elsewhere).
  */
 fun LocalDate.toDayHeaderLabel(locale: Locale = Locale.getDefault()): String =
-    format(DateTimeFormatter.ofPattern("EEE, MMM d", locale))
+    format(cachedFormatter("EEE, MMM d", locale))
 
 /** Full month + year label, e.g. "July 2026", used by the month nav header. */
 fun YearMonth.toMonthYearLabel(locale: Locale = Locale.getDefault()): String =
-    format(DateTimeFormatter.ofPattern("MMMM yyyy", locale))
+    format(cachedFormatter("MMMM yyyy", locale))
+
+/** [DateTimeFormatter]s are immutable and thread-safe; cache one per pattern+locale. */
+private val labelFormatters = java.util.concurrent.ConcurrentHashMap<Pair<String, Locale>, DateTimeFormatter>()
+
+private fun cachedFormatter(pattern: String, locale: Locale): DateTimeFormatter =
+    labelFormatters.computeIfAbsent(pattern to locale) { DateTimeFormatter.ofPattern(pattern, it.second) }

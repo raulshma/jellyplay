@@ -47,7 +47,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
  * the previous version in [com.raulshma.jellyplay.core.database.migration.allMigrations];
  * `allMigrations_coversContiguousRange` enforces that chain.
  */
-const val JELLY_PLAY_DATABASE_VERSION: Int = 51
+const val JELLY_PLAY_DATABASE_VERSION: Int = 52
 
 @Database(
     entities = [

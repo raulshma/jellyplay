@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.SeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberInt
+import kotlinx.coroutines.flow.Flow
 
 /**
  * WHAT the content list renders, decided once at the construction site from
@@ -126,7 +127,6 @@ internal data class HomeContentState(
     val discoverRows: List<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>>,
     val allDiscoverItems: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>,
     val recentlyGrabbed: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>,
-    val photoFolderChildUrls: Map<String, List<String>>,
     /**
      * Non-blocking informational banner (e.g. the implicit-offline
      * "couldn't reach the server — showing your downloads" notice). Null hides it.
@@ -161,6 +161,10 @@ internal data class HomeContentCallbacks(
      */
     val heroBackdropUrlBuilder: (String) -> String,
     val fallbackImageUrlBuilder: (MediaItem) -> List<String>,
+    /** Per-item slice of the photo-folder child-URL cache — collected at the
+     * photo-folder card, not orchestrator scope, so a prefetch merge only
+     * recomposes the card whose urls changed. */
+    val photoFolderChildUrlsFor: (String) -> Flow<List<String>>,
     val onSeerrItemClick: (Int, String) -> Unit,
     val onSeerrRequest: (com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem) -> Unit,
     val seerrPrefetch: (Int, String, () -> Unit) -> Unit,
@@ -552,7 +556,7 @@ internal fun HomeContentList(
                         onItemClick = callbacks.mediaOnItemClick,
                         onPlayClick = callbacks.mediaOnPlayClick,
                         modifier = sectionModifier,
-                        photoFolderChildUrls = state.photoFolderChildUrls,
+                        photoFolderChildUrlsFor = callbacks.photoFolderChildUrlsFor,
                         focusRequester = rowFocusRequesters[index],
                         onRowFocused = { homeFocusRow = index },
                         clippingEnabled = state.experimentalCardClippingEnabled,

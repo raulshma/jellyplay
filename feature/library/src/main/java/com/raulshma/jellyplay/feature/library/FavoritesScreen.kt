@@ -62,7 +62,7 @@ import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
@@ -76,7 +76,7 @@ fun FavoritesScreen(
     viewModel: FavoritesViewModel = hiltViewModel(),
 ) {
     val isTv = LocalTvMode.current
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val mediaTypeFilter by viewModel.mediaTypeFilter.collectAsStateWithLifecycle()
     val pagingItems = viewModel.pagedItems.collectAsLazyPagingItems()
@@ -120,7 +120,7 @@ fun FavoritesScreen(
         JellyPlayScreenScaffold(
             title = stringResource(R.string.library_favorites),
             onBack = onBack,
-            backgroundColor = backgroundColor,
+            backgroundColorState = backgroundColorState,
         ) { innerPadding ->
         Column(
             modifier = Modifier

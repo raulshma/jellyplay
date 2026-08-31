@@ -52,7 +52,7 @@ fun LicensesScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
 
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
@@ -66,7 +66,7 @@ fun LicensesScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_open_source_licenses_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) {
         when {
             viewModel.isLoading -> LoadingScreen()

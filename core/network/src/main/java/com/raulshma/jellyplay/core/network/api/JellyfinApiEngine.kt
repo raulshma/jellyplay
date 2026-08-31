@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 import android.content.Context
 import com.raulshma.jellyplay.core.model.ActiveSession
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -22,6 +23,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.ClientCapabilitiesDto
 import org.jellyfin.sdk.model.api.GeneralCommandType
 import org.jellyfin.sdk.model.api.MediaType as SdkMediaType
@@ -207,14 +209,26 @@ class JellyfinApiEngine @Inject constructor(
         else -> null
     }
 
-    fun <T : com.raulshma.jellyplay.core.model.MediaItem> List<T>.filterByParentalRating(): List<T> {
+    /**
+     * Selector-based parental-rating filter applied on raw values (e.g. DTOs)
+     * before they are mapped to [MediaItem].
+     */
+    fun <T> List<T>.filterByParentalRating(officialRatingOf: (T) -> String?): List<T> {
         val max = currentMaxParentalRating ?: return this
-        return mapNotNull { item ->
-            if (item.officialRating?.let { rating ->
-                    ratingToAge(rating)?.let { age -> age <= max }
-                } != false) item else null
+        return filter { item ->
+            officialRatingOf(item)?.let { rating ->
+                ratingToAge(rating)?.let { age -> age <= max }
+            } != false
         }
     }
+
+    /**
+     * The standard tail of every library listing call: parental-rate the raw
+     * DTOs, then map to [MediaItem] — one shared shape instead of a
+     * filter+map pair repeated per call site.
+     */
+    fun List<BaseItemDto>.toFilteredMediaItems(): List<MediaItem> =
+        filterByParentalRating { it.officialRating }.map { it.toMediaItem() }
 
     val cachedCapabilities by lazy {
         ClientCapabilitiesDto(

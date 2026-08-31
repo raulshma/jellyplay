@@ -317,14 +317,21 @@ class LibraryViewModelTest {
     }
 
     @Test
-    fun `setPosterSize persists via store`() = runTest {
+    fun `setPosterSize updates memory only and persistPosterSize writes the store`() = runTest {
         coEvery { libraryStore.setLibraryPosterSize(any()) } returns Unit
 
         val vm = createViewModel()
+        advanceUntilIdle()
         vm.setPosterSize(1.2f)
         advanceUntilIdle()
 
-        coVerify { libraryStore.setLibraryPosterSize(1.2f) }
+        assertEquals(1.2f, vm.state().posterSize)
+        coVerify(exactly = 0) { libraryStore.setLibraryPosterSize(any()) }
+
+        vm.persistPosterSize()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { libraryStore.setLibraryPosterSize(1.2f) }
     }
 
     @Test

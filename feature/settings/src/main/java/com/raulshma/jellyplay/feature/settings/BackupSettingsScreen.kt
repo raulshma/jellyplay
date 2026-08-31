@@ -53,7 +53,7 @@ fun BackupSettingsScreen(
     ) { uri ->
         uri?.let { viewModel.importSettings(it) }
     }
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
         focusRequester = focusRequester,
@@ -95,7 +95,7 @@ fun BackupSettingsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_backup_restore),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) { innerPadding ->
         // Center a highlighted (search-navigated) setting in the viewport instead of parking it
         // at the bottom edge, which is the default BringIntoViewSpec behaviour.

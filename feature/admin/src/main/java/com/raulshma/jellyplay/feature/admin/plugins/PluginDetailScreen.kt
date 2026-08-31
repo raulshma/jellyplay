@@ -64,7 +64,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -83,7 +83,7 @@ fun PluginDetailScreen(
 ) {
     viewModel.initialize(pluginId, pluginName)
     val state = viewModel.state
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     val adaptiveInfo = LocalAdaptiveInfo.current
     var showUninstallDialog by remember { mutableStateOf(false) }
     // Pending version install awaiting third-party trust confirmation.
@@ -101,7 +101,7 @@ fun PluginDetailScreen(
     JellyPlayScreenScaffold(
         title = state.plugin?.name ?: pluginName,
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) {
         if (state.isLoading) {
             ScreenLoadingState()

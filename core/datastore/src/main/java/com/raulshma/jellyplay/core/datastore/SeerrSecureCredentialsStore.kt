@@ -25,10 +25,27 @@ class SeerrSecureCredentialsStore @Inject constructor(
         )
     }
 
-    fun getApiKey(): String = prefs.getString(KEY_API_KEY, "") ?: ""
+    // Memoised raw values so hot read paths skip the per-call Tink decrypt of
+    // [EncryptedSharedPreferences]. The memos are only valid because this class
+    // is the SOLE owner of the file: every write must route through the setters
+    // and [clearAll] below. Any future writer that touches
+    // "seerr_secure_prefs" directly (e.g. a backup/restore flow) must either go
+    // through this class or invalidate these memos — otherwise restored values
+    // would be shadowed by stale ones until process death.
+    @Volatile
+    private var cachedApiKey: String? = null
+    @Volatile
+    private var cachedSessionCookie: String? = null
+
+    fun getApiKey(): String {
+        val cached = cachedApiKey
+        if (cached != null) return cached
+        return prefs.getString(KEY_API_KEY, "").also { cachedApiKey = it } ?: ""
+    }
 
     fun setApiKey(value: String) {
         prefs.edit().putString(KEY_API_KEY, value).apply()
+        cachedApiKey = value
     }
 
     fun getPassword(): String = prefs.getString(KEY_PASSWORD, "") ?: ""
@@ -37,14 +54,21 @@ class SeerrSecureCredentialsStore @Inject constructor(
         prefs.edit().putString(KEY_PASSWORD, value).apply()
     }
 
-    fun getSessionCookie(): String = prefs.getString(KEY_SESSION_COOKIE, "") ?: ""
+    fun getSessionCookie(): String {
+        val cached = cachedSessionCookie
+        if (cached != null) return cached
+        return prefs.getString(KEY_SESSION_COOKIE, "").also { cachedSessionCookie = it } ?: ""
+    }
 
     fun setSessionCookie(value: String) {
         prefs.edit().putString(KEY_SESSION_COOKIE, value).apply()
+        cachedSessionCookie = value
     }
 
     fun clearAll() {
         prefs.edit().clear().apply()
+        cachedApiKey = null
+        cachedSessionCookie = null
     }
 
     companion object {

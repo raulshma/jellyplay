@@ -54,7 +54,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -74,7 +74,7 @@ fun PinnedHomeSectionsScreen(
 ) {
     val pinnedSections by viewModel.pinnedHomeSectionsFlow.collectAsStateWithLifecycle()
     val isTv = LocalTvMode.current
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     val adaptiveInfo = LocalAdaptiveInfo.current
 
     val focusRequester = remember { FocusRequester() }
@@ -91,7 +91,7 @@ fun PinnedHomeSectionsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_pinned_home_sections),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) { innerPadding ->
         // Center a highlighted (search-navigated) setting in the viewport instead of parking it
         // at the bottom edge, which is the default BringIntoViewSpec behaviour.

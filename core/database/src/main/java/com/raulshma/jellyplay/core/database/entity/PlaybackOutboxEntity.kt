@@ -26,6 +26,10 @@ import androidx.room.PrimaryKey
         // Every drain/count query filters `WHERE deadLetter = 0` and orders by
         // createdAt; the composite serves both without a sort step.
         Index(value = ["deadLetter", "createdAt"]),
+        // getForItemByType (runs ~every 10 s during playback) filters
+        // `WHERE itemId = :itemId AND deadLetter = 0` and orders by createdAt;
+        // the composite covers filter + sort in one index range.
+        Index(value = ["itemId", "deadLetter", "createdAt"]),
     ],
 )
 data class PlaybackOutboxEntity(

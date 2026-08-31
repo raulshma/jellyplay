@@ -34,7 +34,7 @@ import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.feedback.asString
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -53,7 +53,7 @@ fun NewsletterScreen(
     viewModel: NewsletterViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
 
     // TV focus-on-launch: focus the first newsletter section once data arrives so D-pad input
     // lands on content, not the navigation drawer.
@@ -82,7 +82,7 @@ fun NewsletterScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.newsletter_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             if (state.isAdmin) {
                 NewsletterAdminActions(viewModel = viewModel, isSending = state.isSending)

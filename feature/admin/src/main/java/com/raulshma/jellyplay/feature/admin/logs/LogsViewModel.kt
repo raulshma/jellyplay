@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.trimToSize
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import javax.inject.Inject
 
@@ -64,8 +65,10 @@ class LogsViewModel @Inject constructor(
         launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
-                val logFilesResult = adminRepository.getLogFiles()
-                val activityResult = adminRepository.getActivityLogEntries(limit = 50)
+                val logFilesDeferred = async { adminRepository.getLogFiles() }
+                val activityDeferred = async { adminRepository.getActivityLogEntries(limit = 50) }
+                val logFilesResult = logFilesDeferred.await()
+                val activityResult = activityDeferred.await()
                 val entries = activityResult.getOrNull() ?: emptyList()
                 activityEntriesBuffer.clear()
                 activityEntriesBuffer.addAll(entries)

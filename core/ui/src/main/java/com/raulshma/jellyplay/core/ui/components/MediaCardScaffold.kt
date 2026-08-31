@@ -37,6 +37,7 @@ import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
+import com.raulshma.jellyplay.core.designsystem.theme.rememberThemeCardBorder
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
 import com.raulshma.jellyplay.core.ui.animation.pressScale
@@ -149,11 +150,7 @@ fun MediaCardScaffold(
         .aspectRatio(aspectRatio)
         .then(sharedImageModifier)
 
-    val resolvedBorder = border?.stroke ?: themeVariant.cardBorder(
-        primary = MaterialTheme.colorScheme.primary,
-        secondary = MaterialTheme.colorScheme.secondary,
-        outline = MaterialTheme.colorScheme.outline,
-    )
+    val resolvedBorder = border?.stroke ?: rememberThemeCardBorder(themeVariant)
     val borderAlpha = border?.alpha
     val surfaceColor = MaterialTheme.colorScheme.surface
     val resolvedScrimBrush = scrimBrush ?: remember(surfaceColor) {

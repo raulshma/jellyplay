@@ -59,8 +59,9 @@ class NotificationChannelManager @Inject constructor(
     fun deleteStaleChannels(validLibraryIds: Set<String>) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val validChannelIds = validLibraryIds.map { channelIdFor(it) }.toSet()
         nm.notificationChannels
-            .filter { it.id.startsWith(CHANNEL_PREFIX) && it.id !in validLibraryIds.map { id -> channelIdFor(id) } }
+            .filter { it.id.startsWith(CHANNEL_PREFIX) && it.id !in validChannelIds }
             .forEach { nm.deleteNotificationChannel(it.id) }
     }
 
