@@ -23,8 +23,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.ui.Alignment
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
@@ -153,9 +155,9 @@ fun main() {
             // the module still cover those guarded OSes.
             desktopPlayerVideoModule,
             // V3 feature conveyor: search — LIVE since the Phase X desktop
-            // nav v1 (DesktopAppRoot renders searchSection as the start
-            // tab); all VM deps resolve since the MediaRepository cluster
-            // flip.
+            // nav v1 (DesktopAppRoot renders searchSection as a rail
+            // destination; Home is the start tab); all VM deps resolve
+            // since the MediaRepository cluster flip.
             searchModule,
             // …library, second conveyor item — LIVE like search: the VM
             // deps resolved with the cluster flip, and desktopPhotoExport
@@ -417,8 +419,27 @@ fun main() {
             .build()
     }
 
+    // Window placement memory: restore the last session's floating bounds
+    // when they're still reachable on the CURRENT monitor setup (sanitize
+    // rejects the docked-laptop-then-undocked case), else launch centered.
+    // This replaces the old always-1280x800-at-OS-default placement — an
+    // undecorated frame gets the raw Windows cascade (top-left, stepped),
+    // never the centered position a decorated frame's dialog logic gives.
+    val windowStateStore = DesktopWindowStateStore(
+        paths.configDirNio.resolve("window-state.properties"),
+    )
+    val savedWindowGeometry = windowStateStore.load()
+        ?.let { DesktopWindowStateStore.sanitize(it, DesktopWindowStateStore.availableScreens()) }
+    val pxToDp = desktopPxToDpFactor()
+
     application {
-        val windowState = rememberWindowState(width = 1280.dp, height = 800.dp)
+        val windowState = rememberWindowState(
+            position = savedWindowGeometry
+                ?.let { WindowPosition((it.x / pxToDp).dp, (it.y / pxToDp).dp) }
+                ?: WindowPosition(Alignment.Center),
+            width = ((savedWindowGeometry?.width ?: DEFAULT_WINDOW_WIDTH_PX) / pxToDp).dp,
+            height = ((savedWindowGeometry?.height ?: DEFAULT_WINDOW_HEIGHT_PX) / pxToDp).dp,
+        )
         val showAbout = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
         // Wave 12A: runtime icon for the title bar + tray (packaging icons are
@@ -487,6 +508,16 @@ fun main() {
                 }
             },
         ) {
+            // Manual maximize state. WindowPlacement.Maximized (AWT
+            // MAXIMIZED_BOTH) is unusable on an undecorated window: the frame
+            // is a WS_POPUP, which Windows never zooms natively, so AWT only
+            // applies the maximized SIZE (position ignored, restore broken).
+            // We swap bounds ourselves instead — work area on maximize, saved
+            // bounds on restore.
+            var maximizedRestoreBounds by remember {
+                mutableStateOf<java.awt.Rectangle?>(null)
+            }
+
             DisposableEffect(startupPerf) {
                 val composeWindow = window
                 windowRef.set(composeWindow)
@@ -503,15 +534,51 @@ fun main() {
                 }
             }
 
-            // Manual maximize state. WindowPlacement.Maximized (AWT
-            // MAXIMIZED_BOTH) is unusable on an undecorated window: the frame
-            // is a WS_POPUP, which Windows never zooms natively, so AWT only
-            // applies the maximized SIZE (position ignored, restore broken).
-            // We swap bounds ourselves instead — work area on maximize, saved
-            // bounds on restore.
-            var maximizedRestoreBounds by remember {
-                mutableStateOf<java.awt.Rectangle?>(null)
+            // Last-session replay of the manual maximize: rememberWindowState
+            // above only restores the FLOATING bounds; when the previous
+            // session closed maximized, redo the bounds swap once the AWT
+            // window exists (windowOpened, same timing the perf marks rely
+            // on — applying bounds mid-composition would fight the initial
+            // pack()).
+            DisposableEffect(savedWindowGeometry) {
+                if (savedWindowGeometry?.maximized != true) {
+                    onDispose { }
+                } else {
+                    val maximizeListener = object : java.awt.event.WindowAdapter() {
+                        override fun windowOpened(e: java.awt.event.WindowEvent?) {
+                            window.removeWindowListener(this)
+                            if (maximizedRestoreBounds == null) {
+                                maximizedRestoreBounds = window.bounds
+                                window.workAreaOrNull()?.let { window.bounds = it }
+                            }
+                        }
+                    }
+                    window.addWindowListener(maximizeListener)
+                    onDispose { window.removeWindowListener(maximizeListener) }
+                }
             }
+
+            // Persist the floating geometry on window teardown. This covers
+            // every exit path (title-bar close, Ctrl+Q, tray Quit — all
+            // funnel into exitApplication, which disposes the composition).
+            // Fullscreen exit deliberately SKIPS the write: the AWT bounds
+            // at that point are the screen fill, not anything the user
+            // positioned, so the previous session's real geometry wins.
+            // (Crash mid-session loses the last position — accepted; a
+            // move/resize listener would fire continuously during drags.)
+            DisposableEffect(Unit) {
+                onDispose {
+                    if (windowState.placement != WindowPlacement.Fullscreen && !window.bounds.isEmpty) {
+                        windowStateStore.save(
+                            DesktopWindowGeometry.fromRectangle(
+                                rectangle = maximizedRestoreBounds ?: window.bounds,
+                                maximized = maximizedRestoreBounds != null,
+                            ),
+                        )
+                    }
+                }
+            }
+
             val toggleMaximize: () -> Unit = {
                 if (maximizedRestoreBounds != null) {
                     window.bounds = maximizedRestoreBounds
@@ -621,3 +688,21 @@ private fun java.awt.Window.workAreaOrNull(): java.awt.Rectangle? {
         gc.bounds.height - insets.top - insets.bottom,
     )
 }
+
+/**
+ * AWT-pixels-per-dp for converting saved window geometry back into the dp
+ * WindowState speaks. Compose Desktop derives its density from the toolkit's
+ * screen resolution (96 = 100%); reading the same value here makes restored
+ * pixel bounds round-trip exactly instead of drifting per display scale.
+ * Headless JVMs report nonsense — guard to identity.
+ */
+private fun desktopPxToDpFactor(): Float =
+    runCatching {
+        java.awt.Toolkit.getDefaultToolkit().screenResolution / 96f
+    }.getOrDefault(1f)
+        .takeIf { it > 0f && !it.isNaN() }
+        ?: 1f
+
+/** First-launch window size (no saved state) in AWT px — 1280x800dp at 100%. */
+private const val DEFAULT_WINDOW_WIDTH_PX = 1280
+private const val DEFAULT_WINDOW_HEIGHT_PX = 800

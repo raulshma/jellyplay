@@ -85,6 +85,7 @@ import com.raulshma.jellyplay.feature.home.navigation.homeSection
 import com.raulshma.jellyplay.feature.insights.navigation.insightsSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
 import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
+import com.raulshma.jellyplay.feature.music.musichome.MusicHomeScreen
 import com.raulshma.jellyplay.feature.music.navigation.musicSection
 import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
 import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
@@ -95,6 +96,7 @@ import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.feature.music.feedback.DesktopMusicMessageBus
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
+import com.raulshma.jellyplay.desktop.player.DesktopAudioQueueManager
 import com.raulshma.jellyplay.desktop.player.MpvSoftwareSurfaceSupport
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
@@ -289,7 +291,7 @@ private fun DesktopNavScaffold(
     homeRefreshRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     val navigation = rememberNavigationState(
-        startRoute = Route.Search,
+        startRoute = Route.Home,
         topLevelRoutes = DESKTOP_TOP_LEVEL_ROUTES,
         savedStateConfiguration = desktopNavSavedStateConfiguration(),
     )
@@ -343,6 +345,11 @@ private fun DesktopNavScaffold(
         homeMode = mode
         scope.launch { homeDiscoveryStore.setHomeMode(mode) }
     }
+
+    // Live desktop audio core — the Home music pane's Now Playing / Ambient
+    // cards read the current item + metadata from it (same source the tray
+    // and title bar observe; flows are read at click time, not collected).
+    val audioQueueManager: DesktopAudioQueueManager = koinInject()
 
     // Admin gate + logout — the Android shell's MainViewModel duties,
     // inlined for desktop (no desktop MainViewModel exists). isAdmin maps
@@ -470,17 +477,44 @@ private fun DesktopNavScaffold(
             // Home, live since the wave 8B desktop wiring: every HomeViewModel
             // ctor dep resolves (the four WorkManager/widget seams are no-op
             // desktop defs in desktopDataModule; the data layer is Koin-native).
-            // The music pane composes empty on desktop v1 — music browsing
-            // lives in the Music rail section; the Play On redirect stays
-            // null (Android shell cast surface). Home's process-lifecycle
-            // refresher seam is a jvm no-op, so sections refresh on their own
-            // flows (resumes, downloads, watch progress) rather than on a
-            // process start/stop signal.
+            // The music pane renders the shared MusicHomeScreen (MusicHomeVM
+            // from musicModule, same as the Music rail section); every pushed
+            // route below is registered — Artists/Albums/Tracks/Genres/
+            // Playlists/AlbumDetail by musicSection, MediaDetail by
+            // detailsSection, AudioPlayer/Ambient by audioPlayerSection. The
+            // Play On redirect stays null (Android shell cast surface). Home's
+            // process-lifecycle refresher seam is a jvm no-op, so sections
+            // refresh on their own flows (resumes, downloads, watch progress)
+            // rather than on a process start/stop signal.
             homeSection(
                 navigator = guardedNavigator,
                 homeMode = homeMode,
                 onModeChange = onHomeModeChange,
-                musicContent = {},
+                musicContent = {
+                    MusicHomeScreen(
+                        onItemClick = { itemId -> guardedNavigator.navigate(Route.MediaDetail(itemId)) },
+                        onAlbumClick = { albumId -> guardedNavigator.navigate(Route.AlbumDetail(albumId)) },
+                        onArtistsClick = { guardedNavigator.navigate(Route.Artists) },
+                        onAlbumsClick = { guardedNavigator.navigate(Route.Albums) },
+                        onTracksClick = { guardedNavigator.navigate(Route.Tracks) },
+                        onGenresClick = { guardedNavigator.navigate(Route.Genres) },
+                        onPlaylistsClick = { guardedNavigator.navigate(Route.Playlists) },
+                        onNowPlayingClick = {
+                            audioQueueManager.currentPlayingItemId.value?.let { itemId ->
+                                guardedNavigator.navigate(Route.AudioPlayer(itemId))
+                            }
+                        },
+                        onAmbientClick = {
+                            guardedNavigator.navigate(
+                                Route.Ambient(
+                                    imageUrl = audioQueueManager.albumArtUrl.value.ifEmpty { null },
+                                    title = audioQueueManager.title.value,
+                                    artist = audioQueueManager.artist.value,
+                                ),
+                            )
+                        },
+                    )
+                },
                 refreshRequests = homeRefreshRequests,
             )
             searchSection(guardedNavigator)
@@ -709,7 +743,7 @@ private fun DesktopNavScaffold(
     }
 }
 
-/** Rail + tab-switch destinations; the start tab stays Search (Home is one click away). */
+/** Rail + tab-switch destinations; Home is the start tab (same as the Android shell). */
 private val DESKTOP_TOP_LEVEL_ROUTES: Set<Route> = setOf(
     Route.Home,
     Route.Search,
