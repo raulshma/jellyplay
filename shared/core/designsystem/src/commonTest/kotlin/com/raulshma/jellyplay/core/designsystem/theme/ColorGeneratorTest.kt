@@ -15,9 +15,11 @@ import kotlin.test.Test
  * Verifies determinism, dark/light divergence, and basic contrast-ratio guarantees for
  * [ColorGenerator.generateColorScheme], [isLightColor], and [getSynthwaveColorScheme].
  *
- * Robolectric is used so `androidx.core.graphics.ColorUtils` (which backs HSL conversion)
- * has its native Android dependencies available on the JVM. Pinned to SDK 33 since the
- * designsystem module's `compileSdk = 37` is ahead of Robolectric's latest supported SDK.
+ * `calculateLuminance` values below are pinned against the pre-KMP implementation,
+ * which delegated to `androidx.core.graphics.ColorUtils.calculateLuminance` — that
+ * linearizes sRGB channels before the Rec. 709 weighted sum, so mid-luminance colors
+ * (e.g. 0xFF808080 → 0.2158) sit far below a gamma-space estimate (~0.5) and flip
+ * `bestContrast`.
  */
 class ColorGeneratorTest {
 
@@ -152,6 +154,36 @@ ratio >= 1.5,
 "onPrimary must have at least minimal contrast against primary (style=$style, dark=$dark, ratio=$ratio)",
 )
         }
+    }
+
+    @Test
+    fun `calculateLuminance matches androidx ColorUtils with sRGB linearization`() {
+        // Values produced by androidx.core.graphics.ColorUtils.calculateLuminance.
+        assertEquals(1.0, ColorGenerator.calculateLuminance(0xFFFFFF), 1e-6)
+        assertEquals(0.0, ColorGenerator.calculateLuminance(0x000000), 1e-6)
+        // Mid grey: gamma-space estimate is ~0.502 (would flip bestContrast to
+        // black text); the linearized value keeps white, as on release/v0.10.6.
+        assertEquals(0.215861, ColorGenerator.calculateLuminance(0x808080), 1e-4)
+        assertEquals(0.434154, ColorGenerator.calculateLuminance(0xB0B0B0), 1e-4)
+        // Aurora emerald accent: 0.4962 stays just under the 0.5 threshold, so
+        // onPrimary remains white; the gamma-space sum (0.615) flipped it black.
+        assertEquals(0.496185, ColorGenerator.calculateLuminance(0x34D399), 1e-4)
+        assertEquals(0.332536, ColorGenerator.calculateLuminance(0xFF7043), 1e-4)
+    }
+
+    @Test
+    fun `generateColorScheme roles are fully opaque`() {
+        // Guards the hslToColorArgb port: androidx's ColorUtils.HSLToColor
+        // returns Color.rgb(...) (alpha 0xFF). Without the alpha bit every
+        // generator-derived role renders transparent on Android.
+        val cs = ColorGenerator.generateColorScheme(
+            seedColor = Color(0xFFD32F2F),
+            style = ColorStyle.TONAL_SPOT,
+            darkTheme = true,
+            oledMode = false,
+        )
+        listOf(cs.primary, cs.onPrimary, cs.background, cs.surface, cs.primaryContainer)
+            .forEach { assertEquals(1.0f, it.alpha, "role must be opaque: $it") }
     }
 
     @Test

@@ -385,6 +385,11 @@ dependencies {
 
     implementation(libs.media3.session)
 
+    // Android keeps Coil line (3.5.0 BOM) so artwork→Palette
+    // swatches stay byte-identical to the shipped build; the shared modules'
+    // 3.4.0 pin exists only for the wasm klib toolchain and does not apply to
+    // Android class files.
+    implementation(platform(libs.coil.bom.android))
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     testImplementation(libs.junit)

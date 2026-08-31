@@ -48,6 +48,13 @@ androidDesugarJdkLibs = "2.1.5"
 # either side — the pin is only about the wasm target). Revisit on any
 # future Kotlin 2.4 toolchain move.
 coil = "3.4.0"
+# Coil for the ANDROID app only: release/v0.10.6 shipped 3.5.0, and the
+# artwork pipeline (rememberDominantColor / rememberArtworkColors → Palette)
+# is version-sensitive through decode defaults. The wasm-target pin above
+# does not apply to Android class files, so the app resolves 3.5.0 via this
+# BOM to keep its bitmap→swatch behavior byte-identical to the release build
+# while shared JVM/wasm targets stay on 3.4.0.
+coilAndroid = "3.5.0"
 # 0.41.0 (wave 21D): the last mikepenz line whose wasm klibs are built with
 # Kotlin 2.3.x — 0.42+ rebuilt them with Kotlin 2.4.0, and those klibs are
 # silently SKIPPED by the 2.3.21 klib loader (spike w-10C class C), which is
@@ -214,6 +221,7 @@ media3-ffmpeg-decoder = { group = "org.jellyfin.media3", name = "media3-ffmpeg-d
 android-desugar-jdk = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "androidDesugarJdkLibs" }
 
 # Coil
+coil-bom-android = { group = "io.coil-kt.coil3", name = "coil-bom", version.ref = "coilAndroid" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 # Ktor-backed network fetcher for wasmJs (apps/web; Phase W.4). NOTE: the

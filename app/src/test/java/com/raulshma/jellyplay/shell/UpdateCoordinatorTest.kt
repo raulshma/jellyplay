@@ -145,7 +145,7 @@ class UpdateCoordinatorTest {
 
         val state = coordinator.updateState.value
         assertTrue(state is UpdateState.Downloaded)
-        coVerify(exactly = 0) { appUpdateRepository.checkForUpdate(any()) }
+        coVerify(exactly = 0) { appUpdateRepository.checkForUpdate() }
     }
 
     @Test
@@ -162,7 +162,7 @@ class UpdateCoordinatorTest {
         coordinator.onSessionRestored()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { appUpdateRepository.checkForUpdate(any()) }
+        coVerify(exactly = 1) { appUpdateRepository.checkForUpdate() }
         assertEquals(UpdateState.Idle, coordinator.updateState.value)
     }
 

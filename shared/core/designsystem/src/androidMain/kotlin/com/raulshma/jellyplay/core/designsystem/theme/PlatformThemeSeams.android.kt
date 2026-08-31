@@ -24,7 +24,11 @@ import kotlinx.coroutines.withContext
 internal actual fun dynamicPlatformColorScheme(darkTheme: Boolean): ColorScheme? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
     val context = LocalContext.current
-    return remember(context) {
+    // darkTheme must key the remember: the pre-KMP code picked
+    // dynamicDark/LightColorScheme inline on every recomposition, so a dark
+    // mode toggle swapped schemes immediately. Keying only on context would
+    // freeze the first-composed scheme until Activity recreation.
+    return remember(context, darkTheme) {
         if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     }
 }

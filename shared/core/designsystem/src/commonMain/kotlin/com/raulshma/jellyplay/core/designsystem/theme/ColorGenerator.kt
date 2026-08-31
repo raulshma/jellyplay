@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.toArgb
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import kotlin.math.abs
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 object ColorGenerator {
@@ -322,8 +323,9 @@ object ColorGenerator {
         return Color(argb)
     }
 
-    // --- Pure-Kotlin equivalents of androidx.core.graphics.ColorUtils ---
-    // (same formulas; verified by ColorGeneratorTest)
+    // --- Pure-Kotlin replacements for androidx.core.graphics.ColorUtils ---
+    // (HSL math is algorithm-identical; calculateLuminance is pinned against
+    // ColorUtils values in ColorGeneratorTest)
 
     private fun colorToHSL(color: Int, outHsl: FloatArray) {
         val r = (color shr 16 and 0xFF) / 255f
@@ -366,16 +368,30 @@ object ColorGenerator {
             4 -> { r = x; b = c }
             else -> { r = c; b = x }
         }
-        return (((r + m) * 255f).roundToInt() shl 16) or
+        // androidx's HSLToColor returns Color.rgb(...) — fully opaque. The
+        // RGB channels alone leave the alpha byte at 0x00, making every
+        // generated scheme role (buttons, badges, hero surfaces) render
+        // fully transparent on accent-swatch themes.
+        return (0xFF shl 24) or
+                (((r + m) * 255f).roundToInt() shl 16) or
                 (((g + m) * 255f).roundToInt() shl 8) or
                 ((b + m) * 255f).roundToInt()
     }
 
-    @Suppress("SameParameterValue")
-    private fun calculateLuminance(color: Int): Double {
-        val r = (color shr 16 and 0xFF) / 255.0
-        val g = (color shr 8 and 0xFF) / 255.0
-        val b = (color and 0xFF) / 255.0
-        return 0.299 * r + 0.587 * g + 0.114 * b
+    /**
+     * Relative luminance matching androidx.core.graphics.ColorUtils.calculateLuminance:
+     * each sRGB channel is linearized (IEC 61966-2-1 transfer function) before
+     * the Rec. 709 weighted sum. Pinned by ColorGeneratorTest; a plain
+     * gamma-space 0.299/0.587/0.114 sum flips bestContrast for mid-luminance
+     * colors (e.g. 0xFF808080 or Aurora emerald).
+     */
+    internal fun calculateLuminance(color: Int): Double {
+        val r = linearizeSrgb((color shr 16 and 0xFF) / 255.0)
+        val g = linearizeSrgb((color shr 8 and 0xFF) / 255.0)
+        val b = linearizeSrgb((color and 0xFF) / 255.0)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
     }
+
+    private fun linearizeSrgb(component: Double): Double =
+        if (component < 0.03928) component / 12.92 else ((component + 0.055) / 1.055).pow(2.4)
 }

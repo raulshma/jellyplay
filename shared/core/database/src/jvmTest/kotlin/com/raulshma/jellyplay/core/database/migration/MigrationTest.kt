@@ -29,23 +29,30 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
+import kotlin.io.path.createTempDirectory
 
 class MigrationTest {
 
+    private lateinit var dbDir: File
     private lateinit var dbFile: File
     private var database: JellyPlayDatabase? = null
 
     @BeforeTest
     fun setup() {
-        dbFile = File(System.getProperty("java.io.tmpdir"), "jellyplay-db-jvmTest/migration-test.db")
-        dbFile.parentFile?.mkdirs()
-        if (dbFile.exists()) dbFile.delete()
+        // A fresh directory per test, never a shared fixed path: the bundled
+        // driver journals in WAL mode, and deleting only the main .db file
+        // leaves the -wal/-shm sidecars behind, so the next test's fresh main
+        // file replays the previous test's WAL — resurrecting latest-schema
+        // tables into a fixture that expects an old shape ("duplicate column
+        // name" from createDownloadsTableV5, or stale seeded rows).
+        dbDir = createTempDirectory("jellyplay-db-migration-test").toFile()
+        dbFile = File(dbDir, "migration-test.db")
     }
 
     @AfterTest
     fun teardown() {
         database?.close()
-        if (dbFile.exists()) dbFile.delete()
+        dbDir.deleteRecursively()
     }
 
     @Test
@@ -945,22 +952,22 @@ class MigrationTest {
                 assertEquals("item-1", c.getText(0))
                 assertEquals("poster-1", c.getText(1))
                 assertEquals("backdrop-1", c.getText(2))
-                assertNull(c.getText(3))
+                assertTrue(c.isNull(3))
                 assertTrue(c.step())
                 assertEquals("item-2", c.getText(0))
-                assertNull(c.getText(1))
-                assertNull(c.getText(2))
-                assertNull(c.getText(3))
+                assertTrue(c.isNull(1))
+                assertTrue(c.isNull(2))
+                assertTrue(c.isNull(3))
                 assertTrue(c.step())
                 assertEquals("item-3", c.getText(0))
-                assertNull(c.getText(1))
-                assertNull(c.getText(2))
-                assertNull(c.getText(3))
+                assertTrue(c.isNull(1))
+                assertTrue(c.isNull(2))
+                assertTrue(c.isNull(3))
                 assertTrue(c.step())
                 assertEquals("item-4", c.getText(0))
-                assertNull(c.getText(1))
-                assertNull(c.getText(2))
-                assertNull(c.getText(3))
+                assertTrue(c.isNull(1))
+                assertTrue(c.isNull(2))
+                assertTrue(c.isNull(3))
                 assertFalse(c.step())
             }
             // The retired format's fallout is cleared at upgrade time instead of
@@ -1005,7 +1012,7 @@ class MigrationTest {
             db.prepare("SELECT id, chaptersJson FROM offline_media").use { c ->
                 assertTrue(c.step())
                 assertEquals("item-1", c.getText(0))
-                assertNull(c.getText(1))
+                assertTrue(c.isNull(1))
             }
             db.close()
         }
