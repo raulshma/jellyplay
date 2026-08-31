@@ -416,6 +416,13 @@ fun main() {
             startupPerf.markFirstFrame(System.nanoTime())
         }
 
+        // File→Refresh (Ctrl+R) signal into DesktopAppRoot's home entry.
+        // extraBufferCapacity=1 keeps tryEmit non-suspending and coalesces
+        // repeat invocations while a refresh is already running.
+        val homeRefreshRequests = remember {
+            kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        }
+
         Window(
             state = windowState,
             title = "JellyPlay",
@@ -441,7 +448,9 @@ fun main() {
             MenuBar {
                 Menu("File") {
                     Item("Refresh", shortcut = KeyShortcut(Key.R, ctrl = true)) {
-                        // Wired to home refresh when the V1c slice lands.
+                        // Dropped, not queued, when the home entry is not
+                        // composed (see DesktopAppRoot's homeRefreshRequests).
+                        homeRefreshRequests.tryEmit(Unit)
                     }
                     Separator()
                     Item("Exit", shortcut = KeyShortcut(Key.Q, ctrl = true)) {
@@ -471,6 +480,7 @@ fun main() {
                     // Wave 13B session harness only (screenshots + key
                     // injection); unused on every normal boot path.
                     windowRef = windowRef,
+                    homeRefreshRequests = homeRefreshRequests,
                 )
             }
         }

@@ -148,7 +148,7 @@ include(":shared:feature:player-audio")
 // Desktop shell (plan §Phase V1b)
 include(":apps:desktop")
 
-// Web shell (plan §Phase W): wasmJs/browser skeleton over the shared
-// datastore DI stack; API transport (Ktor) and image engine (Coil) land
-// with the W.1/W.4 slices.
+// Web shell (plan §Phase W): wasmJs/browser app over the shared datastore
+// DI stack, with the W.1 Ktor API transport and W.4 Coil3 image engine
+// landed (three routes live: Requests, Upcoming Calendar, Seerr Detail).
 include(":apps:web")

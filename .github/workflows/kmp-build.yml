@@ -8,7 +8,11 @@ name: KMP Build
 
 on:
   push:
-    branches: ['main', 'master']
+    # kmp-alpha included: it receives direct dev/v* merges that never open a
+    # PR, which let three test regressions (MigrationTest WAL replay,
+    # getText null-idiom, UpdateCoordinatorTest signature drift) land
+    # unverified during the v0.10.6 merges.
+    branches: ['main', 'master', 'kmp-alpha']
   pull_request:
   workflow_dispatch:
 

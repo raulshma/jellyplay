@@ -155,6 +155,7 @@ internal fun HomeScreen(
     homeMode: HomeMode = HomeMode.VIDEO,
     musicContent: @Composable () -> Unit = {},
     surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
+    refreshRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
     viewModel: HomeViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -165,6 +166,7 @@ internal fun HomeScreen(
         callbacks = callbacks,
         musicContent = musicContent,
         surpriseRequests = surpriseRequests,
+        refreshRequests = refreshRequests,
     )
 }
 
@@ -175,6 +177,7 @@ private fun MainHomeContent(
     callbacks: HomeCallbacks,
     musicContent: @Composable () -> Unit,
     surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
+    refreshRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     val density = LocalDensity.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -310,6 +313,13 @@ private fun MainHomeContent(
     // emits a one-shot signal that Home forwards to it.
     androidx.compose.runtime.LaunchedEffect(heroController, surpriseRequests) {
         surpriseRequests.collect { heroController.toggleSurprise() }
+    }
+
+    // Shell-driven manual refresh (desktop File→Refresh): same event the
+    // screen's own retry surfaces send, so scroll reset + Manual trigger
+    // semantics stay owned by the VM.
+    androidx.compose.runtime.LaunchedEffect(viewModel, refreshRequests) {
+        refreshRequests.collect { viewModel.onEvent(HomeUiEvent.Refresh) }
     }
 
     val headerHeight = rememberHeroHeight()

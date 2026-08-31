@@ -193,6 +193,11 @@ internal fun DesktopAppRoot(
     onDismissAbout: () -> Unit,
     previousCrashLogPath: String? = null,
     windowRef: AtomicReference<ComposeWindow?>? = null,
+    // File→Refresh signal (Main.kt's MenuBar owns the item; Ctrl+R). Emissions
+    // ride the shared refreshRequests seam into HomeScreen's Refresh event —
+    // no subscribers while the home entry is not composed, so a refresh fired
+    // from another tab is simply dropped rather than queued.
+    homeRefreshRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     val authRepository: AuthRepository = koinInject()
     val isAuthenticated by authRepository.isAuthenticated.collectAsState(initial = false)
@@ -235,7 +240,7 @@ internal fun DesktopAppRoot(
         // DesktopSignedOutAuthHost) — the legacy DesktopSignInPane pane is
         // retired with its v1 cut-list.
         !isAuthenticated -> DesktopSignedOutAuthHost()
-        else -> DesktopNavScaffold()
+        else -> DesktopNavScaffold(homeRefreshRequests = homeRefreshRequests)
     }
 
     if (showAbout) {
@@ -276,7 +281,9 @@ private fun SessionRestoreSplash() {
  * tab pattern), Esc / Alt+Left mapped to [Navigator.goBack].
  */
 @Composable
-private fun DesktopNavScaffold() {
+private fun DesktopNavScaffold(
+    homeRefreshRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
+) {
     val navigation = rememberNavigationState(
         startRoute = Route.Search,
         topLevelRoutes = DESKTOP_TOP_LEVEL_ROUTES,
@@ -470,6 +477,7 @@ private fun DesktopNavScaffold() {
                 homeMode = homeMode,
                 onModeChange = onHomeModeChange,
                 musicContent = {},
+                refreshRequests = homeRefreshRequests,
             )
             searchSection(guardedNavigator)
             librarySection(guardedNavigator)
