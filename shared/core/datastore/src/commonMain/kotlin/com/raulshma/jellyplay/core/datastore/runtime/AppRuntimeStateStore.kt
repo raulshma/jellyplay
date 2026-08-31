@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.model.DlnaDeviceRef
 import com.raulshma.jellyplay.core.model.legacy.UserPreferences
@@ -44,6 +45,9 @@ class AppRuntimeStateStore constructor(
     private val scope = externalScope
     private val sharedPrefs: Flow<Preferences> = dataStore.data
     private val json get() = PreferenceCodec.json
+
+    private var cachedFavoriteChannels: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
+    private var cachedRecentDlnaDevices: ParsedCache<List<DlnaDeviceRef>> = ParsedCache(null, emptyList())
 
     internal object Keys {
         val FAVORITE_CHANNELS = stringPreferencesKey("favorite_channels")
@@ -189,22 +193,23 @@ class AppRuntimeStateStore constructor(
     }
 
     private fun readFavoriteChannels(prefs: Preferences): Set<String> {
-        val raw = prefs[Keys.FAVORITE_CHANNELS] ?: return emptySet()
-        return try {
-            json.decodeFromString<Set<String>>(raw)
-        } catch (_: Exception) {
-            emptySet()
-        }
+        val raw = prefs[Keys.FAVORITE_CHANNELS]
+        if (raw == cachedFavoriteChannels.raw) return cachedFavoriteChannels.value
+        val value = raw?.let {
+            try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { null }
+        } ?: emptySet()
+        cachedFavoriteChannels = ParsedCache(raw, value)
+        return value
     }
 
     private fun readRecentDlnaDevices(prefs: Preferences): List<DlnaDeviceRef> {
-        return prefs[Keys.RECENT_DLNA_DEVICES]?.let {
-            try {
-                json.decodeFromString<List<DlnaDeviceRef>>(it)
-            } catch (_: Exception) {
-                emptyList()
-            }
+        val raw = prefs[Keys.RECENT_DLNA_DEVICES]
+        if (raw == cachedRecentDlnaDevices.raw) return cachedRecentDlnaDevices.value
+        val value = raw?.let {
+            try { json.decodeFromString<List<DlnaDeviceRef>>(it) } catch (_: Exception) { null }
         } ?: emptyList()
+        cachedRecentDlnaDevices = ParsedCache(raw, value)
+        return value
     }
 }
 

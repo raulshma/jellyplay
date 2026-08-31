@@ -157,7 +157,7 @@ fun SeerrSettingsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     var activeDialog by remember { mutableStateOf<PickerState<*>?>(null) }
     var animateEntrance by remember { mutableStateOf(false) }
@@ -192,7 +192,7 @@ fun SeerrSettingsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.settings_seerr_settings),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) {
         LazyColumn(
             state = scrollState,

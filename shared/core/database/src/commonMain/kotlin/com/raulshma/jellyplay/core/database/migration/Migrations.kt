@@ -1020,8 +1020,24 @@ val MIGRATION_50_51 = object : Migration(50, 51) {
     }
 }
 
+// Two index changes, both schema-only (query results identical):
+//  - Drop the dead `offline_media(name)` index. Its only consumer,
+//    OfflineMediaDao.search, is a '%…%' contains-scan over the
+//    offline_media_with_playback view with a CASE-led ORDER BY — no planner
+//    path can use a BINARY-collation B-tree there, so the index was pure
+//    write amplification on the app's highest-churn table.
+//  - Add a covering composite on playback_outbox(itemId, deadLetter, createdAt)
+//    for PlaybackOutboxDao.getForItemByType, which runs ~every 10 s during
+//    playback and filters + sorts by createdAt using only the itemId index.
+val MIGRATION_51_52 = object : Migration(51, 52) {
+    override fun migrate(db: SQLiteConnection) {
+        db.execSQL("DROP INDEX IF EXISTS index_offline_media_name")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_playback_outbox_itemId_deadLetter_createdAt ON playback_outbox(itemId, deadLetter, createdAt)")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v51 migration chain, with the
+ * The complete, correctly-ordered v1→v52 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -1080,4 +1096,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_48_49,
         MIGRATION_49_50,
         MIGRATION_50_51,
+        MIGRATION_51_52,
     )

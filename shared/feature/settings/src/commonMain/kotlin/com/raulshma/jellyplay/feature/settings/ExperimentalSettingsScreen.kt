@@ -35,7 +35,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -59,7 +59,7 @@ fun ExperimentalSettingsScreen(
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
 
     val scrollState = androidx.compose.foundation.lazy.rememberLazyListState()
     val features = ExperimentalFeatures.all
@@ -83,7 +83,7 @@ fun ExperimentalSettingsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.settings_experimental_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) { innerPadding ->
         LazyColumn(
             state = scrollState,

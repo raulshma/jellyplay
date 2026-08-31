@@ -201,7 +201,7 @@ internal fun BaseItemDto.toLiveTvChannel() = LiveTvChannel(
     primaryBlurHash = imageBlurHashes?.get(ImageType.PRIMARY)?.values?.firstOrNull(),
 )
 
-internal fun BaseItemDto.toLiveTvProgram() = LiveTvProgram(
+internal fun BaseItemDto.toLiveTvProgram(now: DateTime = DateTime.now()) = LiveTvProgram(
     id = id.toString(),
     name = name ?: "",
     overview = overview,
@@ -220,7 +220,7 @@ internal fun BaseItemDto.toLiveTvProgram() = LiveTvProgram(
     isPremiere = isPremiere ?: false,
     isSeries = isSeries ?: false,
     isRepeat = isRepeat ?: false,
-    hasAired = endDate?.isBefore(org.jellyfin.sdk.model.DateTime.now()) ?: false,
+    hasAired = endDate?.isBefore(now) ?: false,
     indexNumber = indexNumber,
     parentIndexNumber = parentIndexNumber,
     imageTag = imageTags?.get(ImageType.PRIMARY)?.toString(),

@@ -275,10 +275,11 @@ private fun MainHomeContent(
     // rebuilt — resetting its rotation state — while the CONTENT it reads
     // (via currentOfflineContent) is always fresh.
     val currentOfflineContent by rememberUpdatedState(offlineContent)
-    val offlineBackdropResolver = remember(
+    val offlineResolverKey = remember(offlineContent) {
         offlineContent.library.map { Triple(it.id, it.backdropPath, it.posterPath) } +
             offlineContent.episodes.map { Triple(it.id, it.backdropPath, it.posterPath) }
-    ) {
+    }
+    val offlineBackdropResolver = remember(offlineResolverKey) {
         return@remember { id: String ->
             currentOfflineContent.itemsById[id]?.let { it.backdropPath ?: it.posterPath } ?: ""
         }
@@ -429,13 +430,12 @@ private fun MainHomeContent(
     // its quick actions. Rows report via HomeContentCallbacks.
     var tvFocusedItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.MediaItem?>(null) }
 
-    val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
     // Only photo-folder items are relevant to the prefetcher (it filters to
     // PHOTO_FOLDER internally), so narrow the list to those items. This keeps
     // both the per-emission allocation and the effect-key proportional to the
     // number of photo folders rather than every item across all sections.
     val photoFolderItems = remember(state.sections) {
-        state.sections.flatMap { it.items }.filter { it.mediaType == MediaType.PHOTO_FOLDER }
+        state.sections.asSequence().flatMap { it.items }.filter { it.mediaType == MediaType.PHOTO_FOLDER }.toList()
     }
     // Structural fingerprint so the effect only re-runs when the photo-folder
     // set actually changes, not on every partial-load emission that produces a
@@ -462,7 +462,8 @@ private fun MainHomeContent(
     // expanded (the field is open even before/after typing).
     val searchSession = remember(viewModel) { HomeSearchSession(viewModel::onEvent) }
     val closeSearch = remember(searchSession) { { searchSession.close { focusManager.clearFocus() } } }
-    val isSearchFocused by remember { derivedStateOf { state.isSearchActive || searchSession.isExpanded } }
+    val currentState by rememberUpdatedState(state)
+    val isSearchFocused by remember { derivedStateOf { currentState.isSearchActive || searchSession.isExpanded } }
 
     // Inline section-config sheet target — set by long-pressing a configurable
     // section title. Hoisted here (not in the LazyColumn item) so opening the
@@ -607,7 +608,6 @@ private fun MainHomeContent(
                                 discoverRows = discoverRows,
                                 allDiscoverItems = allDiscoverItems,
                                 recentlyGrabbed = state.recentlyGrabbed,
-                                photoFolderChildUrls = photoFolderChildUrls,
                                 statusBanner = implicitOfflineBanner,
                             ),
                             callbacks = HomeContentCallbacks(
@@ -625,6 +625,7 @@ private fun MainHomeContent(
                                 getBackdropUrl = onlineBackdropResolver,
                                 heroBackdropUrlBuilder = heroBackdropUrlBuilder,
                                 fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                                photoFolderChildUrlsFor = remember(viewModel) { { id: String -> viewModel.photoFolderChildUrlsFor(id) } },
                                 onSeerrItemClick = callbacks.onSeerrItemClick,
                                 onSeerrRequest = remember(viewModel) { { item: SeerrSearchItem -> viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(item)) } },
                                 seerrPrefetch = seerrPrefetch,

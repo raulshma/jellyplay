@@ -45,7 +45,7 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.components.rememberStableCallback
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -82,7 +82,7 @@ fun ChannelsScreen(
         networkStatus = networkStatus,
     )
 
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -102,7 +102,7 @@ fun ChannelsScreen(
 
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.livetv_tab_channels),
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         topBarStyle = com.raulshma.jellyplay.core.ui.components.TopBarStyle.None,
         actions = {
             com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(

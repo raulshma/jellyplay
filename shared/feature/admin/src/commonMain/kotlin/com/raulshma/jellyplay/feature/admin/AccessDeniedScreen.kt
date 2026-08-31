@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.LockAccess
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
@@ -44,7 +44,7 @@ import com.raulshma.jellyplay.feature.admin.generated.resources.admin_access_den
 fun AccessDeniedScreen(
     onBack: () -> Unit,
 ) {
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     // Static text only — on TV the box itself becomes the focus target so focus never
     // falls through to the navigation drawer rail.
     val isTv = LocalTvMode.current
@@ -55,7 +55,7 @@ fun AccessDeniedScreen(
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.admin_access_denied_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) {
         Box(
             modifier = Modifier

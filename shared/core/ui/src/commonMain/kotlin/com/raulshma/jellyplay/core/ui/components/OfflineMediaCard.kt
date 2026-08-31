@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -52,8 +53,12 @@ fun OfflineMediaCard(
      */
     showStatusBadge: Boolean = true,
 ) {
-    val mediaItem = item.toMediaItem()
+    // Memoised so recompositions of this card don't re-run the mapping or
+    // re-allocate the fallback list (unstable List params would otherwise
+    // defeat PosterCard skipping).
+    val mediaItem = remember(item) { item.toMediaItem() }
     val posterUrl = item.posterPath.orEmpty()
+    val fallbackUrls = remember(item.backdropPath) { listOfNotNull(item.backdropPath) }
     // Gate the progress bar on the normalized watch state so it never shows
     // alongside the "Watched" chip/badge (toMediaItem treats >=95% as played).
     val hasProgress = mediaItem.hasWatchProgress
@@ -66,7 +71,7 @@ fun OfflineMediaCard(
         PosterCard(
             item = mediaItem,
             imageUrl = posterUrl,
-            fallbackUrls = listOfNotNull(item.backdropPath),
+            fallbackUrls = fallbackUrls,
             blurHash = item.blurHashPrimary,
             onClick = onClick,
             onPlayClick = onPlayClick,

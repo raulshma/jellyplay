@@ -58,24 +58,25 @@ internal fun mergeAccumulatedCues(
     }
     if (existing.isEmpty()) return batched.distinctBy { it.text }
     val newStart = batched.first().startTimeUs
-    // Close the open-ended span of any existing cue that is still "active"
-    // (end == MAX) at the point the new cue begins.
-    var changed = false
-    val closed = existing.map { cue ->
-        if (cue.endTimeUs == Long.MAX_VALUE && cue.startTimeUs < newStart) {
-            changed = true
-            cue.copy(endTimeUs = newStart)
-        } else {
-            cue
-        }
-    }
     // Drop an incoming line identical to the last recorded one (ExoPlayer
-    // re-emits the active cue on each rendering refresh).
-    val lastText = closed.lastOrNull()?.text
-    val fresh = if (lastText != null && batched.all { it.text.toString() == lastText.toString() }) {
+    // re-emits the active cue on each rendering refresh). Span-closing below
+    // only rewrites endTimeUs, so the last text is read straight from
+    // [existing]; the CharSequence comparison goes through toString() once.
+    val lastText = existing.last().text.toString()
+    val fresh = if (batched.all { it.text.toString() == lastText }) {
         emptyList()
     } else {
         batched.distinctBy { it.text }
+    }
+    // Close the open-ended span of any existing cue that is still "active"
+    // (end == MAX) at the point the new cue begins — pre-scanned allocation-
+    // free so the no-change case never materializes a copy of [existing].
+    var changed = false
+    for (cue in existing) {
+        if (cue.endTimeUs == Long.MAX_VALUE && cue.startTimeUs < newStart) {
+            changed = true
+            break
+        }
     }
     // Common no-change case (re-emission of the active cue): nothing was closed
     // and nothing is fresh, so the sorted/capped result below would be
@@ -83,6 +84,13 @@ internal fun mergeAccumulatedCues(
     // StateFlow assignment short-circuits on identity instead of paying the
     // O(n) equals per onCues tick.
     if (fresh.isEmpty() && !changed) return existing
+    val closed = existing.map { cue ->
+        if (cue.endTimeUs == Long.MAX_VALUE && cue.startTimeUs < newStart) {
+            cue.copy(endTimeUs = newStart)
+        } else {
+            cue
+        }
+    }
     return (closed + fresh)
         .sortedBy { it.startTimeUs }
         .takeLast(MAX_ACCUMULATED_CUES)

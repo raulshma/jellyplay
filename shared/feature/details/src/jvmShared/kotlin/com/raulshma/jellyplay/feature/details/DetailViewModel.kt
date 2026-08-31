@@ -1188,37 +1188,46 @@ class DetailViewModel internal constructor(
             val connected = uiState.value.isSeerrConnected
 
             if (generation != seerrDataGeneration) return@launch
-            // 1. Fetch related videos (trailers)
-            if (connected) {
-                val videosResult = if (mediaType == MediaType.MOVIE) {
-                    remoteDiscovery.seerrRepository.getMovieDetails(tmdbId).map { it.relatedVideos }
-                } else {
-                    remoteDiscovery.seerrRepository.getTvDetails(tmdbId).map { it.relatedVideos }
+            coroutineScope {
+                // 1. Fetch related videos (trailers)
+                val videosDeferred = async {
+                    if (connected) {
+                        if (mediaType == MediaType.MOVIE) {
+                            remoteDiscovery.seerrRepository.getMovieDetails(tmdbId).map { it.relatedVideos }
+                        } else {
+                            remoteDiscovery.seerrRepository.getTvDetails(tmdbId).map { it.relatedVideos }
+                        }
+                    } else {
+                        remoteDiscovery.seerrRepository.getTmdbVideos(tmdbId, mediaType)
+                    }
                 }
-                if (generation == seerrDataGeneration) {
-                    val videos = videosResult.getOrElse { emptyList() }
-                    _uiState.update { it.copy(relatedVideos = videos) }
-                }
-            } else {
-                val videosResult = remoteDiscovery.seerrRepository.getTmdbVideos(tmdbId, mediaType)
-                if (generation == seerrDataGeneration) {
-                    val videos = videosResult.getOrElse { emptyList() }
-                    _uiState.update { it.copy(relatedVideos = videos) }
-                }
-            }
 
-            // 2. Fetch recommendations and similar if enabled
-            val enabled = uiState.value.isSeerrRecommendationsEnabled
-            if (connected && enabled && generation == seerrDataGeneration) {
-                coroutineScope {
-                    val recsDeferred = async {
+                // 2. Fetch recommendations and similar if enabled
+                val enabled = uiState.value.isSeerrRecommendationsEnabled
+                val loadRecs = connected && enabled && generation == seerrDataGeneration
+                val recsDeferred = if (loadRecs) {
+                    async {
                         remoteDiscovery.seerrRepository.getRecommendations(tmdbId, mediaType)
                             .getOrElse { com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse() }
                     }
-                    val similarDeferred = async {
+                } else {
+                    null
+                }
+                val similarDeferred = if (loadRecs) {
+                    async {
                         remoteDiscovery.seerrRepository.getSimilar(tmdbId, mediaType)
                             .getOrElse { com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse() }
                     }
+                } else {
+                    null
+                }
+
+                val videosResult = videosDeferred.await()
+                if (generation == seerrDataGeneration) {
+                    val videos = videosResult.getOrElse { emptyList() }
+                    _uiState.update { it.copy(relatedVideos = videos) }
+                }
+                if (recsDeferred != null && similarDeferred != null) {
                     val recs = recsDeferred.await()
                     val similar = similarDeferred.await()
                     if (generation == seerrDataGeneration) {

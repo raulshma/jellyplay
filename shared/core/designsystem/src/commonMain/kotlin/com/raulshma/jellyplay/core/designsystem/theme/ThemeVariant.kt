@@ -2,8 +2,10 @@ package com.raulshma.jellyplay.core.designsystem.theme
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
@@ -105,9 +107,11 @@ object ThemeVariantColors {
  * should gate this on `ThemeVariant.SYNTHWAVE` and fall back to the M3
  * background colour otherwise.
  */
-fun synthwaveBackgroundBrush(): Brush = Brush.verticalGradient(
+private val SynthwaveBackgroundBrush = Brush.verticalGradient(
     colors = listOf(ThemeVariantColors.SYNTHWAVE_BACKGROUND, ThemeVariantColors.SYNTHWAVE_BACKGROUND_END),
 )
+
+fun synthwaveBackgroundBrush(): Brush = SynthwaveBackgroundBrush
 
 /**
  * Aurora's soft accent-glow border — one definition shared by
@@ -124,9 +128,11 @@ fun auroraCardBorder(primary: Color): BorderStroke =
  * [ThemeVariant.backgroundBrush] so callers don't special-case variants by
  * name.
  */
-fun auroraBackgroundBrush(): Brush = Brush.verticalGradient(
+private val AuroraBackgroundBrush = Brush.verticalGradient(
     colors = listOf(ThemeVariantColors.AURORA_BACKGROUND, ThemeVariantColors.AURORA_BACKGROUND_END),
 )
+
+fun auroraBackgroundBrush(): Brush = AuroraBackgroundBrush
 
 /**
  * The full-bleed background brush for gradient variants (Synthwave, Aurora),
@@ -162,7 +168,6 @@ object HeatmapPalette {
     )
 }
 
-@Composable
 fun ThemeVariant.cardBorder(
     primary: Color = Color.Unspecified,
     secondary: Color = Color.Unspecified,
@@ -199,6 +204,21 @@ fun ThemeVariant.cardBorder(
         width = 1.dp,
         color = outline.copy(alpha = 0.3f)
     )
+}
+
+/**
+ * [ThemeVariant.cardBorder] resolved against the current scheme colors and
+ * memoized — the standard way a composable obtains the variant border without
+ * rebuilding the [BorderStroke] on every recomposition.
+ */
+@Composable
+fun rememberThemeCardBorder(themeVariant: ThemeVariant): BorderStroke? {
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val outline = MaterialTheme.colorScheme.outline
+    return remember(themeVariant, primary, secondary, outline) {
+        themeVariant.cardBorder(primary, secondary, outline)
+    }
 }
 
 @Composable

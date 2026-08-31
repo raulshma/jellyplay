@@ -37,6 +37,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,7 +67,7 @@ import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -119,13 +120,13 @@ fun EpgScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val bottomPad = adaptiveInfo.bottomPadding(isTv)
 
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     val focusRequester = remember { FocusRequester() }
 
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.livetv_epg_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         topBarStyle = com.raulshma.jellyplay.core.ui.components.TopBarStyle.None,
         actions = {
             HeaderStatusIndicator(
@@ -422,12 +423,15 @@ private fun ChannelProgramsRow(
     // The whole row recomposes on a 30s tick, but [ProgramCell] only re-reads
     // this State via a derived check, so only the one cell whose live status
     // actually flips is invalidated — not the entire program strip layout.
+    // `now` is held in a State so the derived value re-evaluates on each tick
+    // instead of capturing the parameter from the first composition.
+    val currentNow by rememberUpdatedState(now)
     val liveProgramId by remember(rowLayout, windowStart) {
         derivedStateOf {
             val live = rowLayout.programLayouts.firstOrNull { layout ->
                 val s = layout.program.startInstant()
                 val e = layout.program.endInstant() ?: s
-                s != null && now >= s && now < (e ?: s)
+                s != null && currentNow >= s && currentNow < (e ?: s)
             }
             live?.program?.id
         }

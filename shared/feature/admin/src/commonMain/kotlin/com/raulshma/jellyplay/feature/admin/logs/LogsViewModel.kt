@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.trimToSize
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 
 data class LogLine(
@@ -61,8 +62,10 @@ class LogsViewModel(
         launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
-                val logFilesResult = adminRepository.getLogFiles()
-                val activityResult = adminRepository.getActivityLogEntries(limit = 50)
+                val logFilesDeferred = async { adminRepository.getLogFiles() }
+                val activityDeferred = async { adminRepository.getActivityLogEntries(limit = 50) }
+                val logFilesResult = logFilesDeferred.await()
+                val activityResult = activityDeferred.await()
                 val entries = activityResult.getOrNull() ?: emptyList()
                 activityEntriesBuffer.clear()
                 activityEntriesBuffer.addAll(entries)

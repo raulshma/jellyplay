@@ -124,7 +124,10 @@ internal fun rememberOfflineHomeSectionTitles(): OfflineHomeSectionTitles =
  * The CW/NextUp prefs the offline home rows honor, mirrored from the same
  * prefs snapshot that builds the online [com.raulshma.jellyplay.core.model.HomeSectionQuery]
  * (see [HomeViewModel]'s prefs collector) so the offline home never contradicts
- * the user's online home layout. Public because [HomeUiState] exposes it.
+ * the user's online home layout. [sectionOrder] additionally carries the
+ * user's global section ordering: the offline CW / Next Up rows sort by it
+ * (their types exist online), while the offline-only rows keep their fixed
+ * tail order. Public because [HomeUiState] exposes it.
  */
 @Immutable
 data class OfflineHomeSectionPrefs(
@@ -133,6 +136,7 @@ data class OfflineHomeSectionPrefs(
     val hiddenCwItemIds: Set<String> = emptySet(),
     val nextUpExcludedSeriesIds: Set<String> = emptySet(),
     val mergeCwAndNextUp: Boolean = false,
+    val sectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
 )
 
 /** Number of items shown in the "Recently Downloaded" row. */
@@ -166,6 +170,10 @@ private const val NEXT_UP_LIMIT = 20
  *    the online [com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase].
  *  - Recently Downloaded (newest [RECENT_LIMIT] by download date), then
  *    Movies / Series / Music.
+ *
+ * Continue Watching / Next Up sort by the user's global section ordering
+ * ([OfflineHomeSectionPrefs.sectionOrder]); the remaining rows keep the fixed
+ * order above — see [orderOfflineSections].
  *
  * Items are mapped to [MediaItem] for section identity (keys, focus, dedupe);
  * the offline originals are re-resolved by id at render time from the same
@@ -239,7 +247,7 @@ internal fun buildOfflineHomeSections(
     }
     val showNextUpRow = prefs.nextUpEnabled && !prefs.mergeCwAndNextUp && nextUp.isNotEmpty()
 
-    return buildList {
+    val sections = buildList {
         if (mergedContinueWatching.isNotEmpty()) {
             add(
                 HomeSection(
@@ -301,6 +309,26 @@ internal fun buildOfflineHomeSections(
             )
         }
     }
+    return orderOfflineSections(sections, prefs.sectionOrder)
+}
+
+/**
+ * Orders the offline rows by the user's global section ordering where the
+ * types overlap (Continue Watching, Next Up — the only offline rows whose
+ * online counterparts are configurable). Offline-only rows (Recently
+ * Downloaded, Movies, Series, Music) have no online counterpart, so they sort
+ * AFTER the ordered pair in their fixed build order — the default order
+ * ([HomeSectionType.CONFIGURABLE], CW before Next Up) reproduces the
+ * historical fixed layout exactly. Stable sort: rows absent from the order
+ * (defensive — the store normalizes the list to all configurable types) also
+ * keep their build order.
+ */
+internal fun orderOfflineSections(
+    sections: List<HomeSection>,
+    sectionOrder: List<HomeSectionType>,
+): List<HomeSection> = sections.sortedBy { section ->
+    val index = sectionOrder.indexOf(section.type)
+    if (index >= 0) index else sectionOrder.size
 }
 
 /**

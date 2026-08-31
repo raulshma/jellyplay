@@ -81,7 +81,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -102,7 +102,7 @@ fun ServerListScreen(
     val serverHealth by viewModel.serverHealth.collectAsStateWithLifecycle()
 
     val isSynthwave = LocalIsSynthwave.current
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
 
     val navOffsetPx = LocalFloatingNavOffset.current
 
@@ -112,7 +112,7 @@ fun ServerListScreen(
     }
 
     Scaffold(
-        containerColor = backgroundColor,
+        containerColor = backgroundColorState.value,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(Res.string.auth_app_name)) },

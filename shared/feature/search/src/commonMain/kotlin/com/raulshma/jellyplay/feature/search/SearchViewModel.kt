@@ -98,6 +98,12 @@ class SearchViewModel(
 
     private val queryFlow = stateFlow("")
 
+    // Shared by the paged search and the side-searches so both react to the
+    // same debounced, de-duplicated query emissions.
+    private val debouncedQuery = queryFlow.flow
+        .debounce(mediaSearchEngine.debounceMs)
+        .distinctUntilChanged()
+
     private val _suggestions = stateFlow<List<MediaItem>>(emptyList())
     val suggestions: StateFlow<List<MediaItem>> = _suggestions.flow
 
@@ -119,20 +125,13 @@ class SearchViewModel(
     private var offlineSearchJob: Job? = null
 
     val pagedResults: Flow<PagingData<MediaItem>> = combine(
-        queryFlow.flow.debounce(mediaSearchEngine.debounceMs).distinctUntilChanged(),
+        debouncedQuery,
         _filters.flow,
     ) { q, f -> q to f }
         .flatMapLatest { (currentQuery, filters) ->
-            seerrSearchJob?.cancel()
-            offlineSearchJob?.cancel()
-            _seerrResults.set(emptyList())
-            _seerrSearchError.set(false)
             if (currentQuery.isBlank()) {
-                _offlineResults.set(emptyList())
                 flowOf(PagingData.empty())
             } else {
-                seerrSearchJob = launch { searchSeerr(currentQuery) }
-                offlineSearchJob = launch { searchOffline(currentQuery) }
                 mediaRepository.searchPaged(
                     query = currentQuery,
                     filters = filters,
@@ -146,6 +145,7 @@ class SearchViewModel(
         loadTags()
         loadSearchHistory()
         loadSuggestions()
+        loadSideSearches()
         loadPersistedFilters()
     }
 
@@ -204,6 +204,29 @@ class SearchViewModel(
         launch {
             val result = mediaRepository.getSearchSuggestions(limit = 20)
             _suggestions.set(result.getOrElse { SearchResult(emptyList(), 0, 0) }.items)
+        }
+    }
+
+    /**
+     * Seerr + on-device side-searches for the current debounced query. Driven
+     * by the query alone — not the filters — so a sort/status tweak neither
+     * re-runs the network + local scans for an unchanged query nor flashes
+     * the Seerr row empty.
+     */
+    private fun loadSideSearches() {
+        launch {
+            debouncedQuery.collect { currentQuery ->
+                seerrSearchJob?.cancel()
+                offlineSearchJob?.cancel()
+                _seerrResults.set(emptyList())
+                _seerrSearchError.set(false)
+                if (currentQuery.isBlank()) {
+                    _offlineResults.set(emptyList())
+                } else {
+                    seerrSearchJob = launch { searchSeerr(currentQuery) }
+                    offlineSearchJob = launch { searchOffline(currentQuery) }
+                }
+            }
         }
     }
 

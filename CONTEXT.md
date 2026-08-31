@@ -309,8 +309,10 @@ every visible card must flip together).
 is a flows + `onEvent` facade. Its public surface is StateFlows
 (`uiState`, `activeDownloadCount`, the `SyncStatusStateHolder`
 re-exposures, `searchQuery`, `searchHistory`, `undoActions`,
-`photoFolderChildUrls`, `currentServerUsers`), sync getters
-(`getImageUrl`/`getBackdropUrl`, the scroll-position pair), `onStart`/
+`currentServerUsers`), sync getters
+(`getImageUrl`/`getBackdropUrl`, the scroll-position pair, and the
+per-item `photoFolderChildUrlsFor(itemId)` photo-folder slice each
+photo card leaf-collects), `onStart`/
 `onStop`/`onCleared`, and one command funnel:
 `onEvent(HomeUiEvent)`. Every user intent — including the quick actions
 (mark played/unplayed, delete download, inline download via `DownloadItem`,

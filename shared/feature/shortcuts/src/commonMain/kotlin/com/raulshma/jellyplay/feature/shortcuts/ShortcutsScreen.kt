@@ -82,10 +82,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
-import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
-import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
-import com.raulshma.jellyplay.core.ui.generated.resources.core_search
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -148,7 +145,8 @@ fun ShortcutsScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val backgroundColor = rememberScreenBackgroundColor()
+val context = LocalContext.current
+    val backgroundColorState = rememberScreenBackgroundColorState()
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
@@ -246,7 +244,7 @@ fun ShortcutsScreen(
         title = stringResource(Res.string.shortcuts_screen_title),
         onBack = onBack,
         topBarStyle = TopBarStyle.Standard,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             val searchActionFocus = rememberTvFocusState()
             IconButton(

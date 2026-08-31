@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.edit
+import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
@@ -99,6 +100,9 @@ class WidgetDataStore constructor(
         dataStore.edit { it[Keys.WIDGET_CONFIG] = json.encodeToString(config) }
     }
 
+    private var cachedPerWidgetConfigs: ParsedCache<Map<Int, WidgetConfig>> = ParsedCache(null, emptyMap())
+    private var cachedLegacyWidgetConfig: ParsedCache<WidgetConfig?> = ParsedCache(null, null)
+
     /**
      * Snapshot of (per-widget configs, legacy global config) eagerly cached so
      * [getWidgetConfigForIdSync] can return a value without suspending. Used by
@@ -106,12 +110,17 @@ class WidgetDataStore constructor(
      */
     private val widgetConfigSnapshot: StateFlow<Pair<Map<Int, WidgetConfig>, WidgetConfig?>> =
         sharedPrefs.map { prefs ->
-            val perWidget = prefs[Keys.WIDGET_CONFIGS]?.let { configsJson ->
-                try { json.decodeFromString<Map<Int, WidgetConfig>>(configsJson) }
-                catch (_: Exception) { null }
-            } ?: emptyMap()
-            val legacy = prefs[Keys.WIDGET_CONFIG]?.let {
-                try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
+            val perWidgetRaw = prefs[Keys.WIDGET_CONFIGS]
+            val perWidget = if (perWidgetRaw == cachedPerWidgetConfigs.raw) {
+                cachedPerWidgetConfigs.value
+            } else {
+                decodeWidgetConfigs(perWidgetRaw).also { cachedPerWidgetConfigs = ParsedCache(perWidgetRaw, it) }
+            }
+            val legacyRaw = prefs[Keys.WIDGET_CONFIG]
+            val legacy = if (legacyRaw == cachedLegacyWidgetConfig.raw) {
+                cachedLegacyWidgetConfig.value
+            } else {
+                decodeWidgetConfig(legacyRaw).also { cachedLegacyWidgetConfig = ParsedCache(legacyRaw, it) }
             }
             perWidget to legacy
         }.stateIn(scope, SharingStarted.Eagerly, emptyMap<Int, WidgetConfig>() to null)
@@ -222,13 +231,34 @@ class WidgetDataStore constructor(
     private inline fun <reified T> decodedListStateFlow(
         key: Preferences.Key<String>,
         loaded: LoadedFlag,
-    ): StateFlow<List<T>> =
-        sharedPrefs.onEach { loaded.value = true }.map { prefs ->
-            prefs[key]?.let {
-                try { json.decodeFromString<List<T>>(it) }
-                catch (_: Exception) { emptyList() }
-            } ?: emptyList()
+    ): StateFlow<List<T>> {
+        var cached = ParsedCache(null, emptyList<T>())
+        return sharedPrefs.onEach { loaded.value = true }.map { prefs ->
+            val raw = prefs[key]
+            if (raw == cached.raw) {
+                cached.value
+            } else {
+                decodeList<T>(raw).also { cached = ParsedCache(raw, it) }
+            }
         }.stateIn(scope, SharingStarted.Eagerly, emptyList())
+    }
+
+    private inline fun <reified T> decodeList(raw: String?): List<T> =
+        raw?.let {
+            try { json.decodeFromString<List<T>>(it) }
+            catch (_: Exception) { emptyList() }
+        } ?: emptyList()
+
+    private fun decodeWidgetConfigs(raw: String?): Map<Int, WidgetConfig> =
+        raw?.let {
+            try { json.decodeFromString<Map<Int, WidgetConfig>>(it) }
+            catch (_: Exception) { null }
+        } ?: emptyMap()
+
+    private fun decodeWidgetConfig(raw: String?): WidgetConfig? =
+        raw?.let {
+            try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
+        }
 
     /**
      * The warm/cold read every *Snapshot() accessor shares: instant memory

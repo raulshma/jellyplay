@@ -135,11 +135,9 @@ fun SecuritySettingsScreen(
     var qcLoading by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
-    // Null gate (desktop, or no biometric host) takes the legacy unavailable
-    // path: the biometric row is hidden entirely, same as NO_HARDWARE/NO_ENROLLED.
-    val biometricGate = rememberBiometricGate()
-    val canShowBiometric = biometricGate?.isAvailable() == true
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+val biometricAvailability = rememberBiometricAvailability()
+    val canShowBiometric = biometricAvailability == BiometricAuthHelper.Availability.AVAILABLE
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     val pinMustBe4Digits = stringResource(Res.string.settings_pin_must_be_4_digits)
     val pinsDoNotMatch = stringResource(Res.string.settings_pins_do_not_match)
@@ -168,7 +166,7 @@ fun SecuritySettingsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.settings_security),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             AdvancedSettingsToggleButton(
                 showAdvanced = showAdvanced,

@@ -57,6 +57,7 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
         // performs network I/O on the binder thread. Keyed by image id (matches
         // the lookup key used by `playbackRepository.getImageUrl(...)`).
         private var posterCache: Map<String, Bitmap?> = emptyMap()
+        private var widgetDims: WidgetDimensions? = null
 
         override fun onCreate() = Unit
 
@@ -81,11 +82,13 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
                     urlById.mapValues { (_, url) -> urlToBitmap[url] }
                 }
             }
+            widgetDims = refreshWidgetDimensions(context, appWidgetId, 220)
         }
 
         override fun onDestroy() {
             items = emptyList()
             posterCache = emptyMap()
+            widgetDims = null
         }
 
         override fun getCount(): Int = items.size
@@ -100,17 +103,14 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
             var hideProgress = false
             var hidePoster = false
 
-            if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                val dims = computeWidgetDimensions(context, appWidgetId, 220)
-                if (dims != null) {
-                    val width = dims.width
+            widgetDims?.let { dims ->
+                val width = dims.width
 
-                    if (width < 240) {
-                        hideProgress = true
-                    }
-                    if (width < 180) {
-                        hidePoster = true
-                    }
+                if (width < 240) {
+                    hideProgress = true
+                }
+                if (width < 180) {
+                    hidePoster = true
                 }
             }
 

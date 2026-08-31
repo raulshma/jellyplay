@@ -136,15 +136,13 @@ fun PlayButtonWithProgress(
     val focusInteraction = rememberJellyFocusableInteraction(focusedScale = 1.15f)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val baseScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.85f else 1f,
+    // Single animation toward the combined press × focus target; the animated
+    // value is read only inside the graphicsLayer lambda below so animation
+    // frames don't recompose the button.
+    val scale = animateFloatAsState(
+        targetValue = (if (isPressed) 0.85f else 1f) * focusInteraction.scale,
         animationSpec = fastEffectsSpec(),
         label = "playBtnScale",
-    )
-    val scale by animateFloatAsState(
-        targetValue = baseScale * focusInteraction.scale,
-        animationSpec = fastEffectsSpec(),
-        label = "playBtnCombinedScale",
     )
 
     val trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
@@ -154,7 +152,7 @@ fun PlayButtonWithProgress(
         modifier = modifier
             .size(buttonSize)
             .then(focusInteraction.modifier)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
             .jellyFocusIndicator(focusInteraction, ShapeCache.smooth10)
             .clip(ShapeCache.smooth10)
             .clickable(

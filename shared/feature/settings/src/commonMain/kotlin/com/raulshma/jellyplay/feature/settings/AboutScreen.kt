@@ -98,7 +98,7 @@ fun AboutScreen(
     val isTv = LocalTvMode.current
     val platformIntents = rememberPlatformIntents()
 
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     val logsSubject = stringResource(Res.string.settings_logs_subject, viewModel.appVersion)
     val sendLogsChooserTitle = stringResource(Res.string.settings_send_logs_chooser)
@@ -114,7 +114,7 @@ fun AboutScreen(
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.settings_about),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) {
         Column(
             modifier = Modifier

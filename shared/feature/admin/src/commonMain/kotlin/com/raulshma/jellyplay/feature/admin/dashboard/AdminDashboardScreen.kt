@@ -44,7 +44,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.AnimatedSectionEntrance
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -87,7 +87,7 @@ fun AdminDashboardScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
 
     // TV focus-on-launch: focus the first quick action once content arrives so D-pad input lands on
     // content, not the navigation drawer.
@@ -152,7 +152,7 @@ fun AdminDashboardScreen(
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.admin_dashboard_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             Box(
                 modifier = Modifier

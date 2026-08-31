@@ -47,6 +47,7 @@ class LiveTvApiClientImpl @Inject constructor(
         filters: ProgramFilters,
         limit: Int,
     ): Result<List<com.raulshma.jellyplay.core.model.LiveTvProgram>> = engine.apiResultWithRetry {
+        val now = org.jellyfin.sdk.model.DateTime.now()
         engine.requireApi().liveTvApi.getRecommendedPrograms(
             userId = userIdUuid(),
             limit = limit,
@@ -59,7 +60,7 @@ class LiveTvApiClientImpl @Inject constructor(
             isSports = filters.isSports,
             enableTotalRecordCount = false,
             fields = listOf(ItemFields.OVERVIEW, ItemFields.CHANNEL_INFO, ItemFields.PRIMARY_IMAGE_ASPECT_RATIO),
-        ).content.items.map { it.toLiveTvProgram() }
+        ).content.items.map { it.toLiveTvProgram(now) }
     }
 
     override suspend fun getLiveTvPrograms(
@@ -67,6 +68,7 @@ class LiveTvApiClientImpl @Inject constructor(
         startDateUtc: String?,
         endDateUtc: String?,
     ): Result<List<com.raulshma.jellyplay.core.model.LiveTvProgram>> = engine.apiResultWithRetry {
+        val now = org.jellyfin.sdk.model.DateTime.now()
         engine.requireApi().liveTvApi.getLiveTvPrograms(
             channelIds = listOf(channelId.toUUID()),
             userId = userIdUuid(),
@@ -93,7 +95,8 @@ class LiveTvApiClientImpl @Inject constructor(
             sortBy = listOf(ItemSortBy.START_DATE),
             fields = listOf(ItemFields.OVERVIEW),
         )
-        engine.requireApi().liveTvApi.getPrograms(dto).content.items.map { it.toLiveTvProgram() }
+        val now = org.jellyfin.sdk.model.DateTime.now()
+        engine.requireApi().liveTvApi.getPrograms(dto).content.items.map { it.toLiveTvProgram(now) }
     }
 
     override suspend fun getLiveTvGuide(
@@ -124,7 +127,8 @@ class LiveTvApiClientImpl @Inject constructor(
                     sortBy = listOf(ItemSortBy.START_DATE),
                     fields = listOf(ItemFields.OVERVIEW),
                 )
-                client.liveTvApi.getPrograms(dto).content.items.map { it.toLiveTvProgram() }
+                val now = org.jellyfin.sdk.model.DateTime.now()
+                client.liveTvApi.getPrograms(dto).content.items.map { it.toLiveTvProgram(now) }
             }
             EpgGuide(channels = channelsDeferred.await(), programs = programsDeferred.await())
         }

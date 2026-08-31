@@ -26,6 +26,8 @@ import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +73,9 @@ import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronRight
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import com.raulshma.jellyplay.feature.home.generated.resources.home_see_all
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 
@@ -370,7 +375,7 @@ fun HomeMediaRow(
     onItemClick: (MediaItem) -> Unit,
     onPlayClick: ((MediaItem) -> Unit)? = null,
     modifier: Modifier = Modifier,
-    photoFolderChildUrls: Map<String, List<String>> = emptyMap(),
+    photoFolderChildUrlsFor: (String) -> Flow<List<String>> = { flowOf(emptyList()) },
     focusRequester: FocusRequester? = null,
     onRowFocused: (() -> Unit)? = null,
     clippingEnabled: Boolean = false,
@@ -450,6 +455,14 @@ fun HomeMediaRow(
             val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
                 item.progressFraction() ?: 0f
             }
+            // Per-item collection: only photo-folder cards subscribe, and only
+            // the affected card recomposes on a prefetch merge.
+            val photoFolderChildImageUrls by if (item.mediaType == MediaType.PHOTO_FOLDER) {
+                remember(item.id) { photoFolderChildUrlsFor(item.id) }
+                    .collectAsStateWithLifecycle(emptyList())
+            } else {
+                remember { mutableStateOf(emptyList()) }
+            }
             val cardImage = rememberEpisodeCardImage(
                 item = item,
                 itemImageUrl = remember(item) { imageUrlBuilder(item) },
@@ -469,7 +482,7 @@ fun HomeMediaRow(
                 blurHash = cardImage.blurHash,
                 onPlayClick = memoizedPlayClick,
                 sharedElementKey = "poster_${item.id}",
-                photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+                photoFolderChildImageUrls = photoFolderChildImageUrls,
                 clipToShape = clippingEnabled,
                 showEpisodeSeriesBadge = cardImage.showSeriesBadge,
                 gradientBrush = posterScrimBrush,

@@ -46,7 +46,9 @@ interface MediaSearchEngine {
      * completed state when both branches resolve, and the empty state for a
      * blank query (without touching the network). Jellyfin top-`limit` items +
      * Seerr results (top `seerrLimit`) only when connected & enabled & not on
-     * Local network status. Never throws.
+     * Local network status. While an offline mode is active the round queries
+     * the offline library instead (see [runOfflinePreviewSearch]) — the server
+     * is unreachable and would silently answer nothing. Never throws.
      */
     fun preview(
         queries: Flow<String>,

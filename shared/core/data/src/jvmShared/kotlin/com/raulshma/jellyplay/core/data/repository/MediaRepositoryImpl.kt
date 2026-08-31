@@ -1176,10 +1176,14 @@ class MediaRepositoryImpl(
         duration: Double?,
         lines: List<LyricsLine>,
     ) {
-        val syncedLrc = lines.joinToString("\n") { line ->
-            val min = line.timeMs / 60_000
-            val sec = (line.timeMs % 60_000) / 1000.0
-            "[%02d:%06.3f] %s".format(min, sec, line.text)
+        val syncedLrc = buildString {
+            val formatter = java.util.Formatter(this)
+            lines.forEachIndexed { index, line ->
+                if (index > 0) append('\n')
+                val min = line.timeMs / 60_000
+                val sec = (line.timeMs % 60_000) / 1000.0
+                formatter.format("[%02d:%06.3f] %s", min, sec, line.text)
+            }
         }
         lyricsCacheDao.upsert(
             LyricsCacheEntity(

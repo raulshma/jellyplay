@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import com.raulshma.jellyplay.core.designsystem.theme.AmbientColors
 import kotlin.math.PI
 import kotlin.math.cos
@@ -57,6 +59,16 @@ fun AmbientColorBackdrop(
     // palette, so hoisting them out of the draw phase removes that churn.
     val blobStops = rememberBlobStops(colors, blobCount)
 
+    // Each brush is built ONCE at a nominal radius of 1 and drawn through a
+    // translate+scale transform; a uniformly scaled radial gradient is
+    // mathematically identical to one built at the frame's radius, so the draw
+    // pass no longer allocates a fresh shader per blob per frame.
+    val blobBrushes = remember(blobStops) {
+        blobStops.map { stops ->
+            Brush.radialGradient(colors = stops, center = Offset.Zero, radius = 1f)
+        }
+    }
+
     // Each blob runs its own slow infinite animation. Frozen under reduced
     // motion (the LaunchedEffect bodies are skipped, values stay 0f) which also
     // serves as the performance-mode freeze — callers gate this composable on
@@ -82,22 +94,18 @@ fun AmbientColorBackdrop(
         val width = size.width
         val height = size.height
 
-        blobStops.forEachIndexed { index, stops ->
+        blobBrushes.forEachIndexed { index, brush ->
             val progress = animatables[index].value
             val x = width * (0.2f + 0.6f * sin(progress * 2f * PI.toFloat() + index))
             val y = height * (0.2f + 0.6f * cos(progress * 2f * PI.toFloat() + index * 1.5f))
             val radius = (width.coerceAtMost(height) * 0.4f) *
                 (0.8f + 0.2f * sin(progress * PI.toFloat()))
 
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = stops,
-                    center = Offset(x, y),
-                    radius = radius,
-                ),
-                radius = radius,
-                center = Offset(x, y),
-            )
+            translate(x, y) {
+                scale(radius, radius, pivot = Offset.Zero) {
+                    drawCircle(brush = brush, radius = 1f, center = Offset.Zero)
+                }
+            }
         }
     }
 }

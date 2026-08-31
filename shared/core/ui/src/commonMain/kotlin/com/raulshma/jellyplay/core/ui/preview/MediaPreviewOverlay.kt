@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -126,7 +127,10 @@ fun MediaPreviewOverlay(
         snapshot.backdropUrl ?: snapshot.posterUrl,
         itemId = snapshot.item.id,
     )
-    val progressValue by progress.asState()
+    // Held as a State and read only inside graphicsLayer lambdas below, so the
+    // per-frame morph values invalidate the draw phase without recomposing the
+    // overlay subtree.
+    val progressState = progress.asState()
 
     Box(
         modifier = modifier
@@ -141,7 +145,7 @@ fun MediaPreviewOverlay(
         Scrim(
             accent = accent,
             size = windowSize,
-            alpha = scrimAlpha(progressValue),
+            progress = progressState,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -150,7 +154,7 @@ fun MediaPreviewOverlay(
             preview = snapshot,
             accent = accent,
             windowSize = windowSize,
-            progress = progressValue,
+            progress = progressState,
         )
     }
 }
@@ -167,14 +171,15 @@ private fun scrimAlpha(progress: Float) = smoothstep(0f, 0.6f, progress)
 /**
  * Translucent scrim with a soft radial vignette. Darkens the center slightly and
  * the edges more strongly, tinted by the artwork's [accent] color so the peek
- * feels color-connected to the card the user is holding. [alpha] fades the whole
- * scrim in/out in sync with the card morph.
+ * feels color-connected to the card the user is holding. [progress] fades the
+ * whole scrim in/out in sync with the card morph; it is read inside the layer
+ * lambda so animation frames don't recompose the scrim.
  */
 @Composable
 private fun Scrim(
     accent: Color,
     size: IntSize,
-    alpha: Float,
+    progress: State<Float>,
     modifier: Modifier = Modifier,
 ) {
     val center = if (size.width > 0) {
@@ -186,7 +191,7 @@ private fun Scrim(
 
     Box(
         modifier
-            .graphicsLayer { this.alpha = alpha }
+            .graphicsLayer { this.alpha = scrimAlpha(progress.value) }
             .background(
                 Brush.radialGradient(
                     colors = listOf(
@@ -215,7 +220,7 @@ private fun MorphingPreviewCard(
     preview: MediaPreview,
     accent: Color,
     windowSize: IntSize,
-    progress: Float,
+    progress: State<Float>,
     modifier: Modifier = Modifier,
 ) {
     val source = preview.sourceBounds
@@ -229,19 +234,20 @@ private fun MorphingPreviewCard(
         accent = accent,
         // Reveal metadata as the card grows past ~halfway, so the morph reads as
         // the card "opening up" rather than text popping in at full size.
-        contentAlpha = smoothstep(0.45f, 0.9f, progress),
+        contentAlpha = { smoothstep(0.45f, 0.9f, progress.value) },
         modifier = modifier.graphicsLayer {
+            val p = progress.value
             // Uniform scale from the source card's width to the resting card's
             // width — keeps the card's aspect ratio (no squash/stretch).
             val scale = if (hasSource && size.width > 0) {
-                lerp(source.width / size.width, 1f, progress)
+                lerp(source.width / size.width, 1f, p)
             } else 1f
 
             // The card's laid-out center is (windowCx, windowCy) because the parent
             // centers it. Move it so the center tracks the morph: collapsed onto the
             // source card's center at progress=0, centered at progress=1.
-            val displayedCx = if (hasSource) lerp(source.center.x, windowCx, progress) else windowCx
-            val displayedCy = if (hasSource) lerp(source.center.y, windowCy, progress) else windowCy
+            val displayedCx = if (hasSource) lerp(source.center.x, windowCx, p) else windowCx
+            val displayedCy = if (hasSource) lerp(source.center.y, windowCy, p) else windowCy
             translationX = displayedCx - windowCx
             translationY = displayedCy - windowCy
             scaleX = scale
@@ -260,7 +266,7 @@ private fun MorphingPreviewCard(
 private fun PreviewCard(
     preview: MediaPreview,
     accent: Color,
-    contentAlpha: Float,
+    contentAlpha: () -> Float,
     modifier: Modifier = Modifier,
 ) {
     val item = preview.item
@@ -357,7 +363,7 @@ private fun PreviewCard(
         Column(
             modifier = Modifier
                 .padding(horizontal = 20.dp, vertical = 14.dp)
-                .graphicsLayer { alpha = contentAlpha },
+                .graphicsLayer { alpha = contentAlpha() },
         ) {
             Text(
                 text = item.name,

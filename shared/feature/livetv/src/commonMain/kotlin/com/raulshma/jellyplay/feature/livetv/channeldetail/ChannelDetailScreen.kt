@@ -30,7 +30,7 @@ import com.composables.icons.tabler.outline.ArrowLeft
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_cancel
@@ -51,7 +51,7 @@ fun ChannelDetailScreen(
         viewModel.loadChannel(channelId, channelName)
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
 
     // One-shot record/cancel feedback (screen-forward seam): resolve the texts
     // here, forward each emitted message through the messenger actual.
@@ -90,7 +90,7 @@ fun ChannelDetailScreen(
         ChannelDetailBackdrop(
             backdropUrl = backdropUrl,
             blurHash = state.channelBlurHash,
-            backgroundColor = backgroundColor,
+            backgroundColorState = backgroundColorState,
             backdropHeightDp = 420.dp,
         )
 

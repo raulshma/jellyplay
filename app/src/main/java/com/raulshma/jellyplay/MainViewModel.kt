@@ -303,11 +303,11 @@ class MainViewModel(
     }
 
     private fun parseSharedText(text: String): SharedTextTarget {
-        val jellyfinUrlMatch = Regex("""jellyfin://media/([a-f0-9-]+)""").find(text)
+        val jellyfinUrlMatch = JELLYFIN_MEDIA_URL_REGEX.find(text)
         if (jellyfinUrlMatch != null) {
             return SharedTextTarget.MediaDetail(jellyfinUrlMatch.groupValues[1])
         }
-        val urlMatch = Regex("""https?://[^\s]+""").find(text)
+        val urlMatch = ANY_URL_REGEX.find(text)
         if (urlMatch != null) {
             return SharedTextTarget.Search(urlMatch.value)
         }
@@ -412,6 +412,11 @@ class MainViewModel(
                 }
             }
         }
+    }
+
+    private companion object {
+        val JELLYFIN_MEDIA_URL_REGEX = Regex("""jellyfin://media/([a-f0-9-]+)""")
+        val ANY_URL_REGEX = Regex("""https?://[^\s]+""")
     }
 }
 

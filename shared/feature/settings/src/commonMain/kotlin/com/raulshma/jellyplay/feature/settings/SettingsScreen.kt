@@ -455,7 +455,7 @@ fun SettingsScreen(
 
     val currentServerAddress by viewModel.currentServerAddress.collectAsStateWithLifecycle()
 
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     val searchBackCd = stringResource(Res.string.settings_search_back_cd)
     val clearSearchCd = stringResource(Res.string.settings_clear_search_cd)
@@ -511,7 +511,7 @@ fun SettingsScreen(
     com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold(
         title = stringResource(Res.string.settings_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         topBarStyle = TopBarStyle.None,
     ) { paddingValues ->
         val messenger = rememberSettingsMessenger()

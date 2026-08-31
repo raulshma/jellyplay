@@ -15,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -54,9 +55,10 @@ fun GlassDismissTag(
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "tagShapeMorph"
     )
-    val shape = remember(shapeMorphProgress) {
-        if (shapeMorphProgress > 0.5f) ShapeCache.smooth16 else ShapeCache.smooth12
-    }
+    // Derived boolean so the shape swap invalidates the composition only when
+    // the morph crosses 0.5f, not on every animation frame.
+    val morphed by remember { derivedStateOf { shapeMorphProgress > 0.5f } }
+    val shape = if (morphed) ShapeCache.smooth16 else ShapeCache.smooth12
 
     val isLight = LocalIsLightTheme.current
     val glassBg = if (isLight) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f)

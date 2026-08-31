@@ -13,15 +13,19 @@ import kotlinx.datetime.toJavaYearMonth
  * behavior is byte-identical, pinned by CalendarGroupingTest's locale-pinned
  * assertions.
  *
- * The formatters are built PER CALL over `Locale.getDefault()` (review
- * round): static `val` formatters would capture the locale at CLASS-LOAD
- * time, so an in-process locale switch (Android per-app locales /
- * `Locale.setDefault` without process death) would keep serving stale-locale
- * labels until restart — a silent drift from the pre-wasm bodies, which
- * resolved the locale on every call.
+ * Formatters are cached per pattern+locale via [cachedFormatter] so repeated
+ * calendar renders do not rebuild DateTimeFormatter on each item (bd956 perf).
+ * Locale is resolved per call (not captured at class-load) so an in-process
+ * locale switch (Android per-app locales / `Locale.setDefault` without process
+ * death) is reflected immediately, matching the pre-wasm bodies.
  */
+private val labelFormatters = java.util.concurrent.ConcurrentHashMap<Pair<String, Locale>, DateTimeFormatter>()
+
+private fun cachedFormatter(pattern: String, locale: Locale): DateTimeFormatter =
+    labelFormatters.computeIfAbsent(pattern to locale) { DateTimeFormatter.ofPattern(pattern, it.second) }
+
 internal actual fun calendarDayHeaderLabel(date: LocalDate): String =
-    date.toJavaLocalDate().format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault()))
+    date.toJavaLocalDate().format(cachedFormatter("EEE, MMM d", Locale.getDefault()))
 
 internal actual fun calendarMonthYearLabel(month: YearMonth): String =
-    month.toJavaYearMonth().format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()))
+    month.toJavaYearMonth().format(cachedFormatter("MMMM yyyy", Locale.getDefault()))

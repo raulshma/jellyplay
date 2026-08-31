@@ -81,7 +81,7 @@ fun PrivacyDataScreen(
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     // One-shot action confirmations (screen-forward seam): resolve the texts
     // here, forward each emitted message through the messenger actual.
@@ -112,7 +112,7 @@ fun PrivacyDataScreen(
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.settings_privacy_data),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier

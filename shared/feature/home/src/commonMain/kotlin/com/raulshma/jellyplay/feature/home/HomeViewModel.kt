@@ -60,6 +60,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.onStart
@@ -257,12 +258,20 @@ internal class HomeViewModel(
 
     /**
      * The photo-folder child-URL cache (see [PhotoFolderChildUrlsStore]).
-     * Re-exposed so the photo-row call sites observe the same flow as before.
      */
     private val photoFolderChildUrlsStore = PhotoFolderChildUrlsStore(scope, photoFolderPrefetcher)
 
-    /** Cached folder-id → child-image-URLs map for the photo rows. */
-    val photoFolderChildUrls: StateFlow<Map<String, List<String>>> get() = photoFolderChildUrlsStore.childUrls
+    /**
+     * Per-item slice of the store's cached folder-id → child-image-URLs map.
+     * Lets each photo-folder card
+     * collect only its own urls so a prefetch merge (which produces a new Map
+     * reference) doesn't invalidate the entire home body — only the one card
+     * whose urls changed.
+     */
+    fun photoFolderChildUrlsFor(itemId: String): Flow<List<String>> =
+        photoFolderChildUrlsStore.childUrls
+            .map { it[itemId].orEmpty() }
+            .distinctUntilChanged()
 
     private fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) =
         photoFolderChildUrlsStore.prefetch(items)
@@ -449,6 +458,7 @@ internal class HomeViewModel(
                         hiddenCwItemIds = prefs.home.hiddenCwItemIds,
                         nextUpExcludedSeriesIds = prefs.home.nextUpExcludedSeriesIds,
                         mergeCwAndNextUp = prefs.home.mergeContinueWatchingAndNextUp,
+                        sectionOrder = prefs.home.homeSectionOrder,
                     ),
                 ) }
 

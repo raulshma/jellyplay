@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.music.musichome
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -10,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
@@ -17,7 +17,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -56,7 +56,7 @@ fun MusicHomeScreen(
     val sections = uiState.sections
     val isLoading = uiState.isLoading
     val error = uiState.error
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     val scope = rememberCoroutineScope()
 
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -95,7 +95,7 @@ fun MusicHomeScreen(
         },
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
+            .drawBehind { drawRect(backgroundColorState.value) }
             .statusBarsPadding(),
     ) {
         when {

@@ -445,6 +445,7 @@ val dataJvmModule: Module = module {
             serverIdentityStore = get(),
             experimentalStore = get(),
             offlineModeManager = get(),
+            offlineRepository = get(),
         )
     }
     single<MediaSearchEngine> { get<MediaSearchEngineImpl>() }

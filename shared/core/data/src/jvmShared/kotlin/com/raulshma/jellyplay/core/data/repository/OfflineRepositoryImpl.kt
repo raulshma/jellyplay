@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.database.dao.OfflineMediaWithPlayback
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SeriesSizeAggregate
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
+import com.raulshma.jellyplay.core.database.dao.UnplayedCountRow
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -22,6 +23,7 @@ import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.OFFLINE_WATCHED_THRESHOLD_PERCENT
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.OfflineSyncState
@@ -166,19 +168,28 @@ class OfflineRepositoryImpl constructor(
                 downloadDao.getSeriesSizeAggregatesFlow(seriesIds)
                     .map { it.associateBy { a -> a.seriesId } }
             }
-        // Combine both maps so the summary re-emits as episode
+        // Unwatched downloaded-episode count per series — feeds the series
+        // cards' unwatched-count badge (the offline stand-in for the server's
+        // `userData.unplayedItemCount`, which is never persisted). Reactive on
+        // playback_state writes, so the badge follows offline watching. The
+        // same counting rule grouped by season feeds the detail seasons list
+        // (see [getSeasonsForSeries]).
+        val unplayedBySeries: Flow<Map<String, Int>> =
+            unplayedCountsFlow(seriesIds, offlineMediaDao::getUnplayedEpisodeCountsBySeriesFlow)
+        // Combine the maps so the summary re-emits as episode
         // downloads progress (Room re-emits each Flow on writes to its
         // tables). SERIES rows take their bytes from the aggregate;
         // everything else from its direct download row. Both branches
         // are cheap copies over the pre-mapped items — only the
         // download-derived fields are re-projected.
-        return combine(directDownloadsFlow, seriesAggregatesFlow) { downloadMap, aggregateMap ->
+        return combine(directDownloadsFlow, seriesAggregatesFlow, unplayedBySeries) { downloadMap, aggregateMap, unplayedMap ->
             baseItems.map { item ->
                 if (item.mediaType == MediaType.SERIES) {
                     val agg = aggregateMap[item.id]
                     item.copy(
                         downloadedBytes = agg?.downloadedBytes ?: 0L,
                         totalSizeBytes = agg?.totalSizeBytes ?: 0L,
+                        unplayedEpisodeCount = unplayedMap[item.id],
                     )
                 } else {
                     item.withDownload(downloadMap[item.id])
@@ -216,16 +227,62 @@ class OfflineRepositoryImpl constructor(
             }) { maps -> maps.reduce { acc, map -> acc + map } }
         }
 
+    /**
+     * Unwatched downloaded-episode counts keyed by the query's grouped id —
+     * shared by the per-series ([buildOfflineLibrary]) and per-season
+     * ([getSeasonsForSeries]) badge projections. Empty map when [ids] is
+     * empty (no query at all). Chunked like [downloadsByItemIdsFlow]: a whole
+     * library of downloaded series can exceed SQLite's host-variable cap.
+     */
+    private fun unplayedCountsFlow(
+        ids: List<String>,
+        query: (List<String>, Double) -> Flow<List<UnplayedCountRow>>,
+    ): Flow<Map<String, Int>> =
+        if (ids.isEmpty()) {
+            flowOf(emptyMap())
+        } else {
+            combine(ids.chunked(MAX_SQLITE_HOST_VARIABLES).map { chunk ->
+                query(chunk, OFFLINE_WATCHED_THRESHOLD_PERCENT)
+                    .map { rows -> rows.associate { it.groupedId to it.unplayedCount } }
+            }) { maps -> maps.reduce { acc, map -> acc + map } }
+        }
+
     private suspend fun downloadsByItemIds(ids: List<String>): Map<String, DownloadEntity> =
         ids.chunked(MAX_SQLITE_HOST_VARIABLES)
             .flatMap { downloadDao.getDownloadsByMediaItemIds(it) }
             .associateBy { it.mediaItemId }
 
     override fun getSeasonsForSeries(seriesId: String): Flow<List<OfflineMediaItem>> =
-        offlineMediaDao.getSeasonsForSeries(seriesId).map { rows ->
-            rows.map { it.toOfflineMediaItem() }
-        }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
-            .distinctUntilChanged()
+        offlineMediaDao.getSeasonsForSeries(seriesId).flatMapLatest { rows ->
+            val baseItems = rows.map { it.toOfflineMediaItem() }
+            // Per-season unwatched counts — the season rows' offline stand-in
+            // for the server's `userData.unplayedItemCount` (never persisted),
+            // so the offline detail screen's season rows badge like the online
+            // ones. The seasons query reads the same ⟕ view, so it re-emits on
+            // playback_state writes either way; the counts flow re-emits too.
+            seasonUnplayedCountsFlow(baseItems).map { unplayedMap ->
+                baseItems.map { item ->
+                    if (item.mediaType == MediaType.SEASON) {
+                        item.copy(unplayedEpisodeCount = unplayedMap[item.id])
+                    } else {
+                        item
+                    }
+                }
+            }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+        }.distinctUntilChanged()
+
+    /**
+     * Unwatched downloaded-episode count per SEASON row — empty map when the
+     * list has no seasons (no query at all). Same counting rule as the
+     * per-series projection in [buildOfflineLibrary], keyed by season.
+     */
+    private fun seasonUnplayedCountsFlow(items: List<OfflineMediaItem>): Flow<Map<String, Int>> {
+        val seasonIds = items.asSequence()
+            .filter { it.mediaType == MediaType.SEASON }
+            .map { it.id }
+            .toList()
+        return unplayedCountsFlow(seasonIds, offlineMediaDao::getUnplayedEpisodeCountsBySeasonFlow)
+    }
 
     override fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getEpisodesForSeason(seasonId).flatMapLatest { rows ->

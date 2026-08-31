@@ -51,6 +51,7 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
         // Poster cache populated in [onDataSetChanged] so [getViewAt] never
         // performs network I/O on the binder thread.
         private var posterCache: Map<String, Bitmap?> = emptyMap()
+        private var widgetDims: WidgetDimensions? = null
 
         override fun onCreate() = Unit
 
@@ -77,11 +78,13 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
                 val nonNullUrls = items.map { it.posterUrl }.filterNotNull()
                 runBlocking { WidgetImageLoader.preloadPosters(context, nonNullUrls) }
             }
+            widgetDims = refreshWidgetDimensions(context, appWidgetId, 250)
         }
 
         override fun onDestroy() {
             items = emptyList()
             posterCache = emptyMap()
+            widgetDims = null
         }
 
         override fun getCount(): Int = items.size
@@ -96,19 +99,7 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
             view.setViewVisibility(R.id.lr_item_subtitle, View.VISIBLE)
 
             // Apply responsive rules based on widget options
-            var hideText = false
-
-            if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                val dims = computeWidgetDimensions(context, appWidgetId, 250)
-                if (dims != null) {
-                    val width = dims.width
-                    val height = dims.height
-
-                    if (height < 200 || width < 180) {
-                        hideText = true
-                    }
-                }
-            }
+            val hideText = widgetDims?.isTooSmallForText() == true
 
             if (hideText) {
                 view.setViewVisibility(R.id.lr_item_text_container, View.GONE)
@@ -148,19 +139,7 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
             view.setViewVisibility(R.id.lr_item_title, View.INVISIBLE)
             view.setViewVisibility(R.id.lr_item_subtitle, View.INVISIBLE)
 
-            var hideText = false
-            if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                val dims = computeWidgetDimensions(context, appWidgetId, 250)
-                if (dims != null) {
-                    val width = dims.width
-                    val height = dims.height
-
-                    if (height < 200 || width < 180) {
-                        hideText = true
-                    }
-                }
-            }
-
+            val hideText = widgetDims?.isTooSmallForText() == true
             if (hideText) {
                 view.setViewVisibility(R.id.lr_item_text_container, View.GONE)
             } else {

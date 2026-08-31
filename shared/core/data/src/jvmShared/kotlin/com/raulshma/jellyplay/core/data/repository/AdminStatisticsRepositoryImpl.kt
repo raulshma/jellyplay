@@ -237,8 +237,9 @@ class AdminStatisticsRepositoryImpl constructor(
             fallbackItems = fallbackDeferred.await()
             counts = countsDeferred.await()
         }
-        val fallbackChart = if (fallbackItems.isNotEmpty()) buildFallbackActivityChart(fallbackItems) else pluginChart
-        val fallbackTrendData = if (fallbackItems.isNotEmpty()) buildFallbackActivityChart(fallbackItems) else emptyList()
+        val fallbackActivityChart = if (fallbackItems.isNotEmpty()) buildFallbackActivityChart(fallbackItems) else null
+        val fallbackChart = fallbackActivityChart ?: pluginChart
+        val fallbackTrendData = fallbackActivityChart ?: emptyList()
         val moviePlayedCount = counts.moviePlayed
         val episodePlayedCount = counts.episodePlayed
         val songPlayedCount = counts.songPlayed

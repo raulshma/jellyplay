@@ -13,9 +13,11 @@ import kotlinx.coroutines.launch
  * folder-id → child-image-URLs map the photo rows read to open a folder's
  * children without a per-card round-trip. Exclusive state — the only map in
  * the home feature — so it lives behind this small interface instead of the
- * VM (SearchViewModel-style re-exposure: the VM delegates
- * `photoFolderChildUrls` and the prefetch call straight through, and the UI
- * call sites are unchanged).
+ * VM. The VM does not re-expose the whole map: each photo-folder card
+ * collects its own slice through `photoFolderChildUrlsFor(itemId)` (map
+ * lookup + `distinctUntilChanged`), so a prefetch merge — which produces a
+ * new Map reference — invalidates only the one card whose urls changed, not
+ * the entire home body.
  *
  * `prefetch` is incremental: ids already cached are skipped via the
  * `alreadyFetched` hand-off, new results are merged, and the map is evicted

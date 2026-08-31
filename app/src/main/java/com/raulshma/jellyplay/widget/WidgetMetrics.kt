@@ -40,6 +40,30 @@ fun computeWidgetDimensions(
 }
 
 /**
+ * Per-refresh dimension resolution for the list/grid `RemoteViewsFactory`
+ * implementations: factories cache this in `onDataSetChanged` (the provider
+ * also calls `notifyAppWidgetViewDataChanged` from `onAppWidgetOptionsChanged`,
+ * so a resize re-runs the refresh) instead of paying the options IPC per
+ * `getViewAt` bind.
+ */
+fun refreshWidgetDimensions(
+    context: Context,
+    appWidgetId: Int,
+    defaultHeight: Int,
+): WidgetDimensions? =
+    if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+        computeWidgetDimensions(context, appWidgetId, defaultHeight)
+    } else {
+        null
+    }
+
+/**
+ * Shared responsive rule of the recommendation grids: below these cell sizes
+ * the title/subtitle container is hidden entirely.
+ */
+fun WidgetDimensions.isTooSmallForText(): Boolean = height < 200 || width < 180
+
+/**
  * Same dimension computation as [computeWidgetDimensions] but for callers that
  * already hold the options [Bundle] and an [AppWidgetManager] instance (e.g. an
  * `AppWidgetProvider.onUpdate` that receives the manager directly).

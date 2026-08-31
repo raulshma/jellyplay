@@ -1701,7 +1701,9 @@ class MpvPlayerEngine(
         if (tracks != prior) {
             _availableTracks.value = tracks
         }
-        Log.d(TAG, "MPV tracks refreshed ($reason): ${describeTracks(tracks)}")
+        if (com.raulshma.jellyplay.feature.player.video.BuildConfig.DEBUG) {
+            Log.d(TAG, "MPV tracks refreshed ($reason): ${describeTracks(tracks)}")
+        }
     }
 
     private fun describeTracks(tracks: List<MediaTrack>): String {

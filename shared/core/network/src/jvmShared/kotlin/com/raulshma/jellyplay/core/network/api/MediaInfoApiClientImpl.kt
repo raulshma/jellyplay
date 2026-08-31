@@ -314,21 +314,32 @@ class MediaInfoApiClientImpl @Inject constructor(
         val allItems = mutableListOf<StaleMediaItem>()
         var totalEstimate = 0
 
-        val playedResponse = api.itemsApi.getItems(
-            isPlayed = true,
-            includeItemTypes = types,
-            parentId = parentId?.let { java.util.UUID.fromString(it) },
-            startIndex = startIndex,
-            limit = limit,
-            recursive = true,
-            enableTotalRecordCount = true,
-            sortBy = listOf(ItemSortBy.DATE_PLAYED),
-            sortOrder = listOf(SortOrder.ASCENDING),
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.DATE_CREATED,
-            ),
-        ).content
+        val (playedResponse, unplayedResponse) = coroutineScope {
+            val parentIdUuid = parentId?.let { java.util.UUID.fromString(it) }
+
+            suspend fun fetchPage(isPlayed: Boolean, pageStartIndex: Int, sortBy: ItemSortBy) =
+                api.itemsApi.getItems(
+                    isPlayed = isPlayed,
+                    includeItemTypes = types,
+                    parentId = parentIdUuid,
+                    startIndex = pageStartIndex,
+                    limit = limit,
+                    recursive = true,
+                    enableTotalRecordCount = true,
+                    sortBy = listOf(sortBy),
+                    sortOrder = listOf(SortOrder.ASCENDING),
+                    fields = listOf(
+                        ItemFields.OVERVIEW,
+                        ItemFields.DATE_CREATED,
+                    ),
+                ).content
+
+            val playedDeferred = async { fetchPage(isPlayed = true, pageStartIndex = startIndex, sortBy = ItemSortBy.DATE_PLAYED) }
+            val unplayedDeferred = if (includeNeverPlayed) async {
+                fetchPage(isPlayed = false, pageStartIndex = 0, sortBy = ItemSortBy.DATE_CREATED)
+            } else null
+            playedDeferred.await() to unplayedDeferred?.await()
+        }
 
         val playedItems = playedResponse?.items ?: emptyList()
         totalEstimate = playedResponse?.totalRecordCount ?: 0
@@ -374,23 +385,7 @@ class MediaInfoApiClientImpl @Inject constructor(
             }
         }
 
-        if (includeNeverPlayed) {
-            val unplayedResponse = api.itemsApi.getItems(
-                isPlayed = false,
-                includeItemTypes = types,
-                parentId = parentId?.let { java.util.UUID.fromString(it) },
-                startIndex = 0,
-                limit = limit,
-                recursive = true,
-                enableTotalRecordCount = true,
-                sortBy = listOf(ItemSortBy.DATE_CREATED),
-                sortOrder = listOf(SortOrder.ASCENDING),
-                fields = listOf(
-                    ItemFields.OVERVIEW,
-                    ItemFields.DATE_CREATED,
-                ),
-            ).content
-
+        if (unplayedResponse != null) {
             val unplayedItems = unplayedResponse?.items ?: emptyList()
             totalEstimate += unplayedResponse?.totalRecordCount ?: 0
 

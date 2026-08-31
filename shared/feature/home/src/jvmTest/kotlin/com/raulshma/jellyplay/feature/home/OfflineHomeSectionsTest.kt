@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
@@ -357,6 +358,58 @@ class OfflineHomeSectionsTest {
         )
         assertTrue(sections.none { it.items.any { item -> item.id == "e1" } })
     }
+
+    //endregion
+
+    //region Section order
+
+    @Test
+    fun `continue watching and next up sort by the user's global section order`() {
+        val sections = buildOfflineHomeSections(
+            library = listOf(offline("cw", playedPercentage = 40.0)),
+            episodes = listOf(episode("e1", seriesId = "s1", episodeNumber = 1)),
+            titles = titles,
+            prefs = defaultPrefs.copy(
+                sectionOrder = listOf(
+                    HomeSectionType.NEXT_UP,
+                    HomeSectionType.LATEST_MEDIA,
+                    HomeSectionType.CONTINUE_WATCHING,
+                    HomeSectionType.RECENTLY_ADDED,
+                    HomeSectionType.RECOMMENDATIONS,
+                ),
+            ),
+        )
+
+        // Next Up leads because the user's order puts it first; the offline-only
+        // rows (Recently Downloaded, Movies) keep their fixed tail order after
+        // the ordered pair.
+        assertEquals(
+            listOf("offline_next_up", "offline_continue_watching", "offline_recently_downloaded", "offline_movies"),
+            sections.map { it.id },
+        )
+    }
+
+    @Test
+    fun `rows absent from the order list keep their build order`() {
+        val sections = listOf(
+            sectionOf("offline_continue_watching", HomeSectionType.CONTINUE_WATCHING),
+            sectionOf("offline_next_up", HomeSectionType.NEXT_UP),
+            sectionOf("offline_recently_downloaded", HomeSectionType.DOWNLOADED),
+        )
+
+        // Defensive: an order list lacking the offline rows' types (the store
+        // normalizes to all configurable types, so this shouldn't occur) must
+        // not reshuffle anything.
+        val ordered = orderOfflineSections(
+            sections,
+            sectionOrder = listOf(HomeSectionType.LATEST_MEDIA, HomeSectionType.RECENTLY_ADDED),
+        )
+
+        assertEquals(sections, ordered)
+    }
+
+    private fun sectionOf(id: String, type: HomeSectionType) =
+        HomeSection(id = id, title = id, type = type, items = emptyList())
 
     //endregion
 }

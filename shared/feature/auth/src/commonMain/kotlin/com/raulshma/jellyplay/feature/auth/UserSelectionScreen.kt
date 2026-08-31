@@ -75,7 +75,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -105,11 +105,11 @@ fun UserSelectionScreen(
     }
 
     val isSynthwave = LocalIsSynthwave.current
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     val navOffsetPx = LocalFloatingNavOffset.current
 
     Scaffold(
-        containerColor = backgroundColor,
+        containerColor = backgroundColorState.value,
         topBar = {
             TopAppBar(
                 title = { Text(serverName) },

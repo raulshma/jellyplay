@@ -385,7 +385,7 @@ fun PlaybackSettingsScreen(
     val isTv = LocalTvMode.current
     var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
     var showResetDialog by remember { mutableStateOf(false) }
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
@@ -446,7 +446,7 @@ fun PlaybackSettingsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.settings_playback_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             AdvancedSettingsToggleButton(
                 showAdvanced = showAdvanced,

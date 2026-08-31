@@ -80,6 +80,9 @@ class OfflineSyncComparator() {
 
         /** Separator between fields inside one list item's rendering. */
         private const val FIELD_SEPARATOR = "|"
+
+        /** Lowercase two-char hex for every byte value ("00".."ff"), precomputed. */
+        private val HEX_BYTES: Array<String> = Array(256) { "%02x".format(it) }
     }
 
     /**
@@ -331,10 +334,13 @@ class OfflineSyncComparator() {
     }
 
     /** SHA-256 of [payload] (UTF-8) as a lowercase hex string. */
-    private fun sha256Hex(payload: String): String =
-        MessageDigest.getInstance("SHA-256")
+    private fun sha256Hex(payload: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
             .digest(payload.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
+        val hex = StringBuilder(digest.size * 2)
+        for (byte in digest) hex.append(HEX_BYTES[byte.toInt() and 0xFF])
+        return hex.toString()
+    }
 
     private fun imageChanged(baselineTag: String?, freshTag: String?): Boolean {
         // Normalize null/blank together: an item that gains or loses an image

@@ -47,7 +47,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -76,7 +76,7 @@ fun PluginsScreen(
 ) {
     val state = viewModel.state
     var selectedTab by remember { mutableIntStateOf(0) }
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     val adaptiveInfo = LocalAdaptiveInfo.current
 
     // Pending uninstall confirmation. Unlike the per-plugin detail screen, the
@@ -98,7 +98,7 @@ fun PluginsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.admin_plugins_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             val refreshFocusState = rememberTvFocusState()
             IconButton(

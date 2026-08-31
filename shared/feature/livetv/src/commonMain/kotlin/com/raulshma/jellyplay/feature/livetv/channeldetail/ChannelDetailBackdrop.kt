@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
@@ -22,7 +23,7 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 /**
  * Full-bleed backdrop behind the channel detail content. Shows the
  * currently-airing program's image (via [backdropUrl]) with a crossfade when
- * the program changes and a scrim gradient fading into [backgroundColor].
+ * the program changes and a scrim gradient fading into [backgroundColorState].
  *
  * Mirrors the detail screen's [com.raulshma.jellyplay.feature.details.DetailBackdrop]
  * treatment so the channel detail feels native. Note these are Primary/poster
@@ -33,7 +34,7 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 internal fun ChannelDetailBackdrop(
     backdropUrl: String,
     blurHash: String?,
-    backgroundColor: Color,
+    backgroundColorState: State<Color>,
     backdropHeightDp: Dp,
     modifier: Modifier = Modifier,
 ) {
@@ -60,20 +61,21 @@ internal fun ChannelDetailBackdrop(
                 )
             } else {
                 // No image at all: solid dim background so the scrim still reads.
-                Box(Modifier.fillMaxSize().drawBehind { drawRect(backgroundColor.copy(alpha = 0.6f)) })
+                Box(Modifier.fillMaxSize().drawBehind { drawRect(backgroundColorState.value.copy(alpha = 0.6f)) })
             }
         }
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .drawBehind {
+                    val color = backgroundColorState.value
                     drawRect(
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                backgroundColor.copy(alpha = 0.4f),
-                                backgroundColor.copy(alpha = 0.9f),
-                                backgroundColor,
+                                color.copy(alpha = 0.4f),
+                                color.copy(alpha = 0.9f),
+                                color,
                             ),
                             startY = (backdropHeightDp - 200.dp).toPx(),
                             endY = backdropHeightDp.toPx(),

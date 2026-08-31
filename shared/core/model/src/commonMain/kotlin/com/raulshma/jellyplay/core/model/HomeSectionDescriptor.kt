@@ -81,74 +81,81 @@ class HomeSectionDescriptor(
 /**
  * The identity descriptor for a section type. Exhaustive on purpose: adding a
  * [HomeSectionType] constant without describing it here is a compile error,
- * not a runtime gap.
+ * not a runtime gap. Built once into an immutable table so reads of
+ * [HomeSectionType.descriptor] (per home refresh, per recomposition) don't
+ * allocate a fresh descriptor each time.
  */
-val HomeSectionType.descriptor: HomeSectionDescriptor
-    get() = when (this) {
-        HomeSectionType.CONTINUE_WATCHING -> HomeSectionDescriptor(
-            type = this,
-            id = "continue_watching",
-            displayName = "Continue Watching",
-            description = "Resume watching in-progress media",
-            isConfigurable = true,
-        )
-        HomeSectionType.NEXT_UP -> HomeSectionDescriptor(
-            type = this,
-            id = "next_up",
-            displayName = "Next Up",
-            description = "Next unwatched episodes of your shows",
-            isConfigurable = true,
-        )
-        HomeSectionType.RECENTLY_ADDED -> HomeSectionDescriptor(
-            type = this,
-            id = "recently_added",
-            displayName = "Recently Added",
-            description = "Recently added items across all libraries",
-            isConfigurable = true,
-        )
-        HomeSectionType.LATEST_MEDIA -> HomeSectionDescriptor(
-            type = this,
-            id = null,
-            displayName = "Latest Media",
-            description = "Latest items from each library",
-            isConfigurable = true,
-            dynamicIdPrefix = "latest_",
-            dynamicTitleTemplate = "Latest {name}",
-        )
-        HomeSectionType.FAVORITES -> HomeSectionDescriptor(
-            type = this,
-            id = null,
-            displayName = "Favorites",
-            description = "Your favorited items",
-            isConfigurable = false,
-        )
-        HomeSectionType.LIVE_TV -> HomeSectionDescriptor(
-            type = this,
-            id = null,
-            displayName = "Live TV",
-            description = "Live television channels",
-            isConfigurable = false,
-        )
-        HomeSectionType.DOWNLOADED -> HomeSectionDescriptor(
-            type = this,
-            id = null,
-            displayName = "Downloaded",
-            description = "Offline downloaded items",
-            isConfigurable = false,
-        )
-        HomeSectionType.RECOMMENDATIONS -> HomeSectionDescriptor(
-            type = this,
-            id = "recommendations",
-            displayName = "Recommended For You",
-            description = "Personalized picks based on your watch history",
-            isConfigurable = true,
-        )
-        HomeSectionType.PINNED -> HomeSectionDescriptor(
-            type = this,
-            id = null,
-            displayName = "Pinned",
-            description = "Collections and shelves you have pinned to home",
-            isConfigurable = false,
-            dynamicIdPrefix = "pinned_",
-        )
+private val homeSectionDescriptors: Map<HomeSectionType, HomeSectionDescriptor> =
+    HomeSectionType.entries.associateWith { type ->
+        when (type) {
+            HomeSectionType.CONTINUE_WATCHING -> HomeSectionDescriptor(
+                type = type,
+                id = "continue_watching",
+                displayName = "Continue Watching",
+                description = "Resume watching in-progress media",
+                isConfigurable = true,
+            )
+            HomeSectionType.NEXT_UP -> HomeSectionDescriptor(
+                type = type,
+                id = "next_up",
+                displayName = "Next Up",
+                description = "Next unwatched episodes of your shows",
+                isConfigurable = true,
+            )
+            HomeSectionType.RECENTLY_ADDED -> HomeSectionDescriptor(
+                type = type,
+                id = "recently_added",
+                displayName = "Recently Added",
+                description = "Recently added items across all libraries",
+                isConfigurable = true,
+            )
+            HomeSectionType.LATEST_MEDIA -> HomeSectionDescriptor(
+                type = type,
+                id = null,
+                displayName = "Latest Media",
+                description = "Latest items from each library",
+                isConfigurable = true,
+                dynamicIdPrefix = "latest_",
+                dynamicTitleTemplate = "Latest {name}",
+            )
+            HomeSectionType.FAVORITES -> HomeSectionDescriptor(
+                type = type,
+                id = null,
+                displayName = "Favorites",
+                description = "Your favorited items",
+                isConfigurable = false,
+            )
+            HomeSectionType.LIVE_TV -> HomeSectionDescriptor(
+                type = type,
+                id = null,
+                displayName = "Live TV",
+                description = "Live television channels",
+                isConfigurable = false,
+            )
+            HomeSectionType.DOWNLOADED -> HomeSectionDescriptor(
+                type = type,
+                id = null,
+                displayName = "Downloaded",
+                description = "Offline downloaded items",
+                isConfigurable = false,
+            )
+            HomeSectionType.RECOMMENDATIONS -> HomeSectionDescriptor(
+                type = type,
+                id = "recommendations",
+                displayName = "Recommended For You",
+                description = "Personalized picks based on your watch history",
+                isConfigurable = true,
+            )
+            HomeSectionType.PINNED -> HomeSectionDescriptor(
+                type = type,
+                id = null,
+                displayName = "Pinned",
+                description = "Collections and shelves you have pinned to home",
+                isConfigurable = false,
+                dynamicIdPrefix = "pinned_",
+            )
+        }
     }
+
+val HomeSectionType.descriptor: HomeSectionDescriptor
+    get() = homeSectionDescriptors.getValue(this)

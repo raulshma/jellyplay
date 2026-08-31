@@ -20,6 +20,8 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.UserDataChange
+import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
+import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -33,6 +35,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -108,6 +111,9 @@ class HomeRefresherTest {
     /** Backs the androidTvWatchNextEnabledProvider handed to the refresher. */
     private var androidTvWatchNextEnabled = true
 
+    /** Backs the directArrEnabledProvider handed to the refresher. */
+    private var directArrEnabled = false
+
     /**
      * Fake for the refresher's `awaitOutboxDrained` seam: counts invocations
      * and (while [drainGate] is set) parks, so GoingOnline tests can observe
@@ -177,7 +183,7 @@ class HomeRefresherTest {
             },
             seerrPreferencesProvider = { SeerrPreferences() },
             discoverEnabledProvider = { false },
-            directArrEnabledProvider = { false },
+            directArrEnabledProvider = { directArrEnabled },
             androidTvWatchNextEnabledProvider = { androidTvWatchNextEnabled },
         ).also { refresher = it }
     }
@@ -558,21 +564,31 @@ class HomeRefresherTest {
                 sections = listOf(section(HomeSectionType.LATEST_MEDIA, items = listOf(item("m1")))),
             ),
         )
+        // *arr row rides the same drop as discover: its cards route to
+        // Seerr/TMDB, unreachable offline.
+        directArrEnabled = true
+        coEvery { arrRepository.refreshCalendar(any(), any()) } returns Result.success(Unit)
+        coEvery { arrRepository.calendar(any(), any()) } returns flowOf(
+            listOf(ArrCalendarItem(title = "Coming", mediaType = ArrMediaType.MOVIE)),
+        )
         val refresher = buildRefresher()
         runCurrent()
         refresher.fetchOnce()
         runCurrent()
         assertTrue(refresher.state.value.sections.isNotEmpty())
+        assertTrue(refresher.state.value.recentlyGrabbed.isNotEmpty())
 
         // Production path: the manager flips the mode and the refresher's own
-        // observer reacts — cached online sections + discover rows dropped,
-        // going-online spinner (if any) cleared. The offline→online side of
-        // this transition (including the spontaneous flavour) is pinned by
+        // observer reacts — cached online sections + discover rows + the *arr
+        // row dropped, going-online spinner (if any) cleared. The
+        // offline→online side of this transition (including the spontaneous
+        // flavour) is pinned by
         // wentOnlineSpontaneously_drainsOutboxBeforeFetch_andRepopulatesSections.
         offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
         runCurrent()
         assertTrue(refresher.state.value.sections.isEmpty())
         assertTrue(refresher.state.value.discoverSections.isEmpty())
+        assertTrue(refresher.state.value.recentlyGrabbed.isEmpty())
         assertFalse(refresher.state.value.isGoingOnline)
         refresher.stop()
     }

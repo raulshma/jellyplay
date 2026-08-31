@@ -59,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -95,7 +96,7 @@ import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
@@ -256,7 +257,7 @@ fun SearchScreen(
         onResult = { spokenText -> spokenText?.let(viewModel::search) },
     )
 
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -298,7 +299,7 @@ fun SearchScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
+            .drawBehind { drawRect(backgroundColorState.value) }
             .onDpadKey(
                 onMenu = {
                     tvFocusedItem?.let { quickActionController.show(it) }
@@ -316,11 +317,11 @@ fun SearchScreen(
             // The screen root re-executes per keystroke (query state is read
             // here); remember the static header brush + display style so each
             // keystroke doesn't re-allocate them.
-            val headerGradientBrush = remember(backgroundColor) {
+            val headerGradientBrush = remember(backgroundColorState.value) {
                 Brush.verticalGradient(
                     colors = listOf(
-                        backgroundColor.copy(alpha = 0.95f),
-                        backgroundColor,
+                        backgroundColorState.value.copy(alpha = 0.95f),
+                        backgroundColorState.value,
                     ),
                 )
             }
@@ -1041,7 +1042,7 @@ fun SearchScreen(
                                             Brush.verticalGradient(
                                                 colors = listOf(
                                                     Color.Transparent,
-                                                    backgroundColor,
+                                                    backgroundColorState.value,
                                                 ),
                                             )
                                         )
