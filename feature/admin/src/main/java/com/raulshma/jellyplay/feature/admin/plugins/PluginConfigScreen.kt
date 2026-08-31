@@ -40,7 +40,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Refresh
 import com.raulshma.jellyplay.feature.admin.R
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.feedback.UiText
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -56,7 +56,7 @@ fun PluginConfigScreen(
 ) {
     viewModel.initialize(pluginId, pluginName)
     val state = viewModel.state
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     val isDark = isSystemInDarkTheme()
     val colors = MaterialTheme.colorScheme
     val userMessageBus = LocalUserMessageBus.current
@@ -97,7 +97,7 @@ fun PluginConfigScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.admin_plugin_settings_title, pluginName),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             val refreshFocusState = rememberTvFocusState()
             IconButton(

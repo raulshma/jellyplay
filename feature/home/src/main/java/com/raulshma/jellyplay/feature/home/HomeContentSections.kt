@@ -25,6 +25,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,7 +34,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -47,7 +47,9 @@ import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -58,6 +60,49 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.SeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberInt
+import kotlinx.coroutines.flow.Flow
+
+/**
+ * WHAT the content list renders, decided once at the construction site from
+ * [HomeRenderSource]: the server feed ([Online]) or the offline-derived one
+ * ([Offline]). The former pairing — a nullable `offlineContent` plus
+ * `sections`/`isLoading`/banners that each had to be masked with
+ * `!renderingOffline &&` at every construction — allowed the two halves to
+ * disagree (silently empty rows); here each branch's constructor IS the mask,
+ * and the banner fields simply do not exist on the offline feed.
+ */
+internal sealed interface HomeFeed {
+
+    /** The rendered section list — server sections online, derived offline. */
+    val sections: List<HomeSection>
+
+    /** True while this feed's content is still arriving (spinner). */
+    val isLoading: Boolean
+
+    /**
+     * The server feed. [partialLoadError] and [newsletterBannerVisible] are
+     * online-only surfaces — offline rendering short-circuits them by
+     * construction, not by boolean masks at the read sites.
+     */
+    data class Online(
+        override val sections: List<HomeSection>,
+        override val isLoading: Boolean,
+        val partialLoadError: Boolean,
+        val newsletterBannerVisible: Boolean,
+    ) : HomeFeed
+
+    /**
+     * The offline feed: the whole [OfflineHomeContent] render model.
+     * [isLoading] covers the FallbackPending window after the gate opens but
+     * before the first library emission (downloads may yet exist).
+     */
+    data class Offline(
+        val content: OfflineHomeContent,
+        override val isLoading: Boolean = false,
+    ) : HomeFeed {
+        override val sections: List<HomeSection> get() = content.sections
+    }
+}
 
 /**
  * Bundles the (previously 38) flat parameters of the home content list into a
@@ -68,14 +113,11 @@ import com.raulshma.jellyplay.core.ui.tv.rememberInt
  */
 @Immutable
 internal data class HomeContentState(
-    val isLoading: Boolean,
+    val feed: HomeFeed,
     val homeHeroEnabled: Boolean,
     val homeBackdropEnabled: Boolean,
-    val newsletterBannerVisible: Boolean,
     val discoverEnabled: Boolean,
     val experimentalCardClippingEnabled: Boolean,
-    val sections: List<HomeSection>,
-    val partialLoadError: Boolean,
     val featuredItem: MediaItem?,
     val backgroundColor: Color,
     val contentPad: Dp,
@@ -85,9 +127,18 @@ internal data class HomeContentState(
     val discoverRows: List<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>>,
     val allDiscoverItems: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>,
     val recentlyGrabbed: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>,
-    val photoFolderChildUrls: Map<String, List<String>>,
-    val offlineLibrary: List<OfflineMediaItem>,
-)
+    /**
+     * Non-blocking informational banner (e.g. the implicit-offline
+     * "couldn't reach the server — showing your downloads" notice). Null hides it.
+     */
+    val statusBanner: String? = null,
+) {
+    /** The online feed, null while the offline branch renders. */
+    val online: HomeFeed.Online? get() = feed as? HomeFeed.Online
+
+    /** The offline render model, null while the online branch renders. */
+    val offlineContent: OfflineHomeContent? get() = (feed as? HomeFeed.Offline)?.content
+}
 
 @Immutable
 internal data class HomeContentCallbacks(
@@ -103,7 +154,17 @@ internal data class HomeContentCallbacks(
     val mediaBackdropUrlBuilder: (MediaItem) -> String,
     val getImageUrl: (String) -> String,
     val getBackdropUrl: (String) -> String,
+    /**
+     * Backdrop builder for the HERO only — the caller resolves online-vs-offline
+     * once (offline items resolve to their local backdrop/poster file path), so
+     * the list never re-branches. Row artwork keeps using [getBackdropUrl].
+     */
+    val heroBackdropUrlBuilder: (String) -> String,
     val fallbackImageUrlBuilder: (MediaItem) -> List<String>,
+    /** Per-item slice of the photo-folder child-URL cache — collected at the
+     * photo-folder card, not orchestrator scope, so a prefetch merge only
+     * recomposes the card whose urls changed. */
+    val photoFolderChildUrlsFor: (String) -> Flow<List<String>>,
     val onSeerrItemClick: (Int, String) -> Unit,
     val onSeerrRequest: (com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem) -> Unit,
     val seerrPrefetch: (Int, String, () -> Unit) -> Unit,
@@ -121,6 +182,41 @@ internal data class HomeContentCallbacks(
      * quick actions */
     val onFocusedMediaItem: (MediaItem) -> Unit = {},
 )
+
+/**
+ * One implementation of the CW / NEXT_UP click routing, shared by the online
+ * and offline rows — only the sinks differ per source. CONTINUE_WATCHING
+ * honors [ContinueWatchingClickBehavior]; NEXT_UP always opens details. Every
+ * sink lands in the same unified MediaDetail / player tree: it renders remote
+ * and downloaded items alike, so no source-specific routing is needed.
+ */
+private fun <T> continueWatchingRowItemClick(
+    sectionType: HomeSectionType,
+    behavior: ContinueWatchingClickBehavior,
+    onDetails: (T) -> Unit,
+    onPlay: (T) -> Unit,
+    onAsk: (T) -> Unit,
+): (T) -> Unit = { item ->
+    if (sectionType == HomeSectionType.CONTINUE_WATCHING) {
+        when (behavior) {
+            ContinueWatchingClickBehavior.DETAILS -> onDetails(item)
+            ContinueWatchingClickBehavior.PLAY -> onPlay(item)
+            ContinueWatchingClickBehavior.ASK -> onAsk(item)
+        }
+    } else {
+        onDetails(item)
+    }
+}
+
+/**
+ * Re-resolves an offline-derived section's [HomeSection.items] back to their
+ * [OfflineMediaItem] originals by id (the shared [OfflineHomeContent.itemsById]
+ * lookup) so the row cards render local artwork and clicks route offline.
+ */
+private fun offlineSectionItems(
+    section: HomeSection,
+    byId: Map<String, OfflineMediaItem>,
+): List<OfflineMediaItem> = section.items.mapNotNull { byId[it.id] }
 
 /**
  * The home LazyColumn: hero, partial-load / newsletter banners, media rows,
@@ -144,7 +240,7 @@ internal fun HomeContentList(
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val sections = state.sections
+    val sections = state.feed.sections
 
     // Discover-row dimensions computed once at the composable scope (not inside
     // the LazyColumn's LazyListScope, where LocalConfiguration isn't readable).
@@ -167,12 +263,12 @@ internal fun HomeContentList(
         listState = listState,
         savedRow = homeFocusRow,
         sectionCount = sections.size,
-        newsletterBannerVisible = state.newsletterBannerVisible,
+        newsletterBannerVisible = state.online?.newsletterBannerVisible == true,
         rowFocusRequesters = { rowFocusRequesters },
     )
 
     if (sections.isEmpty()) {
-        if (state.isLoading) {
+        if (state.feed.isLoading) {
             // Initial online fetch with nothing to show yet — a real loading state
             // instead of a blank screen. Delayed so fast loads don't flicker.
             DelayedLoadingScreen(modifier = Modifier.padding(horizontal = state.contentPad))
@@ -189,16 +285,26 @@ internal fun HomeContentList(
     } else {
         // De-duplicate the downloaded row against the online sections so a title
         // that already appears in Continue Watching / Latest / Recently Added
-        // isn't shown twice.
-        val dedupedOfflineLibrary = remember(state.offlineLibrary, sections) {
-            if (state.offlineLibrary.isEmpty()) state.offlineLibrary
+        // isn't shown twice. Reads the aggregate's (already mode-filtered)
+        // library slice.
+        val offlineContent = state.offlineContent
+        val dedupedOfflineLibrary = remember(offlineContent, sections) {
+            val library = offlineContent?.library.orEmpty()
+            if (library.isEmpty()) library
             else {
                 val onlineIds = buildSet {
                     for (section in sections) for (item in section.items) add(item.id)
                 }
-                if (onlineIds.isEmpty()) state.offlineLibrary else state.offlineLibrary.filter { it.id !in onlineIds }
+                if (onlineIds.isEmpty()) library else library.filter { it.id !in onlineIds }
             }
         }
+
+        // Id→offline-item lookup for the offline hero's click routing and the
+        // DOWNLOADED section rows — prebuilt inside [OfflineHomeContent] (one
+        // build per offline emission, shared with the screen's hero backdrop
+        // resolver). Read via [currentOfflineById] so the hero's click lambda
+        // keeps its identity across download-progress emissions.
+        val currentOfflineById by rememberUpdatedState(offlineContent?.itemsById ?: emptyMap())
 
         // Hoisted out of the items() lambda so the gradient brush is built once
         // per (backgroundColor, density) change rather than re-instantiated for
@@ -212,6 +318,11 @@ internal fun HomeContentList(
             )
         }
 
+        // Standalone headers (discover / *arr) keep their flat fill when the
+        // ambient backdrop is off — the behavior of the former private
+        // SectionHeader.
+        val headerModifier = if (state.homeBackdropEnabled) Modifier else Modifier.background(state.backgroundColor)
+
         CompositionLocalProvider(
             com.raulshma.jellyplay.core.ui.components.LocalScrollIdle provides
                 remember(listState) { { !listState.isScrollInProgress } }
@@ -223,9 +334,15 @@ internal fun HomeContentList(
         ) {
             if (state.featuredItem != null && state.homeHeroEnabled) {
                 item(key = "hero") {
+                    val featured = state.featuredItem
+                    // Online and offline heroes alike open the unified detail
+                    // tree — it renders remote and downloaded items alike, so
+                    // the id is all the routing needs.
                     AnimatedHeroHeader(
-                        featuredItem = state.featuredItem,
-                        getBackdropUrl = remember(callbacks.getBackdropUrl) { { callbacks.getBackdropUrl(it) } },
+                        featuredItem = featured,
+                        getBackdropUrl = remember(callbacks.heroBackdropUrlBuilder) {
+                            { id: String -> callbacks.heroBackdropUrlBuilder(id) }
+                        },
                         height = state.headerHeight,
                         backgroundColor = state.backgroundColor,
                         contentPadding = state.contentPad,
@@ -242,39 +359,25 @@ internal fun HomeContentList(
                 item(key = "hero_spacer") { Spacer(Modifier.height(100.dp)) }
             }
 
-            // Non-blocking notice when some home sections failed to load.
-            if (state.partialLoadError) {
-                item(key = "partial_load_banner") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = state.contentPad, vertical = 4.dp)
-                            .clip(MaterialTheme.shapes.medium)
-                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            Tabler.Outline.AlertCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onErrorContainer,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = stringResource(R.string.home_sections_load_failed),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(onClick = callbacks.onRetrySectionLoad) {
-                            Text(stringResource(R.string.home_retry))
-                        }
-                    }
+            // Non-blocking informational banner (implicit-offline fallback notice).
+            if (state.statusBanner != null) {
+                item(key = "status_banner") {
+                    HomeStatusBannerRow(text = state.statusBanner, contentPad = state.contentPad)
                 }
             }
 
-            if (state.newsletterBannerVisible) {
+            // Non-blocking notice when some home sections failed to load.
+            if (state.online?.partialLoadError == true) {
+                item(key = "partial_load_banner") {
+                    HomeStatusBannerRow(
+                        text = stringResource(R.string.home_sections_load_failed),
+                        onRetry = callbacks.onRetrySectionLoad,
+                        contentPad = state.contentPad,
+                    )
+                }
+            }
+
+            if (state.online?.newsletterBannerVisible == true) {
                 item(key = "newsletter_banner") {
                     NewsletterBanner(
                         onClick = callbacks.onNewsletterClick,
@@ -346,49 +449,105 @@ internal fun HomeContentList(
                     section.title
                 }
 
-                if (section.type == HomeSectionType.CONTINUE_WATCHING || section.type == HomeSectionType.NEXT_UP) {
-                    val rowItemClick: (MediaItem) -> Unit = remember(
-                        section.type, state.continueWatchingClickBehavior, callbacks.mediaOnItemClick, callbacks.mediaOnPlayClick,
-                    ) {
-                        { item ->
-                            if (section.type == HomeSectionType.CONTINUE_WATCHING) {
-                                when (state.continueWatchingClickBehavior) {
-                                    ContinueWatchingClickBehavior.DETAILS -> callbacks.mediaOnItemClick(item)
-                                    ContinueWatchingClickBehavior.PLAY -> callbacks.mediaOnPlayClick(item)
-                                    ContinueWatchingClickBehavior.ASK -> { askContinueItem = item }
-                                }
-                            } else {
-                                callbacks.mediaOnItemClick(item)
-                            }
-                        }
-                    }
-                    // Long-press affordance only for user-configurable section
-                    // types; non-configurable rows (FAVORITES, PINNED, …) are
-                    // managed from their own surfaces and pass null.
-                    val sectionLongClick = remember(section.type, section.libraryId, callbacks) {
-                        if (section.type.isConfigurable) {
-                            { callbacks.onConfigureSection(section.type, section.libraryId) }
-                        } else null
-                    }
-                    ContinueWatchingRow(
+                // Long-press affordance only for user-configurable section
+                // types; non-configurable rows (FAVORITES, PINNED, …) are
+                // managed from their own surfaces and pass null.
+                val sectionLongClick = remember(section.type, section.libraryId, callbacks) {
+                    if (section.type.isConfigurable) {
+                        { callbacks.onConfigureSection(section.type, section.libraryId) }
+                    } else null
+                }
+
+                if (section.type == HomeSectionType.DOWNLOADED) {
+                    // Offline-derived section (see buildOfflineHomeSections):
+                    // re-resolve the offline originals by id (shared lookup
+                    // above) so the cards render local artwork; clicks go to
+                    // the unified detail tree like any online item.
+                    val byId = currentOfflineById
+                    val offlineItems = remember(section, byId) { offlineSectionItems(section, byId) }
+                    OfflineHomeMediaRow(
                         title = sectionTitle,
-                        items = section.items,
-                        imageUrlBuilder = callbacks.mediaImageUrlBuilder,
-                        backdropUrlBuilder = callbacks.mediaBackdropUrlBuilder,
-                        onItemClick = rowItemClick,
-                        onPlayClick = callbacks.mediaOnPlayClick,
+                        items = offlineItems,
+                        onItemClick = remember(callbacks) {
+                            { item -> callbacks.onItemClick(item.id) }
+                        },
                         modifier = sectionModifier,
                         focusRequester = rowFocusRequesters[index],
                         onRowFocused = { homeFocusRow = index },
                         clippingEnabled = state.experimentalCardClippingEnabled,
-                        onSectionLongClick = sectionLongClick,
+                        onFocusedItemChange = callbacks.onFocusedMediaItem,
                     )
-                } else {
-                    val sectionLongClick = remember(section.type, section.libraryId, callbacks) {
-                        if (section.type.isConfigurable) {
-                            { callbacks.onConfigureSection(section.type, section.libraryId) }
-                        } else null
+                } else if (section.type == HomeSectionType.CONTINUE_WATCHING || section.type == HomeSectionType.NEXT_UP) {
+                    if (offlineContent != null) {
+                        // Offline-derived Continue Watching / Next Up (see
+                        // buildOfflineHomeSections): same wide-card row and the
+                        // same Resume-vs-Details click behavior as the online
+                        // home, but re-resolved to the offline originals by id
+                        // (shared lookup above) so cards render local artwork.
+                        // Every sink — Details, PLAY, the ASK dialog — rides
+                        // the same unified funnels as online: MediaDetail and
+                        // the player resolve downloaded items themselves, so no
+                        // offline-specific routing exists.
+                        val byId = currentOfflineById
+                        val offlineItems = remember(section, byId) { offlineSectionItems(section, byId) }
+                        val rowItemClick: (OfflineMediaItem) -> Unit = remember(
+                            section.type, state.continueWatchingClickBehavior, callbacks,
+                        ) {
+                            continueWatchingRowItemClick(
+                                sectionType = section.type,
+                                behavior = state.continueWatchingClickBehavior,
+                                onDetails = { item -> callbacks.mediaOnItemClick(item.toMediaItem()) },
+                                onPlay = { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) },
+                                onAsk = { item -> askContinueItem = item.toMediaItem() },
+                            )
+                        }
+                        ContinueWatchingRow(
+                            title = sectionTitle,
+                            items = offlineItems,
+                            toMediaItem = { it.toMediaItem() },
+                            imageUrl = { it.posterPath.orEmpty() },
+                            backdropUrl = { it.backdropPath.orEmpty() },
+                            key = { it.id },
+                            onItemClick = rowItemClick,
+                            onPlayClick = remember(callbacks) {
+                                { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) }
+                            },
+                            modifier = sectionModifier,
+                            focusRequester = rowFocusRequesters[index],
+                            onRowFocused = { homeFocusRow = index },
+                            clippingEnabled = state.experimentalCardClippingEnabled,
+                            onSectionLongClick = sectionLongClick,
+                            onFocusedItemChange = callbacks.onFocusedMediaItem,
+                        )
+                    } else {
+                        val rowItemClick: (MediaItem) -> Unit = remember(
+                            section.type, state.continueWatchingClickBehavior, callbacks.mediaOnItemClick, callbacks.mediaOnPlayClick,
+                        ) {
+                            continueWatchingRowItemClick(
+                                sectionType = section.type,
+                                behavior = state.continueWatchingClickBehavior,
+                                onDetails = callbacks.mediaOnItemClick,
+                                onPlay = callbacks.mediaOnPlayClick,
+                                onAsk = { item -> askContinueItem = item },
+                            )
+                        }
+                        ContinueWatchingRow(
+                            title = sectionTitle,
+                            items = section.items,
+                            toMediaItem = { it },
+                            imageUrl = callbacks.mediaImageUrlBuilder,
+                            backdropUrl = callbacks.mediaBackdropUrlBuilder,
+                            onItemClick = rowItemClick,
+                            onPlayClick = callbacks.mediaOnPlayClick,
+                            modifier = sectionModifier,
+                            focusRequester = rowFocusRequesters[index],
+                            onRowFocused = { homeFocusRow = index },
+                            clippingEnabled = state.experimentalCardClippingEnabled,
+                            onSectionLongClick = sectionLongClick,
+                            onFocusedItemChange = callbacks.onFocusedMediaItem,
+                        )
                     }
+                } else {
                     HomeMediaRow(
                         title = sectionTitle,
                         items = section.items,
@@ -397,7 +556,7 @@ internal fun HomeContentList(
                         onItemClick = callbacks.mediaOnItemClick,
                         onPlayClick = callbacks.mediaOnPlayClick,
                         modifier = sectionModifier,
-                        photoFolderChildUrls = state.photoFolderChildUrls,
+                        photoFolderChildUrlsFor = callbacks.photoFolderChildUrlsFor,
                         focusRequester = rowFocusRequesters[index],
                         onRowFocused = { homeFocusRow = index },
                         clippingEnabled = state.experimentalCardClippingEnabled,
@@ -417,11 +576,11 @@ internal fun HomeContentList(
 
             if (state.discoverEnabled && state.allDiscoverItems.isNotEmpty()) {
                 item(key = "seerr_discover_header") {
-                    SectionHeader(
-                        text = stringResource(R.string.home_discover),
-                        backgroundColor = state.backgroundColor,
+                    HomeRowTitle(
+                        title = stringResource(R.string.home_discover),
                         contentPad = state.contentPad,
-                        homeBackdropEnabled = state.homeBackdropEnabled,
+                        modifier = headerModifier,
+                        standalone = true,
                     )
                 }
 
@@ -457,11 +616,11 @@ internal fun HomeContentList(
             // off, no *arr is configured, or the calendar window is empty.
             if (state.recentlyGrabbed.isNotEmpty()) {
                 item(key = "arr_recently_grabbed_header") {
-                    SectionHeader(
-                        text = stringResource(R.string.home_coming_soon),
-                        backgroundColor = state.backgroundColor,
+                    HomeRowTitle(
+                        title = stringResource(R.string.home_coming_soon),
                         contentPad = state.contentPad,
-                        homeBackdropEnabled = state.homeBackdropEnabled,
+                        modifier = headerModifier,
+                        standalone = true,
                     )
                 }
                 item(key = "arr_recently_grabbed_row") {
@@ -485,7 +644,10 @@ internal fun HomeContentList(
                 }
             }
 
-            if (dedupedOfflineLibrary.isNotEmpty()) {
+            // While offline (offlineContent != null — every rendered section is
+            // offline-derived then), the offline library IS the section list
+            // above, so the inline Downloaded row would duplicate every title.
+            if (dedupedOfflineLibrary.isNotEmpty() && offlineContent == null) {
                 item(key = "downloaded_row") {
                     // DownloadedSection renders its own "Downloaded" header, so we
                     // intentionally don't emit a separate header item here.
@@ -524,22 +686,43 @@ internal fun HomeContentList(
     }
 }
 
+/**
+ * The content list's ONE non-blocking notice row (the implicit-offline
+ * banner and the partial-load banner used to duplicate this block verbatim).
+ * [onRetry] optional: the partial-load variant carries a Retry button.
+ */
 @Composable
-private fun SectionHeader(
+private fun HomeStatusBannerRow(
     text: String,
-    backgroundColor: Color,
     contentPad: Dp,
-    homeBackdropEnabled: Boolean = false,
+    onRetry: (() -> Unit)? = null,
 ) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-        color = MaterialTheme.colorScheme.onSurface,
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            // Transparent over the ambient backdrop so it shows through headers;
-            // opaque flat fill otherwise.
-            .then(if (homeBackdropEnabled) Modifier else Modifier.background(backgroundColor))
-            .padding(start = contentPad, top = 24.dp, bottom = 8.dp),
-    )
+            .padding(horizontal = contentPad, vertical = 4.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Tabler.Outline.AlertCircle,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onErrorContainer,
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+            modifier = if (onRetry != null) Modifier.weight(1f) else Modifier,
+        )
+        if (onRetry != null) {
+            TextButton(onClick = onRetry) {
+                Text(stringResource(R.string.home_retry))
+            }
+        }
+    }
 }

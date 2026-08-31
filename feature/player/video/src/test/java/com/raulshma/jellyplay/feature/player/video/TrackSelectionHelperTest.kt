@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MediaTrack
+import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
 import com.raulshma.jellyplay.feature.player.video.state.TrackState
 import io.mockk.every
 import io.mockk.coEvery
@@ -162,6 +163,74 @@ class TrackSelectionHelperTest {
         assertEquals(2, subs.size)
         assertEquals("Off", subs[0].label)
         assertTrue(subs[1].isSelected)
+    }
+
+    @Test
+    fun updateTracksFromEngine_directPlayEmptyEngineSubs_surfacesExternalServerStreams() {
+        // #144 direct-play safety net: the side-load chain failed silently and
+        // the engine published zero subtitle tracks, but the server lists an
+        // external sub. The picker must surface it as a synthetic server row
+        // (selecting one runs the selectServerTrack reload → re-side-load)
+        // instead of a dead "None".
+        mediaStreams = listOf(
+            MediaStream(index = 3, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English", isExternal = true),
+        )
+        availableTracks.value = emptyList()
+        helper = makeHelper(
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
+        )
+
+        helper.updateTracksFromEngine()
+
+        val subs = helper.state.value.subtitleTracks
+        assertEquals(2, subs.size)
+        assertEquals("Off", subs[0].label)
+        val synthetic = subs[1]
+        assertEquals(TrackSelectionHelper.SERVER_TRACK_INDEX_BASE + 3, synthetic.index)
+        assertEquals("English", synthetic.label)
+    }
+
+    @Test
+    fun updateTracksFromEngine_directPlayEmbeddedOnlyServerStreams_staysNone() {
+        // Embedded streams are excluded from the fallback: buildExternalSubtitles
+        // skips them on direct play (container demux owns them), so their rows
+        // would be dead ends. Empty engine subs + embedded-only server list →
+        // the "None" placeholder stays.
+        mediaStreams = listOf(
+            MediaStream(index = 3, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English", isExternal = false),
+        )
+        availableTracks.value = emptyList()
+        helper = makeHelper(
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
+        )
+
+        helper.updateTracksFromEngine()
+
+        val subs = helper.state.value.subtitleTracks
+        assertEquals(1, subs.size)
+        assertEquals("None", subs[0].label)
+    }
+
+    @Test
+    fun updateTracksFromEngine_directPlayWithEngineSubs_doesNotMergeServerStreams() {
+        // The fallback is only for a fully-empty engine list: with engine sub
+        // tracks present, direct play keeps the engine-tracks-only picker
+        // (merging would duplicate container-demuxed/side-loaded tracks).
+        mediaStreams = listOf(
+            MediaStream(index = 3, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English", isExternal = true),
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "Track 1", null, TrackType.SUBTITLE, isSelected = false),
+        )
+        helper = makeHelper(
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
+        )
+
+        helper.updateTracksFromEngine()
+
+        val subs = helper.state.value.subtitleTracks
+        assertEquals(2, subs.size) // Off + the engine track only
+        assertEquals("Track 1", subs[1].label)
     }
 
     @Test
@@ -780,6 +849,138 @@ class TrackSelectionHelperTest {
         )
         helper.updateTracksFromEngine()
         verify { engine.selectTrack(TrackType.SUBTITLE, 1) }
+    }
+
+    // ─── Post-download pending selection ─────────────────────────────────────
+    //
+    // After an in-player subtitle download the side-load lands asynchronously:
+    // the picker list does not contain the new track yet when the download
+    // completes. requestSubtitleSelection arms a one-shot intent that resolves
+    // immediately when possible, otherwise on the first later emission that
+    // carries the track.
+
+    @Test
+    fun requestSubtitleSelection_resolvesImmediatelyWhenTrackPresent() {
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+            mediaTrack(1, "Downloaded", "ger", TrackType.SUBTITLE, isSelected = false, id = "external:7"),
+        )
+        helper.updateTracksFromEngine()
+        io.mockk.clearMocks(engine, answers = false)
+
+        helper.requestSubtitleSelection(ReadySubtitleHint(trackId = "external:7", serverStreamIndex = 7))
+
+        verify { engine.selectTrack(TrackType.SUBTITLE, 1) }
+        assertEquals(1, helper.state.value.subtitleTracks.first { it.isSelected }.index)
+    }
+
+    @Test
+    fun requestSubtitleSelection_defersUntilTrackSurfaces() {
+        availableTracks.value = emptyList()
+        helper.updateTracksFromEngine()
+        helper.requestSubtitleSelection(ReadySubtitleHint(trackId = "external:7", serverStreamIndex = 7))
+        // The armed intent must not have resolved against the empty list (any
+        // selectTrack calls so far are the ladder's own auto-Off).
+        io.mockk.clearMocks(engine, answers = false)
+
+        // The side-loaded track arrives on a later emission.
+        availableTracks.value = listOf(
+            mediaTrack(0, "Downloaded", "ger", TrackType.SUBTITLE, isSelected = false, id = "external:7"),
+        )
+        helper.updateTracksFromEngine()
+
+        // The pending intent consumed this emission and activated the track…
+        verify { engine.selectTrack(TrackType.SUBTITLE, 0) }
+        // …overriding the ladder's language-miss fallback to Off.
+        assertFalse(helper.state.value.subtitleTracks.first { it.index < 0 }.isSelected)
+        assertEquals(0, helper.state.value.subtitleTracks.first { it.isSelected }.index)
+    }
+
+    @Test
+    fun findSubtitleOptionFor_matchesSyntheticTranscodeRowByServerIndex() {
+        // Transcode: the new stream is not in the manifest; mergeServerStreams
+        // surfaces it as a synthetic row (SERVER_TRACK_INDEX_BASE + stream index).
+        mediaStreams = listOf(
+            MediaStream(index = 5, type = StreamType.SUBTITLE, language = "ger", displayTitle = "German"),
+        )
+        helper = makeHelper(
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE },
+        )
+        availableTracks.value = emptyList()
+        helper.updateTracksFromEngine()
+
+        val option = helper.findSubtitleOptionFor(ReadySubtitleHint(trackId = "external:5", serverStreamIndex = 5))
+
+        assertEquals(100_005, option?.index)
+    }
+
+    @Test
+    fun findSubtitleOptionFor_allowSyntheticRowFalse_skipsSyntheticRow() {
+        // The auto-armed post-download intent must wait for the real
+        // side-loaded track; only an explicit user pick may take the
+        // synthetic row (whose selection triggers a session reload).
+        mediaStreams = listOf(
+            MediaStream(index = 5, type = StreamType.SUBTITLE, language = "ger", displayTitle = "German"),
+        )
+        helper = makeHelper(
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE },
+        )
+        availableTracks.value = emptyList()
+        helper.updateTracksFromEngine()
+
+        val option = helper.findSubtitleOptionFor(
+            ReadySubtitleHint(trackId = "external:5", serverStreamIndex = 5),
+            allowSyntheticRow = false,
+        )
+
+        assertNull(option)
+    }
+
+    @Test
+    fun requestSubtitleSelection_doesNotConsumeSyntheticTranscodeRow() {
+        // Regression pin: consuming the synthetic row from the AUTO intent
+        // used to fire onReloadForStreamChange — an unrequested mid-playback
+        // session reload merely from completing a download.
+        var reloads = 0
+        mediaStreams = listOf(
+            MediaStream(index = 5, type = StreamType.SUBTITLE, language = "ger", displayTitle = "German"),
+        )
+        helper = makeHelper(
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE },
+            onReloadForStreamChange = { reloads++ },
+        )
+        availableTracks.value = emptyList()
+        helper.updateTracksFromEngine()
+
+        helper.requestSubtitleSelection(ReadySubtitleHint(trackId = "external:5", serverStreamIndex = 5))
+        repeat(3) { helper.updateTracksFromEngine() }
+
+        assertEquals(0, reloads)
+        // No picker row beyond Off is selected — the side-load simply hasn't landed.
+        assertTrue(helper.state.value.subtitleTracks.none { it.isSelected && it.index >= 0 })
+    }
+
+    @Test
+    fun requestSubtitleSelection_givesUpAfterAttemptCap() {
+        availableTracks.value = emptyList()
+        helper.updateTracksFromEngine()
+        helper.requestSubtitleSelection(ReadySubtitleHint(trackId = "external:9"))
+
+        // More emissions than the cap: each consumes an attempt until the
+        // budget is exhausted and the intent drops.
+        repeat(TrackSelectionHelper.PENDING_SERVER_SUBTITLE_MAX_ATTEMPTS + 3) {
+            helper.updateTracksFromEngine()
+        }
+        io.mockk.clearMocks(engine, answers = false)
+
+        // Even when the track finally arrives, no hijacking selection happens.
+        availableTracks.value = listOf(
+            mediaTrack(0, "Late", "ger", TrackType.SUBTITLE, isSelected = false, id = "external:9"),
+        )
+        helper.updateTracksFromEngine()
+
+        // Only the ladder's own auto-Off ran; the dropped intent did not select.
+        verify(exactly = 0) { engine.selectTrack(TrackType.SUBTITLE, 0) }
     }
 
     private fun mediaTrack(

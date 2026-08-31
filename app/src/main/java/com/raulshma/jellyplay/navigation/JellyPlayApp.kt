@@ -117,7 +117,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.rememberJellyPlayUiEnvironment
 import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -338,7 +338,6 @@ private fun MainContent(
     audioPlaybackManager: AudioPlaybackManager,
 ) {
     val homeMode = preferences.homeMode
-    val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current
     val isSoothing = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme.current
     val isMonochrome = com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme.current
 
@@ -437,11 +436,12 @@ private fun MainContent(
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value]
     val isFullScreenRoute = currentBackStack?.any { it is Route && it.isFullScreen } ?: false
 
-    // App-wide offline state. Library + Live TV have no offline fallback (they
-    // always fetch live and degrade to a dead-end ErrorScreen), so while offline
-    // they are hidden from the floating nav. Home is the offline hub, Search has
-    // an offline-results path, Shortcuts are device-local, and MusicBrowse's
-    // home surfaces the downloaded music library — all stay visible.
+    // App-wide offline state. Live TV has no offline fallback (live streams
+    // are always server-bound and degrade to a dead-end ErrorScreen), so while
+    // offline it is hidden from the floating nav. Home is the offline hub,
+    // Search has an offline-results path, Shortcuts are device-local,
+    // MusicBrowse's home surfaces the downloaded music library, and Library
+    // auto-filters to downloads (#147) — all stay visible.
     val offlineMode by viewModel.offlineMode.collectAsStateWithLifecycle()
     val isGoingOnline by viewModel.isGoingOnline.collectAsStateWithLifecycle()
     val downloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
@@ -468,9 +468,10 @@ private fun MainContent(
                 val order = preferences.navItemOrder
                 // Server-bound destinations with no offline fallback. Hidden
                 // by simpleName to stay consistent with the user hidden-item
-                // filter below (also keyed on simpleName).
+                // filter below (also keyed on simpleName). Library is NOT in
+                // here: its grid auto-switches to the offline store (#147).
                 val offlineHidden = if (isOffline) {
-                    setOf(Route.Library::class.simpleName, Route.LiveTv::class.simpleName)
+                    setOf(Route.LiveTv::class.simpleName)
                 } else {
                     emptySet()
                 }
@@ -821,7 +822,6 @@ private fun MainContent(
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
                         isAudioPlayerScreen = isAudioPlayerScreen,
-                        isSynthwave = isSynthwave,
                         isExpanded = isExpanded,
                         isBottomNavVisibleState = isBottomNavVisibleState,
                         hideBottomNavOnScroll = preferences.hideBottomNavOnScroll,
@@ -1066,7 +1066,6 @@ private fun PhoneContent(
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
     isAudioPlayerScreen: Boolean,
-    isSynthwave: Boolean,
     isExpanded: Boolean,
     isBottomNavVisibleState: androidx.compose.runtime.MutableState<Boolean>,
     hideBottomNavOnScroll: Boolean,
@@ -1179,11 +1178,12 @@ private fun PhoneContent(
                 navigationRailContainerColor = animatedNavBarColor,
             ),
         ) {
-            val synthwaveBrush = remember {
-                com.raulshma.jellyplay.core.designsystem.theme.synthwaveBackgroundBrush()
-            }
-            val appBackgroundModifier = if (isSynthwave) {
-                Modifier.background(synthwaveBrush)
+            // Gradient variants (Synthwave, Aurora) paint a full-bleed vertical
+            // gradient instead of the flat M3 background colour.
+            val variantBrush = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
+                .backgroundBrush()
+            val appBackgroundModifier = if (variantBrush != null) {
+                Modifier.background(variantBrush)
             } else {
                 Modifier.background(MaterialTheme.colorScheme.background)
             }
@@ -1205,7 +1205,6 @@ private fun PhoneContent(
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
-                        onPlayOnClick = onPlayOnClick,
                         playOnStrategy = playOnViewModel.strategy,
                         surpriseRequests = surpriseRequests,
                     )
@@ -1470,7 +1469,6 @@ private fun MainNavDisplay(
     modifier: Modifier = Modifier,
     onNowPlayingClick: () -> Unit = {},
     onAmbientClick: () -> Unit = {},
-    onPlayOnClick: () -> Unit = {},
     playOnStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy? = null,
     surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
@@ -1552,7 +1550,6 @@ private fun MainNavDisplay(
         onNowPlayingClick,
         onAmbientClick,
         onLogout,
-        onPlayOnClick,
         playOnStrategy,
     ) {
         entryProvider {
@@ -1560,7 +1557,6 @@ private fun MainNavDisplay(
                 navigator = navigator,
                 homeMode = homeMode,
                 onModeChange = onModeChange,
-                onPlayOnClick = onPlayOnClick,
                 playOnStrategy = playOnStrategy,
                 surpriseRequests = surpriseRequests,
                 musicContent = {

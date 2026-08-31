@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.isAudioType
+import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
@@ -157,11 +158,12 @@ internal fun DetailContent(
         onStartWatchParty = callbacks.onStartWatchParty,
     )
 
-    val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current
+    val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
     val backgroundColorState = scrollState.backgroundColorState
-    val backgroundModifier = remember(isSynthwave) {
-        if (isSynthwave) {
-            Modifier.background(com.raulshma.jellyplay.core.designsystem.theme.synthwaveBackgroundBrush())
+    val backgroundModifier = remember(themeVariant) {
+        val variantBrush = themeVariant.backgroundBrush()
+        if (variantBrush != null) {
+            Modifier.background(variantBrush)
         } else {
             // Read the snapshot state inside drawBehind so a scroll-driven
             // background-colour change re-draws without recomposing DetailContent.

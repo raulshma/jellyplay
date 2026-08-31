@@ -101,6 +101,25 @@ class StreamingSubtitleStoreImpl @Inject constructor(
         }
     }
 
+    override suspend fun markServerStreamIndex(itemId: String, saved: SavedSubtitle, index: Int) {
+        withContext(Dispatchers.IO) {
+            val updated = readManifest(itemId).let { manifest ->
+                StreamingSubtitleManifest(
+                    subtitles = manifest.subtitles.map { existing ->
+                        if (existing.provider == saved.provider &&
+                            existing.providerSubtitleId == saved.providerSubtitleId
+                        ) {
+                            existing.copy(serverStreamIndex = index)
+                        } else {
+                            existing
+                        }
+                    },
+                )
+            }
+            writeManifest(itemId, updated)
+        }
+    }
+
     override suspend fun clear(itemId: String) {
         withContext(Dispatchers.IO) {
             itemDir(itemId).takeIf { it.exists() }?.deleteRecursively()

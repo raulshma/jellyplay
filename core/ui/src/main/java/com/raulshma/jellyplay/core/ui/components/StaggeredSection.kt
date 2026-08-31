@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import kotlinx.coroutines.delay
@@ -29,8 +30,9 @@ fun StaggeredSection(
     val progress = rememberStaggerProgress(delayIndex)
     Box(
         modifier = modifier.graphicsLayer {
-            alpha = progress
-            translationY = (1f - progress) * 24f
+            val p = progress.value
+            alpha = p
+            translationY = (1f - p) * 24f
         },
     ) {
         content()
@@ -38,16 +40,15 @@ fun StaggeredSection(
 }
 
 @Composable
-private fun rememberStaggerProgress(delayIndex: Int): Float {
+private fun rememberStaggerProgress(delayIndex: Int): State<Float> {
     var revealed by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         delay(delayIndex * 45L)
         revealed = true
     }
-    val progress by animateFloatAsState(
+    return animateFloatAsState(
         targetValue = if (revealed) 1f else 0f,
         animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "staggerSection$delayIndex",
     )
-    return progress
 }

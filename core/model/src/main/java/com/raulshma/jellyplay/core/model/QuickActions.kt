@@ -46,14 +46,22 @@ private fun MediaQuickActionScope.actionableTypes(): Set<MediaType> = when (this
  * collection/person screens. Execution of each action (navigation, viewModel
  * calls) stays at the call site via [com.raulshma.jellyplay.core.ui.components.MediaQuickActionController].
  *
- * @param includeDownload When true, adds [QuickAction.DOWNLOAD] for audio and
- *   video types. Matches the type half of `MediaOptionsMenu.canDownload`; the
- *   mediaSources half is checked on the detail screen once the action lands.
+ * @param includeDownload When true, adds [QuickAction.DOWNLOAD] for audio,
+ *   video, and series types (series resolve their season/episode selection
+ *   through the host's download flow). Matches the type half of
+ *   `MediaOptionsMenu.canDownload`; the mediaSources half is resolved by the
+ *   executor once the action fires.
+ * @param isDownloaded Whether this item already has a local download. When true
+ *   (and the type is downloadable), the download slot flips to
+ *   [QuickAction.REMOVE_DOWNLOAD] so an item is never offered both actions at
+ *   once. Callers that know every item is downloaded (offline hosts) can pass
+ *   this instead of distinguishing per item.
+ * @param includeRemoveDownload When true, adds [QuickAction.REMOVE_DOWNLOAD]
+ *   for audio/video types plus series/seasons (which aren't "downloadable" as
+ *   a single stream but can have their downloaded episodes removed). Redundant
+ *   when [includeDownload] + [isDownloaded] already emit the action.
  * @param includeAddToPlaylist When true, adds [QuickAction.ADD_TO_PLAYLIST] for
  *   video and series/season types (the types a playlist makes sense for).
- * @param includeDelete When true, adds [QuickAction.DELETE] for audio and video
- *   types. Used by the offline hosts where the item is already downloaded and a
- *   destructive "remove download" affordance makes sense; omitted online.
  * @param includeFavorite When true, adds the [QuickAction.FAVORITE]/
  *   [QuickAction.UNFAVORITE] toggle. Gated so the online hosts (which already
  *   expose favorite from the detail screen's action row) keep their current
@@ -63,7 +71,8 @@ fun MediaItem.quickActions(
     scope: MediaQuickActionScope,
     includeDownload: Boolean = false,
     includeAddToPlaylist: Boolean = false,
-    includeDelete: Boolean = false,
+    includeRemoveDownload: Boolean = false,
+    isDownloaded: Boolean = false,
     includeFavorite: Boolean = false,
 ): List<QuickAction> {
     if (mediaType !in scope.actionableTypes()) return emptyList()
@@ -73,18 +82,18 @@ fun MediaItem.quickActions(
         if (includeFavorite) {
             add(if (isFavorite) QuickAction.UNFAVORITE else QuickAction.FAVORITE)
         }
-        if (includeDownload && (mediaType.isAudioType || mediaType.isVideoType)) {
-            add(QuickAction.DOWNLOAD)
+        if (includeDownload && (mediaType.isAudioType || mediaType.isVideoType || mediaType == MediaType.SERIES)) {
+            add(if (isDownloaded) QuickAction.REMOVE_DOWNLOAD else QuickAction.DOWNLOAD)
+        } else if (includeRemoveDownload &&
+            (mediaType.isVideoType || mediaType == MediaType.SERIES ||
+                mediaType == MediaType.SEASON || mediaType.isAudioType)
+        ) {
+            add(QuickAction.REMOVE_DOWNLOAD)
         }
         if (includeAddToPlaylist &&
             (mediaType.isVideoType || mediaType == MediaType.SERIES || mediaType == MediaType.SEASON)
         ) {
             add(QuickAction.ADD_TO_PLAYLIST)
-        }
-        if (includeDelete && (mediaType.isVideoType || mediaType == MediaType.SERIES ||
-                mediaType == MediaType.SEASON || mediaType.isAudioType)
-        ) {
-            add(QuickAction.DELETE)
         }
         add(QuickAction.DETAILS)
     }

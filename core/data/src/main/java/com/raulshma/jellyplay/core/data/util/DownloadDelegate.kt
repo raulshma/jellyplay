@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.util
 
+import android.util.Log
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -241,12 +242,12 @@ class DownloadDelegate @Inject constructor(
                             )
                         }
                     } catch (e: Exception) {
-                        android.util.Log.d("DownloadDelegate", "Failed to persist offline images for ${request.mediaItemId}", e)
+                        Log.d(TAG, "Failed to persist offline images for ${request.mediaItemId}", e)
                     }
                     request.trickplayInfo?.let { info ->
                         try {
                             if (!writer.downloadTrickplayData(request.mediaItemId, info, downloadItem.downloadPath)) {
-                                android.util.Log.d("DownloadDelegate", "Trickplay sync failed for ${request.mediaItemId}")
+                                Log.d(TAG, "Trickplay sync failed for ${request.mediaItemId}")
                             }
                         } catch (_: Exception) {}
                     }
@@ -263,21 +264,37 @@ class DownloadDelegate @Inject constructor(
                         }
                     }
                     if (subtitleStreams.isNotEmpty()) {
-                        try {
-                            if (!writer.downloadExternalSubtitles(
-                                    request.mediaItemId,
-                                    request.mediaSourceId,
-                                    subtitleStreams,
-                                    downloadItem.downloadPath,
-                                )
-                            ) {
-                                android.util.Log.d("DownloadDelegate", "Subtitles sync failed for ${request.mediaItemId}")
+                        // saveOfflineMediaDetail above already seeded the
+                        // freshness baseline with THIS detail's subtitle
+                        // signature. If the bundle now fails, that seed would
+                        // mask the failure forever: the next check compares
+                        // identical signatures, never flags, and the item
+                        // plays offline with no subtitles. Marking the axis
+                        // pending forces the next check/resync to retry until
+                        // a fetch actually lands.
+                        val subtitlesOk = try {
+                            writer.downloadExternalSubtitles(
+                                request.mediaItemId,
+                                request.mediaSourceId,
+                                subtitleStreams,
+                                downloadItem.downloadPath,
+                            )
+                        } catch (e: Exception) {
+                            Log.d(TAG, "Subtitles sync threw for ${request.mediaItemId}", e)
+                            false
+                        }
+                        if (!subtitlesOk) {
+                            Log.d(TAG, "Subtitles sync failed for ${request.mediaItemId}")
+                            try {
+                                writer.markSubtitlesPending(request.mediaItemId)
+                            } catch (e: Exception) {
+                                Log.d(TAG, "Failed to mark subtitles pending for ${request.mediaItemId}", e)
                             }
-                        } catch (_: Exception) {}
+                        }
                     }
                     try {
                         if (!writer.downloadMediaSegments(request.mediaItemId, downloadItem.downloadPath)) {
-                            android.util.Log.d("DownloadDelegate", "Segments sync failed for ${request.mediaItemId}")
+                            Log.d(TAG, "Segments sync failed for ${request.mediaItemId}")
                         }
                     } catch (_: Exception) {}
                 }
@@ -290,6 +307,8 @@ class DownloadDelegate @Inject constructor(
     }
 
     private companion object {
+        private const val TAG = "DownloadDelegate"
+
         // Max number of cast/person images persisted to disk per item. Caps the
         // per-download image-fetch cost; the cast row rarely needs more than the
         // top-billed handful, and the rest fall back to the remote URL/blurhash.

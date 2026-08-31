@@ -111,11 +111,6 @@
     <string name="core_ui_color_style_title">Style de couleur</string>
     <string name="core_ui_color_style_subtitle">Définissez l\'ambiance visuelle des palettes générées</string>
     <string name="core_ui_dynamic_colors">Couleurs dynamiques du fond d\'écran</string>
-    <string name="core_ui_synthwave_accent_title">Accent Synthwave</string>
-    <string name="core_ui_synthwave_accent_subtitle">Sélectionnez un échantillon de couleur d\'accent néon personnalisée</string>
-    <string name="core_ui_soothing_accent_title">Accent apaisant</string>
-    <string name="core_ui_soothing_accent_subtitle">Sélectionnez une couleur d\'accent apaisante</string>
-
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Supprimer</string>
     <string name="core_ui_play">Lire</string>
@@ -198,6 +193,12 @@
     <string name="detail_season_default">Saison %1$d</string>
     <string name="detail_cd_collapse">Réduire</string>
     <string name="detail_cd_expand">Développer</string>
+    <string name="detail_download_series_title">Télécharger la série</string>
+    <string name="detail_download_series_subtitle">Appuyez sur une saison pour voir les épisodes. Sélectionnez ceux à télécharger.</string>
+    <string name="detail_downloaded_count_format">• %1$d téléchargé(s)</string>
+    <string name="detail_no_episodes_available">Aucun épisode disponible</string>
+    <string name="detail_downloaded_status">Téléchargé</string>
+    <string name="detail_queuing">Mise en file…</string>
     <string name="detail_delete_entire_series">Supprimer toute la série</string>
     <string name="detail_cancel">Annuler</string>
     <string name="detail_delete_count">Supprimer %1$d</string>
@@ -241,4 +242,6 @@
     <string name="transcode_reason_hint_decoder">Passer le décodeur en Software/FFmpeg peut résoudre le problème.</string>
     <string name="transcode_reason_hint_quality">Augmentez la limite de qualité de streaming dans le sélecteur de qualité.</string>
     <string name="transcode_reason_hint_subtitle">Choisissez un sous-titre SRT/externe pour éviter l\'incrustation.</string>
+    <string name="core_ui_variant_accent_title">Accent %1$s</string>
+    <string name="core_ui_variant_accent_subtitle">Sélectionner la couleur d\'accent de ce style de thème</string>
 </resources>

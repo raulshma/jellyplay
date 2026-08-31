@@ -24,6 +24,11 @@ series, music, and more — and plays it back with zero network.
   progress, download speed, and ETA from the Android notification shade.
 - 📚 **Offline library browser** — downloaded content is mirrored into a
   dedicated **Offline Library**, fully browsable without your server.
+- 🧩 **Downloads in the normal UI** — downloads live inside the regular
+  home and library too: a long-press on any card offers **Download** (or
+  **Remove download** once downloaded), and the library's **Downloaded**
+  filter serves the grid straight from the local store. See
+  [Browsing downloads inline](#browsing-downloads-inline).
 - 📺 **Series & episode selection** — download single episodes, full
   seasons, or entire series; JellyPlay pre-calculates storage needs.
 - 🔁 **Auto-download** — optionally fetch new episodes of series you
@@ -64,6 +69,37 @@ The movie appears in **Downloads** with a progress badge, and in
 Each episode is queued as a separate download (up to 4 resolve
 concurrently), so you can watch the first one while the rest continue
 downloading.
+
+## Browsing downloads inline
+
+Downloads are not confined to the dedicated screens — the regular home and
+library surfaces are download-aware:
+
+- **Long-press any movie / episode / music track / series** on Home or in a
+  Library and tap **Download**: single-stream items start immediately at
+  your default quality, with a "Download started" confirmation. Once an
+  item is downloaded, the same menu flips to **Remove download**, which
+  deletes the local copy (server untouched) after a confirmation — for a
+  series, that's the episode-selection delete sheet.
+- **Series** open the season/episode download sheet right where you are:
+  long-pressing Download on a Home series card presents the sheet in place,
+  and a Library card routes to the detail screen with the sheet
+  pre-opened — either way the whole-series grab gets your selection.
+- **Library → Downloaded filter** — the pinned filter row has a one-tap
+  **Downloaded** chip. While active, the grid is served from the on-device
+  offline store instead of the server: it's instant, composes with the other
+  filters (type, genre, year, rating, played status, sort), and hides the
+  Tags dimension, which has no offline copy. Membership is matched against
+  the library folder saved on each download, so downloads from multi-folder
+  libraries may not appear until they're re-synced.
+- **Library while offline** — going offline (manually or on network loss)
+  auto-applies the Downloaded filter: the grid switches to the on-device
+  store, the chip renders pinned on, and your real filters are kept
+  untouched so going back online restores the exact view you had.
+
+The dedicated **Downloads** queue and **Offline Library** screens remain the
+power surfaces: transfer control, storage summary, music browsing, and
+per-item resync live there.
 
 ### Auto-download new episodes
 
@@ -147,7 +183,9 @@ Once a download is complete:
   ratings, cast, posters, genres) mirrored from your server
 - Tap to play — JellyPlay uses the local copy, no network needed
 - All player features work: subtitles, audio tracks, trickplay seeking,
-  sync, speed control, chapters
+  sync, speed control, chapters (chapter names and timings come from the
+  download-time snapshot; chapter thumbnail tiles need network and fall
+  back to a placeholder image when offline)
 - Resume position and played state are tracked locally and synced back
   to your server later (see [Watch-progress sync](#watch-progress-sync))
 
@@ -157,7 +195,34 @@ bundled offline subtitles and local trickplay sprites automatically.
 
 You can also toggle **Offline mode** manually from the home screen at any
 time — useful to force offline playback even when a flaky connection is
-available.
+available. While offline (manually, automatically on network loss, or when
+the server can't be reached), the home screen keeps its normal layout and
+shows rows derived from your downloads — Continue Watching, Next Up,
+Recently Downloaded, Movies, Series, Music — served entirely from the
+on-device store:
+
+- **Continue Watching** lists every downloaded item (movies *and*
+  episodes) mid-watch — between 1% and 95% progress — most recently played
+  first. Episodes count even though the library grid only shows the series:
+  they come from their own episode index.
+- **Next Up** lists, for each downloaded series, the first not-yet-finished
+  downloaded episode in season/episode order, with the series you watched
+  most recently first (capped at 20). Strict chronology: an episode isn't
+  skipped past just because a later one is downloaded — the row follows the
+  same order you'd watch in. It reflects offline watching live: finish an
+  episode offline and the next one takes its place immediately.
+- Both rows honor your home-screen layout preferences (hide-from-
+  Continue-Watching, excluded Next Up series, disabled sections, and the
+  merge Continue Watching + Next Up toggle). Server-side Next Up tuning
+  (rewatching, day cutoffs) stays online-only.
+
+All rows are playable offline and tap through to the offline detail screen.
+The hero follows the same rule: it features your downloaded movies and
+series with their locally saved artwork (the downloaded poster when no
+backdrop was stored), and tapping it opens the offline detail screen. The
+music home never shows a hero, online or off. The library follows the same
+rule as the rows: its grid auto-filters to your downloads, exactly as if
+you'd tapped the **Downloaded** chip yourself.
 
 ## Keeping downloads fresh (resync)
 
@@ -173,8 +238,9 @@ When you open a downloaded item (or tap **Check all for updates** from the
 Downloads screen), JellyPlay compares the server's current state against the
 baseline captured at download time, across these axes:
 
-- **Metadata** — overview, cast, ratings, genres, studios, runtime (watched /
-  favorite flips are deliberately excluded so they don't trigger a resync)
+- **Metadata** — overview, cast, ratings, genres, studios, runtime, chapter
+  list (watched / favorite flips are deliberately excluded so they don't
+  trigger a resync)
 - **Artwork** — poster and backdrop (Jellyfin issues a new image tag whenever
   an image is replaced)
 - **Subtitles** — the set of deliverable external subtitle tracks
@@ -345,6 +411,7 @@ should remain visible throughout an active transfer.
 | **HLS / DASH streams** | ✅ | Direct play, no re-encoding |
 | **Live TV** | ❌ | Streaming-only by design |
 | **DRM-protected content** | ❌ | Jellyfin doesn't host DRM content |
+| **Downloaded filter in multi-folder libraries** | ⚠️ | Library membership is matched per download; nested-folder layouts may need a resync |
 
 ## Under the hood
 
@@ -410,23 +477,33 @@ multi-connection chunking, and concurrency than the ExoPlayer helper.
 
 ### Persistence (Room)
 
-A single `JellyPlayDatabase` (v46) holds three relevant tables:
+A single `JellyPlayDatabase` (v51) holds five relevant tables:
 
 - **`downloads`** — live transfer state (path, url, sizes, status,
   speed, priority, error, container, series/season linkage). Indexed
   `(status, priority, createdAt)` for queue ordering. Includes a
   cold-start recovery projection and a fast auto-download episode query.
-- **`offline_media`** — browsable offline metadata (overview, ratings,
-  cast JSON, genres, studios, posters, blurHash) plus playback-progress
-  columns (`playbackPositionTicks`, `playedPercentage`, `isPlayed`,
-  `lastPlayedDate`) and the **freshness-resync baseline + result flags**
-  (`syncedPosterTag`, `syncedBackdropTag`, `syncedMetadataSignature`,
-  `syncedSubtitleSignature`, `syncedTrickplaySignature`,
-  `syncedSegmentsSignature`, `syncedMediaSourceId`, `syncedMediaSizeBytes`,
-  `lastSyncedAt`, `syncUpdateAvailable`, `syncMediaChanged`, `syncChecking`,
-  `syncError`). `applyPlayedStateToHierarchy` cascades a played /
-  unplayed flip across an item and its whole series/season hierarchy in
-  one UPDATE, mirroring Jellyfin's server-side behavior.
+- **`offline_media`** — identity plus the browsable offline metadata
+  mirror (overview, ratings, genres, studios, tagline, posters, blurHash)
+  and rich-metadata JSON blobs persisted at download time (cast,
+  provider ids, external urls, chapter list). Rich columns are nullable so
+  rows downloaded before a column existed degrade gracefully until
+  re-download.
+- **`playback_state`** — playback progress and watched/favorite state per
+  item (`playbackPositionTicks`, `playedPercentage`, `isPlayed`,
+  `isFavorite`, `lastPlayedDate`), read through the
+  `OfflineMediaWithPlayback` LEFT JOIN. `applyPlayedStateToHierarchy`
+  cascades a played / unplayed flip across an item and its whole
+  series/season hierarchy in one UPDATE, mirroring Jellyfin's server-side
+  behavior.
+- **`sync_baseline`** — the **freshness-resync baseline + result flags**,
+  split out of the historical `offline_media` row so a metadata re-persist
+  can't clobber them (`syncedPosterTag`, `syncedBackdropTag`,
+  `syncedMetadataSignature`, `syncedSubtitleSignature`,
+  `syncedTrickplaySignature`, `syncedSegmentsSignature`,
+  `syncedMediaSourceId`, `syncedMediaSizeBytes`, `lastSyncedAt`,
+  `syncUpdateAvailable`, `syncMediaChanged`, `syncChecking`, `syncError`,
+  plus per-axis change flags and a failed-subtitle pending-retry flag).
 - **`playback_outbox`** — the offline telemetry queue drained by
   `PlaybackSyncWorker`.
 
@@ -471,12 +548,19 @@ doesn't invalidate the tiles); segments hash the typed `(start, end)` list.
 within `SYNC_TTL_MS` (1 hour) or the device is offline, so the on-entry check
 an offline detail screen fires is effectively free most of the time.
 
-**Baseline seeding + first-contact guard.** Subtitles and trickplay signatures
-are seeded at download time (derived free from `MediaDetail`); the segments
-signature seeds on the first segments resync (segments aren't part of
-`MediaDetail`). An empty signature means "never recorded" and never flags a
-spurious change — so a pre-feature row or a not-yet-synced axis degrades to
-first-contact seeding rather than a false "update available".
+**Baseline seeding + first-contact guard.** The poster/backdrop tags and the
+metadata/subtitle/trickplay signatures are seeded at download time (all
+derived free from `MediaDetail`; the whole baseline seeds once, when no row
+exists yet or its metadata signature is missing); the segments signature
+seeds on the first segments resync (segments aren't part of `MediaDetail`).
+An empty signature means "never recorded" and never flags a spurious change —
+so a pre-feature row or a not-yet-synced axis degrades to first-contact
+seeding rather than a false "update available". The same rule absorbs
+signature-payload format changes: when a release changes a signature's inputs
+(v51 added chapters to the metadata hash), its migration retires the stored
+values and resets what the retired comparison left behind, so the format
+change reads as a one-time silent re-seed instead of a stale badge. The full
+rationale lives with `MIGRATION_50_51` in `core/database`.
 
 **Composite badge.** The DB stores one coarse `syncUpdateAvailable` flag for the
 metadata/images/subtitles/trickplay/segments axes (the per-axis split lives

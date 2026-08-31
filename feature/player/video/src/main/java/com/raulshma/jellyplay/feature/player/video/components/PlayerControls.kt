@@ -149,8 +149,6 @@ internal fun PlayerControls(
     nightModeStrength: EffectStrength,
     audioPassthrough: Boolean,
     segments: List<MediaSegment> = emptyList(),
-    resumePositionMs: Long = 0L,
-
     currentAspectRatio: AspectRatio,
     detectedAspectRatio: AspectRatio?,
     isVisible: Boolean,
@@ -563,7 +561,6 @@ internal fun PlayerControls(
                     trickplayBitmap = tvTrickplayBitmap,
                     playbackSpeed = playbackSpeed,
                     showTimeRemaining = showTimeRemaining,
-                    resumePositionMs = resumePositionMs,
                     abRepeatStartMs = abRepeat.aMs,
                     abRepeatEndMs = abRepeat.bMs,
                     onSeekStart = onSeekStart,
@@ -988,7 +985,6 @@ private fun TvControllableSeekBar(
     trickplayBitmap: Bitmap? = null,
     playbackSpeed: Float = 1.0f,
     showTimeRemaining: Boolean = false,
-    resumePositionMs: Long = 0L,
     // Plain values (not streams): A/B points change only on user action, never
     // per position tick, so passing them here keeps the leaf-collection rule
     // intact while letting the canvas visualize the window. Point presence
@@ -1041,8 +1037,6 @@ private fun TvControllableSeekBar(
     )
 
     val chapterMarkerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
-    // Resume-position marker: tertiary stands apart from progress/chapter markers.
-    val resumeMarkerColor = MaterialTheme.colorScheme.tertiary
 
     // A/B repeat window: translucent region on the track + primary edge ticks.
     val abRepeatRegionColor = activeColor.copy(alpha = 0.28f)
@@ -1320,22 +1314,6 @@ private fun TvControllableSeekBar(
                             )
                         }
                     }
-                }
-
-                if (resumePositionMs > 0 && duration > 0) {
-                    val resumeFraction = (resumePositionMs.toFloat() / duration).coerceIn(0.01f, 0.99f)
-                    val resumeX = resumeFraction * trackWidth
-                    val resumeMarkerHeight = 10.dp.toPx()
-                    val resumeMarkerWidth = 2.dp.toPx()
-                    drawRoundRect(
-                        color = resumeMarkerColor,
-                        topLeft = androidx.compose.ui.geometry.Offset(
-                            resumeX - resumeMarkerWidth / 2f,
-                            trackY + trackHeight.toPx() / 2f - resumeMarkerHeight / 2f,
-                        ),
-                        size = androidx.compose.ui.geometry.Size(resumeMarkerWidth, resumeMarkerHeight),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.dp.toPx()),
-                    )
                 }
 
                 val thumbRadius = thumbRadiusDp.toPx()

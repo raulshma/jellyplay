@@ -41,9 +41,10 @@ data class DownloadsUiState(
 )
 
 /**
- * A completed item eligible for a force resync, with enough episode context
- * (series name + SxxExx) to render the same identification line the downloads
- * list shows, so episodes are distinguishable in the force-resync picker.
+ * A downloaded item eligible for a force resync (completed, or stalled after
+ * partial artifacts landed), with enough episode context (series name + SxxExx)
+ * to render the same identification line the downloads list shows, so episodes
+ * are distinguishable in the force-resync picker.
  */
 @Immutable
 data class ForceResyncCandidate(
@@ -335,14 +336,34 @@ class DownloadsViewModel @Inject constructor(
     }
 
     /**
-     * Completed downloads available for a force resync, deduplicated by media
-     * item id. Drives the item picker in the force-resync sheet. Carries the
-     * episode context (series name + SxxExx) so episodes are identifiable in
-     * the picker, mirroring the context line on the downloads list.
+     * Download statuses eligible for a force resync. COMPLETED items carry the
+     * full artifact set; FAILED and PAUSED items still have their offline
+     * metadata row (seeded during intake) plus whatever sidecars landed before
+     * the stall, so refreshing them from the server is valid. Actively
+     * transferring states (PENDING/QUEUED/DOWNLOADING) are excluded — the
+     * download worker itself lands fresh sidecars there, and a concurrent
+     * resync would interleave with its writes. CANCELLED never lingers: cancel
+     * deletes the row and its files.
      */
-    fun forceResyncCandidates(): List<ForceResyncCandidate> =
-        _uiState.value.downloads
-            .filter { it.status == DownloadStatus.COMPLETED }
+    private val forceResyncEligibleStatuses = setOf(
+        DownloadStatus.COMPLETED,
+        DownloadStatus.FAILED,
+        DownloadStatus.PAUSED,
+    )
+
+    /**
+     * Completed/stalled downloads available for a force resync, deduplicated by
+     * media item id. Resolved from an uncapped one-shot DB read (not the UI
+     * list's 500-row reactive window) so every downloaded media item is
+     * offered, and so the picker is correct even when opened before the list
+     * flow has emitted. Drives the item picker in the force-resync sheet.
+     * Carries the episode context (series name + SxxExx) so episodes are
+     * identifiable in the picker, mirroring the context line on the downloads
+     * list.
+     */
+    suspend fun forceResyncCandidates(): List<ForceResyncCandidate> =
+        downloadRepository.getAllDownloadsSnapshot()
+            .filter { it.status in forceResyncEligibleStatuses }
             .distinctBy { it.mediaItemId }
             .map {
                 ForceResyncCandidate(

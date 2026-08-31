@@ -36,6 +36,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -282,6 +285,7 @@ class VideoPlayerCleanupTest {
             savedStateHandle = androidx.lifecycle.SavedStateHandle(),
             subtitlePreviewRepository = mockk(relaxed = true),
             userDataMutator = mockk(relaxed = true),
+            offlineModeManager = mockk(relaxed = true),
         )
 
         // Set some media-specific states to verify they are cleared on release
@@ -305,13 +309,60 @@ class VideoPlayerCleanupTest {
     @Test
     fun pipController_notifyPipDismissed_triggersViewModelReleaseAndClosePlayer() {
         val pipController = PipController()
-        val sessionManager = mockk<PlaybackSessionManager>(relaxed = true)
         val playbackCore = mockk<SyncPlayPlaybackCore>(relaxed = true)
         val syncPlayManager = mockk<SyncPlayManager>(relaxed = true)
+
+        val viewModel = buildPipDismissViewModel(pipController, syncPlayManager, playbackCore)
+
+        pipController.notifyPipDismissed()
+
+        // Verify syncPlayManager.playbackCore was reset (proves release() ran)
+        verify { playbackCore.reset() }
+
+        // Issue #145: the one-shot flag must be re-armed after handling so a
+        // stale true can never greet the next player instance.
+        assertFalse(pipController.pipDismissed.value)
+
+        // ...and the close signal must have been raised for the screen.
+        runBlocking {
+            withTimeout(1_000) { viewModel.closePlayer.first() }
+        }
+    }
+
+    @Test
+    fun pipController_notifyPipDismissed_afterRelease_rearmsFlagAndStillClosesPlayer() {
+        // Issue #145 regression pin: once the session is already released,
+        // release() early-returns on its idempotence latch and used to skip
+        // pipController.reset() — leaving pipDismissed=true stuck on this
+        // @Singleton, so the NEXT player instance collected it as its initial
+        // value and closed instantly on open ("can't start play on anything").
+        val pipController = PipController()
+        val playbackCore = mockk<SyncPlayPlaybackCore>(relaxed = true)
+        val syncPlayManager = mockk<SyncPlayManager>(relaxed = true)
+
+        val viewModel = buildPipDismissViewModel(pipController, syncPlayManager, playbackCore)
+
+        // Release first so the dismiss below hits release()'s idempotence
+        // latch: only the collector's explicit re-arm can clear the flag now.
+        viewModel.release()
+        pipController.notifyPipDismissed()
+
+        assertFalse(pipController.pipDismissed.value)
+        runBlocking {
+            withTimeout(1_000) { viewModel.closePlayer.first() }
+        }
+    }
+
+    /** Shared construction for the PiP-dismiss tests: relaxed mocks everywhere
+     *  except the collaborators each test actually observes. */
+    private fun buildPipDismissViewModel(
+        pipController: PipController,
+        syncPlayManager: SyncPlayManager,
+        playbackCore: SyncPlayPlaybackCore,
+    ): VideoPlayerViewModel {
         every { syncPlayManager.playbackCore } returns playbackCore
         syncPlayManager.stubEmptyEvents()
-
-        val viewModel = VideoPlayerViewModel(
+        return VideoPlayerViewModel(
             context = mockk(relaxed = true),
             mediaRepository = mockk(relaxed = true),
             playbackRepository = mockk(relaxed = true),
@@ -336,7 +387,7 @@ class VideoPlayerCleanupTest {
             downloadsStore = mockk(relaxed = true) { every { downloads } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice()) },
             appearanceStore = mockk(relaxed = true) { every { appearance } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice()) },
             networkOfflineStore = mockk(relaxed = true) { every { networkOffline } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice()) },
-            sessionManager = sessionManager,
+            sessionManager = mockk(relaxed = true),
             castManager = mockk(relaxed = true),
             jellyfinRemotePlayCastStrategy = mockk(relaxed = true),
             syncPlayManager = syncPlayManager,
@@ -353,11 +404,7 @@ class VideoPlayerCleanupTest {
             savedStateHandle = androidx.lifecycle.SavedStateHandle(),
             subtitlePreviewRepository = mockk(relaxed = true),
             userDataMutator = mockk(relaxed = true),
+            offlineModeManager = mockk(relaxed = true),
         )
-
-        pipController.notifyPipDismissed()
-
-        // Verify syncPlayManager.playbackCore was reset (proves release() ran)
-        verify { playbackCore.reset() }
     }
 }

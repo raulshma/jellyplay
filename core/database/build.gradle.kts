@@ -21,6 +21,15 @@ android {
         buildConfig = false
         resValues = false
     }
+    sourceSets {
+        getByName("test") {
+            // Expose the exported Room schema JSONs on the unit-test classpath
+            // so MigrationTest fixtures execute the REAL historical DDL (e.g.
+            // the exact v50 tables before applying MIGRATION_50_51) instead of
+            // hand-written SQL that can silently drift from what Room shipped.
+            resources.srcDir("$projectDir/schemas")
+        }
+    }
 }
 
 ksp {

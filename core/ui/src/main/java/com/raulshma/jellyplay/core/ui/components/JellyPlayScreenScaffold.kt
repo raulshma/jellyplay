@@ -38,19 +38,23 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
 import com.raulshma.jellyplay.core.ui.R
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -68,34 +72,30 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
-private val SynthwaveBackgroundBrush = Brush.verticalGradient(
-    colors = listOf(
-        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_BACKGROUND,
-        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors.SYNTHWAVE_BACKGROUND_END,
-    )
-)
-
 @Composable
-fun rememberScreenBackgroundColor(
+fun rememberScreenBackgroundColorState(
     artworkColor: Color? = null,
     isLightTheme: Boolean = com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme.current,
-): Color {
+): State<Color> {
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
-    if (themeVariant == com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE) return Color.Transparent
-
-    val baseColor = artworkColor
-        ?: MaterialTheme.colorScheme.background
-    val targetBackgroundColor = if (isLightTheme) {
-        MaterialTheme.colorScheme.background
+    // Gradient variants (Synthwave, Aurora) paint their own full-bleed background,
+    // so the remembered screen background must stay transparent over them.
+    return if (themeVariant.backgroundBrush() != null) {
+        remember(themeVariant) { mutableStateOf(Color.Transparent) }
     } else {
-        lerp(baseColor, Color.Black, 0.65f)
+        val baseColor = artworkColor
+            ?: MaterialTheme.colorScheme.background
+        val targetBackgroundColor = if (isLightTheme) {
+            MaterialTheme.colorScheme.background
+        } else {
+            lerp(baseColor, Color.Black, 0.65f)
+        }
+        animateColorAsState(
+            targetValue = targetBackgroundColor,
+            animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
+            label = "screenBackgroundColor",
+        )
     }
-    val backgroundColor by animateColorAsState(
-        targetValue = targetBackgroundColor,
-        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
-        label = "screenBackgroundColor",
-    )
-    return backgroundColor
 }
 
 /**
@@ -136,8 +136,30 @@ fun JellyPlayScreenScaffold(
     actions: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
 ) {
+    JellyPlayScreenScaffold(
+        title = title,
+        onBack = onBack,
+        backgroundColorState = rememberUpdatedState(backgroundColor),
+        topBarStyle = topBarStyle,
+        actions = actions,
+        content = content,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun JellyPlayScreenScaffold(
+    title: String,
+    onBack: (() -> Unit)? = null,
+    backgroundColorState: State<Color>,
+    topBarStyle: TopBarStyle = TopBarStyle.Standard,
+    actions: @Composable () -> Unit = {},
+    content: @Composable (PaddingValues) -> Unit,
+) {
     val navBarColor = LocalNavigationBarColor.current
-    SideEffect { navBarColor.value = backgroundColor }
+    LaunchedEffect(backgroundColorState) {
+        snapshotFlow { backgroundColorState.value }.collect { navBarColor.value = it }
+    }
 
     val scrollBehavior = when (topBarStyle) {
         TopBarStyle.Collapsing -> TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
@@ -148,10 +170,11 @@ fun JellyPlayScreenScaffold(
     val isTv = LocalJellyPlayUi.current.isTv
 
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
-    val backgroundModifier = if (themeVariant == com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE) {
-        Modifier.background(SynthwaveBackgroundBrush)
+    val variantBrush = themeVariant.backgroundBrush()
+    val backgroundModifier = if (variantBrush != null) {
+        Modifier.background(variantBrush)
     } else {
-        Modifier.background(backgroundColor)
+        Modifier.drawBehind { drawRect(backgroundColorState.value) }
     }
 
     Box(

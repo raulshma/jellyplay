@@ -111,11 +111,6 @@
     <string name="core_ui_color_style_title">Estilo de cor</string>
     <string name="core_ui_color_style_subtitle">Defina o ambiente visual das paletas geradas</string>
     <string name="core_ui_dynamic_colors">Cores dinâmicas do fundo de ecrã</string>
-    <string name="core_ui_synthwave_accent_title">Destaque Synthwave</string>
-    <string name="core_ui_synthwave_accent_subtitle">Selecione uma amostra de cor de destaque neon personalizada</string>
-    <string name="core_ui_soothing_accent_title">Destaque suave</string>
-    <string name="core_ui_soothing_accent_subtitle">Selecione uma cor de destaque calmante</string>
-
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Remover</string>
     <string name="core_ui_play">Reproduzir</string>
@@ -198,6 +193,12 @@
     <string name="detail_season_default">Temporada %1$d</string>
     <string name="detail_cd_collapse">Recolher</string>
     <string name="detail_cd_expand">Expandir</string>
+    <string name="detail_download_series_title">Transferir série</string>
+    <string name="detail_download_series_subtitle">Toque numa temporada para ver os episódios. Selecione quais transferir.</string>
+    <string name="detail_downloaded_count_format">• %1$d transferidos</string>
+    <string name="detail_no_episodes_available">Sem episódios disponíveis</string>
+    <string name="detail_downloaded_status">Transferido</string>
+    <string name="detail_queuing">A pôr na fila…</string>
     <string name="detail_delete_entire_series">Excluir série inteira</string>
     <string name="detail_cancel">Cancelar</string>
     <string name="detail_delete_count">Excluir %1$d</string>
@@ -241,4 +242,6 @@
     <string name="transcode_reason_hint_decoder">Mudar o decodificador para Software/FFmpeg pode resolver.</string>
     <string name="transcode_reason_hint_quality">Aumente o limite de qualidade de streaming no seletor de qualidade.</string>
     <string name="transcode_reason_hint_subtitle">Escolha uma legenda SRT/externa para evitar a incorporação.</string>
+    <string name="core_ui_variant_accent_title">Acento de %1$s</string>
+    <string name="core_ui_variant_accent_subtitle">Selecione a cor de destaque para este estilo de tema</string>
 </resources>

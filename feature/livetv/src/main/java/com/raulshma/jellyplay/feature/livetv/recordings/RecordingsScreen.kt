@@ -108,6 +108,7 @@ fun RecordingsScreen(
             )
         }
         else -> {
+            val rows = remember(uiState.recordings) { uiState.recordings.chunked(GRID_COLUMNS) }
             PullToRefreshBox(
                 isRefreshing = uiState.isLoading,
                 onRefresh = { viewModel.load() },
@@ -127,7 +128,6 @@ fun RecordingsScreen(
                         // 2-column grid rendered as one lazy row per pair so the
                         // whole tab keeps a single vertical scroll (no nested
                         // scrollers to fight for height).
-                        val rows = uiState.recordings.chunked(GRID_COLUMNS)
                         items(
                             items = rows,
                             key = { row -> "${row.first().id}:${row.last().id}" },
@@ -140,9 +140,12 @@ fun RecordingsScreen(
                                 horizontalArrangement = Arrangement.spacedBy(spacing),
                             ) {
                                 row.forEach { recording ->
+                                    val imageUrl = remember(recording.id, recording.imageTag) {
+                                        viewModel.getImageUrl(recording.id, recording.imageTag)
+                                    }
                                     RecordingCard(
                                         recording = recording,
-                                        imageUrl = viewModel.getImageUrl(recording.id, recording.imageTag),
+                                        imageUrl = imageUrl,
                                         onClick = { onRecordingClick(recording.id) },
                                         onLongClick = { viewModel.showDeleteDialog(recording) },
                                         modifier = Modifier.weight(1f),

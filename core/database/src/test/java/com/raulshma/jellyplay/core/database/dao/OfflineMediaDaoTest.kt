@@ -6,7 +6,9 @@ import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.database.entity.PlaybackStateEntity
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -122,6 +124,131 @@ class OfflineMediaDaoTest {
 
         val count = offlineMediaDao.getOfflineItemCount().first()
         assertEquals(2, count)
+    }
+
+    // ── getUnplayedEpisodeCountsBySeriesFlow ─────────────────────────
+
+    @Test
+    fun `getUnplayedEpisodeCountsBySeriesFlow counts unplayed episodes per series`() = runTest {
+        offlineMediaDao.upsertAll(
+            listOf(
+                createMedia(id = "series-1", mediaType = "SERIES"),
+                createMedia(id = "series-2", mediaType = "SERIES"),
+                createMedia(id = "ep-1", mediaType = "EPISODE", seriesId = "series-1"),
+                createMedia(id = "ep-2", mediaType = "EPISODE", seriesId = "series-1"),
+                createMedia(id = "ep-3", mediaType = "EPISODE", seriesId = "series-1"),
+                createMedia(id = "ep-4", mediaType = "EPISODE", seriesId = "series-2"),
+                // Not an episode: must not inflate the series-1 count.
+                createMedia(id = "season-1", mediaType = "SEASON", seriesId = "series-1"),
+            )
+        )
+        // One of series-1's three episodes watched.
+        playbackStateDao.upsert(PlaybackStateEntity(id = "ep-3", isPlayed = true))
+
+        val counts = offlineMediaDao.getUnplayedEpisodeCountsBySeriesFlow(listOf("series-1", "series-2"), 95.0)
+            .first()
+            .associate { it.groupedId to it.unplayedCount }
+
+        assertEquals(2, counts["series-1"])
+        assertEquals(1, counts["series-2"])
+    }
+
+    @Test
+    fun `getUnplayedEpisodeCountsBySeriesFlow excludes episodes at or above the watched threshold`() = runTest {
+        offlineMediaDao.upsertAll(
+            listOf(
+                createMedia(id = "ep-1", mediaType = "EPISODE", seriesId = "series-1"),
+                createMedia(id = "ep-2", mediaType = "EPISODE", seriesId = "series-1"),
+                createMedia(id = "ep-3", mediaType = "EPISODE", seriesId = "series-1"),
+            )
+        )
+        // played = false but 96% resume — finished by the watched threshold
+        // (OFFLINE_WATCHED_THRESHOLD = 0.95), so the badge must not count it.
+        playbackStateDao.upsert(PlaybackStateEntity(id = "ep-2", playedPercentage = 96.0))
+        // Exactly AT the threshold counts as finished too — the comparison is
+        // strict (>= threshold means watched). Pins the SQL literal to the
+        // model constant's documented boundary.
+        playbackStateDao.upsert(PlaybackStateEntity(id = "ep-3", playedPercentage = 95.0))
+
+        val counts = offlineMediaDao.getUnplayedEpisodeCountsBySeriesFlow(listOf("series-1"), 95.0)
+            .first()
+            .associate { it.groupedId to it.unplayedCount }
+
+        assertEquals(1, counts["series-1"])
+    }
+
+    @Test
+    fun `getUnplayedEpisodeCountsBySeriesFlow omits series with no unplayed episodes`() = runTest {
+        offlineMediaDao.upsertAll(
+            listOf(
+                createMedia(id = "ep-1", mediaType = "EPISODE", seriesId = "series-1"),
+            )
+        )
+        playbackStateDao.upsert(PlaybackStateEntity(id = "ep-1", isPlayed = true))
+
+        val rows = offlineMediaDao.getUnplayedEpisodeCountsBySeriesFlow(listOf("series-1"), 95.0).first()
+
+        assertTrue(rows.isEmpty())
+    }
+
+    @Test
+    fun `getUnplayedEpisodeCountsBySeriesFlow re-emits when playback state changes`() = runTest {
+        offlineMediaDao.upsertAll(
+            listOf(createMedia(id = "ep-1", mediaType = "EPISODE", seriesId = "series-1"))
+        )
+        val emissions = Channel<Int>(capacity = Channel.UNLIMITED)
+        val collector = launch {
+            offlineMediaDao.getUnplayedEpisodeCountsBySeriesFlow(listOf("series-1"), 95.0)
+                .collect { rows -> emissions.send(rows.firstOrNull()?.unplayedCount ?: 0) }
+        }
+        // Initial emission: ep-1 is unplayed.
+        assertEquals(1, emissions.receive())
+        // A playback_state write must push a fresh emission through the SAME
+        // collector — the badge follows offline watching without a
+        // re-subscribe (the query reads the ⟕ playback view).
+        playbackStateDao.upsert(PlaybackStateEntity(id = "ep-1", isPlayed = true))
+        assertEquals(0, emissions.receive())
+        collector.cancel()
+    }
+
+    // ── getUnplayedEpisodeCountsBySeasonFlow ─────────────────────────
+
+    @Test
+    fun `getUnplayedEpisodeCountsBySeasonFlow counts unplayed episodes per season`() = runTest {
+        offlineMediaDao.upsertAll(
+            listOf(
+                createMedia(id = "series-1", mediaType = "SERIES"),
+                createMedia(id = "season-1", mediaType = "SEASON", seriesId = "series-1"),
+                createMedia(id = "season-2", mediaType = "SEASON", seriesId = "series-1"),
+                createMedia(id = "ep-1", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-1"),
+                createMedia(id = "ep-2", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-1"),
+                createMedia(id = "ep-3", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-2"),
+            )
+        )
+        // One of season-1's two episodes watched; season-2 untouched.
+        playbackStateDao.upsert(PlaybackStateEntity(id = "ep-2", isPlayed = true))
+
+        val counts = offlineMediaDao.getUnplayedEpisodeCountsBySeasonFlow(listOf("season-1", "season-2"), 95.0)
+            .first()
+            .associate { it.groupedId to it.unplayedCount }
+
+        assertEquals(1, counts["season-1"])
+        assertEquals(1, counts["season-2"])
+    }
+
+    @Test
+    fun `getUnplayedEpisodeCountsBySeasonFlow ignores episodes of seasons outside the query`() = runTest {
+        offlineMediaDao.upsertAll(
+            listOf(
+                createMedia(id = "season-1", mediaType = "SEASON", seriesId = "series-1"),
+                createMedia(id = "season-2", mediaType = "SEASON", seriesId = "series-1"),
+                createMedia(id = "ep-1", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-2"),
+            )
+        )
+
+        val rows = offlineMediaDao.getUnplayedEpisodeCountsBySeasonFlow(listOf("season-1"), 95.0).first()
+
+        assertTrue(rows.isEmpty())
     }
 
     // ── applyPlayedStateToHierarchy ───────────────────────────────────

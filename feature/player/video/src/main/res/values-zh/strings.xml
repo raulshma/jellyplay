@@ -117,6 +117,7 @@
     <string name="player_video_use">使用</string>
     <string name="player_video_failed_tap_to_retry">失败 — 点按重试</string>
     <string name="player_video_search_failed">搜索失败</string>
+    <string name="player_video_load_subtitles_failed">无法加载字幕</string>
     <string name="player_video_no_results_found">未找到结果</string>
     <string name="player_video_pick_language_hint">选择一种语言并搜索以查找字幕。</string>
     <string name="player_video_change_file">更改：%1$s</string>
@@ -255,6 +256,8 @@
     <string name="player_video_remember_subtitles_off">为此剧集保持字幕关闭</string>
     <string name="player_video_error_offline_file_missing">错误：离线文件缺失</string>
     <string name="player_video_error_loading_media">加载媒体出错</string>
+    <string name="player_video_error_offline_stream">当前处于离线状态 \u2014 请重新连接以串流此内容</string>
+    <string name="player_video_error_next_episode_load">无法加载下一集，请检查网络连接后重试</string>
     <string name="player_video_trickplay_thumbnail">预览缩略图</string>
 
     <plurals name="player_video_participants">

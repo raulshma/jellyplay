@@ -293,7 +293,8 @@ class ExoPlayerEngine(
         }
 
         override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
-            _availableTracks.value = buildTracks()
+            val snapshot = buildTracks()
+            _availableTracks.value = snapshot.tracks
             // Keep the ASS-render toggle in lockstep with the OBSERVED
             // selection, not just the selectTrack() command: the selector can
             // activate a side-loaded ASS track on its own (preferredTextLanguage
@@ -303,7 +304,7 @@ class ExoPlayerEngine(
             // native SubtitleView shown for the whole session: the track plays,
             // nothing renders.
             if (assEnabledForSession) {
-                val newlyAss = selectedTextTrackIsAss(tracks)
+                val newlyAss = snapshot.selectedTextIsAss
                 if (newlyAss != activeTrackIsAss) {
                     activeTrackIsAss = newlyAss
                     // Diagnostics for the transcode side-load render chain: the
@@ -319,7 +320,7 @@ class ExoPlayerEngine(
             // Reset the accumulated cue list when the *selected* subtitle track
             // changes, so cues from a prior track don't bleed into the preview.
             // An audio-only track change leaves the text selection untouched.
-            val currentTextId = currentSelectedTextTrackId()
+            val currentTextId = snapshot.selectedTextTrackId
             if (currentTextId != lastSelectedTextTrackId) {
                 lastSelectedTextTrackId = currentTextId
                 _currentCues.value = emptyList()
@@ -1618,21 +1619,6 @@ class ExoPlayerEngine(
     }
 
     /**
-     * The id of the currently *selected* text track group, or null when none is
-     * selected. Used by [onTracksChanged] to detect a subtitle track switch and
-     * reset the accumulated cue list. Mirrors the id logic in [buildTracks].
-     */
-    private fun currentSelectedTextTrackId(): String? {
-        val p = player ?: return null
-        return p.currentTracks.groups
-            .firstOrNull { it.type == C.TRACK_TYPE_TEXT && (0 until it.length).any { i -> it.isTrackSelected(i) } }
-            ?.let { group ->
-                group.getTrackFormat(0).id?.takeIf { it.isNotBlank() }
-                    ?: "SUBTITLE_${group.mediaTrackGroup.hashCode()}"
-            }
-    }
-
-    /**
      * Maps the cues in [cueGroup] to [TimedCue]s and folds them into the
      * accumulated list via [mergeAccumulatedCues]. ExoPlayer surfaces only the
      * *currently displayed* cue(s) per callback, so the preview is built
@@ -1685,62 +1671,105 @@ class ExoPlayerEngine(
         _subtitleEvents.tryEmit(SubtitleEvent.MalformedTrackDisabled)
     }
 
-    private fun buildTracks(): List<MediaTrack> {
-        val p = player ?: return emptyList()
+    /** Everything [onTracksChanged] needs from one pass over the track graph. */
+    private data class TrackSnapshot(
+        val tracks: List<MediaTrack>,
+        val selectedTextIsAss: Boolean,
+        val selectedTextTrackId: String?,
+    )
+
+    /**
+     * Single order-preserving pass over `currentTracks` producing the
+     * publishable [MediaTrack] list (audio groups first, then subtitle groups,
+     * each in group order — the indexing [selectTrack] resolves by), whether
+     * the *selected* text track is ASS/SSA (the [selectedTextTrackIsAss]
+     * predicate via [isAssFormat]), and the id of the currently *selected*
+     * text track group (raw `Format.id` when non-blank, else the synthetic
+     * group-hash id) used to detect a subtitle track switch.
+     */
+    private fun buildTracks(): TrackSnapshot {
+        val p = player ?: return TrackSnapshot(emptyList(), false, null)
         val tracks = p.currentTracks
-        val result = mutableListOf<MediaTrack>()
-
-        fun processType(exoType: Int, trackType: TrackType) {
-            val groupCount = tracks.groups.size
-            var groupIndex = 0
-            for (i in 0 until groupCount) {
-                val group = tracks.groups[i]
-                if (group.type != exoType) continue
-                val isSelected = (0 until group.length).any { group.isTrackSelected(it) }
-                val format = group.getTrackFormat(0)
-                val selFlags = format.selectionFlags
-                val info = TrackLabelInfo(
-                    title = format.label,
-                    language = format.language,
-                    codec = format.sampleMimeType,
-                    channels = if (trackType == TrackType.AUDIO) format.channelCount else null,
-                    // Forced/default are selection flags in Media3 (not role flags).
-                    isForced = selFlags and C.SELECTION_FLAG_FORCED != 0,
-                    isDefault = selFlags and C.SELECTION_FLAG_DEFAULT != 0,
-                    // SDH/closed-caption tracks carry ROLE_FLAG_CAPTION.
-                    isHearingImpaired = format.roleFlags and C.ROLE_FLAG_CAPTION != 0,
-                )
-                result.add(
-                    MediaTrack(
-                        // For side-loaded subtitles Media3 propagates the
-                        // MediaItem.SubtitleConfiguration id (== SubtitleSource.id)
-                        // into the track format, so prefer it over the synthetic
-                        // group index — the subtitle-sync preview resolves the
-                        // active external source by that id.
-                        id = format.id?.takeIf { it.isNotBlank() }
-                            ?: "${trackType.name}_${groupIndex}",
-                        index = groupIndex,
-                        label = TrackLabelFormatter.primary(info),
-                        language = format.language,
-                        isSelected = isSelected,
-                        type = trackType,
-                        badges = TrackLabelFormatter.badges(info),
-                    )
-                )
-                groupIndex++
+        val audio = mutableListOf<MediaTrack>()
+        val subtitles = mutableListOf<MediaTrack>()
+        var selectedTextTrackId: String? = null
+        // Known side-loaded configuration ids — the stable-id recovery in
+        // [resolveStableSideloadedTrackId] only strips a merge prefix when
+        // the suffix matches one of THESE, so container-demuxed formats
+        // (whose ids happen to share the "{n}:{m}" shape) pass through.
+        val configIds = currentSubtitleConfigs.mapNotNull { it.id }.toSet()
+        for (i in tracks.groups.indices) {
+            val group = tracks.groups[i]
+            val trackType: TrackType
+            val target: MutableList<MediaTrack>
+            when (group.type) {
+                C.TRACK_TYPE_AUDIO -> {
+                    trackType = TrackType.AUDIO
+                    target = audio
+                }
+                C.TRACK_TYPE_TEXT -> {
+                    trackType = TrackType.SUBTITLE
+                    target = subtitles
+                }
+                else -> continue
             }
+            val isSelected = (0 until group.length).any { group.isTrackSelected(it) }
+            val format = group.getTrackFormat(0)
+            if (trackType == TrackType.SUBTITLE && isSelected) {
+                if (selectedTextTrackId == null) {
+                    selectedTextTrackId = format.id?.takeIf { it.isNotBlank() }
+                        ?: "SUBTITLE_${group.mediaTrackGroup.hashCode()}"
+                }
+            }
+            val selFlags = format.selectionFlags
+            val info = TrackLabelInfo(
+                title = format.label,
+                language = format.language,
+                codec = format.sampleMimeType,
+                channels = if (trackType == TrackType.AUDIO) format.channelCount else null,
+                // Forced/default are selection flags in Media3 (not role flags).
+                isForced = selFlags and C.SELECTION_FLAG_FORCED != 0,
+                isDefault = selFlags and C.SELECTION_FLAG_DEFAULT != 0,
+                // SDH/closed-caption tracks carry ROLE_FLAG_CAPTION.
+                isHearingImpaired = format.roleFlags and C.ROLE_FLAG_CAPTION != 0,
+            )
+            target.add(
+                MediaTrack(
+                    // For side-loaded subtitles prefer the stable
+                    // SubtitleSource.id over the synthetic group index — the
+                    // subtitle-sync preview and the track-selection ladder
+                    // resolve side-loaded sources by that id. See
+                    // [resolveStableSideloadedTrackId] for why this is NOT
+                    // simply `format.id`.
+                    id = resolveStableSideloadedTrackId(format.id, configIds)
+                        ?: "${trackType.name}_${target.size}",
+                    index = target.size,
+                    label = TrackLabelFormatter.primary(info),
+                    language = format.language,
+                    isSelected = isSelected,
+                    type = trackType,
+                    badges = TrackLabelFormatter.badges(info),
+                )
+            )
         }
-
-        processType(C.TRACK_TYPE_AUDIO, TrackType.AUDIO)
-        processType(C.TRACK_TYPE_TEXT, TrackType.SUBTITLE)
-
-        return result
+        // ASS-ness of the selected text track is resolved through the same
+        // [selectedTextTrackIsAss] predicate the tests cover, so the snapshot
+        // and the standalone decision cannot drift.
+        return TrackSnapshot(audio + subtitles, selectedTextTrackIsAss(tracks), selectedTextTrackId)
     }
 
     override fun addExternalSubtitle(source: SubtitleSource) = runOnPlayerThread {
         val exo = player ?: return@runOnPlayerThread
         val item = currentMediaItem ?: return@runOnPlayerThread
-        val mimeType = source.mimeType ?: SubtitleMimeMapper.mapCodecToMime(source.codec ?: source.label) ?: return@runOnPlayerThread
+        val mimeType = source.mimeType
+            ?: SubtitleMimeMapper.mapCodecToMime(source.codec ?: source.label)
+            ?: run {
+                // A silent drop here used to strand the subtitle-download flow:
+                // the row flipped to "Use" but no track ever surfaced, so the
+                // activation could never resolve it. Log loudly instead.
+                Log.w(TAG, "Dropping external subtitle with unmappable codec: codec=${source.codec}, label=${source.label}")
+                return@runOnPlayerThread
+            }
 
         val newSubConfig = MediaItem.SubtitleConfiguration.Builder(Uri.parse(source.url))
             .setId(source.id)
@@ -1759,6 +1788,8 @@ class ExoPlayerEngine(
             .setSubtitleConfigurations(currentSubtitleConfigs.toList())
             .build()
         currentMediaItem = newItem
+
+        Log.d("SubtitleUse", "exo side-load: id=${source.id}, mime=$mimeType, url=${source.url}, configs=${currentSubtitleConfigs.size}")
 
         withPreservedPlayback { snap ->
             exo.setMediaItem(newItem, snap.positionMs)
@@ -1791,6 +1822,30 @@ internal fun selectedTextTrackIsAss(tracks: androidx.media3.common.Tracks): Bool
             (0 until group.length).any { group.isTrackSelected(it) } &&
             isAssFormat(group.getTrackFormat(0))
     }
+
+/**
+ * Recovers the stable [androidx.media3.common.MediaItem.SubtitleConfiguration]
+ * id from a prepared track's `Format.id`.
+ *
+ * The raw format id is NOT the configuration id: Media3's MergingMediaSource
+ * prefixes every side-loaded child source's ids with the child index
+ * (`"{n}:{id}"`) to keep the merged namespace unique — observed on-device as
+ * `SubtitleSource.id = "provider:WYZIE:x"` surfacing as
+ * `"3:provider:WYZIE:x"`. Exact-match resolution against `SubtitleSource.id`
+ * (the "Use"-activation ladder, the `"external:{index}"` restore contract, the
+ * subtitle-sync preview) therefore fails unless the prefix is stripped.
+ *
+ * The merge prefix is only stripped when the suffix matches one of
+ * [configIds] — the engine's own live subtitle configurations — so unrelated
+ * container-demuxed formats that happen to share the `{n}:{m}` shape pass
+ * through untouched. Top-level for unit-testability without an engine.
+ */
+internal fun resolveStableSideloadedTrackId(formatId: String?, configIds: Set<String>): String? {
+    val raw = formatId?.takeIf { it.isNotBlank() } ?: return null
+    if (raw in configIds) return raw
+    val suffix = raw.substringAfter(':', missingDelimiterValue = "")
+    return suffix.takeIf { it.isNotEmpty() && it in configIds } ?: raw
+}
 
 /**
  * ASS/SSA format predicate shared by the selectTrack visibility toggle and

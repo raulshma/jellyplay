@@ -40,7 +40,7 @@ internal val IMAGE_SUBTITLE_CODECS = setOf(
  * (external/transcoded subs) worked.
  */
 fun isSideLoadableEmbeddedSubtitle(codec: String?): Boolean {
-    val normalized = codec?.trim()?.lowercase()
+    val normalized = normalizeCodec(codec)
     if (normalized.isNullOrBlank()) return true
     return when (normalized) {
         in TEXT_SUBTITLE_CODECS -> true
@@ -56,6 +56,69 @@ fun isSideLoadableEmbeddedSubtitle(codec: String?): Boolean {
  * Used to decide device-profile advertisement and endpoint refusal.
  */
 fun isImageSubtitleCodec(codec: String?): Boolean {
-    val normalized = codec?.trim()?.lowercase() ?: return false
+    val normalized = normalizeCodec(codec) ?: return false
     return normalized in IMAGE_SUBTITLE_CODECS
+}
+
+/** Image codecs that travel as VobSub `.sub` (paired with an `.idx` palette).
+ *  Everything else in [IMAGE_SUBTITLE_CODECS] is served verbatim as `.sup`.
+ *  Must stay a subset of [IMAGE_SUBTITLE_CODECS] — pinned by test. */
+internal val VOBSUB_FAMILY_CODECS = setOf("dvd_subtitle", "vobsub")
+
+/** Case/whitespace normalization shared by every codec predicate below. */
+private fun normalizeCodec(codec: String?): String? = codec?.trim()?.lowercase()
+
+/** Whether [codec] is a VobSub-family stream that only renders as an
+ *  `.idx`+`.sub` pair (see [subtitleCompanionFileName]). */
+fun isVobsubFamilyCodec(codec: String?): Boolean {
+    val normalized = normalizeCodec(codec) ?: return false
+    return normalized in VOBSUB_FAMILY_CODECS
+}
+
+/**
+ * Sibling file name of a VobSub pair: `2.idx` ↔ `2.sub`. Both halves must be
+ * bundled — the palette alone or the bitmap alone renders nothing — and both
+ * must survive orphan pruning while the manifest entry lives. Returns `null`
+ * for non-pair names (no companion concept).
+ */
+fun subtitleCompanionFileName(fileName: String): String? {
+    val lower = fileName.lowercase()
+    return when {
+        lower.endsWith(".idx") -> fileName.dropLast(4) + ".sub"
+        lower.endsWith(".sub") -> fileName.dropLast(4) + ".idx"
+        else -> null
+    }
+}
+
+/**
+ * On-disk file extension for a bundled offline subtitle sidecar of [codec].
+ *
+ * Image codecs must NOT default to `.srt`: the bytes are verbatim PGS/VOBSUB
+ * (the Jellyfin endpoint cannot transcode image formats), and players that
+ * probe by extension would try to parse bitmap data as text. A `.sup` name
+ * also documents intent for resync reconciliation, which reads sidecar files
+ * from disk without re-reading server metadata. New members of
+ * [IMAGE_SUBTITLE_CODECS] land on `.sup` automatically — only add to
+ * [VOBSUB_FAMILY_CODECS] when the server serves them as VobSub pairs.
+ *
+ * Note the mime layer does not depend on this mapping — manifests carry the
+ * original [MediaStream.codec] and the engines derive mime from that. This
+ * exists purely to write an honest file extension.
+ */
+fun subtitleSidecarExtension(codec: String?): String {
+    val normalized = normalizeCodec(codec) ?: return "srt"
+    if (normalized in IMAGE_SUBTITLE_CODECS) {
+        // The download path bundles VobSub as a full .idx+.sub pair
+        // ([isVobsubFamilyCodec] branch), so this arm only ever names the
+        // bitmap half — the palette alone or the bitmap alone renders nothing.
+        return if (normalized in VOBSUB_FAMILY_CODECS) "sub" else "sup"
+    }
+    return when (normalized) {
+        "subrip", "srt" -> "srt"
+        "ass", "ssa" -> "ass"
+        "webvtt", "vtt" -> "vtt"
+        "mov_text", "ttml", "dfxp", "tt" -> "ttml"
+        "sub", "microdvd" -> "sub"
+        else -> "srt"
+    }
 }

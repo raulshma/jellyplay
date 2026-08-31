@@ -117,6 +117,7 @@
     <string name="player_video_use">사용</string>
     <string name="player_video_failed_tap_to_retry">실패 — 다시 시도하려면 탭</string>
     <string name="player_video_search_failed">검색 실패</string>
+    <string name="player_video_load_subtitles_failed">자막을 불러오지 못했습니다</string>
     <string name="player_video_no_results_found">결과를 찾을 수 없음</string>
     <string name="player_video_pick_language_hint">언어를 선택하고 검색하여 자막을 찾으세요.</string>
     <string name="player_video_change_file">변경: %1$s</string>
@@ -255,6 +256,8 @@
     <string name="player_video_remember_subtitles_off">이 시리즈의 자막 계속 끄기</string>
     <string name="player_video_error_offline_file_missing">오류: 오프라인 파일 없음</string>
     <string name="player_video_error_loading_media">미디어 로드 오류</string>
+    <string name="player_video_error_offline_stream">오프라인 상태입니다 \u2014 이 항목을 스트리밍하려면 다시 연결하세요</string>
+    <string name="player_video_error_next_episode_load">다음 에피소드를 불러오지 못했습니다. 연결을 확인하고 다시 시도하세요</string>
     <string name="player_video_trickplay_thumbnail">트릭플레이 썸네일</string>
 
     <plurals name="player_video_participants">

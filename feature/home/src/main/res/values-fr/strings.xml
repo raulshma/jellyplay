@@ -34,7 +34,6 @@
 
     <string name="home_settings">Paramètres</string>
     <string name="home_switch_user">Changer d\'utilisateur</string>
-    <string name="home_going_online">Connexion en cours…</string>
     <string name="home_go_online">Se connecter</string>
     <string name="home_go_offline">Se déconnecter</string>
 
@@ -50,6 +49,8 @@
     <string name="home_discover">Découvrir</string>
     <string name="home_coming_soon">Bientôt disponible</string>
     <string name="home_continue_watching">Reprendre le visionnage</string>
+    <string name="home_next_up">À suivre</string>
+    <string name="home_implicit_offline_banner">Impossible de joindre le serveur — affichage de vos téléchargements.</string>
     <string name="home_recently_downloaded">Récemment téléchargé</string>
     <string name="home_movies">Films</string>
     <string name="home_series">Séries</string>
@@ -66,7 +67,6 @@
     <string name="home_no_downloads_yet">Aucun téléchargement pour le moment</string>
     <string name="home_no_downloads_description">Téléchargez du contenu en ligne pour y accéder hors connexion.</string>
     <string name="home_go_online_action">Se connecter</string>
-    <string name="home_your_downloads">Vos téléchargements</string>
 
     <!-- Home search overlay. -->
     <string name="home_no_results_found">Aucun résultat trouvé</string>

@@ -34,7 +34,6 @@
 
     <string name="home_settings">设置</string>
     <string name="home_switch_user">切换用户</string>
-    <string name="home_going_online">正在联网…</string>
     <string name="home_go_online">联网</string>
     <string name="home_go_offline">离线</string>
 
@@ -50,6 +49,8 @@
     <string name="home_discover">发现</string>
     <string name="home_coming_soon">即将推出</string>
     <string name="home_continue_watching">继续观看</string>
+    <string name="home_next_up">接下来播放</string>
+    <string name="home_implicit_offline_banner">无法连接服务器，正在显示你的下载内容。</string>
     <string name="home_recently_downloaded">最近下载</string>
     <string name="home_movies">电影</string>
     <string name="home_series">剧集</string>
@@ -66,7 +67,6 @@
     <string name="home_no_downloads_yet">暂无下载</string>
     <string name="home_no_downloads_description">联网时下载媒体，即可离线访问。</string>
     <string name="home_go_online_action">联网</string>
-    <string name="home_your_downloads">你的下载</string>
 
     <!-- Home search overlay. -->
     <string name="home_no_results_found">未找到结果</string>

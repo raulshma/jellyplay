@@ -27,6 +27,14 @@ data class SyncBaseline(
     val backdropTag: String?,
     val metadataSignature: String,
     val subtitleSignature: String,
+    /**
+     * True when the subtitle sidecar bundle failed and was never fetched (the
+     * persisted `sync_baseline.syncSubtitlesPending` flag). Forces the subtitle
+     * axis to flag as changed regardless of signature equality — the retry
+     * driver for a bundle that never landed. Lives beside (not inside)
+     * [subtitleSignature] so that column remains a pure server snapshot.
+     */
+    val subtitlesPending: Boolean = false,
     val trickplaySignature: String,
     val segmentsSignature: String,
     val mediaSourceId: String?,
@@ -47,7 +55,10 @@ data class SyncBaseline(
  * (UserData: played state, playback position, favorite) so a watched/unwatched
  * flip on another client doesn't surface a false "metadata changed" signal.
  * It covers the fields a resync would actually overwrite: overview, people,
- * genres, studios, ratings, runtime, year, tagline, name, original title.
+ * genres, studios, ratings, runtime, year, tagline, name, original title,
+ * and chapters (name / startPositionTicks / imageTag) so server chapter edits
+ * after download surface as "update available" and a metadata resync refreshes
+ * chapters.
  *
  * The sidecar axes (subtitles, trickplay, segments) carry their own content
  * signatures because Jellyfin exposes no etag/version for them. Subtitles and
@@ -57,6 +68,25 @@ data class SyncBaseline(
  */
 @Singleton
 class OfflineSyncComparator @Inject constructor() {
+
+    companion object {
+        /**
+         * Separator between list items in a metadata-signature part, chosen
+         * because it never occurs in Jellyfin field values — a person name or
+         * chapter title containing `§` can't merge two items. (A value that
+         * does contain [FIELD_SEPARATOR] only shifts fields within that one
+         * item's rendering; the payload is hashed, never parsed back.)
+         * Signature format is frozen: changing these literals would shift
+         * every digest and read as fleet-wide churn.
+         */
+        private const val ITEM_SEPARATOR = "§"
+
+        /** Separator between fields inside one list item's rendering. */
+        private const val FIELD_SEPARATOR = "|"
+
+        /** Lowercase two-char hex for every byte value ("00".."ff"), precomputed. */
+        private val HEX_BYTES: Array<String> = Array(256) { "%02x".format(it) }
+    }
 
     /**
      * Deterministic hash of the user-facing metadata fields. Stable across equal
@@ -83,9 +113,20 @@ class OfflineSyncComparator @Inject constructor() {
             // People: id+name+role, sorted by id so cast ordering churn doesn't
             // trigger a resync — only actual cast changes do.
             add("p" to detail.people
-                .map { "${it.id}|${it.name.trim()}|${it.role?.trim().orEmpty()}" }
+                .map { listOf(it.id, it.name.trim(), it.role?.trim().orEmpty()).joinToString(FIELD_SEPARATOR) }
                 .sorted()
-                .joinToString("§"))
+                .joinToString(ITEM_SEPARATOR))
+            // Chapters: name+startPositionTicks+imageTag, ordered by start ticks
+            // then name so a server-side reorder without content change doesn't
+            // flip the signature. (Sorting must happen on the parsed values: the
+            // serialized strings start with the name.)
+            add("ch" to detail.chapters
+                .asSequence()
+                .map { Triple(it.name.trim(), it.startPositionTicks, it.imageTag?.trim().orEmpty()) }
+                .sortedWith(compareBy({ (_, ticks) -> ticks }, { (name, _) -> name }))
+                .joinToString(ITEM_SEPARATOR) { (name, ticks, imageTag) ->
+                    listOf(name, ticks, imageTag).joinToString(FIELD_SEPARATOR)
+                })
             add("crt" to (detail.criticRating?.toString().orEmpty()))
         }
         val payload = parts.joinToString("\n") { (k, v) -> "$k=$v" }
@@ -191,12 +232,14 @@ class OfflineSyncComparator @Inject constructor() {
      * the server would serve, which a metadata/images resync cannot fix — so it
      * is reported via [OfflineSyncState.mediaFileChanged] for separate handling.
      *
-     * Subtitle, trickplay, and segment axes compare the fresh content signature
-     * against the baseline signature. An empty baseline signature means "never
-     * recorded" and never flags (first-contact seeding handled by the caller);
-     * segments additionally require the caller to pass [freshSegments] (they are
-     * not part of [MediaDetail]), so a check that skips the segments fetch
-     * never flags segments-changed.
+     * The metadata and sidecar (subtitle, trickplay, segment) axes compare the
+     * fresh content signature against the baseline signature via [hasChanged]:
+     * an empty baseline signature means "never recorded" and never flags
+     * (first-contact seeding handled by the caller) — the shared rule is also
+     * what lets a signature payload format change be retired cleanly by
+     * clearing the stored baseline. Segments additionally require the caller
+     * to pass [freshSegments] (they are not part of [MediaDetail]), so a check
+     * that skips the segments fetch never flags segments-changed.
      */
     fun diff(
         baseline: SyncBaseline,
@@ -210,12 +253,14 @@ class OfflineSyncComparator @Inject constructor() {
         val freshSegmentsSig = freshSegments?.let { segmentsSignature(it) }
         val source = fresh.mediaSources.firstOrNull()
 
-        val metadataChanged = freshMetadataSig != baseline.metadataSignature
+        // hasChanged, not raw inequality: an empty baseline signature ("never
+        // recorded") must seed silently rather than flag — the metadata axis
+        // follows the same first-contact rule as the sidecar axes.
+        val metadataChanged = hasChanged(baseline.metadataSignature, freshMetadataSig)
         val imagesChanged = imageChanged(baseline.posterTag, fresh.posterImageTag) ||
             imageChanged(baseline.backdropTag, fresh.backdropImageTag)
         val mediaFileChanged = mediaSourceChanged(baseline, source)
-        // First-contact guard: an axis with no recorded baseline never flags.
-        val subtitlesChanged = hasChanged(baseline.subtitleSignature, freshSubtitleSig)
+        val subtitlesChanged = subtitleAxisChanged(baseline, freshSubtitleSig)
         val trickplayChanged = hasChanged(baseline.trickplaySignature, freshTrickplaySig)
         val segmentsChanged = hasChanged(baseline.segmentsSignature, freshSegmentsSig)
 
@@ -252,16 +297,26 @@ class OfflineSyncComparator @Inject constructor() {
         imageChanged(baselineTag, freshTag)
 
     /**
-     * True when the fresh subtitle inventory signature differs from the baseline
-     * (empty baseline treated as no-change — first contact seeds rather than
-     * flags). Exposed so a resync can decide whether to re-fetch subtitles.
+     * True when the subtitle axis needs a re-fetch: the bundle is pending
+     * (failed and never fetched), or the fresh inventory signature differs from
+     * the baseline. Exposed so a resync can decide whether to re-fetch.
      */
-    fun isSubtitleChanged(baselineSubtitleSignature: String, fresh: MediaDetail): Boolean =
-        hasChanged(baselineSubtitleSignature, subtitleSignature(fresh))
+    fun isSubtitleChanged(baseline: SyncBaseline, fresh: MediaDetail): Boolean =
+        subtitleAxisChanged(baseline, subtitleSignature(fresh))
 
     /** True when the fresh trickplay signature differs from the baseline. */
-    fun isTrickplayChanged(baselineTrickplaySignature: String, fresh: MediaDetail): Boolean =
-        hasChanged(baselineTrickplaySignature, trickplaySignature(fresh))
+    fun isTrickplayChanged(baseline: SyncBaseline, fresh: MediaDetail): Boolean =
+        hasChanged(baseline.trickplaySignature, trickplaySignature(fresh))
+
+    /**
+     * The subtitle axis's single flag rule, shared by [diff] and
+     * [isSubtitleChanged]: a pending bundle (failed and never fetched) flags
+     * regardless of signature equality — that is the retry driver — otherwise
+     * [hasChanged]'s first-contact guard applies.
+     */
+    private fun subtitleAxisChanged(baseline: SyncBaseline, freshSubtitleSignature: String?): Boolean =
+        baseline.subtitlesPending ||
+            hasChanged(baseline.subtitleSignature, freshSubtitleSignature)
 
     private fun deliverableSubtitles(detail: MediaDetail): List<MediaStream> =
         detail.mediaSources.firstOrNull()?.mediaStreams
@@ -282,10 +337,13 @@ class OfflineSyncComparator @Inject constructor() {
     }
 
     /** SHA-256 of [payload] (UTF-8) as a lowercase hex string. */
-    private fun sha256Hex(payload: String): String =
-        MessageDigest.getInstance("SHA-256")
+    private fun sha256Hex(payload: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
             .digest(payload.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
+        val hex = StringBuilder(digest.size * 2)
+        for (byte in digest) hex.append(HEX_BYTES[byte.toInt() and 0xFF])
+        return hex.toString()
+    }
 
     private fun imageChanged(baselineTag: String?, freshTag: String?): Boolean {
         // Normalize null/blank together: an item that gains or loses an image

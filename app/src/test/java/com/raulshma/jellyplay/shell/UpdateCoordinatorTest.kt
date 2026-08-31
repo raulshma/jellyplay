@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.update.PendingAppUpdate
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
+import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
 import com.raulshma.jellyplay.update.UpdateState
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -120,6 +121,44 @@ class UpdateCoordinatorTest {
 
         // The on-disk APK is suppressed for the dismissed version, so the
         // launch-time path must ask the network instead of surfacing it.
+        coVerify(exactly = 1) { appUpdateRepository.checkForUpdate(any()) }
+        assertEquals(UpdateState.Idle, coordinator.updateState.value)
+    }
+
+    @Test
+    fun `dismissal older than a shortened window no longer suppresses the pending APK`() = runTest(dispatcher) {
+        coEvery { appUpdateRepository.getPendingUpdate() } returns
+            PendingAppUpdate(pendingInfo, pendingApk)
+        // Dismissed 13h ago with a 12h window — outside it (a 24h default
+        // window would still suppress), so the pending APK must surface.
+        experimental.value = ExperimentalSlice(
+            updateDismissPeriod = UpdateDismissPeriod.HOURS_12,
+            dismissedUpdateVersion = "1.2.3",
+            dismissedUpdateAtMs = System.currentTimeMillis() - 13L * 60 * 60 * 1000,
+        )
+
+        coordinator.onSessionRestored()
+        advanceUntilIdle()
+
+        val state = coordinator.updateState.value
+        assertTrue(state is UpdateState.Downloaded)
+        coVerify(exactly = 0) { appUpdateRepository.checkForUpdate(any()) }
+    }
+
+    @Test
+    fun `NEVER dismiss period suppresses the pending APK indefinitely`() = runTest(dispatcher) {
+        coEvery { appUpdateRepository.getPendingUpdate() } returns
+            PendingAppUpdate(pendingInfo, pendingApk)
+        // Dismissed long ago; NEVER keeps the version quiet regardless.
+        experimental.value = ExperimentalSlice(
+            updateDismissPeriod = UpdateDismissPeriod.NEVER,
+            dismissedUpdateVersion = "1.2.3",
+            dismissedUpdateAtMs = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000,
+        )
+
+        coordinator.onSessionRestored()
+        advanceUntilIdle()
+
         coVerify(exactly = 1) { appUpdateRepository.checkForUpdate(any()) }
         assertEquals(UpdateState.Idle, coordinator.updateState.value)
     }

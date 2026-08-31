@@ -112,12 +112,15 @@ class SessionLoadPipelineTest {
     private fun pipeline(
         stages: MutableList<String>,
         hooks: SessionLoadHooks,
+        // isReady = true models a loadMedia that produced a playable session;
+        // the failure early-return is pinned by loadMediaFailure_stopsAfterLoadMedia.
         sessionState: PlayerSessionState = PlayerSessionState(
             currentItemId = "item-1",
             mediaDetail = detail(),
             title = "Test Movie",
             playMethod = PlayMethod.DIRECT_PLAY,
             streamUrl = "https://jellyfin/stream",
+            isReady = true,
         ),
         intros: List<MediaItem> = emptyList(),
         loadMediaBlock: CompletableDeferred<Unit>? = null,
@@ -340,6 +343,32 @@ class SessionLoadPipelineTest {
         runCurrent()
 
         assertFalse("no hydration after a failed load", "onItemHydrated" in stages)
+        assertEquals("onInitializing(false)", stages.last())
+    }
+
+    /**
+     * A loadMedia that reports its own failure (offline gate, detail-fetch
+     * miss, vanished offline file) leaves `isReady = false`. The spine must
+     * stop there — no media session, no playback-START report, no tracking —
+     * instead of ghosting a session for an item that never started (#146).
+     */
+    @Test
+    fun loadMediaFailure_stopsAfterLoadMedia_withoutOutcome() = runTest {
+        val pipeline = pipeline(
+            stages = stages,
+            hooks = recordingHooks(stages),
+            sessionState = PlayerSessionState(currentItemId = "item-1", isReady = false),
+        )
+
+        pipeline.start(this, request()).join()
+        runCurrent()
+
+        assertTrue("loadMedia must run", "loadMedia" in stages)
+        assertFalse("no hydration after a failed load", "onItemHydrated" in stages)
+        assertFalse("no media session for a failed load", "createMediaSession" in stages)
+        assertFalse("no start report for a failed load", "reportPlaybackStart" in stages)
+        assertFalse("failed load is not Completed", stages.any { it.startsWith("onOutcome") })
+        // finally guarantee: the loading veil still lifts.
         assertEquals("onInitializing(false)", stages.last())
     }
 }

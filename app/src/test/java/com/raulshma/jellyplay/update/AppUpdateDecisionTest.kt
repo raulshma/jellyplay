@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.update
 
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
+import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -32,13 +33,52 @@ class AppUpdateDecisionTest {
     // ── isRecentlyDismissed ───────────────────────────────────────────
 
     @Test
-    fun `isRecentlyDismissed true when same version within the suppression window`() {
+    fun `isRecentlyDismissed true when same version within the default 24h window`() {
         assertTrue(
             AppUpdateDecision.isRecentlyDismissed(
                 version = "1.2.3",
                 dismissedVersion = "1.2.3",
                 dismissedAtMs = 1_000L,
-                nowMs = 1_000L + AppUpdateDecision.DISMISSED_UPDATE_SUPPRESS_MS,
+                nowMs = 1_000L + 24L * 60 * 60 * 1000,
+            )
+        )
+    }
+
+    @Test
+    fun `isRecentlyDismissed honors a shorter configured window`() {
+        val dismissedAtMs = 1_000L
+        val twelveHoursMs = 12L * 60 * 60 * 1000
+
+        assertTrue(
+            AppUpdateDecision.isRecentlyDismissed(
+                version = "1.2.3",
+                dismissedVersion = "1.2.3",
+                dismissedAtMs = dismissedAtMs,
+                nowMs = dismissedAtMs + twelveHoursMs - 1L,
+                period = UpdateDismissPeriod.HOURS_12,
+            )
+        )
+        // Outside the 12h window but still inside the default 24h one.
+        assertFalse(
+            AppUpdateDecision.isRecentlyDismissed(
+                version = "1.2.3",
+                dismissedVersion = "1.2.3",
+                dismissedAtMs = dismissedAtMs,
+                nowMs = dismissedAtMs + twelveHoursMs + 1L,
+                period = UpdateDismissPeriod.HOURS_12,
+            )
+        )
+    }
+
+    @Test
+    fun `isRecentlyDismissed with NEVER suppresses regardless of elapsed time`() {
+        assertTrue(
+            AppUpdateDecision.isRecentlyDismissed(
+                version = "1.2.3",
+                dismissedVersion = "1.2.3",
+                dismissedAtMs = 1_000L,
+                nowMs = 1_000L + 365L * 24 * 60 * 60 * 1000, // a year later
+                period = UpdateDismissPeriod.NEVER,
             )
         )
     }
@@ -74,7 +114,7 @@ class AppUpdateDecisionTest {
                 version = "1.2.3",
                 dismissedVersion = "1.2.3",
                 dismissedAtMs = 1_000L,
-                nowMs = 1_000L + AppUpdateDecision.DISMISSED_UPDATE_SUPPRESS_MS + 1L,
+                nowMs = 1_000L + 24L * 60 * 60 * 1000 + 1L,
             )
         )
     }

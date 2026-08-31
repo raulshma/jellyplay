@@ -143,6 +143,8 @@
     <string name="downloads_force_resync_data_header">Données à synchroniser</string>
     <string name="downloads_force_resync_data_metadata">Métadonnées</string>
     <string name="downloads_force_resync_data_metadata_desc">Résumé, distribution, notes</string>
+    <string name="downloads_force_resync_data_chapters">Chapitres</string>
+    <string name="downloads_force_resync_data_chapters_desc">Repères de chapitres</string>
     <string name="downloads_force_resync_data_poster">Affiche</string>
     <string name="downloads_force_resync_data_poster_desc">Visuel principal</string>
     <string name="downloads_force_resync_data_backdrop">Fond</string>

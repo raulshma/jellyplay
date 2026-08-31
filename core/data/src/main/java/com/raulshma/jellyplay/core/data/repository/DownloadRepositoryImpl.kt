@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.core.data.worker.awaitResponse
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadQuality
+import com.raulshma.jellyplay.core.model.maxBitrate
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.DownloadFileEntry
 import com.raulshma.jellyplay.core.model.DownloadFileInventory
@@ -41,6 +42,9 @@ import com.raulshma.jellyplay.core.model.OfflineSubtitleEntry
 import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.isImageSubtitleCodec
+import com.raulshma.jellyplay.core.model.isVobsubFamilyCodec
+import com.raulshma.jellyplay.core.model.subtitleCompanionFileName
+import com.raulshma.jellyplay.core.model.subtitleSidecarExtension
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +52,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -58,6 +63,8 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -127,6 +134,9 @@ class DownloadRepositoryImpl @Inject constructor(
             entities.map { it.toDownloadItem() }
         }.distinctUntilChanged { old, new -> old.rendersSameAs(new) }
 
+    override suspend fun getAllDownloadsSnapshot(): List<DownloadItem> =
+        downloadDao.getAllDownloadsSnapshot().map { it.toDownloadItem() }
+
     override suspend fun getCompletedAudioDownloads(limit: Int, offset: Int): List<DownloadItem> =
         downloadDao.getCompletedAudioDownloads(limit, offset).map { it.toDownloadItem() }
 
@@ -140,6 +150,9 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override fun getActiveDownloadCount(): Flow<Int> =
         downloadDao.getActiveDownloadCount()
+
+    override fun observeCompletedDownloadedIds(): Flow<Set<String>> =
+        downloadDao.getCompletedDownloadedItemIds().map(List<String>::toSet).distinctUntilChanged()
 
     override suspend fun getDownloadByMediaItemId(mediaItemId: String): DownloadItem? =
         downloadDao.getDownloadByMediaItemId(mediaItemId)?.toDownloadItem()
@@ -369,62 +382,82 @@ class DownloadRepositoryImpl @Inject constructor(
     override suspend fun getTotalDownloadedBytes(): Long =
         downloadDao.getTotalDownloadedBytes()
 
+    /**
+     * Persists the lightweight [MediaItem] form for an offline row (no chapters,
+     * cast, or other [MediaDetail]-only fields). Item-only downloads therefore
+     * remain chapter-less by design — callers that have a full [MediaDetail]
+     * (download worker, resync) must use [saveOfflineMediaDetail] so
+     * `chaptersJson` and other rich blobs are encoded.
+     */
     override suspend fun saveOfflineMediaItem(item: MediaItem, imageUrl: String?, backdropUrl: String?, downloadPath: String?) {
         saveOfflineMetadataForItem(item, imageUrl, backdropUrl)
+        seedEpisodeParents(item, artworkDir = downloadPath?.let { File(it).parentFile })
+    }
 
-        if (item.mediaType == MediaType.EPISODE) {
-            val seriesId = item.seriesId
-            val seasonId = item.seasonId
-            val parentDir = downloadPath?.let { File(it).parentFile }
+    /**
+     * Seeds the parent series/season rows for an episode download so a lone
+     * episode still has its hierarchy. Deliberately does NOT touch the episode
+     * row itself: callers that already persisted the rich [MediaDetail] entity
+     * must not have it REPLACE-wiped by a bare-item re-upsert (which nulls
+     * peopleJson/providerIdsJson/externalUrlsJson/chaptersJson).
+     *
+     * [artworkDir] is the directory series artwork is pre-downloaded into;
+     * pass null when no media directory exists yet (artwork then falls back
+     * to remote URLs).
+     */
+    private suspend fun seedEpisodeParents(item: MediaItem, artworkDir: File?) {
+        if (item.mediaType != MediaType.EPISODE) return
+        val seriesId = item.seriesId
+        val seasonId = item.seasonId
 
-            if (seriesId != null && offlineMediaDao.getById(seriesId) == null) {
-                val seriesDetail = mediaRepository.getMediaDetail(seriesId).getOrNull()
-                if (seriesDetail != null) {
-                    val localSeriesPoster = parentDir?.let {
-                        downloadImageToDisk(seriesId, "Primary", 300, it, "${seriesId}_poster.jpg")
-                    }
-                    val localSeriesBackdrop = parentDir?.let {
-                        downloadImageToDisk(seriesId, "Backdrop", 1280, it, "${seriesId}_backdrop.jpg")
-                    }
-                    val seriesImageUrl = localSeriesPoster
-                        ?: playbackRepository.getImageUrl(seriesId, maxWidth = 300)
-                    val seriesBackdropUrl = localSeriesBackdrop
-                        ?: playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
-                    saveOfflineMetadataForItem(seriesDetail.item, seriesImageUrl, seriesBackdropUrl)
-                } else {
-                    offlineMediaDao.upsert(
-                        OfflineMediaEntity(
-                            id = seriesId,
-                            name = item.seriesName ?: "Unknown Series",
-                            mediaType = MediaType.SERIES.name,
-                        )
-                    )
+        if (seriesId != null && offlineMediaDao.getById(seriesId) == null) {
+            val seriesDetail = mediaRepository.getMediaDetail(seriesId).getOrNull()
+            if (seriesDetail != null) {
+                val localSeriesPoster = artworkDir?.let {
+                    downloadImageToDisk(seriesId, "Primary", 300, it, "${seriesId}_poster.jpg")
                 }
-            }
-
-            if (seasonId != null && offlineMediaDao.getById(seasonId) == null) {
+                val localSeriesBackdrop = artworkDir?.let {
+                    downloadImageToDisk(seriesId, "Backdrop", 1280, it, "${seriesId}_backdrop.jpg")
+                }
+                val seriesImageUrl = localSeriesPoster
+                    ?: playbackRepository.getImageUrl(seriesId, maxWidth = 300)
+                val seriesBackdropUrl = localSeriesBackdrop
+                    ?: playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
+                saveOfflineMetadataForItem(seriesDetail.item, seriesImageUrl, seriesBackdropUrl)
+            } else {
                 offlineMediaDao.upsert(
                     OfflineMediaEntity(
-                        id = seasonId,
-                        name = item.seasonName ?: "Season ${item.seasonNumber}",
-                        mediaType = MediaType.SEASON.name,
-                        seriesId = seriesId,
-                        seasonNumber = item.seasonNumber,
+                        id = seriesId,
+                        name = item.seriesName ?: "Unknown Series",
+                        mediaType = MediaType.SERIES.name,
                     )
                 )
             }
+        }
+
+        if (seasonId != null && offlineMediaDao.getById(seasonId) == null) {
+            offlineMediaDao.upsert(
+                OfflineMediaEntity(
+                    id = seasonId,
+                    name = item.seasonName ?: "Season ${item.seasonNumber}",
+                    mediaType = MediaType.SEASON.name,
+                    seriesId = seriesId,
+                    seasonNumber = item.seasonNumber,
+                )
+            )
         }
     }
 
     override suspend fun saveOfflineMediaDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?) {
         saveOfflineMetadataForDetail(detail, imageUrl, backdropUrl)
 
-        // For episodes, fall back to the series/season seeding logic so a
-        // lone episode download still has its parent rows.
-        val item = detail.item
-        if (item.mediaType == MediaType.EPISODE) {
-            saveOfflineMediaItem(item, imageUrl, backdropUrl)
-        }
+        // For episodes, seed the series/season rows so a lone episode download
+        // still has its parent rows. Routes through seedEpisodeParents — NOT
+        // saveOfflineMediaItem — so the just-persisted rich entity (cast,
+        // providers, urls, chapters) is not wiped by a bare-item re-upsert.
+        // No artworkDir: this call historically had none, so series artwork
+        // keeps falling back to remote URLs here.
+        seedEpisodeParents(detail.item, artworkDir = null)
     }
 
     override suspend fun getDownloadedEpisodeIdsForSeries(seriesId: String): Set<String> =
@@ -447,6 +480,16 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override suspend fun getDownloadedSeriesIds(): List<String> =
         downloadDao.getDownloadedSeriesIds()
+
+    override fun observeDownloadedSeriesIds(): Flow<Set<String>> =
+        downloadDao.observeDownloadedSeriesIds().map(List<String>::toSet).distinctUntilChanged()
+
+    override fun observeDownloadedIdsIncludingSeries(): Flow<Set<String>> =
+        combine(
+            observeCompletedDownloadedIds(),
+            observeDownloadedSeriesIds(),
+        ) { itemIds, seriesIds -> itemIds + seriesIds }
+            .distinctUntilChanged()
 
     override suspend fun downloadSeries(
         seriesId: String,
@@ -657,6 +700,10 @@ class DownloadRepositoryImpl @Inject constructor(
 
             subtitlesDir.mkdirs()
             val entries = mutableListOf<OfflineSubtitleEntry>()
+            // Any stream that fails to resolve a delivery URL or fetch marks
+            // the pass incomplete; only a complete pass may prune (contract in
+            // [pruneOrphanSidecarFiles]).
+            var incompletePass = false
 
             for (stream in subtitleStreams) {
                 try {
@@ -667,11 +714,23 @@ class DownloadRepositoryImpl @Inject constructor(
                             playbackRepository.buildSubtitleDeliveryUrl(itemId, mediaSourceId, stream.index, stream.codec)
                         else -> continue
                     }
-                    if (subUrl.isBlank()) continue
+                    if (subUrl.isBlank()) {
+                        incompletePass = true
+                        continue
+                    }
 
-                    val fileName = "${stream.index}.${subtitleFileExtension(stream.codec)}"
-                    val target = File(subtitlesDir, fileName)
-                    if (!downloadToFile(subUrl, target)) continue
+                    // VobSub renders only as an .idx+.sub pair; both halves are
+                    // fetched and the manifest points at the .idx (the player's
+                    // vobsub demuxer picks up the .sub sibling by base name).
+                    val fileName = if (isVobsubFamilyCodec(stream.codec)) {
+                        fetchVobsubPair(subUrl, subtitlesDir, stream.index)
+                    } else {
+                        fetchSingleSidecar(subUrl, subtitlesDir, stream.index, stream.codec)
+                    }
+                    if (fileName == null) {
+                        incompletePass = true
+                        continue
+                    }
 
                     entries.add(
                         OfflineSubtitleEntry(
@@ -683,17 +742,26 @@ class DownloadRepositoryImpl @Inject constructor(
                             displayTitle = stream.displayTitle,
                             isDefault = stream.isDefault,
                             isForced = stream.isForced,
+                            isImage = isImageSubtitleCodec(stream.codec),
                         )
                     )
                 } catch (e: Exception) {
+                    incompletePass = true
                     Log.d(TAG, "Failed to download subtitle stream ${stream.index} for $itemId", e)
                 }
             }
 
             if (entries.isNotEmpty()) {
                 // Persist a manifest describing exactly what landed on disk.
-                File(subtitlesDir, DownloadArtifacts.SUBTITLE_MANIFEST_FILE)
-                    .writeText(json.encodeToString(OfflineSubtitleManifest(entries)))
+                writeSubtitleManifest(subtitlesDir, entries, json)
+                if (!incompletePass) {
+                    // Pair halves count as live alongside the manifest's own
+                    // entry — a pruned .idx or .sub breaks the whole pair.
+                    val liveNames = entries.flatMap {
+                        listOfNotNull(it.fileName, subtitleCompanionFileName(it.fileName))
+                    }.toSet()
+                    pruneOrphanSidecarFiles(subtitlesDir, liveNames)
+                }
                 true
             } else {
                 // Deliverable streams existed but none fetched (transient
@@ -707,6 +775,12 @@ class DownloadRepositoryImpl @Inject constructor(
             Log.d(TAG, "Failed to download external subtitles for $itemId", e)
             false
         }
+    }
+
+    override suspend fun markSubtitlesPending(itemId: String) {
+        // Atomicity and the stub/raise pairing live on the @Transaction DAO
+        // method — the canonical description of this flag's lifecycle.
+        syncBaselineDao.markSubtitlesPending(itemId)
     }
 
     override suspend fun downloadMediaSegments(itemId: String, downloadPath: String): Boolean =
@@ -839,28 +913,94 @@ class DownloadRepositoryImpl @Inject constructor(
         )
     }
 
-    private fun subtitleFileExtension(codec: String?): String = when (codec?.lowercase()) {
-        "subrip", "srt" -> "srt"
-        "ass" -> "ass"
-        "ssa" -> "ass"
-        "webvtt", "vtt" -> "vtt"
-        "mov_text", "ttml" -> "ttml"
-        "sub" -> "sub"
-        else -> "srt"
+    /**
+     * Fetches one text/image sidecar as `{index}.{ext}`. Returns the manifest
+     * file name, or null when the fetch failed (the caller marks the pass
+     * incomplete; [downloadSubtitleFile]'s temp-file write leaves any previous
+     * pass's sidecar untouched).
+     */
+    private suspend fun fetchSingleSidecar(
+        subUrl: String,
+        subtitlesDir: File,
+        index: Int,
+        codec: String?,
+    ): String? {
+        val fileName = "$index.${subtitleSidecarExtension(codec)}"
+        return if (downloadSubtitleFile(subUrl, File(subtitlesDir, fileName))) fileName else null
     }
 
-    private suspend fun downloadToFile(url: String, target: File): Boolean {
+    /**
+     * Fetches both halves of a VobSub pair ([index].idx palette + [index].sub
+     * bitmap). The server's deliveryUrl for an external VobSub stream points
+     * at whichever file the MediaStream advertises; [vobsubPairUrls] derives
+     * the other half. Either half alone is unrenderable, so both fetches must
+     * succeed. Returns the manifest file name (`{index}.idx`, which the
+     * player's vobsub demuxer pairs with the `.sub` sibling), or null.
+     *
+     * On failure nothing is deleted: [downloadSubtitleFile] stages writes in
+     * temp files, so a pair fetched by a previous successful pass stays
+     * intact and keeps serving the still-valid manifest until the resync
+     * retries.
+     */
+    private suspend fun fetchVobsubPair(subUrl: String, subtitlesDir: File, index: Int): String? {
+        val (paletteUrl, bitmapUrl) = vobsubPairUrls(subUrl)
+        val idxFile = File(subtitlesDir, "$index.idx")
+        val subFile = File(subtitlesDir, "$index.sub")
+        if (!downloadSubtitleFile(paletteUrl, idxFile)) return null
+        if (!downloadSubtitleFile(bitmapUrl, subFile)) return null
+        return idxFile.name
+    }
+
+    /**
+     * Fetches one subtitle sidecar to [target]. Subtitle-specific policy lives
+     * here on purpose: the auth-header fallback and the HTML/JSON rejection
+     * below apply only to subtitle fetches (the video transfer in
+     * DownloadTransferClient has its own), so this is deliberately not a
+     * generic file-download helper.
+     */
+    private suspend fun downloadSubtitleFile(url: String, target: File): Boolean {
+        // Staged write: the stream goes to a `.part` sibling and is moved into
+        // place only when complete, so a mid-transfer failure never truncates
+        // (or replaces) the sidecar a previous successful pass wrote — offline
+        // playback keeps serving it until the resync retries.
+        val staging = File(target.parentFile, target.name + ".part")
         return try {
-            httpClient.newCall(Request.Builder().url(url).build()).awaitResponse().use { resp ->
+            // Auth rides on the baked-in api_key query param, with the
+            // X-Emby-Token header as a fallback for servers/reverse proxies
+            // that reject or strip query-token auth (the same pairing
+            // DownloadTransferClient uses for the video itself).
+            val requestBuilder = Request.Builder().url(url)
+            playbackRepository.getAccessToken()?.takeIf { it.isNotBlank() }?.let {
+                requestBuilder.header("X-Emby-Token", it)
+            }
+            httpClient.newCall(requestBuilder.build()).awaitResponse().use { resp ->
                 if (!resp.isSuccessful) return@use false
-                resp.body?.byteStream()?.use { input ->
-                    target.outputStream().use { output -> input.copyTo(output) }
+                // An auth/proxy failure can arrive as HTTP 200 with an HTML
+                // login page (or a JSON error body); persisting either yields a
+                // sidecar the player can't parse — indistinguishable offline
+                // from "subtitle missing". No subtitle format is ever served
+                // as HTML/JSON, so both are rejected outright.
+                val contentType = resp.header("Content-Type")?.lowercase().orEmpty()
+                if (REJECTED_SUBTITLE_CONTENT_TYPES.any { contentType.contains(it) }) {
+                    Log.d(TAG, "Rejected subtitle response from $url: Content-Type $contentType")
+                    return@use false
                 }
-                target.exists() && target.length() > 0
+                var moved = false
+                resp.body?.byteStream()?.use { input ->
+                    staging.outputStream().use { output -> input.copyTo(output) }
+                    Files.move(
+                        staging.toPath(), target.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING,
+                    )
+                    moved = true
+                }
+                moved
             }
         } catch (e: CancellationException) {
+            staging.delete()
             throw e
         } catch (e: Exception) {
+            staging.delete()
             Log.d(TAG, "Failed to download file from $url", e)
             false
         }
@@ -1040,8 +1180,10 @@ class DownloadRepositoryImpl @Inject constructor(
     /**
      * Maps a [MediaDetail] (the rich server response) to an [OfflineMediaEntity],
      * additionally persisting original title, critic rating, studios, tagline,
-     * and the cast as a JSON blob. Falls back to the item-level values for the
-     * base fields so this stays consistent with [MediaItem.toOfflineMediaEntity].
+     * the cast as a JSON blob, and the chapter list as a JSON blob (so chapter
+     * markers and the chapter sheet work offline). Falls back to the item-level
+     * values for the base fields so this stays consistent with
+     * [MediaItem.toOfflineMediaEntity].
      */
     private fun MediaDetail.toOfflineMediaEntity(imageUrl: String?, backdropUrl: String?): OfflineMediaEntity {
         val base = item.toOfflineMediaEntity(imageUrl, backdropUrl)
@@ -1065,6 +1207,7 @@ class DownloadRepositoryImpl @Inject constructor(
             peopleJson = if (cast.isEmpty()) null else encodeCast(cast),
             providerIdsJson = if (providerIds.isEmpty()) null else encodeProviderIds(providerIds),
             externalUrlsJson = if (externalUrls.isEmpty()) null else encodeExternalUrls(externalUrls),
+            chaptersJson = if (chapters.isEmpty()) null else encodeChapters(chapters),
         )
     }
 
@@ -1122,12 +1265,7 @@ class DownloadRepositoryImpl @Inject constructor(
      * the downloaded file matches what the user would see streamed at the
      * equivalent quality.
      */
-    private fun qualityToMaxBitrate(quality: DownloadQuality): Int? = when (quality) {
-        DownloadQuality.ORIGINAL -> null
-        DownloadQuality.HIGH_1080P -> 8_000_000
-        DownloadQuality.MEDIUM_720P -> 3_000_000
-        DownloadQuality.LOW_480P -> 1_500_000
-    }
+    private fun qualityToMaxBitrate(quality: DownloadQuality): Int? = quality.maxBitrate
 
     companion object {
         private const val TAG = "DownloadRepository"
@@ -1137,5 +1275,10 @@ class DownloadRepositoryImpl @Inject constructor(
         // Mirrored by DownloadRecoveryInitializer so cold-start re-enqueues
         // back off identically. WorkManager caps each retry delay at 5h.
         const val DOWNLOAD_BACKOFF_DELAY_MS = 30_000L
+
+        // Content types that can never be a subtitle file. An HTTP 200 body of
+        // one of these is an auth/proxy error page, not sidecar content.
+        private val REJECTED_SUBTITLE_CONTENT_TYPES =
+            listOf("text/html", "application/json")
     }
 }

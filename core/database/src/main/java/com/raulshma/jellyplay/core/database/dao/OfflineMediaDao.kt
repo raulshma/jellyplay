@@ -33,6 +33,25 @@ interface OfflineMediaDao {
     )
     fun getTopLevelItems(): Flow<List<OfflineMediaWithPlayback>>
 
+    /**
+     * Downloaded top-level items of one server library folder — the data source
+     * behind the library screen's "Downloaded" filter. A top-level offline
+     * row's `parentId` is the server folder the item was saved from; in
+     * Jellyfin's metadata hierarchy movies and series sit directly under their
+     * library view, so `parentId` matches the view id on standard single-folder
+     * layouts. (Multi-folder libraries that nest extra physical folders under
+     * one view would need a stored view id — rows saved there won't match.)
+     */
+    @Query(
+        """
+        SELECT * FROM offline_media_with_playback
+        WHERE parentId = :libraryId
+          AND mediaType IN ('SERIES', 'MOVIE', 'AUDIO', 'MUSIC')
+        ORDER BY createdAt DESC
+        """
+    )
+    fun getTopLevelItemsInLibrary(libraryId: String): Flow<List<OfflineMediaWithPlayback>>
+
     @Query(
         """
         SELECT * FROM offline_media_with_playback
@@ -65,6 +84,74 @@ interface OfflineMediaDao {
         """
     )
     suspend fun getEpisodesForSeries(seriesId: String): List<OfflineMediaWithPlayback>
+
+    /**
+     * Every downloaded episode in one reactive query, with playback state
+     * joined — the data source behind the offline home's Continue Watching /
+     * Next Up rows (episodes are excluded from the top-level library queries
+     * by design, so this is the only whole-library episode source). Capped
+     * generously; a library past the cap drops whole trailing series from the
+     * offline rows rather than corrupting per-series episode order.
+     */
+    @Query(
+        """
+        SELECT * FROM offline_media_with_playback
+        WHERE mediaType = 'EPISODE'
+        ORDER BY seriesId ASC, seasonNumber ASC, episodeNumber ASC
+        LIMIT 2000
+        """
+    )
+    fun getDownloadedEpisodes(): Flow<List<OfflineMediaWithPlayback>>
+
+    /**
+     * Per-series count of downloaded episodes that are not yet finished —
+     * the offline source for the unwatched-count badge on series cards
+     * (online cards take the same number from server
+     * `userData.unplayedItemCount`, which is never persisted). Only counts
+     * an episode when it is both unplayed and below the watched threshold:
+     * [watchedThresholdPercent] is the model's `OFFLINE_WATCHED_THRESHOLD`
+     * scaled to the 0–100 unit `playback_state` stores, passed in by the
+     * caller so this SQL never mirrors the constant (it mirrors the
+     * normalization `toMediaItem` applies per item). Reactive so the badge
+     * updates as episodes are watched offline.
+     */
+    @Query(
+        """
+        SELECT seriesId AS groupedId, COUNT(*) AS unplayedCount
+        FROM offline_media_with_playback
+        WHERE mediaType = 'EPISODE'
+          AND seriesId IN (:seriesIds)
+          AND (isPlayed IS NULL OR isPlayed = 0)
+          AND (playedPercentage IS NULL OR playedPercentage < :watchedThresholdPercent)
+        GROUP BY seriesId
+        """
+    )
+    fun getUnplayedEpisodeCountsBySeriesFlow(
+        seriesIds: List<String>,
+        watchedThresholdPercent: Double,
+    ): Flow<List<UnplayedCountRow>>
+
+    /**
+     * Per-season counterpart of [getUnplayedEpisodeCountsBySeriesFlow] —
+     * same counting rule, grouped by the episode's `seasonId`, feeding the
+     * unwatched-count badge on the offline detail screen's season rows (the
+     * online seasons take it from server `userData.unplayedItemCount`).
+     */
+    @Query(
+        """
+        SELECT seasonId AS groupedId, COUNT(*) AS unplayedCount
+        FROM offline_media_with_playback
+        WHERE mediaType = 'EPISODE'
+          AND seasonId IN (:seasonIds)
+          AND (isPlayed IS NULL OR isPlayed = 0)
+          AND (playedPercentage IS NULL OR playedPercentage < :watchedThresholdPercent)
+        GROUP BY seasonId
+        """
+    )
+    fun getUnplayedEpisodeCountsBySeasonFlow(
+        seasonIds: List<String>,
+        watchedThresholdPercent: Double,
+    ): Flow<List<UnplayedCountRow>>
 
     @Query(
         """
@@ -203,6 +290,16 @@ interface OfflineMediaDao {
 data class OfflineImagePaths(
     val posterPath: String?,
     val backdropPath: String?,
+)
+
+/**
+ * `(groupedId, unplayedCount)` projection shared by the per-series and
+ * per-season unwatched-count queries — `groupedId` is whichever column the
+ * query grouped by (the seriesId or seasonId).
+ */
+data class UnplayedCountRow(
+    val groupedId: String,
+    val unplayedCount: Int,
 )
 
 /** `(id, peopleJson)` projection for cast-image reference counting on delete. */

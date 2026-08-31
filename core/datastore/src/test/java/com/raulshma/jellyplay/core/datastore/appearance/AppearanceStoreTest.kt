@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -28,20 +27,22 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Exercises the appearance store, focusing on the 3-way synthwave/soothing/
- * monochrome mutex that previously lived inline with no unit coverage.
+ * Exercises the appearance store, focusing on the single `theme_variant` key
+ * that selects the active theme style, the per-variant accent keys, and the
+ * read-time derivation from the legacy synthwave/soothing/monochrome booleans.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class AppearanceStoreTest {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+    private lateinit var dataStore: DataStore<Preferences>
     private lateinit var store: AppearanceStore
 
     @Before
     fun setup() {
         runBlocking {
-            val dataStore = TestDataStoreProvider.get(
+            dataStore = TestDataStoreProvider.get(
                 ApplicationProvider.getApplicationContext<android.content.Context>()
             )
             dataStore.edit { it.clear() }
@@ -56,52 +57,79 @@ class AppearanceStoreTest {
         assertTrue(slice.dynamicTheming)
         assertEquals(ThemeMode.SYSTEM, slice.themeMode)
         assertEquals(ColorStyle.TONAL_SPOT, slice.colorStyle)
-        assertFalse(slice.synthwaveMode)
-        assertFalse(slice.soothingMode)
-        assertFalse(slice.monochromeMode)
+        assertEquals("standard", slice.themeVariant)
+        assertEquals("punch", slice.vividAccent)
+        assertEquals("emerald", slice.auroraAccent)
+        assertEquals("rose", slice.sakuraAccent)
+        assertEquals("cobalt", slice.vectorPopAccent)
     }
 
     @Test
-    fun `setSynthwaveMode clears soothing and monochrome`() = runTest {
-        store.setSoothingMode(true)
-        store.setMonochromeMode(true)
-        store.setSynthwaveMode(true)
-        val slice = store.appearance.first()
-        assertTrue(slice.synthwaveMode)
-        assertFalse(slice.soothingMode)
-        assertFalse(slice.monochromeMode)
+    fun `setThemeVariant round-trips every variant`() = runTest {
+        for (variant in listOf("standard", "synthwave", "soothing", "monochrome", "vivid", "aurora", "sakura", "vector_pop")) {
+            store.setThemeVariant(variant)
+            assertEquals(variant, store.appearance.first().themeVariant)
+        }
     }
 
     @Test
-    fun `setSoothingMode clears synthwave and monochrome`() = runTest {
-        store.setSynthwaveMode(true)
-        store.setMonochromeMode(true)
-        store.setSoothingMode(true)
-        val slice = store.appearance.first()
-        assertTrue(slice.soothingMode)
-        assertFalse(slice.synthwaveMode)
-        assertFalse(slice.monochromeMode)
+    fun `legacy synthwave boolean derives theme_variant`() = runTest {
+        dataStore.edit { it[AppearanceStore.Keys.SYNTHWAVE_MODE] = true }
+        assertEquals("synthwave", store.appearance.first().themeVariant)
     }
 
     @Test
-    fun `setMonochromeMode clears synthwave and soothing`() = runTest {
-        store.setSynthwaveMode(true)
-        store.setSoothingMode(true)
-        store.setMonochromeMode(true)
-        val slice = store.appearance.first()
-        assertTrue(slice.monochromeMode)
-        assertFalse(slice.synthwaveMode)
-        assertFalse(slice.soothingMode)
+    fun `legacy soothing boolean derives theme_variant`() = runTest {
+        dataStore.edit { it[AppearanceStore.Keys.SOOTHING_MODE] = true }
+        assertEquals("soothing", store.appearance.first().themeVariant)
     }
 
     @Test
-    fun `disabling one accent theme does not enable the others`() = runTest {
-        store.setSynthwaveMode(true)
-        store.setSynthwaveMode(false)
+    fun `legacy monochrome boolean derives theme_variant`() = runTest {
+        dataStore.edit { it[AppearanceStore.Keys.MONOCHROME_MODE] = true }
+        assertEquals("monochrome", store.appearance.first().themeVariant)
+    }
+
+    @Test
+    fun `explicit theme_variant wins over legacy booleans`() = runTest {
+        dataStore.edit { prefs ->
+            prefs[AppearanceStore.Keys.SYNTHWAVE_MODE] = true
+            prefs[AppearanceStore.Keys.THEME_VARIANT] = "aurora"
+        }
+        assertEquals("aurora", store.appearance.first().themeVariant)
+    }
+
+    @Test
+    fun `restore normalizes mixed-case theme_variant`() = runTest {
+        val slice = AppearanceSlice(themeVariant = "Sakura")
+        store.restore(slice)
+        assertEquals("sakura", store.appearance.first().themeVariant)
+    }
+
+    @Test
+    fun `setVariantAccent writes the right per-variant key`() = runTest {
+        store.setVariantAccent("vivid", "tangerine")
+        store.setVariantAccent("aurora", "violet")
+        store.setVariantAccent("sakura", "mint")
+        store.setVariantAccent("vector_pop", "tomato")
+        store.setVariantAccent("synthwave", "cyan")
+        store.setVariantAccent("soothing", "sage")
         val slice = store.appearance.first()
-        assertFalse(slice.synthwaveMode)
-        assertFalse(slice.soothingMode)
-        assertFalse(slice.monochromeMode)
+        assertEquals("tangerine", slice.vividAccent)
+        assertEquals("violet", slice.auroraAccent)
+        assertEquals("mint", slice.sakuraAccent)
+        assertEquals("tomato", slice.vectorPopAccent)
+        assertEquals("cyan", slice.synthwaveAccent)
+        assertEquals("sage", slice.soothingAccent)
+    }
+
+    @Test
+    fun `setVariantAccent ignores unknown variants`() = runTest {
+        store.setVariantAccent("standard", "ignored")
+        store.setVariantAccent("nonsense", "ignored")
+        val slice = store.appearance.first()
+        assertEquals("punch", slice.vividAccent)
+        assertEquals("magenta", slice.synthwaveAccent)
     }
 
     @Test
@@ -120,11 +148,13 @@ class AppearanceStoreTest {
             performanceMode = true,
             accentColorSwatch = "violet",
             colorStyle = ColorStyle.VIBRANT,
-            synthwaveMode = true,
+            themeVariant = "sakura",
             synthwaveAccent = "cyan",
-            soothingMode = false,
             soothingAccent = "forest",
-            monochromeMode = false,
+            vividAccent = "lime",
+            auroraAccent = "ice",
+            sakuraAccent = "peach",
+            vectorPopAccent = "kelly",
             showAdvancedSettings = true,
             reduceMotionEnabled = true,
             blueLightFilterEnabled = true,

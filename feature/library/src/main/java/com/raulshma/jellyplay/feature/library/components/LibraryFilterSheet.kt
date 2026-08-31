@@ -84,6 +84,8 @@ fun LibraryFilterSheet(
     // a single toggle (null/false = off, true = only items with a resume
     // position). Initialized from the persisted filter blob.
     var selectedIsResumable by remember { mutableStateOf(currentFilters.isResumable == true) }
+    // Downloaded filter mirrors LibraryFilters.isDownloaded the same way.
+    var selectedIsDownloaded by remember { mutableStateOf(currentFilters.isDownloaded == true) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -257,6 +259,14 @@ fun LibraryFilterSheet(
                     selected = selectedIsResumable,
                     onClick = { selectedIsResumable = !selectedIsResumable },
                 )
+                // Downloaded toggle — swaps the browse list to the local offline
+                // store. While active the tags dimension can't apply (no offline
+                // column) so its selection is dropped on Apply.
+                GlassFilterChip(
+                    label = stringResource(R.string.library_filter_downloaded),
+                    selected = selectedIsDownloaded,
+                    onClick = { selectedIsDownloaded = !selectedIsDownloaded },
+                )
             }
 
             // ── Genres ──
@@ -399,9 +409,10 @@ fun LibraryFilterSheet(
                                     years = selectedYears.toList(),
                                     sortBy = selectedSort,
                                     playedStatus = selectedPlayedStatus,
-                                    tags = selectedTags.toList(),
+                                    tags = if (selectedIsDownloaded) emptyList() else selectedTags.toList(),
                                     minRating = selectedMinRating,
                                     isResumable = selectedIsResumable.takeIf { it },
+                                    isDownloaded = selectedIsDownloaded.takeIf { it },
                                 )
                             )
                         }

@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
+import com.raulshma.jellyplay.core.database.JELLY_PLAY_DATABASE_VERSION
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
@@ -17,8 +18,13 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -616,19 +622,70 @@ class MigrationTest {
         org.junit.Assert.assertNotEquals(message, unexpected, actual)
     }
 
-    private fun createDatabase(version: Int, block: (SupportSQLiteDatabase) -> Unit) {
-        val factory = FrameworkSQLiteOpenHelperFactory()
-        val config = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration
+    /**
+     * On-disk SQLite configuration at [schemaVersion] whose onCreate runs
+     * [onCreate] and whose onUpgrade is a no-op — migration tests invoke the
+     * migrations manually against the returned handle instead.
+     */
+    private fun rawHelperConfig(
+        schemaVersion: Int,
+        onCreate: (SupportSQLiteDatabase) -> Unit = {},
+    ): androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration =
+        androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration
             .builder(context)
             .name(dbFile.absolutePath)
-            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(version) {
-                override fun onCreate(db: SupportSQLiteDatabase) {
-                    block(db)
-                }
-                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(schemaVersion) {
+                override fun onCreate(db: SupportSQLiteDatabase) = onCreate(db)
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
             })
             .build()
-        val helper = factory.create(config)
+
+    /**
+     * Opens a throwaway SQLite file and hands the raw (Room-free) database to
+     * [block], closing it afterward regardless of outcome. Companion to
+     * [execSchema] for migration tests that need a REAL historical starting
+     * schema without standing up a Room build.
+     */
+    private fun openRawDatabase(schemaVersion: Int, block: (SupportSQLiteDatabase) -> Unit) {
+        val helper = FrameworkSQLiteOpenHelperFactory().create(rawHelperConfig(schemaVersion))
+        val db = helper.writableDatabase
+        try {
+            block(db)
+        } finally {
+            db.close()
+            helper.close()
+        }
+    }
+
+    /**
+     * Executes every CREATE TABLE / CREATE INDEX / CREATE VIEW statement from
+     * the exported Room schema JSON for [version] (exposed on the test
+     * classpath via the module's test sourceSets), reproducing the exact DDL
+     * Room generated for that historical version. Fixtures built this way fail
+     * loudly when a hand-written assumption about an old shape goes stale.
+     */
+    private fun execSchema(db: SupportSQLiteDatabase, version: Int) {
+        val path = "com.raulshma.jellyplay.core.database.JellyPlayDatabase/$version.json"
+        val text = javaClass.classLoader.getResourceAsStream(path)?.bufferedReader()?.readText()
+            ?: error("exported Room schema not found on test classpath: $path")
+        val database = Json.parseToJsonElement(text).jsonObject["database"]!!.jsonObject
+        for (entity in database["entities"]!!.jsonArray.map { it.jsonObject }) {
+            val tableName = entity["tableName"]!!.jsonPrimitive.content
+            db.execSQL(entity["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", tableName))
+            for (index in entity["indices"]?.jsonArray.orEmpty()) {
+                db.execSQL(
+                    index.jsonObject["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", tableName)
+                )
+            }
+        }
+        for (view in database["views"]?.jsonArray.orEmpty()) {
+            val v = view.jsonObject
+            db.execSQL(v["createSql"]!!.jsonPrimitive.content.replace("\${VIEW_NAME}", v["viewName"]!!.jsonPrimitive.content))
+        }
+    }
+
+    private fun createDatabase(version: Int, block: (SupportSQLiteDatabase) -> Unit) {
+        val helper = FrameworkSQLiteOpenHelperFactory().create(rawHelperConfig(version, onCreate = block))
         helper.writableDatabase.close()
         helper.close()
     }
@@ -826,6 +883,7 @@ class MigrationTest {
         assertNotNull(baseline)
         assertEquals(null, baseline!!.syncedMetadataSignature)
         assertEquals(0, baseline.syncUpdateAvailable)
+        assertEquals(0, baseline.syncSubtitlesPending)
         // The migration backfills a playback_state row with default values.
         val playback = db.playbackStateDao().getById("item-1")
         assertNotNull(playback)
@@ -839,14 +897,15 @@ class MigrationTest {
     fun allMigrations_coversContiguousRange() {
         val tokenCipher = TokenCipher.forTestingWithPersistentKey()
         val migrations = allMigrations(tokenCipher)
-        // One migration per step from v1 up to the current schema version (49),
+        // One migration per step from v1 up to the current schema version,
         // each handing off to the next with no gaps or duplicate starts.
         // androidx.room.Database has CLASS retention, so getAnnotation() returns
-        // null at runtime — the hardcoded fallback is the authoritative value
-        // and must be bumped alongside JellyPlayDatabase's version.
+        // null at runtime — the fallback below is the same constant the
+        // annotation was compiled from ([JELLY_PLAY_DATABASE_VERSION]), so a
+        // version bump lands here automatically.
         val expected = JellyPlayDatabase::class.java
             .getAnnotation(androidx.room.Database::class.java)?.version
-            ?: 49
+            ?: JELLY_PLAY_DATABASE_VERSION
         val startVersions = migrations.map { it.startVersion }
         assertEquals(
             "every version 1..<current must start exactly one migration",
@@ -861,6 +920,156 @@ class MigrationTest {
             )
         }
         assertEquals(expected, migrations.last().endVersion)
+    }
+
+    /**
+     * Verifies the v50→v51 migration adds the nullable `chaptersJson` column to
+     * `offline_media` (feature contract: OfflineMediaItem.chapters).
+     * Pre-existing rows pick up null (degrading to "no chapters" until
+     * re-download), and a fresh write round-trips the JSON blob through the DAO.
+     */
+    @Test
+    fun migrateAllFromV12_addsOfflineChaptersColumn() = runTest {
+        createDatabase(12) { db ->
+            createServersTable(db)
+            createDownloadsTableV11(db)
+            createUsersTableV10(db)
+            createLyricsCacheTable(db)
+            createOfflineMediaTable(db)
+            db.execSQL(
+                "INSERT INTO offline_media (id, name, mediaType) VALUES (?, ?, ?)",
+                arrayOf<Any>("item-1", "Test", "MOVIE"),
+            )
+        }
+
+        val db = openWithMigrations()
+        // The pre-existing row picks up null for the new column.
+        val baseline = db.offlineMediaDao().getById("item-1")
+        assertNotNull(baseline)
+        assertEquals(null, baseline!!.chaptersJson)
+        // A targeted write round-trips the JSON blob through the new column.
+        val chaptersJson =
+            """[{"name":"Opening","startPositionTicks":0},{"name":"Credits","startPositionTicks":100000000,"imageTag":"tag"}]"""
+        db.offlineMediaDao().upsert(baseline.copy(chaptersJson = chaptersJson))
+        assertEquals(chaptersJson, db.offlineMediaDao().getById("item-1")!!.chaptersJson)
+        db.close()
+    }
+
+    /**
+     * Verifies the v50→v51 migration retires every stored metadata signature
+     * AND clears what a pre-upgrade retired-format comparison had left
+     * persisted — the metadata per-axis flag and its contribution to the
+     * composite badge — while genuine other-axis badges survive. See
+     * [MIGRATION_50_51]'s KDoc for the full rationale.
+     *
+     * The starting schema is executed from the exported `50.json` (see
+     * [execSchema]) — the exact tables, indices and view Room generated at
+     * v50 — so a drift between [MIGRATION_50_51]'s SQL and the real v50 shape
+     * (a renamed column, a NOT NULL column without default) fails loudly here
+     * instead of only on device.
+     */
+    @Test
+    fun migrateV50_51_retiresLegacyMetadataSignatures() {
+        openRawDatabase(50) { db ->
+            execSchema(db, 50)
+            // Seed against the REAL v50 schema: one row whose v50-format
+            // comparison already left a stale metadata flag + lit composite
+            // badge, one already-first-contact row, one with a genuine
+            // other-axis (images) change whose badge must survive, and one
+            // with only a pending subtitle bundle (the subtitle axis counts
+            // pending as changed, so its badge must survive too).
+            db.execSQL("INSERT INTO offline_media (id, name, mediaType) VALUES ('item-1', 'Test', 'MOVIE')")
+            db.execSQL("INSERT INTO offline_media (id, name, mediaType) VALUES ('item-2', 'Test 2', 'MOVIE')")
+            db.execSQL("INSERT INTO offline_media (id, name, mediaType) VALUES ('item-3', 'Test 3', 'MOVIE')")
+            db.execSQL("INSERT INTO offline_media (id, name, mediaType) VALUES ('item-4', 'Test 4', 'MOVIE')")
+            db.execSQL(
+                "INSERT INTO sync_baseline (id, syncedPosterTag, syncedBackdropTag, syncedMetadataSignature, " +
+                    "syncUpdateAvailable, syncMetadataChanged) " +
+                    "VALUES ('item-1', 'poster-1', 'backdrop-1', 'legacy-format-hash', 1, 1)"
+            )
+            db.execSQL("INSERT INTO sync_baseline (id) VALUES ('item-2')")
+            db.execSQL(
+                "INSERT INTO sync_baseline (id, syncedMetadataSignature, syncUpdateAvailable, syncImagesChanged) " +
+                    "VALUES ('item-3', 'legacy-format-hash-3', 1, 1)"
+            )
+            db.execSQL(
+                "INSERT INTO sync_baseline (id, syncedMetadataSignature, syncUpdateAvailable, " +
+                    "syncSubtitlesPending) VALUES ('item-4', 'legacy-format-hash-4', 1, 1)"
+            )
+
+            MIGRATION_50_51.migrate(db)
+
+            // Every stored metadata signature is gone; other baseline data survives.
+            db.query(
+                "SELECT id, syncedPosterTag, syncedBackdropTag, syncedMetadataSignature FROM sync_baseline ORDER BY id"
+            ).use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("item-1", c.getString(0))
+                assertEquals("poster-1", c.getString(1))
+                assertEquals("backdrop-1", c.getString(2))
+                assertEquals(null, c.getString(3))
+                assertTrue(c.moveToNext())
+                assertEquals("item-2", c.getString(0))
+                assertEquals(null, c.getString(1))
+                assertEquals(null, c.getString(2))
+                assertEquals(null, c.getString(3))
+                assertTrue(c.moveToNext())
+                assertEquals("item-3", c.getString(0))
+                assertEquals(null, c.getString(1))
+                assertEquals(null, c.getString(2))
+                assertEquals(null, c.getString(3))
+                assertTrue(c.moveToNext())
+                assertEquals("item-4", c.getString(0))
+                assertEquals(null, c.getString(1))
+                assertEquals(null, c.getString(2))
+                assertEquals(null, c.getString(3))
+                assertFalse(c.moveToNext())
+            }
+            // The retired format's fallout is cleared at upgrade time instead of
+            // lingering until each row's next TTL-gated check: item-1's stale
+            // metadata flag and composite badge go dark immediately, item-2 stays
+            // clean, and item-3/item-4's genuine non-metadata badges survive.
+            db.query(
+                "SELECT id, syncMetadataChanged, syncImagesChanged, syncSubtitlesChanged, " +
+                    "syncSubtitlesPending, syncUpdateAvailable FROM sync_baseline ORDER BY id"
+            ).use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("item-1", c.getString(0))
+                assertEquals(0, c.getInt(1))
+                assertEquals(0, c.getInt(2))
+                assertEquals(0, c.getInt(3))
+                assertEquals(0, c.getInt(4))
+                assertEquals(0, c.getInt(5))
+                assertTrue(c.moveToNext())
+                assertEquals("item-2", c.getString(0))
+                assertEquals(0, c.getInt(1))
+                assertEquals(0, c.getInt(2))
+                assertEquals(0, c.getInt(3))
+                assertEquals(0, c.getInt(4))
+                assertEquals(0, c.getInt(5))
+                assertTrue(c.moveToNext())
+                assertEquals("item-3", c.getString(0))
+                assertEquals(0, c.getInt(1))
+                assertEquals(1, c.getInt(2))
+                assertEquals(0, c.getInt(3))
+                assertEquals(0, c.getInt(4))
+                assertEquals(1, c.getInt(5))
+                assertTrue(c.moveToNext())
+                assertEquals("item-4", c.getString(0))
+                assertEquals(0, c.getInt(1))
+                assertEquals(0, c.getInt(2))
+                assertEquals(0, c.getInt(3))
+                assertEquals(1, c.getInt(4))
+                assertEquals(1, c.getInt(5))
+                assertFalse(c.moveToNext())
+            }
+            // The new column exists and pre-existing rows pick up null chapters.
+            db.query("SELECT id, chaptersJson FROM offline_media").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("item-1", c.getString(0))
+                assertEquals(null, c.getString(1))
+            }
+        }
     }
 
     private fun openWithMigrations(): JellyPlayDatabase {

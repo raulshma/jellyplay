@@ -108,4 +108,25 @@ class OfflineMediaItemTest {
 
         assertFalse(item.isPlayed)
     }
+
+    @Test
+    fun toMediaItem_mapsUnplayedEpisodeCountToBadgeCount() {
+        val item = OfflineMediaItem(
+            id = "series-1",
+            name = "Test Series",
+            mediaType = MediaType.SERIES,
+            unplayedEpisodeCount = 5,
+        ).toMediaItem()
+
+        assertEquals(5, item.unplayedItemCount)
+    }
+
+    @Test
+    fun toMediaItem_nullOrZeroUnplayedEpisodeCountStaysNull() {
+        // Null (non-series rows, or every downloaded episode watched) and an
+        // explicit 0 both suppress the badge — it only renders for a positive
+        // count, matching the online cards.
+        assertNull(episode().toMediaItem().unplayedItemCount)
+        assertNull(episode().copy(unplayedEpisodeCount = 0).toMediaItem().unplayedItemCount)
+    }
 }

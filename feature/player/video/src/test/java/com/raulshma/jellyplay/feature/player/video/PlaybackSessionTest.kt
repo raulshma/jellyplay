@@ -341,6 +341,8 @@ class PlaybackSessionTest {
             playerEngineFactory = factory,
             playbackSourceResolver = playbackSourceResolver,
             streamingSubtitleStore = noOpStreamingSubtitleStore(),
+            offlineModeManager = mockk(relaxed = true),
+            userMessageBus = com.raulshma.jellyplay.core.ui.feedback.UserMessageBus(),
         )
         psmRef = psm
 

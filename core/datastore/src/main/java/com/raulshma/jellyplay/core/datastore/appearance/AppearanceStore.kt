@@ -34,19 +34,22 @@ import javax.inject.Singleton
 
 /**
  * Deep module owning the **appearance &amp; accessibility** preference domain:
- * theme/contrast/oled/dynamic/accent/color-style, the mutually-exclusive
- * synthwave/soothing/monochrome accent themes, reduce-motion, blue-light filter,
+ * theme/contrast/oled/dynamic/accent/color-style, the theme style variant
+ * (standard/synthwave/soothing/monochrome/vivid/aurora/sakura/vector_pop) with
+ * its per-variant accents, reduce-motion, blue-light filter,
  * font scale, date format, colour-blind mode, hand mode, haptics, scheduled
  * theme hours, backdrop theme music, performance mode, and the advanced-settings
  * toggle.
  *
  * Extracted from the `UserPreferencesStore` god object so this concern owns its
- * keys, setters (including the 3-way mutex below), read projection, and reset
- * list end-to-end. Mirrors the `PlaybackStore` / `ServerIdentityStore` shape.
+ * keys, setters, read projection, and reset list end-to-end. Mirrors the
+ * `PlaybackStore` / `ServerIdentityStore` shape.
  *
- * **Cross-key invariant owned here:** enabling any one of
- * synthwave/soothing/monochrome clears the other two in a single atomic edit
- * (they are mutually exclusive accent themes).
+ * **Theme style invariant:** a single `theme_variant` key selects the active
+ * variant — variants are inherently mutually exclusive. The legacy
+ * `synthwave_mode` / `soothing_mode` / `monochrome_mode` booleans are no longer
+ * written but still drive [readThemeVariant] derivation so existing installs
+ * (and old backups) keep their theme; they remain in the reset list.
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore; key strings match the
  * legacy `UserPreferencesStore.Keys` names — no migration file.
@@ -67,11 +70,16 @@ class AppearanceStore @Inject constructor(
         val COLOR_STYLE = stringPreferencesKey("color_style")
         val PERFORMANCE_MODE = booleanPreferencesKey("performance_mode")
         val REDUCE_MOTION_ENABLED = booleanPreferencesKey("reduce_motion_enabled")
+        val THEME_VARIANT = stringPreferencesKey("theme_variant")
         val SYNTHWAVE_MODE = booleanPreferencesKey("synthwave_mode")
         val SYNTHWAVE_ACCENT = stringPreferencesKey("synthwave_accent")
         val SOOTHING_MODE = booleanPreferencesKey("soothing_mode")
         val SOOTHING_ACCENT = stringPreferencesKey("soothing_accent")
         val MONOCHROME_MODE = booleanPreferencesKey("monochrome_mode")
+        val VIVID_ACCENT = stringPreferencesKey("vivid_accent")
+        val AURORA_ACCENT = stringPreferencesKey("aurora_accent")
+        val SAKURA_ACCENT = stringPreferencesKey("sakura_accent")
+        val VECTOR_POP_ACCENT = stringPreferencesKey("vector_pop_accent")
         val BACKDROP_THEME_MUSIC_ENABLED = booleanPreferencesKey("backdrop_theme_music_enabled")
         val BLUE_LIGHT_FILTER_ENABLED = booleanPreferencesKey("blue_light_filter_enabled")
         val BLUE_LIGHT_FILTER_STRENGTH = floatPreferencesKey("blue_light_filter_strength")
@@ -111,11 +119,13 @@ class AppearanceStore @Inject constructor(
         performanceMode = PreferenceCodec.readBool(prefs, Keys.PERFORMANCE_MODE, "performance_mode", false),
         accentColorSwatch = prefs[Keys.ACCENT_COLOR_SWATCH] ?: "dynamic",
         colorStyle = readColorStyle(prefs),
-        synthwaveMode = PreferenceCodec.readBool(prefs, Keys.SYNTHWAVE_MODE, "synthwave_mode", false),
         synthwaveAccent = prefs[Keys.SYNTHWAVE_ACCENT] ?: "magenta",
-        soothingMode = PreferenceCodec.readBool(prefs, Keys.SOOTHING_MODE, "soothing_mode", false),
         soothingAccent = prefs[Keys.SOOTHING_ACCENT] ?: "ocean",
-        monochromeMode = PreferenceCodec.readBool(prefs, Keys.MONOCHROME_MODE, "monochrome_mode", false),
+        themeVariant = readThemeVariant(prefs),
+        vividAccent = prefs[Keys.VIVID_ACCENT] ?: "punch",
+        auroraAccent = prefs[Keys.AURORA_ACCENT] ?: "emerald",
+        sakuraAccent = prefs[Keys.SAKURA_ACCENT] ?: "rose",
+        vectorPopAccent = prefs[Keys.VECTOR_POP_ACCENT] ?: "cobalt",
         showAdvancedSettings = PreferenceCodec.readBool(prefs, Keys.SHOW_ADVANCED_SETTINGS, "show_advanced_settings", false),
         reduceMotionEnabled = PreferenceCodec.readBool(prefs, Keys.REDUCE_MOTION_ENABLED, "reduce_motion_enabled", false),
         blueLightFilterEnabled = PreferenceCodec.readBool(prefs, Keys.BLUE_LIGHT_FILTER_ENABLED, "blue_light_filter_enabled", false),
@@ -134,6 +144,21 @@ class AppearanceStore @Inject constructor(
         ThemeMode.valueOf(prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM.name)
     } catch (_: Exception) {
         ThemeMode.SYSTEM
+    }
+
+    /**
+     * Resolves the active theme style. Falls back to the legacy single-purpose
+     * booleans when `theme_variant` hasn't been written yet, so upgrades (and
+     * restores of old backups) keep the user's theme with no migration write.
+     */
+    private fun readThemeVariant(prefs: Preferences): String {
+        prefs[Keys.THEME_VARIANT]?.let { return it }
+        return when {
+            PreferenceCodec.readBool(prefs, Keys.SYNTHWAVE_MODE, "synthwave_mode", false) -> "synthwave"
+            PreferenceCodec.readBool(prefs, Keys.SOOTHING_MODE, "soothing_mode", false) -> "soothing"
+            PreferenceCodec.readBool(prefs, Keys.MONOCHROME_MODE, "monochrome_mode", false) -> "monochrome"
+            else -> "standard"
+        }
     }
 
     private fun readContrastLevel(prefs: Preferences): ContrastLevel = try {
@@ -208,45 +233,37 @@ class AppearanceStore @Inject constructor(
         dataStore.edit { it[Keys.REDUCE_MOTION_ENABLED] = enabled }
     }
 
-    /** Enables synthwave mode and clears soothing + monochrome (mutual exclusion). */
-    suspend fun setSynthwaveMode(enabled: Boolean) {
-        dataStore.edit { prefs ->
-            prefs[Keys.SYNTHWAVE_MODE] = enabled
-            if (enabled) {
-                prefs[Keys.SOOTHING_MODE] = false
-                prefs[Keys.MONOCHROME_MODE] = false
-            }
-        }
+    /**
+     * Selects the active theme style (a [com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant]
+     * name in lowercase: "standard", "synthwave", "soothing", "monochrome",
+     * "vivid", "aurora", "sakura", "vector_pop"). A single key — variants are
+     * inherently mutually exclusive. Normalizes to lowercase so the persisted
+     * canonical form stays stable for the raw-string comparisons downstream.
+     */
+    suspend fun setThemeVariant(variant: String) {
+        dataStore.edit { it[Keys.THEME_VARIANT] = variant.lowercase() }
     }
 
     suspend fun setSynthwaveAccent(accent: String) {
         dataStore.edit { it[Keys.SYNTHWAVE_ACCENT] = accent }
     }
 
-    /** Enables soothing mode and clears synthwave + monochrome (mutual exclusion). */
-    suspend fun setSoothingMode(enabled: Boolean) {
-        dataStore.edit { prefs ->
-            prefs[Keys.SOOTHING_MODE] = enabled
-            if (enabled) {
-                prefs[Keys.SYNTHWAVE_MODE] = false
-                prefs[Keys.MONOCHROME_MODE] = false
-            }
-        }
-    }
-
     suspend fun setSoothingAccent(accent: String) {
         dataStore.edit { it[Keys.SOOTHING_ACCENT] = accent }
     }
 
-    /** Enables monochrome mode and clears synthwave + soothing (mutual exclusion). */
-    suspend fun setMonochromeMode(enabled: Boolean) {
-        dataStore.edit { prefs ->
-            prefs[Keys.MONOCHROME_MODE] = enabled
-            if (enabled) {
-                prefs[Keys.SYNTHWAVE_MODE] = false
-                prefs[Keys.SOOTHING_MODE] = false
-            }
+    /** Persists the accent for the given themed variant; unknown variants are ignored. */
+    suspend fun setVariantAccent(variant: String, accent: String) {
+        val key = when (variant.lowercase()) {
+            "synthwave" -> Keys.SYNTHWAVE_ACCENT
+            "soothing" -> Keys.SOOTHING_ACCENT
+            "vivid" -> Keys.VIVID_ACCENT
+            "aurora" -> Keys.AURORA_ACCENT
+            "sakura" -> Keys.SAKURA_ACCENT
+            "vector_pop" -> Keys.VECTOR_POP_ACCENT
+            else -> return
         }
+        dataStore.edit { it[key] = accent }
     }
 
     suspend fun setShowAdvancedSettings(enabled: Boolean) {
@@ -296,8 +313,10 @@ class AppearanceStore @Inject constructor(
     internal val resetKeys: List<Preferences.Key<*>> = listOf(
         Keys.THEME_MODE, Keys.CONTRAST_LEVEL, Keys.DYNAMIC_THEMING, Keys.OLED_MODE,
         Keys.ACCENT_COLOR_SWATCH, Keys.COLOR_STYLE, Keys.PERFORMANCE_MODE,
-        Keys.REDUCE_MOTION_ENABLED, Keys.SYNTHWAVE_MODE, Keys.SYNTHWAVE_ACCENT,
+        Keys.REDUCE_MOTION_ENABLED, Keys.THEME_VARIANT,
+        Keys.SYNTHWAVE_MODE, Keys.SYNTHWAVE_ACCENT,
         Keys.SOOTHING_MODE, Keys.SOOTHING_ACCENT, Keys.MONOCHROME_MODE,
+        Keys.VIVID_ACCENT, Keys.AURORA_ACCENT, Keys.SAKURA_ACCENT, Keys.VECTOR_POP_ACCENT,
         Keys.BACKDROP_THEME_MUSIC_ENABLED, Keys.BLUE_LIGHT_FILTER_ENABLED,
         Keys.BLUE_LIGHT_FILTER_STRENGTH, Keys.DATE_FORMAT_PREFERENCE, Keys.APP_FONT_SCALE,
         Keys.SCHEDULED_THEME_START_HOUR, Keys.SCHEDULED_THEME_END_HOUR,
@@ -314,8 +333,10 @@ class AppearanceStore @Inject constructor(
         PreferenceResetCategory.APPEARANCE -> listOf(
             Keys.THEME_MODE, Keys.CONTRAST_LEVEL, Keys.DYNAMIC_THEMING, Keys.OLED_MODE,
             Keys.ACCENT_COLOR_SWATCH, Keys.COLOR_STYLE, Keys.PERFORMANCE_MODE,
-            Keys.REDUCE_MOTION_ENABLED, Keys.SYNTHWAVE_MODE, Keys.SYNTHWAVE_ACCENT,
+            Keys.REDUCE_MOTION_ENABLED, Keys.THEME_VARIANT,
+            Keys.SYNTHWAVE_MODE, Keys.SYNTHWAVE_ACCENT,
             Keys.SOOTHING_MODE, Keys.SOOTHING_ACCENT, Keys.MONOCHROME_MODE,
+            Keys.VIVID_ACCENT, Keys.AURORA_ACCENT, Keys.SAKURA_ACCENT, Keys.VECTOR_POP_ACCENT,
             Keys.BACKDROP_THEME_MUSIC_ENABLED, Keys.BLUE_LIGHT_FILTER_ENABLED,
             Keys.BLUE_LIGHT_FILTER_STRENGTH, Keys.DATE_FORMAT_PREFERENCE, Keys.APP_FONT_SCALE,
             Keys.SCHEDULED_THEME_START_HOUR, Keys.SCHEDULED_THEME_END_HOUR,
@@ -359,8 +380,8 @@ class AppearanceStore @Inject constructor(
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences], plus the gap
-     * keys [restorePreferences] omits (the mutually-exclusive accent-theme
-     * toggles, haptics, date format, font scale, scheduled-theme hours, and
+     * keys [restorePreferences] omits (the theme-variant + accent keys,
+     * haptics, date format, font scale, scheduled-theme hours, and
      * color-blind/hand mode).
      */
     suspend fun restore(slice: AppearanceSlice) {
@@ -377,11 +398,16 @@ class AppearanceStore @Inject constructor(
             it[Keys.BLUE_LIGHT_FILTER_ENABLED] = slice.blueLightFilterEnabled
             it[Keys.BLUE_LIGHT_FILTER_STRENGTH] = slice.blueLightFilterStrength
             it[Keys.BACKDROP_THEME_MUSIC_ENABLED] = slice.backdropThemeMusicEnabled
-            it[Keys.SYNTHWAVE_MODE] = slice.synthwaveMode
             it[Keys.SYNTHWAVE_ACCENT] = slice.synthwaveAccent
-            it[Keys.SOOTHING_MODE] = slice.soothingMode
             it[Keys.SOOTHING_ACCENT] = slice.soothingAccent
-            it[Keys.MONOCHROME_MODE] = slice.monochromeMode
+            // Same normalization as setThemeVariant: backup JSON can carry any
+            // casing, and downstream legacy-boolean derivation compares raw
+            // lowercase strings.
+            it[Keys.THEME_VARIANT] = slice.themeVariant.lowercase()
+            it[Keys.VIVID_ACCENT] = slice.vividAccent
+            it[Keys.AURORA_ACCENT] = slice.auroraAccent
+            it[Keys.SAKURA_ACCENT] = slice.sakuraAccent
+            it[Keys.VECTOR_POP_ACCENT] = slice.vectorPopAccent
             it[Keys.HAPTICS_ENABLED] = slice.hapticsEnabled
             it[Keys.DATE_FORMAT_PREFERENCE] = slice.dateFormatPreference.name
             it[Keys.APP_FONT_SCALE] = slice.appFontScale.name
@@ -407,11 +433,13 @@ data class AppearanceSlice(
     val performanceMode: Boolean = false,
     val accentColorSwatch: String = "dynamic",
     val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
-    val synthwaveMode: Boolean = false,
+    val themeVariant: String = "standard",
     val synthwaveAccent: String = "magenta",
-    val soothingMode: Boolean = false,
     val soothingAccent: String = "ocean",
-    val monochromeMode: Boolean = false,
+    val vividAccent: String = "punch",
+    val auroraAccent: String = "emerald",
+    val sakuraAccent: String = "rose",
+    val vectorPopAccent: String = "cobalt",
     val showAdvancedSettings: Boolean = false,
     val reduceMotionEnabled: Boolean = false,
     val blueLightFilterEnabled: Boolean = false,

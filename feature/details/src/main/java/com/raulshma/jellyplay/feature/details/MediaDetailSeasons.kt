@@ -825,7 +825,7 @@ internal fun EpisodeCard(
             // card's lastPlayedDate line so the field is not lost in the unified
             // card. Shown when the episode has any watch activity and the relative
             // formatter could parse the stored timestamp.
-            val lastWatched = formatRelativeTime(episode.lastPlayedDate)
+            val lastWatched = remember(episode.lastPlayedDate) { formatRelativeTime(episode.lastPlayedDate) }
             if (lastWatched != null && (episode.isPlayed || (positionTicks != null && positionTicks > 0))) {
                 Text(
                     text = lastWatched,
@@ -1068,7 +1068,7 @@ private fun CompactEpisodeRow(
 
             // Last-watched relative timestamp — ports the offline compact row's
             // lastPlayedDate line so the field is not lost in the unified card.
-            val lastWatched = formatRelativeTime(episode.lastPlayedDate)
+            val lastWatched = remember(episode.lastPlayedDate) { formatRelativeTime(episode.lastPlayedDate) }
             if (lastWatched != null && (episode.isPlayed || (positionTicks != null && positionTicks > 0))) {
                 Text(
                     text = lastWatched,

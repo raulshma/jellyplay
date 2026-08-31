@@ -107,7 +107,7 @@ fun LanguageSettingsScreen(
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<LanguageSettingsDialog>(LanguageSettingsDialog.None) }
     var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
@@ -142,7 +142,7 @@ fun LanguageSettingsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_language_subs_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             AdvancedSettingsToggleButton(
                 showAdvanced = showAdvanced,

@@ -3,30 +3,31 @@ package com.raulshma.jellyplay.feature.home
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.core.data.catalogue.NextEpisode
 import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
-import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
-import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
+import com.raulshma.jellyplay.core.ui.feedback.UiText
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.HomeSessionTransition
 import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolder
-import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
+import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolderFactory
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
-import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
@@ -35,19 +36,15 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
+import com.raulshma.jellyplay.core.datastore.home.toSectionPrefs
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
-import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
-import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
-import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
-import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
-import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
-import com.raulshma.jellyplay.core.model.HomeSectionQuery
+import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
@@ -60,29 +57,27 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 import javax.inject.Inject
 import dagger.hilt.android.lifecycle.HiltViewModel
 
 @HiltViewModel
-class HomeViewModel @Inject constructor(
-    private val mediaRepository: MediaRepository,
+internal class HomeViewModel @Inject constructor(
+    private val episodeCatalogue: EpisodeCatalogue,
     private val userDataMutator: UserDataMutator,
     private val mediaSearchEngine: MediaSearchEngine,
-    private val offlineFirstItemResolver: OfflineFirstItemResolver,
-    private val orderHomeSections: OrderHomeSectionsUseCase,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val downloadRepository: DownloadRepository,
+    private val downloadIntake: DownloadIntake,
     private val offlineRepository: OfflineRepository,
-    private val playbackOutboxRepository: PlaybackOutboxRepository,
-    private val playbackSyncScheduler: PlaybackSyncScheduler,
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: NewsletterTriggerManager,
     private val homeDiscoveryStore: HomeDiscoveryStore,
@@ -90,8 +85,6 @@ class HomeViewModel @Inject constructor(
     private val experimentalStore: ExperimentalStore,
     private val playbackStore: PlaybackStore,
     private val preferencesEditor: PreferencesEditor,
-    private val widgetDataStore: WidgetDataStore,
-    private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val authRepository: AuthRepository,
@@ -102,11 +95,7 @@ class HomeViewModel @Inject constructor(
      * purely as the uiState.currentUser mirror.
      */
     private val homeSession: HomeSession,
-    private val arrRepository: ArrRepository,
-    private val tvWatchNextScheduler: TvWatchNextScheduler,
-    private val continueWatchingBroadcaster: ContinueWatchingBroadcaster,
-    private val librarySyncHook: LibrarySyncHook,
-    private val timeSource: TimeSource,
+    private val userMessageBus: UserMessageBus,
     /**
      * The settings-search catalog, injected through the core/ui seam. The
      * binding itself lives in feature/settings (see its `SettingsSearchModule`)
@@ -114,13 +103,35 @@ class HomeViewModel @Inject constructor(
      * feature/settings, only on the core/ui interface.
      */
     private val settingsSearchProvider: SettingsSearchProvider,
+    /**
+     * The construction seams for the two big sub-modules below: each factory
+     * owns its module's pure-DI collaborators so they never surface on this
+     * VM's constructor (a new refresher or sync-holder dependency used to
+     * widen THIS interface by one parameter, and the test harness with it).
+     */
+    private val homeRefresherFactory: HomeRefresherFactory,
+    private val syncStatusStateHolderFactory: SyncStatusStateHolderFactory,
 ) : JellyPlayViewModel(), DefaultLifecycleObserver {
 
     private val _uiState = stateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.flow
 
-    val activeDownloadCount: StateFlow<Int> = downloadRepository.getActiveDownloadCount()
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
+    /**
+     * Ids whose quick actions must flip to "Remove download" — completed
+     * downloads ∪ series ids (a series card flips once any episode of it is
+     * downloaded; REMOVE_DOWNLOAD then opens the delete-episodes sheet). The
+     * union contract lives on [DownloadRepository]
+     * ([observeDownloadedIdsIncludingSeries]) so every consumer — home and
+     * the library screen — honors the series half by construction; it used to
+     * be assembled here, and library only took the completed ids. Collected
+     * unconditionally — unlike [HomeUiState.offlineLibrary], which is gated
+     * to offline modes because every download-progress tick re-invalidates it
+     * — because the ONLINE home's action sheet needs this set too. The
+     * repository collapses equal id sets, so transfers don't churn it.
+     */
+    val downloadedIds: StateFlow<Set<String>> =
+        downloadRepository.observeDownloadedIdsIncludingSeries()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     /**
      * The home screen's pending-sync surface — outbox badge count, sync
@@ -130,11 +141,8 @@ class HomeViewModel @Inject constructor(
      * [SyncStatusStateHolder]); re-exposed SearchViewModel-style so the
      * header/sheet call sites observe the same flows as before.
      */
-    private val syncStatus = SyncStatusStateHolder(
+    private val syncStatus = syncStatusStateHolderFactory.create(
         scope = scope,
-        playbackOutboxRepository = playbackOutboxRepository,
-        playbackSyncScheduler = playbackSyncScheduler,
-        offlineFirstItemResolver = offlineFirstItemResolver,
         offlineModeManager = offlineModeManager,
     )
 
@@ -155,11 +163,23 @@ class HomeViewModel @Inject constructor(
      * The section-preference mirrors, bundled in one [HomeSectionPrefs] value
      * so the prefs collector below diffs and adopts each emission with a
      * single comparison/assignment; the refresher consumes the snapshot
-     * directly via its planProvider.
+     * directly via its sectionPrefsProvider.
      */
     private var sectionPrefs = HomeSectionPrefs()
     private var androidTvWatchNextEnabled = true
     private var seerrPreferences = SeerrPreferences()
+
+    /**
+     * The discover / *arr flags the refresher re-reads per fetch. Private
+     * mirrors owned by the prefs collectors below, like [seerrPreferences] —
+     * NOT reads of the render state: `HomeUiState.discoverEnabled` /
+     * `directArrEnabled` are render fields a screen reads, and letting the
+     * refresher consume them made its fetch gating depend on uiState write
+     * timing (the mirrors lag no hop and are written exactly where the
+     * refresher's input changes).
+     */
+    private var discoverEnabled = false
+    private var directArrEnabled = false
 
     /** Saved home-list scroll anchor (see [ScrollPositionStore]); the VM's get/save/reset methods are delegates. */
     private val scrollPositionStore = ScrollPositionStore()
@@ -173,29 +193,34 @@ class HomeViewModel @Inject constructor(
      * collector below, same fold pattern as [SeerrRequestStateHolder]) and
      * the scroll resets on manual refresh and identity changes.
      *
-     * Constructed here rather than injected: its collaborators are exactly
-     * this VM's own constructor collaborators, and its per-call inputs are
-     * the preference mirrors above, exposed as read-only providers so the
-     * mirrors stay owned by the prefs collector in one place.
+     * Constructed through [homeRefresherFactory] (the construction seam that
+     * owns its pure-DI collaborators); the per-call inputs are the preference
+     * mirrors above, exposed as read-only providers so the mirrors stay
+     * owned by the prefs collector in one place.
      */
-    private val refresher = HomeRefresher(
+    private val refresher = homeRefresherFactory.create(
         scope = scope,
-        timeSource = timeSource,
-        mediaRepository = mediaRepository,
-        seerrRepository = seerrRepository,
-        arrRepository = arrRepository,
-        orderHomeSections = orderHomeSections,
-        widgetDataStore = widgetDataStore,
-        continueWatchingBroadcaster = continueWatchingBroadcaster,
-        tvWatchNextScheduler = tvWatchNextScheduler,
-        librarySyncHook = librarySyncHook,
         offlineModeManager = offlineModeManager,
         awaitOutboxDrained = syncStatus::awaitOutboxDrained,
-        planProvider = { sectionPrefs },
+        sectionPrefsProvider = { sectionPrefs },
         seerrPreferencesProvider = { seerrPreferences },
-        discoverEnabledProvider = { _uiState.value.discoverEnabled },
-        directArrEnabledProvider = { _uiState.value.directArrEnabled },
+        discoverEnabledProvider = { discoverEnabled },
+        directArrEnabledProvider = { directArrEnabled },
         androidTvWatchNextEnabledProvider = { androidTvWatchNextEnabled },
+    )
+
+    /**
+     * The offline collection gate — when the home renders downloads — as one
+     * module (see [OfflineHomeGate]): the gate flow, both gated collectors
+     * and the render-source fold, behind a single [OfflineHomeGate.state]
+     * flow. The refresher's `fetchFailedEmpty` is its only input from the
+     * refresh machinery.
+     */
+    private val offlineHomeGate = OfflineHomeGate(
+        scope = scope,
+        offlineMode = offlineModeManager.offlineMode,
+        offlineRepository = offlineRepository,
+        fetchFailedEmpty = refresher.state.map { it.fetchFailedEmpty },
     )
 
     /**
@@ -236,12 +261,20 @@ class HomeViewModel @Inject constructor(
 
     /**
      * The photo-folder child-URL cache (see [PhotoFolderChildUrlsStore]).
-     * Re-exposed so the photo-row call sites observe the same flow as before.
      */
     private val photoFolderChildUrlsStore = PhotoFolderChildUrlsStore(scope, photoFolderPrefetcher)
 
-    /** Cached folder-id → child-image-URLs map for the photo rows. */
-    val photoFolderChildUrls: StateFlow<Map<String, List<String>>> get() = photoFolderChildUrlsStore.childUrls
+    /**
+     * Per-item slice of the store's cached folder-id → child-image-URLs map.
+     * Lets each photo-folder card
+     * collect only its own urls so a prefetch merge (which produces a new Map
+     * reference) doesn't invalidate the entire home body — only the one card
+     * whose urls changed.
+     */
+    fun photoFolderChildUrlsFor(itemId: String): Flow<List<String>> =
+        photoFolderChildUrlsStore.childUrls
+            .map { it[itemId].orEmpty() }
+            .distinctUntilChanged()
 
     private fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) =
         photoFolderChildUrlsStore.prefetch(items)
@@ -267,6 +300,22 @@ class HomeViewModel @Inject constructor(
      * unchanged.
      */
     private val seriesDeleteStateHolder = SeriesDeleteStateHolder(scope, offlineRepository)
+
+    /**
+     * The series download sheet opened from a series card's quick-action
+     * Download — the same `SeriesDownloadSheet` the media-detail screen hosts,
+     * fed here from the [EpisodeCatalogue] seam instead of a detail session.
+     * [state][SeriesDownloadStateHolder.state] is folded into
+     * [HomeUiState.seriesDownload] by the init collector; the methods below
+     * are one-line delegates for the sheet's callbacks.
+     */
+    private val seriesDownloadStateHolder = SeriesDownloadStateHolder(
+        scope = scope,
+        episodeCatalogue = episodeCatalogue,
+        downloadRepository = downloadRepository,
+        downloadIntake = downloadIntake,
+        userMessageBus = userMessageBus,
+    )
 
     /**
      * Encapsulates all Seerr request UI state (result, servers, loading, seasons).
@@ -353,42 +402,49 @@ class HomeViewModel @Inject constructor(
             ) { home, appearance, experimental, playback ->
                 HomePrefs(home, appearance, experimental, playback)
             }.collect { prefs ->
-                val newSectionPrefs = HomeSectionPrefs(
-                    query = HomeSectionQuery(
-                        enabledSections = prefs.home.enabledHomeSectionTypes,
-                        libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides,
-                        nextUpRewatching = prefs.home.nextUpRewatching,
-                        nextUpMaxDays = prefs.home.nextUpMaxDays,
-                        nextUpExcludedSeriesIds = prefs.home.nextUpExcludedSeriesIds,
-                        hiddenCwItemIds = prefs.home.hiddenCwItemIds,
-                        pinnedSections = prefs.home.pinnedHomeSections,
-                    ),
-                    homeSectionOrder = prefs.home.homeSectionOrder,
-                    mergeContinueWatchingAndNextUp = prefs.home.mergeContinueWatchingAndNextUp,
-                )
+                // The shared slice→prefs mapping (the store's commands read
+                // through the same function) — no hand-copied field list here.
+                val newSectionPrefs = prefs.home.toSectionPrefs()
                 val homeSectionPrefsChanged = hasSeenHomePreferences && newSectionPrefs != sectionPrefs
 
                 hasSeenHomePreferences = true
                 sectionPrefs = newSectionPrefs
                 androidTvWatchNextEnabled = prefs.playback.androidTvWatchNextEnabled
+                directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.experimental.enabledExperimentalFeatures
                 _uiState.update { it.copy(
                     homeMode = prefs.home.homeMode,
-                    dynamicTheming = prefs.appearance.dynamicTheming,
-                    oledMode = prefs.appearance.oledMode,
-                    colorStyle = prefs.appearance.colorStyle,
-                    accentColorSwatch = prefs.appearance.accentColorSwatch,
+                    // The appearance quintet as one embedded slice (the
+                    // SeerrRequestState precedent) — one assignment, no
+                    // per-field hand-sync.
+                    appearance = AppearanceUiState(
+                        dynamicTheming = prefs.appearance.dynamicTheming,
+                        oledMode = prefs.appearance.oledMode,
+                        colorStyle = prefs.appearance.colorStyle,
+                        accentColorSwatch = prefs.appearance.accentColorSwatch,
+                        performanceMode = prefs.appearance.performanceMode,
+                    ),
                     homeHeroEnabled = prefs.home.homeHeroEnabled,
                     homeBackdropEnabled = prefs.home.homeBackdropEnabled,
-                    performanceMode = prefs.appearance.performanceMode,
                     showClock = prefs.home.showClockOnHome,
                     showSettingsInHomeSearch = prefs.home.showSettingsInHomeSearch,
                     hideTopHeaderOnScroll = prefs.home.hideTopHeaderOnScroll,
                     continueWatchingClickBehavior = prefs.home.continueWatchingClickBehavior,
                     experimentalCardClippingEnabled = ExperimentalFeature.HOME_CARD_CLIPPING in prefs.experimental.enabledExperimentalFeatures,
                     directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.experimental.enabledExperimentalFeatures,
-                    enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes,
-                    homeSectionOrder = prefs.home.homeSectionOrder,
-                    libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides,
+                    // The section-config sheet's mirrors, likewise one slice.
+                    sectionConfig = SectionConfigState(
+                        enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes,
+                        homeSectionOrder = prefs.home.homeSectionOrder,
+                        libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides,
+                    ),
+                    offlineSectionPrefs = OfflineHomeSectionPrefs(
+                        continueWatchingEnabled = HomeSectionType.CONTINUE_WATCHING in prefs.home.enabledHomeSectionTypes,
+                        nextUpEnabled = HomeSectionType.NEXT_UP in prefs.home.enabledHomeSectionTypes,
+                        hiddenCwItemIds = prefs.home.hiddenCwItemIds,
+                        nextUpExcludedSeriesIds = prefs.home.nextUpExcludedSeriesIds,
+                        mergeCwAndNextUp = prefs.home.mergeContinueWatchingAndNextUp,
+                        sectionOrder = prefs.home.homeSectionOrder,
+                    ),
                 ) }
 
                 if (homeSectionPrefsChanged) {
@@ -399,9 +455,10 @@ class HomeViewModel @Inject constructor(
 
         launch {
             seerrPreferencesStore.preferences.collect { prefs ->
-                val wasEnabled = _uiState.value.discoverEnabled
+                val wasEnabled = discoverEnabled
                 seerrPreferences = prefs
                 val nowEnabled = prefs.enabled && prefs.discoverEnabled
+                discoverEnabled = nowEnabled
                 _uiState.update { it.copy(discoverEnabled = nowEnabled) }
                 if (nowEnabled && !wasEnabled) {
                     refresher.request(RefreshTrigger.DiscoverEnabled)
@@ -409,22 +466,21 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Only collect the offline library while actually in an offline mode.
-        // The underlying Flow re-emits on every download progress write, so
-        // collecting it unconditionally caused the whole home tree to
-        // re-invalidated during downloads even in online mode (where the
-        // offline branch never renders). flatMapLatest on offlineMode means
-        // the upstream collection is cancelled entirely while online.
-        @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+        // Fold the offline gate's state slice into HomeUiState (same fold
+        // pattern as the refresher collector below): the render-source
+        // decision, the offline library, and the offline episodes. The gate
+        // module owns the collectors and the fold's inputs; the VM only
+        // mirrors emissions into the single state object.
         launch {
-            offlineModeManager.offlineMode
-                .flatMapLatest { mode ->
-                    if (mode != OfflineMode.ONLINE) offlineRepository.getOfflineLibrary()
-                    else flowOf(emptyList())
+            offlineHomeGate.state.collect { offline ->
+                _uiState.update {
+                    it.copy(
+                        renderSource = offline.renderSource,
+                        offlineLibrary = offline.offlineLibrary,
+                        offlineEpisodes = offline.offlineEpisodes,
+                    )
                 }
-                .collect { items ->
-                    _uiState.update { it.copy(offlineLibrary = items) }
-                }
+            }
         }
 
         launch {
@@ -472,6 +528,14 @@ class HomeViewModel @Inject constructor(
         launch {
             seriesDeleteStateHolder.state.collect { seriesDelete ->
                 _uiState.update { it.copy(seriesDelete = seriesDelete) }
+            }
+        }
+
+        // Fold the series download sheet holder into HomeUiState.seriesDownload
+        // (same fold pattern).
+        launch {
+            seriesDownloadStateHolder.state.collect { seriesDownload ->
+                _uiState.update { it.copy(seriesDownload = seriesDownload) }
             }
         }
 
@@ -533,6 +597,10 @@ class HomeViewModel @Inject constructor(
             is HomeUiEvent.MarkItemPlayed -> setItemPlayed(event.item, played = true)
             is HomeUiEvent.MarkItemUnplayed -> setItemPlayed(event.item, played = false)
             is HomeUiEvent.DeleteOfflineMedia -> deleteOfflineMedia(event.item)
+            is HomeUiEvent.RequestSeriesDownload -> requestSeriesDownload(event.series)
+            is HomeUiEvent.LoadSeriesDownloadEpisodes -> loadSeriesDownloadEpisodes(event.seasonId)
+            is HomeUiEvent.DownloadSeries -> downloadSeries(event.selectedEpisodes)
+            is HomeUiEvent.DismissSeriesDownload -> dismissSeriesDownload()
             is HomeUiEvent.RequestSeriesDelete -> requestSeriesDelete(event.series)
             is HomeUiEvent.DismissSeriesDelete -> dismissSeriesDelete()
             is HomeUiEvent.DeleteOfflineEpisodes -> deleteOfflineEpisodes(event.episodeIds)
@@ -541,12 +609,13 @@ class HomeViewModel @Inject constructor(
             is HomeUiEvent.DeleteSearchHistoryItem -> deleteSearchHistoryItem(event.id)
             is HomeUiEvent.ClearSearchHistory -> clearSearchHistory()
             is HomeUiEvent.SettingsResultClicked -> onSettingsResultClicked(event.item)
-            is HomeUiEvent.ExcludeSeriesFromNextUp -> excludeSeriesFromNextUp(event.seriesId)
             is HomeUiEvent.SetSectionVisible -> setSectionVisible(event.type, event.visible)
             is HomeUiEvent.MoveSection -> moveSection(event.type, event.up)
             is HomeUiEvent.SetLibrarySectionVisible -> setLibrarySectionVisible(event.libraryId, event.type, event.visible)
             is HomeUiEvent.PrefetchPhotoFolderChildUrls -> prefetchPhotoFolderChildUrls(event.items)
             is HomeUiEvent.EnsurePendingItemDetails -> ensurePendingItemDetails(event.itemIds)
+            is HomeUiEvent.PlaySeries -> resolveSeriesPlay(event)
+            is HomeUiEvent.DownloadItem -> downloadItem(event)
         }
     }
 
@@ -560,6 +629,64 @@ class HomeViewModel @Inject constructor(
 
     fun saveHomeScrollPosition(firstVisibleItemIndex: Int, firstVisibleItemScrollOffset: Int) =
         scrollPositionStore.save(firstVisibleItemIndex, firstVisibleItemScrollOffset)
+
+    /** Single-flight latch for [resolveSeriesPlay] — main-thread only. */
+    private var seriesPlayResolveInFlight = false
+
+    /**
+     * Resolves which EPISODE of a home section SERIES card's play affordance
+     * should start: the shared catalogue-side smart-play decision
+     * ([NextEpisode.forSorted] over the playback-sorted snapshot — resume →
+     * next unplayed → replay first), i.e. the same rule the detail screen's
+     * primary button applies. A series folder must never be handed to the
+     * player itself.
+     *
+     * Cards resolve against the server catalogue; when the screen is
+     * rendering downloaded content ([isRenderingDownloads]) the catalogue
+     * reads local episodes instead — so an implicit-offline session (fetch
+     * failed, downloads shown) never pokes the server that just failed.
+     * Single-flight: taps arriving while a resolve is in flight are dropped.
+     * [HomeUiEvent.PlaySeries.onResolved] fires on the main thread exactly
+     * once per accepted request.
+     */
+    private fun resolveSeriesPlay(event: HomeUiEvent.PlaySeries) {
+        // Single-flight: rapid double-taps must not stack catalogue loads or
+        // double-navigate.
+        if (seriesPlayResolveInFlight) return
+        seriesPlayResolveInFlight = true
+        launch {
+            try {
+                val target = episodeCatalogue.loadSeriesEpisodes(
+                    event.series.id,
+                    offline = isRenderingDownloads(),
+                ).getOrNull()?.let { NextEpisode.forSorted(it.sortedEpisodes) }
+                val episode = target?.episode
+                event.onResolved(
+                    if (episode != null) {
+                        SeriesPlayResolution.Episode(episode, target.startPositionTicks)
+                    } else {
+                        SeriesPlayResolution.Details(event.series)
+                    },
+                )
+            } finally {
+                seriesPlayResolveInFlight = false
+            }
+        }
+    }
+
+    /**
+     * True when the home screen renders (or would render) downloaded content
+     * rather than server content: explicit offline mode, or the implicit one —
+     * the online fetch failed leaving only downloads to show. Reads the same
+     * [HomeUiState.renderSource] the screen branches on (one fold — see
+     * [computeHomeRenderSource]); previously this re-derived the predicate
+     * with subtly different terms from the screen's copy. The known-empty
+     * corner (fetch failed, downloads confirmed absent →
+     * [HomeRenderSource.Online], hard-error screen) is deliberately excluded:
+     * no series card can fire this while the error screen shows.
+     */
+    private fun isRenderingDownloads(): Boolean =
+        _uiState.value.renderSource != HomeRenderSource.Online
 
     /**
      * Shared offline-delete module (core/data) — the same collapse/defense
@@ -588,6 +715,45 @@ class HomeViewModel @Inject constructor(
 
     /** Opens the delete-episodes sheet for [series] — see [SeriesDeleteStateHolder.requestSeriesDelete]. */
     private fun requestSeriesDelete(series: MediaItem) = seriesDeleteStateHolder.requestSeriesDelete(series)
+
+    /** Opens the series download sheet for [series] — see [SeriesDownloadStateHolder.requestSeriesDownload]. */
+    private fun requestSeriesDownload(series: MediaItem) = seriesDownloadStateHolder.requestSeriesDownload(series)
+
+    /** Lazily expands one season in the open series download sheet — see [SeriesDownloadStateHolder.loadSeasonEpisodes]. */
+    private fun loadSeriesDownloadEpisodes(seasonId: String) = seriesDownloadStateHolder.loadSeasonEpisodes(seasonId)
+
+    /** Queues the selected episodes and closes the sheet — see [SeriesDownloadStateHolder.downloadSeries]. */
+    private fun downloadSeries(selectedEpisodes: Map<String, List<String>>) =
+        seriesDownloadStateHolder.downloadSeries(selectedEpisodes)
+
+    /** Closes the series download sheet — see [SeriesDownloadStateHolder.dismiss]. */
+    private fun dismissSeriesDownload() = seriesDownloadStateHolder.dismiss()
+
+    /**
+     * Long-press Download from an online home card. Single-stream items
+     * (movie/episode/music track) start inline at the default quality; series
+     * route to the detail screen with the download sheet pre-presented via
+     * [HomeUiEvent.DownloadItem.onOpenDetail] (their flow needs the user's
+     * season/episode selection), and other non-inline types open the detail
+     * screen plainly. Failures surface on the message bus.
+     */
+    private fun downloadItem(event: HomeUiEvent.DownloadItem) {
+        val (item, onOpenDetail) = event
+        launch {
+            when (val result = downloadIntake.startFromItem(item)) {
+                DownloadRequestResult.Started ->
+                    userMessageBus.info(
+                        UiText.Resource(com.raulshma.jellyplay.core.data.R.string.data_download_started)
+                    )
+                is DownloadRequestResult.SeriesSelectionRequired -> onOpenDetail(result.seriesId, true)
+                is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId, false)
+                is DownloadRequestResult.Failed ->
+                    userMessageBus.error(
+                        UiText.Resource(com.raulshma.jellyplay.core.data.R.string.data_download_start_failed)
+                    )
+            }
+        }
+    }
 
     /** Closes the sheet — see [SeriesDeleteStateHolder.dismiss]. */
     private fun dismissSeriesDelete() = seriesDeleteStateHolder.dismiss()
@@ -737,44 +903,35 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun excludeSeriesFromNextUp(seriesId: String) {
-        launch {
-            homeDiscoveryStore.excludeSeriesFromNextUp(seriesId)
-        }
-    }
-
     /**
-     * Toggles a home section's visibility from the inline section-config sheet.
-     * Writes through [preferencesEditor] exactly as the Settings screen does —
-     * the prefs collector above then triggers a refresher request so the
-     * row appears/disappears with no extra wiring.
+     * Toggles a home section's visibility from the inline section-config
+     * sheet. The write goes through the store's section-prefs command (the
+     * shared algebra applied to the CURRENT persisted state) — the same
+     * command Settings' Appearance toggle routes through; the prefs collector
+     * above then triggers a refresher request so the row appears/disappears
+     * with no extra wiring.
      */
     private fun setSectionVisible(type: HomeSectionType, visible: Boolean) {
-        preferencesEditor.setEnabledHomeSectionTypes(
-            sectionPrefs.withSectionVisible(type, visible).query.enabledSections,
-        )
+        launch { homeDiscoveryStore.setSectionVisible(type, visible) }
     }
 
     /**
      * Moves a home section up/down within the user's ordering, from the inline
-     * section-config sheet. Swaps with the neighbour in the cached order and
-     * persists via [preferencesEditor]; the prefs collector + ordering use case
+     * section-config sheet. Store command: swap with the neighbour in the
+     * persisted order, re-normalized; the prefs collector + ordering use case
      * re-apply it on the next emission.
      */
     private fun moveSection(type: HomeSectionType, up: Boolean) {
-        val updated = sectionPrefs.withSectionMoved(type, up) ?: return
-        preferencesEditor.edit { homeDiscovery.setHomeSectionOrder(updated.homeSectionOrder) }
+        launch { homeDiscoveryStore.moveSection(type, up) }
     }
 
     /**
      * Toggles a per-library section (currently LATEST_MEDIA) from the inline
-     * section-config sheet, mirroring Settings → Configure Libraries.
+     * section-config sheet, mirroring Settings → Configure Libraries — both
+     * route through the same store command.
      */
     private fun setLibrarySectionVisible(libraryId: String, type: HomeSectionType, visible: Boolean) {
-        preferencesEditor.setLibraryHomeSectionOverrides(
-            sectionPrefs.withLibrarySectionVisible(libraryId, type, visible)
-                .query.libraryHomeSectionOverrides,
-        )
+        launch { homeDiscoveryStore.setLibrarySectionVisible(libraryId, type, visible) }
     }
 
     override fun onStart(owner: LifecycleOwner) {

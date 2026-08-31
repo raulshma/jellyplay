@@ -127,7 +127,16 @@ sealed class Route : NavKey {
 
     // ───────────────────────── Details ─────────────────────────
 
-    @Serializable data class MediaDetail(val itemId: String) : Route() {
+    /**
+     * @param openDownloadSheet When true, the detail screen pre-presents the
+     *   series download sheet once the item loads — the deep-link from a card
+     *   long-press Download on a series (the series flow needs the user's
+     *   season/episode selection before anything is enqueued).
+     */
+    @Serializable data class MediaDetail(
+        val itemId: String,
+        val openDownloadSheet: Boolean = false,
+    ) : Route() {
         override val isDetail = true
     }
 
@@ -324,6 +333,15 @@ sealed class Route : NavKey {
         HighlightableRoute {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
     }
+
+    /**
+     * Import preview screen. Shows a before/after diff of every setting from
+     * the selected backup file (current vs incoming) with per-category and
+     * import-all actions. Reached from [BackupSettings] after a file is picked.
+     *
+     * @param uri the `Uri` of the picked backup file, as an encoded string.
+     */
+    @Serializable data class ImportPreview(val uri: String) : Route()
 
     /**
      * Integrations hub — top-level list of every third-party service JellyPlay

@@ -69,7 +69,7 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -91,7 +91,7 @@ fun ManageSeriesScreen(
 ) {
     LaunchedEffect(seriesId) { viewModel.load(seriesId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
@@ -111,7 +111,7 @@ fun ManageSeriesScreen(
         JellyPlayScreenScaffold(
             title = title,
             onBack = onBack,
-            backgroundColor = backgroundColor,
+            backgroundColorState = backgroundColorState,
             actions = {
                 if (uiState.actionTarget is ActionTarget.Series) {
                     JellyPlayLoadingIndicator(

@@ -184,6 +184,13 @@
     <string name="settings_update_available">Update available: v%1$s</string>
     <string name="settings_up_to_date">Up to date (v%1$s)</string>
     <string name="settings_check_for_updates">Check for Updates</string>
+    <string name="settings_update_dismiss_title">Hide Dismissed Updates For</string>
+    <string name="settings_update_dismiss_subtitle">How long an update you dismissed with \"Later\" stays hidden</string>
+    <string name="settings_update_dismiss_12_hours">12 hours</string>
+    <string name="settings_update_dismiss_24_hours">24 hours</string>
+    <string name="settings_update_dismiss_3_days">3 days</string>
+    <string name="settings_update_dismiss_1_week">1 week</string>
+    <string name="settings_update_dismiss_never">Never show this update</string>
     <string name="settings_acknowledgements">Acknowledgements</string>
     <string name="settings_built_with_jellyfin">Built with Jellyfin SDK</string>
 
@@ -301,6 +308,25 @@
     <string name="factory_reset_cat_player_engines">Player Engines</string>
     <string name="factory_reset_cat_experimental">Experimental</string>
     <string name="factory_reset_cat_misc_app">Miscellaneous</string>
+    <string name="factory_reset_cat_app_state">App State</string>
+
+    <!-- ImportPreviewScreen.kt -->
+    <string name="settings_import_preview_title">Import Preview</string>
+    <string name="settings_import_preview_loading">Loading backup…</string>
+    <string name="settings_import_preview_error">Could not read backup file</string>
+    <string name="settings_import_preview_summary_card">%1$d of %2$d settings will change</string>
+    <string name="settings_import_preview_import_all">Import All</string>
+    <string name="settings_import_preview_import_category">Import Category</string>
+    <string name="settings_import_preview_security_option">Also restore PIN / biometric lock</string>
+    <string name="settings_import_preview_legacy_warning">This is a legacy backup (older app version). Settings will be migrated where possible.</string>
+    <string name="settings_import_preview_version_warning">Backup was exported from a newer app version (%1$d). Some settings may be ignored.</string>
+    <string name="settings_import_preview_confirm">Import</string>
+    <string name="settings_import_preview_confirm_all_title">Import All Settings?</string>
+    <string name="settings_import_preview_confirm_all_message">This will overwrite all current settings with the values from the backup. This cannot be undone.</string>
+    <string name="settings_import_preview_confirm_category_title">Import This Category?</string>
+    <string name="settings_import_preview_confirm_category_message">Only the settings in this category will be overwritten from the backup.</string>
+    <string name="settings_import_preview_confirm_extras_title">Import App State?</string>
+    <string name="settings_import_preview_confirm_extras_message">This will overwrite favorite channels, last channel, Watch Later playlist and onboarding state from the backup.</string>
 
     <!-- ActiveDevicesRow.kt -->
     <string name="settings_active_devices">Active Devices</string>
@@ -424,24 +450,16 @@
     <string name="settings_appearance_title">Appearance</string>
     <string name="settings_reset_defaults_cd">Reset to defaults</string>
     <string name="settings_theme">Theme</string>
-    <string name="settings_synthwave_accent">Synthwave (%1$s)</string>
-    <string name="settings_soothing_accent">Soothing (%1$s)</string>
-    <string name="settings_monochrome_nothing">Monochrome (Nothing Phone)</string>
+    <string name="settings_style_summary">%1$s (%2$s)</string>
     <string name="settings_artwork_dynamic">Artwork dynamic</string>
     <string name="settings_theme_mode">Theme Mode</string>
-    <string name="settings_overridden_synthwave">Overridden by Synthwave Mode</string>
-    <string name="settings_overridden_soothing">Overridden by Soothing Mode</string>
-    <string name="settings_overridden_monochrome">Overridden by Monochrome Mode</string>
+    <string name="settings_overridden_variant">Overridden by %1$s</string>
     <string name="settings_theme_follow_system">Follow system setting</string>
     <string name="settings_theme_always_light">Always light</string>
     <string name="settings_theme_always_dark">Always dark</string>
     <string name="settings_theme_scheduled">Auto day/night (%1$d:00\u2013%2$d:00)</string>
-    <string name="settings_synthwave_mode">Synthwave Mode</string>
-    <string name="settings_synthwave_mode_subtitle">Apply retro-futuristic neon theme with sharp corners</string>
-    <string name="settings_soothing_mode">Soothing Mode</string>
-    <string name="settings_soothing_mode_subtitle">Apply a calm, Facebook-inspired theme with soft rounded corners</string>
-    <string name="settings_monochrome_mode">Monochrome Mode</string>
-    <string name="settings_monochrome_mode_subtitle">Apply strict black/white theme inspired by Nothing OS</string>
+    <string name="settings_theme_style">Theme Style</string>
+    <string name="settings_theme_style_subtitle">Choose a full themed look — Standard, Synthwave, Soothing, Monochrome, Vivid, Aurora, Sakura, or Vector Pop</string>
     <string name="settings_dynamic_theming">Dynamic Theming</string>
     <string name="settings_dynamic_theming_subtitle">Colors extracted from artwork</string>
     <string name="settings_oled_mode">OLED Mode</string>
@@ -1236,10 +1254,10 @@
     <string name="ss_theme_scheduler_subtitle">Automatically switch between light and dark theme by time of day</string>
     <string name="ss_theme_mode_title">Theme Mode</string>
     <string name="ss_theme_mode_subtitle">Follow system setting, light mode, or dark mode</string>
-    <string name="ss_synthwave_mode_title">Synthwave Mode</string>
-    <string name="ss_synthwave_mode_subtitle">Retro-futuristic neon theme with sharp corners</string>
-    <string name="ss_soothing_mode_title">Soothing Mode</string>
-    <string name="ss_soothing_mode_subtitle">Soft Facebook-inspired styling and rounded corners</string>
+    <string name="ss_theme_style_title">Theme Style</string>
+    <string name="ss_theme_style_subtitle">Pick a themed look: Standard, Synthwave, Soothing, Monochrome, Vivid, Aurora, Sakura, or Vector Pop</string>
+    <string name="ss_style_accent_title">Theme Style Accent</string>
+    <string name="ss_style_accent_subtitle">Accent color for the active theme style</string>
     <string name="ss_dynamic_theming_title">Dynamic Theming</string>
     <string name="ss_dynamic_theming_subtitle">Colors extracted dynamically from playing media artwork</string>
     <string name="ss_oled_mode_title">OLED Mode</string>
@@ -1294,8 +1312,6 @@
     <string name="ss_blue_light_filter_subtitle">Tint the screen amber to reduce eye strain at night</string>
     <string name="ss_blue_light_strength_title">Blue Light Filter Strength</string>
     <string name="ss_blue_light_strength_subtitle">Intensity of the amber overlay</string>
-    <string name="ss_monochrome_mode_title">Monochrome Mode</string>
-    <string name="ss_monochrome_mode_subtitle">Apply strict black/white theme inspired by Nothing OS</string>
     <string name="ss_hide_search_history_title">Hide Search History</string>
     <string name="ss_hide_search_history_subtitle">Hide recent search history from the search screen</string>
     <string name="ss_scheduled_start_title">Theme Scheduled Start</string>

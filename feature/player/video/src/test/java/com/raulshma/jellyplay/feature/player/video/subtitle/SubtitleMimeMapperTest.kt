@@ -18,6 +18,10 @@ class SubtitleMimeMapperTest {
         assertEquals(MimeTypes.APPLICATION_TTML, SubtitleMimeMapper.mapCodecToMime("ttml"))
         assertEquals(MimeTypes.APPLICATION_TTML, SubtitleMimeMapper.mapCodecToMime("dfxp"))
         assertEquals(MimeTypes.APPLICATION_PGS, SubtitleMimeMapper.mapCodecToMime("pgs"))
+        // Server-reported variants of the same bitmap format: without these,
+        // ExoPlayer drops the sidecar silently at mime resolution.
+        assertEquals(MimeTypes.APPLICATION_PGS, SubtitleMimeMapper.mapCodecToMime("pgssub"))
+        assertEquals(MimeTypes.APPLICATION_PGS, SubtitleMimeMapper.mapCodecToMime("hdmv_pgs_subtitle"))
         assertEquals(MimeTypes.APPLICATION_TX3G, SubtitleMimeMapper.mapCodecToMime("mov_text"))
     }
 

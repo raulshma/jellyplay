@@ -183,7 +183,10 @@ data class DetailCapabilities(
     val localDownloadManagement: Boolean,
     /** Genre/tag chips are tappable → deep-link into a filtered library section. Remote-only. */
     val tagNavigation: Boolean,
-    /** A chapter list can be rendered and a chapter is playable (resume-from-position). */
+    /** A chapter list can be rendered and a chapter is playable
+     *  (resume-from-position). True for remote items and for local projections
+     *  carrying the download-time chapter snapshot; thumbnails may still be
+     *  unreachable offline (tiles degrade to a placeholder). */
     val chapters: Boolean,
 )
 

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -11,11 +12,14 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.isSideLoadableEmbeddedSubtitle
+import com.raulshma.jellyplay.core.model.toMediaDetail
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -29,6 +33,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,6 +91,13 @@ class PlayerSessionManager(
     private val playerEngineFactory: PlayerEngineFactory,
     private val playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver,
     private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
+    /**
+     * Fail-fast gate for online resolution (#146): without it a dead network
+     * made every load stage block on full OkHttp timeouts before silently
+     * bailing, which read as "the Next button did nothing".
+     */
+    private val offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager,
+    private val userMessageBus: com.raulshma.jellyplay.core.ui.feedback.UserMessageBus,
 ) {
     private val _sessionState = MutableStateFlow(PlayerSessionState())
     val sessionState: StateFlow<PlayerSessionState> = _sessionState.asStateFlow()
@@ -95,6 +107,14 @@ class PlayerSessionManager(
     val engine: MediaEngine? get() = _engine.value
 
     private var lastPlaybackRequest: PlaybackRequest? = null
+
+    /**
+     * Owns the in-flight offline sidecar-subtitle catch-up fetch; cancelled on
+     * every load and on release so a late landing can never attach into a
+     * session it no longer belongs to. The item-id guard inside the job stays
+     * as belt-and-braces (same-item reload).
+     */
+    private var sidecarCatchUpJob: Job? = null
 
     /** Owns the in-flight transcode-reason lookup; cancelled/replaced per resolution. */
     private val transcodeReasonsRefresher =
@@ -214,6 +234,7 @@ class PlayerSessionManager(
         // isCurrent guard pass and land the previous session's reasons in
         // the fresh session before the resolve path re-arms or clears them.
         transcodeReasonsRefresher.cancel()
+        sidecarCatchUpJob?.cancel()
         _sessionState.update { it.copy(currentItemId = itemId, isReady = false) }
 
         // The download lookup is needed both for Auto resolution and for
@@ -226,6 +247,15 @@ class PlayerSessionManager(
             is PlaybackSource.Auto -> source.resolve(download)
             is PlaybackSource.Offline -> source
             is PlaybackSource.Online -> source
+        }
+
+        // Offline gate: an Online-resolved item cannot play without the server.
+        // Fail fast with feedback instead of dead-airing through every network
+        // stage's timeout (#146). Offline (download) sources are unaffected —
+        // that is exactly the path offline mode exists for.
+        if (resolved is PlaybackSource.Online && offlineModeManager.isOffline) {
+            failLoad(context.getString(R.string.player_video_error_offline_stream))
+            return
         }
 
         when (resolved) {
@@ -242,6 +272,16 @@ class PlayerSessionManager(
             )
             is PlaybackSource.Auto -> error("PlaybackSource.Auto must be resolved before dispatch")
         }
+    }
+
+    /**
+     * Fail a load: publish the not-ready state and surface the reason to the
+     * user. Every [loadMedia] failure path converges here so the state write
+     * and the feedback emission cannot drift apart (#146).
+     */
+    private fun failLoad(message: String) {
+        _sessionState.update { it.copy(title = message, isReady = false) }
+        userMessageBus.error(message)
     }
 
     private suspend fun loadOffline(
@@ -320,31 +360,25 @@ class PlayerSessionManager(
         val agg = aggregateStore.aggregateRaw.first()
         val playerType = agg.playback.preferredPlayer
 
-        // Preserve the offline item's rich metadata (seriesId, seasonId,
-        // season/episode numbers, seriesName, …) via the canonical adapter so
-        // downstream next-episode discovery, autoplay, and the "up next" overlay
-        // work offline. Falls back to a minimal MediaItem when only the download
-        // row (no offline_media metadata) is present. runTimeTicks is overridden
-        // with the locally-extracted value so seek/duration math matches the
-        // actual file, not whatever was persisted at download time.
-        val detail = com.raulshma.jellyplay.core.model.MediaDetail(
-            item = (offlineItem?.toMediaItem() ?: com.raulshma.jellyplay.core.model.MediaItem(
+        // Build the session detail through the canonical offline adapter
+        // (toMediaDetail) so every persisted field — chapters, provider ids,
+        // external urls, cast, taglines, critic rating — flows exactly as it
+        // does online. Falls back to a bare-detail MediaDetail when only the
+        // download row (no offline_media metadata) is present. runTimeTicks is
+        // overridden with the locally-extracted value so seek/duration math
+        // matches the actual file. mediaSources stays empty on both paths
+        // (toMediaDetail maps it null and the bare default is emptyList)
+        // because the offline track-restore ladder depends on it (see
+        // refreshMediaDetail).
+        val detail = (offlineItem?.toMediaDetail() ?: MediaDetail(
+            item = MediaItem(
                 id = itemId,
                 name = title,
-                mediaType = download?.mediaType ?: com.raulshma.jellyplay.core.model.MediaType.UNKNOWN,
-            )).copy(
-                runTimeTicks = runTimeTicks,
+                mediaType = download?.mediaType ?: MediaType.UNKNOWN,
             ),
-            mediaSources = emptyList(),
-            chapters = emptyList(),
-            // Carry the provider ids / external URLs persisted at download time
-            // so SubtitleProviderIds can resolve a TMDB/IMDb id for Wyzie /
-            // OpenSubtitles even when the Jellyfin server is unreachable. Empty
-            // for legacy downloads (pre-v44) — the subtitle providers then fall
-            // back to a title search.
-            providerIds = offlineItem?.providerIds ?: emptyMap(),
-            externalUrls = offlineItem?.externalUrls ?: emptyList(),
-        )
+        )).let { base ->
+            base.copy(item = base.item.copy(runTimeTicks = runTimeTicks))
+        }
 
         if (playerType == PlayerType.EXTERNAL) {
             _sessionState.update { it.copy(isReady = true, mediaDetail = detail, isOffline = true) }
@@ -360,8 +394,32 @@ class PlayerSessionManager(
         // for this item in the streaming-subtitle store. `SubtitleManager`
         // always writes provider downloads there regardless of online/offline
         // playback, so offline (downloaded) media must restore them too —
-        // otherwise a subtitle downloaded once vanishes on reopen.
-        loadStreamingSubtitles(itemId)
+        // otherwise a subtitle downloaded once vanishes on reopen. No server
+        // stream list exists offline, so no deletion reconciliation runs.
+        loadStreamingSubtitles(itemId, currentStreams = null)
+
+        // Best-effort catch-up for sidecar subtitles added on the server AFTER
+        // the download was made (#144): the bundle is a download-time snapshot,
+        // so a newly added .srt never reached it, and offline sessions (empty
+        // server streams, engine-tracks-only picker) would never show it. When
+        // the server is reachable, re-fetch the detail in the background and
+        // side-load every external stream not already attached — bundled subs
+        // dedupe by their `offline:{index}` id inside attachNewSubtitleStreams.
+        // Deliberately background: offline playback must start instantly, and
+        // the tracks pop in when the fetch lands. This never publishes server
+        // streams into session state — the offline track-restore ladder depends
+        // on `mediaStreams` staying empty (see refreshMediaDetail).
+        if (!offlineModeManager.isOffline) {
+            sidecarCatchUpJob = scope.launch {
+                val detail = mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
+                // The session may have moved on (item switch, release) while the
+                // fetch was in flight — attachNewSubtitleStreams re-checks the
+                // item id, but skip the work entirely when it is no longer ours.
+                if (detail != null && _sessionState.value.currentItemId == itemId) {
+                    attachNewSubtitleStreams(detail)
+                }
+            }
+        }
 
         val trickplayDir = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
             .getLocalTrickplayDir(downloadPath, itemId)
@@ -381,7 +439,9 @@ class PlayerSessionManager(
     ) {
         val detailResult = mediaRepository.getMediaDetail(itemId)
         val detail = detailResult.getOrElse {
-            _sessionState.update { it.copy(title = context.getString(R.string.player_video_error_loading_media)) }
+            // Surface the failure — the old silent bail left the user staring
+            // at a "loading" veil that had lifted over nothing (#146).
+            failLoad(context.getString(R.string.player_video_error_loading_media))
             return
         }
 
@@ -452,7 +512,7 @@ class PlayerSessionManager(
         // (OpenSubtitles/Wyzie) for this streaming item. These persist across
         // replays on-device, so a subtitle downloaded once (even offline) is
         // available on the next playback without a server round-trip.
-        loadStreamingSubtitles(itemId)
+        loadStreamingSubtitles(itemId, streams)
 
         _sessionState.update { it.copy(isReady = true) }
     }
@@ -462,10 +522,32 @@ class PlayerSessionManager(
      * durable streaming-subtitle store. Mirrors [loadOfflineSubtitles] but for
      * streaming (non-downloaded) items — keyed by `itemId`, not a media-file
      * path. Files missing on disk are silently skipped.
+     *
+     * Entries that recorded a [SavedSubtitle.serverStreamIndex] are reconciled
+     * against [currentStreams]: when the user deleted the subtitle from the
+     * metadata editor, its server stream is gone — and side-loading the local
+     * copy would resurrect the deleted track on every playback. Null disables
+     * reconciliation (offline playback has no server state to reconcile
+     * against). Legacy entries (no recorded index) and device-only downloads
+     * (upload failed, so no index was ever recorded) always load: the durable
+     * local copy is their only copy.
      */
-    private suspend fun loadStreamingSubtitles(itemId: String) {
+    private suspend fun loadStreamingSubtitles(itemId: String, currentStreams: List<MediaStream>?) {
         val saved = streamingSubtitleStore.loadAll(itemId)
+        val currentIndexes = currentStreams
+            ?.filter { it.type == StreamType.SUBTITLE }
+            ?.map { it.index }
+            ?.toSet()
         for (entry in saved) {
+            val recordedIndex = entry.serverStreamIndex
+            if (recordedIndex != null && currentIndexes != null && recordedIndex !in currentIndexes) {
+                Log.d(
+                    "SubtitleUse",
+                    "loadStreamingSubtitles: skipping ${entry.provider}:${entry.providerSubtitleId} " +
+                        "(server stream $recordedIndex deleted)",
+                )
+                continue
+            }
             val file = streamingSubtitleStore.fileFor(itemId, entry)
             if (!file.exists()) continue
             addExternalSubtitle(
@@ -778,6 +860,102 @@ class PlayerSessionManager(
     }
 
     /**
+     * The [MediaSource] of [detail] corresponding to the session's playing
+     * source, matched by id so multi-version items keep the playing version's
+     * streams (falling back to the CURRENT session source, never to a
+     * same-position different-version stream). With [fallbackToFirst], a
+     * session without a source (offline) resolves to the detail's first
+     * source; without it the result stays null so offline sessions keep their
+     * source-less state. Single home for the "which of this detail's sources
+     * is ours?" walk used by refresh/attach paths and the ViewModel fold.
+     */
+    fun matchedMediaSource(detail: MediaDetail, fallbackToFirst: Boolean): MediaSource? {
+        val current = _sessionState.value.currentMediaSource
+        return when {
+            current != null -> detail.mediaSources.firstOrNull { it.id == current.id } ?: current
+            fallbackToFirst -> detail.mediaSources.firstOrNull()
+            else -> null
+        }
+    }
+
+    /**
+     * Applies a refreshed [MediaDetail] after a mid-session metadata change
+     * (subtitle download/upload). Merges into session state FIRST so mode/
+     * quality/stream-index reloads rebuild the side-loaded subtitle set from
+     * the refreshed detail instead of the pre-change snapshot, and the session
+     * collector re-publishes the refreshed streams instead of reverting them;
+     * then optionally side-loads newly attached subtitle streams into the live
+     * engine ([attachToEngine] = false when the caller already side-loaded a
+     * local copy itself — attaching again would duplicate the track). One
+     * entry point so this ordering contract lives here, not in callers.
+     */
+    fun applyRefreshedDetail(detail: MediaDetail, attachToEngine: Boolean) {
+        refreshMediaDetail(detail)
+        if (attachToEngine) attachNewSubtitleStreams(detail)
+    }
+
+    /**
+     * Merges a re-fetched [MediaDetail] into the session state after a
+     * mid-session metadata change (subtitle download/upload). Without this,
+     * [reloadPlayback] / [reloadForStreamChange] rebuild the side-loaded
+     * subtitle set from the stale pre-change [PlayerSessionState.mediaDetail],
+     * silently dropping a just-downloaded subtitle on the next mode/quality/
+     * stream-index switch, and the ViewModel's session collector re-publishes
+     * the stale stream list over the refreshed one.
+     *
+     * Offline sessions keep their null source and empty stream list — their
+     * side-loaded subs are keyed by the offline id contract, and the
+     * track-restore ladder depends on `mediaStreams` staying empty offline.
+     */
+    fun refreshMediaDetail(detail: MediaDetail) {
+        val itemId = _sessionState.value.currentItemId ?: return
+        if (detail.item.id != itemId) return
+        val source = matchedMediaSource(detail, fallbackToFirst = false)
+        val streams = source?.mediaStreams ?: emptyList()
+        _sessionState.update {
+            it.copy(
+                mediaDetail = detail,
+                currentMediaSource = source,
+                mediaStreams = streams,
+            )
+        }
+    }
+
+    /**
+     * Side-loads subtitle streams that appeared in [detail] but are not yet
+     * attached to the current session — the missing step after an in-player
+     * subtitle download/upload. The engine was loaded with the pre-change
+     * subtitle set, and on Direct Play the picker is built purely from engine
+     * tracks, so a server-attached stream stays invisible until the engine
+     * itself learns about it. Re-runs [buildExternalSubtitles]' per-stream
+     * gates so the mid-session set matches a fresh load, then attaches only
+     * genuinely new entries (by `external:{index}` / `offline:{index}` id) to
+     * avoid duplicating already side-loaded streams.
+     */
+    fun attachNewSubtitleStreams(detail: MediaDetail) {
+        if (lastPlaybackRequest == null) return
+        val state = _sessionState.value
+        val itemId = state.currentItemId ?: return
+        if (detail.item.id != itemId) return
+        val source = matchedMediaSource(detail, fallbackToFirst = true) ?: return
+        val existingIds = lastPlaybackRequest?.externalSubtitles?.map { it.id }?.toSet().orEmpty()
+        val built = buildExternalSubtitles(detail, source, state.playMethod)
+            .filter { sub ->
+                if (sub.id in existingIds) return@filter false
+                // An offline-bundled sidecar with the same stream index is the
+                // same subtitle — don't re-attach it under the external id.
+                val index = externalSubtitleTrackStreamIndex(sub.id)
+                index == null || offlineSubtitleTrackId(index) !in existingIds
+            }
+        Log.d(
+            "SubtitleUse",
+            "attachNewSubtitleStreams: playMethod=${state.playMethod}, existing=${existingIds.size}, " +
+                "attaching=${built.map { "${it.id} '${it.label.take(24)}'" }}",
+        )
+        built.forEach { addExternalSubtitle(it) }
+    }
+
+    /**
      * Builds the side-loaded [SubtitleSource] list for the engine.
      *
      * Subtitles that already carry a server [MediaStream.deliveryUrl] (the
@@ -815,7 +993,10 @@ class PlayerSessionManager(
                 // side-load text-side-loadable streams. Image subs are left to
                 // the server's burn-in (transcode) or the player's container
                 // demux (direct play on MPV).
-                !isSideLoadableEmbeddedSubtitle(stream.codec) -> return@mapNotNull null
+                !isSideLoadableEmbeddedSubtitle(stream.codec) -> {
+                    Log.d("SubtitleUse", "buildExternalSubtitles: skipping non-sideloadable codec=${stream.codec} index=${stream.index}")
+                    return@mapNotNull null
+                }
                 // See the KDoc above for the DIRECT_PLAY rationale: embedded
                 // text subs are side-loaded only when not direct-playing.
                 stream.isExternal ||
@@ -823,9 +1004,15 @@ class PlayerSessionManager(
                     playbackRepository.buildSubtitleDeliveryUrl(
                         detail.item.id, source.id, stream.index, stream.codec,
                     )
-                else -> return@mapNotNull null
+                else -> {
+                    Log.d("SubtitleUse", "buildExternalSubtitles: skipping embedded sub on direct play index=${stream.index}")
+                    return@mapNotNull null
+                }
             }
-            if (subUrl.isBlank()) return@mapNotNull null
+            if (subUrl.isBlank()) {
+                Log.d("SubtitleUse", "buildExternalSubtitles: blank url for index=${stream.index}")
+                return@mapNotNull null
+            }
 
             SubtitleSource(
                 url = subUrl,
@@ -847,9 +1034,23 @@ class PlayerSessionManager(
         // Try item-scoped directory first, fall back to legacy un-scoped.
         val scopedDir = java.io.File(parentDir, "subtitles_$itemId")
         val subtitlesDir = if (scopedDir.exists()) scopedDir else java.io.File(parentDir, "subtitles")
+        val engineCapabilities = _engine.value?.capabilities
         for (entry in manifest.subtitles) {
             val file = java.io.File(subtitlesDir, entry.fileName)
             if (!file.exists()) continue
+            // Bitmap sidecars (PGS/VOBSUB — bytes delivered verbatim via a server
+            // deliveryUrl) decode only through mpv's libav decoders; Exo/LibVLC
+            // would fail silently at render time, so skip them there. Mirrors the
+            // streaming path in [buildExternalSubtitles], which relies on the
+            // server refusing image endpoints instead.
+            if (entry.isBitmapSidecar && engineCapabilities?.supportsImageSubtitles != true) {
+                Log.d(
+                    "SubtitleUse",
+                    "loadOfflineSubtitles: skipping image sidecar index=${entry.index} " +
+                        "codec=${entry.codec} — engine lacks bitmap-subtitle support",
+                )
+                continue
+            }
             addExternalSubtitle(
                 SubtitleSource(
                     url = Uri.fromFile(file).toString(),
@@ -867,6 +1068,7 @@ class PlayerSessionManager(
 
     fun release() {
         transcodeReasonsRefresher.cancel()
+        sidecarCatchUpJob?.cancel()
         _engine.value?.release()
         _engine.value = null
         lastPlaybackRequest = null

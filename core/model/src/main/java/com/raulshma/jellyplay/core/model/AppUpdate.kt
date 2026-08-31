@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.model
 
 import androidx.compose.runtime.Immutable
+import kotlinx.serialization.Serializable
 
 /**
  * Result of an app self-update check against the GitHub Releases API.
@@ -28,3 +29,28 @@ data class AppUpdateInfo(
     val downloadAssetName: String?,
     val releaseSize: Long,
 )
+
+/**
+ * How long an update the user dismissed via "Later" stays hidden from the
+ * launch-time auto-prompt for that same version. [NEVER] keeps that version
+ * hidden until a newer release appears; manual checks always surface results.
+ */
+@Immutable
+@Serializable
+enum class UpdateDismissPeriod(
+    val suppressMs: Long?,
+) {
+    HOURS_12(12L * 60 * 60 * 1000),
+    HOURS_24(24L * 60 * 60 * 1000),
+    DAYS_3(3L * 24 * 60 * 60 * 1000),
+    WEEK_1(7L * 24 * 60 * 60 * 1000),
+    NEVER(null),
+    ;
+
+    companion object {
+        val DEFAULT = HOURS_24
+
+        fun fromName(name: String?): UpdateDismissPeriod =
+            name?.let { candidate -> entries.find { it.name == candidate } } ?: DEFAULT
+    }
+}

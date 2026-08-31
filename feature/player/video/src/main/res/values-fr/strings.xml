@@ -117,6 +117,7 @@
     <string name="player_video_use">Utiliser</string>
     <string name="player_video_failed_tap_to_retry">Échec — touchez pour réessayer</string>
     <string name="player_video_search_failed">La recherche a échoué</string>
+    <string name="player_video_load_subtitles_failed">Impossible de charger les sous-titres</string>
     <string name="player_video_no_results_found">Aucun résultat trouvé</string>
     <string name="player_video_pick_language_hint">Choisissez une langue et recherchez pour trouver des sous-titres.</string>
     <string name="player_video_change_file">Changer : %1$s</string>
@@ -255,6 +256,8 @@
     <string name="player_video_remember_subtitles_off">Garder les sous-titres désactivés pour cette série</string>
     <string name="player_video_error_offline_file_missing">Erreur : fichier hors ligne manquant</string>
     <string name="player_video_error_loading_media">Erreur lors du chargement du média</string>
+    <string name="player_video_error_offline_stream">Vous êtes hors ligne \u2014 reconnectez-vous pour lire ce titre</string>
+    <string name="player_video_error_next_episode_load">Impossible de charger l\u2019épisode suivant. Vérifiez votre connexion et réessayez</string>
     <string name="player_video_trickplay_thumbnail">Vignette trickplay</string>
 
     <plurals name="player_video_participants">

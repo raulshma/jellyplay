@@ -201,7 +201,7 @@ private fun CuratedFeaturedCard(
                 }
                 item.communityRating?.let { rating ->
                     Text(
-                        text = "\u2605 ${String.format("%.1f", rating)}",
+                        text = remember(rating) { "\u2605 ${String.format("%.1f", rating)}" },
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = RatingColors.star,
                     )
@@ -301,7 +301,9 @@ private fun CuratedPickCard(
                         .padding(horizontal = 5.dp, vertical = 2.dp),
                 ) {
                     Text(
-                        text = "\u2605 ${"%.1f".format(item.communityRating)}",
+                        text = remember(item.communityRating) {
+                            "\u2605 ${"%.1f".format(item.communityRating)}"
+                        },
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                         color = RatingColors.star,
                     )

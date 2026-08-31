@@ -14,12 +14,16 @@ import com.raulshma.jellyplay.core.database.dao.OfflineMediaWithPlayback
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SeriesSizeAggregate
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
+import com.raulshma.jellyplay.core.database.dao.UnplayedCountRow
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.ExternalUrl
+import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.OFFLINE_WATCHED_THRESHOLD_PERCENT
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.OfflineSyncState
@@ -34,7 +38,9 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.serializer
 import androidx.collection.LruCache
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -44,6 +50,13 @@ import javax.inject.Singleton
  * Anything shorter would match too many unrelated items.
  */
 const val MIN_OFFLINE_SEARCH_LENGTH: Int = 2
+
+/**
+ * Batch size for `WHERE mediaItemId IN (...)` download lookups. SQLite's
+ * legacy host-variable cap is 999 (Android < 12); the whole-library episode
+ * paths can exceed that, so ids are chunked below it.
+ */
+private const val MAX_SQLITE_HOST_VARIABLES = 900
 
 private val MEDIA_TYPE_BY_NAME: Map<String, MediaType> = MediaType.entries.associateBy { it.name }
 private val DOWNLOAD_STATUS_BY_NAME: Map<String, DownloadStatus> = DownloadStatus.entries.associateBy { it.name }
@@ -99,107 +112,190 @@ class OfflineRepositoryImpl @Inject constructor(
 
     override fun getChildren(parentId: String): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getChildrenByParent(parentId).flatMapLatest { rows ->
-            val ids = rows.map { it.media.id }
-            if (ids.isEmpty()) {
-                flowOf(emptyList())
-            } else {
-                downloadDao.getDownloadsByMediaItemIdsFlow(ids).map { downloads ->
-                    val downloadMap = downloads.associateBy { it.mediaItemId }
-                    rows.map { row ->
-                        row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
-                    }
-                }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
-            }
+            rowsWithDownloadsAndArtwork(rows)
         }.distinctUntilChanged()
 
     override fun getOfflineLibrary(): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getTopLevelItems().flatMapLatest { rows ->
-            if (rows.isEmpty()) {
-                kotlinx.coroutines.flow.flowOf(emptyList())
-            } else {
-                // Partition top-level ids by type: SERIES has no `downloads`
-                // row of its own (episodes are downloaded individually, each
-                // carrying `seriesId`), so its size must be aggregated from its
-                // episodes. Movies/standalone audio keep the direct per-row
-                // join. Querying each partition only by the ids it can match
-                // avoids a wasted left-join against every series id.
-                val seriesIds = rows.asSequence()
-                    .filter { it.media.mediaType == MediaType.SERIES.name }
-                    .map { it.media.id }
-                    .toList()
-                val directIds = rows.asSequence()
-                    .filter { it.media.mediaType != MediaType.SERIES.name }
-                    .map { it.media.id }
-                    .toList()
-                // Map metadata rows to models once per metadata emission: the
-                // mapping depends solely on offline_media/playback_state
-                // columns, so re-running it inside the combine below would only
-                // repeat the JSON/CSV decodes on every downloads re-emission
-                // (2 s progress ticks during transfers). The combine instead
-                // projects just the download-derived fields onto these items
-                // via cheap data-class copies.
-                val baseItems = rows.map { it.toOfflineMediaItem() }
-                val directDownloadsFlow: Flow<Map<String, DownloadEntity>> =
-                    if (directIds.isEmpty()) {
-                        flowOf(emptyMap())
-                    } else {
-                        downloadDao.getDownloadsByMediaItemIdsFlow(directIds)
-                            .map { it.associateBy { d -> d.mediaItemId } }
-                    }
-                val seriesAggregatesFlow: Flow<Map<String, SeriesSizeAggregate>> =
-                    if (seriesIds.isEmpty()) {
-                        flowOf(emptyMap())
-                    } else {
-                        downloadDao.getSeriesSizeAggregatesFlow(seriesIds)
-                            .map { it.associateBy { a -> a.seriesId } }
-                    }
-                // Combine both maps so the summary re-emits as episode
-                // downloads progress (Room re-emits each Flow on writes to its
-                // tables). SERIES rows take their bytes from the aggregate;
-                // everything else from its direct download row. Both branches
-                // are cheap copies over the pre-mapped items — only the
-                // download-derived fields are re-projected.
-                combine(directDownloadsFlow, seriesAggregatesFlow) { downloadMap, aggregateMap ->
-                    baseItems.map { item ->
-                        if (item.mediaType == MediaType.SERIES) {
-                            val agg = aggregateMap[item.id]
-                            item.copy(
-                                downloadedBytes = agg?.downloadedBytes ?: 0L,
-                                totalSizeBytes = agg?.totalSizeBytes ?: 0L,
-                            )
-                        } else {
-                            item.withDownload(downloadMap[item.id])
-                        }
-                    }
-                }.distinctUntilChanged()
-                    .flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
-            }
+            buildOfflineLibrary(rows)
         }.distinctUntilChanged()
 
-    override fun getSeasonsForSeries(seriesId: String): Flow<List<OfflineMediaItem>> =
-        offlineMediaDao.getSeasonsForSeries(seriesId).map { rows ->
-            rows.map { it.toOfflineMediaItem() }
-        }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+    override fun getOfflineLibraryInFolder(folderId: String): Flow<List<OfflineMediaItem>> =
+        offlineMediaDao.getTopLevelItemsInLibrary(folderId).flatMapLatest { rows ->
+            buildOfflineLibrary(rows)
+        }.distinctUntilChanged()
+
+    override fun getOfflineEpisodes(): Flow<List<OfflineMediaItem>> =
+        offlineMediaDao.getDownloadedEpisodes().flatMapLatest { rows ->
+            rowsWithDownloadsAndArtwork(rows)
+        }.distinctUntilChanged()
+
+    /**
+     * Assembles the browsable offline library (download rows joined, series
+     * sizes aggregated from episodes, local artwork resolved) from a set of
+     * top-level metadata rows. Shared by the whole-library and per-library-folder
+     * variants — only the row source differs.
+     */
+    private fun buildOfflineLibrary(rows: List<OfflineMediaWithPlayback>): Flow<List<OfflineMediaItem>> {
+        if (rows.isEmpty()) {
+            return kotlinx.coroutines.flow.flowOf(emptyList())
+        }
+        // Partition top-level ids by type: SERIES has no `downloads`
+        // row of its own (episodes are downloaded individually, each
+        // carrying `seriesId`), so its size must be aggregated from its
+        // episodes. Movies/standalone audio keep the direct per-row
+        // join. Querying each partition only by the ids it can match
+        // avoids a wasted left-join against every series id.
+        val seriesIds = rows.asSequence()
+            .filter { it.media.mediaType == MediaType.SERIES.name }
+            .map { it.media.id }
+            .toList()
+        val directIds = rows.asSequence()
+            .filter { it.media.mediaType != MediaType.SERIES.name }
+            .map { it.media.id }
+            .toList()
+        // Map metadata rows to models once per metadata emission: the
+        // mapping depends solely on offline_media/playback_state
+        // columns, so re-running it inside the combine below would only
+        // repeat the JSON/CSV decodes on every downloads re-emission
+        // (2 s progress ticks during transfers). The combine instead
+        // projects just the download-derived fields onto these items
+        // via cheap data-class copies.
+        val baseItems = rows.map { it.toOfflineMediaItem() }
+        val directDownloadsFlow: Flow<Map<String, DownloadEntity>> =
+            downloadsByItemIdsFlow(directIds)
+        val seriesAggregatesFlow: Flow<Map<String, SeriesSizeAggregate>> =
+            if (seriesIds.isEmpty()) {
+                flowOf(emptyMap())
+            } else {
+                downloadDao.getSeriesSizeAggregatesFlow(seriesIds)
+                    .map { it.associateBy { a -> a.seriesId } }
+            }
+        // Unwatched downloaded-episode count per series — feeds the series
+        // cards' unwatched-count badge (the offline stand-in for the server's
+        // `userData.unplayedItemCount`, which is never persisted). Reactive on
+        // playback_state writes, so the badge follows offline watching. The
+        // same counting rule grouped by season feeds the detail seasons list
+        // (see [getSeasonsForSeries]).
+        val unplayedBySeries: Flow<Map<String, Int>> =
+            unplayedCountsFlow(seriesIds, offlineMediaDao::getUnplayedEpisodeCountsBySeriesFlow)
+        // Combine the maps so the summary re-emits as episode
+        // downloads progress (Room re-emits each Flow on writes to its
+        // tables). SERIES rows take their bytes from the aggregate;
+        // everything else from its direct download row. Both branches
+        // are cheap copies over the pre-mapped items — only the
+        // download-derived fields are re-projected.
+        return combine(directDownloadsFlow, seriesAggregatesFlow, unplayedBySeries) { downloadMap, aggregateMap, unplayedMap ->
+            baseItems.map { item ->
+                if (item.mediaType == MediaType.SERIES) {
+                    val agg = aggregateMap[item.id]
+                    item.copy(
+                        downloadedBytes = agg?.downloadedBytes ?: 0L,
+                        totalSizeBytes = agg?.totalSizeBytes ?: 0L,
+                        unplayedEpisodeCount = unplayedMap[item.id],
+                    )
+                } else {
+                    item.withDownload(downloadMap[item.id])
+                }
+            }
+        }.distinctUntilChanged()
+            .flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+    }
+
+    /**
+     * Rows → items with downloads joined and local artwork resolved — the one
+     * shape behind every reactive offline browse flow (whole library, per-folder,
+     * episodes, children). The downloads lookup is chunked: SQLite on Android
+     * < 12 caps host variables at 999, and the episode paths can exceed that
+     * on long-running libraries.
+     */
+    private fun rowsWithDownloadsAndArtwork(
+        rows: List<OfflineMediaWithPlayback>,
+    ): Flow<List<OfflineMediaItem>> {
+        val baseItems = rows.map { it.toOfflineMediaItem() }
+        if (baseItems.isEmpty()) return flowOf(emptyList())
+        return downloadsByItemIdsFlow(baseItems.map { it.id })
+            .map { downloadMap -> baseItems.map { it.withDownload(downloadMap[it.id]) } }
             .distinctUntilChanged()
+            .flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+    }
+
+    private fun downloadsByItemIdsFlow(ids: List<String>): Flow<Map<String, DownloadEntity>> =
+        if (ids.isEmpty()) {
+            flowOf(emptyMap())
+        } else {
+            combine(ids.chunked(MAX_SQLITE_HOST_VARIABLES).map { chunk ->
+                downloadDao.getDownloadsByMediaItemIdsFlow(chunk)
+                    .map { list -> list.associateBy { it.mediaItemId } }
+            }) { maps -> maps.reduce { acc, map -> acc + map } }
+        }
+
+    /**
+     * Unwatched downloaded-episode counts keyed by the query's grouped id —
+     * shared by the per-series ([buildOfflineLibrary]) and per-season
+     * ([getSeasonsForSeries]) badge projections. Empty map when [ids] is
+     * empty (no query at all). Chunked like [downloadsByItemIdsFlow]: a whole
+     * library of downloaded series can exceed SQLite's host-variable cap.
+     */
+    private fun unplayedCountsFlow(
+        ids: List<String>,
+        query: (List<String>, Double) -> Flow<List<UnplayedCountRow>>,
+    ): Flow<Map<String, Int>> =
+        if (ids.isEmpty()) {
+            flowOf(emptyMap())
+        } else {
+            combine(ids.chunked(MAX_SQLITE_HOST_VARIABLES).map { chunk ->
+                query(chunk, OFFLINE_WATCHED_THRESHOLD_PERCENT)
+                    .map { rows -> rows.associate { it.groupedId to it.unplayedCount } }
+            }) { maps -> maps.reduce { acc, map -> acc + map } }
+        }
+
+    private suspend fun downloadsByItemIds(ids: List<String>): Map<String, DownloadEntity> =
+        ids.chunked(MAX_SQLITE_HOST_VARIABLES)
+            .flatMap { downloadDao.getDownloadsByMediaItemIds(it) }
+            .associateBy { it.mediaItemId }
+
+    override fun getSeasonsForSeries(seriesId: String): Flow<List<OfflineMediaItem>> =
+        offlineMediaDao.getSeasonsForSeries(seriesId).flatMapLatest { rows ->
+            val baseItems = rows.map { it.toOfflineMediaItem() }
+            // Per-season unwatched counts — the season rows' offline stand-in
+            // for the server's `userData.unplayedItemCount` (never persisted),
+            // so the offline detail screen's season rows badge like the online
+            // ones. The seasons query reads the same ⟕ view, so it re-emits on
+            // playback_state writes either way; the counts flow re-emits too.
+            seasonUnplayedCountsFlow(baseItems).map { unplayedMap ->
+                baseItems.map { item ->
+                    if (item.mediaType == MediaType.SEASON) {
+                        item.copy(unplayedEpisodeCount = unplayedMap[item.id])
+                    } else {
+                        item
+                    }
+                }
+            }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+        }.distinctUntilChanged()
+
+    /**
+     * Unwatched downloaded-episode count per SEASON row — empty map when the
+     * list has no seasons (no query at all). Same counting rule as the
+     * per-series projection in [buildOfflineLibrary], keyed by season.
+     */
+    private fun seasonUnplayedCountsFlow(items: List<OfflineMediaItem>): Flow<Map<String, Int>> {
+        val seasonIds = items.asSequence()
+            .filter { it.mediaType == MediaType.SEASON }
+            .map { it.id }
+            .toList()
+        return unplayedCountsFlow(seasonIds, offlineMediaDao::getUnplayedEpisodeCountsBySeasonFlow)
+    }
 
     override fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getEpisodesForSeason(seasonId).flatMapLatest { rows ->
-            val ids = rows.map { it.media.id }
-            if (ids.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyList())
-            else downloadDao.getDownloadsByMediaItemIdsFlow(ids).map { downloads ->
-                val downloadMap = downloads.associateBy { it.mediaItemId }
-                rows.map { row ->
-                    row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
-                }
-            }.distinctUntilChanged()
-                .flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+            rowsWithDownloadsAndArtwork(rows)
         }.distinctUntilChanged()
 
     override suspend fun getEpisodesForSeries(seriesId: String): List<OfflineMediaItem> {
         val rows = offlineMediaDao.getEpisodesForSeries(seriesId)
-        val ids = rows.map { it.media.id }
-        if (ids.isEmpty()) return emptyList()
-        val downloadMap = downloadDao.getDownloadsByMediaItemIds(ids).associateBy { it.mediaItemId }
+        if (rows.isEmpty()) return emptyList()
+        val downloadMap = downloadsByItemIds(rows.map { it.media.id })
         return resolveArtworkList(rows.map { row ->
             row.toOfflineMediaItem().withDownload(downloadMap[row.media.id])
         })
@@ -919,66 +1015,82 @@ class OfflineRepositoryImpl @Inject constructor(
             cast = decodeCast(m.peopleJson),
             providerIds = decodeProviderIds(m.providerIdsJson),
             externalUrls = decodeExternalUrls(m.externalUrlsJson),
+            chapters = decodeChapters(m.chaptersJson),
             createdAt = m.createdAt,
         )
     }
 }
 
-/** Reusable lenient Json for (de)serializing the offline cast JSON column. */
+/** Reusable lenient Json for (de)serializing the offline JSON-blob columns. */
 internal val offlineJson: Json = Json {
     ignoreUnknownKeys = true
     encodeDefaults = true
 }
 
 /**
- * Memo caches for the pure JSON-column decodes below: the library/episodes/
- * season flows re-map every row on each Room re-emission (2 s progress ticks
- * during transfers), and the decodes are deterministic, so equal inputs always
- * yield equal outputs.
+ * Memoized encode/decode codec for one offline_media JSON-blob column.
+ *
+ * Single home for the null/garbage-tolerant decode + memo-cache shape every
+ * blob column shares (cast, provider ids, external urls, chapters): the
+ * library/episodes/season flows re-map every row on each Room re-emission
+ * (2 s progress ticks during transfers), and the decodes are deterministic,
+ * so equal inputs always yield equal outputs.
  */
-private val castDecodeCache = LruCache<String, List<OfflinePersonInfo>>(256)
-private val providerIdsDecodeCache = LruCache<String, Map<String, String>>(256)
-private val externalUrlsDecodeCache = LruCache<String, List<com.raulshma.jellyplay.core.model.ExternalUrl>>(256)
+internal class JsonBlobCodec<T : Any>(
+    private val serializer: KSerializer<T>,
+    private val fallback: T,
+) {
+    private val cache = LruCache<String, T>(256)
+    /** Encodes [value] into the persisted JSON column form. */
+    fun encode(value: T): String = offlineJson.encodeToString(serializer, value)
 
-private inline fun <T : Any> memoizedDecode(cache: LruCache<String, T>, json: String, fallback: T, decode: () -> T): T {
-    cache.get(json)?.let { return it }
-    val value = runCatching(decode).getOrDefault(fallback)
-    cache.put(json, value)
-    return value
-}
-
-/** Decodes a [peopleJson] blob into a cast list, tolerating null/garbage rows. */
-internal fun decodeCast(peopleJson: String?): List<OfflinePersonInfo> {
-    if (peopleJson.isNullOrBlank()) return emptyList()
-    return memoizedDecode(castDecodeCache, peopleJson, emptyList()) {
-        offlineJson.decodeFromString(peopleJson)
+    /** Decodes [blob], tolerating null/blank/garbage by yielding [fallback]. */
+    fun decode(blob: String?): T {
+        if (blob.isNullOrBlank()) return fallback
+        cache.get(blob)?.let { return it }
+        val value = runCatching { offlineJson.decodeFromString(serializer, blob) }
+            .getOrDefault(fallback)
+        cache.put(blob, value)
+        return value
     }
 }
+
+private inline fun <reified T : Any> jsonBlobCodec(fallback: T): JsonBlobCodec<T> =
+    JsonBlobCodec(serializer(), fallback)
+
+private val castCodec = jsonBlobCodec<List<OfflinePersonInfo>>(emptyList())
+private val providerIdsCodec = jsonBlobCodec<Map<String, String>>(emptyMap())
+private val externalUrlsCodec = jsonBlobCodec<List<ExternalUrl>>(emptyList())
+private val chaptersCodec = jsonBlobCodec<List<ChapterInfo>>(emptyList())
+
+/** Decodes a [peopleJson] blob into a cast list, tolerating null/garbage rows. */
+internal fun decodeCast(peopleJson: String?): List<OfflinePersonInfo> =
+    castCodec.decode(peopleJson)
 
 /** Encodes a cast list into the persisted JSON column form. */
 internal fun encodeCast(people: List<OfflinePersonInfo>): String =
-    offlineJson.encodeToString(people)
+    castCodec.encode(people)
 
 /** Encodes provider ids into the persisted JSON column form. */
 internal fun encodeProviderIds(providerIds: Map<String, String>): String =
-    offlineJson.encodeToString(providerIds)
-
-/** Encodes external URLs into the persisted JSON column form. */
-internal fun encodeExternalUrls(urls: List<com.raulshma.jellyplay.core.model.ExternalUrl>): String =
-    offlineJson.encodeToString(urls)
+    providerIdsCodec.encode(providerIds)
 
 /** Decodes a [providerIdsJson] blob into a map, tolerating null/garbage. */
-private fun decodeProviderIds(providerIdsJson: String?): Map<String, String> {
-    if (providerIdsJson.isNullOrBlank()) return emptyMap()
-    return memoizedDecode(providerIdsDecodeCache, providerIdsJson, emptyMap()) {
-        offlineJson.decodeFromString(providerIdsJson)
-    }
-}
+private fun decodeProviderIds(providerIdsJson: String?): Map<String, String> =
+    providerIdsCodec.decode(providerIdsJson)
+
+/** Encodes external URLs into the persisted JSON column form. */
+internal fun encodeExternalUrls(urls: List<ExternalUrl>): String =
+    externalUrlsCodec.encode(urls)
 
 /** Decodes a [externalUrlsJson] blob into a URL list, tolerating null/garbage. */
-private fun decodeExternalUrls(externalUrlsJson: String?): List<com.raulshma.jellyplay.core.model.ExternalUrl> {
-    if (externalUrlsJson.isNullOrBlank()) return emptyList()
-    return memoizedDecode(externalUrlsDecodeCache, externalUrlsJson, emptyList()) {
-        offlineJson.decodeFromString(externalUrlsJson)
-    }
-}
+private fun decodeExternalUrls(externalUrlsJson: String?): List<ExternalUrl> =
+    externalUrlsCodec.decode(externalUrlsJson)
+
+/** Encodes a chapter list into the persisted JSON column form. */
+internal fun encodeChapters(chapters: List<ChapterInfo>): String =
+    chaptersCodec.encode(chapters)
+
+/** Decodes a [chaptersJson] blob into a chapter list, tolerating null/garbage. */
+internal fun decodeChapters(chaptersJson: String?): List<ChapterInfo> =
+    chaptersCodec.decode(chaptersJson)

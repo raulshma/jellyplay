@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -67,8 +68,8 @@ import java.time.ZoneOffset
  *    the refresh clock (one clock, one owner — failed/offline attempts
  *    still count as fresh), job choreography, cadence + jitter, discover
  *    TTL, the user-data-push debounce/throttle/deferral chain, and the
- *    offline transitions (the offline-mode mirror plus the user-initiated
- *    going-online handshake: busy flag, full-screen loader, outbox drain,
+ *    offline transitions (the offline-mode mirror plus the offline→online
+ *    reconnect handshake: busy flag, full-screen loader, outbox drain,
  *    capped fetch).
  *  * [HomeViewModel] is a flows + `onEvent` facade: it folds [state] into
  *    its single UiState object, resets the scroll anchor on identity
@@ -108,7 +109,7 @@ internal class HomeRefresher(
     private val awaitOutboxDrained: suspend () -> Unit,
     // Per-call inputs — the VM's mutable preference mirrors stay in the VM
     // and are re-read through these providers on every fetch:
-    private val planProvider: () -> HomeSectionPrefs,
+    private val sectionPrefsProvider: () -> HomeSectionPrefs,
     private val seerrPreferencesProvider: () -> SeerrPreferences,
     private val discoverEnabledProvider: () -> Boolean,
     private val directArrEnabledProvider: () -> Boolean,
@@ -194,7 +195,7 @@ internal class HomeRefresher(
             }
 
             lastRefreshTime = timeSource.nowEpochMillis()
-            val plan = planProvider()
+            val sectionPrefs = sectionPrefsProvider()
 
             // Stale-while-revalidate: on a cold open (sections still empty),
             // paint the persisted snapshot from Room instantly so the home
@@ -205,7 +206,7 @@ internal class HomeRefresher(
             // on screen and flashing stale would feel worse than the brief
             // spinner.
             if (_state.value.sections.isEmpty()) {
-                orderedCachedSections(plan)?.let { cachedSections ->
+                orderedCachedSections(sectionPrefs)?.let { cachedSections ->
                     _state.update { it.copy(sections = cachedSections) }
                 }
             }
@@ -225,7 +226,7 @@ internal class HomeRefresher(
                     // pull-to-refresh: bypass this query's home-sections
                     // cache rather than dropping every cache in the
                     // repository (plan 08).
-                    mediaRepository.getHomeSections(plan.query, force = force)
+                    mediaRepository.getHomeSections(sectionPrefs.query, force = force)
                 }
                 val discoverDeferred = if (discoverEnabledProvider()) {
                     async { runCatching { fetchDiscoverSections(seerrPreferencesProvider()) } }
@@ -257,8 +258,8 @@ internal class HomeRefresher(
                         // caller's dispatcher.
                         val finalSections = orderHomeSections(
                             sections = fetchedSections,
-                            order = plan.homeSectionOrder,
-                            mergeContinueWatchingAndNextUp = plan.mergeContinueWatchingAndNextUp,
+                            order = sectionPrefs.homeSectionOrder,
+                            mergeContinueWatchingAndNextUp = sectionPrefs.mergeContinueWatchingAndNextUp,
                         )
 
                         _state.update { it.copy(sections = finalSections) }
@@ -397,11 +398,11 @@ internal class HomeRefresher(
                 // Going online is async (preference write → mode flip →
                 // drain + fetch) and previously gave zero feedback. Flip the
                 // busy flag the UI can show a spinner on BEFORE the toggle,
-                // so [observeOfflineMode] can tell this user-initiated
-                // transition apart from an external/auto online flip (only
-                // this one runs the handshake). The flag clears when the
-                // transition resolves — or immediately if the mode flips
-                // back offline first.
+                // so [observeOfflineMode]'s reconnect handshake clears it
+                // when the ONLINE emission lands (external/auto flips never
+                // raise it — their handshake just doesn't touch spinners).
+                // The flag also tells [observeOfflineMode] to clear it if
+                // the mode flips back offline first.
                 _state.update { it.copy(isGoingOnline = true) }
                 offlineModeManager.toggleManualOffline()
                 // Fallback: the toggle is a preference write on the
@@ -465,8 +466,8 @@ internal class HomeRefresher(
         // identity; letting it land would repopulate the just-cleared
         // discoverSections with the previous user's rows.
         discoverJob?.cancel()
-        val plan = planProvider()
-        val cachedSections = orderedCachedSections(plan)
+        val sectionPrefs = sectionPrefsProvider()
+        val cachedSections = orderedCachedSections(sectionPrefs)
         _state.update {
             if (cachedSections != null) {
                 it.copy(
@@ -485,12 +486,20 @@ internal class HomeRefresher(
 
     /**
      * Online→offline transition: drop the cached ONLINE sections + discover
-     * rows (the offline home renders the offline library instead). Touches
-     * neither error nor spinners — mirrors the previous inline clear, which
-     * also cleared the going-online spinner separately.
+     * rows + the *arr "Coming Soon" row (the offline home renders the offline
+     * library instead). The *arr row rides the same drop as discover — its
+     * cards route to Seerr/TMDB, unreachable offline, so a stale row would be
+     * dead weight. Touches neither error nor spinners — mirrors the previous
+     * inline clear, which also cleared the going-online spinner separately.
      */
     private fun dropOnlineContent() {
-        _state.update { it.copy(sections = emptyList(), discoverSections = emptyMap()) }
+        _state.update {
+            it.copy(
+                sections = emptyList(),
+                discoverSections = emptyMap(),
+                recentlyGrabbed = emptyList(),
+            )
+        }
     }
 
     /**
@@ -595,11 +604,13 @@ internal class HomeRefresher(
      *    any pending going-online spinner (the user or an auto-detect flip
      *    took us back offline while the prior online fetch was still parked
      *    on the refresh mutex).
-     *  * offline → ONLINE: mirror the field only, UNLESS a
-     *    [RefreshTrigger.GoingOnline] request is in flight — the
-     *    user-initiated transition additionally runs the handshake
-     *    (full-screen loader, outbox drain, capped fetch) the VM used to
-     *    orchestrate itself.
+     *  * offline → ONLINE (any flavour): run the reconnect handshake —
+     *    full-screen loader, outbox drain, capped fetch. The user-initiated
+     *    [RefreshTrigger.GoingOnline] path additionally has the busy flag up
+     *    (its spinners clear here); external flips (nav ⋮ toggle from the
+     *    app shell) and auto-detect reconnects used to mirror the field only,
+     *    which left the home sitting on dropped-empty sections until a manual
+     *    refresh or the next periodic tick.
      */
     private fun observeOfflineMode() {
         scope.launch {
@@ -614,15 +625,16 @@ internal class HomeRefresher(
                         dropOnlineContent()
                         _state.update { it.copy(isGoingOnline = false) }
                     }
-                    previousMode != OfflineMode.ONLINE && mode == OfflineMode.ONLINE && _state.value.isGoingOnline -> {
-                        // Offline → online (user-initiated): show the
-                        // full-screen loader during the post-toggle fetch so
-                        // the online branch doesn't flash blank between the
-                        // mode flip and sections arriving. isGoingOnline MUST
-                        // clear in finally — a bare after-the-fetch clear
-                        // would leave it stuck on forever (and the user
-                        // restarting the app to recover) whenever the
-                        // handshake throws or is cancelled.
+                    previousMode != OfflineMode.ONLINE && mode == OfflineMode.ONLINE -> {
+                        // Offline → online: show the full-screen loader
+                        // during the post-toggle fetch so the online branch
+                        // doesn't flash blank between the mode flip and
+                        // sections arriving. isGoingOnline MUST clear in
+                        // finally — a bare after-the-fetch clear would leave
+                        // it stuck on forever (and the user restarting the
+                        // app to recover) whenever the handshake throws or is
+                        // cancelled. The write is a no-op for external/auto
+                        // reconnects, which never raised it.
                         showFullScreenLoader()
                         try {
                             // Let the playback outbox drain before fetching so
@@ -782,20 +794,20 @@ internal class HomeRefresher(
     }
 
     /**
-     * Reads the persisted SWR snapshot for [plan] and orders it for display,
-     * or null if nothing is cached / the cached sections are empty. Shared
-     * by the user-switch paint ([refreshForUserSwitch]) and the cold-open
-     * path in [fetchOnce].
+     * Reads the persisted SWR snapshot for [sectionPrefs] and orders it
+     * for display, or null if nothing is cached / the cached sections are
+     * empty. Shared by the user-switch paint ([refreshForUserSwitch]) and
+     * the cold-open path in [fetchOnce].
      */
-    private suspend fun orderedCachedSections(plan: HomeSectionPrefs): List<HomeSection>? =
-        runCatching { mediaRepository.getCachedHomeSections(plan.query) }
+    private suspend fun orderedCachedSections(sectionPrefs: HomeSectionPrefs): List<HomeSection>? =
+        runCatching { mediaRepository.getCachedHomeSections(sectionPrefs.query) }
             .getOrNull()
             ?.takeIf { it.sections.isNotEmpty() }
             ?.let { cached ->
                 orderHomeSections(
                     sections = cached.sections,
-                    order = plan.homeSectionOrder,
-                    mergeContinueWatchingAndNextUp = plan.mergeContinueWatchingAndNextUp,
+                    order = sectionPrefs.homeSectionOrder,
+                    mergeContinueWatchingAndNextUp = sectionPrefs.mergeContinueWatchingAndNextUp,
                 )
             }
 
@@ -896,65 +908,6 @@ internal enum class RefreshTrigger {
 }
 
 /**
- * One snapshot of the VM's section-preference mirrors: the fetch query (all
- * seven [HomeSectionQuery] inputs, NESTED so each is declared exactly once —
- * not mirrored field-for-field here) plus the display-only ordering rules.
- * Bundled so the prefs collector can diff and adopt an emission with a single
- * `!=` / assignment and the refresher can consume one consistent snapshot per
- * fetch; adding a section preference means adding it to [HomeSectionQuery]
- * (fetch inputs) or here (display-only) — not to scattered field listings on
- * the VM.
- */
-internal data class HomeSectionPrefs(
-    val query: HomeSectionQuery = HomeSectionQuery(),
-    val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
-    val mergeContinueWatchingAndNextUp: Boolean = false,
-) {
-
-    /**
-     * Copy with [type]'s membership in the enabled-sections set toggled —
-     * the policy behind the inline section-config sheet's visibility toggle.
-     */
-    fun withSectionVisible(type: HomeSectionType, visible: Boolean): HomeSectionPrefs =
-        copy(query = query.copy(enabledSections = query.enabledSections.toMutableSet().apply {
-            if (visible) add(type) else remove(type)
-        }))
-
-    /**
-     * Copy with [type] swapped with its neighbour in the section order
-     * ([up] or down), or null when no swap is possible (type absent, or
-     * already at the requested edge) so callers can skip the write.
-     */
-    fun withSectionMoved(type: HomeSectionType, up: Boolean): HomeSectionPrefs? {
-        val index = homeSectionOrder.indexOf(type)
-        if (index == -1) return null
-        val target = if (up) index - 1 else index + 1
-        if (target !in homeSectionOrder.indices) return null
-        return copy(homeSectionOrder = homeSectionOrder.toMutableList().apply {
-            val removed = removeAt(index)
-            add(target, removed)
-        })
-    }
-
-    /**
-     * Copy with [type]'s disabled-state toggled for [libraryId]. The override
-     * map is keyed by library id with the DISABLED types as its value set; an
-     * empty set removes the key (restoring default-enabled state).
-     */
-    fun withLibrarySectionVisible(
-        libraryId: String,
-        type: HomeSectionType,
-        visible: Boolean,
-    ): HomeSectionPrefs {
-        val overrides = query.libraryHomeSectionOverrides.toMutableMap()
-        val disabled = overrides[libraryId].orEmpty().toMutableSet()
-        if (visible) disabled.remove(type) else disabled.add(type)
-        if (disabled.isEmpty()) overrides.remove(libraryId) else overrides[libraryId] = disabled
-        return copy(query = query.copy(libraryHomeSectionOverrides = overrides))
-    }
-}
-
-/**
  * The refresh-owned slice of the home UiState: everything the fetch
  * machinery writes. The VM folds this into its single UiState object (same
  * pattern as the SeerrRequestStateHolder fold) so the UI still observes one
@@ -982,4 +935,15 @@ internal data class HomeRefreshState(
     val isGoingOnline: Boolean = false,
     /** Mirror of [OfflineModeManager.offlineMode]; transitions drive the policy in [HomeRefresher.observeOfflineMode]. */
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
-)
+) {
+    /**
+     * The server fetch failed and left nothing to show — the precondition for
+     * the implicit-offline fallback (online mode + downloads present). The
+     * offline collection gate in [com.raulshma.jellyplay.feature.home.HomeViewModel]
+     * keys on this, and the same gate folds it into
+     * [com.raulshma.jellyplay.feature.home.HomeUiState.renderSource] via
+     * [com.raulshma.jellyplay.feature.home.computeHomeRenderSource].
+     */
+    val fetchFailedEmpty: Boolean
+        get() = error != null && sections.isEmpty()
+}

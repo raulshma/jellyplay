@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.details
+package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -23,8 +23,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
-import com.raulshma.jellyplay.core.ui.components.rememberMultiEpisodeSelectionForDownload
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -52,14 +50,24 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.Download
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.ui.components.SheetHeader
-import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
 import com.raulshma.jellyplay.core.designsystem.theme.defaultSpatialSpring
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.feature.details.R
+import com.raulshma.jellyplay.core.ui.R
 
+/**
+ * Series download sheet: per-season episode picker for enqueueing downloads.
+ * Shared by the media detail screen (its Download button / deep link) and the
+ * home quick-action sheet (long-press Download on a series card) — both hosts
+ * supply seasons/episodes from their own data seams and execute the batch
+ * through their own download intake. Purely presentational; selection state
+ * lives in [rememberMultiEpisodeSelectionForDownload].
+ *
+ * Already-downloaded episodes ([downloadedEpisodeIds]) render as locked rows
+ * (tertiary tint, non-selectable) so a partially downloaded series shows what
+ * remains.
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SeriesDownloadSheet(
@@ -140,7 +148,7 @@ fun SeriesDownloadSheet(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = stringResource(R.string.detail_episodes_selected_format, totalSelectedCount, allSelectableIds.size),
+                text = stringResource(R.string.detail_episodes_selected, totalSelectedCount, allSelectableIds.size),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -398,8 +406,7 @@ fun SeriesDownloadSheet(
                 )
                 Spacer(Modifier.size(6.dp))
                 Text(
-                    if (isDownloading) stringResource(R.string.detail_queuing)
-                    else "$totalSelectedCount",
+                    if (isDownloading) stringResource(R.string.detail_queuing) else "$totalSelectedCount",
                 )
             }
         }

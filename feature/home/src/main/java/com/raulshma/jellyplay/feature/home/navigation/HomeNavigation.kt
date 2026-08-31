@@ -18,7 +18,6 @@ fun EntryProviderScope<NavKey>.homeSection(
     navigator: Navigator,
     homeMode: HomeMode = HomeMode.VIDEO,
     onModeChange: (HomeMode) -> Unit,
-    onPlayOnClick: () -> Unit,
     playOnStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy? = null,
     musicContent: @Composable () -> Unit,
     surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
@@ -53,24 +52,14 @@ fun EntryProviderScope<NavKey>.homeSection(
                         navigator.navigate(Route.VideoPlayer(itemId, mediaSourceId, startPosition))
                     }
                 },
-                onSettingsClick = { navigator.navigate(Route.Settings) },
-                onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
-                onDownloadsClick = { navigator.navigate(Route.Downloads) },
-                onPlayOnClick = onPlayOnClick,
                 onOfflineLibraryClick = { navigator.navigate(Route.OfflineLibrary) },
-                onOfflineItemClick = { itemId, mediaType ->
-                    // The unified MediaDetail tree renders remote, downloaded,
-                    // and local/offline detail alike, so both series and
-                    // non-series offline items route to MediaDetail. mediaType
-                    // is retained on the callback signature (HomeOfflineContent
-                    // still passes it) but no longer selects the route.
-                    navigator.navigate(Route.MediaDetail(itemId))
+                onDownloadDetailClick = { itemId, openDownloadSheet ->
+                    navigator.navigate(Route.MediaDetail(itemId, openDownloadSheet))
                 },
                 onSeerrItemClick = { tmdbId, mediaType ->
                     navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
                 },
                 onModeChange = onModeChange,
-                onSearchItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
                 onSearchSeerrClick = { tmdbId, mediaType ->
                     navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
                 },

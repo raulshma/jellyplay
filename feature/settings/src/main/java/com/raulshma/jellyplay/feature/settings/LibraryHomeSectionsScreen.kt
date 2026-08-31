@@ -44,7 +44,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
@@ -62,7 +62,7 @@ fun LibraryHomeSectionsScreen(
     val libraries by viewModel.libraryFolders.collectAsStateWithLifecycle()
     val overrides by viewModel.libraryHomeSectionOverridesFlow.collectAsStateWithLifecycle()
     val isTv = LocalTvMode.current
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
     val adaptiveInfo = LocalAdaptiveInfo.current
 
     val focusRequester = remember { FocusRequester() }
@@ -74,7 +74,7 @@ fun LibraryHomeSectionsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_configure_libraries),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) { innerPadding ->
         LazyColumn(
             state = scrollState,

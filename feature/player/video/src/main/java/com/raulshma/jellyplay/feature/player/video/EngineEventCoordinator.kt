@@ -187,9 +187,17 @@ class EngineEventCoordinator(
      * supervisor child so one failed collector does not cancel the rest.
      */
     private fun launchEnginePolicies(engine: MediaEngine): Job = coordinatorScope.launch {
+        // Pass-out interaction clock: a resume (false → true transition)
+        // resets the clock so a long paused period doesn't immediately trip
+        // the timer once playback resumes.
         launch {
+            var wasPlaying = false
             engine.isPlaying.collect { playing ->
                 _isPlaying.value = playing
+                if (playing && !wasPlaying) {
+                    lastInteractionElapsedMs = clock()
+                }
+                wasPlaying = playing
             }
         }
         launch {
@@ -217,18 +225,6 @@ class EngineEventCoordinator(
                             )
                         )
                 }
-            }
-        }
-        // Pass-out interaction clock: a resume (false → true transition)
-        // resets the clock so a long paused period doesn't immediately trip
-        // the timer once playback resumes.
-        launch {
-            var wasPlaying = false
-            engine.isPlaying.collect { playing ->
-                if (playing && !wasPlaying) {
-                    lastInteractionElapsedMs = clock()
-                }
-                wasPlaying = playing
             }
         }
     }

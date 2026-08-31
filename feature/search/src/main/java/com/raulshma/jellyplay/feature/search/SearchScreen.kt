@@ -64,6 +64,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -79,6 +81,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
@@ -100,7 +103,7 @@ import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
@@ -153,7 +156,10 @@ fun SearchScreen(
     val seerrSnapshot by viewModel.seerrSnapshot.collectAsStateWithLifecycle()
     val seerrLoadingState = rememberSeerrCardLoadingState()
 
-    val query = viewModel.query
+    // The live query string is only read inside leaf composables (the search
+    // bar, the empty-state suggestions); the body sees this rarely-flipping
+    // blank/nonblank signal so keystrokes don't recompose the whole screen.
+    val queryHasText by remember { derivedStateOf { viewModel.query.isNotBlank() } }
     val filters by viewModel.filters.collectAsStateWithLifecycle()
     val genres by viewModel.genres.collectAsStateWithLifecycle()
     val tags by viewModel.tags.collectAsStateWithLifecycle()
@@ -166,17 +172,10 @@ fun SearchScreen(
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
 
     // Only persist the query to "Recent Searches" once the pager confirms a
-    // non-empty result set for it. This prevents typo'd queries (zero matches)
-    // from polluting search history. Keys on refresh state + item count so it
-    // re-evaluates whenever a new search settles.
-    val refreshLoadState = pagedResults.loadState.refresh
-    val pagedItemCount = pagedResults.itemCount
-    androidx.compose.runtime.LaunchedEffect(refreshLoadState, pagedItemCount, query) {
-        val settled = refreshLoadState is LoadState.NotLoading && pagedItemCount > 0
-        if (settled && query.isNotBlank()) {
-            viewModel.onSearchResultsShown(query)
-        }
-    }
+    // non-empty result set for it. See [SearchHistoryRecorder] — the effect
+    // lives in a leaf so it can key on the live query without the screen body
+    // recomposing per keystroke.
+    SearchHistoryRecorder(pagedResults = pagedResults, viewModel = viewModel)
 
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
         isLoading = isRefreshing,
@@ -219,31 +218,18 @@ fun SearchScreen(
         debugKey = "search_field",
     )
 
-    BackHandler(enabled = isSearchFocused || query.isNotBlank() || hasActiveFilters) {
+    BackHandler(enabled = isSearchFocused || queryHasText || hasActiveFilters) {
         when {
             isSearchFocused -> focusManager.clearFocus()
-            query.isNotBlank() -> viewModel.search("")
+            queryHasText -> viewModel.search("")
             hasActiveFilters -> viewModel.clearFilters()
         }
     }
 
-    val speechLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            val spokenText = matches?.firstOrNull()
-            if (!spokenText.isNullOrBlank()) {
-                viewModel.search(spokenText)
-            }
-        }
-    }
-
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val context = androidx.compose.ui.platform.LocalContext.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val bottomPad = adaptiveInfo.bottomPadding(isTv)
@@ -282,7 +268,7 @@ fun SearchScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
+            .drawBehind { drawRect(backgroundColorState.value) }
             .onDpadKey(
                 onMenu = {
                     tvFocusedItem?.let { quickActionController.show(it) }
@@ -297,17 +283,8 @@ fun SearchScreen(
                 .imePadding(),
         ) {
             // ── Header Section (cinematic dark, white-on-dark text) ──
-            // The screen root re-executes per keystroke (query state is read
-            // here); remember the static header brush + display style so each
-            // keystroke doesn't re-allocate them.
-            val headerGradientBrush = remember(backgroundColor) {
-                Brush.verticalGradient(
-                    colors = listOf(
-                        backgroundColor.copy(alpha = 0.95f),
-                        backgroundColor,
-                    ),
-                )
-            }
+            // The gradient brush is rebuilt in the draw cache only when the
+            // animated background color actually changes, not per recomposition.
             val headlineLarge = MaterialTheme.typography.headlineLarge
             val headerTitleStyle = remember(headlineLarge) {
                 headlineLarge.copy(
@@ -317,7 +294,16 @@ fun SearchScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(headerGradientBrush)
+                    .drawWithCache {
+                        val color = backgroundColorState.value
+                        val headerGradientBrush = Brush.verticalGradient(
+                            colors = listOf(
+                                color.copy(alpha = 0.95f),
+                                color,
+                            ),
+                        )
+                        onDrawBehind { drawRect(headerGradientBrush) }
+                    }
                     .statusBarsPadding()
                     .padding(top = 16.dp),
             ) {
@@ -377,108 +363,13 @@ fun SearchScreen(
                 Spacer(Modifier.height(16.dp))
 
                 // ── Search field (MD3 expressive DockedSearchBar) ──
-                AnimatedVisibility(
-                    visible = true,
-                    enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()) + slideInVertically(
-                        MaterialTheme.motionScheme.slowSpatialSpec(),
-                        initialOffsetY = { 40 },
-                    ),
-                ) {
-                    DockedSearchBar(
-                        inputField = {
-                            SearchBarDefaults.InputField(
-                                query = query,
-                                onQueryChange = { viewModel.search(it) },
-                                onSearch = {
-                                    // The IME "Search"/"Done" action: clear focus so the
-                                    // soft keyboard dismisses. The debounced query already
-                                    // covers the actual search; this only improves the
-                                    // keyboard ergonomics for hardware/IME submit.
-                                    focusManager.clearFocus()
-                                },
-                                expanded = false,
-                                onExpandedChange = { },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(focusRequester)
-                                    .onFocusEvent { isSearchFocused = it.isFocused }
-                                    ,
-                                    placeholder = {
-                                    Text(
-                                        stringResource(R.string.search_placeholder),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        Tabler.Outline.Search,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                },
-                                trailingIcon = {
-                                    if (query.isNotBlank()) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(48.dp)
-                                                .clip(ShapeCache.smooth8)
-                                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                                                .clickable { viewModel.search("") },
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Icon(
-                                                imageVector = Tabler.Outline.X,
-                                                contentDescription = stringResource(R.string.search_clear_search),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(16.dp),
-                                            )
-                                        }
-                                    } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(32.dp)
-                                                .clip(ShapeCache.smooth8)
-                                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                                                .clickable {
-                                                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                                        putExtra(
-                                                            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                                                            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
-                                                        )
-                                                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-                                                        putExtra(RecognizerIntent.EXTRA_PROMPT, context.getString(R.string.search_voice_prompt))
-                                                    }
-                                                    // Guard against devices/TVs without a speech-recognition activity.
-                                                    val activityAvailable = intent.resolveActivity(context.packageManager) != null
-                                                    if (activityAvailable) {
-                                                        speechLauncher.launch(intent)
-                                                    }
-                                                },
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Icon(
-                                                imageVector = Tabler.Outline.Microphone,
-                                                contentDescription = stringResource(R.string.search_voice_search),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(16.dp),
-                                            )
-                                        }
-                                    }
-                                },
-                            )
-                        },
-                        expanded = false,
-                        onExpandedChange = { },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp),
-                        shape = ShapeCache.smooth16,
-                        colors = SearchBarDefaults.colors(
-                            containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                        ),
-                    ) { }
-                }
+                // Reads the live query in the leaf so per-keystroke
+                // recomposition stays confined to the bar.
+                SearchInputBar(
+                    focusRequester = focusRequester,
+                    viewModel = viewModel,
+                    onFocusedChange = { isSearchFocused = it },
+                )
 
                 // ── Sort + Status chip row (parity with Library's filter chip row) ──
                 // Always-visible immediate-apply chips: Sort shows the active sort
@@ -643,7 +534,7 @@ fun SearchScreen(
                         else offlineResults.filter { it.id !in onlineIds }
                     }
                 }
-                val showOffline = dedupedOfflineResults.isNotEmpty() && query.isNotBlank()
+                val showOffline = dedupedOfflineResults.isNotEmpty() && queryHasText
                 if (showOffline) {
                     OfflineSearchSection(
                         items = dedupedOfflineResults,
@@ -759,12 +650,13 @@ fun SearchScreen(
                 // Library content (grid, empty state, or initial state)
                 Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     when {
-                        pagedResults.itemCount == 0 && query.isNotBlank() && !isRefreshing && !showSeerr && !showSeerrError && !showOffline -> {
+                        pagedResults.itemCount == 0 && queryHasText && !isRefreshing && !showSeerr && !showSeerrError && !showOffline -> {
                             // Typo tolerance fallback: Jellyfin's media search is substring/prefix
                             // only, so a misspelled query ("Interstelar") returns nothing. With no
                             // easy way to push a fuzzy variant through the server query, surface
                             // "Did you mean?" suggestions derived from the user's own recent
                             // searches — a pure client-side prefix heuristic, no extra fetches.
+                            val query = viewModel.query
                             val didYouMean by remember(query, searchHistory) {
                                 derivedStateOf {
                                     if (query.length < 3 || searchHistory.isEmpty()) {
@@ -841,7 +733,7 @@ fun SearchScreen(
                                 }
                             }
                         }
-                        query.isBlank() && !showSeerr -> {
+                        !queryHasText && !showSeerr -> {
                             Column(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1035,14 +927,15 @@ fun SearchScreen(
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
                                         .fillMaxWidth()
-                                        .background(
-                                            Brush.verticalGradient(
+                                        .drawWithCache {
+                                            val brush = Brush.verticalGradient(
                                                 colors = listOf(
                                                     Color.Transparent,
-                                                    backgroundColor,
+                                                    backgroundColorState.value,
                                                 ),
                                             )
-                                        )
+                                            onDrawBehind { drawRect(brush) }
+                                        }
                                         .padding(vertical = 20.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {
@@ -1175,6 +1068,159 @@ fun SearchScreen(
 // ─────────────────────────────────────────────────────────────────────────────
 // ── Subcomponents (matching LibraryScreen / MediaDetailScreen design language)
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The MD3 expressive search field. Reads the live query here — not in the
+ * screen body — so per-keystroke recomposition is confined to this bar.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun SearchInputBar(
+    focusRequester: FocusRequester,
+    viewModel: SearchViewModel,
+    onFocusedChange: (Boolean) -> Unit,
+) {
+    val query = viewModel.query
+    val focusManager = LocalFocusManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val speechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val spokenText = matches?.firstOrNull()
+            if (!spokenText.isNullOrBlank()) {
+                viewModel.search(spokenText)
+            }
+        }
+    }
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()) + slideInVertically(
+            MaterialTheme.motionScheme.slowSpatialSpec(),
+            initialOffsetY = { 40 },
+        ),
+    ) {
+        DockedSearchBar(
+            inputField = {
+                SearchBarDefaults.InputField(
+                    query = query,
+                    onQueryChange = { viewModel.search(it) },
+                    onSearch = {
+                        // The IME "Search"/"Done" action: clear focus so the
+                        // soft keyboard dismisses. The debounced query already
+                        // covers the actual search; this only improves the
+                        // keyboard ergonomics for hardware/IME submit.
+                        focusManager.clearFocus()
+                    },
+                    expanded = false,
+                    onExpandedChange = { },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .onFocusEvent { onFocusedChange(it.isFocused) }
+                        ,
+                        placeholder = {
+                        Text(
+                            stringResource(R.string.search_placeholder),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Tabler.Outline.Search,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    trailingIcon = {
+                        if (query.isNotBlank()) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(ShapeCache.smooth8)
+                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                                    .clickable { viewModel.search("") },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = Tabler.Outline.X,
+                                    contentDescription = stringResource(R.string.search_clear_search),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(ShapeCache.smooth8)
+                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                                    .clickable {
+                                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                            putExtra(
+                                                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                                            )
+                                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                                            putExtra(RecognizerIntent.EXTRA_PROMPT, context.getString(R.string.search_voice_prompt))
+                                        }
+                                        // Guard against devices/TVs without a speech-recognition activity.
+                                        val activityAvailable = intent.resolveActivity(context.packageManager) != null
+                                        if (activityAvailable) {
+                                            speechLauncher.launch(intent)
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = Tabler.Outline.Microphone,
+                                    contentDescription = stringResource(R.string.search_voice_search),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                    },
+                )
+            },
+            expanded = false,
+            onExpandedChange = { },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+            shape = ShapeCache.smooth16,
+            colors = SearchBarDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+            ),
+        ) { }
+    }
+}
+
+/**
+ * Result-gated writer of "Recent Searches". Runs in a leaf keyed on the live
+ * query so the screen body doesn't recompose per keystroke.
+ */
+@Composable
+private fun SearchHistoryRecorder(
+    pagedResults: LazyPagingItems<MediaItem>,
+    viewModel: SearchViewModel,
+) {
+    // Only persist the query to "Recent Searches" once the pager confirms a
+    // non-empty result set for it. This prevents typo'd queries (zero matches)
+    // from polluting search history. Keyed on refresh state + query so it
+    // re-evaluates when a new search settles; the item count is read inside
+    // the effect so page appends don't re-record the same query.
+    val query = viewModel.query
+    val refreshLoadState = pagedResults.loadState.refresh
+    LaunchedEffect(refreshLoadState, query) {
+        val settled = refreshLoadState is LoadState.NotLoading && pagedResults.itemCount > 0
+        if (settled && query.isNotBlank()) {
+            viewModel.onSearchResultsShown(query)
+        }
+    }
+}
 
 @Composable
 private fun AnimatedSearchItem(

@@ -17,6 +17,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -42,6 +43,9 @@ class DownloadDelegateTest {
         // Captures the stream list handed to downloadExternalSubtitles so a test
         // can assert the selectedSubtitleIndices narrowing.
         var recordedSubtitleStreams: List<MediaStream>? = null
+        // Controls the subtitle-bundle outcome so a test can simulate failure.
+        var subtitleBundleResult: Boolean = true
+        var subtitleBundleThrows: Throwable? = null
         private fun result(): Result<DownloadItem> = startResult!!
 
         override suspend fun startDownload(
@@ -103,11 +107,16 @@ class DownloadDelegateTest {
         ): Boolean {
             recordedSubtitleStreams = mediaStreams
             calls += "downloadExternalSubtitles($itemId)"
-            return true
+            subtitleBundleThrows?.let { throw it }
+            return subtitleBundleResult
         }
 
         override suspend fun downloadMediaSegments(itemId: String, downloadPath: String): Boolean {
             calls += "downloadMediaSegments($itemId)"; return true
+        }
+
+        override suspend fun markSubtitlesPending(itemId: String) {
+            calls += "markSubtitlesPending($itemId)"
         }
 
         override fun enqueueDownload(downloadId: String) {
@@ -186,6 +195,41 @@ class DownloadDelegateTest {
         // Subtitle index 2 survives; 1 and 3 are dropped; the audio stream (4)
         // passes through unchanged.
         assertEquals(listOf(2, 4), writer.recordedSubtitleStreams?.map { it.index })
+    }
+
+    @Test
+    fun `executeDownload marks subtitles pending when the subtitle bundle fails`() = runTest {
+        // Without the rollback, the pre-seeded baseline masks the failure and
+        // the item plays offline with no subtitles forever (see executeDownload).
+        writer.subtitleBundleResult = false
+        val request = buildRequest(detailWithStreams = true, withTrickplay = false)
+        coEvery { playbackRepository.getBackdropUrl(any(), any()) } returns "https://backdrop"
+
+        delegate.executeDownload(request)
+
+        assertTrue(writer.calls.contains("markSubtitlesPending(item-1)"))
+    }
+
+    @Test
+    fun `executeDownload marks subtitles pending when the subtitle bundle throws`() = runTest {
+        writer.subtitleBundleThrows = RuntimeException("network gone")
+        val request = buildRequest(detailWithStreams = true, withTrickplay = false)
+
+        val result = delegate.executeDownload(request)
+
+        // The throw must not abort the recipe nor skip the rollback.
+        assertNotNull(result.downloadItem)
+        assertTrue(writer.calls.contains("downloadMediaSegments(item-1)"))
+        assertTrue(writer.calls.contains("markSubtitlesPending(item-1)"))
+    }
+
+    @Test
+    fun `executeDownload does not mark subtitles pending on a successful bundle`() = runTest {
+        val request = buildRequest(detailWithStreams = true, withTrickplay = false)
+
+        delegate.executeDownload(request)
+
+        assertFalse(writer.calls.contains("markSubtitlesPending(item-1)"))
     }
 
     @Test

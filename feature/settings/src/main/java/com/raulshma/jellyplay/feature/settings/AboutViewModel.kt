@@ -7,6 +7,7 @@ import androidx.core.content.FileProvider
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
+import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -57,12 +58,16 @@ class AboutViewModel @Inject constructor(
     var selfUpdateDownloadEnabled by composeState(false)
         private set
 
+    var updateDismissPeriod by composeState(UpdateDismissPeriod.DEFAULT)
+        private set
+
     init {
         loadServerInfo()
         launch {
             experimentalStore.experimental.collect { prefs ->
                 selfUpdateCheckEnabled = prefs.selfUpdateCheckEnabled
                 selfUpdateDownloadEnabled = prefs.selfUpdateDownloadEnabled
+                updateDismissPeriod = prefs.updateDismissPeriod
             }
         }
     }
@@ -101,6 +106,10 @@ class AboutViewModel @Inject constructor(
 
     fun updateSelfUpdateDownloadPref(enabled: Boolean) {
         launch { experimentalStore.setSelfUpdateDownloadEnabled(enabled) }
+    }
+
+    fun updateDismissPeriodPref(period: UpdateDismissPeriod) {
+        launch { experimentalStore.setUpdateDismissPeriod(period) }
     }
 
     private fun collectLogs(): Uri? {

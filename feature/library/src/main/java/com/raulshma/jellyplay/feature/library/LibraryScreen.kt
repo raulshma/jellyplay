@@ -113,6 +113,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.defaultEffectsTween
 import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
@@ -183,6 +184,9 @@ fun LibraryScreen(
     onSmartPlaylistsClick: () -> Unit = {},
     onMoodPlaylistsClick: () -> Unit = {},
     onPlaylistsClick: () -> Unit = {},
+    /** Open an item's detail screen from the inline card long-press Download;
+     * [openDownloadSheet] pre-presents the series download sheet there. */
+    onOpenDownloadDetail: (itemId: String, openDownloadSheet: Boolean) -> Unit = { _, _ -> },
     sectionContext: com.raulshma.jellyplay.core.model.LibrarySectionContext? = null,
     onBack: (() -> Unit)? = null,
     viewModel: LibraryViewModel = hiltViewModel(),
@@ -211,6 +215,9 @@ fun LibraryScreen(
     val tags by viewModel.tags.collectAsStateWithLifecycle()
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
     val resetDialogVisible by viewModel.resetDialogVisible.collectAsStateWithLifecycle()
+    // Offline mode auto-filters the grid to downloads (#147); the flag pins
+    // the Downloaded chip and swaps the empty-state copy.
+    val offlineAutoFilter by viewModel.offlineAutoFilter.collectAsStateWithLifecycle()
 
     // Section mode: configure the VM once with the injected context. Idempotent
     // (configureSection early-returns on an equal context) so recomposition is
@@ -269,7 +276,8 @@ fun LibraryScreen(
         derivedStateOf {
             browser.filters.mediaTypes.isNotEmpty() ||
                 browser.filters.genres.isNotEmpty() ||
-                browser.filters.playedStatus != PlayedStatus.ALL
+                browser.filters.playedStatus != PlayedStatus.ALL ||
+                browser.filters.isDownloaded == true
         }
     }
     val isAnySheetOpen = openFilterSheet != null || showPosterSizeSheet || showGroupBySheet
@@ -317,22 +325,41 @@ fun LibraryScreen(
     // the title row. Null when neither exists.
     val rowAboveFilterLeaf = if (showFolderRow) firstFolderPillFocus else headerEntryLeaf
 
+    // Item awaiting a remove-download confirm from the quick-action menu.
+    // Hoisted so the dialog survives the card leaving composition while open.
+    var pendingRemoveDownload by remember { mutableStateOf<MediaItem?>(null) }
+
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember { { item: MediaItem -> item.quickActions(MediaQuickActionScope.LIBRARY, includeDownload = true, includeAddToPlaylist = true) } },
-        executeAction = remember(viewModel, onItemClick) {
+        resolveActions = remember(viewModel) {
+            { item: MediaItem ->
+                item.quickActions(
+                    MediaQuickActionScope.LIBRARY,
+                    includeDownload = true,
+                    includeAddToPlaylist = true,
+                    // Downloaded items flip the download slot to
+                    // "Remove download" instead of offering both.
+                    isDownloaded = viewModel.downloadedIds.value.contains(item.id),
+                )
+            }
+        },
+        executeAction = remember(viewModel, onItemClick, onOpenDownloadDetail) {
             { item: MediaItem, action: QuickAction ->
                 when (action) {
                     QuickAction.PLAY -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
                     QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, true)
                     QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, false)
-                    // DOWNLOAD and ADD_TO_PLAYLIST navigate to the detail screen
-                    // rather than triggering the action inline. The full download
-                    // flow needs a resolved detail (mediaSources, quality, path)
-                    // and the playlist picker lives in feature/details, which this
-                    // module doesn't depend on — so the detail screen owns both.
-                    QuickAction.DOWNLOAD, QuickAction.ADD_TO_PLAYLIST ->
+                    // Single-stream items start inline at the default quality;
+                    // series (and other non-inline types) open the detail
+                    // screen — for a series with the download sheet pre-presented.
+                    QuickAction.DOWNLOAD -> viewModel.downloadItem(
+                        item,
+                        onOpenDetail = onOpenDownloadDetail,
+                    )
+                    QuickAction.REMOVE_DOWNLOAD -> pendingRemoveDownload = item
+                    // ADD_TO_PLAYLIST navigates: the playlist picker lives in
+                    // feature/details, which this module doesn't depend on.
+                    QuickAction.ADD_TO_PLAYLIST, QuickAction.DETAILS ->
                         onItemClick(item.id, item.mediaType, item.parentId, item.name)
-                    QuickAction.DETAILS -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
                     else -> Unit
                 }
             }
@@ -554,10 +581,22 @@ fun LibraryScreen(
                     // dedicated selection sheet (immediate-apply); "All Filters"
                     // falls back to the legacy full sheet.
                     LibraryFilterChipRow(
-                        filters = filters,
+                        // Offline mode pins the Downloaded filter on (#147): the
+                        // chip renders selected and Tags stay hidden while the
+                        // grid is served from the local store. The toggle is a
+                        // no-op then — the grid is downloads-only until the app
+                        // is back online, so tapping could only mislead.
+                        filters = if (offlineAutoFilter) filters.copy(isDownloaded = true) else filters,
                         genres = genres,
                         availableTags = tags,
                         onOpenSheet = { openFilterSheet = it },
+                        onToggleDownloaded = {
+                            if (!offlineAutoFilter) {
+                                viewModel.updateFilters(
+                                    filters.copy(isDownloaded = !(filters.isDownloaded == true))
+                                )
+                            }
+                        },
                         firstChipFocus = firstFilterChipFocus,
                         modifier = Modifier
                             .onDpadKey(
@@ -632,6 +671,14 @@ fun LibraryScreen(
                                         viewModel.updateFilters(
                                             filters.copy(playedStatus = PlayedStatus.ALL)
                                         )
+                                    },
+                                )
+                            }
+                            if (filters.isDownloaded == true) {
+                                GlassDismissTag(
+                                    label = stringResource(R.string.library_filter_downloaded),
+                                    onDismiss = {
+                                        viewModel.updateFilters(filters.copy(isDownloaded = null))
                                     },
                                 )
                             }
@@ -753,8 +800,11 @@ fun LibraryScreen(
                                 // hand-rolled empty state left the screen with zero focusables and
                                 // the drawer rail captured focus.
                                 ScreenEmptyState(
-                                    icon = Tabler.Outline.Search,
-                                    title = stringResource(R.string.library_no_items_found),
+                                    icon = if (offlineAutoFilter) Tabler.Outline.CloudOff else Tabler.Outline.Search,
+                                    title = stringResource(
+                                        if (offlineAutoFilter) R.string.library_no_downloads_offline
+                                        else R.string.library_no_items_found
+                                    ),
                                     actionLabel = if (hasActiveFilters) {
                                         stringResource(com.raulshma.jellyplay.core.ui.R.string.core_clear_filters)
                                     } else {
@@ -1264,6 +1314,23 @@ fun LibraryScreen(
     }
     MediaQuickActionHost(quickActionController)
 
+    // Remove-download confirm: quick-action removal only ever deletes the
+    // local download — the server copy is untouched.
+    pendingRemoveDownload?.let { target ->
+        ConfirmDialog(
+            title = stringResource(R.string.library_remove_download_title),
+            message = stringResource(R.string.library_remove_download_message, target.name),
+            confirmText = stringResource(R.string.library_remove_download_confirm),
+            dismissText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
+            icon = Tabler.Outline.Trash,
+            onConfirm = {
+                viewModel.removeItemDownload(target)
+                pendingRemoveDownload = null
+            },
+            onDismiss = { pendingRemoveDownload = null },
+        )
+    }
+
     if (resetDialogVisible) {
         LibraryResetConfirmDialog(
             onConfirm = { dontShowAgain -> viewModel.confirmResetAll(dontShowAgain) },
@@ -1273,7 +1340,10 @@ fun LibraryScreen(
 
     if (showFilters) {
         LibraryFilterSheet(
-            currentFilters = filters,
+            // Same offline pinning as the chip row (#147): the Downloaded
+            // toggle renders on while the grid is auto-served from the local
+            // store, so the sheet can't claim it's off.
+            currentFilters = if (offlineAutoFilter) filters.copy(isDownloaded = true) else filters,
             genres = genres,
             availableTags = tags,
             onApply = { newFilters ->
@@ -1350,6 +1420,7 @@ fun LibraryScreen(
                     onValueChange = { viewModel.setPosterSize(it) },
                     valueRange = 0.7f..1.4f,
                     isTv = isTv,
+                    onValueChangeFinished = { viewModel.persistPosterSize() },
                 )
             }
         }

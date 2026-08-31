@@ -111,11 +111,6 @@
     <string name="core_ui_color_style_title">色彩样式</string>
     <string name="core_ui_color_style_subtitle">定义生成调色板的视觉氛围</string>
     <string name="core_ui_dynamic_colors">动态壁纸颜色</string>
-    <string name="core_ui_synthwave_accent_title">Synthwave 强调色</string>
-    <string name="core_ui_synthwave_accent_subtitle">选择自定义霓虹强调色板</string>
-    <string name="core_ui_soothing_accent_title">柔和强调色</string>
-    <string name="core_ui_soothing_accent_subtitle">选择舒缓的强调色</string>
-
     <!-- core/ui connection-state & quick actions -->
     <string name="core_ui_backspace">退格</string>
     <string name="core_ui_cd_error">错误</string>
@@ -198,6 +193,12 @@
     <string name="detail_season_default">第 %1$d 季</string>
     <string name="detail_cd_collapse">收起</string>
     <string name="detail_cd_expand">展开</string>
+    <string name="detail_download_series_title">下载剧集</string>
+    <string name="detail_download_series_subtitle">点击某一季可查看剧集。选择要下载的内容。</string>
+    <string name="detail_downloaded_count_format">• 已下载 %1$d 集</string>
+    <string name="detail_no_episodes_available">没有可用的剧集</string>
+    <string name="detail_downloaded_status">已下载</string>
+    <string name="detail_queuing">正在加入队列…</string>
     <string name="detail_delete_entire_series">删除整部剧集</string>
     <string name="detail_cancel">取消</string>
     <string name="detail_delete_count">删除 %1$d</string>
@@ -240,4 +241,6 @@
     <string name="transcode_reason_hint_decoder">将解码器切换为 Software/FFmpeg 可能解决此问题。</string>
     <string name="transcode_reason_hint_quality">在画质选择器中提高流媒体画质上限。</string>
     <string name="transcode_reason_hint_subtitle">选择 SRT/外部字幕以避免烧录。</string>
+    <string name="core_ui_variant_accent_title">%1$s强调色</string>
+    <string name="core_ui_variant_accent_subtitle">选择此主题样式的强调色</string>
 </resources>

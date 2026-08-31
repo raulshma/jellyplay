@@ -55,7 +55,7 @@ fun PrivacyDataScreen(
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     // One pending confirmation at a time: null = none.
     var pendingAction by remember { mutableStateOf<PendingPrivacyAction?>(null) }
@@ -67,7 +67,7 @@ fun PrivacyDataScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_privacy_data),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier

@@ -121,10 +121,8 @@
     <string name="core_ui_color_style_title">Color Style</string>
     <string name="core_ui_color_style_subtitle">Define the visual vibe of generated palettes</string>
     <string name="core_ui_dynamic_colors">Dynamic wallpaper colors</string>
-    <string name="core_ui_synthwave_accent_title">Synthwave Accent</string>
-    <string name="core_ui_synthwave_accent_subtitle">Select custom neon accent color swatch</string>
-    <string name="core_ui_soothing_accent_title">Soothing Accent</string>
-    <string name="core_ui_soothing_accent_subtitle">Select a calming accent color</string>
+    <string name="core_ui_variant_accent_title">%1$s Accent</string>
+    <string name="core_ui_variant_accent_subtitle">Select the accent color for this theme style</string>
 
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Remove</string>
@@ -214,6 +212,12 @@
     <string name="detail_season_default">Season %1$d</string>
     <string name="detail_cd_collapse">Collapse</string>
     <string name="detail_cd_expand">Expand</string>
+    <string name="detail_download_series_title">Download Series</string>
+    <string name="detail_download_series_subtitle">Tap a season to see episodes. Select which to download.</string>
+    <string name="detail_downloaded_count_format">• %1$d downloaded</string>
+    <string name="detail_no_episodes_available">No episodes available</string>
+    <string name="detail_downloaded_status">Downloaded</string>
+    <string name="detail_queuing">Queuing…</string>
     <string name="detail_delete_entire_series">Delete entire series</string>
     <string name="detail_cancel">Cancel</string>
     <string name="detail_delete_count">Delete %1$d</string>

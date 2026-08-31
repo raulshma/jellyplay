@@ -30,7 +30,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.feature.livetv.R
 
@@ -46,7 +46,7 @@ fun ChannelDetailScreen(
         viewModel.loadChannel(channelId, channelName)
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
 
     // Bespoke screen (no JellyPlayScreenScaffold) — own the remote Back path explicitly so it
     // does not depend solely on the nav-host system pop.
@@ -70,7 +70,7 @@ fun ChannelDetailScreen(
         ChannelDetailBackdrop(
             backdropUrl = backdropUrl,
             blurHash = state.channelBlurHash,
-            backgroundColor = backgroundColor,
+            backgroundColorState = backgroundColorState,
             backdropHeightDp = 420.dp,
         )
 

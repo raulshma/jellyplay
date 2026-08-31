@@ -15,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -185,7 +186,7 @@ internal fun WatchProgressSection(item: MediaItem) {
 
     // Last-watched relative time (e.g. "2d ago"). Falls back to absolute date
     // when the relative formatter can't parse the stored timestamp.
-    val lastPlayedRelative = formatRelativeTime(item.lastPlayedDate)
+    val lastPlayedRelative = remember(item.lastPlayedDate) { formatRelativeTime(item.lastPlayedDate) }
     val lastPlayedValue = lastPlayedRelative ?: item.lastPlayedDate?.let { formatAbsoluteDate(it) }
     if (lastPlayedValue != null) {
         InfoLine(label = stringResource(R.string.detail_last_watched), value = lastPlayedValue)

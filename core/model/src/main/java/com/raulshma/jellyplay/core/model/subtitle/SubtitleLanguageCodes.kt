@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.model.subtitle
 
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Language-code normalization for the subtitle-provider pipeline.
@@ -67,18 +68,29 @@ object SubtitleLanguageCodes {
         map
     }
 
+    /**
+     * Memo for the short-code branch of [toIso3]: caches JDK-resolved ISO 639-3
+     * values only. Unresolved inputs (null results, e.g. blank or undetermined
+     * tags) re-run the original forLanguageTag/isO3Language path each time, so
+     * fallback behavior is unchanged.
+     */
+    private val shortCodeToIso3: MutableMap<String, String> = ConcurrentHashMap()
+
     /** Converts an arbitrary language code (1/2/3-letter or BCP-47) to ISO 639-3. */
     fun toIso3(code: String?): String? {
         if (code.isNullOrBlank()) return null
         val cleaned = code.trim().replace('_', '-').substringBefore('-')
         // 2-letter (639-1) or longer BCP-47 prefix → resolve via the JDK locale.
         if (cleaned.length <= 2) {
-            return try {
+            shortCodeToIso3[cleaned]?.let { return it }
+            val resolved = try {
                 Locale.forLanguageTag(cleaned).takeIf { it.language.isNotBlank() && it.language != "und" }
                     ?.isO3Language?.takeIf { it.isNotBlank() }
             } catch (_: Exception) {
                 cleaned.lowercase().ifBlank { null }
             }
+            if (resolved != null) shortCodeToIso3[cleaned] = resolved
+            return resolved
         }
         // 3-letter: could be 639-2B (B) or 639-3 (T). Normalize B→T, else passthrough.
         val lower = cleaned.lowercase()

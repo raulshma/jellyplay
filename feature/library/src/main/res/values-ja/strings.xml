@@ -14,6 +14,7 @@
         <item quantity="other">%1$d 件のアイテム</item>
     </plurals>
     <string name="library_no_items_found">アイテムが見つかりません</string>
+    <string name="library_no_downloads_offline">まだダウンロードはありません</string>
     <string name="library_try_adjusting_filters">フィルターを調整してみてください</string>
     <string name="library_list_view">リスト表示</string>
     <string name="library_grid_view">グリッド表示</string>
@@ -31,6 +32,10 @@
     <string name="library_status">状態</string>
     <string name="library_sort_in_progress">進行中</string>
     <string name="library_filter_resumable">進行中</string>
+    <string name="library_filter_downloaded">ダウンロード済み</string>
+    <string name="library_remove_download_title">ダウンロードを削除しますか？</string>
+    <string name="library_remove_download_message">このデバイスから「%1$s」のダウンロード済みコピーを削除します。サーバー上のコピーには影響しません。</string>
+    <string name="library_remove_download_confirm">削除</string>
     <string name="library_genres">ジャンル</string>
     <string name="library_year_range">公開年</string>
     <string name="library_tags">タグ</string>

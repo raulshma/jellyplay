@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.database.dao
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
 import kotlinx.coroutines.flow.Flow
@@ -37,6 +38,50 @@ interface SyncBaselineDao {
 
     @Query("UPDATE sync_baseline SET syncChecking = :checking WHERE id = :itemId")
     suspend fun setSyncChecking(itemId: String, checking: Int)
+
+    /**
+     * Canonical home of the subtitle-pending retry state's lifecycle: raises
+     * [SyncBaselineEntity.syncSubtitlesPending] (the retry driver the check and
+     * resync gates read) plus `syncSubtitlesChanged` + `syncUpdateAvailable` so
+     * the downloads-screen badge lights immediately — without touching
+     * `lastSyncedAt`, which would otherwise keep the TTL-gated check
+     * short-circuiting for up to an hour before surfacing anything. Only a
+     * successful fetch clears these; checks and failed fetches preserve them.
+     *
+     * Atomic by construction: the stub insert guarantees some row carries
+     * [itemId] before the flag raise runs, so the mark lands even when the
+     * download recipe's minimal-item fallback marks before any baseline was
+     * seeded. The stub's null signatures deliberately read as "first contact"
+     * to the freshness check, which re-seeds them while retaining the flag.
+     */
+    @Transaction
+    suspend fun markSubtitlesPending(itemId: String) {
+        insertSubtitlesPendingStub(itemId)
+        raiseSubtitlesPendingFlags(itemId)
+    }
+
+    /** The flag-raising half of [markSubtitlesPending]; row must exist. */
+    @Query(
+        """
+        UPDATE sync_baseline
+        SET syncSubtitlesPending = 1, syncSubtitlesChanged = 1, syncUpdateAvailable = 1
+        WHERE id = :itemId
+        """
+    )
+    suspend fun raiseSubtitlesPendingFlags(itemId: String): Int
+
+    /**
+     * The row-guaranteeing half of [markSubtitlesPending]. `OR IGNORE` keeps an
+     * existing full baseline intact.
+     */
+    @Query(
+        """
+        INSERT OR IGNORE INTO sync_baseline
+            (id, syncSubtitlesPending, syncSubtitlesChanged, syncUpdateAvailable)
+        VALUES (:itemId, 1, 1, 1)
+        """
+    )
+    suspend fun insertSubtitlesPendingStub(itemId: String)
 
     /** Clears stale `syncChecking=1` markers left by a crashed check. */
     @Query("UPDATE sync_baseline SET syncChecking = 0 WHERE syncChecking = 1")

@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.LocalArtworkColors
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariantColors
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight
@@ -137,8 +136,12 @@ internal fun rememberDetailScrollState(
 
     val isLightTheme = rememberIsLightTheme()
     val artworkColors = LocalArtworkColors.current
-    val isSynthwave = LocalIsSynthwave.current
+    // One truth source for variant flags: the resolved variant, not the
+    // per-variant booleans (which only cover the three legacy themes).
+    val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
+    val isSynthwave = themeVariant == com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.SYNTHWAVE
     val isSoothing = LocalIsSoothingTheme.current
+    val isAurora = themeVariant == com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.AURORA
     val schemeBackground = MaterialTheme.colorScheme.background
 
     val baseOverlayColor = artworkColors?.darkMuted
@@ -146,9 +149,10 @@ internal fun rememberDetailScrollState(
         ?: schemeBackground
     // Depends only on artwork + theme flags, not on scroll state — so memoize
     // it to avoid recomputing the lerp + when on every scroll-driven recompose.
-    val targetBackgroundColor = remember(baseOverlayColor, schemeBackground, isSynthwave, isSoothing, isLightTheme) {
+    val targetBackgroundColor = remember(baseOverlayColor, schemeBackground, isSynthwave, isSoothing, isAurora, isLightTheme) {
         when {
             isSynthwave -> ThemeVariantColors.SYNTHWAVE_DETAIL_BG
+            isAurora -> ThemeVariantColors.AURORA_DETAIL_BG
             isSoothing -> schemeBackground
             isLightTheme -> schemeBackground
             else -> lerp(baseOverlayColor, Color.Black, 0.65f)

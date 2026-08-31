@@ -117,6 +117,7 @@
     <string name="player_video_use">使用</string>
     <string name="player_video_failed_tap_to_retry">失敗 — タップして再試行</string>
     <string name="player_video_search_failed">検索に失敗しました</string>
+    <string name="player_video_load_subtitles_failed">字幕を読み込めませんでした</string>
     <string name="player_video_no_results_found">結果が見つかりません</string>
     <string name="player_video_pick_language_hint">言語を選択して検索すると字幕が見つかります。</string>
     <string name="player_video_change_file">変更: %1$s</string>
@@ -255,6 +256,8 @@
     <string name="player_video_remember_subtitles_off">このシリーズの字幕をオフのままにする</string>
     <string name="player_video_error_offline_file_missing">エラー: オフラインファイルが見つかりません</string>
     <string name="player_video_error_loading_media">メディアの読み込みエラー</string>
+    <string name="player_video_error_offline_stream">オフラインです \u2014 このタイトルをストリーミングするには再接続してください</string>
+    <string name="player_video_error_next_episode_load">次のエピソードを読み込めませんでした。接続を確認して再試行してください</string>
     <string name="player_video_trickplay_thumbnail">トリックプレイのサムネイル</string>
 
     <plurals name="player_video_participants">

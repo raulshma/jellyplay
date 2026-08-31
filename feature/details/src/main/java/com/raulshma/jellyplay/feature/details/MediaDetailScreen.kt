@@ -48,6 +48,7 @@ import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.SeriesDownloadSheet
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
@@ -70,6 +71,9 @@ fun MediaDetailScreen(
     onManageSeries: (seriesId: String) -> Unit = {},
     onNavigate: (Route) -> Unit = {},
     onEditClick: (itemId: String) -> Unit = {},
+    /** Seed for the series download sheet (route deep-link from a card
+     * long-press Download on a series). Consumed once the item loads. */
+    openDownloadSheetOnEntry: Boolean = false,
     onBack: () -> Unit,
     viewModel: DetailViewModel = hiltViewModel(),
 ) {
@@ -120,6 +124,18 @@ fun MediaDetailScreen(
     val outerIsLightTheme = rememberIsLightTheme()
 
     var showSeriesDownloadSheet by remember { mutableStateOf(false) }
+
+    // Route deep-link: a card long-press Download on a series lands here so
+    // the user picks seasons/episodes. Seed the sheet once the detail resolves
+    // as a series (the sheet host below also gates on that), re-running when
+    // the loaded id changes so the flag survives a slow first load.
+    LaunchedEffect(openDownloadSheetOnEntry, detail?.item?.id) {
+        if (openDownloadSheetOnEntry && detail?.item?.mediaType == MediaType.SERIES) {
+            showSeriesDownloadSheet = true
+            viewModel.downloads.loadDownloadedEpisodeIds()
+            viewModel.downloads.prepareDownloadSheetEpisodes()
+        }
+    }
     /** Series batch-delete sheet (multi-select downloaded episodes). */
     var showDeleteEpisodesSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }

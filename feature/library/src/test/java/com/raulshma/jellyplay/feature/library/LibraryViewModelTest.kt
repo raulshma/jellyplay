@@ -2,6 +2,9 @@
 
 package com.raulshma.jellyplay.feature.library
 
+import androidx.paging.LoadState
+import androidx.paging.PagingDataEvent
+import androidx.paging.PagingDataPresenter
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -15,18 +18,28 @@ import com.raulshma.jellyplay.core.model.LibrarySectionContext
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -37,15 +50,28 @@ class LibraryViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository
+    private lateinit var downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository
+    private lateinit var downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake
+    private lateinit var offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager
     private lateinit var userDataMutator: UserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var photoFolderPrefetcher: PhotoFolderPrefetcher
     private lateinit var libraryStore: LibraryStore
     private lateinit var userMessageBus: com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 
+    /** Real flow behind offlineModeManager.offlineMode — tests drive offline
+     *  transitions (#147 auto downloaded filter) by setting its value. */
+    private val offlineModeFlow =
+        MutableStateFlow(com.raulshma.jellyplay.core.model.OfflineMode.ONLINE)
+
     @Before
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
+        offlineRepository = mockk(relaxed = true)
+        downloadRepository = mockk(relaxed = true)
+        downloadIntake = mockk(relaxed = true)
+        offlineModeManager = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         photoFolderPrefetcher = mockk(relaxed = true)
@@ -54,6 +80,11 @@ class LibraryViewModelTest {
 
         every { imageUrlProvider.getImageUrl(any(), any()) } returns "https://example.com/image.jpg"
         every { libraryStore.library } returns MutableStateFlow(LibrarySlice())
+        every { offlineModeManager.offlineMode } returns offlineModeFlow
+        // The VM collects this in init for quick-action download gating.
+        every {
+            downloadRepository.observeDownloadedIdsIncludingSeries()
+        } returns MutableStateFlow(emptySet())
 
         // Stub the init-block repository calls with real Result/Flow values so
         // the relaxed mock's default Result mock doesn't ClassCast inside the
@@ -65,6 +96,10 @@ class LibraryViewModelTest {
 
     private fun createViewModel(): LibraryViewModel = LibraryViewModel(
         mediaRepository = mediaRepository,
+        offlineRepository = offlineRepository,
+        downloadRepository = downloadRepository,
+        downloadIntake = downloadIntake,
+        offlineModeManager = offlineModeManager,
         userDataMutator = userDataMutator,
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
@@ -282,14 +317,21 @@ class LibraryViewModelTest {
     }
 
     @Test
-    fun `setPosterSize persists via store`() = runTest {
+    fun `setPosterSize updates memory only and persistPosterSize writes the store`() = runTest {
         coEvery { libraryStore.setLibraryPosterSize(any()) } returns Unit
 
         val vm = createViewModel()
+        advanceUntilIdle()
         vm.setPosterSize(1.2f)
         advanceUntilIdle()
 
-        coVerify { libraryStore.setLibraryPosterSize(1.2f) }
+        assertEquals(1.2f, vm.state().posterSize)
+        coVerify(exactly = 0) { libraryStore.setLibraryPosterSize(any()) }
+
+        vm.persistPosterSize()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { libraryStore.setLibraryPosterSize(1.2f) }
     }
 
     @Test
@@ -402,5 +444,97 @@ class LibraryViewModelTest {
         coVerify {
             userDataMutator.setPlayed("m1", true, UserDataMutator.FlipMode.Silent, emptyList(), null)
         }
+    }
+
+    // ── Offline auto downloaded filter (#147) ────────────────────────────────
+
+    @Test
+    fun `offline static paging settles refresh load state so pull-to-refresh spinner clears`() = runTest {
+        // Offline BEFORE the tab opens: the VM's first (and only) paging
+        // generation is the static offline PagingData.from(...) path.
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        every {
+            offlineRepository.getOfflineLibrary()
+        } returns flowOf(
+            listOf(
+                OfflineMediaItem(
+                    id = "dl-1",
+                    name = "Downloaded Movie",
+                    mediaType = MediaType.MOVIE,
+                )
+            )
+        )
+        val vm = createViewModel()
+
+        // Same construction LazyPagingItems performs in LibraryScreen: a fresh
+        // presenter with no cached paging data, whose initial load state is
+        // refresh = Loading.
+        val presenter = object : PagingDataPresenter<MediaItem>(
+            mainContext = UnconfinedTestDispatcher(testScheduler),
+        ) {
+            override suspend fun presentPagingDataEvent(event: PagingDataEvent<MediaItem>) {}
+        }
+
+        val collectJob = backgroundScope.launch {
+            vm.pagedItems.collect { presenter.collectFrom(it) }
+        }
+        advanceUntilIdle()
+
+        // The grid renders the offline item (mirrors pagedItems.itemCount > 0)…
+        assertEquals(1, presenter.snapshot().items.size)
+        // …but PullToRefreshBox stays spinning unless loadState.refresh leaves
+        // Loading — a static PagingData.from without explicit source load states
+        // never dispatches them (dispatchLoadStates = false).
+        val refreshState = presenter.loadStateFlow.value?.refresh
+        assertTrue(
+            "refresh stuck at $refreshState — pull-to-refresh spinner would never clear",
+            refreshState is LoadState.NotLoading,
+        )
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `offlineAutoFilter mirrors offline mode transitions`() = runTest {
+        val vm = createViewModel()
+        backgroundScope.launch(kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler)) {
+            vm.offlineAutoFilter.collect { }
+        }
+        assertFalse(vm.offlineAutoFilter.value)
+
+        offlineModeFlow.value = com.raulshma.jellyplay.core.model.OfflineMode.OFFLINE_AUTO
+        advanceUntilIdle()
+        assertTrue(vm.offlineAutoFilter.value)
+
+        offlineModeFlow.value = com.raulshma.jellyplay.core.model.OfflineMode.ONLINE
+        advanceUntilIdle()
+        assertFalse(vm.offlineAutoFilter.value)
+    }
+
+    @Test
+    fun `offline mode serves the grid from the offline store without server paging`() = runTest {
+        every {
+            offlineRepository.getOfflineLibrary()
+        } returns kotlinx.coroutines.flow.flowOf(
+            listOf(
+                com.raulshma.jellyplay.core.model.OfflineMediaItem(
+                    id = "dl-1",
+                    name = "Downloaded Movie",
+                    mediaType = MediaType.MOVIE,
+                )
+            )
+        )
+
+        val vm = createViewModel()
+        offlineModeFlow.value = com.raulshma.jellyplay.core.model.OfflineMode.OFFLINE_MANUAL
+
+        val firstPage = backgroundScope.async { vm.pagedItems.first() }
+        advanceUntilIdle()
+
+        assertTrue(firstPage.isCompleted)
+        // The local store is the source, the server pager is never touched…
+        verify(exactly = 0) { mediaRepository.getMediaItemsPaged(any(), any(), any()) }
+        // …and the auto filter never mutated the user's filters.
+        assertNull(vm.state().filters.isDownloaded)
     }
 }

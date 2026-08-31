@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
 import com.raulshma.jellyplay.core.ui.components.SeerrCardLoadingState
@@ -64,11 +65,7 @@ internal fun SeerrDiscoverRow(
     // `when(mediaType)` block) on every recomposition.
     val onCardClick = remember(seerrCardLoadingState, seerrPrefetch, onSeerrItemClick) {
         { item: SeerrSearchItem ->
-            val mediaType = when {
-                item.mediaType.equals("movie", ignoreCase = true) -> "movie"
-                item.mediaType.equals("tv", ignoreCase = true) -> "tv"
-                else -> item.mediaType
-            }
+            val mediaType = normalizeSeerrMediaType(item.mediaType)
             seerrCardLoadingState.startLoading(item.id)
             seerrPrefetch(item.id, mediaType) {
                 seerrCardLoadingState.stopLoading(item.id)
@@ -83,6 +80,11 @@ internal fun SeerrDiscoverRow(
     CompositionLocalProvider(
         LocalSeerrCardLoadingState provides seerrCardLoadingState,
         LocalSeerrPrefetch provides seerrPrefetch,
+        // Home is a no-peek surface: every home media card long-presses into the
+        // quick-action sheet, so the press-and-hold preview is suppressed here.
+        // These TMDB-keyed cards have no server quick actions, so long-press is
+        // simply inert on them rather than opening a different affordance.
+        LocalMediaPreviewController provides null,
     ) {
         LazyRow(
             modifier = Modifier
@@ -115,4 +117,15 @@ internal fun SeerrDiscoverRow(
             }
         }
     }
+}
+
+/**
+ * Normalizes an *arr media type for the detail routes: case-folded `movie` /
+ * `tv`, everything else passed through. Internal so the test asserts THIS
+ * function instead of a local copy of the rule.
+ */
+internal fun normalizeSeerrMediaType(raw: String): String = when {
+    raw.equals("movie", ignoreCase = true) -> "movie"
+    raw.equals("tv", ignoreCase = true) -> "tv"
+    else -> raw
 }

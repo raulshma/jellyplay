@@ -970,8 +970,74 @@ val MIGRATION_48_49 = object : Migration(48, 49) {
     }
 }
 
+// The subtitle sidecar bundle's "failed and never fetched" retry state moves
+// from a sentinel value inside `syncedSubtitleSignature` to its own flag
+// column (`syncSubtitlesPending`), so the signature column stays a pure server
+// snapshot. Schema-additive only: the flag feature shipped alongside this
+// migration, so no existing row carries the retired sentinel and 0 (not
+// pending) is the correct backfill for every pre-existing baseline.
+val MIGRATION_49_50 = object : Migration(49, 50) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE sync_baseline ADD COLUMN syncSubtitlesPending INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v49 migration chain, with the
+ * Persists the item's chapter list as a nullable JSON blob on offline_media
+ * (contract: [com.raulshma.jellyplay.core.model.OfflineMediaItem.chapters]).
+ * Existing rows stay null and simply render without chapters until
+ * re-download. Mirrors the `peopleJson` blob pattern from 29→30.
+ *
+ * Chapters also join the metadata resync signature payload, which changes the
+ * digest for every item — including those without chapters — so stored v50
+ * signatures are hashes of the retired payload format and can never match a
+ * freshly computed one. Nulling them here hands every baseline to the
+ * comparator's empty-baseline rule ("never recorded" never flags), making the
+ * format change a one-time silent re-seed on each row's next freshness check
+ * instead of a fleet-wide false "update available".
+ *
+ * And because that next check is TTL-gated by `lastSyncedAt`, anything the
+ * retired-format comparison left persisted would stay visible until it fires:
+ * the migration therefore also clears the metadata axis's own change flag and
+ * recomputes the composite `syncUpdateAvailable` badge from the surviving
+ * axes, so a pre-upgrade false flag goes dark at upgrade time while genuine
+ * other-axis badges survive.
+ */
+val MIGRATION_50_51 = object : Migration(50, 51) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN chaptersJson TEXT")
+        db.execSQL("UPDATE sync_baseline SET syncedMetadataSignature = NULL")
+        db.execSQL(
+            "UPDATE sync_baseline SET syncMetadataChanged = 0, " +
+                // The subtitle axis counts a pending retry bundle as changed
+                // (comparator's subtitleAxisChanged rule), so its flag joins
+                // the survivor set alongside the four signature axes.
+                "syncUpdateAvailable = CASE WHEN syncImagesChanged = 1 " +
+                "OR syncSubtitlesChanged = 1 OR syncSubtitlesPending = 1 " +
+                "OR syncTrickplayChanged = 1 OR syncSegmentsChanged = 1 " +
+                "THEN 1 ELSE 0 END"
+        )
+    }
+}
+
+// Two index changes, both schema-only (query results identical):
+//  - Drop the dead `offline_media(name)` index. Its only consumer,
+//    OfflineMediaDao.search, is a '%…%' contains-scan over the
+//    offline_media_with_playback view with a CASE-led ORDER BY — no planner
+//    path can use a BINARY-collation B-tree there, so the index was pure
+//    write amplification on the app's highest-churn table.
+//  - Add a covering composite on playback_outbox(itemId, deadLetter, createdAt)
+//    for PlaybackOutboxDao.getForItemByType, which runs ~every 10 s during
+//    playback and filters + sorts by createdAt using only the itemId index.
+val MIGRATION_51_52 = object : Migration(51, 52) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP INDEX IF EXISTS index_offline_media_name")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_playback_outbox_itemId_deadLetter_createdAt ON playback_outbox(itemId, deadLetter, createdAt)")
+    }
+}
+
+/**
+ * The complete, correctly-ordered v1→v52 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -1028,4 +1094,7 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_46_47,
         MIGRATION_47_48,
         MIGRATION_48_49,
+        MIGRATION_49_50,
+        MIGRATION_50_51,
+        MIGRATION_51_52,
     )

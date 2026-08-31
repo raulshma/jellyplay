@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -57,9 +58,10 @@ fun ExpressiveChipContainer(
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "expressiveChipShapeMorph",
     )
-    val shape = remember(shapeMorphProgress) {
-        if (shapeMorphProgress > 0.5f) ShapeCache.smooth20 else ShapeCache.smooth16
-    }
+    // Derived boolean so the shape swap invalidates the composition only when
+    // the morph crosses 0.5f, not on every animation frame.
+    val morphed by remember { derivedStateOf { shapeMorphProgress > 0.5f } }
+    val shape = if (morphed) ShapeCache.smooth20 else ShapeCache.smooth16
 
     Row(
         verticalAlignment = Alignment.CenterVertically,

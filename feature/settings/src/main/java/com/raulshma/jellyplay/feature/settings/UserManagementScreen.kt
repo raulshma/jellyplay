@@ -90,7 +90,7 @@ fun UserManagementScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     val focusRequester = remember { FocusRequester() }
     val addUserFocusState = rememberTvFocusState(focusedScale = 1.05f)
@@ -103,7 +103,7 @@ fun UserManagementScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_switch_user),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             HeaderStatusIndicator(
                 status = headerStatus,

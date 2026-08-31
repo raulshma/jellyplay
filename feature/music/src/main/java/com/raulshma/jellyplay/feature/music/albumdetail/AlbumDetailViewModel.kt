@@ -16,6 +16,8 @@ import com.raulshma.jellyplay.feature.music.toMixErrorMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -58,12 +60,16 @@ class AlbumDetailViewModel @Inject constructor(
         launch {
             _isLoading.value = true
             _error.value = null
-            mediaRepository.getMediaDetail(albumId, force = force)
-                .onSuccess { _detail.value = it }
-                .onFailure { _error.value = it.message ?: "Failed to load album" }
-            mediaRepository.getAlbumTracks(albumId)
-                .onSuccess { _tracks.set(it) }
-                .onFailure { _error.value = it.message ?: "Failed to load tracks" }
+            coroutineScope {
+                val detailDeferred = async { mediaRepository.getMediaDetail(albumId, force = force) }
+                val tracksDeferred = async { mediaRepository.getAlbumTracks(albumId) }
+                detailDeferred.await()
+                    .onSuccess { _detail.value = it }
+                    .onFailure { _error.value = it.message ?: "Failed to load album" }
+                tracksDeferred.await()
+                    .onSuccess { _tracks.set(it) }
+                    .onFailure { _error.value = it.message ?: "Failed to load tracks" }
+            }
             _isLoading.value = false
         }
     }

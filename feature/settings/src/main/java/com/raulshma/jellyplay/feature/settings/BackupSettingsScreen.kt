@@ -8,6 +8,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -33,6 +34,7 @@ import com.composables.icons.tabler.outline.*
 fun BackupSettingsScreen(
     onBack: () -> Unit,
     onFactoryReset: () -> Unit,
+    onImportPreview: (String) -> Unit = {},
     highlightSettingId: String? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -51,7 +53,7 @@ fun BackupSettingsScreen(
     ) { uri ->
         uri?.let { viewModel.importSettings(it) }
     }
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
         focusRequester = focusRequester,
@@ -59,10 +61,41 @@ fun BackupSettingsScreen(
         tag = "backup_init",
     )
 
+    // When a backup is picked and decoded, navigate to the full-screen diff.
+    // The ViewModel stages `pendingImport` without writing; the preview screen
+    // performs the actual restore (all or per-category). The pending state is
+    // consumed atomically: navigation is attempted first and the pending is
+    // cleared only after the navigate call returns, so a failed navigation
+    // does not drop the staged file (user can retry). A duplicate launch for
+    // the same uri is suppressed via the `lastNavigatedUri` guard — without it
+    // returning to this screen would re-trigger the pending that was never
+    // cleared on failure.
+    // Use a one-shot event id to allow re-picking the *same* file.
+    // The previous `lastNavigatedUri == raw` guard permanently suppressed the
+    // same uri after first navigation (review finding). Instead, clear the guard
+    // when pending becomes null so a new PendingImport with the same uri can
+    // re-fire after `cancelImport()` + re-pick.
+    val lastNavigatedUri = remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(viewModel.pendingImport) {
+        val pending = viewModel.pendingImport
+        if (pending == null) {
+            lastNavigatedUri.value = null
+            return@LaunchedEffect
+        }
+        val raw = pending.uri.toString()
+        if (raw == lastNavigatedUri.value) return@LaunchedEffect
+        lastNavigatedUri.value = raw
+        try {
+            onImportPreview(raw)
+        } finally {
+            viewModel.cancelImport()
+        }
+    }
+
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_backup_restore),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
     ) { innerPadding ->
         // Center a highlighted (search-navigated) setting in the viewport instead of parking it
         // at the bottom edge, which is the default BringIntoViewSpec behaviour.

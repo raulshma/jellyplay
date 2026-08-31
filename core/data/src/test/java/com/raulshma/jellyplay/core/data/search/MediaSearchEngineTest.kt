@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.search
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
@@ -11,6 +12,7 @@ import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
@@ -51,6 +53,7 @@ class MediaSearchEngineTest {
     private val serverIdentityStore: ServerIdentityStore = mockk(relaxed = true)
     private val experimentalStore: ExperimentalStore = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk(relaxed = true)
+    private val offlineRepository: OfflineRepository = mockk(relaxed = true)
 
     private val activeUserId = MutableStateFlow<String?>("user-1")
     private val experimental = MutableStateFlow(ExperimentalSlice())
@@ -63,6 +66,7 @@ class MediaSearchEngineTest {
         every { serverIdentityStore.activeUserId } returns activeUserId
         every { experimentalStore.experimental } returns experimental
         every { offlineModeManager.networkStatus } returns networkStatus
+        every { offlineModeManager.isOffline } returns false
         every { seerrRepository.isConnected() } returns flowOf(true)
         every { seerrRepository.isSearchEnabled() } returns flowOf(true)
         every { searchHistoryRepository.getRecent(any(), any()) } returns flowOf(emptyList())
@@ -74,6 +78,7 @@ class MediaSearchEngineTest {
             serverIdentityStore = serverIdentityStore,
             experimentalStore = experimentalStore,
             offlineModeManager = offlineModeManager,
+            offlineRepository = offlineRepository,
         )
     }
 
@@ -328,6 +333,91 @@ class MediaSearchEngineTest {
         collectOneRound("matrix")
 
         coVerify(exactly = 0) { searchHistoryRepository.saveQuery(any(), any()) }
+    }
+
+    // ── Offline fallback ───────────────────────────────────────────────
+
+    @Test
+    fun `offline mode searches the offline library instead of the server`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+        coEvery { offlineRepository.searchOffline("matrix", 8) } returns listOf(
+            OfflineMediaItem(id = "d1", name = "Matrix", mediaType = MediaType.MOVIE),
+        )
+        val queries = MutableStateFlow("")
+        val states = mutableListOf<MediaSearchPreviewState>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            engine.preview(queries).toList(states)
+        }
+
+        queries.value = "matrix"
+        advanceTimeBy(301)
+        runCurrent()
+
+        // The round never touches the server pair; offline matches land in the
+        // Jellyfin slot so the shared result rows render them unchanged.
+        coVerify(exactly = 0) { mediaRepository.search(any(), limit = any()) }
+        coVerify(exactly = 0) { seerrRepository.search(any(), any()) }
+        coVerify(exactly = 1) { offlineRepository.searchOffline("matrix", 8) }
+        assertEquals(listOf("d1"), states.last().jellyfin.map { it.id })
+        assertTrue(states.last().seerr.isEmpty())
+        assertFalse(states.last().isSearching)
+        job.cancel()
+    }
+
+    @Test
+    fun `offline matches record history like server matches`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+        coEvery { offlineRepository.searchOffline(any(), any()) } returns listOf(
+            OfflineMediaItem(id = "d1", name = "Matrix", mediaType = MediaType.MOVIE),
+        )
+        collectOneRound("matrix")
+
+        coVerify(exactly = 1) { searchHistoryRepository.saveQuery("matrix", "user-1") }
+    }
+
+    @Test
+    fun `offline search failure degrades to empty results instead of throwing`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+        coEvery { offlineRepository.searchOffline(any(), any()) } throws RuntimeException("db")
+        val queries = MutableStateFlow("")
+        val states = mutableListOf<MediaSearchPreviewState>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            engine.preview(queries).toList(states)
+        }
+
+        queries.value = "matrix"
+        advanceTimeBy(301)
+        runCurrent()
+
+        val last = states.last()
+        assertTrue(last.jellyfin.isEmpty())
+        assertTrue(last.seerr.isEmpty())
+        assertFalse(last.isSearching)
+        job.cancel()
+    }
+
+    @Test
+    fun `offline history write failure still returns results instead of throwing`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+        coEvery { offlineRepository.searchOffline(any(), any()) } returns listOf(
+            OfflineMediaItem(id = "d1", name = "Matrix", mediaType = MediaType.MOVIE),
+        )
+        coEvery { searchHistoryRepository.saveQuery(any(), any()) } throws RuntimeException("disk full")
+        val queries = MutableStateFlow("")
+        val states = mutableListOf<MediaSearchPreviewState>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            engine.preview(queries).toList(states)
+        }
+
+        queries.value = "matrix"
+        advanceTimeBy(301)
+        runCurrent()
+
+        // The history write sits inside the round's failure policy, like the
+        // online branch — results still land.
+        assertEquals(listOf("d1"), states.last().jellyfin.map { it.id })
+        assertFalse(states.last().isSearching)
+        job.cancel()
     }
 
     // ── History mutations ───────────────────────────────────────────────

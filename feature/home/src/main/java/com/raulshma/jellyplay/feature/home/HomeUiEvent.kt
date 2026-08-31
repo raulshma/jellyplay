@@ -44,6 +44,18 @@ sealed interface HomeUiEvent {
     /** Quick-action delete of a downloaded (non-series) item. */
     data class DeleteOfflineMedia(val item: MediaItem) : HomeUiEvent
 
+    /** Opens the series download sheet for a series card's quick-action Download. */
+    data class RequestSeriesDownload(val series: MediaItem) : HomeUiEvent
+
+    /** Lazily expands one season in the open series download sheet. */
+    data class LoadSeriesDownloadEpisodes(val seasonId: String) : HomeUiEvent
+
+    /** Queues the series download sheet's selected episodes and closes it. */
+    data class DownloadSeries(val selectedEpisodes: Map<String, List<String>>) : HomeUiEvent
+
+    /** Closes the series download sheet. */
+    data object DismissSeriesDownload : HomeUiEvent
+
     /** Opens the delete-episodes sheet for a downloaded series card. */
     data class RequestSeriesDelete(val series: MediaItem) : HomeUiEvent
 
@@ -80,9 +92,6 @@ sealed interface HomeUiEvent {
      */
     data class SettingsResultClicked(val item: ResolvedSettingsItem) : HomeUiEvent
 
-    /** Hides a series from the Next Up row. */
-    data class ExcludeSeriesFromNextUp(val seriesId: String) : HomeUiEvent
-
     /** Toggles a home section's visibility from the inline section-config sheet. */
     data class SetSectionVisible(val type: HomeSectionType, val visible: Boolean) : HomeUiEvent
 
@@ -101,4 +110,41 @@ sealed interface HomeUiEvent {
 
     /** Resolves pending-sync row metadata while the sync details sheet is open. */
     data class EnsurePendingItemDetails(val itemIds: Collection<String>) : HomeUiEvent
+
+    /**
+     * A SERIES card's play affordance was tapped. The VM resolves which
+     * episode to start (resume → next unplayed → replay — the smart-play rule)
+     * and fires [onResolved] exactly once on the main thread with the outcome;
+     * navigation itself stays with the caller. Mirrors [PrefetchSeerrDetails]'s
+     * `onDone`. See [SeriesPlayResolution].
+     */
+    data class PlaySeries(
+        val series: MediaItem,
+        val onResolved: (SeriesPlayResolution) -> Unit,
+    ) : HomeUiEvent
+
+    /**
+     * Long-press Download from an online home card. Single-stream items start
+     * inline; series and other non-inline types open the detail screen via
+     * [onOpenDetail] (`openDownloadSheet` pre-presents the series download
+     * sheet there). Same callback-carries-navigation shape as [PlaySeries].
+     */
+    data class DownloadItem(
+        val item: MediaItem,
+        val onOpenDetail: (itemId: String, openDownloadSheet: Boolean) -> Unit = { _, _ -> },
+    ) : HomeUiEvent
+}
+
+/**
+ * The outcome of [HomeUiEvent.PlaySeries]: either the resolved target episode
+ * ([Episode], carrying its resume position in ticks — 0 unless resuming) or a
+ * fallback to the series' details screen ([Details]) when nothing was
+ * resolvable (catalogue load failure, empty/unavailable series).
+ */
+sealed interface SeriesPlayResolution {
+    /** Play [item] (always an EPISODE) from [startPositionTicks]. */
+    data class Episode(val item: MediaItem, val startPositionTicks: Long) : SeriesPlayResolution
+
+    /** Nothing resolvable — open the details screen for [series] instead. */
+    data class Details(val series: MediaItem) : SeriesPlayResolution
 }

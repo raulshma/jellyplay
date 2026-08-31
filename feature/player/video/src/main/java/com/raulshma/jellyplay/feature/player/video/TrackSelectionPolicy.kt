@@ -15,6 +15,14 @@ import com.raulshma.jellyplay.core.model.isLanguageMatch
 internal fun externalSubtitleTrackId(streamIndex: Int): String = "external:$streamIndex"
 
 /**
+ * Inverse of [externalSubtitleTrackId]: recovers the server stream index from
+ * a side-loaded streaming-subtitle id, or null for every other id shape
+ * (`offline:`, `local:`, `provider:`).
+ */
+internal fun externalSubtitleTrackStreamIndex(id: String): Int? =
+    id.takeIf { it.startsWith("external:") }?.removePrefix("external:")?.toIntOrNull()
+
+/**
  * Offline side-loaded subtitle id: `"offline:{subtitle manifest index}"`.
  * Stamped by `PlayerSessionManager.loadOfflineSubtitles` and matched by
  * [TrackSelectionPolicy.resolveByOfflineSubtitleId].

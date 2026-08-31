@@ -19,8 +19,12 @@ import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
+import com.raulshma.jellyplay.core.datastore.BackupSliceKey
+import com.raulshma.jellyplay.core.datastore.PreferencesJson
+import com.raulshma.jellyplay.core.datastore.SettingsBackup
 import com.raulshma.jellyplay.core.model.PinLockoutState
 import com.raulshma.jellyplay.core.model.legacy.UserPreferences
+import kotlinx.serialization.json.JsonElement
 
 /**
  * Builds a one-shot [UserPreferences] snapshot from the 18 domain-store slices
@@ -181,11 +185,11 @@ fun buildUserPreferencesSnapshot(
     showAdvancedSettings = appearance.showAdvancedSettings,
     audioVisualizerEnabled = audio.audioVisualizerEnabled,
     audioLyricsVisible = audio.audioLyricsVisible,
-    synthwaveMode = appearance.synthwaveMode,
+    synthwaveMode = appearance.themeVariant == "synthwave",
     synthwaveAccent = appearance.synthwaveAccent,
-    soothingMode = appearance.soothingMode,
+    soothingMode = appearance.themeVariant == "soothing",
     soothingAccent = appearance.soothingAccent,
-    monochromeMode = appearance.monochromeMode,
+    monochromeMode = appearance.themeVariant == "monochrome",
     syncPlayJoinBehavior = syncPlayCast.syncPlayJoinBehavior,
     syncPlayToleranceMs = syncPlayCast.syncPlayToleranceMs,
     syncPlayAutoAcceptInvites = syncPlayCast.syncPlayAutoAcceptInvites,
@@ -261,6 +265,7 @@ fun buildUserPreferencesSnapshot(
     selfUpdateDownloadEnabled = experimental.selfUpdateDownloadEnabled,
     dismissedUpdateVersion = experimental.dismissedUpdateVersion,
     dismissedUpdateAtMs = experimental.dismissedUpdateAtMs,
+    updateDismissPeriod = experimental.updateDismissPeriod,
     watchLaterPlaylistId = runtime.watchLaterPlaylistId,
     hideEpisodeThumbnails = library.hideEpisodeThumbnails,
     episodesDescending = library.episodesDescending,
@@ -277,3 +282,71 @@ fun buildUserPreferencesSnapshot(
     downloadScheduleWindow = downloads.downloadScheduleWindow,
     enabledExperimentalFeatures = experimental.enabledExperimentalFeatures,
 )
+
+/**
+ * Builds a [UserPreferences] snapshot from a decoded v2 [SettingsBackup].
+ * Each slice is decoded leniently: missing keys fall back to the slice's
+ * defaults, and malformed elements are ignored (matching `restoreV2`
+ * forward-compat). Pure (no IO) so the ViewModel only handles the
+ * `ContentResolver` read.
+ *
+ * `pinLockout` is not part of the backup (it is runtime state in
+ * `PinRateLimiter`); callers should pass `PinLockoutState()` for the
+ * incoming snapshot unless they have a reason to preserve it.
+ */
+fun buildUserPreferencesFromBackup(
+    backup: SettingsBackup,
+    pinLockout: PinLockoutState = PinLockoutState(failedAttempts = 0, lockoutUntilEpochMs = 0),
+    json: kotlinx.serialization.json.Json = PreferencesJson.import,
+): UserPreferences {
+    fun <T> decodeOrDefault(
+        key: String,
+        serializer: kotlinx.serialization.KSerializer<T>,
+        default: T,
+    ): T {
+        val element: JsonElement = backup.slices[key] ?: return default
+        return runCatching { json.decodeFromJsonElement(serializer, element) }.getOrDefault(default)
+    }
+
+    val playback = decodeOrDefault(BackupSliceKey.PLAYBACK, PlaybackSlice.serializer(), PlaybackSlice())
+    val appearance = decodeOrDefault(BackupSliceKey.APPEARANCE, AppearanceSlice.serializer(), AppearanceSlice())
+    val videoPlayer = decodeOrDefault(BackupSliceKey.VIDEO_PLAYER, VideoPlayerSlice.serializer(), VideoPlayerSlice())
+    val downloads = decodeOrDefault(BackupSliceKey.DOWNLOADS, DownloadsSlice.serializer(), DownloadsSlice())
+    val engine = decodeOrDefault(BackupSliceKey.PLAYER_ENGINE, PlayerEngineSlice.serializer(), PlayerEngineSlice())
+    val homeDiscovery = decodeOrDefault(BackupSliceKey.HOME_DISCOVERY, HomeDiscoverySlice.serializer(), HomeDiscoverySlice())
+    val audio = decodeOrDefault(BackupSliceKey.AUDIO, AudioSlice.serializer(), AudioSlice())
+    val audioEffects = decodeOrDefault(BackupSliceKey.AUDIO_EFFECTS, AudioEffectsSlice.serializer(), AudioEffectsSlice())
+    val audioCache = decodeOrDefault(BackupSliceKey.AUDIO_CACHE, AudioCacheSlice.serializer(), AudioCacheSlice())
+    val library = decodeOrDefault(BackupSliceKey.LIBRARY, LibrarySlice.serializer(), LibrarySlice())
+    val navigation = decodeOrDefault(BackupSliceKey.NAVIGATION, NavigationSlice.serializer(), NavigationSlice())
+    val networkOffline = decodeOrDefault(BackupSliceKey.NETWORK_OFFLINE, NetworkOfflineSlice.serializer(), NetworkOfflineSlice())
+    val notification = decodeOrDefault(BackupSliceKey.NOTIFICATION, NotificationSlice.serializer(), NotificationSlice())
+    val syncPlayCast = decodeOrDefault(BackupSliceKey.SYNC_PLAY_CAST, SyncPlayCastSlice.serializer(), SyncPlayCastSlice())
+    val screensaver = decodeOrDefault(BackupSliceKey.SCREENSAVER, ScreensaverSlice.serializer(), ScreensaverSlice())
+    val security = decodeOrDefault(BackupSliceKey.SECURITY, SecuritySlice.serializer(), SecuritySlice())
+    val subtitle = decodeOrDefault(BackupSliceKey.SUBTITLE, SubtitleSlice.serializer(), SubtitleSlice())
+    val experimental = decodeOrDefault(BackupSliceKey.EXPERIMENTAL, ExperimentalSlice.serializer(), ExperimentalSlice())
+
+    return buildUserPreferencesSnapshot(
+        playback = playback,
+        videoPlayer = videoPlayer,
+        engine = engine,
+        subtitle = subtitle,
+        audio = audio,
+        audioEffects = audioEffects,
+        audioCache = audioCache,
+        appearance = appearance,
+        homeDiscovery = homeDiscovery,
+        library = library,
+        navigation = navigation,
+        downloads = downloads,
+        networkOffline = networkOffline,
+        notification = notification,
+        syncPlayCast = syncPlayCast,
+        screensaver = screensaver,
+        security = security,
+        experimental = experimental,
+        runtime = backup.extras,
+        pinLockout = pinLockout,
+    )
+}

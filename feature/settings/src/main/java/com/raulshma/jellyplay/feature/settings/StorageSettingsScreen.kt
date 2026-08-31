@@ -76,7 +76,7 @@ fun StorageSettingsScreen(
     val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
+    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
     var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
 
     LaunchedEffect(Unit) { viewModel.refreshCacheSize() }
@@ -113,7 +113,7 @@ fun StorageSettingsScreen(
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_downloads_storage_title),
         onBack = onBack,
-        backgroundColor = backgroundColor,
+        backgroundColorState = backgroundColorState,
         actions = {
             AdvancedSettingsToggleButton(
                 showAdvanced = showAdvanced,

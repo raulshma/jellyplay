@@ -141,6 +141,8 @@
     <string name="downloads_force_resync_data_header">Zu synchronisierende Daten</string>
     <string name="downloads_force_resync_data_metadata">Metadaten</string>
     <string name="downloads_force_resync_data_metadata_desc">Übersicht, Besetzung, Bewertungen</string>
+    <string name="downloads_force_resync_data_chapters">Kapitel</string>
+    <string name="downloads_force_resync_data_chapters_desc">Kapitelmarken</string>
     <string name="downloads_force_resync_data_poster">Poster</string>
     <string name="downloads_force_resync_data_poster_desc">Hauptmotiv</string>
     <string name="downloads_force_resync_data_backdrop">Hintergrund</string>

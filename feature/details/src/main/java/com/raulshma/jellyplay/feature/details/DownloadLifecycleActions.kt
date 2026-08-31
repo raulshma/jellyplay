@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadFileInventory
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadQuality
+import com.raulshma.jellyplay.core.model.maxBitrate
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaType
@@ -370,10 +371,5 @@ internal class DownloadLifecycleActions(
         }
     }
 
-    private fun qualityToMaxBitrate(quality: DownloadQuality): Int? = when (quality) {
-        DownloadQuality.ORIGINAL -> null
-        DownloadQuality.HIGH_1080P -> 8_000_000
-        DownloadQuality.MEDIUM_720P -> 3_000_000
-        DownloadQuality.LOW_480P -> 1_500_000
-    }
+    private fun qualityToMaxBitrate(quality: DownloadQuality): Int? = quality.maxBitrate
 }

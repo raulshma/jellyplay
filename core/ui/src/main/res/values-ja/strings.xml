@@ -111,11 +111,6 @@
     <string name="core_ui_color_style_title">カラースタイル</string>
     <string name="core_ui_color_style_subtitle">生成されるパレットの視覚的な雰囲気を定義</string>
     <string name="core_ui_dynamic_colors">動的な壁紙の色</string>
-    <string name="core_ui_synthwave_accent_title">Synthwave アクセント</string>
-    <string name="core_ui_synthwave_accent_subtitle">カスタムネオンアクセントカラーを選択</string>
-    <string name="core_ui_soothing_accent_title">落ち着いたアクセント</string>
-    <string name="core_ui_soothing_accent_subtitle">穏やかなアクセントカラーを選択</string>
-
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">削除</string>
     <string name="core_ui_play">再生</string>
@@ -198,6 +193,12 @@
     <string name="detail_season_default">シーズン %1$d</string>
     <string name="detail_cd_collapse">折りたたむ</string>
     <string name="detail_cd_expand">展開する</string>
+    <string name="detail_download_series_title">シリーズをダウンロード</string>
+    <string name="detail_download_series_subtitle">シーズンをタップしてエピソードを表示します。ダウンロードするものを選択してください。</string>
+    <string name="detail_downloaded_count_format">• %1$d 件ダウンロード済み</string>
+    <string name="detail_no_episodes_available">視聴可能なエピソードはありません</string>
+    <string name="detail_downloaded_status">ダウンロード済み</string>
+    <string name="detail_queuing">キューに追加中…</string>
     <string name="detail_delete_entire_series">シリーズ全体を削除</string>
     <string name="detail_cancel">キャンセル</string>
     <string name="detail_delete_count">%1$d 件削除</string>
@@ -240,4 +241,6 @@
     <string name="transcode_reason_hint_decoder">デコーダーを Software/FFmpeg に切り替えると解決する場合があります。</string>
     <string name="transcode_reason_hint_quality">品質選択でストリーミング品質の上限を上げてください。</string>
     <string name="transcode_reason_hint_subtitle">焼き込みを避けるには SRT/外部字幕を選んでください。</string>
+    <string name="core_ui_variant_accent_title">%1$sアクセント</string>
+    <string name="core_ui_variant_accent_subtitle">このテーマスタイルのアクセントカラーを選択</string>
 </resources>

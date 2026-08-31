@@ -272,6 +272,12 @@ class SessionLoadPipeline(
 
         sessionManager.loadMedia(request.itemId, request.mediaSourceId, resolvedStartTicks)
 
+        // loadMedia reports its own failures (offline gate, detail-fetch miss,
+        // vanished offline file) by leaving isReady = false. Continuing would
+        // create a media session and report playback START for an item that
+        // never started, so stop here; the finally lifts the loading veil.
+        if (!sessionManager.sessionState.value.isReady) return
+
         val sessionState = sessionManager.sessionState.value
         val source = sessionState.currentMediaSource
         val detail = sessionState.mediaDetail

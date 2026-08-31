@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
@@ -48,6 +49,9 @@ class AppRuntimeStateStore @Inject constructor(
     private val scope = externalScope
     private val sharedPrefs: Flow<Preferences> = dataStore.data
     private val json get() = PreferenceCodec.json
+
+    private var cachedFavoriteChannels: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
+    private var cachedRecentDlnaDevices: ParsedCache<List<DlnaDeviceRef>> = ParsedCache(null, emptyList())
 
     internal object Keys {
         val FAVORITE_CHANNELS = stringPreferencesKey("favorite_channels")
@@ -132,13 +136,36 @@ class AppRuntimeStateStore @Inject constructor(
      * Faithful inverse of [state]'s projection: writes every field of [slice]
      * back to the DataStore using the same encoding as the legacy facade
      * setters. Nullable ids are skipped on `null` (matching the legacy
-     * `?.let` behaviour) rather than removed.
+     * Restores a snapshot. Nullable ids (`liveTvLastChannelId`,
+     * `watchLaterPlaylistId`) are *preserved* when the slice carries `null`
+     * (matches the legacy `?.let` / existing test
+     * `restore(slice) with null ids leaves any prior id untouched`). For a
+     * full backup restore that must clear stale ids, call [restoreForBackup]
+     * with `clearNullIds = true`.
      */
     suspend fun restore(slice: AppRuntimeState) {
+        restore(slice, clearNullIds = false)
+    }
+
+    /**
+     * Full-restore variant used by backup import's "Everything" path.
+     * When [clearNullIds] is true, a `null` id explicitly removes the key so
+     * importing a backup with `null` does not leave a stale prior value
+     * (review finding: stale-clear bug).
+     */
+    suspend fun restore(slice: AppRuntimeState, clearNullIds: Boolean) {
         dataStore.edit { prefs ->
             prefs[Keys.FAVORITE_CHANNELS] = json.encodeToString(slice.favoriteChannels)
-            slice.liveTvLastChannelId?.let { prefs[Keys.LIVE_TV_LAST_CHANNEL_ID] = it }
-            slice.watchLaterPlaylistId?.let { prefs[Keys.WATCH_LATER_PLAYLIST_ID] = it }
+            if (slice.liveTvLastChannelId != null) {
+                prefs[Keys.LIVE_TV_LAST_CHANNEL_ID] = slice.liveTvLastChannelId
+            } else if (clearNullIds) {
+                prefs.remove(Keys.LIVE_TV_LAST_CHANNEL_ID)
+            }
+            if (slice.watchLaterPlaylistId != null) {
+                prefs[Keys.WATCH_LATER_PLAYLIST_ID] = slice.watchLaterPlaylistId
+            } else if (clearNullIds) {
+                prefs.remove(Keys.WATCH_LATER_PLAYLIST_ID)
+            }
             prefs[Keys.ONBOARDING_COMPLETED] = slice.onboardingCompleted
             prefs[Keys.RECENT_DLNA_DEVICES] = json.encodeToString(slice.recentDlnaDevices)
         }
@@ -159,22 +186,23 @@ class AppRuntimeStateStore @Inject constructor(
     }
 
     private fun readFavoriteChannels(prefs: Preferences): Set<String> {
-        val raw = prefs[Keys.FAVORITE_CHANNELS] ?: return emptySet()
-        return try {
-            json.decodeFromString<Set<String>>(raw)
-        } catch (_: Exception) {
-            emptySet()
-        }
+        val raw = prefs[Keys.FAVORITE_CHANNELS]
+        if (raw == cachedFavoriteChannels.raw) return cachedFavoriteChannels.value
+        val value = raw?.let {
+            try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { null }
+        } ?: emptySet()
+        cachedFavoriteChannels = ParsedCache(raw, value)
+        return value
     }
 
     private fun readRecentDlnaDevices(prefs: Preferences): List<DlnaDeviceRef> {
-        return prefs[Keys.RECENT_DLNA_DEVICES]?.let {
-            try {
-                json.decodeFromString<List<DlnaDeviceRef>>(it)
-            } catch (_: Exception) {
-                emptyList()
-            }
+        val raw = prefs[Keys.RECENT_DLNA_DEVICES]
+        if (raw == cachedRecentDlnaDevices.raw) return cachedRecentDlnaDevices.value
+        val value = raw?.let {
+            try { json.decodeFromString<List<DlnaDeviceRef>>(it) } catch (_: Exception) { null }
         } ?: emptyList()
+        cachedRecentDlnaDevices = ParsedCache(raw, value)
+        return value
     }
 }
 

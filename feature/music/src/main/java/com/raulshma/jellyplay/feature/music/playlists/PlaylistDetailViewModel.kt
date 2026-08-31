@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.ui.components.UndoableAction
 import com.raulshma.jellyplay.core.ui.components.undoActionChannel
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.receiveAsFlow
 import javax.inject.Inject
 
@@ -44,17 +45,20 @@ class PlaylistDetailViewModel @Inject constructor(
         launch {
             _isLoading.value = true
             _error.value = null
-            mediaRepository.getPlaylistItems(playlistId, limit = 200)
-                .onSuccess {
-                    _items.value = it
-                    if (playlistName != null) {
+            if (playlistName == null) {
+                val itemsDeferred = async { mediaRepository.getPlaylistItems(playlistId, limit = 200) }
+                val nameDeferred = async { mediaRepository.getMediaDetail(playlistId, force = force) }
+                itemsDeferred.await()
+                    .onSuccess { _items.value = it }
+                    .onFailure { _error.value = it.message }
+                nameDeferred.await().onSuccess { _playlistName.value = it.item.name }
+            } else {
+                mediaRepository.getPlaylistItems(playlistId, limit = 200)
+                    .onSuccess {
+                        _items.value = it
                         _playlistName.value = playlistName
                     }
-                }
-                .onFailure { _error.value = it.message }
-            if (playlistName == null) {
-                mediaRepository.getMediaDetail(playlistId, force = force)
-                    .onSuccess { _playlistName.value = it.item.name }
+                    .onFailure { _error.value = it.message }
             }
             _isLoading.value = false
         }

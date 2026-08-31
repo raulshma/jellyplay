@@ -117,6 +117,7 @@
     <string name="player_video_use">Usar</string>
     <string name="player_video_failed_tap_to_retry">Falhou — toque para repetir</string>
     <string name="player_video_search_failed">A pesquisa falhou</string>
+    <string name="player_video_load_subtitles_failed">Não foi possível carregar as legendas</string>
     <string name="player_video_no_results_found">Sem resultados</string>
     <string name="player_video_pick_language_hint">Escolha um idioma e pesquise para encontrar legendas.</string>
     <string name="player_video_change_file">Alterar: %1$s</string>
@@ -255,6 +256,8 @@
     <string name="player_video_remember_subtitles_off">Manter legendas desativadas para esta série</string>
     <string name="player_video_error_offline_file_missing">Erro: ficheiro offline em falta</string>
     <string name="player_video_error_loading_media">Erro ao carregar conteúdo</string>
+    <string name="player_video_error_offline_stream">Está sem ligação \u2014 reconecte-se para reproduzir este título</string>
+    <string name="player_video_error_next_episode_load">Não foi possível carregar o próximo episódio. Verifique a ligação e tente novamente</string>
     <string name="player_video_trickplay_thumbnail">Miniatura trickplay</string>
 
     <plurals name="player_video_participants">

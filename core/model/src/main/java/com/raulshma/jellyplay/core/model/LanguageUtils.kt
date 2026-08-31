@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.model
 
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Robustly matches language codes by normalizing them using java.util.Locale.
@@ -12,15 +13,26 @@ fun isLanguageMatch(trackLang: String?, prefLang: String?): Boolean {
     return try {
         val trackClean = trackLang.split('-')[0].split('_')[0].trim()
         val prefClean = prefLang.split('-')[0].split('_')[0].trim()
-        val trackLocale = Locale.forLanguageTag(trackClean)
-        val prefLocale = Locale.forLanguageTag(prefClean)
-        val trackISO3 = try { trackLocale.isO3Language } catch (_: Exception) { trackClean }
-        val prefISO3 = try { prefLocale.isO3Language } catch (_: Exception) { prefClean }
+        val trackISO3 = resolveIso3(trackClean)
+        val prefISO3 = resolveIso3(prefClean)
         trackISO3.equals(prefISO3, ignoreCase = true)
     } catch (_: Exception) {
         trackLang.startsWith(prefLang, ignoreCase = true) || prefLang.startsWith(trackLang, ignoreCase = true)
     }
 }
+
+/**
+ * Memoised ISO-639 resolution for [isLanguageMatch]: the cleaned tag is the
+ * only input and the result (JDK-resolved, or the tag itself when the JDK
+ * cannot resolve it) is pure, so cached values equal a fresh
+ * forLanguageTag/isO3Language run for every input.
+ */
+private val iso3Cache = ConcurrentHashMap<String, String>()
+
+private fun resolveIso3(clean: String): String =
+    iso3Cache.getOrPut(clean) {
+        try { Locale.forLanguageTag(clean).isO3Language } catch (_: Exception) { clean }
+    }
 
 // Compiled once and reused (was recompiled inside parseLanguageFromLabel on
 // every media-open / track-switch call). Mirrors the cached-regex pattern used
@@ -91,12 +103,20 @@ fun parseLanguageFromLabel(label: String?): String? {
     }
     
     // Fall back to scanning the whole string for display name matches (longer names first)
-    for ((name, iso) in localeLookupMap) {
-        if (name.length > 3 && normalizedLabel.contains(name)) {
+    for ((name, iso) in longNameEntries) {
+        if (normalizedLabel.contains(name)) {
             return iso
         }
     }
-    
+
     return null
+}
+
+/**
+ * [localeLookupMap] entries whose key is longer than 3 chars, in map order —
+ * the only ones the substring fallback scan above can match.
+ */
+private val longNameEntries: List<Pair<String, String>> by lazy {
+    localeLookupMap.mapNotNull { (name, iso) -> if (name.length > 3) name to iso else null }
 }
 

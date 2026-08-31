@@ -44,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -60,7 +61,7 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -147,12 +148,12 @@ private fun ArtistDetailContent(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
     val albumCardWidth = if (isExpanded) 180.dp else 150.dp
-    val backgroundColor = rememberScreenBackgroundColor()
+    val backgroundColorState = rememberScreenBackgroundColorState()
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
+            .drawBehind { drawRect(backgroundColorState.value) }
     ) {
         MediaImage(
             url = getBackdropUrl(artistId),
@@ -318,6 +319,8 @@ private fun AlbumCard(
 
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
+    val isAurora = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current ==
+        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.AURORA
     val borderModifier = when {
         isSynthwave -> Modifier.border(
             width = 1.5.dp,
@@ -332,6 +335,13 @@ private fun AlbumCard(
         isSoothing -> Modifier.border(
             width = 0.8.dp,
             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+            shape = ShapeCache.smooth8
+        )
+        // Aurora: soft accent glow border matching the gradient background.
+        isAurora -> Modifier.border(
+            border = com.raulshma.jellyplay.core.designsystem.theme.auroraCardBorder(
+                MaterialTheme.colorScheme.primary
+            ),
             shape = ShapeCache.smooth8
         )
         else -> Modifier

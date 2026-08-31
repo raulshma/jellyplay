@@ -51,16 +51,10 @@ class AppearanceSettingsViewModel @Inject constructor(
     fun setPerformanceMode(enabled: Boolean) = editor.setPerformanceMode(enabled)
     fun setColorStyle(style: ColorStyle) = editor.setColorStyle(style)
     fun setAccentColorSwatch(swatch: String) = editor.setAccentColorSwatch(swatch)
-    fun setSynthwaveMode(enabled: Boolean) =
-        editor.edit { appearance.setSynthwaveMode(enabled) }
-    fun setSynthwaveAccent(accent: String) =
-        editor.edit { appearance.setSynthwaveAccent(accent) }
-    fun setSoothingMode(enabled: Boolean) =
-        editor.edit { appearance.setSoothingMode(enabled) }
-    fun setSoothingAccent(accent: String) =
-        editor.edit { appearance.setSoothingAccent(accent) }
-    fun setMonochromeMode(enabled: Boolean) =
-        editor.edit { appearance.setMonochromeMode(enabled) }
+    fun setThemeVariant(variant: String) =
+        editor.edit { appearance.setThemeVariant(variant) }
+    fun setVariantAccent(variant: String, accent: String) =
+        editor.edit { appearance.setVariantAccent(variant, accent) }
     fun setBlueLightFilterEnabled(enabled: Boolean) =
         editor.edit { appearance.setBlueLightFilterEnabled(enabled) }
     fun setBlueLightFilterStrength(strength: Float) =
@@ -75,8 +69,11 @@ class AppearanceSettingsViewModel @Inject constructor(
     fun setDateFormatPreference(preference: DateFormatPreference) =
         editor.setDateFormatPreference(preference)
     fun setHomeMode(mode: HomeMode) = editor.setHomeMode(mode)
-    fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) =
-        editor.setEnabledHomeSectionTypes(types)
+
+    /** Single-section toggle — the store's shared section-prefs command, so
+     * this screen and home's inline sheet apply the same policy. */
+    fun setSectionVisible(type: HomeSectionType, visible: Boolean) =
+        editor.edit { homeDiscovery.setSectionVisible(type, visible) }
     fun setHomeSectionOrder(order: List<HomeSectionType>) =
         editor.edit { homeDiscovery.setHomeSectionOrder(order) }
     fun setHomeHeroEnabled(enabled: Boolean) = editor.setHomeHeroEnabled(enabled)

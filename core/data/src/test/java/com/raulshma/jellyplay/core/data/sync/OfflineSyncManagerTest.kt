@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.ResyncCategory
 import com.raulshma.jellyplay.core.model.ResyncOptions
 import com.raulshma.jellyplay.core.model.ResyncStep
 import com.raulshma.jellyplay.core.model.StreamType
@@ -116,7 +117,7 @@ class OfflineSyncManagerTest {
     fun `resyncItem skips subtitles and trickplay writers when those options are off`() = runTest {
         manager.resyncItem(
             itemId,
-            options = ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = false, trickplay = false, segments = true),
+            options = ResyncOptions.of(ResyncCategory.SEGMENTS),
         )
 
         assertFalse(writer.calls.contains("downloadExternalSubtitles"))
@@ -129,7 +130,7 @@ class OfflineSyncManagerTest {
     fun `resyncItem skips segments and does not bust cache when segments option is off`() = runTest {
         manager.resyncItem(
             itemId,
-            options = ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = false, trickplay = false, segments = false),
+            options = ResyncOptions.NONE,
         )
 
         assertFalse(writer.calls.contains("downloadMediaSegments"))
@@ -137,8 +138,54 @@ class OfflineSyncManagerTest {
     }
 
     @Test
+    fun `resyncItem with chapters only still persists the offline detail row`() = runTest {
+        // Chapters are a column of the offline row (and fold into its composite
+        // metadata signature), so a chapters-only selection must go through the
+        // same row persist as a metadata selection.
+        manager.resyncItem(
+            itemId,
+            options = ResyncOptions.of(ResyncCategory.CHAPTERS),
+        )
+
+        assertTrue(writer.calls.contains("saveOfflineMediaDetail"))
+    }
+
+    @Test
+    fun `resyncItem with metadata and chapters both off skips the row persist and retains the prior signature`() = runTest {
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(metadataSignature = "stale-meta-sig")
+
+        manager.resyncItem(
+            itemId,
+            options = ResyncOptions.NONE,
+        )
+
+        assertFalse(writer.calls.contains("saveOfflineMediaDetail"))
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals("stale-meta-sig", slot.captured.syncedMetadataSignature)
+    }
+
+    @Test
+    fun `resyncItem with chapters only re-seeds the composite metadata signature`() = runTest {
+        // The chapters write refreshes the whole row, so the composite signature
+        // (metadata + chapters) must be re-seeded from the fresh fetch — keeping
+        // the stale value would re-flag the axis on the next check.
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(metadataSignature = "stale-meta-sig")
+
+        manager.resyncItem(
+            itemId,
+            options = ResyncOptions.of(ResyncCategory.CHAPTERS),
+        )
+
+        val expected = comparator.metadataSignature(detail())
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals(expected, slot.captured.syncedMetadataSignature)
+    }
+
+    @Test
     fun `resyncItem busts segments cache before refreshing segments`() = runTest {
-        manager.resyncItem(itemId, options = ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = false, trickplay = false, segments = true))
+        manager.resyncItem(itemId, options = ResyncOptions.of(ResyncCategory.SEGMENTS))
 
         coVerifyOrder {
             playbackRepository.invalidateSegmentsCache(itemId)
@@ -150,13 +197,13 @@ class OfflineSyncManagerTest {
 
     @Test
     fun `resyncItem retains skipped subtitle signature in the persisted baseline`() = runTest {
-        // Baseline carries a real subtitle signature; options.subtitles = false
+        // Baseline carries a real subtitle signature; options exclude SUBTITLES
         // must carry it forward unchanged instead of wiping it.
         coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(subtitleSignature = "prior-sub-sig")
 
         manager.resyncItem(
             itemId,
-            options = ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = false, trickplay = true, segments = true),
+            options = ResyncOptions.of(ResyncCategory.TRICKPLAY, ResyncCategory.SEGMENTS),
         )
 
         val slot = slot<SyncBaselineEntity>()
@@ -176,7 +223,7 @@ class OfflineSyncManagerTest {
 
         val result = manager.resyncItem(
             itemId,
-            options = ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = true, trickplay = false, segments = false),
+            options = ResyncOptions.of(ResyncCategory.SUBTITLES),
         )
 
         val subsStep = result.steps.firstOrNull { it.step == ResyncStep.DOWNLOAD_SUBTITLES }
@@ -243,6 +290,160 @@ class OfflineSyncManagerTest {
         assertEquals("prior-seg-sig", slot.captured.syncedSegmentsSignature)
     }
 
+    @Test
+    fun `checkForUpdates carries the subtitle pending flag forward instead of clearing it`() = runTest {
+        // A failed-at-download bundle sets syncSubtitlesPending. The check must
+        // flag subtitles-changed AND keep the flag stored — otherwise it would
+        // silently retire the badge before any resync ran.
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(
+            subtitlesPending = 1,
+            lastSyncedAt = 0L, // force TTL expiry
+        )
+
+        val result = manager.checkForUpdates(itemId)
+
+        assertTrue("the pending flag must keep flagging subtitles as changed", result.state.subtitlesChanged)
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals(1, slot.captured.syncSubtitlesPending)
+    }
+
+    @Test
+    fun `firstContact check on an unseeded stub row keeps the badge lit`() = runTest {
+        // The un-seeded minimal-item fallback produces a STUB row: null
+        // signatures + pending flag only. Its first check counts as first
+        // contact (re-seeds signatures) but must not zero the subtitle/badge
+        // flags — the stub exists precisely because the bundle never landed.
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns SyncBaselineEntity(
+            id = itemId,
+            syncedSubtitleSignature = null,
+            syncSubtitlesPending = 1,
+            lastSyncedAt = 0L,
+        )
+
+        manager.checkForUpdates(itemId)
+
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals(1, slot.captured.syncSubtitlesPending)
+        assertEquals(1, slot.captured.syncSubtitlesChanged)
+        assertEquals(1, slot.captured.syncUpdateAvailable)
+        // Every OTHER axis is still treated as spurious first contact.
+        assertEquals(0, slot.captured.syncMetadataChanged)
+        assertEquals(0, slot.captured.syncImagesChanged)
+    }
+
+    @Test
+    fun `checkForUpdates replaces a real subtitle signature with the fresh one`() = runTest {
+        // Without a pending flag the check re-seeds normally — the retention
+        // must not freeze the axis on stale values forever.
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(
+            subtitleSignature = "stale-sub-sig",
+            lastSyncedAt = 0L,
+        )
+
+        manager.checkForUpdates(itemId)
+
+        val expectedSub = comparator.subtitleSignature(detail())
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals(expectedSub, slot.captured.syncedSubtitleSignature)
+        assertEquals(0, slot.captured.syncSubtitlesPending)
+    }
+
+    @Test
+    fun `resyncItem failure with a pending baseline keeps pending and badge lit`() = runTest {
+        // Pending alone (signature already matching) drives the retry; when the
+        // re-fetch fails, the pending flag and both badge flags must survive —
+        // this is the leg that keeps "repair pending" visible until it lands.
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(
+            subtitleSignature = comparator.subtitleSignature(detail()),
+            subtitlesPending = 1,
+        )
+        writer.subtitlesResult = false
+
+        val result = manager.resyncItem(
+            itemId,
+            options = ResyncOptions.of(ResyncCategory.SUBTITLES),
+        )
+
+        val subsStep = result.steps.firstOrNull { it.step == ResyncStep.DOWNLOAD_SUBTITLES }
+        assertNotNull(subsStep)
+        assertEquals(false, subsStep?.success)
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals(1, slot.captured.syncSubtitlesPending)
+        assertEquals(1, slot.captured.syncSubtitlesChanged)
+        assertEquals(1, slot.captured.syncUpdateAvailable)
+    }
+
+    @Test
+    fun `resyncItem success clears the pending flag and stores the fetched signature`() = runTest {
+        // Pending alone drives the retry even though the signature matches;
+        // once the fetch lands, pending clears and the real signature is kept.
+        val freshSig = comparator.subtitleSignature(detail())
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(
+            subtitleSignature = freshSig,
+            subtitlesPending = 1,
+        )
+        writer.subtitlesResult = true
+
+        manager.resyncItem(
+            itemId,
+            options = ResyncOptions.of(ResyncCategory.SUBTITLES),
+        )
+
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals(0, slot.captured.syncSubtitlesPending)
+        assertEquals(freshSig, slot.captured.syncedSubtitleSignature)
+    }
+
+    @Test
+    fun `resyncItem keeps pending when the subtitle block never runs because the download row vanished`() = runTest {
+        // options include SUBTITLES but no download row -> downloadPath null -> the
+        // fetch block is skipped. Nothing was fetched, so the pending flag must
+        // survive instead of being silently cleared by the success default.
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(
+            subtitleSignature = comparator.subtitleSignature(detail()),
+            subtitlesPending = 1,
+        )
+        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns null
+
+        manager.resyncItem(
+            itemId,
+            options = ResyncOptions.ALL,
+        )
+
+        assertFalse(writer.calls.contains("downloadExternalSubtitles"))
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals(1, slot.captured.syncSubtitlesPending)
+    }
+
+    @Test
+    fun `resyncItem keeps pending when the fresh detail carries no media sources`() = runTest {
+        // The other un-attempted variant of the guard: freshSource == null
+        // (server responded without media sources) skips the block just the same.
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(
+            subtitleSignature = comparator.subtitleSignature(detail()),
+            subtitlesPending = 1,
+        )
+        coEvery { mediaRepository.getMediaDetail(itemId, any()) } returns Result.success(
+            detail().copy(mediaSources = emptyList()),
+        )
+
+        manager.resyncItem(
+            itemId,
+            options = ResyncOptions.of(ResyncCategory.SUBTITLES),
+        )
+
+        assertFalse(writer.calls.contains("downloadExternalSubtitles"))
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals(1, slot.captured.syncSubtitlesPending)
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     /** Records every sidecar write call so a test can assert which ran. */
@@ -289,6 +490,10 @@ class OfflineSyncManagerTest {
             return segmentsResult
         }
 
+        override suspend fun markSubtitlesPending(itemId: String) {
+            calls += "markSubtitlesPending"
+        }
+
         override fun enqueueDownload(downloadId: String) {
             calls += "enqueueDownload"
         }
@@ -319,14 +524,16 @@ class OfflineSyncManagerTest {
      *  change-gates fire (subtitle/trickplay "stale" -> resync re-fetches). */
     private fun baselineEntity(
         subtitleSignature: String? = "stale-sub-sig",
+        subtitlesPending: Int = 0,
         trickplaySignature: String? = "stale-trick-sig",
         segmentsSignature: String? = "stale-seg-sig",
+        metadataSignature: String? = comparator.metadataSignature(detail()),
         lastSyncedAt: Long? = 0L, // expired TTL by default so checks/resyncs don't short-circuit
     ): SyncBaselineEntity = SyncBaselineEntity(
         id = itemId,
         syncedPosterTag = "poster-1",
         syncedBackdropTag = "backdrop-1",
-        syncedMetadataSignature = comparator.metadataSignature(detail()),
+        syncedMetadataSignature = metadataSignature,
         syncedSubtitleSignature = subtitleSignature,
         syncedTrickplaySignature = trickplaySignature,
         syncedSegmentsSignature = segmentsSignature,
@@ -337,6 +544,7 @@ class OfflineSyncManagerTest {
         syncMediaChanged = 0,
         syncChecking = 0,
         syncError = 0,
+        syncSubtitlesPending = subtitlesPending,
     )
 
     private fun createTempDir(): File =

@@ -94,12 +94,13 @@ fun expressiveListShape(
 ): Shape {
     val key = "${index}_${count}_${outerRadius.value}_${innerRadius.value}"
     val cached = expressiveListShapeCache[key]
-    val base = if (cached != null) {
-        cached
-    } else {
-        val outer = outerRadius
-        val inner = innerRadius
-        val shape = when {
+    if (cached != null) {
+        return cached
+    }
+    val outer = outerRadius
+    val inner = innerRadius
+    val shape = SynthwaveDynamicShape(
+        when {
             count <= 1 -> AbsoluteSmoothCornerShape(outer, 60)
             index == 0 -> AbsoluteSmoothCornerShape(
                 cornerRadiusTL = outer,
@@ -122,11 +123,10 @@ fun expressiveListShape(
                 smoothnessAsPercentBR = 60,
             )
             else -> AbsoluteSmoothCornerShape(inner, 60)
-        }
-        expressiveListShapeCache.put(key, shape)
-        shape
-    }
-    return SynthwaveDynamicShape(base)
+        },
+    )
+    expressiveListShapeCache.put(key, shape)
+    return shape
 }
 
-private val expressiveListShapeCache = android.util.LruCache<String, AbsoluteSmoothCornerShape>(128)
+private val expressiveListShapeCache = android.util.LruCache<String, SynthwaveDynamicShape>(128)

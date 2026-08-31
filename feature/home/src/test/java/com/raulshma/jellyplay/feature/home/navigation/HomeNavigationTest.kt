@@ -63,35 +63,11 @@ class HomeNavigationTest {
     }
 
     @Test
-    fun onOfflineItemClick_series_navigatesToMediaDetail() {
-        val callbacks = buildTestCallbacks(navigator)
-        callbacks.onOfflineItemClick("series-1", MediaType.SERIES)
-
-        verify { navigator.navigate(Route.MediaDetail("series-1")) }
-    }
-
-    @Test
-    fun onOfflineItemClick_movie_navigatesToMediaDetail() {
-        val callbacks = buildTestCallbacks(navigator)
-        callbacks.onOfflineItemClick("movie-1", MediaType.MOVIE)
-
-        verify { navigator.navigate(Route.MediaDetail("movie-1")) }
-    }
-
-    @Test
     fun onSeerrItemClick_navigatesToSeerrDetail() {
         val callbacks = buildTestCallbacks(navigator)
         callbacks.onSeerrItemClick(12345, "movie")
 
         verify { navigator.navigate(Route.SeerrDetail(12345, "movie")) }
-    }
-
-    @Test
-    fun onSearchItemClick_navigatesToMediaDetail() {
-        val callbacks = buildTestCallbacks(navigator)
-        callbacks.onSearchItemClick("search-item-1")
-
-        verify { navigator.navigate(Route.MediaDetail("search-item-1")) }
     }
 
     @Test
@@ -113,7 +89,6 @@ class HomeNavigationTest {
     private fun buildTestCallbacks(
         navigator: Navigator,
         playOnStrategy: JellyfinRemotePlayCastStrategy? = null,
-        onPlayOnClick: () -> Unit = {},
         onModeChange: (HomeMode) -> Unit = {},
     ): HomeCallbacks {
         return HomeCallbacks(
@@ -134,19 +109,11 @@ class HomeNavigationTest {
                     navigator.navigate(Route.VideoPlayer(itemId, mediaSourceId, startPosition))
                 }
             },
-            onSettingsClick = { navigator.navigate(Route.Settings) },
-            onSyncPlayClick = { navigator.navigate(Route.SyncPlay) },
-            onDownloadsClick = { navigator.navigate(Route.Downloads) },
-            onPlayOnClick = onPlayOnClick,
             onOfflineLibraryClick = { navigator.navigate(Route.OfflineLibrary) },
-            onOfflineItemClick = { itemId, mediaType ->
-                navigator.navigate(Route.MediaDetail(itemId))
-            },
             onSeerrItemClick = { tmdbId, mediaType ->
                 navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
             },
             onModeChange = onModeChange,
-            onSearchItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
             onSearchSeerrClick = { tmdbId, mediaType ->
                 navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
             },

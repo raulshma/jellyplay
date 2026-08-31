@@ -50,6 +50,7 @@ class EngineCapabilityMatrixTest {
             caps.supportsAssOverride, caps.supportsAssStyleOverride, caps.supportsFontFamily,
             caps.supportsFreeFormColors, caps.supportsBorderStyles,
             caps.supportsSecondarySubtitles, caps.supportsScreenshot,
+            caps.supportsImageSubtitles,
         ).forEach { assertFalse("EXTERNAL must advertise no capabilities", it) }
     }
 
@@ -153,6 +154,18 @@ class EngineCapabilityMatrixTest {
         assertTrue(c.supportsFontFamily)
         assertTrue(c.supportsFreeFormColors)
         assertTrue(c.supportsBorderStyles)
+    }
+
+    // ── Image (bitmap) subtitle capability flag ──
+
+    @Test
+    fun imageSubtitles_mpvOnly() {
+        // Only mpv's libav decoders render external bitmap sidecars
+        // (PGS .sup / VobSub). Gates offline manifest side-loading.
+        assertTrue(EngineCapabilityMatrix.MPV.supportsImageSubtitles)
+        assertFalse(EngineCapabilityMatrix.EXO_PLAYER.supportsImageSubtitles)
+        assertFalse(EngineCapabilityMatrix.LIBVLC.supportsImageSubtitles)
+        assertFalse(EngineCapabilityMatrix.EXTERNAL.supportsImageSubtitles)
     }
 
     @Test

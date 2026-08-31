@@ -55,6 +55,7 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.isMusicTrack
+import com.raulshma.jellyplay.core.ui.feedback.UiText
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.R
@@ -67,6 +68,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
 import com.raulshma.jellyplay.feature.player.video.state.GesturePrefsState
 import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
+import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
 import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
@@ -88,14 +90,27 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 /** Minimum resolved duration (ms) before smart-download auto-cleanup may fire. */
 private const val MIN_DURATION_FOR_SMART_DELETE_MS = 5 * 60 * 1000L
+
+/**
+ * How long a next-episode load may hold its single-flight latch while waiting
+ * for the session to settle onto the new item before the button re-arms. Error
+ * paths release earlier via [SessionEvent.ShowError]; this backstop covers
+ * paths that change nothing (e.g. remote-play routing). Sized for the slowest
+ * network preset's timeout chain (VERY_RELAXED 60 s + failover retries).
+ */
+// internal so the latch tests can drive the scheduler by exactly this value.
+internal const val NEXT_EPISODE_SETTLE_TIMEOUT_MS = 90_000L
 
 // The process-death resume-position persistence (SavedStateHandle keys,
 // throttle/coalesce windows, the staleness threshold and the pure
@@ -239,6 +254,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val subtitlePreviewRepository: com.raulshma.jellyplay.feature.player.video.subtitle.SubtitlePreviewRepository,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
+    private val offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(VideoPlayerUiState())
@@ -306,6 +322,14 @@ class VideoPlayerViewModel @Inject constructor(
     )
     val resumeReminder: kotlinx.coroutines.flow.SharedFlow<Long> = _resumeReminder
 
+    /**
+     * True while a next-episode load is in flight and unsettled. The Up Next
+     * overlay disables its play button on this flag, so rapid re-taps can
+     * neither stack duplicate loads nor restart playback once per tap (#146).
+     */
+    private val _nextEpisodeLoading = MutableStateFlow(false)
+    val isNextEpisodeLoading: StateFlow<Boolean> = _nextEpisodeLoading.asStateFlow()
+
     private val playerSessionManager = PlayerSessionManager(
         context = context,
         scope = scope,
@@ -320,6 +344,8 @@ class VideoPlayerViewModel @Inject constructor(
         pipController = pipController,
         playbackSourceResolver = playbackSourceResolver,
         streamingSubtitleStore = streamingSubtitleStore,
+        offlineModeManager = offlineModeManager,
+        userMessageBus = userMessageBus,
     )
 
     // ── Engine-event orchestration ──────────────────────────────────────────
@@ -385,8 +411,19 @@ class VideoPlayerViewModel @Inject constructor(
         addExternalSubtitle = { playerSessionManager.addExternalSubtitle(it) },
         getMediaStreams = { _uiState.value.media.mediaStreams },
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
-        onMediaDetailRefreshed = { detail -> applyMediaDetailAndSourceState(detail) },
+        getCurrentSourceId = { playerSessionManager.sessionState.value.currentMediaSource?.id },
+        onMediaDetailRefreshed = { refresh -> applyMediaDetailAndSourceState(refresh) },
         getCurrentMediaDetail = { mediaDetail },
+        // allowSyntheticRow = true is deliberate here (it's the default, spelled
+        // out so the policy doesn't hinge on a distant parameter): for "is the
+        // downloaded row usable", a synthetic server row IS a usable answer —
+        // selecting it runs the selectServerTrack reload. This is the opposite
+        // of the auto-select path in TrackSelectionHelper, which excludes
+        // synthetic rows because it must never surprise-reload playback.
+        isSubtitleTrackAttached = { hint ->
+            trackSelectionHelper.findSubtitleOptionFor(hint, allowSyntheticRow = true) != null
+        },
+        isOffline = { offlineModeManager.isOffline },
     )
     internal val sleepTimer = SleepTimerController(
         sleepTimerManager = sleepTimerManager,
@@ -1074,6 +1111,14 @@ class VideoPlayerViewModel @Inject constructor(
                     videoMiniPlayerState.release()
                     release()
                     _closePlayer.trySend(Unit)
+                    // Re-arm the one-shot flag here too, not only via
+                    // performRelease's pipController.reset(): release() can
+                    // early-return on its idempotence latch (already-released
+                    // session), which used to leave pipDismissed=true stuck on
+                    // this @Singleton. The next player instance then read it as
+                    // its initial collected value and closed instantly
+                    // (issue #145, "can't start play on anything").
+                    pipController.clearPipDismissed()
                 }
             }
         }
@@ -1468,6 +1513,14 @@ class VideoPlayerViewModel @Inject constructor(
         subtitleStreamIndex: Int? = null,
         audioStreamIndex: Int? = null,
     ) {
+        // Defensive: PipController is a process @Singleton whose one-shot event
+        // flags outlive this Activity. A flag left set by an abnormally torn
+        // down previous session must never greet the next load — the fresh
+        // screen would react to it instantly and close (issue #145). Legitimate
+        // in-flight dismiss flows end in release + close, never a new
+        // initialize, so this cannot swallow a live signal.
+        pipController.clearPipDismissed()
+        pipController.consumeAutoExitPip()
         playbackSession.initialize(
             LoadRequest(
                 itemId = itemId,
@@ -2225,32 +2278,69 @@ class VideoPlayerViewModel @Inject constructor(
         val seriesId = detail.item.seriesId ?: return
         val seasonId = detail.item.seasonId ?: return
         val currentItemId = playerSessionManager.sessionState.value.currentItemId ?: return
+        // Single-flight latch (#146): every tap used to launch an independent
+        // resolve → mark-played → initialize chain. Offline, each stage blocked
+        // on a full network timeout, so re-taps landed minutes later as
+        // staggered teardown+reload passes — one visible restart per extra tap.
+        if (!_nextEpisodeLoading.compareAndSet(false, true)) return
         launch {
-            val episodes = resolveEpisodes(seriesId, seasonId)
-            val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
-            if (currentIndex < 0 || currentIndex + 1 >= episodes.size) return@launch
-            val next = episodes[currentIndex + 1]
-
-            // Auto-advancing is only reachable near the episode's end, so the
-            // current episode was effectively watched. Mark it played so it
-            // drops out of Continue Watching. This also covers the SyncPlay
-            // branch below, which bypasses [initialize] and its stopped-position
-            // report.
-            if (!cachedAggregate.videoPlayer.incognitoModeEnabled) {
-                runCatching { userDataMutator.setPlayed(currentItemId, played = true) }
-            }
-
-            if (syncPlayManager.isInSyncPlaySession) {
-                val group = syncPlayManager.currentGroup
-                val currentPlaylistItemId = group?.playingPlaylistItemId
-                val nextExistsInQueue = group?.playlistItemMap?.values?.contains(next.id) == true
-                if (currentPlaylistItemId != null && nextExistsInQueue) {
-                    syncPlay.sendNextItem(currentPlaylistItemId)
+            try {
+                val episodesResult = episodeCatalogue.loadSeasonEpisodes(
+                    seriesId,
+                    seasonId,
+                    playerSessionManager.sessionState.value.isOffline,
+                )
+                val episodes = episodesResult.getOrElse {
+                    // A failed resolution used to fall through to an empty list
+                    // and silently do nothing; tell the user instead.
+                    userMessageBus.error(UiText.Resource(R.string.player_video_error_next_episode_load))
                     return@launch
                 }
-            }
+                val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
+                if (currentIndex < 0 || currentIndex + 1 >= episodes.size) return@launch
+                val next = episodes[currentIndex + 1]
 
-            initialize(next.id, null, 0L)
+                // Auto-advancing is only reachable near the episode's end, so the
+                // current episode was effectively watched. Mark it played so it
+                // drops out of Continue Watching. This also covers the SyncPlay
+                // branch below, which bypasses [initialize] and its stopped-position
+                // report.
+                if (!cachedAggregate.videoPlayer.incognitoModeEnabled) {
+                    runCatching { userDataMutator.setPlayed(currentItemId, played = true) }
+                }
+
+                if (syncPlayManager.isInSyncPlaySession) {
+                    val group = syncPlayManager.currentGroup
+                    val currentPlaylistItemId = group?.playingPlaylistItemId
+                    val nextExistsInQueue = group?.playlistItemMap?.values?.contains(next.id) == true
+                    if (currentPlaylistItemId != null && nextExistsInQueue) {
+                        syncPlay.sendNextItem(currentPlaylistItemId)
+                        return@launch
+                    }
+                }
+
+                initialize(next.id, null, 0L)
+
+                // Keep holding the latch until the load actually settles — the
+                // session binds a different, non-null item or an error
+                // surfaces — so taps landing inside this window are ignored
+                // rather than queued as a second teardown+reload of the same
+                // episode (#146). The non-null guard matters: initialize()'s
+                // per-item teardown resets PlayerSessionState (currentItemId =
+                // null) BEFORE the pipeline rebinds the new item, and that
+                // transient must not read as "settled" — without it the latch
+                // releases the instant this line returns.
+                withTimeoutOrNull(NEXT_EPISODE_SETTLE_TIMEOUT_MS) {
+                    merge(
+                        playerSessionManager.sessionState.map {
+                            it.currentItemId != currentItemId && it.currentItemId != null
+                        },
+                        playbackSession.events.map { it is SessionEvent.ShowError },
+                    ).filter { settled -> settled }.first()
+                }
+            } finally {
+                _nextEpisodeLoading.value = false
+            }
         }
     }
 
@@ -2444,16 +2534,27 @@ class VideoPlayerViewModel @Inject constructor(
         imageUrlProvider.getImageUrl(itemId, maxWidth = maxWidth)
 
     /**
-     * Re-applies [mediaDetail] and refreshes the shared source/stream/aspect-ratio
-     * UiState fields after a subtitle download/upload adds a new stream. The
-     * duplicated inline block previously lived separately in [downloadSubtitle]
-     * and [uploadSubtitle]; folding it here lets [SubtitleManager] trigger the
-     * refresh via its [onMediaDetailRefreshed] callback without a hard VM
-     * reference.
+     * Re-applies a refreshed [MediaDetail] and refreshes the shared source/
+     * stream/aspect-ratio UiState fields after a subtitle download/upload adds
+     * a new stream — see [MediaDetailRefresh] for the per-field contract.
      */
-    private fun applyMediaDetailAndSourceState(detail: com.raulshma.jellyplay.core.model.MediaDetail) {
+    private fun applyMediaDetailAndSourceState(refresh: MediaDetailRefresh) {
+        val detail = refresh.detail
         applyMediaDetail(detail)
-        val source = detail.mediaSources.firstOrNull()
+        // One session entry point: sync the session manager FIRST so (a)
+        // mode/quality/stream-index reloads rebuild the side-loaded subtitle
+        // set from the refreshed detail instead of the pre-download snapshot,
+        // (b) the session collector re-publishes the refreshed streams instead
+        // of reverting the uiState write below to the stale ones — then
+        // side-load subtitle streams the download/upload attached server-side.
+        // On Direct Play (and offline playback) the picker is built purely
+        // from engine tracks, and the engine still holds the pre-change
+        // subtitle set — without this the new subtitle never surfaces and the
+        // "Use" action lands on an empty track list.
+        playerSessionManager.applyRefreshedDetail(detail, attachToEngine = refresh.attachToEngine)
+        // Match the session's source id so multi-version items publish the
+        // playing version's streams; offline falls back to the detail's first.
+        val source = playerSessionManager.matchedMediaSource(detail, fallbackToFirst = true)
         val streams = source?.mediaStreams ?: emptyList()
         _uiState.update { it.copy(
             media = it.media.copy(
@@ -2464,12 +2565,57 @@ class VideoPlayerViewModel @Inject constructor(
         ) }
         updatePipAspectRatio(streams)
         // Rebuild the audio/subtitle track options from the refreshed server
-        // streams. A subtitle download/upload attaches a new MediaStream server-
-        // side, but the engine's availableTracks flow only re-emits on an engine-
-        // level change — so without this call the newly attached subtitle never
-        // surfaces in the track picker (trackState.subtitleTracks) and the
-        // user couldn't apply it. `mergeServerStreams` picks it up here.
+        // streams. The side-load above re-emits the engine's availableTracks
+        // (its own collector re-runs this), but that emission is async — call
+        // it directly too so the picker updates immediately on transcode,
+        // where `mergeServerStreams` surfaces the stream without the engine.
         trackSelectionHelper.updateTracksFromEngine()
+        refresh.newSubtitleStreamIndex?.let { index ->
+            trackSelectionHelper.requestSubtitleSelection(
+                ReadySubtitleHint(
+                    trackId = externalSubtitleTrackId(index),
+                    serverStreamIndex = index,
+                ),
+            )
+        }
+    }
+
+    /**
+     * "Use" action for a downloaded-subtitle row: activates that subtitle as
+     * the current track. [rowKey] is the plain remote-subtitle id for Jellyfin
+     * rows and the composite `"{provider}:{id}"` key for external-provider
+     * rows — matching how [SubtitleManager] records its ready hints.
+     *
+     * Returns true when the subtitle was activated now; false when it has not
+     * surfaced yet (the side-load into the engine is asynchronous — mpv
+     * republishes its track list on a delay, ExoPlayer re-prepares the media
+     * item). In that case the ready hint is armed as a pending selection so it
+     * applies automatically on the next track-list emissions instead of the
+     * user having to re-tap "Use" — and callers should not navigate away from
+     * the download row.
+     */
+    fun useDownloadedSubtitle(rowKey: String): Boolean {
+        val hint = subtitles.state.value.readySubtitles[rowKey]
+        Log.d(
+            USE_LOG_TAG,
+            "Use pressed: rowKey=$rowKey, hint=$hint, playMethod=${playerSessionManager.sessionState.value.playMethod}, " +
+                "pickerRows=" + trackSelectionHelper.state.value.subtitleTracks
+                    .joinToString { "(i=${it.index},id=${it.id},si=${it.streamIndex},sel=${it.isSelected},'${it.label.take(24)}')" },
+        )
+        if (hint == null) {
+            userMessageBus.info("Subtitle not active yet — please try again shortly")
+            return false
+        }
+        val option = trackSelectionHelper.findSubtitleOptionFor(hint)
+        Log.d(USE_LOG_TAG, "Resolution: ${option?.let { "index=${it.index} id=${it.id}" } ?: "<none>"}")
+        if (option == null) {
+            trackSelectionHelper.requestSubtitleSelection(hint)
+            userMessageBus.info("Subtitle still loading — it will be selected automatically")
+            return false
+        }
+        selectSubtitleTrack(option)
+        userMessageBus.info("Subtitle selected")
+        return true
     }
 
     // endregion
@@ -2727,5 +2873,12 @@ class VideoPlayerViewModel @Inject constructor(
 
     private companion object {
         const val TAG = "VideoPlayerViewModel"
+
+        /**
+         * Shared tag across the whole "downloaded subtitle → Use → activate"
+         * chain (VM, session manager, engines) so one logcat filter captures
+         * the full path: `adb logcat -s SubtitleUse`.
+         */
+        const val USE_LOG_TAG = "SubtitleUse"
     }
 }

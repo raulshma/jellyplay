@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
@@ -19,6 +20,8 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.UserDataChange
+import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
+import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
@@ -33,6 +36,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -105,6 +109,9 @@ class HomeRefresherTest {
     /** Backs the androidTvWatchNextEnabledProvider handed to the refresher. */
     private var androidTvWatchNextEnabled = true
 
+    /** Backs the directArrEnabledProvider handed to the refresher. */
+    private var directArrEnabled = false
+
     /**
      * Fake for the refresher's `awaitOutboxDrained` seam: counts invocations
      * and (while [drainGate] is set) parks, so GoingOnline tests can observe
@@ -162,7 +169,7 @@ class HomeRefresherTest {
                 drainCalls++
                 drainGate?.await()
             },
-            planProvider = {
+            sectionPrefsProvider = {
                 HomeSectionPrefs(
                     query = HomeSectionQuery(),
                     homeSectionOrder = HomeSectionType.CONFIGURABLE,
@@ -171,7 +178,7 @@ class HomeRefresherTest {
             },
             seerrPreferencesProvider = { SeerrPreferences() },
             discoverEnabledProvider = { false },
-            directArrEnabledProvider = { false },
+            directArrEnabledProvider = { directArrEnabled },
             androidTvWatchNextEnabledProvider = { androidTvWatchNextEnabled },
         ).also { refresher = it }
     }
@@ -503,35 +510,81 @@ class HomeRefresherTest {
     }
 
     @Test
+    fun wentOnlineSpontaneously_drainsOutboxBeforeFetch_andRepopulatesSections() = runTest {
+        // Regression pin: an external/auto offline→online flip (the nav ⋮
+        // "Go Online" toggles the manager directly from the app shell;
+        // auto-detect flips OFFLINE_AUTO→ONLINE on network return) lands in
+        // the observer WITHOUT a GoingOnline request. That transition used to
+        // mirror the field only — after the offline content drop the home sat
+        // on "No content available" until a manual refresh or the next
+        // periodic tick. Every reconnect must run the same drain+fetch
+        // handshake as the user-initiated one.
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1")))),
+            ),
+        )
+        val refresher = buildRefresher()
+        runCurrent()
+
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent() // ONLINE→offline: content dropped
+        assertTrue(refresher.state.value.sections.isEmpty())
+
+        drainGate = CompletableDeferred()
+        offlineModeFlow.value = OfflineMode.ONLINE // spontaneous — NO GoingOnline request
+        runCurrent()
+
+        // Mid-handshake: full-screen loader up, outbox draining, fetch
+        // strictly not started (same ordering contract as the user-initiated
+        // handshake so Continue Watching reflects the server's post-sync state).
+        assertTrue(refresher.state.value.isLoading)
+        assertEquals(1, drainCalls)
+        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+
+        drainGate!!.complete(Unit)
+        runCurrent()
+
+        assertFalse(refresher.state.value.isLoading)
+        assertFalse(refresher.state.value.isGoingOnline)
+        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), any()) }
+        assertTrue(refresher.state.value.sections.isNotEmpty())
+        refresher.stop()
+    }
+
+    @Test
     fun wentOffline_dropsCachedOnlineContent() = runTest {
         coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
             HomeSectionsResult(
                 sections = listOf(section(HomeSectionType.LATEST_MEDIA, items = listOf(item("m1")))),
             ),
         )
+        // *arr row rides the same drop as discover: its cards route to
+        // Seerr/TMDB, unreachable offline.
+        directArrEnabled = true
+        coEvery { arrRepository.refreshCalendar(any(), any()) } returns Result.success(Unit)
+        coEvery { arrRepository.calendar(any(), any()) } returns flowOf(
+            listOf(ArrCalendarItem(title = "Coming", mediaType = ArrMediaType.MOVIE)),
+        )
         val refresher = buildRefresher()
         runCurrent()
         refresher.fetchOnce()
         runCurrent()
         assertTrue(refresher.state.value.sections.isNotEmpty())
+        assertTrue(refresher.state.value.recentlyGrabbed.isNotEmpty())
 
         // Production path: the manager flips the mode and the refresher's own
-        // observer reacts — cached online sections + discover rows dropped,
-        // going-online spinner (if any) cleared.
+        // observer reacts — cached online sections + discover rows + the *arr
+        // row dropped, going-online spinner (if any) cleared. The
+        // offline→online side of this transition (including the spontaneous
+        // flavour) is pinned by
+        // wentOnlineSpontaneously_drainsOutboxBeforeFetch_andRepopulatesSections.
         offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
         runCurrent()
         assertTrue(refresher.state.value.sections.isEmpty())
         assertTrue(refresher.state.value.discoverSections.isEmpty())
+        assertTrue(refresher.state.value.recentlyGrabbed.isEmpty())
         assertFalse(refresher.state.value.isGoingOnline)
-
-        // Spontaneous offline→online mirror-only semantics: re-flipping
-        // online WITHOUT a GoingOnline request must not run the handshake
-        // (no extra fetch) — the content drop only ever comes from the
-        // offline-mode observer above.
-        offlineModeFlow.value = OfflineMode.ONLINE
-        runCurrent()
-        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), any()) }
-        assertTrue(refresher.state.value.sections.isEmpty())
         refresher.stop()
     }
 

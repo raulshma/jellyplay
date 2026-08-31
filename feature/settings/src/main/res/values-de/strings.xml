@@ -158,6 +158,13 @@
     <string name="settings_update_available">Update verfügbar: v%1$s</string>
     <string name="settings_up_to_date">Auf dem neuesten Stand (v%1$s)</string>
     <string name="settings_check_for_updates">Nach Updates suchen</string>
+    <string name="settings_update_dismiss_title">Verworfene Updates ausblenden für</string>
+    <string name="settings_update_dismiss_subtitle">Wie lange ein mit „Später“ verworfenes Update ausgeblendet bleibt</string>
+    <string name="settings_update_dismiss_12_hours">12 Stunden</string>
+    <string name="settings_update_dismiss_24_hours">24 Stunden</string>
+    <string name="settings_update_dismiss_3_days">3 Tage</string>
+    <string name="settings_update_dismiss_1_week">1 Woche</string>
+    <string name="settings_update_dismiss_never">Dieses Update nie zeigen</string>
     <string name="settings_acknowledgements">Danksagung</string>
 
     <!-- NotificationSettingsScreen.kt -->
@@ -369,24 +376,12 @@
     <string name="settings_appearance_title">Erscheinungsbild</string>
     <string name="settings_reset_defaults_cd">Auf Standardwerte zurücksetzen</string>
     <string name="settings_theme">Design</string>
-    <string name="settings_synthwave_accent">Synthwave (%1$s)</string>
-    <string name="settings_soothing_accent">Soothing (%1$s)</string>
-    <string name="settings_monochrome_nothing">Monochrome (Nothing Phone)</string>
     <string name="settings_artwork_dynamic">Dynamisches Artwork</string>
     <string name="settings_theme_mode">Designmodus</string>
-    <string name="settings_overridden_synthwave">Durch Synthwave-Modus überschrieben</string>
-    <string name="settings_overridden_soothing">Durch Soothing-Modus überschrieben</string>
-    <string name="settings_overridden_monochrome">Durch Monochrome-Modus überschrieben</string>
     <string name="settings_theme_follow_system">Systemeinstellung folgen</string>
     <string name="settings_theme_always_light">Immer hell</string>
     <string name="settings_theme_always_dark">Immer dunkel</string>
     <string name="settings_theme_scheduled">Auto Tag/Nacht (%1$d:00\u2013%2$d:00)</string>
-    <string name="settings_synthwave_mode">Synthwave-Modus</string>
-    <string name="settings_synthwave_mode_subtitle">Retro-futuristisches Neon-Design mit scharfen Ecken anwenden</string>
-    <string name="settings_soothing_mode">Soothing-Modus</string>
-    <string name="settings_soothing_mode_subtitle">Ruhiges, Facebook-inspiriertes Design mit weichen abgerundeten Ecken anwenden</string>
-    <string name="settings_monochrome_mode">Monochrome-Modus</string>
-    <string name="settings_monochrome_mode_subtitle">Strenges Schwarz/Weiß-Design inspiriert von Nothing OS anwenden</string>
     <string name="settings_dynamic_theming">Dynamische Designs</string>
     <string name="settings_dynamic_theming_subtitle">Aus Artwork extrahierte Farben</string>
     <string name="settings_oled_mode">OLED-Modus</string>
@@ -1209,10 +1204,6 @@
     <string name="ss_theme_scheduler_subtitle">Automatisch zwischen hellem und dunklem Design nach Tageszeit wechseln</string>
     <string name="ss_theme_mode_title">Designmodus</string>
     <string name="ss_theme_mode_subtitle">Systemeinstellung folgen, heller oder dunkler Modus</string>
-    <string name="ss_synthwave_mode_title">Synthwave-Modus</string>
-    <string name="ss_synthwave_mode_subtitle">Retro-futuristisches Neon-Design mit scharfen Kanten</string>
-    <string name="ss_soothing_mode_title">Sanfter Modus</string>
-    <string name="ss_soothing_mode_subtitle">Sanftes, an Facebook angelehntes Styling mit abgerundeten Ecken</string>
     <string name="ss_dynamic_theming_title">Dynamische Designs</string>
     <string name="ss_dynamic_theming_subtitle">Farben werden dynamisch aus dem Artwork der laufenden Medien extrahiert</string>
     <string name="ss_oled_mode_title">OLED-Modus</string>
@@ -1267,8 +1258,6 @@
     <string name="ss_blue_light_filter_subtitle">Bildschirm bernsteinfarben tönen, um die Augenbelastung nachts zu verringern</string>
     <string name="ss_blue_light_strength_title">Blaulichtfilter-Stärke</string>
     <string name="ss_blue_light_strength_subtitle">Intensität der Bernstein-Überlagerung</string>
-    <string name="ss_monochrome_mode_title">Monochrom-Modus</string>
-    <string name="ss_monochrome_mode_subtitle">Strenges Schwarz-/Weiß-Design, inspiriert von Nothing OS, anwenden</string>
     <string name="ss_hide_search_history_title">Suchverlauf ausblenden</string>
     <string name="ss_hide_search_history_subtitle">Letzten Suchverlauf auf dem Suchbildschirm ausblenden</string>
     <string name="ss_scheduled_start_title">Geplante Design-Startzeit</string>
@@ -1663,4 +1652,12 @@
     <string name="ss_subtitle_provider_settings_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
     <string name="ss_MEDIA_CARD_PEEK_title">Drück-Halte-Vorschau</string>
     <string name="ss_MEDIA_CARD_PEEK_subtitle">Lange auf eine Medienkarte drücken, um eine weichgezeichnete Detailvorschau zu sehen; Loslassen zum Schließen</string>
+    <string name="settings_theme_style">Designstil</string>
+    <string name="settings_theme_style_subtitle">Vollständigen Look wählen — Standard, Synthwave, Soothing, Monochrome, Vivid, Aurora, Sakura oder Vector Pop</string>
+    <string name="settings_style_summary">%1$s (%2$s)</string>
+    <string name="settings_overridden_variant">Überschrieben durch %1$s</string>
+    <string name="ss_theme_style_title">Designstil</string>
+    <string name="ss_theme_style_subtitle">Design-Look wählen: Standard, Synthwave, Soothing, Monochrome, Vivid, Aurora, Sakura oder Vector Pop</string>
+    <string name="ss_style_accent_title">Designstil-Akzent</string>
+    <string name="ss_style_accent_subtitle">Akzentfarbe für den aktiven Designstil</string>
 </resources>
