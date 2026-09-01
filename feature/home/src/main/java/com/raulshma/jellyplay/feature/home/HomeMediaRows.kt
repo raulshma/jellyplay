@@ -85,13 +85,16 @@ import kotlinx.coroutines.flow.flowOf
  * with `clipToBounds = false` so items and their elevation bleed past the edges.
  */
 /**
- * Home row for the offline-derived poster-card sections
- * ([HomeSectionType.DOWNLOADED]): the same chrome as [HomeMediaRow] — title,
- * card width, spacing, TV/mobile scroller, focus wiring — but cards render via
- * [OfflineMediaCard] so artwork resolves from local files and no server image
- * URL is ever built (issue #147: the offline home is the normal home,
- * populated from downloads). The offline Continue Watching / Next Up rows
- * render through [ContinueWatchingRow] with local-file resolvers instead.
+ * Home row for the offline-derived poster-card sections: the same chrome as
+ * [HomeMediaRow] — title, card width, spacing, TV/mobile scroller, focus
+ * wiring — but cards render via [OfflineMediaCard] so artwork resolves from
+ * local files and no server image URL is ever built (issue #147: the offline
+ * home is the normal home, populated from downloads). Rows are either generic
+ * ([HomeSectionType.DOWNLOADED]) or cached-layout mirror rows typed as their
+ * online counterparts; the latter pass [onSectionLongClick] so the section
+ * configure affordance matches the online rows. The offline Continue Watching
+ * / Next Up rows render through [ContinueWatchingRow] with local-file
+ * resolvers instead.
  */
 @Composable
 internal fun OfflineHomeMediaRow(
@@ -102,6 +105,7 @@ internal fun OfflineHomeMediaRow(
     focusRequester: FocusRequester? = null,
     onRowFocused: (() -> Unit)? = null,
     clippingEnabled: Boolean = false,
+    onSectionLongClick: (() -> Unit)? = null,
     // TV-only: reports the D-pad-focused item so the screen's Menu key can
     // open its quick actions (the offline card's own long-press handles touch).
     onFocusedItemChange: ((MediaItem) -> Unit)? = null,
@@ -112,7 +116,7 @@ internal fun OfflineHomeMediaRow(
         HomeRowTitle(
             title = title,
             contentPad = metrics.contentPad,
-            onLongClick = null,
+            onLongClick = onSectionLongClick,
         )
         HomeItemRow(
             items = items,

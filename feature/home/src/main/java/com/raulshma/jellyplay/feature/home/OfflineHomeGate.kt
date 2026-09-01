@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
 import kotlinx.coroutines.CoroutineScope
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
@@ -38,12 +40,17 @@ import kotlinx.coroutines.launch
  * so they are collected ONLY while the gate is open (any offline mode, or an
  * online fetch that failed leaving nothing to show); the upstream collection
  * is cancelled while the online home renders.
+ *
+ * [homeLayoutProvider] supplies the cached online home layout (see
+ * [OfflineHomeState.cachedLayout]) — one suspend read per gate open, not per
+ * library emission.
  */
 internal class OfflineHomeGate(
     scope: CoroutineScope,
     offlineMode: Flow<OfflineMode>,
     offlineRepository: OfflineRepository,
     fetchFailedEmpty: Flow<Boolean>,
+    homeLayoutProvider: suspend () -> List<HomeSection> = { emptyList() },
 ) {
     private val _state = MutableStateFlow(OfflineHomeState())
     val state: StateFlow<OfflineHomeState> = _state.asStateFlow()
@@ -104,15 +111,43 @@ internal class OfflineHomeGate(
                     _state.update { it.copy(offlineEpisodes = episodes) }
                 }
         }
+
+        // Cached online layout under the SAME gate: one provider read per
+        // gate open (a single indexed Room row — far cheaper than a library
+        // emission, so it lands before the first library item in practice).
+        // Cleared when the gate closes so a return online never renders a
+        // stale offline layout.
+        @OptIn(ExperimentalCoroutinesApi::class)
+        scope.launch {
+            gate
+                .flatMapLatest { gate ->
+                    if (gate.isCollecting) {
+                        flow { emit(homeLayoutProvider()) }
+                    } else {
+                        flowOf(emptyList())
+                    }
+                }
+                .distinctUntilChanged()
+                .collect { layout ->
+                    _state.update { it.copy(cachedLayout = layout) }
+                }
+        }
     }
 }
 
-/** The module's whole output: the render decision plus both offline lists. */
+/** The module's whole output: the render decision plus both offline lists and the cached layout. */
 @Immutable
 internal data class OfflineHomeState(
     val renderSource: HomeRenderSource = HomeRenderSource.Online,
     val offlineLibrary: List<OfflineMediaItem> = emptyList(),
     val offlineEpisodes: List<OfflineMediaItem> = emptyList(),
+    /**
+     * The cached online home layout (issue #147): section types, titles,
+     * per-library rows and order from the last successful online fetch. Empty
+     * when no snapshot exists — the offline home then falls back to its
+     * generic derived rows.
+     */
+    val cachedLayout: List<HomeSection> = emptyList(),
 )
 
 /**

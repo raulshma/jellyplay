@@ -458,7 +458,15 @@ internal fun HomeContentList(
                     } else null
                 }
 
-                if (section.type == HomeSectionType.DOWNLOADED) {
+                // While the offline feed renders, every non-wide section is
+                // offline-derived (generic DOWNLOADED rows or cached-layout
+                // mirror rows typed as their online counterparts — #147), so
+                // they all render through the offline poster-card row with
+                // local artwork. Online, only a DOWNLOADED section could ever
+                // hit this branch (defensive — the online feed has none).
+                if (section.type == HomeSectionType.DOWNLOADED ||
+                    (offlineContent != null && section.type != HomeSectionType.CONTINUE_WATCHING && section.type != HomeSectionType.NEXT_UP)
+                ) {
                     // Offline-derived section (see buildOfflineHomeSections):
                     // re-resolve the offline originals by id (shared lookup
                     // above) so the cards render local artwork; clicks go to
@@ -475,6 +483,10 @@ internal fun HomeContentList(
                         focusRequester = rowFocusRequesters[index],
                         onRowFocused = { homeFocusRow = index },
                         clippingEnabled = state.experimentalCardClippingEnabled,
+                        // Mirrored rows keep their online counterparts'
+                        // long-press configure affordance (configurable types
+                        // only — same gate as the online branch).
+                        onSectionLongClick = sectionLongClick,
                         onFocusedItemChange = callbacks.onFocusedMediaItem,
                     )
                 } else if (section.type == HomeSectionType.CONTINUE_WATCHING || section.type == HomeSectionType.NEXT_UP) {

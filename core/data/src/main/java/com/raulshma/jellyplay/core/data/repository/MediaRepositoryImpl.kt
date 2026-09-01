@@ -351,6 +351,17 @@ class MediaRepositoryImpl @Inject constructor(
         return withContext(Dispatchers.Default) { entity.payload }
     }
 
+    override suspend fun getOfflineHomeLayout(): HomeSectionsResult? {
+        val identity = homeSession.currentIdentity() ?: return null
+        // Key-agnostic latest row and no freshness ceiling, by contract (see
+        // the interface KDoc): the offline home re-filters membership against
+        // the offline store, so staleness only costs section ORDER/titles,
+        // never content. Decode off the caller's dispatcher like the SWR read.
+        val entity = homeSectionCacheDao.getLatestForIdentity(identity.serverId, identity.userId)
+            ?: return null
+        return withContext(Dispatchers.Default) { entity.payload }
+    }
+
     private suspend fun persistHomeSectionsSnapshot(cacheKey: String, result: HomeSectionsResult) {
         val identity = homeSession.currentIdentity() ?: return
         runCatching {

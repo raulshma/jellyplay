@@ -37,6 +37,19 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         query: HomeSectionQuery = HomeSectionQuery(),
     ): HomeSectionsResult?
 
+    /**
+     * The most recently persisted home-sections snapshot for the current
+     * (server, user), across cacheKeys and with NO staleness ceiling — the
+     * offline home's LAYOUT mirror (issue #147): the section types, titles,
+     * per-library rows and order the user last saw online, which the offline
+     * home reproduces filtered to downloaded items. Even a snapshot older
+     * than the SWR ceiling is a better layout source than the generic
+     * offline fallback rows; membership is re-filtered against the offline
+     * store at consumption, so stale items simply drop out. Null when no
+     * snapshot exists for the identity (fresh install, cleared data).
+     */
+    suspend fun getOfflineHomeLayout(): HomeSectionsResult?
+
     /** Library folders. [force] bypasses the folders cache for this read. */
     suspend fun getLibraryFolders(force: Boolean = false): Result<List<LibraryFolder>>
 

@@ -127,7 +127,15 @@ class OfflineRepositoryImpl @Inject constructor(
 
     override fun getOfflineEpisodes(): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getDownloadedEpisodes().flatMapLatest { rows ->
-            rowsWithDownloadsAndArtwork(rows)
+            // No series-backdrop substitution here (issue #147 image parity):
+            // this flow feeds ONLY the offline home's Continue Watching / Next
+            // Up rows, whose online counterparts ask the server for the
+            // EPISODE's backdrop and fall back to its primary thumb. Keeping
+            // the episode's own backdrop (or null) makes the offline wide card
+            // fall back to the episode primary through the same chain, instead
+            // of showing the series backdrop the online row never shows. The
+            // detail hero keeps the substitution — see resolveEpisodeArtwork.
+            rowsWithDownloadsAndArtwork(rows, episodeSeriesArtworkFallback = false)
         }.distinctUntilChanged()
 
     /**
@@ -208,16 +216,23 @@ class OfflineRepositoryImpl @Inject constructor(
      * episodes, children). The downloads lookup is chunked: SQLite on Android
      * < 12 caps host variables at 999, and the episode paths can exceed that
      * on long-running libraries.
+     *
+     * [episodeSeriesArtworkFallback] toggles the episode→series artwork
+     * substitution (see [resolveEpisodeArtwork]); only the offline home's
+     * episodes flow passes false — see [getOfflineEpisodes].
      */
     private fun rowsWithDownloadsAndArtwork(
         rows: List<OfflineMediaWithPlayback>,
+        episodeSeriesArtworkFallback: Boolean = true,
     ): Flow<List<OfflineMediaItem>> {
         val baseItems = rows.map { it.toOfflineMediaItem() }
         if (baseItems.isEmpty()) return flowOf(emptyList())
         return downloadsByItemIdsFlow(baseItems.map { it.id })
             .map { downloadMap -> baseItems.map { it.withDownload(downloadMap[it.id]) } }
             .distinctUntilChanged()
-            .flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+            .flatMapLatest { items ->
+                flow { emit(resolveArtworkList(items, episodeSeriesArtworkFallback)) }
+            }
     }
 
     private fun downloadsByItemIdsFlow(ids: List<String>): Flow<Map<String, DownloadEntity>> =
@@ -610,7 +625,7 @@ class OfflineRepositoryImpl @Inject constructor(
      * table writes, not per recomposition.
      */
     private suspend fun resolveItemArtwork(item: OfflineMediaItem): OfflineMediaItem =
-        resolveItemArtwork(item, artworkInputKey(item), SeriesPrefetch())
+        resolveItemArtwork(item, artworkInputKey(item, episodeSeriesArtworkFallback = true), SeriesPrefetch())
 
     /**
      * Memoization seam for the artwork pass: everything the resolver reads
@@ -619,10 +634,12 @@ class OfflineRepositoryImpl @Inject constructor(
      * Byte-count-only download progress ticks — the 2 s cadence during active
      * transfers — never appear in the key, which is what keeps ~1000 stats +
      * 2 queries per tick off the offline screen. Only the download's
-     * completed-ness is keyed, not the full status: artwork appears beside
-     * the file when the download completes, so COMPLETED↔not transitions must
+     * completed-ness is keyed, not the full status: artwork appears beside the
+     * file when the download completes, so COMPLETED↔not transitions must
      * re-resolve — but a PAUSED↔DOWNLOADING flip changes nothing the resolver
-     * reads and keeps the memo hit.
+     * reads and keeps the memo hit. [episodeSeriesArtworkFallback] is keyed
+     * because the same episode resolves differently in the home episodes flow
+     * (own artwork only) vs the detail paths (series substitution).
      */
     private data class ArtworkInputKey(
         val id: String,
@@ -632,6 +649,7 @@ class OfflineRepositoryImpl @Inject constructor(
         val backdropPath: String?,
         val downloadPath: String?,
         val downloadIsComplete: Boolean,
+        val episodeSeriesArtworkFallback: Boolean,
         val cast: List<OfflinePersonInfo>,
     )
 
@@ -641,7 +659,7 @@ class OfflineRepositoryImpl @Inject constructor(
         val cast: List<OfflinePersonInfo>,
     )
 
-    private fun artworkInputKey(item: OfflineMediaItem) = ArtworkInputKey(
+    private fun artworkInputKey(item: OfflineMediaItem, episodeSeriesArtworkFallback: Boolean) = ArtworkInputKey(
         id = item.id,
         mediaType = item.mediaType,
         seriesId = item.seriesId,
@@ -649,6 +667,7 @@ class OfflineRepositoryImpl @Inject constructor(
         backdropPath = item.backdropPath,
         downloadPath = item.downloadPath,
         downloadIsComplete = item.downloadStatus == DownloadStatus.COMPLETED,
+        episodeSeriesArtworkFallback = episodeSeriesArtworkFallback,
         cast = item.cast,
     )
 
@@ -684,7 +703,11 @@ class OfflineRepositoryImpl @Inject constructor(
         val ownPoster = ownDir?.let { localArtifactOrNull(it, DownloadArtifacts.posterFile(item.id)) }
         val ownBackdrop = ownDir?.let { localArtifactOrNull(it, DownloadArtifacts.backdropFile(item.id)) }
         val (resolvedPoster, resolvedBackdrop) = when (item.mediaType) {
-            MediaType.EPISODE -> resolveEpisodeSeriesArtwork(item, ownPoster, ownBackdrop, prefetch)
+            MediaType.EPISODE -> if (key.episodeSeriesArtworkFallback) {
+                resolveEpisodeArtwork(item, ownPoster, ownBackdrop, prefetch)
+            } else {
+                ownPoster to ownBackdrop
+            }
             MediaType.SERIES -> resolveSeriesArtwork(item, ownPoster, ownBackdrop, prefetch)
             else -> ownPoster to ownBackdrop
         }
@@ -717,10 +740,13 @@ class OfflineRepositoryImpl @Inject constructor(
      * to `offline_media`/`downloads` — i.e. continuously during active
      * downloads — so the `File.exists()` stats must stay off Main.
      */
-    private suspend fun resolveArtworkList(items: List<OfflineMediaItem>): List<OfflineMediaItem> {
+    private suspend fun resolveArtworkList(
+        items: List<OfflineMediaItem>,
+        episodeSeriesArtworkFallback: Boolean = true,
+    ): List<OfflineMediaItem> {
         if (items.isEmpty()) return items
         return withContext(Dispatchers.IO) {
-            val keys = items.map(::artworkInputKey)
+            val keys = items.map { artworkInputKey(it, episodeSeriesArtworkFallback) }
             // Snapshot each entry ONCE: a second get() after the all-cached
             // check could miss (a concurrent collector's puts evicting LRU
             // entries between the two reads) and trip the non-null assertion.
@@ -809,9 +835,12 @@ class OfflineRepositoryImpl @Inject constructor(
      * path, then the series artifact found beside the episode dir) since
      * Jellyfin rarely carries a backdrop per episode and the online detail
      * hero resolves to the series backdrop. The item's own poster/backdrop
-     * (passed in) win when present.
+     * (passed in) win when present. Only the detail/read paths use this —
+     * the offline home's episodes flow resolves own artwork only (see
+     * [getOfflineEpisodes]) so its Continue Watching cards match the online
+     * row's backdrop→primary fallback chain.
      */
-    private suspend fun resolveEpisodeSeriesArtwork(
+    private suspend fun resolveEpisodeArtwork(
         item: OfflineMediaItem,
         ownPoster: String?,
         ownBackdrop: String?,

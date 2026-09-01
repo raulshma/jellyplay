@@ -166,16 +166,21 @@ class DownloadDelegate @Inject constructor(
                         // Filenames are keyed by mediaItemId so items sharing the
                         // flat downloads dir don't overwrite each other.
                         //
-                        // Episodes persist NO backdrop of their own: Jellyfin
-                        // usually has no Backdrop image for an episode, so the
-                        // download 404s and the persisted path falls back to a
-                        // remote URL that only renders offline when Coil's cache
-                        // happens to hold it. The online detail screen resolves
-                        // episode heroes to the SERIES backdrop instead, so the
-                        // offline row leaves backdropPath null and
-                        // OfflineRepositoryImpl.getOfflineDetail substitutes the
-                        // series' local backdrop at load time (the same result
-                        // with a deterministic local file behind it).
+                        // Episodes attempt their own Backdrop too (issue #147
+                        // image parity): the online Continue Watching row asks
+                        // the server for the episode's Backdrop and falls back
+                        // to its Primary thumb, so the offline CW row must be
+                        // able to resolve the same episode-level backdrop. When
+                        // the server has none (the common case — Jellyfin rarely
+                        // carries a backdrop per episode) the fetch returns null
+                        // and the row's backdropPath STAYS null: the offline home
+                        // episodes flow then skips the series-backdrop
+                        // substitution (see OfflineRepositoryImpl.getOfflineEpisodes)
+                        // so the wide card falls back to the episode's own
+                        // primary, matching the online fallback chain. The
+                        // offline DETAIL hero still substitutes the series
+                        // backdrop via resolveEpisodeArtwork — the same
+                        // image the online detail hero resolves to.
                         val parentDir = java.io.File(downloadItem.downloadPath).parentFile
                         val localPoster = if (parentDir != null) {
                             writer.downloadOfflineImage(
@@ -185,12 +190,12 @@ class DownloadDelegate @Inject constructor(
                         } else {
                             request.imageUrl
                         }
-                        val localBackdrop = if (!isEpisode && parentDir != null) {
+                        val localBackdrop = if (parentDir != null) {
                             val backdropUrl = playbackRepository.getBackdropUrl(request.mediaItemId, maxWidth = 1280)
                             writer.downloadOfflineImage(
                                 request.mediaItemId, "Backdrop", 1280, parentDir,
                                 com.raulshma.jellyplay.core.data.repository.DownloadArtifacts.backdropFile(request.mediaItemId),
-                            ) ?: backdropUrl
+                            ) ?: if (isEpisode) null else backdropUrl
                         } else {
                             null
                         }
