@@ -76,6 +76,17 @@ jobs:
         # blank lines left by the dev/v0.10.7 merge made bash die on an
         # orphaned ":shared:feature:editor:jvmJar" fragment (exit 127) after
         # gradle itself had gone green on the truncated task list.
+        # And NO `#` comments inside the scalar either: they fold into the
+        # single command line, bash then treats them and EVERYTHING after as
+        # a shell comment, and the trailing --max-workers/heap overrides
+        # silently never reach gradle — which is why the first two OOM-fix
+        # attempts were no-ops while the build kept dying at the same
+        # "Not enough memory" compiler error. The overrides are runner-sized
+        # because gradle.properties is tuned for an 18-core dev box (6g
+        # daemon, 12 workers) and OOMs the Kotlin daemon on 4-core runners
+        # across the full multi-target graph (same medicine codeql.yml
+        # takes); the full graph only started running on CI at all once the
+        # blank-line bug above was fixed.
         run: >
           ./gradlew
           :shared:core:model:jvmJar
@@ -152,11 +163,6 @@ jobs:
           :shared:feature:player-video:compileAndroidMain
           :apps:web:compileKotlinWasmJs
           --stacktrace
-          # gradle.properties is tuned for an 18-core dev box (6g daemon,
-          # 12 workers); 4-core runners OOM the Kotlin daemon on the full
-          # task graph — same overrides codeql.yml uses. The full graph only
-          # started running on CI once the folded-scalar blank-line bug was
-          # fixed; before that gradle silently built a truncated task list.
           --max-workers=2
           "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
           "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
