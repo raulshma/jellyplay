@@ -16,8 +16,15 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Keyed on the HEAD BRANCH, not github.ref: pushing kmp-alpha with an open
+# PR fires BOTH the push event (ref refs/heads/kmp-alpha) and pull_request
+# synchronize (ref refs/pull/N/merge) — distinct github.ref values meant the
+# cancel-in-progress guard never matched and every commit built the full
+# matrix twice. Head-branch keying makes both events share one group; the
+# surviving run's checks attach to the commit SHA either way, so the PR still
+# reports them.
 concurrency:
-  group: kmp-build-${{ github.ref }}
+  group: kmp-build-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 # bash on every OS: pwsh choked on the folded multi-line Gradle invocations
