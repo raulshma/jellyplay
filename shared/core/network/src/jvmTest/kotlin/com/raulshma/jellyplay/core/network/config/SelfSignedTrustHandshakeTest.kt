@@ -92,10 +92,24 @@ class SelfSignedTrustHandshakeTest {
     }
 
     private fun canonicalAddress(server: MockWebServer): String =
-        "https://${server.hostName}:${server.port}"
+        "https://127.0.0.1:${server.port}"
+
+    /**
+     * The request URL with the host pinned to the IPv4 literal the server is
+     * bound to. MockWebServer's own `url()` builds from `hostName`, which for
+     * an InetAddress-bound server REVERSE-RESOLVES: "127.0.0.1" on Windows,
+     * but "localhost" on Linux/macOS — and OkHttp then races dual-stack
+     * localhost resolution instead of dialing the bound address, surfacing
+     * `ConnectException: Failed to connect to localhost/[::1]:port` (the
+     * deterministic CI failure that hid the trust assertions behind a
+     * transport error). Grants ([canonicalAddress]) pin the same literal so
+     * the handshake peer ("127.0.0.1") matches the entry.
+     */
+    private fun v4Url(server: MockWebServer, path: String = "/System/Info/Public"): okhttp3.HttpUrl =
+        server.url(path).newBuilder().host("127.0.0.1").build()
 
     private fun get(server: MockWebServer, path: String = "/System/Info/Public") =
-        client.newCall(Request.Builder().url(server.url(path)).build()).execute()
+        client.newCall(Request.Builder().url(v4Url(server, path)).build()).execute()
 
     // ----------------------------------------------------------------- (a)
 
@@ -132,7 +146,7 @@ class SelfSignedTrustHandshakeTest {
     fun `portless grant for the host covers the server's non-default port`() {
         serverA.enqueue(MockResponse().setBody("ok"))
         grantedConfig.value = defaultConfig().copy(
-            selfSignedTrustHosts = setOf("https://${serverA.hostName}"),
+            selfSignedTrustHosts = setOf("https://127.0.0.1"),
         )
 
         get(serverA).use { response ->
@@ -176,7 +190,7 @@ class SelfSignedTrustHandshakeTest {
             .build()
         try {
             val error = runCatching {
-                freshClient.newCall(Request.Builder().url(serverA.url("/x")).build()).execute().use {}
+                freshClient.newCall(Request.Builder().url(v4Url(serverA, "/x")).build()).execute().use {}
             }.exceptionOrNull()
             assertTrue(
                 isTlsTrustFailure(error),
@@ -225,7 +239,7 @@ class SelfSignedTrustHandshakeTest {
                 selfSignedTrustHosts = setOf(canonicalAddress(serverA)),
             )
             probeClient.newCall(
-                Request.Builder().url(serverA.url("/System/Info/Public")).build(),
+                Request.Builder().url(v4Url(serverA)).build(),
             ).execute().use { response ->
                 assertEquals(200, response.code)
             }
