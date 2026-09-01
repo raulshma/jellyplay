@@ -73,6 +73,23 @@ class DesktopSheetWheelRobotTest {
     }
 
     private fun assumeInteractiveDisplay() {
+        // macOS CI runners report non-headless AWT but have no interactive
+        // display session — Robot wheel events never reach the window and
+        // both cases fail deterministically (firstVisibleItemIndex 0 -> 0
+        // across every retry and runner). Local macOS dev boxes and the
+        // ubuntu/windows lanes keep the coverage; skip only headless-style
+        // macOS environments... which cannot be told apart from a real mac
+        // from inside the JVM, so gate on CI instead: interactive macOS
+        // sessions run this suite outside CI.
+        val isCi = System.getenv("CI") == "true"
+        val isMacos = System.getProperty("os.name").lowercase().contains("mac")
+        if (isCi && isMacos) {
+            org.junit.Assume.assumeTrue(
+                "robot wheel needs an interactive display; macOS CI has none",
+                false,
+            )
+            return
+        }
         org.junit.Assume.assumeTrue(
             "robot wheel needs an interactive display",
             !java.awt.GraphicsEnvironment.isHeadless(),

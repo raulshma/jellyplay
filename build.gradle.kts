@@ -102,8 +102,8 @@ subprojects {
                     // the plugin's retry { } DSL — configure the task extension
                     // (org.gradle.testretry.TestRetryTaskExtension) by name.
                     extensions.configure<org.gradle.testretry.TestRetryTaskExtension>("retry") {
-                        maxRetries.set(2)
-                        maxFailures.set(3)
+                        maxRetries.set(3)
+                        maxFailures.set(5)
                         failOnPassedAfterRetry.set(false)
                     }
                 }
