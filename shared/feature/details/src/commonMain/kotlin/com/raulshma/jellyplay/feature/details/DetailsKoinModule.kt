@@ -52,13 +52,11 @@ val detailsModule: Module = module {
     single { RemoteDiscoveryClients(get(), get(), get(), get()) }
     single { PlaylistActions.Factory(get(), get()) }
 
-    viewModel {
-        CollectionDetailViewModel(
-            mediaRepository = get(),
-            userDataMutator = get(),
-            imageUrlProvider = get(),
-        )
-    }
+    // Wave 16C + the #147 download quick-actions merge: the
+    // Collection/Person detail VMs gained MediaDownloadActions (core:data
+    // jvmShared) ctor deps, so both moved to jvmShared with their screens and
+    // their defs moved to the per-platform registration modules — same
+    // treatment as DetailViewModel above.
     viewModel {
         CastAndCrewViewModel(
             mediaRepository = get(),
@@ -70,13 +68,6 @@ val detailsModule: Module = module {
             strings = get(),
             mediaRepository = get(),
             arrRepository = get(),
-        )
-    }
-    viewModel {
-        PersonDetailViewModel(
-            mediaRepository = get(),
-            userDataMutator = get(),
-            imageUrlProvider = get(),
         )
     }
     viewModel {

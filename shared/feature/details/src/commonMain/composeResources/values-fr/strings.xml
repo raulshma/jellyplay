@@ -174,6 +174,8 @@
     <!-- ── Snackbar / user feedback (from ViewModel) ────────────────────── -->
     <string name="detail_msg_couldnt_update_favorite">Impossible de mettre à jour le favori</string>
     <string name="detail_msg_couldnt_mark_played">Impossible de marquer comme lu</string>
+    <string name="detail_msg_download_started">Téléchargement démarré</string>
+    <string name="detail_msg_download_start_failed">Impossible de démarrer le téléchargement</string>
     <string name="detail_msg_couldnt_mark_unplayed">Impossible de marquer comme non lu</string>
     <string name="detail_mark_season_watched">Marquer la saison comme vue</string>
     <string name="detail_mark_season_unwatched">Marquer la saison comme non vue</string>

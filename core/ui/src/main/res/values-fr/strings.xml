@@ -244,4 +244,8 @@
     <string name="transcode_reason_hint_subtitle">Choisissez un sous-titre SRT/externe pour éviter l\'incrustation.</string>
     <string name="core_ui_variant_accent_title">Accent %1$s</string>
     <string name="core_ui_variant_accent_subtitle">Sélectionner la couleur d\'accent de ce style de thème</string>
+    <!-- Quick-action remove-download confirm (shared by every host surface) -->
+    <string name="core_remove_download_title">Supprimer le téléchargement ?</string>
+    <string name="core_remove_download_message">Ceci supprime la copie téléchargée de « %1$s » de cet appareil. La copie sur le serveur n’est pas affectée.</string>
+    <string name="core_remove_download_confirm">Supprimer</string>
 </resources>

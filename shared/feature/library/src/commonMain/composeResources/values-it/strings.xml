@@ -24,17 +24,16 @@
     <string name="library_mood_playlists">Playlist per umore</string>
     <string name="library_playlists">Playlist</string>
     <string name="library_shuffle">Casuale</string>
+    <string name="library_jump_to_letter">Vai alla lettera</string>
 
     <!-- LibraryFilterSheet -->
     <string name="library_reset">Reimposta</string>
     <string name="library_sort_by">Ordina per</string>
     <string name="library_media_type">Tipo di contenuto</string>
     <string name="library_status">Stato</string>
+    <string name="library_sort_in_progress">In corso</string>
     <string name="library_filter_resumable">In corso</string>
     <string name="library_filter_downloaded">Scaricato</string>
-    <string name="library_remove_download_title">Eliminare il download?</string>
-    <string name="library_remove_download_message">Questa azione elimina la copia scaricata di “%1$s” da questo dispositivo. La copia sul server non viene modificata.</string>
-    <string name="library_remove_download_confirm">Elimina</string>
     <string name="library_genres">Generi</string>
     <string name="library_year_range">Intervallo anni</string>
     <string name="library_tags">Tag</string>

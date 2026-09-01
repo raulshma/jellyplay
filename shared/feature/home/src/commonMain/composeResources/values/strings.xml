@@ -36,6 +36,7 @@
     <string name="home_settings">Settings</string>
     <string name="home_switch_user">Switch User</string>
     <string name="home_go_online">Go Online</string>
+    <string name="home_go_offline">Go Offline</string>
 
     <!-- Home empty / partial-load states. -->
     <string name="home_no_content_available">No Content Available</string>
@@ -93,12 +94,6 @@
 
     <!-- Localized error messages -->
     <string name="home_error_load_content">Couldn\'t load content. Check your connection and try again.</string>
-
-    <!-- Offline home long-press "Delete download" confirmation. -->
-    <string name="home_delete_download_title">Delete download</string>
-    <string name="home_delete_download_message">Remove \"%1$s\" from your device? This frees up %2$s.</string>
-    <string name="home_delete_download_message_no_size">Remove \"%1$s\" from your device?</string>
-    <string name="home_delete_download_confirm">Delete</string>
     <string name="home_download_started">Download started</string>
     <string name="home_download_start_failed">Couldn't start the download</string>
     <string name="home_series_download_queued">Episodes queued for download</string>

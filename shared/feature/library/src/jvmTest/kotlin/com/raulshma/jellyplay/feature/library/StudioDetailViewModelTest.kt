@@ -65,6 +65,7 @@ class StudioDetailViewModelTest {
             mediaRepository = mediaRepository,
             userDataMutator = userDataMutator,
             imageUrlProvider = imageUrlProvider,
+            mediaDownloadActions = mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
         )
     }
 

@@ -57,13 +57,14 @@ internal fun buildOfflineHomeContent(
     homeMode: HomeMode,
     titles: OfflineHomeSectionTitles,
     prefs: OfflineHomeSectionPrefs,
+    cachedLayout: List<HomeSection> = emptyList(),
 ): OfflineHomeContent {
     val filteredLibrary = filterOfflineByMode(library, homeMode)
     val filteredEpisodes = filterOfflineByMode(episodes, homeMode)
     return OfflineHomeContent(
         library = filteredLibrary,
         episodes = filteredEpisodes,
-        sections = buildOfflineHomeSections(filteredLibrary, filteredEpisodes, titles, prefs),
+        sections = buildOfflineHomeSections(filteredLibrary, filteredEpisodes, titles, prefs, cachedLayout),
         itemsById = offlineItemsById(filteredLibrary, filteredEpisodes),
     )
 }
@@ -133,6 +134,10 @@ internal fun rememberOfflineHomeSectionTitles(): OfflineHomeSectionTitles =
 data class OfflineHomeSectionPrefs(
     val continueWatchingEnabled: Boolean = true,
     val nextUpEnabled: Boolean = true,
+    /** All currently-enabled configurable section types — filters the cached-layout mirror (#147). */
+    val enabledSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
+    /** Per-library DISABLED types, keyed by library id — same shape as the online overrides. */
+    val libraryOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
     val hiddenCwItemIds: Set<String> = emptySet(),
     val nextUpExcludedSeriesIds: Set<String> = emptySet(),
     val mergeCwAndNextUp: Boolean = false,
@@ -150,14 +155,27 @@ private const val NEXT_UP_LIMIT = 20
 
 /**
  * Derives the home sections shown while offline from the (mode-filtered)
- * offline library and its downloaded episodes. Continue Watching and Next Up
- * keep their online types ([HomeSectionType.CONTINUE_WATCHING] /
- * [HomeSectionType.NEXT_UP]) so [com.raulshma.jellyplay.feature.home.HomeContentList]
- * renders them through the same wide-card row as the online home — the offline
- * home IS the normal home, just populated from downloads (issue #147); the
- * wide row resolves artwork from local files and routes clicks offline. Every
- * other section is typed [HomeSectionType.DOWNLOADED] and renders through the
- * offline poster-card row.
+ * offline library and its downloaded episodes. Two shapes, in precedence
+ * order (issue #147: "literally the home layout, filtered for downloaded"):
+ *
+ *  1. **Cached-layout mirror** — when [cachedLayout] (the last persisted
+ *     online snapshot) is non-empty and at least one of its rows survives the
+ *     downloaded filter, the offline home reproduces the ONLINE layout
+ *     exactly: same section types, titles (per-library "Latest …" rows,
+ *     recommendation "Because you watched …" headers), library ids and row
+ *     order, with each row's items filtered to what is downloaded. Continue
+ *     Watching / Next Up keep their positions but render the locally derived
+ *     lists (local playback progress is fresher than the snapshot). Rows the
+ *     user has since disabled via the CURRENT prefs drop out; the mirror
+ *     order itself is preserved verbatim, never re-sorted.
+ *  2. **Generic fallback** — no snapshot (fresh install / cleared data) or
+ *     every mirrored row filtered to empty: the historical fixed rows.
+ *
+ * Continue Watching and Next Up keep their online types
+ * ([HomeSectionType.CONTINUE_WATCHING] / [HomeSectionType.NEXT_UP]) so
+ * [com.raulshma.jellyplay.feature.home.HomeContentList] renders them through
+ * the same wide-card row as the online home; every other offline section
+ * (mirrored or fallback) renders through the offline poster-card row.
  *
  * Rows, each omitted when empty or disabled by [OfflineHomeSectionPrefs]:
  *  - Continue Watching — movies + episodes with 1–95% progress, most recently
@@ -184,6 +202,7 @@ internal fun buildOfflineHomeSections(
     episodes: List<OfflineMediaItem>,
     titles: OfflineHomeSectionTitles,
     prefs: OfflineHomeSectionPrefs,
+    cachedLayout: List<HomeSection> = emptyList(),
 ): List<HomeSection> {
     if (library.isEmpty() && episodes.isEmpty()) return emptyList()
 
@@ -246,6 +265,21 @@ internal fun buildOfflineHomeSections(
         continueWatching
     }
     val showNextUpRow = prefs.nextUpEnabled && !prefs.mergeCwAndNextUp && nextUp.isNotEmpty()
+
+    // Cached-layout mirror first (#147): when the snapshot exists and yields
+    // at least one row, it IS the offline layout. Falls through to the generic
+    // rows otherwise so downloads are never unreachable.
+    if (cachedLayout.isNotEmpty()) {
+        val itemsById = offlineItemsById(library, episodes)
+        val mirrored = mirrorCachedLayoutSections(
+            cachedLayout,
+            itemsById,
+            prefs,
+            titles,
+            DerivedCwNextUp(mergedContinueWatching, showNextUpRow, nextUp),
+        )
+        if (mirrored.isNotEmpty()) return mirrored
+    }
 
     val sections = buildList {
         if (mergedContinueWatching.isNotEmpty()) {
@@ -310,6 +344,94 @@ internal fun buildOfflineHomeSections(
         }
     }
     return orderOfflineSections(sections, prefs.sectionOrder)
+}
+
+/**
+ * The locally derived Continue Watching / Next Up values that always travel
+ * together into the layout mirror: the merged CW∪Next-Up list (merge pref
+ * set), whether the separate Next Up row still renders, and that row's items.
+ * Derived once in [buildOfflineHomeSections].
+ */
+private data class DerivedCwNextUp(
+    val mergedContinueWatching: List<OfflineMediaItem>,
+    val showNextUpRow: Boolean,
+    val nextUp: List<OfflineMediaItem>,
+)
+
+/**
+ * Mirrors the cached online layout onto the offline home: each snapshot row
+ * survives with its type/title/libraryId/order intact, its items filtered to
+ * the downloaded [itemsById] originals. CW / Next Up swap in the locally
+ * derived lists (local progress beats the snapshot) at their snapshot
+ * positions. Rows drop when the CURRENT prefs disable their type (or the
+ * per-library override for a LATEST_MEDIA row), when nothing in them is
+ * downloaded, or when unplayable offline (LIVE_TV). The snapshot order is
+ * returned verbatim — it already encodes the user's layout.
+ *
+ * Known limitation: a section type ABSENT from the snapshot (disabled when it
+ * was fetched) does not reappear when re-enabled while offline — the mirror
+ * only reproduces row types the snapshot contains. And while any mirrored row
+ * survives, the generic fallback rows (e.g. Recently Downloaded) stay
+ * suppressed; they return only once every mirrored row filters to empty.
+ */
+private fun mirrorCachedLayoutSections(
+    cachedLayout: List<HomeSection>,
+    itemsById: Map<String, OfflineMediaItem>,
+    prefs: OfflineHomeSectionPrefs,
+    titles: OfflineHomeSectionTitles,
+    cwNextUp: DerivedCwNextUp,
+): List<HomeSection> = buildList {
+    for (cached in cachedLayout) {
+        when (cached.type) {
+            HomeSectionType.CONTINUE_WATCHING -> {
+                if (prefs.continueWatchingEnabled && cwNextUp.mergedContinueWatching.isNotEmpty()) {
+                    add(
+                        HomeSection(
+                            id = "offline_continue_watching",
+                            title = titles.continueWatching,
+                            type = HomeSectionType.CONTINUE_WATCHING,
+                            items = cwNextUp.mergedContinueWatching.map { it.toMediaItem() },
+                        )
+                    )
+                }
+            }
+            HomeSectionType.NEXT_UP -> {
+                if (cwNextUp.showNextUpRow) {
+                    add(
+                        HomeSection(
+                            id = "offline_next_up",
+                            title = titles.nextUp,
+                            type = HomeSectionType.NEXT_UP,
+                            items = cwNextUp.nextUp.map { it.toMediaItem() },
+                        )
+                    )
+                }
+            }
+            // Unplayable offline; DOWNLOADED never appears in an online snapshot.
+            HomeSectionType.LIVE_TV, HomeSectionType.DOWNLOADED -> Unit
+            else -> {
+                // Configurable types honor the CURRENT enablement (the snapshot
+                // reflects prefs at fetch time; a toggle made while offline wins).
+                if (cached.type.isConfigurable && cached.type !in prefs.enabledSectionTypes) continue
+                val libraryId = cached.libraryId
+                if (libraryId != null && cached.type in prefs.libraryOverrides[libraryId].orEmpty()) continue
+                val downloaded = cached.items.mapNotNull { itemsById[it.id] }
+                if (downloaded.isNotEmpty()) {
+                    add(
+                        HomeSection(
+                            id = "offline_${cached.id}",
+                            title = cached.title,
+                            type = cached.type,
+                            items = downloaded.map { it.toMediaItem() },
+                            seedItem = if (cached.type == HomeSectionType.RECOMMENDATIONS) cached.seedItem else null,
+                            libraryId = libraryId,
+                            collectionType = cached.collectionType,
+                        )
+                    )
+                }
+            }
+        }
+    }
 }
 
 /**

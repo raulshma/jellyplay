@@ -36,10 +36,12 @@ import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.QuickAction
+import com.raulshma.jellyplay.core.ui.components.RemoveDownloadConfirmHost
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
+import com.raulshma.jellyplay.core.ui.components.rememberRemoveDownloadState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -71,15 +73,37 @@ fun StudioDetailScreen(
         serverHealth = serverHealth,
     )
 
-    // Long-press / TV-Menu quick actions for studio cards
+    // Item awaiting a remove-download confirm from the quick-action menu.
+    // Hoisted so the dialog survives the card leaving composition while open.
+    val removeDownloadState = rememberRemoveDownloadState()
+
+    // Collected (not read as a .value snapshot inside the resolve lambda) so
+    // the resolver is rebuilt when the downloaded set changes — a download
+    // completing flips the card's Download↔Remove-download action without
+    // waiting for an unrelated recomposition. The set is distinct-collapsed
+    // upstream, so active transfers don't churn it.
+    val downloadedIds by viewModel.downloadedIds.collectAsStateWithLifecycle()
+
+    // Long-press / TV-Menu quick actions for studio cards. Download /
+    // Remove download ride the same intake as the library grid (#147).
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember { { item: MediaItem -> item.quickActions(MediaQuickActionScope.LIBRARY) } },
+        resolveActions = remember(viewModel, downloadedIds) {
+            { item: MediaItem ->
+                item.quickActions(
+                    MediaQuickActionScope.LIBRARY,
+                    includeDownload = true,
+                    isDownloaded = downloadedIds.contains(item.id),
+                )
+            }
+        },
         executeAction = remember(viewModel, onItemClick) {
             { item: MediaItem, action: QuickAction ->
                 when (action) {
                     QuickAction.PLAY -> onItemClick(item.id)
                     QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, true)
                     QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, false)
+                    QuickAction.DOWNLOAD -> viewModel.downloadItem(item, onOpenDetail = onItemClick)
+                    QuickAction.REMOVE_DOWNLOAD -> removeDownloadState.request(item)
                     QuickAction.DETAILS -> onItemClick(item.id)
                     else -> Unit
                 }
@@ -195,4 +219,11 @@ fun StudioDetailScreen(
         } // close CompositionLocalProvider
     } // close Box
     MediaQuickActionHost(quickActionController)
+
+    // Remove-download confirm: quick-action removal only ever deletes the
+    // local download — the server copy is untouched.
+    RemoveDownloadConfirmHost(
+        state = removeDownloadState,
+        onConfirmRemove = { viewModel.removeItemDownload(it) },
+    )
 } // close StudioDetailScreen

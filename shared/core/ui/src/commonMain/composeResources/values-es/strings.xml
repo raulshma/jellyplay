@@ -241,4 +241,7 @@
     <string name="transcode_reason_hint_decoder">Cambiar el decodificador a Software/FFmpeg podría solucionarlo.</string>
     <string name="transcode_reason_hint_quality">Sube el límite de calidad de streaming en el selector de calidad.</string>
     <string name="transcode_reason_hint_subtitle">Elige un subtítulo SRT/externo para evitar la incrustación.</string>
+    <string name="core_remove_download_title">¿Eliminar descarga?</string>
+    <string name="core_remove_download_message">Esto elimina la copia descargada de «%1$s» de este dispositivo. La copia del servidor no se ve afectada.</string>
+    <string name="core_remove_download_confirm">Eliminar</string>
 </resources>

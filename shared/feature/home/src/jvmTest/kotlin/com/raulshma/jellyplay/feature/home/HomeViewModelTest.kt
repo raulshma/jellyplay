@@ -127,6 +127,7 @@ class HomeViewModelTest {
     private lateinit var photoFolderPrefetcher: PhotoFolderPrefetcher
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake
+    private lateinit var mediaDownloadActions: com.raulshma.jellyplay.core.data.download.MediaDownloadActions
     private lateinit var userMessageBus: com.raulshma.jellyplay.core.ui.message.UserMessageBus
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var offlineModeManager: OfflineModeManager
@@ -237,6 +238,9 @@ class HomeViewModelTest {
         photoFolderPrefetcher = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
         downloadIntake = mockk(relaxed = true)
+        mediaDownloadActions = mockk(relaxed = true)
+        // The VM's downloadedIds delegates to this flow at construction.
+        every { mediaDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
         userMessageBus = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
@@ -278,6 +282,7 @@ class HomeViewModelTest {
         every { downloadRepository.observeDownloadedIdsIncludingSeries() } returns flowOf(emptySet())
         every { offlineRepository.getOfflineLibrary() } returns flowOf(emptyList())
         every { offlineRepository.getOfflineEpisodes() } returns flowOf(emptyList())
+        coEvery { mediaRepository.getOfflineHomeLayout() } returns null
         every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)
     }
 
@@ -290,10 +295,12 @@ class HomeViewModelTest {
         episodeCatalogue = episodeCatalogue,
         userDataMutator = userDataMutator,
         mediaSearchEngine = mediaSearchEngine,
+        mediaRepository = mediaRepository,
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
         downloadRepository = downloadRepository,
         downloadIntake = downloadIntake,
+        mediaDownloadActions = mediaDownloadActions,
         offlineRepository = offlineRepository,
         offlineModeManager = offlineModeManager,
         newsletterTriggerManager = newsletterTriggerManager,

@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.di.androidAppInteropAdaptersModule
 import com.raulshma.jellyplay.di.androidAppModule
 import com.raulshma.jellyplay.di.androidAppViewModelsModule
 import com.raulshma.jellyplay.di.androidDownloadSeamsModule
+import com.raulshma.jellyplay.di.downloadOutcomeModule
 import com.raulshma.jellyplay.di.androidSettingsSeamsModule
 import com.raulshma.jellyplay.feature.search.di.searchModule
 import com.raulshma.jellyplay.feature.library.di.androidPhotoExportModule
@@ -200,6 +201,11 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // preload). Koin owns these legacy-side impls so the
                 // DownloadRepository single in dataJvmModule resolves.
                 androidDownloadSeamsModule(this@JellyPlayApplication),
+                // Dev v0.10.7 quick-action flow: core/data's download-outcome
+                // seam (MediaDownloadActions.downloadAndReport) bridged to the
+                // Android core:ui UserMessageBus single — app is the only graph
+                // that sees both (shared:core:data cannot depend on core:ui).
+                downloadOutcomeModule,
                 // Admin flip (Wave wB): Android actual of the admin-statistics
                 // label seam — legacy core:data R.string over the Koin-owned
                 // AdminStatisticsRepositoryImpl (dataJvmModule), byte-identical

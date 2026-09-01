@@ -55,25 +55,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Download
-import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.feature.home.generated.resources.home_error_load_content
-import com.raulshma.jellyplay.feature.home.generated.resources.home_delete_download_title
-import com.raulshma.jellyplay.feature.home.generated.resources.home_delete_download_message_no_size
-import com.raulshma.jellyplay.feature.home.generated.resources.home_delete_download_message
-import com.raulshma.jellyplay.feature.home.generated.resources.home_delete_download_confirm
 import com.raulshma.jellyplay.feature.home.generated.resources.home_go_online_action
 import com.raulshma.jellyplay.feature.home.generated.resources.home_implicit_offline_banner
 import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads_description
 import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads_yet
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
-import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
-import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
@@ -81,8 +73,6 @@ import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
-import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.DeleteDownloadedEpisodesSheet
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
@@ -92,11 +82,13 @@ import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.QuickAction
+import com.raulshma.jellyplay.core.ui.components.RemoveDownloadConfirmHost
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.SeriesDownloadSheet
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.UndoSnackbarOverlay
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
+import com.raulshma.jellyplay.core.ui.components.rememberRemoveDownloadState
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
@@ -232,7 +224,8 @@ private fun MainHomeContent(
     // lambda) so the hero rotates the same offline titles while offline.
     val offlineTitles = rememberOfflineHomeSectionTitles()
     val offlineContent = remember(
-        state.offlineLibrary, state.offlineEpisodes, state.homeMode, offlineTitles, state.offlineSectionPrefs,
+        state.offlineLibrary, state.offlineEpisodes, state.homeMode, offlineTitles,
+        state.offlineSectionPrefs, state.offlineLayoutSections,
     ) {
         buildOfflineHomeContent(
             library = state.offlineLibrary,
@@ -240,6 +233,7 @@ private fun MainHomeContent(
             homeMode = state.homeMode,
             titles = offlineTitles,
             prefs = state.offlineSectionPrefs,
+            cachedLayout = state.offlineLayoutSections,
         )
     }
     val offlineSections = offlineContent.sections
@@ -375,9 +369,9 @@ private fun MainHomeContent(
     } }
 
     // Item awaiting a delete-confirm from the offline home's quick-action menu.
-    // Hoisted here (not in the sheet callback) so the dialog survives the card
-    // leaving composition while it's open.
-    var pendingDelete by remember { mutableStateOf<com.raulshma.jellyplay.core.model.MediaItem?>(null) }
+    // The shared holder (core/ui — see RemoveDownloadState) hoists the pending
+    // item so the dialog survives the card leaving composition while it's open.
+    val removeDownloadState = rememberRemoveDownloadState()
 
     // Collected (not read as a .value snapshot inside the resolve lambda) so
     // the resolver is rebuilt when the downloaded set changes — a download
@@ -404,7 +398,7 @@ private fun MainHomeContent(
                 )
             }
         },
-        executeAction = remember(viewModel, mediaOnItemClick, mediaOnPlayClick, callbacks) {
+        executeAction = remember(viewModel, mediaOnItemClick, mediaOnPlayClick, callbacks, removeDownloadState) {
             { item: com.raulshma.jellyplay.core.model.MediaItem, action: QuickAction ->
                 // The routing table lives in homeQuickActionEffect (pure,
                 // pinned by HomeQuickActionsTest); this dispatch is mechanical.
@@ -430,7 +424,7 @@ private fun MainHomeContent(
                         viewModel.onEvent(HomeUiEvent.DownloadItem(effect.item, effect.onOpenDetail))
                     is HomeQuickActionEffect.OpenSeriesDeleteSheet ->
                         viewModel.onEvent(HomeUiEvent.RequestSeriesDelete(effect.series))
-                    is HomeQuickActionEffect.ConfirmDeleteDownload -> pendingDelete = effect.item
+                    is HomeQuickActionEffect.ConfirmDeleteDownload -> removeDownloadState.request(effect.item)
                     HomeQuickActionEffect.None -> Unit
                 }
             }
@@ -771,29 +765,14 @@ private fun MainHomeContent(
     // Long-press / TV-Menu quick actions for home cards.
     MediaQuickActionHost(quickActionController)
 
-    // Delete-confirm for the offline home's quick-action "Delete download".
-    pendingDelete?.let { target ->
-        val sizeBytes = remember(state.offlineLibrary, target.id) {
-            state.offlineLibrary.firstOrNull { it.id == target.id }?.totalSizeBytes ?: 0L
-        }
-        ConfirmDialog(
-            title = stringResource(Res.string.home_delete_download_title),
-            message = if (sizeBytes > 0L) {
-                stringResource(Res.string.home_delete_download_message, target.name, sizeBytes.formatBytes())
-            } else {
-                stringResource(Res.string.home_delete_download_message_no_size, target.name)
-            },
-            confirmText = stringResource(Res.string.home_delete_download_confirm),
-            dismissText = stringResource(CoreUiRes.string.core_cancel),
-            icon = Tabler.Outline.Trash,
-            tone = ConfirmTone.DESTRUCTIVE,
-            onConfirm = {
-                viewModel.onEvent(HomeUiEvent.DeleteOfflineMedia(target))
-                pendingDelete = null
-            },
-            onDismiss = { pendingDelete = null },
-        )
-    }
+    // Delete-confirm for the offline home's quick-action "Delete download" —
+    // the shared remove-download dialog every quick-action host renders. The
+    // series delete-episodes sheet below is separate by design: series cards
+    // keep their per-episode selection.
+    RemoveDownloadConfirmHost(
+        state = removeDownloadState,
+        onConfirmRemove = { item -> viewModel.onEvent(HomeUiEvent.DeleteOfflineMedia(item)) },
+    )
 
     // Advanced series delete-episodes sheet — the same one the media-detail
     // screen uses. Shown when a series card's quick-action Delete is tapped;

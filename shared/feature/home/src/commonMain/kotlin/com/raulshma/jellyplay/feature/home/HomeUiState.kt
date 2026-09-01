@@ -68,6 +68,15 @@ data class HomeUiState(
      */
     val offlineEpisodes: List<OfflineMediaItem> = emptyList(),
     /**
+     * The cached ONLINE home layout (issue #147): section types, titles,
+     * per-library rows and order from the last successful online fetch,
+     * collected under the same gate as [offlineLibrary]. The offline home
+     * mirrors it filtered to downloaded items (see buildOfflineHomeSections);
+     * empty when no snapshot exists, in which case the generic derived rows
+     * render instead.
+     */
+    val offlineLayoutSections: List<HomeSection> = emptyList(),
+    /**
      * The CW/NextUp prefs the offline home rows must honor (enabled flags,
      * hidden CW items, excluded Next Up series, CW+NextUp merge). Built from
      * the same prefs snapshot that drives the online section query so the

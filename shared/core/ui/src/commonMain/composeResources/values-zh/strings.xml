@@ -241,4 +241,7 @@
     <string name="transcode_reason_hint_decoder">将解码器切换为 Software/FFmpeg 可能解决此问题。</string>
     <string name="transcode_reason_hint_quality">在画质选择器中提高流媒体画质上限。</string>
     <string name="transcode_reason_hint_subtitle">选择 SRT/外部字幕以避免烧录。</string>
+    <string name="core_remove_download_title">删除下载？</string>
+    <string name="core_remove_download_message">这会从此设备删除“%1$s”的已下载副本。服务器上的副本不受影响。</string>
+    <string name="core_remove_download_confirm">删除</string>
 </resources>

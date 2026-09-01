@@ -16,12 +16,12 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.test.Test
 import java.io.File
 
 // V3 downloads conveyor: moved verbatim from the legacy :core:data shim's
@@ -50,6 +50,12 @@ class DownloadDelegateTest {
         // Controls the subtitle-bundle outcome so a test can simulate failure.
         var subtitleBundleResult: Boolean = true
         var subtitleBundleThrows: Throwable? = null
+        // Per-image-type result override for downloadOfflineImage: an absent
+        // key yields the default local path, an explicit null a failed fetch.
+        val imageResults = mutableMapOf<String, String?>()
+        // Last backdropUrl persisted via saveOfflineMediaDetail/Item.
+        var lastSavedBackdrop: String? = null
+            private set
         private fun result(): Result<DownloadItem> = startResult!!
 
         override suspend fun startDownload(
@@ -78,13 +84,19 @@ class DownloadDelegateTest {
             imageUrl: String?,
             backdropUrl: String?,
             downloadPath: String?,
-        ) { calls += "saveOfflineMediaItem(${item.id})" }
+        ) {
+            calls += "saveOfflineMediaItem(${item.id})"
+            lastSavedBackdrop = backdropUrl
+        }
 
         override suspend fun saveOfflineMediaDetail(
             detail: MediaDetail,
             imageUrl: String?,
             backdropUrl: String?,
-        ) { calls += "saveOfflineMediaDetail(${detail.item.id})" }
+        ) {
+            calls += "saveOfflineMediaDetail(${detail.item.id})"
+            lastSavedBackdrop = backdropUrl
+        }
 
         override suspend fun downloadOfflineImage(
             itemId: String,
@@ -94,7 +106,7 @@ class DownloadDelegateTest {
             fileName: String,
         ): String? {
             calls += "downloadOfflineImage($itemId,$imageType)"
-            return "/tmp/$fileName"
+            return if (imageType in imageResults) imageResults[imageType] else "/tmp/$fileName"
         }
 
         override suspend fun downloadTrickplayData(
@@ -254,12 +266,13 @@ class DownloadDelegateTest {
     }
 
     @Test
-    fun `executeDownload skips the backdrop bundle for episodes and persists a null backdrop`() = runTest {
-        // Jellyfin episodes usually have no Backdrop image, so an episode's own
-        // backdrop download 404s and would persist a dead remote URL that only
-        // renders offline when Coil's cache happens to hold it. The recipe must
-        // skip it entirely: the offline hero falls back to the series backdrop
-        // at load time (mirroring the online detail screen).
+    fun `executeDownload bundles the episode's own backdrop and persists the local artifact`() = runTest {
+        // #147 image parity: the online Continue Watching row asks the server
+        // for the EPISODE's Backdrop, so the download must fetch the same
+        // image as an artifact. Most servers have no episode backdrop — that
+        // null case (persist null, no remote-URL fallback) is pinned by the
+        // test below.
+        coEvery { playbackRepository.getBackdropUrl(any(), any()) } returns "https://backdrop"
         val request = buildRequest(
             detailWithStreams = false,
             withTrickplay = false,
@@ -269,12 +282,32 @@ class DownloadDelegateTest {
         val result = delegate.executeDownload(request)
 
         assertNotNull(result.downloadItem)
-        // Poster still bundles (the episode card thumbnail); the own backdrop
-        // download must not run.
         assertTrue(writer.calls.contains("downloadOfflineImage(item-1,Primary)"))
-        assertTrue(!writer.calls.contains("downloadOfflineImage(item-1,Backdrop)"))
-        coVerify(exactly = 0) { playbackRepository.getBackdropUrl(any(), any()) }
+        assertTrue(writer.calls.contains("downloadOfflineImage(item-1,Backdrop)"))
         assertTrue(writer.calls.contains("saveOfflineMediaDetail(item-1)"))
+        assertEquals("/tmp/item-1_backdrop.jpg", writer.lastSavedBackdrop)
+    }
+
+    @Test
+    fun `executeDownload persists a null episode backdrop when the server has none`() = runTest {
+        // A failed/absent episode backdrop must NOT fall back to a dead remote
+        // URL (episodes only): the offline home's CW card then falls back to
+        // the episode's own primary via the wide card's fallback chain, while
+        // the offline detail hero resolves the series backdrop at load time.
+        coEvery { playbackRepository.getBackdropUrl(any(), any()) } returns "https://backdrop"
+        writer.imageResults["Backdrop"] = null
+        val request = buildRequest(
+            detailWithStreams = false,
+            withTrickplay = false,
+            mediaType = MediaType.EPISODE,
+        )
+
+        val result = delegate.executeDownload(request)
+
+        assertNotNull(result.downloadItem)
+        assertTrue(writer.calls.contains("downloadOfflineImage(item-1,Backdrop)"))
+        assertTrue(writer.calls.contains("saveOfflineMediaDetail(item-1)"))
+        assertNull(writer.lastSavedBackdrop)
     }
 
     @Test

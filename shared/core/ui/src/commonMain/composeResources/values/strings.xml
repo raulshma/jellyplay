@@ -262,4 +262,7 @@
     <string name="transcode_reason_hint_decoder">Switching the decoder to Software/FFmpeg may fix this.</string>
     <string name="transcode_reason_hint_quality">Raise the streaming quality limit in the quality picker.</string>
     <string name="transcode_reason_hint_subtitle">Choose an SRT/external subtitle to avoid burn-in.</string>
+    <string name="core_remove_download_title">Delete download?</string>
+    <string name="core_remove_download_message">This deletes the downloaded copy of “%1$s” from this device. The server copy is not affected.</string>
+    <string name="core_remove_download_confirm">Delete</string>
 </resources>

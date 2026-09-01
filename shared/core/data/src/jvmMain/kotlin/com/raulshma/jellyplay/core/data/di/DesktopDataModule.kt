@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.di
 
 import com.raulshma.jellyplay.core.data.download.DesktopDownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.network.DesktopNetworkMonitor
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.DesktopOfflineModeManager
@@ -137,6 +138,26 @@ fun desktopDataModule(dataDir: Path): Module {
             )
         }
         single<DownloadIntake> { get<DesktopDownloadIntake>() }
+
+        // Desktop actual of the quick-action download-outcome seam
+        // (MediaDownloadActions.downloadAndReport posts Started/Failed
+        // through it): Android bridges this to core/ui's UserMessageBus
+        // snackbar via the app's downloadOutcomeModule, but desktop has no
+        // global toast host in core/data's reach — and core/data must not
+        // depend on core/ui. Console-logging keeps the outcome visible in the
+        // desktop log without inventing UI plumbing here; the transfer itself
+        // is observable through the downloads screen either way.
+        single<DownloadOutcomeMessenger> {
+            object : DownloadOutcomeMessenger {
+                override fun downloadStarted() {
+                    println("[downloads] download started")
+                }
+
+                override fun downloadStartFailed() {
+                    println("[downloads] download failed to start")
+                }
+            }
+        }
 
         single {
             DesktopAutoDownloadScheduler(

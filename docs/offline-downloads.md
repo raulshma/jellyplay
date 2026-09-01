@@ -72,19 +72,26 @@ downloading.
 
 ## Browsing downloads inline
 
-Downloads are not confined to the dedicated screens — the regular home and
-library surfaces are download-aware:
+Downloads are not confined to the dedicated screens — the long-press
+quick-action menu is download-aware across the app: Home, the library
+grid, favorites, search, studio / collection / person detail, the
+media-detail rows, and the Offline Library itself.
 
-- **Long-press any movie / episode / music track / series** on Home or in a
-  Library and tap **Download**: single-stream items start immediately at
-  your default quality, with a "Download started" confirmation. Once an
-  item is downloaded, the same menu flips to **Remove download**, which
-  deletes the local copy (server untouched) after a confirmation — for a
-  series, that's the episode-selection delete sheet.
-- **Series** open the season/episode download sheet right where you are:
-  long-pressing Download on a Home series card presents the sheet in place,
-  and a Library card routes to the detail screen with the sheet
-  pre-opened — either way the whole-series grab gets your selection.
+- **Long-press any movie / episode / music track / series** and tap
+  **Download**: single-stream items start immediately at your default
+  quality, with a "Download started" confirmation. Once an item is
+  downloaded, the same menu flips to **Remove download**, which deletes
+  the local copy (server untouched) after a confirmation dialog. Series
+  removal is the one place hosts differ: a Home series card opens the
+  episode-selection delete sheet, while every other surface — the library
+  grid included — confirms once and deletes the whole series download.
+- **Series downloads** keep their season/episode selection sheet: on Home
+  the sheet is presented right where you are, and a Library card routes to
+  the detail screen with the sheet pre-opened. On every other surface
+  (favorites, search, studio / collection / person detail, media-detail
+  rows), a series — or any item whose flow needs the detail screen —
+  simply opens its detail screen, and you tap **Download** there; the
+  sheet isn't pre-opened.
 - **Library → Downloaded filter** — the pinned filter row has a one-tap
   **Downloaded** chip. While active, the grid is served from the on-device
   offline store instead of the server: it's instant, composes with the other
@@ -99,7 +106,8 @@ library surfaces are download-aware:
 
 The dedicated **Downloads** queue and **Offline Library** screens remain the
 power surfaces: transfer control, storage summary, music browsing, and
-per-item resync live there.
+per-item resync live there. Removing a download from the Offline Library
+grid asks for the same confirmation first.
 
 ### Auto-download new episodes
 

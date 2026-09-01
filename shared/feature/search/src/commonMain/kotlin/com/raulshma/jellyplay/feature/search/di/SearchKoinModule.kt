@@ -26,6 +26,7 @@ val searchModule: Module = module {
             mediaSearchEngine = get(),
             offlineRepository = get(),
             searchFiltersStore = get(),
+            mediaDownloadActions = get(),
         )
     }
 }

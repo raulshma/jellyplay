@@ -50,7 +50,12 @@ class PersonDetailViewModelTest {
         mediaRepository = mockk(relaxed = true)
         userDataMutator = FakeUserDataMutator()
         imageUrlProvider = mockk(relaxed = true)
-        viewModel = PersonDetailViewModel(mediaRepository, userDataMutator, imageUrlProvider)
+        viewModel = PersonDetailViewModel(
+            mediaRepository,
+            userDataMutator,
+            imageUrlProvider,
+            mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
+        )
     }
 
     @Test

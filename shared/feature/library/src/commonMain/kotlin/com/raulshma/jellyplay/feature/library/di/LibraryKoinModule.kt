@@ -34,8 +34,7 @@ val libraryModule: Module = module {
         LibraryViewModel(
             mediaRepository = get(),
             offlineRepository = get(),
-            downloadRepository = get(),
-            downloadIntake = get(),
+            mediaDownloadActions = get(),
             offlineModeManager = get(),
             userMessageBus = get(),
             userDataMutator = get(),
@@ -49,6 +48,7 @@ val libraryModule: Module = module {
             mediaRepository = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            mediaDownloadActions = get(),
         )
     }
     viewModel {
@@ -63,6 +63,7 @@ val libraryModule: Module = module {
             mediaRepository = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            mediaDownloadActions = get(),
         )
     }
     viewModel {

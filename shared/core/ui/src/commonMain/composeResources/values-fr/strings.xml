@@ -242,4 +242,7 @@
     <string name="transcode_reason_hint_decoder">Passer le décodeur en Software/FFmpeg peut résoudre le problème.</string>
     <string name="transcode_reason_hint_quality">Augmentez la limite de qualité de streaming dans le sélecteur de qualité.</string>
     <string name="transcode_reason_hint_subtitle">Choisissez un sous-titre SRT/externe pour éviter l\'incrustation.</string>
+    <string name="core_remove_download_title">Supprimer le téléchargement ?</string>
+    <string name="core_remove_download_message">Ceci supprime la copie téléchargée de « %1$s » de cet appareil. La copie sur le serveur n’est pas affectée.</string>
+    <string name="core_remove_download_confirm">Supprimer</string>
 </resources>

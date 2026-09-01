@@ -24,17 +24,16 @@
     <string name="library_mood_playlists">Listas por ambiente</string>
     <string name="library_playlists">Listas de reprodução</string>
     <string name="library_shuffle">Aleatório</string>
+    <string name="library_jump_to_letter">Ir para a letra</string>
 
     <!-- LibraryFilterSheet -->
     <string name="library_reset">Repor</string>
     <string name="library_sort_by">Ordenar por</string>
     <string name="library_media_type">Tipo de multimédia</string>
     <string name="library_status">Estado</string>
+    <string name="library_sort_in_progress">Em andamento</string>
     <string name="library_filter_resumable">Em andamento</string>
     <string name="library_filter_downloaded">Baixado</string>
-    <string name="library_remove_download_title">Excluir download?</string>
-    <string name="library_remove_download_message">Isso exclui a cópia baixada de “%1$s” deste dispositivo. A cópia no servidor não é afetada.</string>
-    <string name="library_remove_download_confirm">Excluir</string>
     <string name="library_genres">Géneros</string>
     <string name="library_year_range">Intervalo de anos</string>
     <string name="library_tags">Etiquetas</string>

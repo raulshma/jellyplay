@@ -171,6 +171,8 @@
     <!-- ── Snackbar / user feedback (from ViewModel) ────────────────────── -->
     <string name="detail_msg_couldnt_update_favorite">즐겨찾기를 업데이트할 수 없습니다</string>
     <string name="detail_msg_couldnt_mark_played">재생됨으로 표시할 수 없습니다</string>
+    <string name="detail_msg_download_started">다운로드가 시작되었습니다</string>
+    <string name="detail_msg_download_start_failed">다운로드를 시작할 수 없습니다</string>
     <string name="detail_msg_couldnt_mark_unplayed">재생 안 됨으로 표시할 수 없습니다</string>
     <string name="detail_mark_season_watched">시즌을 시청함으로 표시</string>
     <string name="detail_mark_season_unwatched">시즌을 시청 안 함으로 표시</string>

@@ -120,11 +120,12 @@ class UpdateCoordinator (
             val experimental = experimentalStore.experimental.first()
             val pending = runCatching { appUpdateRepository.getPendingUpdate() }.getOrNull()
             val result = appUpdateRepository.checkForUpdate()
-            // Manual checks ignore the 24h dismissal — the user explicitly asked.
-            // Always hit the network so a release published *after* the on-disk
-            // APK was downloaded can still surface: when both are present, prefer
-            // the newer version (ties keep the pending APK so its already-downloaded
-            // bytes stay the install path). On network failure fall back to pending.
+            // Manual checks ignore the dismissal suppression entirely — the
+            // user explicitly asked. Always hit the network so a release
+            // published *after* the on-disk APK was downloaded can still
+            // surface: when both are present, prefer the newer version (ties
+            // keep the pending APK so its already-downloaded bytes stay the
+            // install path). On network failure fall back to pending.
             val remote = result.getOrNull()
             val surface = AppUpdateDecision.pickUpdateToSurface(pending?.info, remote)
             when {

@@ -53,7 +53,12 @@ class CollectionDetailViewModelTest {
         every { imageUrlProvider.getImageUrl(any()) } returns "img"
         every { imageUrlProvider.getBackdropUrl(any()) } returns "backdrop"
 
-        viewModel = CollectionDetailViewModel(mediaRepository, userDataMutator, imageUrlProvider)
+        viewModel = CollectionDetailViewModel(
+            mediaRepository,
+            userDataMutator,
+            imageUrlProvider,
+            mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
+        )
     }
 
     @Test

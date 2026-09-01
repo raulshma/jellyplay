@@ -51,5 +51,7 @@
 
     <!-- Localized error messages -->
     <string name="data_no_media_source_download">Nenhuma fonte de mídia disponível para download</string>
+    <string name="data_download_started">Download iniciado</string>
+    <string name="data_download_start_failed">Não foi possível iniciar o download</string>
     <string name="data_series_download_queued">Episódios colocados na fila de transferência</string>
 </resources>

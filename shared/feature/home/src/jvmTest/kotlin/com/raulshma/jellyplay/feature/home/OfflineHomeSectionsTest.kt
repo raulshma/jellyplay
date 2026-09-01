@@ -412,4 +412,164 @@ class OfflineHomeSectionsTest {
         HomeSection(id = id, title = id, type = type, items = emptyList())
 
     //endregion
+
+    //region cached-layout mirror (#147: "literally the home layout, filtered for downloaded")
+
+    private fun cachedItem(id: String) = com.raulshma.jellyplay.core.model.MediaItem(
+        id = id,
+        name = id,
+        mediaType = MediaType.MOVIE,
+    )
+
+    @Test
+    fun `cached layout mirrors types titles order and filters items to downloads`() {
+        val sections = buildOfflineHomeSections(
+            library = listOf(
+                offline("dl1"),
+                offline("show", type = MediaType.SERIES),
+            ),
+            episodes = emptyList(),
+            titles = titles,
+            prefs = defaultPrefs,
+            cachedLayout = listOf(
+                HomeSection(
+                    id = "srv_latest_tv",
+                    title = "Latest TV",
+                    type = HomeSectionType.LATEST_MEDIA,
+                    items = listOf(cachedItem("show"), cachedItem("not-downloaded")),
+                    libraryId = "lib-tv",
+                    collectionType = "tvshows",
+                ),
+                HomeSection(
+                    id = "srv_cw",
+                    title = "Continue Watching",
+                    type = HomeSectionType.CONTINUE_WATCHING,
+                    items = listOf(cachedItem("irrelevant")),
+                ),
+                HomeSection(
+                    id = "srv_latest_movies",
+                    title = "Latest Movies",
+                    type = HomeSectionType.LATEST_MEDIA,
+                    items = listOf(cachedItem("dl1")),
+                    libraryId = "lib-movies",
+                    collectionType = "movies",
+                ),
+            ),
+        )
+
+        // Snapshot order verbatim (CW between the two Latest rows — a generic
+        // derivation could never produce this); CW empty (nothing in progress)
+        // so its row drops; non-downloaded members filtered out.
+        assertEquals(
+            listOf("offline_srv_latest_tv", "offline_srv_latest_movies"),
+            sections.map { it.id },
+        )
+        assertEquals(listOf("Latest TV", "Latest Movies"), sections.map { it.title })
+        assertEquals(HomeSectionType.LATEST_MEDIA, sections[0].type)
+        assertEquals("lib-tv", sections[0].libraryId)
+        assertEquals("tvshows", sections[0].collectionType)
+        assertEquals(listOf("show"), sections[0].items.map { it.id })
+    }
+
+    @Test
+    fun `cached layout swaps in the locally derived continue watching and next up`() {
+        val sections = buildOfflineHomeSections(
+            library = listOf(offline("movie", playedPercentage = 40.0, lastPlayedDate = "2026-02-01")),
+            episodes = listOf(
+                // Fresh next episode of a downloaded series → Next Up. The CW
+                // member is the partially-watched MOVIE from the library.
+                episode("b1", seriesId = "sB", episodeNumber = 1),
+            ),
+            titles = titles,
+            prefs = defaultPrefs,
+            cachedLayout = listOf(
+                HomeSection(
+                    id = "srv_cw",
+                    title = "Continue Watching",
+                    type = HomeSectionType.CONTINUE_WATCHING,
+                    // Snapshot members are NOT downloaded — the local
+                    // derivation (from local playback progress) must win.
+                    items = listOf(cachedItem("server-only-item")),
+                ),
+                HomeSection(
+                    id = "srv_next_up",
+                    title = "Next Up",
+                    type = HomeSectionType.NEXT_UP,
+                    items = listOf(cachedItem("server-only-item")),
+                ),
+            ),
+        )
+
+        assertEquals(
+            listOf("offline_continue_watching", "offline_next_up"),
+            sections.map { it.id },
+        )
+        assertEquals(listOf("movie"), sections[0].items.map { it.id })
+        assertEquals(listOf("b1"), sections[1].items.map { it.id })
+    }
+
+    @Test
+    fun `cached layout honors current enablement and per-library overrides`() {
+        val sections = buildOfflineHomeSections(
+            library = listOf(offline("dl1"), offline("show", type = MediaType.SERIES)),
+            episodes = emptyList(),
+            titles = titles,
+            prefs = defaultPrefs.copy(
+                enabledSectionTypes = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.RECENTLY_ADDED),
+                libraryOverrides = mapOf("lib-tv" to setOf(HomeSectionType.LATEST_MEDIA)),
+            ),
+            cachedLayout = listOf(
+                HomeSection(
+                    id = "srv_latest_tv",
+                    title = "Latest TV",
+                    type = HomeSectionType.LATEST_MEDIA,
+                    items = listOf(cachedItem("show")),
+                    libraryId = "lib-tv",
+                ),
+                HomeSection(
+                    id = "srv_recent",
+                    title = "Recently Added",
+                    type = HomeSectionType.RECENTLY_ADDED,
+                    items = listOf(cachedItem("dl1")),
+                ),
+            ),
+        )
+
+        // Latest TV dropped twice over: globally enabled but disabled for its
+        // library via the override; Recently Added survives.
+        assertEquals(listOf("offline_srv_recent"), sections.map { it.id })
+    }
+
+    @Test
+    fun `cached layout with no downloadable rows falls back to the generic rows`() {
+        val sections = buildOfflineHomeSections(
+            library = listOf(offline("movie")),
+            episodes = emptyList(),
+            titles = titles,
+            prefs = defaultPrefs,
+            cachedLayout = listOf(
+                // Every snapshot member is absent from the offline store, and
+                // LIVE TV is unplayable offline — the mirror yields nothing.
+                HomeSection(
+                    id = "srv_latest_tv",
+                    title = "Latest TV",
+                    type = HomeSectionType.LATEST_MEDIA,
+                    items = listOf(cachedItem("not-downloaded")),
+                ),
+                HomeSection(
+                    id = "srv_live",
+                    title = "Live TV",
+                    type = HomeSectionType.LIVE_TV,
+                    items = listOf(cachedItem("channel")),
+                ),
+            ),
+        )
+
+        assertEquals(
+            listOf("offline_recently_downloaded", "offline_movies"),
+            sections.map { it.id },
+        )
+    }
+
+    //endregion
 }

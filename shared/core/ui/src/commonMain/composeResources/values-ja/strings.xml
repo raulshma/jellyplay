@@ -241,4 +241,7 @@
     <string name="transcode_reason_hint_decoder">デコーダーを Software/FFmpeg に切り替えると解決する場合があります。</string>
     <string name="transcode_reason_hint_quality">品質選択でストリーミング品質の上限を上げてください。</string>
     <string name="transcode_reason_hint_subtitle">焼き込みを避けるには SRT/外部字幕を選んでください。</string>
+    <string name="core_remove_download_title">ダウンロードを削除しますか？</string>
+    <string name="core_remove_download_message">このデバイスから「%1$s」のダウンロード済みコピーを削除します。サーバー上のコピーには影響しません。</string>
+    <string name="core_remove_download_confirm">削除</string>
 </resources>

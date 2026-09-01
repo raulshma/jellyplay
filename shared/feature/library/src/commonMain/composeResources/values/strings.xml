@@ -24,6 +24,9 @@
     <string name="library_mood_playlists">Mood Playlists</string>
     <string name="library_playlists">Playlists</string>
     <string name="library_shuffle">Shuffle</string>
+    <string name="library_jump_to_letter">Jump to letter</string>
+    <string name="library_see_all">See All</string>
+    <string name="library_back">Back</string>
 
     <!-- Filter chip row -->
     <string name="library_all_filters">All Filters</string>
@@ -43,6 +46,7 @@
     <string name="library_poster_size">Poster size</string>
 
     <!-- Action chip row (labeled toolbar replacements) -->
+    <string name="library_action_view">View</string>
     <string name="library_action_size">Size</string>
     <string name="library_action_group">Group</string>
 
@@ -56,11 +60,9 @@
     <string name="library_sort_by">Sort By</string>
     <string name="library_media_type">Filter by Type</string>
     <string name="library_status">Status</string>
+    <string name="library_sort_in_progress">In Progress</string>
     <string name="library_filter_resumable">In Progress</string>
     <string name="library_filter_downloaded">Downloaded</string>
-    <string name="library_remove_download_title">Delete download?</string>
-    <string name="library_remove_download_message">This deletes the downloaded copy of “%1$s” from this device. The server copy is not affected.</string>
-    <string name="library_remove_download_confirm">Delete</string>
     <string name="library_genres">Genres</string>
     <string name="library_year_range">Year Range</string>
     <!-- %1$d = selected start year -->

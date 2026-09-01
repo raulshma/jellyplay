@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.core.data.di
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.network.ServerHealthMonitor
@@ -586,6 +588,27 @@ val dataJvmModule: Module = module {
         DownloadDelegate(
             writer = get<DownloadRepository>(),
             playbackRepository = get(),
+        )
+    }
+
+    // The unified quick-action download/remove delegate every host surface
+    // shares (library, favorites, search, detail rows). Koin-owned
+    // construction per the jvmShared convention (see MediaDownloadActions'
+    // kdoc): the scope is the DatastoreQualifiers application scope,
+    // DownloadRepository/OfflineRepository are this module's own singles, and
+    // DownloadIntake resolves from the platform data modules (Android:
+    // AndroidCoreDataKoinModule's DownloadIntakeImpl; desktop:
+    // desktopDataModule's DesktopDownloadIntake). The DownloadOutcomeMessenger
+    // binding is platform-owned too — the app's downloadOutcomeModule bridges
+    // it to core/ui's UserMessageBus on Android, desktopDataModule provides a
+    // desktop definition — because core/data must not depend on core/ui.
+    single {
+        MediaDownloadActions(
+            scope = get(DatastoreQualifiers.applicationScope),
+            downloadRepository = get<DownloadRepository>(),
+            downloadIntake = get<DownloadIntake>(),
+            offlineRepository = get(),
+            messenger = get(),
         )
     }
 

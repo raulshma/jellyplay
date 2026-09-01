@@ -241,4 +241,7 @@
     <string name="transcode_reason_hint_decoder">디코더를 Software/FFmpeg로 전환하면 해결될 수 있습니다.</string>
     <string name="transcode_reason_hint_quality">품질 선택에서 스트리밍 품질 한도를 높이세요.</string>
     <string name="transcode_reason_hint_subtitle">번인을 피하려면 SRT/외부 자막을 선택하세요.</string>
+    <string name="core_remove_download_title">다운로드를 삭제할까?</string>
+    <string name="core_remove_download_message">이 기기에서 “%1$s”의 다운로드된 사본을 삭제합니다. 서버의 사본은 영향을 받지 않습니다.</string>
+    <string name="core_remove_download_confirm">삭제</string>
 </resources>

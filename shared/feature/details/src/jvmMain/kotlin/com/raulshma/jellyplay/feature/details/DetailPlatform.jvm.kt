@@ -83,6 +83,26 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             audioQueueFacade = get(),
             themeMusicPlayer = get(),
             actionFactories = get(),
+            mediaDownloadActions = get(),
+        )
+    }
+    // #147 merge: Collection/Person VMs left commonMain when their closure
+    // reached MediaDownloadActions (core:data jvmShared) — defs live here and
+    // in androidDetailsModule now, the DetailViewModel precedent.
+    viewModel {
+        CollectionDetailViewModel(
+            mediaRepository = get(),
+            userDataMutator = get(),
+            imageUrlProvider = get(),
+            mediaDownloadActions = get(),
+        )
+    }
+    viewModel {
+        PersonDetailViewModel(
+            mediaRepository = get(),
+            userDataMutator = get(),
+            imageUrlProvider = get(),
+            mediaDownloadActions = get(),
         )
     }
 }

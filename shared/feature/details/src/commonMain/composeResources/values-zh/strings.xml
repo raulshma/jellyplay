@@ -171,6 +171,8 @@
     <!-- ── Snackbar / user feedback (from ViewModel) ────────────────────── -->
     <string name="detail_msg_couldnt_update_favorite">无法更新收藏</string>
     <string name="detail_msg_couldnt_mark_played">无法标记为已播放</string>
+    <string name="detail_msg_download_started">下载已开始</string>
+    <string name="detail_msg_download_start_failed">无法开始下载</string>
     <string name="detail_msg_couldnt_mark_unplayed">无法标记为未播放</string>
     <string name="detail_mark_season_watched">将整季标记为已观看</string>
     <string name="detail_mark_season_unwatched">将整季标记为未观看</string>

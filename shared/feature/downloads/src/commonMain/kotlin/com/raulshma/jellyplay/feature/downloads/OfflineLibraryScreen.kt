@@ -65,8 +65,10 @@ import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.OfflineMediaCard
 import com.raulshma.jellyplay.core.ui.components.QuickAction
+import com.raulshma.jellyplay.core.ui.components.RemoveDownloadConfirmHost
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
+import com.raulshma.jellyplay.core.ui.components.rememberRemoveDownloadState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
@@ -107,6 +109,9 @@ fun OfflineLibraryScreen(
     var sortMenuOpen by remember { mutableStateOf(false) }
     val searchFocus = remember { FocusRequester() }
 
+    // Removal goes through the shared confirm dialog, like every other host.
+    val removeDownloadState = rememberRemoveDownloadState()
+
     // Long-press quick actions. Everything in this grid is downloaded, so the
     // sheet offers mark-watched / favorite / delete / view-details and routing
     // always lands on the offline detail screens (never the online page).
@@ -122,7 +127,7 @@ fun OfflineLibraryScreen(
                 )
             }
         },
-        executeAction = remember(viewModel, onItemClick, onSeriesClick) {
+        executeAction = remember(viewModel, onItemClick, onSeriesClick, removeDownloadState) {
             { item: MediaItem, action: QuickAction ->
                 when (action) {
                     // PLAY and DETAILS both open the offline detail/series screen,
@@ -137,7 +142,7 @@ fun OfflineLibraryScreen(
                     QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, played = true)
                     QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, played = false)
                     QuickAction.FAVORITE, QuickAction.UNFAVORITE -> viewModel.toggleFavorite(item)
-                    QuickAction.REMOVE_DOWNLOAD -> viewModel.delete(item)
+                    QuickAction.REMOVE_DOWNLOAD -> removeDownloadState.request(item)
                     else -> Unit
                 }
             }
@@ -283,6 +288,10 @@ fun OfflineLibraryScreen(
         }
     }
     MediaQuickActionHost(quickActionController)
+    RemoveDownloadConfirmHost(
+        state = removeDownloadState,
+        onConfirmRemove = { viewModel.delete(it) },
+    )
 }
 
 @Composable

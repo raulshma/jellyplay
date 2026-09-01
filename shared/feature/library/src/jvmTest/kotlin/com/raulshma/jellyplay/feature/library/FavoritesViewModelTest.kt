@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.library
 
+import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -7,6 +8,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -33,6 +35,7 @@ class FavoritesViewModelTest {
 
     private lateinit var mediaRepository: MediaRepository
     private lateinit var userDataMutator: UserDataMutator
+    private lateinit var mediaDownloadActions: MediaDownloadActions
     private lateinit var viewModel: FavoritesViewModel
 
     @BeforeTest
@@ -40,10 +43,12 @@ class FavoritesViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
+        mediaDownloadActions = mockk(relaxed = true)
         viewModel = FavoritesViewModel(
             mediaRepository = mediaRepository,
             userDataMutator = userDataMutator,
             imageUrlProvider = mockk<ImageUrlProvider>(relaxed = true),
+            mediaDownloadActions = mediaDownloadActions,
         )
     }
 
@@ -63,5 +68,25 @@ class FavoritesViewModelTest {
             userDataMutator.setPlayed("m1", true, UserDataMutator.FlipMode.Silent, emptyList(), null)
         }
         coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+    }
+
+    @Test
+    fun `downloadItem routes through the shared download actions`() = runTest {
+        val item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)
+
+        viewModel.downloadItem(item, onOpenDetail = { })
+        advanceUntilIdle()
+
+        coVerify { mediaDownloadActions.downloadAndReport(item, any()) }
+    }
+
+    @Test
+    fun `removeItemDownload delegates to the shared download actions`() = runTest {
+        val item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)
+
+        viewModel.removeItemDownload(item)
+        advanceUntilIdle()
+
+        verify { mediaDownloadActions.removeDownload(item) }
     }
 }

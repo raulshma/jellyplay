@@ -171,6 +171,8 @@
     <!-- ── Snackbar / user feedback (from ViewModel) ────────────────────── -->
     <string name="detail_msg_couldnt_update_favorite">お気に入りを更新できませんでした</string>
     <string name="detail_msg_couldnt_mark_played">再生済みにできませんでした</string>
+    <string name="detail_msg_download_started">ダウンロードを開始しました</string>
+    <string name="detail_msg_download_start_failed">ダウンロードを開始できませんでした</string>
     <string name="detail_msg_couldnt_mark_unplayed">未再生にできませんでした</string>
     <string name="detail_mark_season_watched">シーズンを視聴済みにする</string>
     <string name="detail_mark_season_unwatched">シーズンを未視聴にする</string>

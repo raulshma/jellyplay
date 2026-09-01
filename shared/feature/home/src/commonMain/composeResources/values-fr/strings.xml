@@ -35,6 +35,7 @@
     <string name="home_settings">Paramètres</string>
     <string name="home_switch_user">Changer d\'utilisateur</string>
     <string name="home_go_online">Se connecter</string>
+    <string name="home_go_offline">Se déconnecter</string>
 
     <!-- Home empty / partial-load states. -->
     <string name="home_no_content_available">Aucun contenu disponible</string>
@@ -92,12 +93,6 @@
 
     <!-- Localized error messages -->
     <string name="home_error_load_content">Impossible de charger le contenu. Vérifiez votre connexion et réessayez.</string>
-
-    <!-- Confirmation de suppression (appui long) sur l\'accueil hors connexion. -->
-    <string name="home_delete_download_title">Supprimer le téléchargement</string>
-    <string name="home_delete_download_message">Supprimer \"%1$s\" de votre appareil ? Cela libère %2$s.</string>
-    <string name="home_delete_download_message_no_size">Supprimer \"%1$s\" de votre appareil ?</string>
-    <string name="home_delete_download_confirm">Supprimer</string>
     <string name="home_download_started">Téléchargement lancé</string>
     <string name="home_download_start_failed">Impossible de lancer le téléchargement</string>
     <string name="home_series_download_queued">Épisodes mis en file d'attente pour le téléchargement</string>

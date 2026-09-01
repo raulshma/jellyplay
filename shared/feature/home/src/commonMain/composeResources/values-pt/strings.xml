@@ -35,6 +35,7 @@
     <string name="home_settings">Definições</string>
     <string name="home_switch_user">Mudar de utilizador</string>
     <string name="home_go_online">Ficar online</string>
+    <string name="home_go_offline">Ficar offline</string>
 
     <!-- Home empty / partial-load states. -->
     <string name="home_no_content_available">Sem conteúdo disponível</string>
@@ -92,12 +93,6 @@
 
     <!-- Localized error messages -->
     <string name="home_error_load_content">Não foi possível carregar o conteúdo. Verifique sua conexão e tente novamente.</string>
-
-    <!-- Confirmação de excluir download ao pressionar e segurar na home offline. -->
-    <string name="home_delete_download_title">Excluir download</string>
-    <string name="home_delete_download_message">Remover \"%1$s\" do seu dispositivo? Isso libera %2$s.</string>
-    <string name="home_delete_download_message_no_size">Remover \"%1$s\" do seu dispositivo?</string>
-    <string name="home_delete_download_confirm">Excluir</string>
     <string name="home_download_started">Download iniciado</string>
     <string name="home_download_start_failed">Não foi possível iniciar o download</string>
     <string name="home_series_download_queued">Episódios na fila para download</string>

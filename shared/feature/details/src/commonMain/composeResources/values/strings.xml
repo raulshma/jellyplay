@@ -188,6 +188,8 @@
     <!-- ── Snackbar / user feedback (from ViewModel) ────────────────────── -->
     <string name="detail_msg_couldnt_update_favorite">Couldn\'t update favorite</string>
     <string name="detail_msg_couldnt_mark_played">Couldn\'t mark as played</string>
+    <string name="detail_msg_download_started">Download started</string>
+    <string name="detail_msg_download_start_failed">Couldn\u2019t start the download</string>
     <string name="detail_msg_couldnt_mark_unplayed">Couldn\'t mark as unplayed</string>
     <string name="detail_mark_season_watched">Mark season as watched</string>
     <string name="detail_mark_season_unwatched">Mark season as unwatched</string>

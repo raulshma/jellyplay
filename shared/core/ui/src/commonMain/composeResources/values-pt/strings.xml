@@ -242,4 +242,7 @@
     <string name="transcode_reason_hint_decoder">Mudar o decodificador para Software/FFmpeg pode resolver.</string>
     <string name="transcode_reason_hint_quality">Aumente o limite de qualidade de streaming no seletor de qualidade.</string>
     <string name="transcode_reason_hint_subtitle">Escolha uma legenda SRT/externa para evitar a incorporação.</string>
+    <string name="core_remove_download_title">Excluir download?</string>
+    <string name="core_remove_download_message">Isso exclui a cópia baixada de “%1$s” deste dispositivo. A cópia no servidor não é afetada.</string>
+    <string name="core_remove_download_confirm">Excluir</string>
 </resources>
