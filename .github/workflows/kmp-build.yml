@@ -152,6 +152,14 @@ jobs:
           :shared:feature:player-video:compileAndroidMain
           :apps:web:compileKotlinWasmJs
           --stacktrace
+          # gradle.properties is tuned for an 18-core dev box (6g daemon,
+          # 12 workers); 4-core runners OOM the Kotlin daemon on the full
+          # task graph — same overrides codeql.yml uses. The full graph only
+          # started running on CI once the folded-scalar blank-line bug was
+          # fixed; before that gradle silently built a truncated task list.
+          --max-workers=2
+          "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
+          "-Pkotlin.daemon.jvmargs=-Xmx3g -XX:+UseParallelGC"
 
       - name: Shared tests (JVM)
         run: >
@@ -188,6 +196,9 @@ jobs:
           :shared:feature:player-audio:jvmTest
           :shared:feature:player-video:jvmTest
           --stacktrace
+          --max-workers=2
+          "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
+          "-Pkotlin.daemon.jvmargs=-Xmx3g -XX:+UseParallelGC"
 
       - name: Android app androidTest assembly (relocated player-video UI tests)
         # Wave 7C: the legacy :feature:player:video androidTest set moved to
@@ -275,6 +286,19 @@ jobs:
         # apps/desktop/build.gradle.kts (numeric x.y.z only; jpackage/msi
         # constraint).
         run: ./gradlew :apps:desktop:packageDistributionForCurrentOS -PjellyplayVersion=0.1.0 --stacktrace
+
+      - name: Dump jpackage logs on failure
+        # Compose's ExternalToolRunner only NAMES the runner-local *-out/-err
+        # files on jpackage failure — without this the actual cause never
+        # reaches the Actions log (macos createDistributable exit 1 had zero
+        # stderr in-log).
+        if: failure()
+        run: |
+          shopt -s nullglob
+          for f in apps/desktop/build/compose/logs/**/*.txt apps/desktop/build/compose/logs/*/*.txt; do
+            echo "===== $f ====="
+            cat "$f"
+          done
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
