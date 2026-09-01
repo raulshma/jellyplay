@@ -713,6 +713,20 @@ compose.desktop {
                 iconFile.set(packagingIconsDir.file("JellyPlay.ico"))
             }
             macOS {
+                // Apple's jpackage bundler rejects app-versions whose FIRST
+                // segment is zero ("The first number in an app-version cannot
+                // be zero or negative" — plist CFBundleVersion rule), so the
+                // pre-1.0 line (0.1.0 dev dry-run, 0.11.0 alphas) can never
+                // package a dmg as-is. Shift 0.x.y up to 1.x.y for the macOS
+                // BUNDLE version only; msi/deb keep the real numeric triple
+                // and the About screen + release tags carry the display
+                // version (desktop-build.properties), so this stays cosmetic.
+                val versionParts = jellyplayPackageVersion.split('.')
+                packageVersion = if (versionParts.first() == "0") {
+                    "1." + versionParts.drop(1).joinToString(".")
+                } else {
+                    jellyplayPackageVersion
+                }
                 iconFile.set(packagingIconsDir.file("JellyPlay.icns"))
                 bundleID = "com.raulshma.jellyplay.desktop"
             }

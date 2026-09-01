@@ -158,8 +158,8 @@ jobs:
           # started running on CI once the folded-scalar blank-line bug was
           # fixed; before that gradle silently built a truncated task list.
           --max-workers=2
-          "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
-          "-Pkotlin.daemon.jvmargs=-Xmx3g -XX:+UseParallelGC"
+          "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
+          "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
       - name: Shared tests (JVM)
         run: >
@@ -197,8 +197,8 @@ jobs:
           :shared:feature:player-video:jvmTest
           --stacktrace
           --max-workers=2
-          "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
-          "-Pkotlin.daemon.jvmargs=-Xmx3g -XX:+UseParallelGC"
+          "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
+          "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
       - name: Android app androidTest assembly (relocated player-video UI tests)
         # Wave 7C: the legacy :feature:player:video androidTest set moved to
