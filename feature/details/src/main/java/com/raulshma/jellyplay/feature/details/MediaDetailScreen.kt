@@ -46,12 +46,14 @@ import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.QuickAction
+import com.raulshma.jellyplay.core.ui.components.RemoveDownloadConfirmHost
 import com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.SeriesDownloadSheet
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
+import com.raulshma.jellyplay.core.ui.components.rememberRemoveDownloadState
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
@@ -163,11 +165,25 @@ fun MediaDetailScreen(
     val markSeasonConfirm = rememberConfirmState()
     var markSeasonToWatched by remember { mutableStateOf(true) }
 
+    // Row item awaiting a remove-download confirm from the quick-action menu.
+    // Hoisted so the dialog survives the card leaving composition while open.
+    val removeDownloadState = rememberRemoveDownloadState()
+
     // Quick actions for row items (related/collection/episode cards) and the
     // TV Menu key on the focused card. The controller is
     // provided to every PosterCard/EpisodeCard below via CompositionLocal.
+    // Download / Remove download ride the same intake as the library grid
+    // (#147): a downloaded row card flips the slot to "Remove download".
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember(viewModel) { { item: MediaItem -> item.quickActions(MediaQuickActionScope.DETAIL) } },
+        resolveActions = remember(viewModel) {
+            { item: MediaItem ->
+                item.quickActions(
+                    MediaQuickActionScope.DETAIL,
+                    includeDownload = true,
+                    isDownloaded = viewModel.quickActionDownloadedIds.value.contains(item.id),
+                )
+            }
+        },
         executeAction = remember(viewModel, onPlayClick, onItemClick) {
             { item: MediaItem, action: QuickAction ->
                 when (action) {
@@ -180,6 +196,8 @@ fun MediaDetailScreen(
                     )
                     QuickAction.MARK_WATCHED -> viewModel.markRowItemPlayed(item, played = true)
                     QuickAction.MARK_UNWATCHED -> viewModel.markRowItemPlayed(item, played = false)
+                    QuickAction.DOWNLOAD -> viewModel.downloadRowItem(item, onOpenDetail = onItemClick)
+                    QuickAction.REMOVE_DOWNLOAD -> removeDownloadState.request(item)
                     QuickAction.DETAILS -> onItemClick(item.id)
                     else -> Unit
                 }
@@ -831,6 +849,13 @@ fun MediaDetailScreen(
                 onDismiss = { pendingDeleteEpisode = null },
             )
         }
+
+        // ── Quick-action remove-download confirm (row cards). Same contract
+        // as the library grid: only the LOCAL download is deleted. ──
+        RemoveDownloadConfirmHost(
+            state = removeDownloadState,
+            onConfirmRemove = { viewModel.removeRowItemDownload(it) },
+        )
 
         // ── Resync bottom sheet. Lists what changed and offers a
         // resync / re-download action with live status. ──

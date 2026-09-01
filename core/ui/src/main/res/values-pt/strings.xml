@@ -244,4 +244,8 @@
     <string name="transcode_reason_hint_subtitle">Escolha uma legenda SRT/externa para evitar a incorporação.</string>
     <string name="core_ui_variant_accent_title">Acento de %1$s</string>
     <string name="core_ui_variant_accent_subtitle">Selecione a cor de destaque para este estilo de tema</string>
+    <!-- Quick-action remove-download confirm (shared by every host surface) -->
+    <string name="core_remove_download_title">Excluir download?</string>
+    <string name="core_remove_download_message">Isso exclui a cópia baixada de “%1$s” deste dispositivo. A cópia no servidor não é afetada.</string>
+    <string name="core_remove_download_confirm">Excluir</string>
 </resources>

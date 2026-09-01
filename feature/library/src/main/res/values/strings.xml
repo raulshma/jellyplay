@@ -63,9 +63,6 @@
     <string name="library_sort_in_progress">In Progress</string>
     <string name="library_filter_resumable">In Progress</string>
     <string name="library_filter_downloaded">Downloaded</string>
-    <string name="library_remove_download_title">Delete download?</string>
-    <string name="library_remove_download_message">This deletes the downloaded copy of “%1$s” from this device. The server copy is not affected.</string>
-    <string name="library_remove_download_confirm">Delete</string>
     <string name="library_genres">Genres</string>
     <string name="library_year_range">Year Range</string>
     <!-- %1$d = selected start year -->

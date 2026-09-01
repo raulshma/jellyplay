@@ -93,10 +93,4 @@
 
     <!-- Localized error messages -->
     <string name="home_error_load_content">Impossibile caricare i contenuti. Controlla la connessione e riprova.</string>
-
-    <!-- Conferma eliminazione download (pressione lunga) nella home offline. -->
-    <string name="home_delete_download_title">Elimina download</string>
-    <string name="home_delete_download_message">Rimuovere \"%1$s\" dal dispositivo? Libera %2$s.</string>
-    <string name="home_delete_download_message_no_size">Rimuovere \"%1$s\" dal dispositivo?</string>
-    <string name="home_delete_download_confirm">Elimina</string>
 </resources>

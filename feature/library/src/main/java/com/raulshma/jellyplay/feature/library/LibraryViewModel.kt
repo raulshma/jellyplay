@@ -4,11 +4,9 @@ import androidx.paging.LoadState
 import androidx.paging.LoadStates
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
+import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -65,8 +63,7 @@ private data class PagedQueryKey(
 class LibraryViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val offlineRepository: OfflineRepository,
-    private val downloadRepository: DownloadRepository,
-    private val downloadIntake: DownloadIntake,
+    private val mediaDownloadActions: MediaDownloadActions,
     private val offlineModeManager: OfflineModeManager,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
@@ -103,13 +100,12 @@ class LibraryViewModel @Inject constructor(
     val showFilters = _showFilters.flow
 
     /**
-     * Ids of download-complete items, for quick-action gating: a downloaded
-     * item's long-press offers "Remove download" instead of "Download". The
-     * repository collapses progress-tick re-emissions, so this stays quiet
-     * while transfers run.
+     * Ids whose quick actions offer "Remove download" instead of "Download":
+     * completed downloads ∪ series ids (a series card flips once any episode
+     * of it is downloaded). Re-exposes the shared quick-action delegate's
+     * Eagerly-started flow — one collector serves every host surface.
      */
-    private val _downloadedIds = stateFlow<Set<String>>(emptySet())
-    val downloadedIds = _downloadedIds.flow
+    val downloadedIds = mediaDownloadActions.downloadedIds
 
     private val _photoFolderChildUrls = stateFlow<Map<String, List<String>>>(emptyMap())
     val photoFolderChildUrls = _photoFolderChildUrls.flow
@@ -173,7 +169,7 @@ class LibraryViewModel @Inject constructor(
      */
     fun downloadItem(item: MediaItem, onOpenDetail: (itemId: String, openDownloadSheet: Boolean) -> Unit) {
         launch {
-            when (val result = downloadIntake.startFromItem(item)) {
+            when (val result = mediaDownloadActions.download(item)) {
                 DownloadRequestResult.Started ->
                     userMessageBus.info(
                         UiText.Resource(com.raulshma.jellyplay.core.data.R.string.data_download_started)
@@ -194,7 +190,7 @@ class LibraryViewModel @Inject constructor(
      * series download, anything else the single item. Never touches the server.
      */
     fun removeItemDownload(item: MediaItem) {
-        deleteActions.deleteDownload(item)
+        mediaDownloadActions.removeDownload(item)
     }
 
     private val _refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
@@ -260,16 +256,6 @@ class LibraryViewModel @Inject constructor(
     }
     .cachedIn(scope)
 
-    /**
-     * Shared offline-delete module (core/data) — the same series-vs-item
-     * routing the offline hosts use. No `onContentMutated`: the paged flows
-     * (server or offline) refresh on their own once rows are gone.
-     */
-    private val deleteActions = OfflineDeleteActions(
-        scope = scope,
-        offlineRepository = offlineRepository,
-    )
-
     init {
         loadFolders()
         loadGenres()
@@ -277,16 +263,6 @@ class LibraryViewModel @Inject constructor(
         loadViewMode()
         loadLayoutPrefs()
         loadResetConfirmPref()
-        launch {
-            // The full union (completed ids ∪ series ids), not just completed
-            // item ids — a series card's quick actions must offer Remove
-            // download once any episode of it is downloaded. Home used to be
-            // the only consumer honoring the series half; the union lives on
-            // DownloadRepository now (observeDownloadedIdsIncludingSeries).
-            downloadRepository.observeDownloadedIdsIncludingSeries().collect { ids ->
-                _downloadedIds.set(ids)
-            }
-        }
     }
 
     /**

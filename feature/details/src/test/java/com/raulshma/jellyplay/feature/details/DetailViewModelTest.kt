@@ -224,6 +224,7 @@ class DetailViewModelTest {
             audioQueueFacade = audioQueueFacade,
             themeMusicPlayer = themeMusicPlayer,
             actionFactories = actionFactories,
+            mediaDownloadActions = mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
         )
     }
 

@@ -113,8 +113,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.defaultEffectsTween
 import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
-import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.RemoveDownloadConfirmHost
 import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
@@ -126,6 +126,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
+import com.raulshma.jellyplay.core.ui.components.rememberRemoveDownloadState
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvDrawerOpener
@@ -326,11 +327,19 @@ fun LibraryScreen(
     val rowAboveFilterLeaf = if (showFolderRow) firstFolderPillFocus else headerEntryLeaf
 
     // Item awaiting a remove-download confirm from the quick-action menu.
-    // Hoisted so the dialog survives the card leaving composition while open.
-    var pendingRemoveDownload by remember { mutableStateOf<MediaItem?>(null) }
+    // The shared holder (core/ui — see RemoveDownloadState) hoists the pending
+    // item so the dialog survives the card leaving composition while it's open.
+    val removeDownloadState = rememberRemoveDownloadState()
+
+    // Collected (not read as a .value snapshot inside the resolve lambda) so
+    // the resolver is rebuilt when the downloaded set changes — a download
+    // completing flips the card's Download↔Remove-download action without
+    // waiting for an unrelated recomposition. The set is distinct-collapsed
+    // upstream, so active transfers don't churn it.
+    val downloadedIds by viewModel.downloadedIds.collectAsStateWithLifecycle()
 
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember(viewModel) {
+        resolveActions = remember(viewModel, downloadedIds) {
             { item: MediaItem ->
                 item.quickActions(
                     MediaQuickActionScope.LIBRARY,
@@ -338,7 +347,7 @@ fun LibraryScreen(
                     includeAddToPlaylist = true,
                     // Downloaded items flip the download slot to
                     // "Remove download" instead of offering both.
-                    isDownloaded = viewModel.downloadedIds.value.contains(item.id),
+                    isDownloaded = downloadedIds.contains(item.id),
                 )
             }
         },
@@ -355,7 +364,7 @@ fun LibraryScreen(
                         item,
                         onOpenDetail = onOpenDownloadDetail,
                     )
-                    QuickAction.REMOVE_DOWNLOAD -> pendingRemoveDownload = item
+                    QuickAction.REMOVE_DOWNLOAD -> removeDownloadState.request(item)
                     // ADD_TO_PLAYLIST navigates: the playlist picker lives in
                     // feature/details, which this module doesn't depend on.
                     QuickAction.ADD_TO_PLAYLIST, QuickAction.DETAILS ->
@@ -1316,20 +1325,10 @@ fun LibraryScreen(
 
     // Remove-download confirm: quick-action removal only ever deletes the
     // local download — the server copy is untouched.
-    pendingRemoveDownload?.let { target ->
-        ConfirmDialog(
-            title = stringResource(R.string.library_remove_download_title),
-            message = stringResource(R.string.library_remove_download_message, target.name),
-            confirmText = stringResource(R.string.library_remove_download_confirm),
-            dismissText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
-            icon = Tabler.Outline.Trash,
-            onConfirm = {
-                viewModel.removeItemDownload(target)
-                pendingRemoveDownload = null
-            },
-            onDismiss = { pendingRemoveDownload = null },
-        )
-    }
+    RemoveDownloadConfirmHost(
+        state = removeDownloadState,
+        onConfirmRemove = { viewModel.removeItemDownload(it) },
+    )
 
     if (resetDialogVisible) {
         LibraryResetConfirmDialog(

@@ -34,9 +34,6 @@
     <string name="library_sort_in_progress">In corso</string>
     <string name="library_filter_resumable">In corso</string>
     <string name="library_filter_downloaded">Scaricato</string>
-    <string name="library_remove_download_title">Eliminare il download?</string>
-    <string name="library_remove_download_message">Questa azione elimina la copia scaricata di “%1$s” da questo dispositivo. La copia sul server non viene modificata.</string>
-    <string name="library_remove_download_confirm">Elimina</string>
     <string name="library_genres">Generi</string>
     <string name="library_year_range">Intervallo anni</string>
     <string name="library_tags">Tag</string>

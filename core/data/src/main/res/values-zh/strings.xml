@@ -49,5 +49,7 @@
 
     <!-- Localized error messages -->
     <string name="data_no_media_source_download">没有可下载的媒体源</string>
+    <string name="data_download_started">下载已开始</string>
+    <string name="data_download_start_failed">无法开始下载</string>
     <string name="data_series_download_queued">剧集已加入下载队列</string>
 </resources>

@@ -93,10 +93,4 @@
 
     <!-- Localized error messages -->
     <string name="home_error_load_content">Não foi possível carregar o conteúdo. Verifique sua conexão e tente novamente.</string>
-
-    <!-- Confirmação de excluir download ao pressionar e segurar na home offline. -->
-    <string name="home_delete_download_title">Excluir download</string>
-    <string name="home_delete_download_message">Remover \"%1$s\" do seu dispositivo? Isso libera %2$s.</string>
-    <string name="home_delete_download_message_no_size">Remover \"%1$s\" do seu dispositivo?</string>
-    <string name="home_delete_download_confirm">Excluir</string>
 </resources>

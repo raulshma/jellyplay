@@ -243,4 +243,8 @@
     <string name="transcode_reason_hint_subtitle">选择 SRT/外部字幕以避免烧录。</string>
     <string name="core_ui_variant_accent_title">%1$s强调色</string>
     <string name="core_ui_variant_accent_subtitle">选择此主题样式的强调色</string>
+    <!-- Quick-action remove-download confirm (shared by every host surface) -->
+    <string name="core_remove_download_title">删除下载？</string>
+    <string name="core_remove_download_message">这会从此设备删除“%1$s”的已下载副本。服务器上的副本不受影响。</string>
+    <string name="core_remove_download_confirm">删除</string>
 </resources>

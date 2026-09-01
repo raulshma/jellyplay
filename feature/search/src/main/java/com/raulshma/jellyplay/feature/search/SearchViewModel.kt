@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
+import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
@@ -60,6 +61,7 @@ class SearchViewModel @Inject constructor(
     private val mediaSearchEngine: MediaSearchEngine,
     private val offlineRepository: OfflineRepository,
     private val searchFiltersStore: com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore,
+    private val mediaDownloadActions: MediaDownloadActions,
 ) : JellyPlayViewModel() {
 
     private val _query = composeState("")
@@ -355,6 +357,24 @@ class SearchViewModel @Inject constructor(
         launch {
             userDataMutator.setPlayed(item.id, played)
         }
+    }
+
+    /** Ids whose quick actions flip to "Remove download" — see [MediaDownloadActions.downloadedIds]. */
+    val downloadedIds = mediaDownloadActions.downloadedIds
+
+    /**
+     * Long-press Download from a search result card (#147): inline start for
+     * single-stream items; series selection and richer flows open the detail
+     * screen plainly — this host's navigation cannot pre-present the series
+     * sheet (unlike the library grid).
+     */
+    fun downloadItem(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
+        launch { mediaDownloadActions.downloadAndReport(item, onOpenDetail) }
+    }
+
+    /** Long-press Remove download — deletes the local copy only. */
+    fun removeItemDownload(item: MediaItem) {
+        mediaDownloadActions.removeDownload(item)
     }
 
     fun getSeerrPosterUrl(posterPath: String?): String? =

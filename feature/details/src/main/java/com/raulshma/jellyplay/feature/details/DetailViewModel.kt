@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.feature.details
 
 import android.content.Context
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
+import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
@@ -91,6 +93,8 @@ class DetailViewModel @Inject internal constructor(
     private val themeMusicPlayer: com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer,
     /** Hilt factories for the extracted action helpers (see [DetailActionFactories]). */
     private val actionFactories: DetailActionFactories,
+    /** Quick-action download/remove routing shared with the other host screens (#147). */
+    private val mediaDownloadActions: MediaDownloadActions,
 ) : JellyPlayViewModel() {
 
     /** Media-detail preference fields, projected centrally off the store slices. */
@@ -1050,6 +1054,32 @@ class DetailViewModel @Inject internal constructor(
                 seriesId = item.seriesId ?: seriesIdForItem(item.id),
             )
         }
+    }
+
+    /** Ids whose quick actions flip to "Remove download" — see [MediaDownloadActions.downloadedIds]. */
+    val quickActionDownloadedIds = mediaDownloadActions.downloadedIds
+
+    /**
+     * Long-press Download from a detail row card (related/collection/episode,
+     * #147): same routing as the library grid — inline start for single-stream
+     * items, detail screen for series (selection sheet) and other richer flows.
+     */
+    fun downloadRowItem(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
+        launch {
+            when (val result = mediaDownloadActions.download(item)) {
+                DownloadRequestResult.Started ->
+                    _messages.emit(DetailMessage.Text(strings.get(com.raulshma.jellyplay.core.data.R.string.data_download_started)))
+                is DownloadRequestResult.SeriesSelectionRequired -> onOpenDetail(result.seriesId)
+                is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId)
+                is DownloadRequestResult.Failed ->
+                    _messages.emit(DetailMessage.Text(strings.get(com.raulshma.jellyplay.core.data.R.string.data_download_start_failed)))
+            }
+        }
+    }
+
+    /** Long-press Remove download from a detail row card — deletes the local copy only. */
+    fun removeRowItemDownload(item: MediaItem) {
+        mediaDownloadActions.removeDownload(item)
     }
 
     /**

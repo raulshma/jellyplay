@@ -10,13 +10,14 @@ import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
-import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
+import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.ui.feedback.UiText
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
@@ -73,10 +74,13 @@ internal class HomeViewModel @Inject constructor(
     private val episodeCatalogue: EpisodeCatalogue,
     private val userDataMutator: UserDataMutator,
     private val mediaSearchEngine: MediaSearchEngine,
+    /** Read here only for the offline home's cached-layout mirror (see [offlineHomeGate]). */
+    private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val downloadRepository: DownloadRepository,
     private val downloadIntake: DownloadIntake,
+    private val mediaDownloadActions: MediaDownloadActions,
     private val offlineRepository: OfflineRepository,
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: NewsletterTriggerManager,
@@ -119,19 +123,17 @@ internal class HomeViewModel @Inject constructor(
     /**
      * Ids whose quick actions must flip to "Remove download" — completed
      * downloads ∪ series ids (a series card flips once any episode of it is
-     * downloaded; REMOVE_DOWNLOAD then opens the delete-episodes sheet). The
-     * union contract lives on [DownloadRepository]
-     * ([observeDownloadedIdsIncludingSeries]) so every consumer — home and
-     * the library screen — honors the series half by construction; it used to
-     * be assembled here, and library only took the completed ids. Collected
-     * unconditionally — unlike [HomeUiState.offlineLibrary], which is gated
-     * to offline modes because every download-progress tick re-invalidates it
-     * — because the ONLINE home's action sheet needs this set too. The
-     * repository collapses equal id sets, so transfers don't churn it.
+     * downloaded; REMOVE_DOWNLOAD then opens the delete-episodes sheet). Read
+     * from the shared [MediaDownloadActions.downloadedIds] flow (same union
+     * contract on [DownloadRepository.observeDownloadedIdsIncludingSeries])
+     * that every quick-action host consumes — one eagerly-shared collector
+     * serves all screens instead of a per-VM one. Collected unconditionally —
+     * unlike [HomeUiState.offlineLibrary], which is gated to offline modes
+     * because every download-progress tick re-invalidates it — because the
+     * ONLINE home's action sheet needs this set too. The repository collapses
+     * equal id sets, so transfers don't churn it.
      */
-    val downloadedIds: StateFlow<Set<String>> =
-        downloadRepository.observeDownloadedIdsIncludingSeries()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptySet())
+    val downloadedIds: StateFlow<Set<String>> = mediaDownloadActions.downloadedIds
 
     /**
      * The home screen's pending-sync surface — outbox badge count, sync
@@ -221,6 +223,14 @@ internal class HomeViewModel @Inject constructor(
         offlineMode = offlineModeManager.offlineMode,
         offlineRepository = offlineRepository,
         fetchFailedEmpty = refresher.state.map { it.fetchFailedEmpty },
+        // The offline home's layout mirror (#147): the cached online sections
+        // the offline home reproduces filtered to downloads. runCatching so a
+        // corrupt blob degrades to the generic offline rows instead of
+        // crashing the gate collector.
+        homeLayoutProvider = {
+            runCatching { mediaRepository.getOfflineHomeLayout()?.sections.orEmpty() }
+                .getOrDefault(emptyList())
+        },
     )
 
     /**
@@ -440,6 +450,8 @@ internal class HomeViewModel @Inject constructor(
                     offlineSectionPrefs = OfflineHomeSectionPrefs(
                         continueWatchingEnabled = HomeSectionType.CONTINUE_WATCHING in prefs.home.enabledHomeSectionTypes,
                         nextUpEnabled = HomeSectionType.NEXT_UP in prefs.home.enabledHomeSectionTypes,
+                        enabledSectionTypes = prefs.home.enabledHomeSectionTypes,
+                        libraryOverrides = prefs.home.libraryHomeSectionOverrides,
                         hiddenCwItemIds = prefs.home.hiddenCwItemIds,
                         nextUpExcludedSeriesIds = prefs.home.nextUpExcludedSeriesIds,
                         mergeCwAndNextUp = prefs.home.mergeContinueWatchingAndNextUp,
@@ -478,6 +490,7 @@ internal class HomeViewModel @Inject constructor(
                         renderSource = offline.renderSource,
                         offlineLibrary = offline.offlineLibrary,
                         offlineEpisodes = offline.offlineEpisodes,
+                        offlineLayoutSections = offline.cachedLayout,
                     )
                 }
             }
@@ -689,28 +702,15 @@ internal class HomeViewModel @Inject constructor(
         _uiState.value.renderSource != HomeRenderSource.Online
 
     /**
-     * Shared offline-delete module (core/data) — the same collapse/defense
-     * algorithm the detail screen and downloads library use. Constructed with
-     * no `onContentMutated` because Home's reactive `offlineLibrary` Room flow
-     * (see the init collector) refreshes on its own once rows are deleted.
-     * Used only for the quick-action delete; the series delete-episodes sheet
-     * goes through [seriesDeleteStateHolder], which captures its snapshot
-     * providers per call.
-     */
-    private val offlineDeleteActions = OfflineDeleteActions(
-        scope = scope,
-        offlineRepository = offlineRepository,
-    )
-
-    /**
      * Deletes a downloaded item from the offline home's quick-action menu.
      * Delegates the series-vs-item routing to
-     * [OfflineDeleteActions.deleteDownload]; the reactive
-     * [HomeUiState.offlineLibrary] flow refreshes on its own once the row is
-     * gone, so no manual state update is needed here.
+     * [MediaDownloadActions.removeDownload] (the shared plumbing every
+     * quick-action host uses); the reactive [HomeUiState.offlineLibrary] flow
+     * refreshes on its own once the row is gone, so no manual state update is
+     * needed here.
      */
     private fun deleteOfflineMedia(item: MediaItem) {
-        offlineDeleteActions.deleteDownload(item)
+        mediaDownloadActions.removeDownload(item)
     }
 
     /** Opens the delete-episodes sheet for [series] — see [SeriesDeleteStateHolder.requestSeriesDelete]. */
@@ -730,12 +730,14 @@ internal class HomeViewModel @Inject constructor(
     private fun dismissSeriesDownload() = seriesDownloadStateHolder.dismiss()
 
     /**
-     * Long-press Download from an online home card. Single-stream items
-     * (movie/episode/music track) start inline at the default quality; series
-     * route to the detail screen with the download sheet pre-presented via
-     * [HomeUiEvent.DownloadItem.onOpenDetail] (their flow needs the user's
-     * season/episode selection), and other non-inline types open the detail
-     * screen plainly. Failures surface on the message bus.
+     * Long-press Download from an online home card — non-series items only.
+     * Series cards never reach this method: [homeQuickActionEffect]
+     * intercepts them and emits [HomeQuickActionEffect.OpenSeriesDownloadSheet]
+     * (the in-place series sheet) instead of StartDownload. Single-stream
+     * items (movie/episode/music track) start inline at the default quality;
+     * other non-inline types (season, album, ...) open the detail screen
+     * plainly via [HomeUiEvent.DownloadItem.onOpenDetail]. Failures surface
+     * on the message bus.
      */
     private fun downloadItem(event: HomeUiEvent.DownloadItem) {
         val (item, onOpenDetail) = event
@@ -745,12 +747,15 @@ internal class HomeViewModel @Inject constructor(
                     userMessageBus.info(
                         UiText.Resource(com.raulshma.jellyplay.core.data.R.string.data_download_started)
                     )
-                is DownloadRequestResult.SeriesSelectionRequired -> onOpenDetail(result.seriesId, true)
                 is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId, false)
                 is DownloadRequestResult.Failed ->
                     userMessageBus.error(
                         UiText.Resource(com.raulshma.jellyplay.core.data.R.string.data_download_start_failed)
                     )
+                // Unreachable: [homeQuickActionEffect] never emits StartDownload
+                // for a series card. Listed only to keep the sealed `when`
+                // exhaustive — series downloads are handled by the series sheet.
+                is DownloadRequestResult.SeriesSelectionRequired -> Unit
             }
         }
     }

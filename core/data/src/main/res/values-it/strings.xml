@@ -51,5 +51,7 @@
 
     <!-- Localized error messages -->
     <string name="data_no_media_source_download">Nessuna sorgente multimediale disponibile per il download</string>
+    <string name="data_download_started">Download avviato</string>
+    <string name="data_download_start_failed">Impossibile avviare il download</string>
     <string name="data_series_download_queued">Episodi accodati per il download</string>
 </resources>

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
+import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -20,6 +21,7 @@ class CollectionDetailViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
+    private val mediaDownloadActions: MediaDownloadActions,
 ) : JellyPlayViewModel() {
 
     private val _uiState = MutableStateFlow<CollectionDetailUiState>(CollectionDetailUiState.Loading)
@@ -85,5 +87,23 @@ class CollectionDetailViewModel @Inject constructor(
                 containers = listOf(itemContainer),
             )
         }
+    }
+
+    /** Ids whose quick actions flip to "Remove download" — see [MediaDownloadActions.downloadedIds]. */
+    val downloadedIds = mediaDownloadActions.downloadedIds
+
+    /**
+     * Long-press Download from a collection row card (#147): inline start for
+     * single-stream items; series selection and richer flows open the detail
+     * screen plainly — this host's navigation cannot pre-present the series
+     * sheet (unlike the library grid).
+     */
+    fun downloadItem(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
+        launch { mediaDownloadActions.downloadAndReport(item, onOpenDetail) }
+    }
+
+    /** Long-press Remove download — deletes the local copy only. */
+    fun removeItemDownload(item: MediaItem) {
+        mediaDownloadActions.removeDownload(item)
     }
 }

@@ -51,8 +51,7 @@ class LibraryViewModelTest {
 
     private lateinit var mediaRepository: MediaRepository
     private lateinit var offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository
-    private lateinit var downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository
-    private lateinit var downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake
+    private lateinit var mediaDownloadActions: com.raulshma.jellyplay.core.data.download.MediaDownloadActions
     private lateinit var offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager
     private lateinit var userDataMutator: UserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -69,8 +68,7 @@ class LibraryViewModelTest {
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
-        downloadRepository = mockk(relaxed = true)
-        downloadIntake = mockk(relaxed = true)
+        mediaDownloadActions = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
@@ -81,10 +79,8 @@ class LibraryViewModelTest {
         every { imageUrlProvider.getImageUrl(any(), any()) } returns "https://example.com/image.jpg"
         every { libraryStore.library } returns MutableStateFlow(LibrarySlice())
         every { offlineModeManager.offlineMode } returns offlineModeFlow
-        // The VM collects this in init for quick-action download gating.
-        every {
-            downloadRepository.observeDownloadedIdsIncludingSeries()
-        } returns MutableStateFlow(emptySet())
+        // The VM re-exposes this for quick-action download gating.
+        every { mediaDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
 
         // Stub the init-block repository calls with real Result/Flow values so
         // the relaxed mock's default Result mock doesn't ClassCast inside the
@@ -97,8 +93,7 @@ class LibraryViewModelTest {
     private fun createViewModel(): LibraryViewModel = LibraryViewModel(
         mediaRepository = mediaRepository,
         offlineRepository = offlineRepository,
-        downloadRepository = downloadRepository,
-        downloadIntake = downloadIntake,
+        mediaDownloadActions = mediaDownloadActions,
         offlineModeManager = offlineModeManager,
         userDataMutator = userDataMutator,
         imageUrlProvider = imageUrlProvider,

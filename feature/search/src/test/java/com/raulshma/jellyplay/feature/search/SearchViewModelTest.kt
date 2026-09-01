@@ -67,6 +67,7 @@ class SearchViewModelTest {
     private val mediaSearchEngine: MediaSearchEngine = mockk(relaxed = true)
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var searchFiltersStore: SearchFiltersStore
+    private val mediaDownloadActions: com.raulshma.jellyplay.core.data.download.MediaDownloadActions = mockk(relaxed = true)
 
     private lateinit var viewModel: SearchViewModel
 
@@ -99,7 +100,7 @@ class SearchViewModelTest {
             seerrRequestDelegate,
             mediaSearchEngine,
             offlineRepository,
-            searchFiltersStore,
+            searchFiltersStore, mediaDownloadActions,
         )
     }
 
@@ -164,7 +165,7 @@ class SearchViewModelTest {
         // Recreate so the init-time suggestion load picks up the stub.
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
         )
 
         // Warm the flow; the empty initial query triggers loadDiscoverySuggestions().
@@ -207,7 +208,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
         )
         backgroundScope.launch { viewModel.genres.collect { } }
         advanceUntilIdle()
@@ -225,7 +226,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
         )
         backgroundScope.launch { viewModel.genres.collect { } }
         advanceUntilIdle()
@@ -241,7 +242,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
         )
         backgroundScope.launch { viewModel.tags.collect { } }
         advanceUntilIdle()
@@ -258,7 +259,7 @@ class SearchViewModelTest {
         )
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
         )
         backgroundScope.launch { viewModel.isSeerrConnected.collect { } }
         advanceUntilIdle()
@@ -273,7 +274,7 @@ class SearchViewModelTest {
         )
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
         )
         backgroundScope.launch { viewModel.isSeerrSearchEnabled.collect { } }
         advanceUntilIdle()
@@ -295,7 +296,7 @@ class SearchViewModelTest {
         )
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
         )
         // searchSeerr()/searchOffline() are launched from the pagedResults
         // pipeline, so that flow must be collected for the search to run. The
@@ -324,7 +325,7 @@ class SearchViewModelTest {
         coEvery { seerrRepository.search(any(), any()) } returns Result.failure(RuntimeException("500"))
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
@@ -343,7 +344,7 @@ class SearchViewModelTest {
         every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
@@ -369,7 +370,7 @@ class SearchViewModelTest {
         )
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
@@ -403,7 +404,7 @@ class SearchViewModelTest {
         coEvery { offlineRepository.searchOffline(any(), any()) } returns offline
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
@@ -421,7 +422,7 @@ class SearchViewModelTest {
         coEvery { offlineRepository.searchOffline(any(), any()) } throws RuntimeException("db locked")
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
@@ -461,7 +462,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
         )
         backgroundScope.launch { viewModel.searchHistory.collect { } }
         advanceUntilIdle()

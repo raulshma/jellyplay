@@ -93,10 +93,4 @@
 
     <!-- Localized error messages -->
     <string name="home_error_load_content">コンテンツを読み込めませんでした。接続を確認して再試行してください。</string>
-
-    <!-- オフラインのホームで長押しした際のダウンロード削除確認。 -->
-    <string name="home_delete_download_title">ダウンロードを削除</string>
-    <string name="home_delete_download_message">「%1$s」を端末から削除しますか？%2$s が解放されます。</string>
-    <string name="home_delete_download_message_no_size">「%1$s」を端末から削除しますか？</string>
-    <string name="home_delete_download_confirm">削除</string>
 </resources>

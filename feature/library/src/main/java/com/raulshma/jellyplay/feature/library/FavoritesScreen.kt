@@ -60,8 +60,10 @@ import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.QuickAction
+import com.raulshma.jellyplay.core.ui.components.RemoveDownloadConfirmHost
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
+import com.raulshma.jellyplay.core.ui.components.rememberRemoveDownloadState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -87,15 +89,43 @@ fun FavoritesScreen(
         viewModel.prefetchPhotoFolderChildUrls(snapshot.items)
     }
 
-    // Long-press / TV-Menu quick actions for favorite cards
+    // Item awaiting a remove-download confirm from the quick-action menu.
+    // Hoisted so the dialog survives the card leaving composition while open.
+    val removeDownloadState = rememberRemoveDownloadState()
+
+    // Collected (not read as a .value snapshot inside the resolve lambda) so
+    // the resolver is rebuilt when the downloaded set changes — a download
+    // completing flips the card's Download↔Remove-download action without
+    // waiting for an unrelated recomposition. The set is distinct-collapsed
+    // upstream, so active transfers don't churn it.
+    val downloadedIds by viewModel.downloadedIds.collectAsStateWithLifecycle()
+
+    // Long-press / TV-Menu quick actions for favorite cards. Download /
+    // Remove download ride the same intake as the library grid (#147): a
+    // downloaded favorite flips the slot to "Remove download".
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember { { item: MediaItem -> item.quickActions(MediaQuickActionScope.LIBRARY) } },
+        resolveActions = remember(viewModel, downloadedIds) {
+            { item: MediaItem ->
+                item.quickActions(
+                    MediaQuickActionScope.LIBRARY,
+                    includeDownload = true,
+                    isDownloaded = downloadedIds.contains(item.id),
+                )
+            }
+        },
         executeAction = remember(viewModel, onItemClick) {
             { item: MediaItem, action: QuickAction ->
                 when (action) {
                     QuickAction.PLAY -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
                     QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, true)
                     QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, false)
+                    // Result ids always echo the originating item (DownloadIntake),
+                    // so the captured metadata stays accurate.
+                    QuickAction.DOWNLOAD ->
+                        viewModel.downloadItem(item, onOpenDetail = { id ->
+                            onItemClick(id, item.mediaType, item.parentId, item.name)
+                        })
+                    QuickAction.REMOVE_DOWNLOAD -> removeDownloadState.request(item)
                     QuickAction.DETAILS -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
                     else -> Unit
                 }
@@ -207,6 +237,13 @@ fun FavoritesScreen(
         } // close CompositionLocalProvider
     } // close Box
     MediaQuickActionHost(quickActionController)
+
+    // Remove-download confirm: quick-action removal only ever deletes the
+    // local download — the server copy is untouched.
+    RemoveDownloadConfirmHost(
+        state = removeDownloadState,
+        onConfirmRemove = { viewModel.removeItemDownload(it) },
+    )
 } // close FavoritesScreen
 
 @Composable
