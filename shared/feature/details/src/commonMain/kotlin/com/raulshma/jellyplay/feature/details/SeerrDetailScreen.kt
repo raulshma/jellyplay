@@ -535,18 +535,20 @@ private fun SeerrDetailContent(
                 }
             }
 
-            val isLandscapeExpanded = isExpanded && adaptiveInfo.isLandscape
             // Rebuilt only when the theme colour / backdrop geometry change, not
             // on every scroll frame (mirrors DetailContent's fadeBrush).
-            val scrimBrush = remember(backgroundColor, backdropHeight, baseBackdropHeight, isLandscapeExpanded, density) {
+            // Bottom-anchored fade on every window size class — landscape
+            // tablets previously got a full-height 0.5→1.0 wash instead, which
+            // read as a dimmed backdrop rather than a fade.
+            val scrimBrush = remember(backgroundColor, backdropHeight, baseBackdropHeight, density) {
                 Brush.verticalGradient(
                     colors = listOf(
-                        if (isLandscapeExpanded) backgroundColor.copy(alpha = 0.5f) else Color.Transparent,
-                        backgroundColor.copy(alpha = if (isLandscapeExpanded) 0.8f else 0.4f),
+                        Color.Transparent,
+                        backgroundColor.copy(alpha = 0.4f),
                         backgroundColor.copy(alpha = 0.9f),
                         backgroundColor,
                     ),
-                    startY = if (isLandscapeExpanded) 0f else with(density) { (baseBackdropHeight - 200.dp).toPx() },
+                    startY = with(density) { (baseBackdropHeight - 200.dp).toPx() },
                     endY = with(density) { backdropHeight.toPx() }
                 )
             }

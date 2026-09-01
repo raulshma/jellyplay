@@ -96,6 +96,29 @@ private const val HERO_BREATH_DURATION_MS = 12_000
 private const val HERO_PLAY_PULSE_DURATION_MS = 1_800
 private const val HERO_RATING_PULSE_DURATION_MS = 2_000
 
+// Reference height the hero dissolve's fractional stops were tuned on: the
+// 520dp portrait phone hero, where the 55–85% mask spans ~156dp. Shorter
+// heroes (320dp tablet landscape) compress that melt band to ~96dp, which
+// reads as a hard cut instead of the phone's soft merge, so the band is
+// floored at the reference width.
+private val HeroDissolveReferenceHeight = 520.dp
+
+/**
+ * Start fraction (0–1 of the hero height) of the bottom dissolve band. The
+ * fully-transparent anchor stays at 0.85 of the height on every device; only
+ * the band top moves, and never higher than needed to keep the band at least
+ * as wide as the reference phone hero's.
+ */
+private fun heroDissolveStartFraction(
+    heightPx: Float,
+    proportionalStop: Float,
+    referenceHeightPx: Float,
+): Float {
+    val minBandPx = referenceHeightPx * (0.85f - proportionalStop)
+    val bandTopPx = minOf(proportionalStop * heightPx, 0.85f * heightPx - minBandPx)
+    return (bandTopPx / heightPx).coerceIn(0f, 1f)
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AnimatedHeroHeader(
@@ -414,7 +437,11 @@ fun HeroHeader(
                             val mask = Brush.verticalGradient(
                                 colorStops = arrayOf(
                                     0.0f to Color.Black,
-                                    0.55f to Color.Black,
+                                    heroDissolveStartFraction(
+                                        heightPx = size.height,
+                                        proportionalStop = 0.55f,
+                                        referenceHeightPx = HeroDissolveReferenceHeight.toPx(),
+                                    ) to Color.Black,
                                     0.85f to Color.Transparent,
                                     1.0f to Color.Transparent,
                                 ),
@@ -436,7 +463,11 @@ fun HeroHeader(
                             val fade = Brush.verticalGradient(
                                 colorStops = arrayOf(
                                     0.0f to Color.Transparent,
-                                    0.6f to Color.Transparent,
+                                    heroDissolveStartFraction(
+                                        heightPx = size.height,
+                                        proportionalStop = 0.6f,
+                                        referenceHeightPx = HeroDissolveReferenceHeight.toPx(),
+                                    ) to Color.Transparent,
                                     0.85f to backgroundColor.copy(alpha = 0.6f),
                                     1.0f to backgroundColor,
                                 ),

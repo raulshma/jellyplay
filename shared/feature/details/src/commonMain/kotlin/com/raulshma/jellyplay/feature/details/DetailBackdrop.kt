@@ -27,7 +27,6 @@ import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
 /**
@@ -46,7 +45,6 @@ internal fun DetailBackdrop(
     relatedVideos: List<SeerrRelatedVideo>,
     preferences: DetailPreferences,
     scrollState: DetailScrollState,
-    isExpanded: Boolean,
     modifier: Modifier = Modifier,
     /**
      * On-disk backdrop path for the current item (DetailAssets.backdropPath).
@@ -71,9 +69,6 @@ internal fun DetailBackdrop(
         } ?: relatedVideos.firstOrNull { it.site?.lowercase() == "youtube" }
     }
     var autoplayEmbedFailed by remember(targetBackdropId) { mutableStateOf(false) }
-
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    val isLandscapeExpanded = isExpanded && adaptiveInfo.isLandscape
 
     Box(
         modifier = modifier
@@ -163,14 +158,21 @@ internal fun DetailBackdrop(
                 // a fresh gradient on every draw pass of the colour animation.
                 .drawWithCache {
                     val backgroundColor = backgroundColorState.value
+                    // Bottom-anchored fade, identical on every window size class.
+                    // The scroll spacer puts body content at baseBackdropHeight
+                    // - 150dp on every tier, so starting the gradient 50dp earlier
+                    // dissolves the artwork into the background colour under the
+                    // arriving content on phones, tablets and TV alike. Landscape
+                    // tablets previously got a full-height 0.5→1.0 wash instead,
+                    // which read as a dimmed backdrop rather than a fade.
                     val scrimBrush = Brush.verticalGradient(
                         colors = listOf(
-                            if (isLandscapeExpanded) backgroundColor.copy(alpha = 0.5f) else Color.Transparent,
-                            backgroundColor.copy(alpha = if (isLandscapeExpanded) 0.8f else 0.4f),
+                            Color.Transparent,
+                            backgroundColor.copy(alpha = 0.4f),
                             backgroundColor.copy(alpha = 0.9f),
                             backgroundColor,
                         ),
-                        startY = if (isLandscapeExpanded) 0f else (baseBackdropHeight - 200.dp).toPx(),
+                        startY = (baseBackdropHeight - 200.dp).toPx(),
                         endY = backdropHeight.toPx(),
                     )
                     onDrawBehind {

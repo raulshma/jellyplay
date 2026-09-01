@@ -214,7 +214,6 @@ internal fun DetailContent(
             relatedVideos = state.relatedVideos,
             preferences = state.preferences,
             scrollState = scrollState,
-            isExpanded = isExpanded,
             localBackdropPath = state.assets.backdropPath,
         )
 
