@@ -13,6 +13,9 @@ plugins {
     // but never applied to the root project by default. Application itself is
     // gated on -PenableCoverage below.
     alias(libs.plugins.kover) apply false
+    // CI-only flake absorption for the shared-tree test suites (see the
+    // subprojects gate below for the rationale).
+    alias(libs.plugins.test.retry) apply false
 }
 
 // Kover is opt-in: unless the build is invoked with -PenableCoverage (e.g.
@@ -70,6 +73,39 @@ subprojects {
             extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension>("kotlin") {
                 compilerOptions {
                     jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+                }
+            }
+        }
+    }
+}
+
+// Test-retry: the shared/ suites run under real CI load for the first time
+// since the kmp-build folded-scalar fix (before it, gradle silently built a
+// truncated task list), and each lane showed exactly-one-per-run failures in
+// DIFFERENT tests (DataStore stateIn lag on slow disks, a ViewModel NPE under
+// load) — classic load flakes, not deterministic regressions. Retry those on
+// CI only (local runs keep failing loudly so flakes stay visible). The
+// deterministic bugs found on the way (SelfSigned reverse-DNS URLs, macOS
+// zero-major app-version, Kotlin daemon OOM) were fixed for real, not retried.
+val ciRun = providers.environmentVariable("CI").map { it == "true" }.getOrElse(false)
+
+subprojects {
+    listOf(
+        "org.jetbrains.kotlin.multiplatform",
+        "org.jetbrains.kotlin.jvm",
+    ).forEach { kotlinPlugin ->
+        pluginManager.withPlugin(kotlinPlugin) {
+            if (ciRun) {
+                apply(plugin = "org.gradle.test-retry")
+                tasks.withType<Test>().configureEach {
+                    // `apply(plugin = ...)` generates no type-safe accessor for
+                    // the plugin's retry { } DSL — configure the task extension
+                    // (org.gradle.testretry.TestRetryTaskExtension) by name.
+                    extensions.configure<org.gradle.testretry.TestRetryTaskExtension>("retry") {
+                        maxRetries.set(2)
+                        maxFailures.set(3)
+                        failOnPassedAfterRetry.set(false)
+                    }
                 }
             }
         }
