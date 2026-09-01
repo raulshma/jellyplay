@@ -206,6 +206,21 @@ jobs:
           "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
           "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
+      - name: Print test failure details
+        # Gradle 9's console prints only one-line "FAILED" entries; the
+        # assertion messages live in the JUnit XML. The SelfSignedTrust /
+        # datastore failures need their "got $error" text to diagnose.
+        if: failure()
+        run: |
+          shopt -s nullglob
+          for f in $(find . -path '*build/test-results*' -name 'TEST-*.xml' 2>/dev/null); do
+            grep -q '<failure' "$f" || continue
+            echo "===== $f ====="
+            sed -n 's/.*<failure message="\([^"]*\)".*/MSG: \1/p' "$f"
+            sed -n 's/.*<failure[^>]*>\([^<]\{1,\}\).*/TEXT: \1/p' "$f" | head -c 3000
+            echo
+          done || true
+
       - name: Android app androidTest assembly (relocated player-video UI tests)
         # Wave 7C: the legacy :feature:player:video androidTest set moved to
         # :app (AGP KMP library plugins expose no androidTest compilation —
