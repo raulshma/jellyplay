@@ -192,6 +192,7 @@ class AuthRepositoryImplTest {
         every { serverIdentityStore.activeUserId } returns flowOf("user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
+        coEvery { apiClient.getCurrentUser() } returns Result.success(mockk(relaxed = true))
 
         val result = repository.restoreSession()
 
@@ -199,6 +200,83 @@ class AuthRepositoryImplTest {
         coVerify { apiClient.setServer(any()) }
         coVerify { apiClient.selectReachableAddress() }
         coVerify { apiClient.setUser(any()) }
+        coVerify(exactly = 0) { apiClient.disconnect() }
+    }
+
+    @Test
+    fun `restoreSession tears down the session when the server rejects the restored token with 401`() = runTest {
+        // Regression: Jellyfin replaces the session for a (client, deviceId,
+        // user) triple on a new login — e.g. a sibling install (debug +
+        // release split by a backup-restore that cloned the device id) logs
+        // in and revokes this install's stored token. Restoring that dead
+        // token used to boot into a ghost session: home renders from cache,
+        // every live call 401s, and detail screens show "You don't have
+        // access to this item." A definitive 401 at restore must instead
+        // land on the login screen.
+        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
+        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        coEvery { serverDao.getServerById("server-1") } returns testServerEntity
+        coEvery { userDao.getUserById("user-1") } returns testUserEntity
+        coEvery { apiClient.getCurrentUser() } returns Result.failure(
+            ApiException(
+                isRetryable = false,
+                httpCode = 401,
+                isAccessDenied = true,
+                message = "Authentication required. Please sign in again.",
+            ),
+        )
+
+        val result = repository.restoreSession()
+
+        // Restore itself succeeds — the session was found and wired; the
+        // validation then removed it, so isAuthenticated flips false and the
+        // shell renders the login flow instead of a cached ghost home.
+        assertTrue(result.isSuccess)
+        coVerify { apiClient.setUser(any()) }
+        coVerify { apiClient.disconnect() }
+        coVerify { serverIdentityStore.clearSession() }
+    }
+
+    @Test
+    fun `restoreSession keeps the session when token validation fails without a 401`() = runTest {
+        // Network/5xx/403 failures must NOT invalidate: offline use keeps
+        // working from cache, and an authenticated-but-forbidden user keeps
+        // the session (permission demotion has its own path in
+        // refreshCurrentUser).
+        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
+        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        coEvery { serverDao.getServerById("server-1") } returns testServerEntity
+        coEvery { userDao.getUserById("user-1") } returns testUserEntity
+        coEvery { apiClient.getCurrentUser() } returns Result.failure(Exception("offline"))
+
+        val result = repository.restoreSession()
+
+        assertTrue(result.isSuccess)
+        coVerify { apiClient.setUser(any()) }
+        coVerify(exactly = 0) { apiClient.disconnect() }
+        coVerify(exactly = 0) { serverIdentityStore.clearSession() }
+    }
+
+    @Test
+    fun `restoreSession keeps the session on 403 from token validation`() = runTest {
+        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
+        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        coEvery { serverDao.getServerById("server-1") } returns testServerEntity
+        coEvery { userDao.getUserById("user-1") } returns testUserEntity
+        coEvery { apiClient.getCurrentUser() } returns Result.failure(
+            ApiException(
+                isRetryable = false,
+                httpCode = 403,
+                isAccessDenied = true,
+                message = "You don't have permission to access this item.",
+            ),
+        )
+
+        val result = repository.restoreSession()
+
+        assertTrue(result.isSuccess)
+        coVerify { apiClient.setUser(any()) }
+        coVerify(exactly = 0) { apiClient.disconnect() }
     }
 
     @Test
@@ -279,6 +357,81 @@ class AuthRepositoryImplTest {
 
         assertTrue(result.isSuccess)
         coVerify(exactly = 0) { apiClient.setUser(any()) }
+    }
+
+    @Test
+    fun `switchUser fails without establishing session when stored token is rejected with 401`() = runTest {
+        // Regression: tapping a saved server/user re-armed a revoked stored
+        // token, reported success, and landed on a cached ghost home whose
+        // live calls all 401 — the restore-time guard then cleared the
+        // session on next cold start, bouncing the user between the server
+        // screen and home forever. A rejected token must fail the switch so
+        // the login screen asks for credentials.
+        coEvery { userDao.getUserById("user-1") } returns testUserEntity
+        coEvery { serverDao.getServerById("server-1") } returns testServerEntity
+        coEvery { apiClient.getCurrentUser() } returns Result.failure(
+            ApiException(
+                isRetryable = false,
+                httpCode = 401,
+                isAccessDenied = true,
+                message = "Authentication required. Please sign in again.",
+            ),
+        )
+
+        val result = repository.switchUser("user-1")
+
+        assertTrue(result.isFailure)
+        coVerify { apiClient.setUser(any()) }
+        coVerify { apiClient.disconnect() }
+        coVerify(exactly = 0) { serverIdentityStore.setActiveSession(any(), any()) }
+    }
+
+    @Test
+    fun `switchUser succeeds and persists identity when stored token validates`() = runTest {
+        coEvery { userDao.getUserById("user-1") } returns testUserEntity
+        coEvery { serverDao.getServerById("server-1") } returns testServerEntity
+        coEvery { apiClient.getCurrentUser() } returns Result.success(mockk(relaxed = true))
+
+        val result = repository.switchUser("user-1")
+
+        assertTrue(result.isSuccess)
+        coVerify { apiClient.setUser(any()) }
+        coVerify { serverIdentityStore.setActiveSession("server-1", "user-1") }
+        coVerify { userDao.updateUser(any()) }
+    }
+
+    @Test
+    fun `switchServer fails without establishing session when stored token is rejected with 401`() = runTest {
+        coEvery { serverDao.getServerById("server-1") } returns testServerEntity
+        coEvery { userDao.getMostRecentUserForServer("server-1") } returns testUserEntity
+        coEvery { apiClient.getCurrentUser() } returns Result.failure(
+            ApiException(
+                isRetryable = false,
+                httpCode = 401,
+                isAccessDenied = true,
+                message = "Authentication required. Please sign in again.",
+            ),
+        )
+
+        val result = repository.switchServer("server-1")
+
+        assertTrue(result.isFailure)
+        coVerify { apiClient.setUser(any()) }
+        coVerify { apiClient.disconnect() }
+        coVerify(exactly = 0) { serverIdentityStore.setActiveSession(any(), any()) }
+    }
+
+    @Test
+    fun `switchServer succeeds and persists identity when stored token validates`() = runTest {
+        coEvery { serverDao.getServerById("server-1") } returns testServerEntity
+        coEvery { userDao.getMostRecentUserForServer("server-1") } returns testUserEntity
+        coEvery { apiClient.getCurrentUser() } returns Result.success(mockk(relaxed = true))
+
+        val result = repository.switchServer("server-1")
+
+        assertTrue(result.isSuccess)
+        coVerify { apiClient.setUser(any()) }
+        coVerify { serverIdentityStore.setActiveSession("server-1", "user-1") }
     }
 
     @Test

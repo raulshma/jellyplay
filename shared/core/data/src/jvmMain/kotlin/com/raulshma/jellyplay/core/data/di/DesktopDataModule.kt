@@ -142,7 +142,7 @@ fun desktopDataModule(dataDir: Path): Module {
         // Desktop actual of the quick-action download-outcome seam
         // (MediaDownloadActions.downloadAndReport posts Started/Failed
         // through it): Android bridges this to core/ui's UserMessageBus
-        // snackbar via the app's downloadOutcomeModule, but desktop has no
+        // snackbar via androidAppInteropAdaptersModule, but desktop has no
         // global toast host in core/data's reach — and core/data must not
         // depend on core/ui. Console-logging keeps the outcome visible in the
         // desktop log without inventing UI plumbing here; the transfer itself

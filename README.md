@@ -563,7 +563,7 @@ Two more workflows run alongside it:
 
 A fourth workflow keeps the Kotlin Multiplatform tree honest:
 
-- `.github/workflows/kmp-build.yml` — on pushes to `main` and every PR, compiles all configured targets of the `shared/` tree (JVM + wasmJs + Android) on Ubuntu, Windows, and macOS, runs the full `jvmTest` suite per shared module, and runs `:apps:desktop:test` (home of the Koin-registration guard) plus the `:apps:web:compileKotlinWasmJs` lane
+- `.github/workflows/kmp-build.yml` — on pushes to `main`/`master`/`kmp-alpha` and every PR, compiles all configured targets of the `shared/` tree (JVM + wasmJs + Android) on Ubuntu, Windows, and macOS, runs the full `jvmTest` suite per shared module, and runs `:apps:desktop:test` (home of the Koin-registration guard) plus the `:apps:web:compileKotlinWasmJs` lane
 
 ---
 

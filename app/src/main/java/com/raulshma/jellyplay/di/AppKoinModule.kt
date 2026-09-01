@@ -7,12 +7,15 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.PlayOnViewModel
+import com.raulshma.jellyplay.core.data.R
 import com.raulshma.jellyplay.core.data.cast.CastManager
+import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
+import com.raulshma.jellyplay.core.ui.feedback.UiText
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import com.raulshma.jellyplay.feature.details.DetailAudioPlayback
@@ -196,6 +199,11 @@ fun androidAppInteropAdaptersModule(application: Application): Module = module {
     single<DetailThemeMusic> { AppDetailThemeMusic(player = get()) }
     single<AudioPlayerEngine> { AppAudioPlayerEngine(manager = get()) }
     single<AudioPlayerCast> { AppAudioPlayerCast(castManager = get(), application = application) }
+    // Dev v0.10.7 quick-action flow: core/data's download-outcome seam
+    // (MediaDownloadActions.downloadAndReport) bridged to the UserMessageBus
+    // single — the app graph is the only one that sees both (shared:core:data
+    // cannot depend on core/ui; desktop ships its own def in desktopDataModule).
+    single<DownloadOutcomeMessenger> { AppDownloadOutcomeMessenger(userMessageBus = get()) }
 }
 
 /** Bridges the shared music module's [MusicMessageBus] seam to the core bus. */
@@ -203,6 +211,19 @@ private class AppMusicMessageBus(
     private val bus: UserMessageBus,
 ) : MusicMessageBus {
     override fun error(message: String) = bus.error(message)
+}
+
+/** core/data download-outcome seam: exact info/error toasts over the core bus. */
+private class AppDownloadOutcomeMessenger(
+    private val userMessageBus: UserMessageBus,
+) : DownloadOutcomeMessenger {
+    override fun downloadStarted() {
+        userMessageBus.info(UiText.Resource(R.string.data_download_started))
+    }
+
+    override fun downloadStartFailed() {
+        userMessageBus.error(UiText.Resource(R.string.data_download_start_failed))
+    }
 }
 
 /** Details feature seam: per-item audio playback over the shared manager. */

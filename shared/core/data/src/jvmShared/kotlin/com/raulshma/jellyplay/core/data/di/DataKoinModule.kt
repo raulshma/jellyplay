@@ -599,7 +599,7 @@ val dataJvmModule: Module = module {
     // DownloadIntake resolves from the platform data modules (Android:
     // AndroidCoreDataKoinModule's DownloadIntakeImpl; desktop:
     // desktopDataModule's DesktopDownloadIntake). The DownloadOutcomeMessenger
-    // binding is platform-owned too — the app's downloadOutcomeModule bridges
+    // binding is platform-owned too — androidAppInteropAdaptersModule bridges
     // it to core/ui's UserMessageBus on Android, desktopDataModule provides a
     // desktop definition — because core/data must not depend on core/ui.
     single {

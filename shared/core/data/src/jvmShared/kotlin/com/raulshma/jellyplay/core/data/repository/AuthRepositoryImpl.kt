@@ -120,6 +120,17 @@ class AuthRepositoryImpl constructor(
         if (userEntity != null) {
             val user = userEntity.toUserInfo(server.address)
             apiClient.setUser(user)
+            // Guard against re-arming a revoked token: without this, tapping
+            // a saved server adopts the dead stored token, the app lands on a
+            // cached ghost home whose live calls all 401, and the next cold
+            // start clears the session again — a server-screen/home bounce
+            // loop. A rejected token fails the switch so the login screen
+            // asks for credentials instead.
+            if (storedTokenRejected()) {
+                Log.w("AuthRepository", "switchServer: stored token for ${userEntity.name} rejected (401)")
+                apiClient.disconnect()
+                return Result.failure(sessionExpired())
+            }
             serverIdentityStore.setActiveSession(serverId, userEntity.userId)
             database.withTransaction {
                 serverDao.updateServer(serverEntity.copy(lastConnected = System.currentTimeMillis()))
@@ -312,12 +323,57 @@ class AuthRepositoryImpl constructor(
                         } ?: emptyList(),
                     )
                 )
+                validateRestoredSession()
             } else {
                 Log.w("AuthRepository", "restoreSession: no access token for active user")
             }
         }
     }.onFailure { e ->
         Log.e("AuthRepository", "restoreSession failed", e)
+    }
+
+    /**
+     * Restore-time guard on top of [storedTokenRejected]: a token the server
+     * definitively rejects (401) tears the freshly restored session down, so
+     * the shell lands on the login screen instead of a cached ghost home.
+     */
+    private suspend fun validateRestoredSession() {
+        if (storedTokenRejected()) {
+            Log.w("AuthRepository", "restoreSession: server rejected the stored token (401) — clearing session")
+            apiClient.disconnect()
+            serverIdentityStore.clearSession()
+        }
+    }
+
+    /** The failure surfaced when a stored token is rejected (HTTP 401). */
+    private fun sessionExpired(): com.raulshma.jellyplay.core.network.api.ApiException =
+        com.raulshma.jellyplay.core.network.api.ApiException(
+            isRetryable = false,
+            httpCode = 401,
+            isAccessDenied = true,
+            message = "Authentication required. Please sign in again.",
+        )
+
+    /**
+     * One cheap round-trip after adopting a persisted token. The server can
+     * have revoked it since it was stored — a password change, a dashboard
+     * session cleanup, or a sibling install logging in as the same
+     * (client, deviceId, user): Jellyfin replaces that session and the old
+     * token 401s. Adopting such a token boots into a ghost session: home
+     * renders from cache while every live call fails, downloaded items
+     * render through the offline fallback, and everything else (e.g. series
+     * detail, which has no offline row) surfaces "You don't have access to
+     * this item."
+     *
+     * Only HTTP 401 counts as rejection: 403 means authenticated-but-forbidden
+     * (permission demotion has its own path in [refreshCurrentUser]), and
+     * network/5xx failures keep the session so offline use is unchanged.
+     */
+    private suspend fun storedTokenRejected(): Boolean {
+        val rejected = runCatching { apiClient.getCurrentUser().exceptionOrNull() }
+            .getOrNull() as? com.raulshma.jellyplay.core.network.api.ApiException
+            ?: return false
+        return rejected.httpCode == 401
     }
 
     override suspend fun refreshCurrentUser(): Result<UserInfo> {
@@ -401,6 +457,14 @@ class AuthRepositoryImpl constructor(
         // a dead primary address.
         runCatching { apiClient.selectReachableAddress() }
         apiClient.setUser(userEntity.toUserInfo(server.address))
+        // Same revoked-token guard as switchServer: a stored token the server
+        // 401s must not establish a session — the login screen needs to ask
+        // for credentials, not bounce through a ghost home.
+        if (storedTokenRejected()) {
+            Log.w("AuthRepository", "switchUser: stored token for ${userEntity.name} rejected (401)")
+            apiClient.disconnect()
+            return Result.failure(sessionExpired())
+        }
         serverIdentityStore.setActiveSession(server.id, userId)
         database.withTransaction {
             userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))

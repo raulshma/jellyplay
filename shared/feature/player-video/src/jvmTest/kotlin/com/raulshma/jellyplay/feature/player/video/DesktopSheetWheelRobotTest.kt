@@ -24,6 +24,7 @@ import java.awt.Point
 import java.awt.Robot
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -41,6 +42,35 @@ import kotlin.test.assertTrue
 class DesktopSheetWheelRobotTest {
 
     private val items = (0 until 100).map { "Item $it" }
+
+    private val warmUpDone = AtomicBoolean(false)
+    private val warmUpWindow = AtomicReference<ComposeWindow?>(null)
+
+    /**
+     * The JVM's first ComposeWindow is routinely denied the Windows foreground
+     * when a background test worker shows it, and Windows routes WM_MOUSEWHEEL
+     * to the FOREGROUND window — so whichever wheel case ran first in a fresh
+     * JVM lost its wheel events to whatever app actually held focus (observed:
+     * first case 0 -> 0, second case scrolls; both pass when run as the second
+     * case). Show and dispose a sacrificial window once per JVM so the measured
+     * windows are never the process's first activation.
+     */
+    private fun warmUpFirstWindowOnce() {
+        if (!warmUpDone.compareAndSet(false, true)) return
+        if (java.awt.GraphicsEnvironment.isHeadless()) return
+        EventQueue.invokeLater {
+            val warmup = ComposeWindow()
+            warmup.isUndecorated = true
+            warmup.setSize(120, 80)
+            warmup.location = Point(0, 0)
+            warmup.setContent { Text("wheel warm-up") }
+            warmUpWindow.set(warmup)
+            warmup.isVisible = true
+            warmup.toFront()
+        }
+        Thread.sleep(600)
+        EventQueue.invokeLater { warmUpWindow.getAndSet(null)?.dispose() }
+    }
 
     private fun assumeInteractiveDisplay() {
         org.junit.Assume.assumeTrue(
@@ -83,6 +113,7 @@ class DesktopSheetWheelRobotTest {
         assert: (LazyListState, SheetState, Int, Int) -> Unit,
     ) {
         assumeInteractiveDisplay()
+        warmUpFirstWindowOnce()
         val listRef = AtomicReference<LazyListState?>(null)
         val sheetRef = AtomicReference<SheetState?>(null)
         val windowRef = AtomicReference<ComposeWindow?>(null)
@@ -161,7 +192,27 @@ class DesktopSheetWheelRobotTest {
             repeat(40) { robot.mouseWheel(1) }
             Thread.sleep(1_000)
 
-            val after = listState.firstVisibleItemIndex
+            var after = listState.firstVisibleItemIndex
+            if (after == before) {
+                // Windows routes WM_MOUSEWHEEL to the foreground window; if the
+                // sheet dialog lost the activation race, the wheel above went
+                // to another app. Re-assert foreground on the dialog stack and
+                // wheel once more before declaring failure — an infra retry,
+                // not a second chance at the behavior under test.
+                EventQueue.invokeAndWait {
+                    window.toFront()
+                    window.ownedWindows.filter { it.isVisible }.forEach { owned ->
+                        owned.toFront()
+                        owned.requestFocus()
+                    }
+                }
+                Thread.sleep(500)
+                robot.mouseMove(center.x, center.y)
+                Thread.sleep(200)
+                repeat(40) { robot.mouseWheel(1) }
+                Thread.sleep(1_000)
+                after = listState.firstVisibleItemIndex
+            }
             assert(listState, sheetState, before, after)
         } finally {
             EventQueue.invokeLater { windowRef.get()?.dispose() }

@@ -27,15 +27,16 @@ ledger tracks *where the migration stands*.
 **Done:**
 
 - `shared/` tree complete: `core/{model,designsystem,datastore,database,network,data,ui,player-contract}`
-  + 24 `feature/*` modules; every commonMain expect has actuals; zero stubs
+  + 23 `feature/*` modules; every commonMain expect has actuals; zero stubs
   in shipped surfaces. `:app` builds phone+TV flavors on top of the shared
   modules exclusively.
 - Targets: android+jvm everywhere; **wasmJs additionally** on
   core/{model,designsystem,datastore,network,data,ui,player-contract} and
-  feature/{requests,calendar,details}. The 21 remaining feature modules carry
-  documented `java.*`-in-commonMain usage that a web slice would have to split
-  jvmShared-style first (core:data's wave-15B split is the template).
-- `apps/desktop`: full shell — nav rail over 17 routes, real mpv engine,
+  feature/{requests,calendar,details}. The 20 remaining feature modules are
+  jvm/android-only today; 11 of them carry `java.*`-in-commonMain usage that a
+  web slice would have to split jvmShared-style first (core:data's wave-15B
+  split is the template).
+- `apps/desktop`: full shell — nav rail over 15 routes, real mpv engine,
   download manager, audio queue manager, tray/menus, packaging in CI on all
   three OSes. Gaps: Live TV channel player + subtitle tester dead-ended,
   video route gated to Windows HWND / software-surface OSes, File→Refresh

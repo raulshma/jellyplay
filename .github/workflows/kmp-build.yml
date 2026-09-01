@@ -20,6 +20,14 @@ concurrency:
   group: kmp-build-${{ github.ref }}
   cancel-in-progress: true
 
+# bash on every OS: pwsh choked on the folded multi-line Gradle invocations
+# (ParserError at line 18) and mangled -PjellyplayVersion=0.1.0 into '0' on
+# windows-latest. bash ships on all three hosted runners, and with the
+# gradlew exec bit restored in git, ./gradlew runs everywhere unchanged.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   shared-targets:
     strategy:
