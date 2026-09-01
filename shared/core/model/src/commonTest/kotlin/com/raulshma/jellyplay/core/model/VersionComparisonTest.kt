@@ -30,4 +30,30 @@ class VersionComparisonTest {
         assertEquals(0, compareVersions("1.2.x", "1.2.0"))
         assertTrue(compareVersions("1.2.1", "1.2.x") > 0)
     }
+
+    @Test
+    fun `compareVersions sorts pre-releases below their release`() {
+        assertTrue(compareVersions("0.11.0-alpha.1", "0.11.0") < 0)
+        assertTrue(compareVersions("0.11.0", "0.11.0-alpha.1") > 0)
+    }
+
+    @Test
+    fun `compareVersions orders pre-release numbers numerically`() {
+        assertTrue(compareVersions("0.11.0-alpha.2", "0.11.0-alpha.1") > 0)
+        assertTrue(compareVersions("0.11.0-alpha.10", "0.11.0-alpha.9") > 0)
+        assertEquals(0, compareVersions("0.11.0-alpha.1", "0.11.0-alpha.1"))
+    }
+
+    @Test
+    fun `compareVersions orders pre-release channels lexically`() {
+        // "alpha" < "beta" < "rc" per semver lexical identifier ordering.
+        assertTrue(compareVersions("0.11.0-beta.1", "0.11.0-alpha.1") > 0)
+        assertTrue(compareVersions("0.11.0-rc", "0.11.0-beta.1") > 0)
+    }
+
+    @Test
+    fun `compareVersions still prefers newer numeric core across pre-releases`() {
+        assertTrue(compareVersions("0.11.0-alpha.1", "0.10.7") > 0)
+        assertTrue(compareVersions("0.12.0", "0.11.0-alpha.9") > 0)
+    }
 }

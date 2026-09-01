@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - 'v[0-9]+*'
+      # Pre-release channels (v0.11.0-alpha, v1.0.0-rc) belong to
+      # kmp-release.yml — the glob above would otherwise match them too and
+      # publish Android APKs as the latest STABLE release.
+      - '!v[0-9]+*-*'
       - 'release/**'
   workflow_dispatch:
 
