@@ -64,6 +64,11 @@ jobs:
         # player-contract gained wasm in W.3 when MediaEngine's supertypes
         # (PlayerLifecycleCallbacks, RemotePlayableEngine) moved into it from
         # shared core:data in the same packages.
+        # Keep this ONE folded scalar: a blank line inside `run: >` is a hard
+        # newline that splits the invocation into separate shell commands —
+        # blank lines left by the dev/v0.10.7 merge made bash die on an
+        # orphaned ":shared:feature:editor:jvmJar" fragment (exit 127) after
+        # gradle itself had gone green on the truncated task list.
         run: >
           ./gradlew
           :shared:core:model:jvmJar
@@ -105,39 +110,26 @@ jobs:
           :shared:feature:settings:compileAndroidMain
           :shared:feature:admin:jvmJar
           :shared:feature:admin:compileAndroidMain
-
-
           :shared:feature:editor:jvmJar
           :shared:feature:editor:compileAndroidMain
-
           :shared:feature:calendar:jvmJar
           :shared:feature:calendar:compileAndroidMain
           :shared:feature:calendar:compileKotlinWasmJs
-
-
           :shared:feature:requests:jvmJar
           :shared:feature:requests:compileAndroidMain
           :shared:feature:requests:compileKotlinWasmJs
-
-
-
           :shared:feature:shortcuts:jvmJar
           :shared:feature:shortcuts:compileAndroidMain
-
           :shared:feature:newsletter:jvmJar
           :shared:feature:newsletter:compileAndroidMain
-
-
           :shared:feature:insights:jvmJar
           :shared:feature:insights:compileAndroidMain
           :shared:feature:onboarding:jvmJar
           :shared:feature:onboarding:compileAndroidMain
           :shared:feature:subtitle-tester:jvmJar
           :shared:feature:subtitle-tester:compileAndroidMain
-
           :shared:feature:arrqueue:jvmJar
           :shared:feature:arrqueue:compileAndroidMain
-
           :shared:feature:auth:jvmJar
           :shared:feature:auth:compileAndroidMain
           :shared:feature:details:jvmJar
@@ -149,12 +141,9 @@ jobs:
           :shared:feature:player-live:compileAndroidMain
           :shared:feature:player-audio:jvmJar
           :shared:feature:player-audio:compileAndroidMain
-
           :shared:feature:player-video:jvmJar
           :shared:feature:player-video:compileAndroidMain
-
           :apps:web:compileKotlinWasmJs
-
           --stacktrace
 
       - name: Shared tests (JVM)
@@ -176,36 +165,21 @@ jobs:
           :shared:feature:syncplay:jvmTest
           :shared:feature:settings:jvmTest
           :shared:feature:admin:jvmTest
-
-
           :shared:feature:editor:jvmTest
-
           :shared:feature:calendar:jvmTest
-
-
           :shared:feature:requests:jvmTest
-
-
-
           :shared:feature:shortcuts:jvmTest
-
           :shared:feature:newsletter:jvmTest
-
-
           :shared:feature:insights:jvmTest
           :shared:feature:onboarding:jvmTest
           :shared:feature:subtitle-tester:jvmTest
-
           :shared:feature:arrqueue:jvmTest
           :shared:feature:details:jvmTest
-
           :shared:feature:auth:jvmTest
           :shared:feature:home:jvmTest
           :shared:feature:player-live:jvmTest
           :shared:feature:player-audio:jvmTest
           :shared:feature:player-video:jvmTest
-
-
           --stacktrace
 
       - name: Android app androidTest assembly (relocated player-video UI tests)
