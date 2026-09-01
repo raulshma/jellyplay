@@ -1833,30 +1833,6 @@ internal fun selectedTextTrackIsAss(tracks: androidx.media3.common.Tracks): Bool
 // from jvmTest; same package, call-sites unchanged.
 
 /**
- * Recovers the stable [androidx.media3.common.MediaItem.SubtitleConfiguration]
- * id from a prepared track's `Format.id`.
- *
- * The raw format id is NOT the configuration id: Media3's MergingMediaSource
- * prefixes every side-loaded child source's ids with the child index
- * (`"{n}:{id}"`) to keep the merged namespace unique — observed on-device as
- * `SubtitleSource.id = "provider:WYZIE:x"` surfacing as
- * `"3:provider:WYZIE:x"`. Exact-match resolution against `SubtitleSource.id`
- * (the "Use"-activation ladder, the `"external:{index}"` restore contract, the
- * subtitle-sync preview) therefore fails unless the prefix is stripped.
- *
- * The merge prefix is only stripped when the suffix matches one of
- * [configIds] — the engine's own live subtitle configurations — so unrelated
- * container-demuxed formats that happen to share the `{n}:{m}` shape pass
- * through untouched. Top-level for unit-testability without an engine.
- */
-internal fun resolveStableSideloadedTrackId(formatId: String?, configIds: Set<String>): String? {
-    val raw = formatId?.takeIf { it.isNotBlank() } ?: return null
-    if (raw in configIds) return raw
-    val suffix = raw.substringAfter(':', missingDelimiterValue = "")
-    return suffix.takeIf { it.isNotEmpty() && it in configIds } ?: raw
-}
-
-/**
  * ASS/SSA format predicate shared by the selectTrack visibility toggle and
  * [selectedTextTrackIsAss]. Matches BOTH `sampleMimeType` and `codecs`:
  * Media3 re-labels source-parsed text tracks to
