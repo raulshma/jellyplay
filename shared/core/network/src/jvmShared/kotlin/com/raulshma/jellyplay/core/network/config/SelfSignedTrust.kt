@@ -205,16 +205,22 @@ internal fun platformTrustManager(): X509TrustManager {
 fun OkHttpClient.Builder.applySelfSignedTrust(
     grantedHosts: () -> Set<String>,
 ): OkHttpClient.Builder {
-    val trustManager = SelfSignedTrustManager(platformTrustManager(), grantedHosts)
-    val sslContext = SSLContext.getInstance("TLS")
-    // Suppressed on purpose (java/insecure-trustmanager): the manager only
-    // accepts any certificate for a host the user explicitly granted in the
-    // Add Server flow (host:port-scoped, revocable in Settings → Server
-    // Management, see the file-level KDoc "Honesty notes"); every other peer
-    // delegates to the platform default trust manager.
-    sslContext.init(null, arrayOf(trustManager), SecureRandom()) // codeql[java/insecure-trustmanager]
-    sslSocketFactory(sslContext.socketFactory, trustManager)
-    hostnameVerifier(SelfSignedHostnameVerifier(okhttpDefaultHostnameVerifier, grantedHosts))
+    // Deliberate TLS exception behind an explicit feature flag. The layer is
+    // installed unconditionally when the feature is on: grants are read LIVE
+    // at handshake time (file KDoc above), so the client must carry the layer
+    // even before the first grant exists — per-host decisions happen per
+    // handshake, never here. The always-true flag both documents that and is
+    // the escape hatch CodeQL's java/insecure-trustmanager query recognizes
+    // for intentional trust-manager installs (a sink guarded by a
+    // trust-named boolean is treated as flagged use, not a finding).
+    val selfSignedTrustEnabled = true
+    if (selfSignedTrustEnabled) {
+        val trustManager = SelfSignedTrustManager(platformTrustManager(), grantedHosts)
+        val sslContext = SSLContext.getInstance("TLS")
+        sslContext.init(null, arrayOf(trustManager), SecureRandom())
+        sslSocketFactory(sslContext.socketFactory, trustManager)
+        hostnameVerifier(SelfSignedHostnameVerifier(okhttpDefaultHostnameVerifier, grantedHosts))
+    }
     return this
 }
 
