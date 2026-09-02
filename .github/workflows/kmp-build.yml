@@ -16,6 +16,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least-privilege GITHUB_TOKEN for every job in this workflow — checkout,
+# build, test, and artifact upload need no write scopes (CodeQL
+# actions/missing-workflow-permissions).
+permissions:
+  contents: read
+
 # Keyed on the HEAD BRANCH, not github.ref: pushing kmp-alpha with an open
 # PR fires BOTH the push event (ref refs/heads/kmp-alpha) and pull_request
 # synchronize (ref refs/pull/N/merge) — distinct github.ref values meant the

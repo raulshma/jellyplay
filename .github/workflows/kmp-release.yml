@@ -20,6 +20,12 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
 
+# Least-privilege GITHUB_TOKEN default; the release job below escalates to
+# contents:write for tag/release creation (CodeQL
+# actions/missing-workflow-permissions).
+permissions:
+  contents: read
+
 concurrency:
   group: kmp-release-${{ github.ref }}
   cancel-in-progress: false
