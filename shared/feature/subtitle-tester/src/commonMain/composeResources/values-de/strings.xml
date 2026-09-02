@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subtitle_tester_title">Untertitel-Stil-Tester</string>
+    <string name="subtitle_tester_apply">Anwenden</string>
+    <string name="subtitle_tester_reset">Zurücksetzen</string>
+    <string name="subtitle_tester_discard_title">Änderungen verwerfen?</string>
+    <string name="subtitle_tester_discard_message">Deine Vorschau-Anpassungen wurden nicht angewendet.</string>
+    <string name="subtitle_tester_discard_confirm">Verwerfen</string>
+    <string name="subtitle_tester_discard_cancel">Weiter bearbeiten</string>
+    <string name="subtitle_tester_engine">Engine</string>
+    <string name="subtitle_tester_preset">Beispiel</string>
+    <string name="subtitle_tester_reloading">Wird neu geladen…</string>
+    <string name="subtitle_tester_hint_hot">Echtzeit · Vorschau aktualisiert sofort</string>
+    <string name="subtitle_tester_hint_libvlc">Stiländerungen laden diese Engine kurz neu</string>
+
+    <string name="subtitle_tester_preset_dialogue">Dialog</string>
+    <string name="subtitle_tester_preset_lyrics">Songtext</string>
+    <string name="subtitle_tester_preset_signs">Schilder / Übersetzungs-Notizen</string>
+    <string name="subtitle_tester_preset_action">Action-Szenen</string>
+
+    <!-- Preview playback media + sample subtitle track -->
+    <string name="subtitle_tester_preview_title">Untertitel-Tester</string>
+    <string name="subtitle_tester_track_sample">Beispiel</string>
+</resources>

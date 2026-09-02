@@ -1,0 +1,329 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="player_audio">Audio</string>
+    <string name="player_subtitles">Untertitel</string>
+    <string name="player_resumed_message">An der letzten Position fortgesetzt</string>
+    <string name="player_reset_to_auto">Auf Auto zurücksetzen</string>
+    <string name="player_track_default">Standard</string>
+    <string name="player_track_none">Keine</string>
+
+    <string name="track_badge_forced">Erzwungen</string>
+    <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_default">Standard</string>
+
+    <!-- Companion dashboard -->
+    <string name="player_video_lyrics">Songtexte</string>
+    <string name="player_video_media_tracks">Mediaspuren</string>
+    <string name="player_video_disconnect">Trennen</string>
+
+    <!-- Aspect ratio sheet -->
+    <string name="player_video_aspect_ratio">Seitenverhältnis</string>
+    <string name="player_video_aspect_auto">Auto (%1$s)</string>
+    <string name="player_video_aspect_detected">Erkannt: %1$s</string>
+
+    <!-- Playback error overlay -->
+    <string name="player_video_playback_error">Wiedergabefehler</string>
+    <string name="player_video_playback_error_retryable">Die Wiedergabe wurde unterbrochen. Wiederholen Sie es mit dieser Engine oder versuchen Sie eine andere.</string>
+    <string name="player_video_playback_error_fatal">Dieses Video konnte mit dieser Engine nicht wiedergegeben werden. Versuchen Sie eine andere Player-Engine, oder verwerfen Sie, um zurückzukehren.</string>
+    <string name="player_video_retry_on">Auf %1$s wiederholen</string>
+    <string name="player_video_retry_with">Mit %1$s wiederholen</string>
+    <string name="player_video_try_another_engine">Andere Engine versuchen</string>
+    <string name="player_video_dismiss">Verwerfen</string>
+
+    <!-- Subtitle style controls / sheet -->
+    <string name="player_video_subtitle_settings">Untertiteleinstellungen</string>
+    <string name="player_video_open_tester">Tester öffnen</string>
+    <string name="player_video_reset">Zurücksetzen</string>
+    <string name="player_video_reset_all">Alle zurücksetzen</string>
+    <string name="player_video_pick_color">Farbe wählen</string>
+    <string name="player_video_hue">Farbton</string>
+    <string name="player_video_saturation">Sättigung</string>
+    <string name="player_video_value">Wert</string>
+    <string name="player_video_apply">Anwenden</string>
+    <string name="player_video_cancel">Abbrechen</string>
+    <string name="player_video_override_subtitle_styles">Untertitelstile überschreiben</string>
+    <string name="player_video_override_subtitle_styles_hint">Eigene Größe, Farben und Rahmen anwenden</string>
+    <string name="player_video_ass_basic_notice">Vollständige ASS/SSA-Stile werden von ExoPlayer und mpv unterstützt. Diese Engine rendert Untertitel mit einfachem Stil.</string>
+    <string name="player_video_ass_embedded_notice">Bei dieser Engine werden ASS/SSA-Untertitel mit ihrem eingebetteten Stil gerendert. Eigene Farben, Rahmen und der Force-Override gelten nur für SRT/VTT.</string>
+    <string name="player_video_font_size">Schriftgröße: %1$dsp</string>
+    <string name="player_video_font">Schriftart</string>
+    <string name="player_video_bundled_default">Mitgeladener Standard</string>
+    <string name="player_video_pick">Wählen…</string>
+    <string name="player_video_bold">Fett</string>
+    <string name="player_video_italic">Kursiv</string>
+    <string name="player_video_ass_styling">ASS-Stil</string>
+    <string name="player_video_ass_respect">Beibehalten</string>
+    <string name="player_video_ass_force">Erzwingen</string>
+    <string name="player_video_ass_scale_hint">Eingebetteten Stil beibehalten; nur Größe &amp; Position anwenden</string>
+    <string name="player_video_ass_force_hint">Eingebetteten Stil mit Ihren Farben, Schriftart &amp; Rahmen überschreiben</string>
+    <string name="player_video_font_color">Schriftfarbe</string>
+    <string name="player_video_background_color">Hintergrundfarbe</string>
+    <string name="player_video_background_opacity">Hintergrunddeckkraft: %1$d%%</string>
+    <string name="player_video_edge_type">Kantenart</string>
+    <string name="player_video_edge_none">Keine</string>
+    <string name="player_video_edge_outline">Kontur</string>
+    <string name="player_video_edge_shadow">Schatten</string>
+    <string name="player_video_edge_raised">Erhaben</string>
+    <string name="player_video_edge_depressed">Versenkt</string>
+    <string name="player_video_edge_color">Kantenfarbe</string>
+    <string name="player_video_border_style">Rahmenstil</string>
+    <string name="player_video_border_outline_shadow">Kontur+Schatten</string>
+    <string name="player_video_border_opaque_box">Undurchsichtige Box</string>
+    <string name="player_video_border_background_box">Hintergrundbox</string>
+    <string name="player_video_border_width">Rahmenbreite: %1$s</string>
+    <string name="player_video_shadow_offset">Schattenversatz: %1$s</string>
+    <string name="player_video_subtitle_offset">Untertitelversatz: %1$s</string>
+    <string name="player_video_vertical_position">Vertikale Position: %1$d%%</string>
+
+    <!-- Sleep timer sheet -->
+    <string name="player_video_sleep_timer">Sleeptimer</string>
+    <string name="player_video_sleep_timer_on">Sleeptimer \u00B7 %1$s</string>
+    <string name="player_video_cancel_sleep_timer">Sleeptimer abbrechen (%1$s verbleibend)</string>
+    <string name="player_video_custom_duration">Eigene Dauer</string>
+    <string name="player_video_custom_ellipsis">Eigen…</string>
+    <string name="player_video_end_of_episode">Ende der Episode</string>
+    <string name="player_video_minutes">Minuten</string>
+    <string name="player_video_enter_1_600">1–600 eingeben</string>
+    <string name="player_video_start">Start</string>
+
+    <!-- SyncPlay sheet -->
+    <string name="player_video_leave_group">Gruppe verlassen</string>
+    <string name="player_video_ignore_wait">Wartezeit ignorieren</string>
+    <string name="player_video_ignore_wait_hint">Nicht für puffende Nutzer pausieren</string>
+    <string name="player_video_repeat_one">Eines wiederholen</string>
+    <string name="player_video_repeat_all">Alle wiederholen</string>
+    <string name="player_video_repeat_none">Nichts wiederholen</string>
+    <string name="player_video_shuffle">Zufall</string>
+    <string name="player_video_sorted">Sortiert</string>
+    <string name="player_video_pause">Pause</string>
+    <string name="player_video_play">Wiedergabe</string>
+    <string name="player_video_stop">Stopp</string>
+    <string name="player_video_synced">Synchron</string>
+    <string name="player_video_buffering">Puffern</string>
+    <string name="player_video_group">Gruppe</string>
+
+    <!-- Subtitle manager sheet -->
+    <string name="player_video_download">Herunterladen</string>
+    <string name="player_video_search">Suchen</string>
+    <string name="player_video_upload">Hochladen</string>
+    <string name="player_video_load_from_device">Vom Gerät laden</string>
+    <string name="player_video_no_remote_subtitles">Keine Remote-Untertitel verfügbar.</string>
+    <string name="player_video_unknown">Unbekannt</string>
+    <string name="player_video_perfect_match">Perfekte Übereinstimmung</string>
+    <string name="player_video_taking_a_while">Dauert einen Moment…</string>
+    <string name="player_video_use">Verwenden</string>
+    <string name="player_video_failed_tap_to_retry">Fehlgeschlagen — tippen zum Wiederholen</string>
+    <string name="player_video_search_failed">Suche fehlgeschlagen</string>
+    <string name="player_video_load_subtitles_failed">Untertitel konnten nicht geladen werden</string>
+    <string name="player_video_no_results_found">Keine Ergebnisse gefunden</string>
+    <string name="player_video_pick_language_hint">Wählen Sie eine Sprache und suchen Sie nach Untertiteln.</string>
+    <string name="player_video_change_file">Ändern: %1$s</string>
+    <string name="player_video_select_file">Datei auswählen (.srt, .ass, .ssa, .vtt)</string>
+    <string name="player_video_language">Sprache</string>
+    <string name="player_video_forced_subtitle">Erzwungener Untertitel</string>
+    <string name="player_video_hearing_impaired">Hörgeschädigt</string>
+    <string name="player_video_uploading">Wird hochgeladen…</string>
+
+    <!-- Player controls -->
+    <string name="player_video_back">Zurück</string>
+    <string name="player_video_current_time">Aktuelle Zeit</string>
+    <string name="player_video_previous_episode">Vorherige Episode</string>
+    <string name="player_video_next_episode">Nächste Episode</string>
+    <string name="player_video_lock_screen">Bildschirm sperren</string>
+    <string name="player_video_rotate_screen">Bildschirm drehen</string>
+    <string name="player_video_more_options">Weitere Optionen</string>
+    <string name="player_video_audio">Audio</string>
+    <string name="player_video_subtitles">Untertitel</string>
+    <string name="player_video_subtitle_hub_section_tracks">Spuren</string>
+    <string name="player_video_subtitle_hub_section_style">Stil</string>
+    <string name="player_video_subtitle_hub_section_get">Abrufen</string>
+    <string name="player_video_subtitle_hub_section_delay">Verzögerung</string>
+    <string name="player_video_subtitle_downloaded_device_only">Nur auf Gerät gespeichert (offline)</string>
+    <string name="player_video_chapters">Kapitel</string>
+    <string name="player_video_episodes">Episoden</string>
+    <string name="player_video_syncplay">SyncPlay</string>
+    <string name="player_video_aspect_ratio_label">Seitenverhältnis</string>
+    <string name="player_video_info">Info</string>
+    <string name="player_video_ends_at">Endet um %1$s</string>
+
+    <!-- Player overflow menu -->
+    <string name="player_video_dialogue_boost">Dialog-Verstärkung</string>
+    <string name="player_video_dialogue_boost_on">Dialog-Verstärkung \u00B7 %1$s</string>
+    <string name="player_video_night_mode">Nachtmodus</string>
+    <string name="player_video_night_mode_on">Nachtmodus \u00B7 %1$s</string>
+    <string name="player_video_audio_normalization">Audio-Normalisierung</string>
+    <string name="player_video_normalization_on">Normalisierung \u00B7 %1$s</string>
+    <string name="player_video_channel_mixing">Kanal-Mischung</string>
+    <string name="player_video_channel_mix_on">Kanal-Mix \u00B7 %1$s</string>
+    <string name="player_video_av_sync">A/V-Sync</string>
+    <string name="player_video_playback_mode">Wiedergabemodus</string>
+    <string name="player_video_playback_mode_on">%1$s \u00B7 An</string>
+    <string name="player_video_decoder">Decoder</string>
+    <string name="player_video_passthrough">Durchreichung</string>
+    <string name="player_video_stats_for_nerds">Statistiken für Nerds</string>
+    <string name="player_video_stats_for_nerds_on">Statistiken für Nerds \u00B7 An</string>
+    <string name="player_video_video_filters">Videofilter</string>
+    <string name="player_video_video_filters_on">Videofilter \u00B7 An</string>
+    <string name="player_video_capture_frame">Bild aufnehmen</string>
+    <string name="player_video_ab_repeat">A/B-Wiederholung</string>
+    <string name="player_video_ab_repeat_on">A/B-Wiederholung \u00B7 An</string>
+    <string name="player_video_set_a_point">A-Punkt setzen</string>
+    <string name="player_video_set_b_point">B-Punkt setzen</string>
+    <string name="player_video_clear_ab_repeat">A/B-Wiederholung löschen</string>
+    <string name="player_video_set_a_point_at">A-Punkt setzen \u00B7 %1$s</string>
+    <string name="player_video_set_b_point_at">B-Punkt setzen \u00B7 %1$s</string>
+    <string name="player_video_ab_repeat_badge_enabled">A/B-Wiederholung an — zum Startpunkt spulen, dann „A-Punkt setzen“</string>
+    <string name="player_video_ab_repeat_badge_a_set">A gesetzt bei %1$s — zum Endpunkt spulen, dann „B-Punkt setzen“</string>
+    <string name="player_video_ab_repeat_badge_active">Schleife %1$s \u2192 %2$s</string>
+    <string name="player_video_ab_repeat_badge_cleared">A/B-Wiederholung gelöscht</string>
+    <string name="player_audio_only">Nur Audio</string>
+    <string name="player_audio_only_on">Nur Audio an — Video ausgeblendet</string>
+
+    <!-- Video filter sheet -->
+    <string name="player_video_brightness">Helligkeit</string>
+    <string name="player_video_contrast">Kontrast</string>
+    <string name="player_video_sharpness">Schärfe</string>
+    <string name="player_video_rotation">Rotation</string>
+    <string name="player_video_red_gain">Rot-Anhebung</string>
+    <string name="player_video_green_gain">Grün-Anhebung</string>
+    <string name="player_video_blue_gain">Blau-Anhebung</string>
+    <string name="player_video_gaussian_blur">Gaußscher Weichzeichner</string>
+
+    <!-- Playback info overlay -->
+    <string name="player_video_playback_info">Wiedergabeinfo</string>
+    <string name="player_video_media_source">Medienquelle</string>
+    <string name="player_video_video">Video</string>
+    <string name="player_video_active_controls">Aktive Steuerungen</string>
+    <string name="player_video_player_errors">Player-Fehler</string>
+    <string name="player_video_container">Container</string>
+    <string name="player_video_size">Größe</string>
+    <string name="player_video_bitrate">Bitrate</string>
+    <string name="player_video_play_method">Wiedergabemethode</string>
+    <string name="player_video_connection">Verbindung</string>
+    <string name="player_video_metered">Getaktet</string>
+    <string name="player_video_unmetered">Ungetaktet</string>
+    <string name="player_video_codec">Codec</string>
+    <string name="player_video_resolution">Auflösung</string>
+    <string name="player_video_hdr_format">HDR-Format</string>
+    <string name="player_video_range">Bereich</string>
+    <string name="player_video_frame_rate">Bildrate</string>
+    <string name="player_video_track_n">Spur %1$d</string>
+    <string name="player_video_channels">Kanäle</string>
+    <string name="player_video_player_engine">Player-Engine</string>
+    <string name="player_video_decoder_mode">Decoder-Modus</string>
+    <string name="player_video_speed">Geschwindigkeit</string>
+    <string name="player_video_audio_delay">Audio-Verzögerung</string>
+    <string name="player_video_night_mode_label">Nachtmodus</string>
+    <string name="player_video_dialogue_boost_label">Dialog-Verstärkung</string>
+    <string name="player_video_audio_passthrough">Audio-Durchreichung</string>
+    <string name="player_video_active_audio">Aktives Audio</string>
+    <string name="player_video_active_subtitle">Aktiver Untertitel</string>
+    <string name="player_video_off">Aus</string>
+    <string name="player_video_on">An</string>
+
+    <!-- Misc. hardcoded strings -->
+    <string name="player_video_reset_audio">Audio zurücksetzen</string>
+    <string name="player_video_subtitle_delay">Untertitelverzögerung</string>
+    <string name="player_video_subtitle_delay_close">Untertitelverzögerung schließen</string>
+    <string name="player_video_subtitle_delay_reset">Zurücksetzen</string>
+    <string name="player_video_subtitle_delay_decrease">Untertitelverzögerung verringern</string>
+    <string name="player_video_subtitle_delay_increase">Untertitelverzögerung erhöhen</string>
+    <string name="player_video_subtitle_delay_voice_heard">Stimme gehört</string>
+    <string name="player_video_subtitle_delay_text_seen">Text gesehen</string>
+    <string name="player_video_subtitle_delay_show_controls">Verzögerung einstellen</string>
+    <string name="player_video_subtitle_delay_hub_hint">Passe das Timing der Untertitel zum Video an. Nutze das Overlay, damit du die Untertitel beim Anpassen sehen kannst.</string>
+    <string name="player_video_av_sync_audio_helper">Negativ: Audio früher. Positiv: Audio später.</string>
+    <string name="player_video_av_sync_decrease">%1$s verringern</string>
+    <string name="player_video_av_sync_increase">%1$s erhöhen</string>
+    <string name="player_video_picture_in_picture">Bild im Bild</string>
+    <string name="player_video_play_next">Nächstes abspielen</string>
+    <string name="player_video_turn_on_autoplay">Autoplay aktivieren</string>
+    <string name="player_video_enter_pin">PIN eingeben</string>
+    <string name="player_video_unlock_player">Player entsperren</string>
+    <string name="player_video_incorrect_pin">Falsche PIN</string>
+    <string name="player_video_no_episodes_found">Keine Episoden für diese Staffel gefunden</string>
+    <string name="player_video_poster">Poster</string>
+    <string name="player_video_selected">Ausgewählt</string>
+    <string name="player_video_volume">Lautstärke</string>
+    <string name="player_video_hdr_label">HDR: %1$s</string>
+    <string name="player_video_duration">Dauer</string>
+    <string name="player_video_remember_audio_language">Audiosprache für diese Serie merken</string>
+    <string name="player_video_remember_subtitle_language">Untertitelsprache für diese Serie merken</string>
+    <string name="player_video_remember_subtitles_off">Untertitel für diese Serie deaktiviert lassen</string>
+    <string name="player_video_error_offline_file_missing">Fehler: Offlinedatei fehlt</string>
+    <string name="player_video_error_loading_media">Fehler beim Laden der Medien</string>
+    <string name="player_video_error_offline_stream">Du bist offline \u2014 verbinde dich erneut, um diesen Titel zu streamen</string>
+    <string name="player_video_error_next_episode_load">Nächste Episode konnte nicht geladen werden. Prüfe deine Verbindung und versuche es erneut</string>
+    <string name="player_video_trickplay_thumbnail">Trickplay-Miniaturansicht</string>
+
+    <plurals name="player_video_participants">
+        <item quantity="one">%1$d Teilnehmer</item>
+        <item quantity="other">%1$d Teilnehmer</item>
+    </plurals>
+
+    <!-- Localized UI text extracted from player/video components -->
+    <string name="player_video_stats_playback">Wiedergabe</string>
+    <string name="player_video_stats_network">Netzwerk</string>
+    <string name="player_video_stats_performance">Leistung</string>
+    <string name="player_video_stats_engine">Engine</string>
+    <string name="player_video_stats_state">Status</string>
+    <string name="player_video_stats_playing">Wiedergabe</string>
+    <string name="player_video_stats_position">Position</string>
+    <string name="player_video_stats_progress">Fortschritt</string>
+    <string name="player_video_stats_buffer_health">Pufferstand</string>
+    <string name="player_video_stats_buffered">Gepuffert</string>
+    <string name="player_video_stats_clock">Uhr</string>
+    <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_color_range">Farbbereich</string>
+    <string name="player_video_stats_color_depth">Farbtiefe</string>
+    <string name="player_video_stats_sample_rate">Abtastrate</string>
+    <string name="player_video_stats_session_id">Sitzungs-ID</string>
+    <string name="player_video_stats_quality">Qualitat</string>
+    <string name="player_video_stats_est_bandwidth">Geschaetzte Bandbreite</string>
+    <string name="player_video_stats_stream_bitrate">Stream-Bitrate</string>
+    <string name="player_video_stats_dropped_frames">Verlorene Frames</string>
+    <string name="player_video_stats_total_frames">Frames gesamt</string>
+    <string name="player_video_stats_drop_rate">Verlustrate</string>
+    <string name="player_video_stats_buffer_size">Puffergroesse</string>
+    <string name="player_video_stats_vo_dropped_frames">VO verworfene Frames</string>
+    <string name="player_video_stats_vo_delay">VO-Verzoegerung</string>
+    <string name="player_video_stats_display_rate">Bildrate</string>
+    <string name="player_video_stats_player">Player</string>
+    <string name="player_video_cast_connecting">Verbinden</string>
+    <string name="player_video_casting">Casting</string>
+    <string name="player_video_season_n">Staffel %1$d</string>
+    <string name="player_video_no_episodes_available">Keine Episoden verfuegbar</string>
+    <string name="player_video_watched">Angesehen</string>
+    <string name="player_video_time_left">Noch %1$s</string>
+    <string name="player_video_now_playing">Laeuft gerade</string>
+    <string name="player_video_quality_title">Qualitaet</string>
+    <string name="player_video_quality_description">Aenderungen gelten sofort fuer adaptive Streams. Bei Direct Play wird die maximale Wiedergabe-Bitrate festgelegt.</string>
+    <string name="player_video_adaptive_bitrate_cap">Adaptive Bitrate-Obergrenze</string>
+    <string name="player_video_adaptive_bitrate_on">Begrenzt Qualitaet in getakteten Netzwerken</string>
+    <string name="player_video_adaptive_bitrate_off">Aus - volle Qualitaet (Direct Play)</string>
+    <string name="player_video_skip_intro">Intro ueberspringen</string>
+    <string name="player_video_overview_tab">Uebersicht</string>
+    <string name="player_video_lyrics_subtitles_tab">Songtexte / Untertitel</string>
+    <string name="player_video_synopsis">Handlung</string>
+    <string name="player_video_cast_and_crew">Besetzung &amp; Crew</string>
+    <string name="player_video_audio_stream">Audio-Stream</string>
+    <string name="player_video_episode_title">E%1$d: %2$s</string>
+    <string name="player_video_seek_backward_10s">-10s</string>
+    <string name="player_video_seek_forward_30s">+30s</string>
+    <string name="player_video_cast_connecting_device">Verbinde mit Geraet...</string>
+    <string name="player_video_cast_connected_streaming">Verbunden / Streaming</string>
+    <string name="player_video_companion">JellyPlay Companion</string>
+
+    <!-- Localized error messages -->
+    <string name="player_video_font_invalid_format">Ausgewählte Datei ist keine .ttf- oder .otf-Schriftart.</string>
+
+    <string name="player_video_subtitle_provider_all">Alle</string>
+
+    <!-- Barrierefreiheit: Screen-Reader-Semantik für das Helligkeits-/Lautstärke-Gestenfeld (P5 §3.1) -->
+    <string name="a11y_gesture_controls">Helligkeits- und Lautstärkeregelung</string>
+    <string name="a11y_brightness_increase">Helligkeit erhöhen</string>
+    <string name="a11y_brightness_decrease">Helligkeit verringern</string>
+    <string name="a11y_volume_increase">Lautstärke erhöhen</string>
+    <string name="a11y_volume_decrease">Lautstärke verringern</string>
+    <string name="player_direct_play_fallback">Direkte Wiedergabe fehlgeschlagen – Wechsel zu Transcode (%1$s)</string>
+</resources>

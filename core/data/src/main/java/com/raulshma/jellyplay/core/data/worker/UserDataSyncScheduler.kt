@@ -8,10 +8,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.Duration
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Schedules the background user-data sync. Defined as an interface (and
@@ -32,9 +29,8 @@ interface UserDataSyncScheduler {
     fun enqueueNow()
 }
 
-@Singleton
-class UserDataSyncSchedulerImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
+class UserDataSyncSchedulerImpl(
+    private val context: Context,
 ) : UserDataSyncScheduler {
     override fun enqueuePeriodic() {
         val constraints = Constraints.Builder()

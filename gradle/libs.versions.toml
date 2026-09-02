@@ -3,6 +3,8 @@ agp = "9.3.2"
 kotlin = "2.3.21"
 ksp = "2.3.10"
 kover = "0.9.9"
+# Gradle official test-retry plugin — CI-only flake absorption (root build gate).
+test-retry = "1.6.2"
 composeBom = "2026.06.01"
 composeMaterial3 = "1.5.0-alpha25"
 composeMaterial3Adaptive = "1.3.0-rc01"
@@ -10,24 +12,82 @@ composeMaterial3Adaptive = "1.3.0-rc01"
 # group (NOT .adaptive) and tracks the material3 release line, not the adaptive
 # one. Previously keyed off composeMaterial3Adaptive — only worked by accident.
 composeMaterial3AdaptiveNavigationSuite = "1.5.0-alpha25"
-hilt = "2.60.1"
-hiltNavigationCompose = "1.4.0"
-hiltWork = "1.4.0"
+# JetBrains Compose Multiplatform distribution — the ONLY publisher of real
+# JVM/wasm compose binaries (androidx publishes Android AARs + IDE stubs only,
+# verified via .module metadata of ui 1.12.0 / material3 1.5.0-alpha25). On the
+# Android target these redirect to the androidx artifacts.
+composeMultiplatform = "1.11.1"
+# JB material3 rides its own train; the 1.11.x line never stabilised past
+# alpha (latest release overall is 1.9.0), so pin the newest of the matching
+# 1.11 line to keep expressive APIs available on desktop/wasm.
+composeMultiplatformMaterial3 = "1.11.0-alpha07"
+# Koin: shared-module DI (plan §Phase C4). 4.2.x publishes android/jvm/wasmJs
+# (wasmJs stable since 4.0.0). Hand-written DSL modules — koin-annotations
+# deferred until its KSP line settles (kspWasmJs unverified).
+koin = "4.2.2"
+# Plain dagger artifact only — shared/core/network's JellyfinApiEngine ctor
+# takes dagger.Lazy (fed by a memoizing wrapper in NetworkKoinModules). All
+# Hilt artifacts left the repo with the wave-8 Hilt extinction.
+dagger = "2.60.1"
 navigation3 = "1.1.5"
+# JetBrains fork of navigation3-ui: google's -ui artifact ships Android plus
+# jvm/linux STUBS only (runtime throws "Implemented only in JetBrains fork");
+# the fork holds the real desktop/web NavDisplay. Runtime stays on the google
+# artifact — the fork's POM depends on it too, so only -ui needs swapping.
+jbNavigation3Ui = "1.1.1"
 lifecycleViewmodelNav3 = "2.11.0"
 jellyfinSdk = "1.8.12"
 media3 = "1.10.1"
 media3FfmpegDecoder = "1.9.0+1"
 androidDesugarJdkLibs = "2.1.5"
-coil = "3.5.0"
-multiplatformMarkdownRenderer = "0.43.0"
+# Coil pinned BELOW latest deliberately: 3.4.0 is the last line whose KMP
+# artifacts were built with a Kotlin 2.3 compiler (Central's
+# coil-core-3.4.0-kotlin-tooling-metadata.json reports buildPluginVersion
+# 2.3.10), so its wasmJs klibs load under this repo's 2.3.21 toolchain.
+# 3.5.0 rebuilt them with Kotlin 2.4.0; those klibs are silently SKIPPED by
+# the 2.3.21 klib loader and every coil3 symbol stays unresolved under
+# :apps:web:compileKotlinWasmJs (JVM/Android class files are unaffected by
+# either side — the pin is only about the wasm target). Revisit on any
+# future Kotlin 2.4 toolchain move.
+coil = "3.4.0"
+# Coil for the ANDROID app only: release/v0.10.6 shipped 3.5.0, and the
+# artwork pipeline (rememberDominantColor / rememberArtworkColors → Palette)
+# is version-sensitive through decode defaults. The wasm-target pin above
+# does not apply to Android class files, so the app resolves 3.5.0 via this
+# BOM to keep its bitmap→swatch behavior byte-identical to the release build
+# while shared JVM/wasm targets stay on 3.4.0.
+coilAndroid = "3.5.0"
+# 0.41.0 (wave 21D): the last mikepenz line whose wasm klibs are built with
+# Kotlin 2.3.x — 0.42+ rebuilt them with Kotlin 2.4.0, and those klibs are
+# silently SKIPPED by the 2.3.21 klib loader (spike w-10C class C), which is
+# why wasm used to carry a MiniMarkdownParser fallback while the dependency
+# stayed jvmShared-scoped. At 0.41.0 the klibs resolve on wasm too, so the
+# dependency lives in commonMain and every target renders GFM through the
+# same MarkdownText (the mini parser + wasm actual were deleted). Revisit on
+# any future Kotlin 2.4 toolchain move.
+multiplatformMarkdownRenderer = "0.41.0"
 room = "2.8.4"
 datastore = "1.2.1"
+okio = "3.9.0"
+javakeyring = "1.0.4"
+androidxSqlite = "2.6.2"
 paging = "3.5.0"
 pagingCompose = "3.5.0"
 workManager = "2.11.2"
 kotlinxSerialization = "1.11.0"
 kotlinxCoroutines = "1.11.0"
+# kotlinx-datetime 0.8.0 is the newest release line and is ABI-safe for this
+# repo's Kotlin 2.3.21 pin: its Gradle module metadata (fetched 2026-08-27,
+# wave 15B) declares kotlin-stdlib 2.1.20 on the metadataApiElements variant —
+# i.e. the klibs were produced by the Kotlin 2.1.20 compiler, which our 2.3.21
+# klib loader reads (a 2.4-built klib would be silently skipped — the coil
+# 3.4.0/mikepenz precedent). The wasm klib artifact
+# (org.jetbrains.kotlinx:kotlinx-datetime-wasm-js:0.8.0.klib) exists on Maven
+# Central. Its transitive kotlinx-serialization-core 1.6.2 want upgrades to the
+# repo-wide 1.11.0 pin — no new serialization version enters the graph.
+kotlinxDatetime = "0.8.0"
+# Browser DOM bindings for the wasmJs target (Kotlin/Wasm interop).
+kotlinxBrowser = "0.5.0"
 palette = "1.0.0"
 coreKtx = "1.19.0"
 collection = "1.6.0"
@@ -41,18 +101,21 @@ mockk = "1.14.11"
 orgJson = "20240303"
 coroutinesTest = "1.11.0"
 robolectric = "4.16.1"
-roomTesting = "2.8.4"
 androidxTestCore = "1.7.0"
 uiautomator = "2.4.0"
 playServicesCast = "22.3.1"
 mediarouter = "1.9.0-alpha01"
 slf4j = "2.0.18"
 libmpv = "0.1.12"
+# JNA for the desktop libmpv binding (Phase V2 MpvDesktopEngine)
+jna = "5.17.0"
 libvlc = "3.7.5"
 assMedia = "0.5.0"
 truetypeParser = "2.1.4"
 okhttp = "5.4.0"
-smoothCornerRect = "v1.0.0"
+# Ktor: wasmJs HTTP/WebSocket client (plan §Phase W). Desktop/Android keep
+# OkHttp; Ktor exists for the wasm target of shared/core/network + apps/web.
+ktor = "3.5.2"
 tvMaterial = "1.1.0"
 tablerIcons = "2.2.1"
 biometric = "1.4.0-alpha07"
@@ -72,15 +135,30 @@ aboutLibraries = "15.0.4"
 # AndroidX Core
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashScreen" }
+androidx-collection = { group = "androidx.collection", name = "collection", version.ref = "collection" }
 androidx-collection-ktx = { group = "androidx.collection", name = "collection-ktx", version.ref = "collection" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 # Compose BOM
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+jb-compose-runtime = { group = "org.jetbrains.compose.runtime", name = "runtime", version.ref = "composeMultiplatform" }
+jb-compose-ui = { group = "org.jetbrains.compose.ui", name = "ui", version.ref = "composeMultiplatform" }
+# Desktop-only compose ui surface (SwingPanel & friends) for shared modules'
+# jvmMain actuals (wave 9A player-video surface host). Same version family
+# as the jb-compose-* set; runtime resolves via apps/desktop currentOs.
+jb-compose-ui-desktop = { group = "org.jetbrains.compose.ui", name = "ui-desktop", version.ref = "composeMultiplatform" }
+jb-compose-foundation = { group = "org.jetbrains.compose.foundation", name = "foundation", version.ref = "composeMultiplatform" }
+jb-compose-animation = { group = "org.jetbrains.compose.animation", name = "animation", version.ref = "composeMultiplatform" }
+jb-compose-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version.ref = "composeMultiplatformMaterial3" }
+jb-compose-saveable = { group = "org.jetbrains.compose.runtime", name = "runtime-saveable", version.ref = "composeMultiplatform" }
+# Compose-Resources runtime (StringResource/getString). Shared KMP modules get
+# it via `compose.components.resources`; this alias is for legacy AGP modules
+# whose tests name the type against shared/core:ui's public Res accessors.
+jb-compose-resources = { group = "org.jetbrains.compose.components", name = "components-resources", version.ref = "composeMultiplatform" }
 compose-runtime = { group = "androidx.compose.runtime", name = "runtime" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }
 compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
 compose-ui-test = { group = "androidx.compose.ui", name = "ui-test-junit4" }
-compose-animation = { group = "androidx.compose.animation", name = "animation-android" }
+compose-animation = { group = "androidx.compose.animation", name = "animation" }
 compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "composeMaterial3" }
 compose-ui-google-fonts = { group = "androidx.compose.ui", name = "ui-text-google-fonts" }
@@ -94,22 +172,33 @@ compose-material3-adaptive-navigation-suite = { group = "androidx.compose.materi
 # Navigation 3
 navigation3-runtime = { group = "androidx.navigation3", name = "navigation3-runtime", version.ref = "navigation3" }
 navigation3-ui = { group = "androidx.navigation3", name = "navigation3-ui", version.ref = "navigation3" }
+# Desktop swap target for navigation3-ui (see jbNavigation3Ui version note) —
+# used via resolutionStrategy substitution in apps/desktop, never a direct dep.
+jb-navigation3-ui = { group = "org.jetbrains.androidx.navigation3", name = "navigation3-ui", version.ref = "jbNavigation3Ui" }
 lifecycle-viewmodel-navigation3 = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-navigation3", version.ref = "lifecycleViewmodelNav3" }
 
 # Lifecycle
 lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }
+lifecycle-viewmodel = { group = "androidx.lifecycle", name = "lifecycle-viewmodel", version.ref = "lifecycle" }
+# SavedStateHandle (KMP since lifecycle 2.9) — StudioDetailViewModel in shared/feature:library
+lifecycle-viewmodel-savedstate = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-savedstate", version.ref = "lifecycle" }
 lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycle" }
+
+# Koin (shared/core/* commonMain+jvmShared module defs; koin-test for jvmTest verify())
+koin-core = { group = "io.insert-koin", name = "koin-core", version.ref = "koin" }
+koin-test = { group = "io.insert-koin", name = "koin-test", version.ref = "koin" }
+# KMP viewModel scoping for shared feature modules (koinViewModel() in nav entries)
+koin-compose = { group = "io.insert-koin", name = "koin-compose", version.ref = "koin" }
+koin-compose-viewmodel = { group = "io.insert-koin", name = "koin-compose-viewmodel", version.ref = "koin" }
 
 # javax.inject (Hilt constructor-injection annotations, usable from non-Hilt modules)
 javax-inject = { group = "javax.inject", name = "javax.inject", version = "1" }
 
-# Hilt
-hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
-hilt-android-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "hiltWork" }
-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "hiltWork" }
+# Plain dagger artifact: dagger.Lazy ctor params on shared-module classes
+# (JellyfinApiEngine) need the type on the KMP compile classpath without
+# pulling an Android-only AAR into the jvm target.
+dagger = { group = "com.google.dagger", name = "dagger", version.ref = "dagger" }
 
 # Jellyfin SDK
 jellyfin-core = { group = "org.jellyfin.sdk", name = "jellyfin-core", version.ref = "jellyfinSdk" }
@@ -134,8 +223,19 @@ media3-ffmpeg-decoder = { group = "org.jellyfin.media3", name = "media3-ffmpeg-d
 android-desugar-jdk = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "androidDesugarJdkLibs" }
 
 # Coil
+coil-bom-android = { group = "io.coil-kt.coil3", name = "coil-bom", version.ref = "coilAndroid" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
+# Ktor-backed network fetcher for wasmJs (apps/web; Phase W.4). NOTE: the
+# artifact is named coil-network-ktor3 — upstream split the old
+# coil-network-ktor (last published 3.0.0-alpha08) into -ktor2/-ktor3
+# flavors by Ktor major before 3.0.0 stable. Same coil version pin; the
+# ktor3 flavor matches our Ktor 3.5.x stack (its own metadata declares
+# ktor-client-core 3.1.0; Gradle resolves to the repo-wide 3.5.2). Wired
+# into :apps:web's wasmJsMain image pipeline — the only consumer — since
+# the 3.4.0 pin made its wasmJs klib loadable again (see the version note
+# above).
+coil-network-ktor3 = { group = "io.coil-kt.coil3", name = "coil-network-ktor3", version.ref = "coil" }
 
 # Markdown renderer (GitHub-flavoured; used for release notes & plugin changelogs)
 multiplatform-markdown-renderer = { group = "com.mikepenz", name = "multiplatform-markdown-renderer", version.ref = "multiplatformMarkdownRenderer" }
@@ -148,8 +248,13 @@ room-compiler = { group = "androidx.room", name = "room-compiler", version.ref =
 
 # DataStore
 datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+datastore-preferences-core = { group = "androidx.datastore", name = "datastore-preferences-core", version.ref = "datastore" }
+okio = { group = "com.squareup.okio", name = "okio", version.ref = "okio" }
+java-keyring = { group = "com.github.javakeyring", name = "java-keyring", version.ref = "javakeyring" }
+androidx-sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "androidxSqlite" }
 
 # Paging
+paging-common = { group = "androidx.paging", name = "paging-common", version.ref = "paging" }
 paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }
 paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "pagingCompose" }
 
@@ -162,7 +267,11 @@ palette-ktx = { group = "androidx.palette", name = "palette-ktx", version.ref = 
 
 # Kotlinx Serialization
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-swing = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-swing", version.ref = "kotlinxCoroutines" }
+kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinxDatetime" }
+kotlinx-browser = { group = "org.jetbrains.kotlinx", name = "kotlinx-browser", version.ref = "kotlinxBrowser" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -171,7 +280,6 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "roomTesting" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
 androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 
@@ -181,10 +289,11 @@ mediarouter = { group = "androidx.mediarouter", name = "mediarouter", version.re
 
 # SLF4J
 slf4j-api = { group = "org.slf4j", name = "slf4j-api", version.ref = "slf4j" }
-slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version.ref = "slf4j" }
 
 # Player Engines
 libmpv = { group = "io.github.abdallahmehiz", name = "mpv-android-lib", version.ref = "libmpv" }
+# Desktop libmpv access (mpv-2.dll / libmpv.so / libmpv.dylib) for MpvDesktopEngine
+jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
 libvlc-all = { group = "org.videolan.android", name = "libvlc-all", version.ref = "libvlc" }
 # libass wired into Media3's renderer pipeline — full ASS/SSA rendering
 # (positioning, fonts, animations, karaoke, vector drawing) on the
@@ -201,10 +310,19 @@ truetype-parser = { group = "io.github.yubyf", name = "truetypeparser-light", ve
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
+# Test-only: HandshakeCertificates/HeldCertificate for the self-signed-trust
+# TLS integration tests (mockwebserver 5.x no longer pulls okhttp-tls in
+# transitively). Same version.ref as the OkHttp 5.4 pin.
+okhttp-tls = { group = "com.squareup.okhttp3", name = "okhttp-tls", version.ref = "okhttp" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 
-# Smooth Corner Rect
-smooth-corner-rect = { group = "com.github.racra", name = "smooth-corner-rect-android-compose", version.ref = "smoothCornerRect" }
+# Ktor (wasmJs transport, Phase W) — engine for wasmJs comes from ktor-client-js
+# (ships js+wasmJs variants); desktop/Android HTTP stays on OkHttp.
+ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
+ktor-client-js = { group = "io.ktor", name = "ktor-client-js", version.ref = "ktor" }
+ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-client-websockets = { group = "io.ktor", name = "ktor-client-websockets", version.ref = "ktor" }
 
 # Android TV
 tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMaterial" }
@@ -232,8 +350,17 @@ android-test = { id = "com.android.test", version.ref = "agp" }
 androidx-baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineprofile" }
 androidx-baselineprofile-producer = { id = "androidx.baselineprofile.producer", version.ref = "baselineprofile" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+# CMP distribution plugin: required for compose-resources config (`compose.resources {}`).
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+# Kotlin Multiplatform (docs/kmp-migration-plan.md §Phase 0): the shared/ tree.
+# AGP 9 forbids combining org.jetbrains.kotlin.multiplatform with
+# com.android.library, so every KMP module's Android target uses AGP's
+# dedicated KMP library plugin below instead.
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+test-retry = { id = "org.gradle.test-retry", version.ref = "test-retry" }
 aboutLibraries = { id = "com.mikepenz.aboutlibraries.plugin", version.ref = "aboutLibraries" }

@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared action / component literals (enhancements §2.2).
+         Prefixed `core_` so they never collide with module-local strings
+         once resources are merged at the app level. -->
+    <string name="core_retry">Reintentar</string>
+    <string name="core_cancel">Cancelar</string>
+    <string name="core_reset">Restablecer</string>
+    <string name="core_close">Cerrar</string>
+    <string name="core_done">Hecho</string>
+    <!-- Additional shared action literals -->
+    <string name="core_confirm">Confirmar</string>
+    <string name="core_ok">Aceptar</string>
+    <string name="core_delete">Eliminar</string>
+    <string name="core_clear">Borrar</string>
+    <string name="core_undo">Deshacer</string>
+    <string name="core_clear_filters">Quitar filtros</string>
+    <string name="core_copy">Copiar</string>
+    <string name="core_copied_to_clipboard">Copiado al portapapeles</string>
+    <string name="core_restart">Reiniciar</string>
+    <string name="core_search">Buscar</string>
+    <string name="core_loading">Cargando…</string>
+    <!-- Media quick-action sheet labels -->
+    <string name="core_action_play">Reproducir</string>
+    <string name="core_action_mark_watched">Marcar como visto</string>
+    <string name="core_action_mark_unwatched">Marcar como no visto</string>
+    <string name="core_action_download">Descargar</string>
+    <string name="core_action_add_to_playlist">Añadir a la lista de reproducción</string>
+    <string name="core_action_favorite">Añadir a favoritos</string>
+    <string name="core_action_unfavorite">Quitar de favoritos</string>
+    <string name="core_action_delete">Eliminar descarga</string>
+    <string name="core_action_details">Ver detalles</string>
+
+    <!-- Truly cross-module feedback (posted from the app/navigation layer
+         and referenced by multiple feature modules). -->
+    <string name="msg_no_video_player_found">No se encontró ningún reproductor de vídeo</string>
+    <string name="msg_smart_download_deleted">Se eliminó la descarga vista para liberar espacio</string>
+
+    <!-- Localizable labels for [com.raulshma.jellyplay.core.model.MediaType], shared
+         by every feature screen that renders a media-type badge or filter chip.
+         Kept here (not in core/model) because the model layer has no resource
+         access; resolve them via [mediaTypeDisplayName] / [mediaTypeDisplayNamePlural]. -->
+    <string name="core_media_movie">Película</string>
+    <string name="core_media_series">Serie</string>
+    <string name="core_media_season">Temporada</string>
+    <string name="core_media_episode">Episodio</string>
+    <string name="core_media_track">Pista</string>
+    <string name="core_media_album">Álbum</string>
+    <string name="core_media_artist">Artista</string>
+    <string name="core_media_music_video">Videoclip</string>
+    <string name="core_media_collection">Colección</string>
+    <string name="core_media_photo">Foto</string>
+    <string name="core_media_photo_album">Álbum de fotos</string>
+    <string name="core_media_live_tv">TV en directo</string>
+    <string name="core_media_channel">Canal</string>
+    <string name="core_media_unknown">Elemento</string>
+
+    <!-- Plural forms (e.g. filter chips, library headers). -->
+    <string name="core_media_movie_plural">Películas</string>
+    <string name="core_media_series_plural">Series</string>
+    <string name="core_media_season_plural">Temporadas</string>
+    <string name="core_media_episode_plural">Episodios</string>
+    <string name="core_media_music_plural">Música</string>
+    <string name="core_media_album_plural">Álbumes</string>
+    <string name="core_media_artist_plural">Artistas</string>
+    <string name="core_media_music_video_plural">Videoclips</string>
+    <string name="core_media_collection_plural">Colecciones</string>
+    <string name="core_media_photo_plural">Fotos</string>
+    <string name="core_media_photo_album_plural">Álbumes de fotos</string>
+    <string name="core_media_live_tv_plural">TV en directo</string>
+    <string name="core_media_channel_plural">Canales</string>
+    <string name="core_media_unknown_plural">Desconocidos</string>
+
+    <!-- core/ui shared -->
+    <string name="core_report">Reportar</string>
+    <string name="core_ui_back">Atrás</string>
+    <string name="core_ui_select">Seleccionar…</string>
+
+    <!-- core/ui auth challenge -->
+    <string name="core_ui_auth_title">Autenticar</string>
+    <string name="core_ui_auth_subtitle">Confirma tu identidad</string>
+    <string name="core_ui_auth_use_pin">Usar PIN</string>
+    <string name="core_ui_auth_use_biometric">Usar biométrico</string>
+    <string name="core_ui_auth_biometric_prompt">Usa la biométrica para autenticarte</string>
+
+    <!-- core/ui seerr request dialog -->
+    <string name="core_ui_seerr_request_success">¡Solicitud enviada correctamente!</string>
+    <string name="core_ui_seerr_loading_options">Cargando opciones…</string>
+    <string name="core_ui_seerr_destination_server_sonarr">Servidor de destino (Sonarr)</string>
+    <string name="core_ui_seerr_destination_server_radarr">Servidor de destino (Radarr)</string>
+    <string name="core_ui_seerr_quality_profile">Perfil de calidad</string>
+    <string name="core_ui_seerr_root_folder">Carpeta raíz</string>
+    <string name="core_ui_seerr_tags">Etiquetas</string>
+    <string name="core_ui_seerr_all_seasons">Todas las temporadas</string>
+    <string name="core_ui_seerr_season">Temporada %1$d</string>
+    <string name="core_ui_seerr_episodes">%1$d episodios</string>
+    <string name="core_ui_seerr_loading_seasons">Cargando temporadas…</string>
+    <string name="core_ui_seerr_request">Solicitar</string>
+
+    <!-- core/ui accent / color pickers -->
+    <string name="core_ui_accent_color_title">Color de acento</string>
+    <string name="core_ui_accent_color_subtitle">Selecciona una muestra de color de acento personalizada o dinámica</string>
+    <string name="core_ui_color_style_title">Estilo de color</string>
+    <string name="core_ui_color_style_subtitle">Define el estilo visual de las paletas generadas</string>
+    <string name="core_ui_dynamic_colors">Colores dinámicos del fondo de pantalla</string>
+    <string name="core_ui_synthwave_accent_title">Acento Synthwave</string>
+    <string name="core_ui_synthwave_accent_subtitle">Selecciona una muestra de color de acento neón personalizada</string>
+    <string name="core_ui_soothing_accent_title">Acento suave</string>
+    <string name="core_ui_soothing_accent_subtitle">Selecciona un color de acento relajante</string>
+    <string name="core_ui_variant_accent_title">Acento de %1$s</string>
+    <string name="core_ui_variant_accent_subtitle">Selecciona el color de acento para este estilo de tema</string>
+
+    <!-- core/ui component content descriptions & labels -->
+    <string name="core_ui_remove">Quitar</string>
+    <string name="core_ui_play">Reproducir</string>
+    <string name="core_ui_backspace">Borrado</string>
+    <string name="core_ui_request">Solicitar</string>
+    <string name="core_ui_watched">Visto</string>
+    <string name="core_ui_downloaded">Descargado</string>
+    <string name="core_ui_cd_loading">Cargando</string>
+    <string name="core_ui_cd_error">Error</string>
+    <string name="core_ui_cd_local_network">Red local, sin internet</string>
+    <string name="core_ui_cd_offline">Sin conexión</string>
+    <string name="core_ui_cd_server_unreachable">Servidor no disponible</string>
+    <!-- Settings search registry: localized -->
+    <string name="ss_cat_about">Acerca de</string>
+    <string name="ss_cat_account">Cuenta</string>
+    <string name="ss_cat_activity_insights">Actividad e información</string>
+    <string name="ss_cat_appearance">Apariencia</string>
+    <string name="ss_cat_audio_player">Reproductor de audio</string>
+    <string name="ss_cat_backup_restore">Copia de seguridad y restauración</string>
+    <string name="ss_cat_experimental">Experimental</string>
+    <string name="ss_cat_integrations">Integraciones</string>
+    <string name="ss_cat_language_subtitles">Idioma y subtítulos</string>
+    <string name="ss_cat_notifications">Notificaciones</string>
+    <string name="ss_cat_playback">Reproducción</string>
+    <string name="ss_cat_security">Seguridad</string>
+    <string name="ss_cat_storage">Almacenamiento</string>
+    <string name="ss_cat_system">Sistema</string>
+
+    <!-- Accessibility / media -->
+    <string name="core_ui_image_placeholder">Marcador de imagen</string>
+
+    <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
+    <string name="core_segment_intro">Intro</string>
+    <string name="core_segment_intro_desc">Secuencia de apertura/intro</string>
+    <string name="core_segment_outro">Outro</string>
+    <string name="core_segment_outro_desc">Secuencia de creditos/outro</string>
+    <string name="core_segment_preview">Vista previa</string>
+    <string name="core_segment_preview_desc">Proximamente / cold open / teaser</string>
+    <string name="core_segment_recap">Resumen</string>
+    <string name="core_segment_recap_desc">Previamente en...</string>
+    <string name="core_segment_commercial">Comercial</string>
+    <string name="core_segment_commercial_desc">Pausa publicitaria</string>
+    <string name="core_segment_unknown">Otro</string>
+    <string name="core_segment_unknown_desc">Segmento personalizado</string>
+    <string name="core_segment_skip_intro">Omitir intro</string>
+    <string name="core_segment_skip_outro">Omitir creditos</string>
+    <string name="core_segment_skip_preview">Omitir vista previa</string>
+    <string name="core_segment_skip_recap">Omitir resumen</string>
+    <string name="core_segment_skip_commercial">Omitir comercial</string>
+    <string name="core_segment_skip_unknown">Omitir segmento</string>
+    <string name="core_segment_behavior_show_button">Mostrar boton</string>
+    <string name="core_segment_behavior_show_button_desc">Mostrar un boton de omitir durante el segmento</string>
+    <string name="core_segment_behavior_auto_skip">Salto automatico</string>
+    <string name="core_segment_behavior_auto_skip_desc">Saltar automaticamente el segmento</string>
+    <string name="core_segment_behavior_ignore">Ignorar</string>
+    <string name="core_segment_behavior_ignore_desc">No hacer nada para este tipo de segmento</string>
+
+    <!-- Localized UI text extracted from MediaPreviewOverlay -->
+    <string name="core_preview_release_to_close">Soltar para cerrar</string>
+    <string name="core_preview_series">Serie</string>
+    <string name="core_preview_new_format">%1$d nuevo</string>
+
+    <!-- Shared player speed-picker custom-value labels (§2.3). -->
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">Ajustar velocidad de reproducción</string>
+
+    <!-- Accesibilidad: interruptor modo Vídeo/Música (P5 §3.2) -->
+    <string name="a11y_mode_video">Modo vídeo</string>
+    <string name="a11y_mode_music">Modo música</string>
+
+    <!-- DeleteDownloadedEpisodesSheet (shared by media detail + offline home). -->
+    <string name="detail_delete_downloads_title">Eliminar descargas</string>
+    <string name="detail_select_episodes_to_remove">Selecciona los episodios que quieres quitar del dispositivo.</string>
+    <string name="detail_select_all">Seleccionar todo</string>
+    <string name="detail_deselect_all">Deseleccionar todo</string>
+    <string name="detail_episodes_selected">%1$d de %2$d episodios seleccionados</string>
+    <string name="detail_episodes_selected_with_freed">%1$d de %2$d episodios seleccionados · %3$s</string>
+    <string name="detail_season_default">Temporada %1$d</string>
+    <string name="detail_cd_collapse">Contraer</string>
+    <string name="detail_cd_expand">Expandir</string>
+    <string name="detail_delete_entire_series">Eliminar serie completa</string>
+    <string name="detail_cancel">Cancelar</string>
+    <string name="detail_delete_count">Eliminar %1$d</string>
+    <string name="detail_delete_count_with_freed">Eliminar %1$d · %2$s</string>
+<plurals name="detail_episode_count">
+    <item quantity="one">%1$d episodio</item>
+    <item quantity="other">%1$d episodios</item>
+    </plurals>
+
+    <!-- SeriesDownloadSheet (per-season download picker, shared by detail + home). -->
+    <string name="detail_download_series_title">Descargar serie</string>
+    <string name="detail_download_series_subtitle">Toca una temporada para ver los episodios. Selecciona cuáles descargar.</string>
+    <string name="detail_downloaded_count_format">• %1$d descargados</string>
+    <string name="detail_no_episodes_available">No hay episodios disponibles</string>
+    <string name="detail_downloaded_status">Descargado</string>
+    <string name="detail_queuing">Poniendo en cola…</string>
+
+    <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
+    <string name="transcode_reasons_title">¿Por qué se transcodifica?</string>
+    <string name="transcode_reason_unknown">El servidor informó: %1$s</string>
+    <string name="transcode_reason_container_not_supported">El contenedor del archivo no es compatible con la reproducción directa.</string>
+    <string name="transcode_reason_video_codec_not_supported">El códec de vídeo no es compatible con los decodificadores de este dispositivo.</string>
+    <string name="transcode_reason_audio_codec_not_supported">El códec de audio no es compatible con los decodificadores de este dispositivo.</string>
+    <string name="transcode_reason_video_bitrate">La tasa de bits de vídeo supera el límite de calidad de streaming.</string>
+    <string name="transcode_reason_audio_bitrate">La tasa de bits de audio supera el límite de calidad de streaming.</string>
+    <string name="transcode_reason_container_bitrate">La tasa de bits total supera el límite de calidad de streaming.</string>
+    <string name="transcode_reason_video_bit_depth">La profundidad de bits del vídeo (p. ej., 10 bits) no es compatible con la reproducción directa.</string>
+    <string name="transcode_reason_audio_bit_depth">La profundidad de bits del audio no es compatible con la reproducción directa.</string>
+    <string name="transcode_reason_audio_channels">El audio tiene más canales de los que permite el perfil del dispositivo.</string>
+    <string name="transcode_reason_audio_profile">El perfil de audio (p. ej., DTS-HD, Atmos) no es compatible con la reproducción directa.</string>
+    <string name="transcode_reason_audio_sample_rate">La frecuencia de muestreo del audio no es compatible con la reproducción directa.</string>
+    <string name="transcode_reason_audio_is_external">La pista de audio es externa al contenedor y no se puede transmitir directamente.</string>
+    <string name="transcode_reason_secondary_audio">Una pista de audio secundaria (p. ej., comentarios) forzó la transcodificación.</string>
+    <string name="transcode_reason_interlaced">El vídeo entrelazado no es compatible con la reproducción directa.</string>
+    <string name="transcode_reason_anamorphic">La codificación de vídeo anamórfica no es compatible con la reproducción directa.</string>
+    <string name="transcode_reason_ref_frames">El vídeo tiene demasiados fotogramas de referencia para el decodificador del dispositivo.</string>
+    <string name="transcode_reason_video_codec_tag">La etiqueta del códec de vídeo es poco común y no se reconoce para reproducción directa.</string>
+    <string name="transcode_reason_video_framerate">La frecuencia de fotogramas del vídeo no es compatible con la reproducción directa.</string>
+    <string name="transcode_reason_video_level">El nivel de códec del vídeo es demasiado alto para el decodificador del dispositivo.</string>
+    <string name="transcode_reason_video_profile">El perfil del códec de vídeo no es compatible con la reproducción directa.</string>
+    <string name="transcode_reason_video_range">El rango de vídeo (p. ej., HDR, Dolby Vision) no es compatible con la reproducción directa.</string>
+    <string name="transcode_reason_video_resolution">La resolución del vídeo supera el límite de reproducción directa.</string>
+    <string name="transcode_reason_subtitle_codec">El formato de subtítulos debe incrustarse en el servidor.</string>
+    <string name="transcode_reason_stream_count">El archivo tiene más pistas de las que permite el perfil del dispositivo.</string>
+    <string name="transcode_reason_direct_play_error">El servidor no pudo analizar el flujo original para reproducción directa.</string>
+    <string name="transcode_reason_unknown_video_info">El servidor no pudo determinar los detalles del flujo de vídeo y transcodificó por seguridad.</string>
+    <string name="transcode_reason_unknown_audio_info">El servidor no pudo determinar los detalles del flujo de audio y transcodificó por seguridad.</string>
+    <string name="transcode_reason_hint_engine">Prueba otro motor de reproducción (mpv o VLC); puede reproducirlo directamente.</string>
+    <string name="transcode_reason_hint_decoder">Cambiar el decodificador a Software/FFmpeg podría solucionarlo.</string>
+    <string name="transcode_reason_hint_quality">Sube el límite de calidad de streaming en el selector de calidad.</string>
+    <string name="transcode_reason_hint_subtitle">Elige un subtítulo SRT/externo para evitar la incrustación.</string>
+    <string name="core_remove_download_title">¿Eliminar descarga?</string>
+    <string name="core_remove_download_message">Esto elimina la copia descargada de «%1$s» de este dispositivo. La copia del servidor no se ve afectada.</string>
+    <string name="core_remove_download_confirm">Eliminar</string>
+</resources>

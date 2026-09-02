@@ -156,6 +156,7 @@ import com.raulshma.jellyplay.feature.admin.navigation.adminSection
 import com.raulshma.jellyplay.feature.details.navigation.detailsSection
 import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
 import com.raulshma.jellyplay.feature.editor.navigation.editorSection
+import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
 import com.raulshma.jellyplay.feature.home.navigation.homeSection
 import com.raulshma.jellyplay.feature.insights.navigation.insightsSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
@@ -203,7 +204,17 @@ fun JellyPlayApp(
         }
     }
 
-    CompositionLocalProvider(LocalUserMessageBus provides infra.userMessageBus) {
+    // The shared (commonMain) UserMessageBus — the single the migrated
+    // ViewModels (home, player session, library) post through. Provided
+    // alongside the legacy bus below so both message stacks render.
+    val sharedUserMessageBus = remember {
+        org.koin.mp.KoinPlatform.getKoin()!!.get<com.raulshma.jellyplay.core.ui.message.UserMessageBus>()
+    }
+
+    CompositionLocalProvider(
+        LocalUserMessageBus provides infra.userMessageBus,
+        com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus provides sharedUserMessageBus,
+    ) {
         when {
             isRestoring -> {}
             isAuthenticated && !preferences.onboardingCompleted && !isTv -> {
@@ -240,8 +251,8 @@ fun JellyPlayApp(
                         // Resolved here — the authenticated branch only — so the
                         // playback engine stays unbuilt for auth/onboarding
                         // sessions; collecting it anywhere earlier would defeat
-                        // the dagger.Lazy.
-                        audioPlaybackManager = infra.audioPlaybackManagerLazy.get(),
+                        // the lazy provider.
+                        audioPlaybackManager = infra.audioPlaybackManagerLazy.value,
                     )
                 }
             }
@@ -358,6 +369,9 @@ private fun MainContent(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val userMessageBus = LocalUserMessageBus.current
+    // Shared (commonMain) bus — same instance the root provider supplies to
+    // the migrated ViewModels; collected alongside the legacy bus below.
+    val sharedUserMessageBus = com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus.current
     var pendingExternalLaunch by remember { mutableStateOf<com.raulshma.jellyplay.ExternalPlayerLaunch?>(null) }
     val externalPlayerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -637,6 +651,41 @@ private fun MainContent(
                     message = resolvedText,
                     withDismissAction = true,
                     duration = if (message is UserMessage.Error) {
+                        androidx.compose.material3.SnackbarDuration.Long
+                    } else {
+                        androidx.compose.material3.SnackbarDuration.Short
+                    },
+                )
+            }
+        }
+    }
+
+    // Same severity→duration mapping as the legacy bus above, but for the
+    // shared (commonMain) bus the migrated ViewModels post through. Resource
+    // messages resolve via compose-resources' suspend getString (asString()
+    // is @Composable-only, unavailable inside a collect lambda).
+    androidx.compose.runtime.LaunchedEffect(sharedUserMessageBus, isTv) {
+        sharedUserMessageBus.messages.collect { message ->
+            val resolvedText = when (val text = message.text) {
+                is com.raulshma.jellyplay.core.ui.message.UiText.Raw -> text.value
+                is com.raulshma.jellyplay.core.ui.message.UiText.Resource ->
+                    org.jetbrains.compose.resources.getString(text.res, *text.args.toTypedArray())
+            }
+            if (isTv) {
+                android.widget.Toast.makeText(
+                    context,
+                    resolvedText,
+                    if (message is com.raulshma.jellyplay.core.ui.message.UserMessage.Error) {
+                        android.widget.Toast.LENGTH_LONG
+                    } else {
+                        android.widget.Toast.LENGTH_SHORT
+                    },
+                ).show()
+            } else {
+                snackbarHostState.showSnackbar(
+                    message = resolvedText,
+                    withDismissAction = true,
+                    duration = if (message is com.raulshma.jellyplay.core.ui.message.UserMessage.Error) {
                         androidx.compose.material3.SnackbarDuration.Long
                     } else {
                         androidx.compose.material3.SnackbarDuration.Short
@@ -1087,8 +1136,11 @@ private fun PhoneContent(
     var isBottomNavVisible by isBottomNavVisibleState
 
     // Play On (cast-to-Jellyfin-session) lives at the app shell so the mini
-    // transport persists across tabs. Owned by an activity-scoped VM.
-    val playOnViewModel: com.raulshma.jellyplay.PlayOnViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    // transport persists across tabs. Owned by an activity-scoped VM: both
+    // this site and PlayOnCompanionScreen's default resolve through the same
+    // LocalViewModelStoreOwner (MainActivity) with the same Koin store key,
+    // so they observe one instance.
+    val playOnViewModel: com.raulshma.jellyplay.PlayOnViewModel = org.koin.compose.viewmodel.koinViewModel()
     val playOnState by playOnViewModel.uiState.collectAsStateWithLifecycle()
     var showPlayOnSheet by remember { mutableStateOf(false) }
     val playOnContext = LocalContext.current
@@ -1534,9 +1586,15 @@ private fun MainNavDisplay(
     // Admin access-control state, collected once here (a @Composable context)
     // and threaded into the admin section as read lambdas so the navigation
     // entries — which are composed lazily — observe the latest value without
-    // re-building the entry graph. MainViewModel is activity-scoped, so this
-    // resolves to the same instance held by JellyPlayApp/MainActivity.
-    val mainViewModel: MainViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    // re-building the entry graph. MainViewModel is activity-scoped: this
+    // ViewModelProvider call resolves the SAME instance MainActivity's
+    // `by viewModels { KoinViewModelFactory }` delegate holds (same store,
+    // same default key) — see di/AppKoinModule.kt.
+    val mainViewModel: MainViewModel = com.raulshma.jellyplay.di.mainViewModelFromKoin(
+        checkNotNull(androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner.current) {
+            "MainNavDisplay composed without a ViewModelStoreOwner"
+        } as androidx.lifecycle.ViewModelStoreOwner,
+    )
     val isAdminState = mainViewModel.isAdmin.collectAsStateWithLifecycle()
     val isRefreshingAdminState = mainViewModel.isRefreshingAdmin.collectAsStateWithLifecycle()
 
@@ -1557,7 +1615,19 @@ private fun MainNavDisplay(
                 navigator = navigator,
                 homeMode = homeMode,
                 onModeChange = onModeChange,
-                playOnStrategy = playOnStrategy,
+                // The shared home module narrows the Play-On surface to its
+                // HomePlayOnRedirect seam (the concrete cast strategy is
+                // Android-bound); adapt the real strategy here — probe +
+                // fling, exactly the inline shape the legacy homeSection had.
+                playOnStrategy = playOnStrategy?.let { strategy ->
+                    HomePlayOnRedirect { itemId, startPositionMs ->
+                        strategy.isConnected.value.also { connected ->
+                            if (connected) {
+                                strategy.loadMedia(itemId = itemId, startPositionMs = startPositionMs)
+                            }
+                        }
+                    }
+                },
                 surpriseRequests = surpriseRequests,
                 musicContent = {
                     MusicHomeScreen(

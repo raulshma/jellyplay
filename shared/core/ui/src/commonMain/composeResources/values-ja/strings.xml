@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared action / component literals (enhancements §2.2).
+         Prefixed `core_` so they never collide with module-local strings
+         once resources are merged at the app level. -->
+    <string name="core_retry">再試行</string>
+    <string name="core_cancel">キャンセル</string>
+    <string name="core_reset">リセット</string>
+    <string name="core_close">閉じる</string>
+    <string name="core_done">完了</string>
+    <!-- Additional shared action literals -->
+    <string name="core_confirm">確認</string>
+    <string name="core_ok">OK</string>
+    <string name="core_delete">削除</string>
+    <string name="core_clear">クリア</string>
+    <string name="core_undo">元に戻す</string>
+    <string name="core_clear_filters">フィルターをクリア</string>
+    <string name="core_copy">コピー</string>
+    <string name="core_copied_to_clipboard">クリップボードにコピーしました</string>
+    <string name="core_restart">最初から再生</string>
+    <string name="core_search">検索</string>
+    <string name="core_loading">読み込んでいます…</string>
+    <!-- Media quick-action sheet labels -->
+    <string name="core_action_play">再生</string>
+    <string name="core_action_mark_watched">視聴済みにする</string>
+    <string name="core_action_mark_unwatched">未視聴にする</string>
+    <string name="core_action_download">ダウンロード</string>
+    <string name="core_action_add_to_playlist">プレイリストに追加</string>
+    <string name="core_action_favorite">お気に入りに追加</string>
+    <string name="core_action_unfavorite">お気に入りから削除</string>
+    <string name="core_action_delete">ダウンロードを削除</string>
+    <string name="core_action_details">詳細を表示</string>
+
+    <!-- Truly cross-module feedback (posted from the app/navigation layer
+         and referenced by multiple feature modules). -->
+    <string name="msg_no_video_player_found">動画プレーヤーが見つかりません</string>
+    <string name="msg_smart_download_deleted">容量確保のため、視聴済みのダウンロードが削除されました</string>
+
+    <!-- Localizable labels for [com.raulshma.jellyplay.core.model.MediaType], shared
+         by every feature screen that renders a media-type badge or filter chip.
+         Kept here (not in core/model) because the model layer has no resource
+         access; resolve them via [mediaTypeDisplayName] / [mediaTypeDisplayNamePlural]. -->
+    <string name="core_media_movie">映画</string>
+    <string name="core_media_series">シリーズ</string>
+    <string name="core_media_season">シーズン</string>
+    <string name="core_media_episode">エピソード</string>
+    <string name="core_media_track">トラック</string>
+    <string name="core_media_album">アルバム</string>
+    <string name="core_media_artist">アーティスト</string>
+    <string name="core_media_music_video">ミュージックビデオ</string>
+    <string name="core_media_collection">コレクション</string>
+    <string name="core_media_photo">写真</string>
+    <string name="core_media_photo_album">フォトアルバム</string>
+    <string name="core_media_live_tv">ライブテレビ</string>
+    <string name="core_media_channel">チャンネル</string>
+    <string name="core_media_unknown">アイテム</string>
+
+    <!-- Plural forms (e.g. filter chips, library headers). -->
+    <string name="core_media_movie_plural">映画</string>
+    <string name="core_media_series_plural">テレビ番組</string>
+    <string name="core_media_season_plural">シーズン</string>
+    <string name="core_media_episode_plural">エピソード</string>
+    <string name="core_media_music_plural">音楽</string>
+    <string name="core_media_album_plural">アルバム</string>
+    <string name="core_media_artist_plural">アーティスト</string>
+    <string name="core_media_music_video_plural">ミュージックビデオ</string>
+    <string name="core_media_collection_plural">コレクション</string>
+    <string name="core_media_photo_plural">写真</string>
+    <string name="core_media_photo_album_plural">フォトアルバム</string>
+    <string name="core_media_live_tv_plural">ライブテレビ</string>
+    <string name="core_media_channel_plural">チャンネル</string>
+    <string name="core_media_unknown_plural">不明</string>
+
+    <!-- core/ui shared -->
+    <string name="core_report">報告</string>
+    <string name="core_ui_back">戻る</string>
+    <string name="core_ui_select">選択…</string>
+
+    <!-- core/ui auth challenge -->
+    <string name="core_ui_auth_title">認証</string>
+    <string name="core_ui_auth_subtitle">本人確認を行ってください</string>
+    <string name="core_ui_auth_use_pin">PIN を使用</string>
+    <string name="core_ui_auth_use_biometric">生体認証を使用</string>
+    <string name="core_ui_auth_biometric_prompt">認証に生体認証を使用</string>
+
+    <!-- core/ui seerr request dialog -->
+    <string name="core_ui_seerr_request_success">リクエストが正常に送信されました！</string>
+    <string name="core_ui_seerr_loading_options">オプションを読み込み中…</string>
+    <string name="core_ui_seerr_destination_server_sonarr">送信先サーバー (Sonarr)</string>
+    <string name="core_ui_seerr_destination_server_radarr">送信先サーバー (Radarr)</string>
+    <string name="core_ui_seerr_quality_profile">品質プロファイル</string>
+    <string name="core_ui_seerr_root_folder">ルートフォルダー</string>
+    <string name="core_ui_seerr_tags">タグ</string>
+    <string name="core_ui_seerr_all_seasons">すべてのシーズン</string>
+    <string name="core_ui_seerr_season">シーズン %1$d</string>
+    <string name="core_ui_seerr_episodes">%1$d エピソード</string>
+    <string name="core_ui_seerr_loading_seasons">シーズンを読み込み中…</string>
+    <string name="core_ui_seerr_request">リクエスト</string>
+
+    <!-- core/ui accent / color pickers -->
+    <string name="core_ui_accent_color_title">アクセントカラー</string>
+    <string name="core_ui_accent_color_subtitle">カスタムまたは動的なアクセントカラーを選択</string>
+    <string name="core_ui_color_style_title">カラースタイル</string>
+    <string name="core_ui_color_style_subtitle">生成されるパレットの視覚的な雰囲気を定義</string>
+    <string name="core_ui_dynamic_colors">動的な壁紙の色</string>
+    <string name="core_ui_synthwave_accent_title">Synthwave アクセント</string>
+    <string name="core_ui_synthwave_accent_subtitle">カスタムネオンアクセントカラーを選択</string>
+    <string name="core_ui_soothing_accent_title">落ち着いたアクセント</string>
+    <string name="core_ui_soothing_accent_subtitle">穏やかなアクセントカラーを選択</string>
+    <string name="core_ui_variant_accent_title">%1$sアクセント</string>
+    <string name="core_ui_variant_accent_subtitle">このテーマスタイルのアクセントカラーを選択</string>
+
+    <!-- core/ui component content descriptions & labels -->
+    <string name="core_ui_remove">削除</string>
+    <string name="core_ui_play">再生</string>
+    <string name="core_ui_backspace">バックスペース</string>
+    <string name="core_ui_request">リクエスト</string>
+    <string name="core_ui_watched">視聴済み</string>
+    <string name="core_ui_downloaded">ダウンロード済み</string>
+    <string name="core_ui_cd_loading">読み込み中</string>
+    <string name="core_ui_cd_error">エラー</string>
+    <string name="core_ui_cd_local_network">ローカルネットワーク、インターネットなし</string>
+    <string name="core_ui_cd_offline">オフライン</string>
+    <string name="core_ui_cd_server_unreachable">サーバーに接続できません</string>
+
+    <!-- Accessibility / media -->
+    <string name="core_ui_image_placeholder">画像プレースホルダー</string>
+
+    <!-- Settings search registry: localized -->
+    <string name="ss_cat_about">概要</string>
+    <string name="ss_cat_account">アカウント</string>
+    <string name="ss_cat_activity_insights">アクティビティとインサイト</string>
+    <string name="ss_cat_appearance">外観</string>
+    <string name="ss_cat_audio_player">オーディオプレーヤー</string>
+    <string name="ss_cat_backup_restore">バックアップと復元</string>
+    <string name="ss_cat_experimental">実験的機能</string>
+    <string name="ss_cat_integrations">連携</string>
+    <string name="ss_cat_language_subtitles">言語と字幕</string>
+    <string name="ss_cat_notifications">通知</string>
+    <string name="ss_cat_playback">再生</string>
+    <string name="ss_cat_security">セキュリティ</string>
+    <string name="ss_cat_storage">ストレージ</string>
+    <string name="ss_cat_system">システム</string>
+
+    <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
+    <string name="core_segment_intro">イントロ</string>
+    <string name="core_segment_intro_desc">オープニング/イントロシーケンス</string>
+    <string name="core_segment_outro">アウトロ</string>
+    <string name="core_segment_outro_desc">エンディング/アウトロシーケンス</string>
+    <string name="core_segment_preview">プレビュー</string>
+    <string name="core_segment_preview_desc">次回予告/コールドオープン/ティーザー</string>
+    <string name="core_segment_recap">あらすじ</string>
+    <string name="core_segment_recap_desc">前回のあらすじ...</string>
+    <string name="core_segment_commercial">CM</string>
+    <string name="core_segment_commercial_desc">CM休止</string>
+    <string name="core_segment_unknown">その他</string>
+    <string name="core_segment_unknown_desc">カスタムセグメント</string>
+    <string name="core_segment_skip_intro">イントロをスキップ</string>
+    <string name="core_segment_skip_outro">エンディングをスキップ</string>
+    <string name="core_segment_skip_preview">プレビューをスキップ</string>
+    <string name="core_segment_skip_recap">あらすじをスキップ</string>
+    <string name="core_segment_skip_commercial">CMをスキップ</string>
+    <string name="core_segment_skip_unknown">セグメントをスキップ</string>
+    <string name="core_segment_behavior_show_button">ボタンを表示</string>
+    <string name="core_segment_behavior_show_button_desc">セグメント中にスキップボタンを表示</string>
+    <string name="core_segment_behavior_auto_skip">自動スキップ</string>
+    <string name="core_segment_behavior_auto_skip_desc">セグメントを自動的にスキップ</string>
+    <string name="core_segment_behavior_ignore">無視</string>
+    <string name="core_segment_behavior_ignore_desc">このセグメントタイプでは何もしない</string>
+
+    <!-- Localized UI text extracted from MediaPreviewOverlay -->
+    <string name="core_preview_release_to_close">離して閉じる</string>
+    <string name="core_preview_series">シリーズ</string>
+    <string name="core_preview_new_format">新着 %1$d 件</string>
+
+    <!-- Shared player speed-picker custom-value labels (§2.3). -->
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">再生速度を調整</string>
+
+    <!-- アクセシビリティ: 動画/音楽モード切り替え (P5 §3.2) -->
+    <string name="a11y_mode_video">動画モード</string>
+    <string name="a11y_mode_music">音楽モード</string>
+
+    <!-- DeleteDownloadedEpisodesSheet (shared by media detail + offline home). -->
+    <string name="detail_delete_downloads_title">ダウンロードを削除</string>
+    <string name="detail_select_episodes_to_remove">端末から削除するエピソードを選択してください。</string>
+    <string name="detail_select_all">すべて選択</string>
+    <string name="detail_deselect_all">選択をすべて解除</string>
+    <string name="detail_episodes_selected">%2$d 件中 %1$d 件のエピソードを選択</string>
+    <string name="detail_episodes_selected_with_freed">%2$d 件中 %1$d 件のエピソードを選択 · %3$s</string>
+    <string name="detail_season_default">シーズン %1$d</string>
+    <string name="detail_cd_collapse">折りたたむ</string>
+    <string name="detail_cd_expand">展開する</string>
+    <string name="detail_delete_entire_series">シリーズ全体を削除</string>
+    <string name="detail_cancel">キャンセル</string>
+    <string name="detail_delete_count">%1$d 件削除</string>
+    <string name="detail_delete_count_with_freed">%1$d 件削除 · %2$s</string>
+<plurals name="detail_episode_count">
+    <item quantity="other">%1$d 件のエピソード</item>
+    </plurals>
+
+    <!-- SeriesDownloadSheet (per-season download picker, shared by detail + home). -->
+    <string name="detail_download_series_title">シリーズをダウンロード</string>
+    <string name="detail_download_series_subtitle">シーズンをタップしてエピソードを表示します。ダウンロードするものを選択してください。</string>
+    <string name="detail_downloaded_count_format">• %1$d 件ダウンロード済み</string>
+    <string name="detail_no_episodes_available">視聴可能なエピソードはありません</string>
+    <string name="detail_downloaded_status">ダウンロード済み</string>
+    <string name="detail_queuing">キューに追加中…</string>
+
+    <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
+    <string name="transcode_reasons_title">なぜトランスコード中？</string>
+    <string name="transcode_reason_unknown">サーバー報告: %1$s</string>
+    <string name="transcode_reason_container_not_supported">ファイルのコンテナーはダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_video_codec_not_supported">このデバイスのデコーダーは映像コーデックに対応していません。</string>
+    <string name="transcode_reason_audio_codec_not_supported">このデバイスのデコーダーは音声コーデックに対応していません。</string>
+    <string name="transcode_reason_video_bitrate">映像ビットレートがストリーミング品質の上限を超えています。</string>
+    <string name="transcode_reason_audio_bitrate">音声ビットレートがストリーミング品質の上限を超えています。</string>
+    <string name="transcode_reason_container_bitrate">合計ビットレートがストリーミング品質の上限を超えています。</string>
+    <string name="transcode_reason_video_bit_depth">映像ビット深度（例: 10ビット）はダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_audio_bit_depth">音声ビット深度はダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_audio_channels">音声チャンネル数がデバイスプロファイルの許容を超えています。</string>
+    <string name="transcode_reason_audio_profile">音声プロファイル（例: DTS-HD、Atmos）はダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_audio_sample_rate">音声サンプリングレートはダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_audio_is_external">音声トラックがコンテナーの外にあり、直接ストリームできません。</string>
+    <string name="transcode_reason_secondary_audio">副音声トラック（例: コメンタリー）によりトランスコードされました。</string>
+    <string name="transcode_reason_interlaced">インターレース映像はダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_anamorphic">アナモルフィック映像はダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_ref_frames">リファレンスフレームが多すぎてデバイスのデコーダーで処理できません。</string>
+    <string name="transcode_reason_video_codec_tag">珍しい映像コーデックタグはダイレクト再生で認識されません。</string>
+    <string name="transcode_reason_video_framerate">映像フレームレートはダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_video_level">映像コーデックレベルがデバイスのデコーダーには高すぎます。</string>
+    <string name="transcode_reason_video_profile">映像コーデックプロファイルはダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_video_range">映像レンジ（例: HDR、Dolby Vision）はダイレクト再生に対応していません。</string>
+    <string name="transcode_reason_video_resolution">映像解像度がダイレクト再生の上限を超えています。</string>
+    <string name="transcode_reason_subtitle_codec">字幕形式はサーバーによる焼き込みが必要です。</string>
+    <string name="transcode_reason_stream_count">ストリーム数がデバイスプロファイルの許容を超えています。</string>
+    <string name="transcode_reason_direct_play_error">サーバーが元ストリームのダイレクト再生判定に失敗しました。</string>
+    <string name="transcode_reason_unknown_video_info">サーバーが映像ストリーム詳細を判定できず、安全のためトランスコードしました。</string>
+    <string name="transcode_reason_unknown_audio_info">サーバーが音声ストリーム詳細を判定できず、安全のためトランスコードしました。</string>
+    <string name="transcode_reason_hint_engine">別の再生エンジン（mpv または VLC）を試すとダイレクト再生できる場合があります。</string>
+    <string name="transcode_reason_hint_decoder">デコーダーを Software/FFmpeg に切り替えると解決する場合があります。</string>
+    <string name="transcode_reason_hint_quality">品質選択でストリーミング品質の上限を上げてください。</string>
+    <string name="transcode_reason_hint_subtitle">焼き込みを避けるには SRT/外部字幕を選んでください。</string>
+    <string name="core_remove_download_title">ダウンロードを削除しますか？</string>
+    <string name="core_remove_download_message">このデバイスから「%1$s」のダウンロード済みコピーを削除します。サーバー上のコピーには影響しません。</string>
+    <string name="core_remove_download_confirm">削除</string>
+</resources>

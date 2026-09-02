@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Login screen -->
+    <string name="auth_sign_in_title">Iniciar sesión</string>
+    <string name="auth_sign_in">Iniciar sesión</string>
+    <string name="auth_signing_in">Iniciando sesión…</string>
+    <string name="auth_username">Usuario</string>
+    <string name="auth_password">Contraseña</string>
+    <string name="auth_error_username_required">Introduce un nombre de usuario</string>
+    <string name="auth_login_failed">Error al iniciar sesión</string>
+    <string name="auth_back_to_sign_in">Volver a Iniciar sesión</string>
+
+    <!-- Add Server screen -->
+    <string name="auth_add_server_title">Añadir servidor</string>
+    <string name="auth_add_server">Añadir servidor</string>
+    <string name="auth_connect_to_jellyfin">Conectar a Jellyfin</string>
+    <string name="auth_add_server_subtitle">Busca un servidor en tu red o introduce una dirección manualmente</string>
+    <string name="auth_or_enter_manually">o introduce manualmente</string>
+    <string name="auth_scanning_for_servers">Buscando servidores…</string>
+    <string name="auth_stop">Detener</string>
+    <string name="auth_server_one_found">%1$d servidor encontrado</string>
+    <string name="auth_server_one_found_scanning">%1$d servidor encontrado…</string>
+    <string name="auth_servers_found">%1$d servidores encontrados</string>
+    <string name="auth_servers_found_scanning">%1$d servidores encontrados…</string>
+    <string name="auth_collapse">Contraer</string>
+    <string name="auth_expand">Expandir</string>
+    <string name="auth_discovery_unavailable">Detección no disponible</string>
+    <string name="auth_retry">Reintentar</string>
+    <string name="auth_no_servers_found">No se encontraron servidores en tu red</string>
+    <string name="auth_connect">Conectar</string>
+    <string name="auth_connecting">Conectando…</string>
+    <string name="auth_server_address">Dirección del servidor</string>
+    <string name="auth_server_address_invalid">Introduce una URL válida (p. ej., https://host:puerto)</string>
+
+    <!-- Server connection errors -->
+    <string name="auth_error_server_address_required">Introduce una dirección de servidor</string>
+    <string name="auth_error_resolve_address">No se pudo resolver la dirección del servidor</string>
+    <string name="auth_error_could_not_connect">No se pudo conectar al servidor</string>
+    <string name="auth_error_connection_timeout">Tiempo de conexión agotado</string>
+    <string name="auth_error_ssl">Error SSL/TLS: comprueba el certificado del servidor</string>
+    <string name="auth_error_cleartext">No se permiten conexiones HTTP. Usa HTTPS.</string>
+    <string name="auth_error_connection_failed">Error al conectar con el servidor</string>
+    <string name="auth_tls_trust_title">¿Confiar en el certificado de este servidor?</string>
+    <string name="auth_tls_trust_body">El servidor %1$s usa un certificado que JellyPlay no pudo verificar (autofirmado o no confiable). Confiar en él permite que JellyPlay se conecte de forma segura a este servidor. Puedes revocarlo más tarde en Ajustes → Gestión de servidores.</string>
+    <string name="auth_tls_trust_confirm">Confiar y conectar</string>
+
+    <!-- Android 17+ local network permission -->
+    <string name="auth_error_local_network_denied">El acceso a la red local está bloqueado. Concede el permiso de red local para acceder a los servidores de tu Wi-Fi.</string>
+    <string name="auth_local_network_rationale_title">Acceso a la red local</string>
+    <string name="auth_local_network_rationale_body">JellyPlay necesita acceso a la red local para descubrir y conectarse a los servidores Jellyfin de tu Wi-Fi.</string>
+    <string name="auth_local_network_allow">Permitir acceso</string>
+
+    <!-- Quick Connect screen -->
+    <string name="auth_qc_starting">Iniciando Quick Connect…</string>
+    <string name="auth_qc_enter_code">Introduce este código en otro dispositivo</string>
+    <string name="auth_qc_path">Jellyfin → Ajustes de usuario → Quick Connect</string>
+    <string name="auth_qc_waiting">Esperando aprobación…</string>
+    <string name="auth_cancel">Cancelar</string>
+    <string name="auth_qc_connected">✓ ¡Conectado!</string>
+    <string name="auth_qc_failed">Quick Connect falló</string>
+    <string name="auth_try_again">Reintentar</string>
+
+    <!-- Quick Connect errors (ViewModel) -->
+    <string name="auth_qc_error_check_availability">No se pudo comprobar la disponibilidad de Quick Connect</string>
+    <string name="auth_qc_error_not_enabled">Quick Connect no está activado en este servidor</string>
+    <string name="auth_qc_error_initiate">No se pudo iniciar Quick Connect</string>
+    <string name="auth_qc_error_polling">Error en la consulta de Quick Connect</string>
+    <string name="auth_qc_error_auth">Error de autenticación de Quick Connect</string>
+    <string name="auth_qc_error_timeout">Quick Connect agotó el tiempo de espera. Inténtalo de nuevo.</string>
+
+    <!-- Server list screen -->
+    <string name="auth_loading">Cargando…</string>
+    <string name="auth_no_servers_added_title">No hay servidores añadidos</string>
+    <string name="auth_no_servers_added_desc">Añade tu servidor Jellyfin para empezar</string>
+    <string name="auth_remove_server">Quitar servidor</string>
+    <string name="auth_remove_server_title">¿Quitar servidor?</string>
+    <string name="auth_remove_server_message">Esto elimina \"%1$s\" y todos los usuarios guardados en él. No se puede deshacer.</string>
+    <string name="auth_remove">Quitar</string>
+
+    <!-- User selection screen -->
+    <string name="auth_loading_users">Cargando usuarios…</string>
+    <string name="auth_no_users_title">No hay usuarios en este servidor</string>
+    <string name="auth_no_users_desc">Añade un usuario para empezar</string>
+    <string name="auth_add_user">Añadir usuario</string>
+    <string name="auth_user_placeholder">Usuario</string>
+    <string name="auth_remove_user">Quitar usuario</string>
+    <string name="auth_remove_user_title">¿Quitar usuario?</string>
+    <string name="auth_remove_user_message">¿Quitar a \"%1$s\" de este servidor? Tendrás que iniciar sesión de nuevo para usarlo.</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="auth_quick_connect">Conexión rápida</string>
+
+    <!-- Server health indicator -->
+    <string name="server_health_healthy">En línea</string>
+    <string name="server_health_unreachable">Sin conexión</string>
+    <string name="server_health_checking">Comprobando…</string>
+</resources>

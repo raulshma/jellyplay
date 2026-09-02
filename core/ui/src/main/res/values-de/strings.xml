@@ -244,4 +244,8 @@
     <string name="transcode_reason_hint_subtitle">Wähle einen SRT-/externen Untertitel, um das Einbrennen zu vermeiden.</string>
     <string name="core_ui_variant_accent_title">%1$s-Akzent</string>
     <string name="core_ui_variant_accent_subtitle">Akzentfarbe für diesen Designstil auswählen</string>
+    <!-- Quick-action remove-download confirm (shared by every host surface) -->
+    <string name="core_remove_download_title">Download löschen?</string>
+    <string name="core_remove_download_message">Dies löscht die heruntergeladene Kopie von „%1$s“ von diesem Gerät. Die Kopie auf dem Server bleibt unverändert.</string>
+    <string name="core_remove_download_confirm">Löschen</string>
 </resources>

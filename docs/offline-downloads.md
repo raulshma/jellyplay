@@ -72,19 +72,26 @@ downloading.
 
 ## Browsing downloads inline
 
-Downloads are not confined to the dedicated screens — the regular home and
-library surfaces are download-aware:
+Downloads are not confined to the dedicated screens — the long-press
+quick-action menu is download-aware across the app: Home, the library
+grid, favorites, search, studio / collection / person detail, the
+media-detail rows, and the Offline Library itself.
 
-- **Long-press any movie / episode / music track / series** on Home or in a
-  Library and tap **Download**: single-stream items start immediately at
-  your default quality, with a "Download started" confirmation. Once an
-  item is downloaded, the same menu flips to **Remove download**, which
-  deletes the local copy (server untouched) after a confirmation — for a
-  series, that's the episode-selection delete sheet.
-- **Series** open the season/episode download sheet right where you are:
-  long-pressing Download on a Home series card presents the sheet in place,
-  and a Library card routes to the detail screen with the sheet
-  pre-opened — either way the whole-series grab gets your selection.
+- **Long-press any movie / episode / music track / series** and tap
+  **Download**: single-stream items start immediately at your default
+  quality, with a "Download started" confirmation. Once an item is
+  downloaded, the same menu flips to **Remove download**, which deletes
+  the local copy (server untouched) after a confirmation dialog. Series
+  removal is the one place hosts differ: a Home series card opens the
+  episode-selection delete sheet, while every other surface — the library
+  grid included — confirms once and deletes the whole series download.
+- **Series downloads** keep their season/episode selection sheet: on Home
+  the sheet is presented right where you are, and a Library card routes to
+  the detail screen with the sheet pre-opened. On every other surface
+  (favorites, search, studio / collection / person detail, media-detail
+  rows), a series — or any item whose flow needs the detail screen —
+  simply opens its detail screen, and you tap **Download** there; the
+  sheet isn't pre-opened.
 - **Library → Downloaded filter** — the pinned filter row has a one-tap
   **Downloaded** chip. While active, the grid is served from the on-device
   offline store instead of the server: it's instant, composes with the other
@@ -99,7 +106,8 @@ library surfaces are download-aware:
 
 The dedicated **Downloads** queue and **Offline Library** screens remain the
 power surfaces: transfer control, storage summary, music browsing, and
-per-item resync live there.
+per-item resync live there. Removing a download from the Offline Library
+grid asks for the same confirmation first.
 
 ### Auto-download new episodes
 
@@ -415,9 +423,11 @@ should remain visible throughout an active transfer.
 
 ## Under the hood
 
-A reference for contributors. The feature spans `core/database`,
-`core/model`, `core/data`, and the `feature/downloads` / `feature/home`
-/ `feature/details` / `feature/settings` modules, wired by Hilt.
+A reference for contributors. The feature spans `shared/core/database`,
+`shared/core/model`, `shared/core/data`, and the `shared/feature/downloads` /
+`shared/feature/home` / `shared/feature/details` / `shared/feature/settings`
+modules, wired by Koin (the WorkManager download workers stay in the
+Android-only `core/data` remainder).
 
 ### Engine: custom WorkManager + OkHttp (not ExoPlayer)
 
@@ -526,12 +536,12 @@ A single `JellyPlayDatabase` (v51) holds five relevant tables:
 
 A two-layer split keeps the freshness rules testable and the I/O isolated:
 
-- **`OfflineSyncComparator`** (`core/data/.../sync`) — the pure, side-effect-free
+- **`OfflineSyncComparator`** (`shared/core/data/.../sync`) — the pure, side-effect-free
   decision layer. It computes deterministic **content-hash signatures** for each
   resync axis (metadata, subtitles, trickplay, segments) from a `MediaDetail`,
   captures a `SyncBaseline`, and diffs a fresh fetch against it. No I/O here —
   network, DB, and disk live one layer up.
-- **`OfflineSyncManager`** (`core/data/.../sync`) — the orchestrator that moves
+- **`OfflineSyncManager`** (`shared/core/data/.../sync`) — the orchestrator that moves
   data between the network (`MediaRepository`, `PlaybackRepository`), the DAO
   (`OfflineMediaDao`), and the artifact writers (`OfflineDownloadWriter`). Owns
   the TTL gate, the offline short-circuit, batch progress, and the partial-sync
@@ -584,9 +594,9 @@ construction so a check interrupted by process death doesn't render as a stuck
 
 ### UI layer
 
-- **`feature/details`** — **one** `MediaDetailScreen` renders detail for
+- **`shared/feature/details`** — **one** `MediaDetailScreen` renders detail for
   online, remote-with-attached-download, and local/offline/fallback items.
-  `MediaDetailProvider` (in `core/data`) owns the remote/local source decision,
+  `MediaDetailProvider` (in `shared/core/data`) owns the remote/local source decision,
   the source-dependent read graph (detail, seasons/episodes via the shared
   `EpisodeCatalogue`, album children, local subtitles, local artwork), the
   reactive download/sync attachment, and a compact capability set. `DetailViewModel`
@@ -600,16 +610,16 @@ construction so a check interrupted by process death doesn't render as a stuck
   a completed download. The `DownloadConfirmationDialog` and `SeriesDownloadSheet`
   initiate downloads; `DetailViewModel` performs the cellular-warning check and
   calls `DownloadIntake`.
-- **`feature/downloads`** — reserved for download **queue** and **offline-library**
+- **`shared/feature/downloads`** — reserved for download **queue** and **offline-library**
   management: `DownloadsScreen` (queue + per-row actions, the freshness-resync
   appbar action with a batch check + `DownloadsResyncSheet`, and the granular
   per-item / per-category `ForceResyncSheet`) and `OfflineLibraryScreen`
   (grid with search/sort/filter + storage header). Both drill into
   `Route.MediaDetail(id)` — there is no longer a separate offline detail or series
   screen.
-- **`feature/home`** — the `SyncStatusIcon` + `SyncDetailsSheet` that
+- **`shared/feature/home`** — the `SyncStatusIcon` + `SyncDetailsSheet` that
   surface pending playback-sync events.
-- **`feature/settings`** — `StorageSettingsScreen` exposes every
+- **`shared/feature/settings`** — `StorageSettingsScreen` exposes every
   download, storage, and offline preference.
 
 ## Next steps

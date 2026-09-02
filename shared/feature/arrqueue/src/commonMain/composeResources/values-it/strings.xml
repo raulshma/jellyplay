@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Screen / scaffold -->
+    <string name="arrqueue_title">Coda attività</string>
+    <string name="arrqueue_refresh">Aggiorna</string>
+
+    <!-- Common buttons -->
+    <string name="arrqueue_unknown_error">Errore sconosciuto</string>
+    <string name="arrqueue_retry">Riprova</string>
+    <string name="arrqueue_cancel">Annulla</string>
+    <string name="arrqueue_delete">Elimina</string>
+    <string name="arrqueue_grab">Forza</string>
+    <string name="arrqueue_import">Importa</string>
+
+    <!-- Selection bar -->
+    <string name="arrqueue_selected_count">%1$d selezionati</string>
+    <string name="arrqueue_select_all">Seleziona tutto</string>
+    <string name="arrqueue_clear_selection">Cancella selezione</string>
+
+    <!-- Status chips -->
+    <string name="arrqueue_status_downloading">In download</string>
+    <string name="arrqueue_status_queued">In coda</string>
+    <string name="arrqueue_status_paused">In pausa</string>
+    <string name="arrqueue_status_completed">Completato</string>
+    <string name="arrqueue_status_imported">Importato</string>
+    <string name="arrqueue_status_failed">Non riuscito</string>
+    <string name="arrqueue_status_warning">Avviso</string>
+    <string name="arrqueue_status_unknown">Sconosciuto</string>
+
+    <!-- Feature disabled state -->
+    <string name="arrqueue_disabled_title">L\'integrazione *arr diretta è disattivata</string>
+    <string name="arrqueue_disabled_body">Abilitala in Impostazioni → Integrazioni per visualizzare la coda di download combinata.</string>
+    <string name="arrqueue_open_settings">Apri impostazioni *arr</string>
+
+    <!-- Empty state -->
+    <string name="arrqueue_empty_title">La coda è vuota</string>
+    <string name="arrqueue_empty_body">Nessun download su Radarr / Sonarr.</string>
+
+    <!-- Grab -->
+    <string name="arrqueue_grab_title">Forza recupero release</string>
+    <string name="arrqueue_grab_message">Inviare \"%1$s\" al suo client di download ora?</string>
+    <string name="arrqueue_grab_sent">Recupero inviato per \"%1$s\"</string>
+
+    <!-- Import -->
+    <string name="arrqueue_import_title">Forza importazione</string>
+    <string name="arrqueue_import_message">Importare \"%1$s\" in %2$s ora?</string>
+    <string name="arrqueue_import_sent">Importazione inviata per \"%1$s\"</string>
+
+    <!-- Remove / delete dialog -->
+    <string name="arrqueue_remove_selected_title">Eliminare i selezionati?</string>
+    <string name="arrqueue_remove_item_title">Eliminare \"%1$s\"?</string>
+    <string name="arrqueue_remove_body_bulk">Scegli come rimuovere questi elementi dalla coda.</string>
+    <string name="arrqueue_remove_body_single">Scegli come rimuovere questo elemento dalla coda.</string>
+    <string name="arrqueue_remove_only">Solo rimuovi</string>
+    <string name="arrqueue_remove_search">Rimuovi e cerca di nuovo</string>
+    <string name="arrqueue_blocklist_search">Blocklist e ricerca</string>
+</resources>

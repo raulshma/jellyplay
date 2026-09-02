@@ -3,10 +3,7 @@ package com.raulshma.jellyplay.core.data.worker
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Watches the network status and resumes interrupted downloads when the device
@@ -36,12 +33,11 @@ import javax.inject.Singleton
  *
  * Constructed as a singleton so [start] is idempotent across callers.
  */
-@Singleton
-class DownloadReconnectListener @Inject constructor(
+class DownloadReconnectListener(
     private val networkMonitor: NetworkMonitor,
     private val offlineModeManager: OfflineModeManager,
     private val downloadRepository: DownloadRepository,
-    @ApplicationScope private val scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) {
     private val trigger = ReconnectTrigger(
         networkMonitor = networkMonitor,

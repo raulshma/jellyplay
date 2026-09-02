@@ -10,10 +10,7 @@ import android.widget.RemoteViewsService
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
+import org.koin.mp.KoinPlatform
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -32,22 +29,15 @@ import kotlinx.coroutines.runBlocking
  */
 class LibraryRecommendationsWidgetService : RemoteViewsService() {
 
-    @EntryPoint
-    @InstallIn(SingletonComponent::class)
-    interface WidgetEntryPoint {
-        fun widgetDataStore(): WidgetDataStore
-    }
-
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
-        val entryPoint = EntryPointAccessors.fromApplication(
-            applicationContext,
-            WidgetEntryPoint::class.java,
-        )
+        // Koin accessor (wave 8B — Hilt removal): resolved straight from the
+        // application container, same shape the EntryPoint call used.
+        val store: WidgetDataStore = KoinPlatform.getKoin()!!.get()
         val appWidgetId = intent.getIntExtra(
             AppWidgetManager.EXTRA_APPWIDGET_ID,
             AppWidgetManager.INVALID_APPWIDGET_ID
         )
-        return LibraryRecommendationsFactory(applicationContext, entryPoint.widgetDataStore(), appWidgetId)
+        return LibraryRecommendationsFactory(applicationContext, store, appWidgetId)
     }
 
     private class LibraryRecommendationsFactory(

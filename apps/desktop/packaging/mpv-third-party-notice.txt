@@ -1,0 +1,20 @@
+JellyPlay third-party notice: libmpv
+=====================================
+
+This distribution bundles libmpv (the mpv media player client library), a
+GPL-2.0-or-later work by the mpv project and contributors, unmodified.
+JellyPlay itself is GPL-3.0-or-later, whose terms permit combining and
+redistributing GPL-2.0-or-later works.
+
+  Upstream source code:  https://github.com/mpv-player/mpv
+  Windows build pipeline: mpv-winbuild (https://github.com/shinchiro/mpv-winbuild),
+                         mirrored at https://github.com/dyphire/mpv-winbuild
+  Retrieved artifact:    mpv-dev-x86_64-20250930-git-05656cd.7z
+  Artifact sha256:       0f952998dac3ca767d9e859580f7ed49c387f410bce17e90921f00435f1b96b4
+  License text:          https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt
+
+The build that produced the bundled libmpv-2.dll also links FFmpeg
+(GPL-2.0-or-later, https://ffmpeg.org), Lua 5.1 (MIT, bundled as lua51.dll
+from the same mpv-winbuild release), libass (ISC), and other components
+under their respective licenses; the corresponding source code is available
+from the mpv-winbuild project at the URL above.

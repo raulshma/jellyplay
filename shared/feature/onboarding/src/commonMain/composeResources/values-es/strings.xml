@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Extracted hardcoded UI text (analysis F-37); translations seeded (F-19). -->
+
+    <string name="onboarding_skip">Omitir</string>
+    <string name="onboarding_next">Siguiente</string>
+    <string name="onboarding_completion_title">¡Todo listo!</string>
+    <string name="onboarding_completion_subtitle">Tu JellyPlay está configurado y listo para usar. Siempre puedes cambiar estos ajustes más tarde.</string>
+    <string name="onboarding_completion_start_watching">Empezar a ver</string>
+    <string name="onboarding_seerr_connection">Conexión</string>
+    <string name="onboarding_seerr_connected">Conectado</string>
+    <string name="onboarding_seerr_features">Funciones</string>
+    <string name="onboarding_seerr_regions">Regiones</string>
+
+    <string name="onboarding_welcome_title">Bienvenido a\nJellyPlay</string>
+    <string name="onboarding_welcome_subtitle">Tu cliente personal de Jellyfin. Vamos a configurar unas cuantas cosas para empezar.</string>
+    <string name="onboarding_feature_stream">Reproduce películas y series</string>
+    <string name="onboarding_feature_music">Reproductor de música con efectos de audio avanzados</string>
+    <string name="onboarding_feature_download">Descarga para reproducir sin conexión</string>
+
+    <!-- SubtitlesStep (shared preview also consumes these) -->
+    <string name="onboarding_subtitles_title">Subtítulos</string>
+    <string name="onboarding_subtitles_subtitle">Personaliza el aspecto y los valores predeterminados de los subtítulos</string>
+    <string name="onboarding_subtitles_preview">Vista previa de subtítulos</string>
+    <string name="onboarding_subtitles_font_size">Tamaño de fuente</string>
+    <string name="onboarding_subtitles_font_color">Color de fuente</string>
+    <string name="onboarding_subtitles_edge_type">Tipo de borde</string>
+
+    <!-- SeerrStep -->
+    <string name="onboarding_seerr_title">Integraciones</string>
+    <string name="onboarding_seerr_subtitle">Conecta opcionalmente Seerr (Jellyseerr/Overseerr) para funciones mejoradas. Puedes omitir este paso.</string>
+    <string name="onboarding_seerr_server_url">URL del servidor</string>
+    <string name="onboarding_seerr_api_key">Clave de API</string>
+    <string name="onboarding_seerr_local">Local</string>
+    <string name="onboarding_seerr_api_key_placeholder">Introduce tu clave de API de Seerr</string>
+    <string name="onboarding_seerr_username">Nombre de usuario</string>
+    <string name="onboarding_seerr_username_placeholder">Nombre de usuario de Jellyfin</string>
+    <string name="onboarding_seerr_password">Contraseña</string>
+    <string name="onboarding_seerr_password_placeholder_jellyfin">Contraseña de Jellyfin</string>
+    <string name="onboarding_seerr_email">Correo</string>
+    <string name="onboarding_seerr_email_placeholder">Correo de la cuenta de Seerr</string>
+    <string name="onboarding_seerr_password_placeholder_seerr">Contraseña de la cuenta de Seerr</string>
+    <string name="onboarding_seerr_disconnect">Desconectar</string>
+    <string name="onboarding_seerr_enable_integration">Activar integración de Seerr</string>
+    <string name="onboarding_seerr_master_switch">Interruptor principal para todas las funciones de Seerr</string>
+    <string name="onboarding_seerr_search_integration">Integración de búsqueda</string>
+    <string name="onboarding_seerr_search_subtitle">Mostrar resultados de Seerr en la búsqueda</string>
+    <string name="onboarding_seerr_recommendations">Recomendaciones</string>
+    <string name="onboarding_seerr_recommendations_subtitle">Mostrar títulos similares y recomendaciones</string>
+    <string name="onboarding_seerr_discover">Descubrir</string>
+    <string name="onboarding_seerr_discover_subtitle">Contenido popular y en tendencia de Seerr</string>
+    <string name="onboarding_seerr_streaming_region">Streaming</string>
+
+    <!-- SecurityStep -->
+    <string name="onboarding_security_title">Privacidad y seguridad</string>
+    <string name="onboarding_security_subtitle">Protege la app con un PIN o biometría</string>
+    <string name="onboarding_security_pin_lock">Bloqueo con PIN</string>
+    <string name="onboarding_security_pin_lock_subtitle">Exigir un PIN para abrir la app</string>
+    <string name="onboarding_security_enter_pin">Introducir PIN</string>
+    <string name="onboarding_security_confirm_pin">Confirmar PIN</string>
+    <string name="onboarding_security_save_pin">Guardar PIN</string>
+    <string name="onboarding_security_pins_do_not_match">Los PIN no coinciden</string>
+    <string name="onboarding_security_biometric_lock">Bloqueo biométrico</string>
+    <string name="onboarding_security_biometric_unlock">Usar huella o desbloqueo facial</string>
+    <string name="onboarding_security_biometric_setup_hint">Configura una huella o un rostro en los ajustes de Android para activarlo</string>
+    <string name="onboarding_security_auto_lock_timer">Temporizador de bloqueo automático</string>
+    <string name="onboarding_security_lock_never">Nunca</string>
+    <string name="onboarding_security_lock_15s">15s</string>
+    <string name="onboarding_security_lock_30s">30s</string>
+    <string name="onboarding_security_lock_1m">1m</string>
+    <string name="onboarding_security_lock_5m">5m</string>
+
+    <!-- HomeLayoutStep -->
+    <string name="onboarding_home_layout_title">Diseño de inicio</string>
+    <string name="onboarding_home_layout_subtitle">Elige qué aparece en tu pantalla de inicio</string>
+    <string name="onboarding_home_layout_home_mode">Modo de inicio</string>
+    <string name="onboarding_home_layout_nav_labels">Mostrar etiquetas de navegación</string>
+    <string name="onboarding_home_layout_nav_labels_subtitle">Mostrar etiquetas de texto bajo los iconos de la barra de navegación</string>
+    <string name="onboarding_home_layout_home_sections">Secciones de inicio</string>
+
+    <!-- AppearanceStep -->
+    <string name="onboarding_appearance_title">Apariencia</string>
+    <string name="onboarding_appearance_subtitle">Elige cómo se ve JellyPlay para ti</string>
+    <string name="onboarding_appearance_theme">Tema</string>
+    <string name="onboarding_appearance_theme_system">Sistema</string>
+    <string name="onboarding_appearance_theme_light">Claro</string>
+    <string name="onboarding_appearance_theme_dark">Oscuro</string>
+    <string name="onboarding_appearance_theme_scheduled">Programado</string>
+    <string name="onboarding_appearance_contrast">Contraste</string>
+    <string name="onboarding_appearance_dynamic_theming">Tema dinámico</string>
+    <string name="onboarding_appearance_dynamic_theming_subtitle">Coincidir colores con tu fondo de pantalla</string>
+    <string name="onboarding_appearance_oled_mode">Modo OLED</string>
+    <string name="onboarding_appearance_oled_mode_subtitle">Fondo negro puro para pantallas AMOLED</string>
+    <string name="onboarding_appearance_home_hero">Sección destacada de inicio</string>
+    <string name="onboarding_appearance_home_hero_subtitle">Mostrar banner de contenido destacado en la pantalla de inicio</string>
+
+    <!-- AudioPlayerStep -->
+    <string name="onboarding_audio_title">Reproductor de audio</string>
+    <string name="onboarding_audio_subtitle">Configura tu experiencia de escucha de música</string>
+    <string name="onboarding_audio_default_speed">Velocidad predeterminada</string>
+    <string name="onboarding_audio_gapless">Reproducción sin pausas</string>
+    <string name="onboarding_audio_gapless_subtitle">Transición fluida entre pistas</string>
+    <string name="onboarding_audio_autoplay_next">Reproducir automáticamente la siguiente pista</string>
+    <string name="onboarding_audio_normalization">Normalización de audio</string>
+    <string name="onboarding_audio_normalization_subtitle">Equilibrar el volumen entre diferentes pistas</string>
+    <string name="onboarding_audio_crossfade">Transición suave</string>
+    <string name="onboarding_audio_off">Desactivado</string>
+
+    <!-- VideoPlayerStep -->
+    <string name="onboarding_video_title">Reproductor de vídeo</string>
+    <string name="onboarding_video_subtitle">Configura tu experiencia de reproducción de vídeo predeterminada</string>
+    <string name="onboarding_video_player_engine">Motor del reproductor</string>
+    <string name="onboarding_video_streaming_quality">Calidad de streaming</string>
+    <string name="onboarding_video_gestures">Gestos</string>
+    <string name="onboarding_video_gestures_subtitle">Desliza para buscar, ajustar brillo y volumen</string>
+    <string name="onboarding_video_autoplay_next">Reproducir automáticamente el siguiente episodio</string>
+    <string name="onboarding_video_default_orientation">Orientación predeterminada</string>
+
+    <!-- PerformanceStep -->
+    <string name="onboarding_performance_title">Rendimiento</string>
+    <string name="onboarding_performance_subtitle">Optimiza la app para tu dispositivo</string>
+    <string name="onboarding_performance_mode">Modo de rendimiento</string>
+    <string name="onboarding_performance_description">Reduce animaciones, transiciones y calidad de imagen para un rendimiento más fluido en dispositivos de gama baja. Puedes cambiarlo más adelante en Ajustes.</string>
+    <string name="onboarding_performance_enable">Activar modo de rendimiento</string>
+    <string name="onboarding_performance_enable_subtitle">Optimización para dispositivos de gama baja</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="onboarding_feature_syncplay">SyncPlay – ver juntos</string>
+</resources>

@@ -4,10 +4,16 @@ import android.content.Context
 import android.os.Environment
 import android.os.StatFs
 import com.raulshma.jellyplay.core.model.MediaType
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
+
+// V3 downloads conveyor: the sanitize/extension/free-space-floor CONTRACT
+// moved to :shared:core:data jvmShared (DownloadStorageLayoutContract, same
+// package) with the portable DownloadRepositoryImpl; this Android actual keeps
+// the Context/Environment/StatFs logic verbatim and now implements the shared
+// interface. The @Inject/@Singleton annotations were stripped — Koin owns
+// construction (the app composition root's androidDownloadSeamsModule), and
+// DownloadRecoveryInitializer (Koin single, app androidAppModule) consumes this
+// (StorageSettingsViewModel) via koin().get().
 
 /**
  * Deep module: the on-disk storage-layout policy for downloads — where a file
@@ -25,16 +31,16 @@ import javax.inject.Singleton
  * container string reported by the Jellyfin MediaSource. It is otherwise pure
  * — no DAO, no network, no DB. Tests pass a fake `Context` (Robolectric) or
  * exercise [sanitizeName] / [deriveExtension] / [hasMinimumFreeSpace] directly
- * as pure functions.
+ * as pure functions (the two first now delegate to the shared contract
+ * companion so Android and desktop produce identical filenames).
  *
  * **Output.** A [ResolvedDownloadPath] carrying the base directory (created if
  * missing), the sanitized filename, and the absolute file path the caller
  * writes into the `DownloadEntity.downloadPath` column.
  */
-@Singleton
-class DownloadStorageLayout @Inject constructor(
-    @ApplicationContext private val context: Context,
-) {
+class DownloadStorageLayout(
+    private val context: Context,
+) : DownloadStorageLayoutContract {
 
     /**
      * Resolves the download destination for [mediaType] under [storageLocationPref].
@@ -51,7 +57,7 @@ class DownloadStorageLayout @Inject constructor(
      *   used as the file extension when safe, falling back to mp3/mp4 otherwise.
      * @throws IllegalStateException if the resolved directory has < 100 MB free.
      */
-    fun resolve(
+    override fun resolve(
         mediaType: String,
         storageLocationPref: String,
         name: String,
@@ -125,6 +131,9 @@ class DownloadStorageLayout @Inject constructor(
      * SD card or USB stick is inserted, it appears here as an extra
      * [StorageMountKind.REMOVABLE] option. Stays within app-private scoped
      * storage (no SAF rework).
+     *
+     * Android-only surface (the shared [DownloadStorageLayoutContract] has no
+     * counterpart — desktop has a single volume), consumed by the settings UI.
      */
     fun availableMounts(): List<StorageMount> {
         val options = mutableListOf<StorageMount>()
@@ -171,55 +180,34 @@ class DownloadStorageLayout @Inject constructor(
 
     /**
      * The download display name with characters that are unsafe on the local
-     * filesystem (or in a URI) replaced with `_`. Exposed for testing.
+     * filesystem (or in a URI) replaced with `_`. Delegates to the shared
+     * contract companion so Android and desktop produce identical filenames.
+     * Exposed for testing.
      */
     internal fun sanitizeName(name: String): String =
-        name.replace(FILENAME_SANITIZE_REGEX, "_")
+        DownloadStorageLayoutContract.sanitizeName(name)
 
     /**
-     * File extension for the download. Prefers the original [container] reported
-     * by the Jellyfin MediaSource so the on-disk extension reflects the real
-     * bytes — ExoPlayer selects its extractor from the URI extension and hangs
-     * silently when the extension lies (e.g. an MKV stream saved as `.mp4`).
-     * Falls back to the legacy hardcoded extension for audio/video when the
-     * container is missing or unsafe (path-traversal / weird chars).
+     * File extension for the download. Delegates to the shared contract
+     * companion (single rule across platforms). Falls back to the legacy
+     * hardcoded extension for audio/video when the container is missing or
+     * unsafe (path-traversal / weird chars).
      */
     internal fun deriveExtension(container: String?, isAudioType: Boolean): String =
-        container
-            ?.takeIf { it.isNotBlank() && FILENAME_CONTAINER_REGEX.matches(it) }
-            ?: if (isAudioType) "mp3" else "mp4"
+        DownloadStorageLayoutContract.deriveExtension(container, isAudioType)
 
     /**
-     * True iff [dir] has at least [MIN_FREE_BYTES] available. The floor guards
-     * against starting a download onto a nearly-full volume. Exposed for testing
-     * (callers pass a real dir from the test filesystem).
+     * True iff [dir] has at least [DownloadStorageLayoutContract.MIN_FREE_BYTES]
+     * available. The floor guards against starting a download onto a nearly-full
+     * volume. Exposed for testing (callers pass a real dir from the test
+     * filesystem).
      */
     internal fun hasMinimumFreeSpace(dir: File): Boolean {
         val statFs = StatFs(dir.absolutePath)
         val availableBytes = statFs.availableBlocksLong * statFs.blockSizeLong
-        return availableBytes >= MIN_FREE_BYTES
-    }
-
-    private companion object {
-        private val FILENAME_SANITIZE_REGEX = Regex("[^a-zA-Z0-9.\\-]")
-        private val FILENAME_CONTAINER_REGEX = Regex("[A-Za-z0-9]{2,8}")
-        private const val MIN_FREE_BYTES = 100L * 1024 * 1024
+        return DownloadStorageLayoutContract.hasMinimumFreeSpace(availableBytes)
     }
 }
-
-/**
- * The resolved on-disk destination for one download.
- *
- * @property baseDir the directory the file lives in (created if missing).
- * @property fileName the sanitized filename (`<safeName>_<id8>.<ext>`).
- * @property filePath absolute path = `baseDir`/`fileName`. This is what gets
- *   written to `DownloadEntity.downloadPath`.
- */
-data class ResolvedDownloadPath(
-    val baseDir: File,
-    val fileName: String,
-    val filePath: String,
-)
 
 /**
  * One selectable download destination surfaced by

@@ -87,6 +87,7 @@ class RoutePredicatesTest {
         Route.SecuritySettings(),
         Route.PrivacyData(),
         Route.BackupSettings(),
+        Route.ImportPreview("content://test"),
         Route.ExperimentalSettings(),
         Route.FactoryReset(),
         Route.Integrations(),
@@ -212,7 +213,8 @@ class RoutePredicatesTest {
                 "PinnedHomeSections", "HomeLayoutPresets", "LibraryHomeSections",
                 "PlaybackSettings", "AudioSettings", "LanguageSettings",
                 "NotificationSettings", "StorageSettings", "SecuritySettings",
-                "PrivacyData", "BackupSettings", "ExperimentalSettings", "FactoryReset",
+                "PrivacyData", "BackupSettings", "ImportPreview",
+                "ExperimentalSettings", "FactoryReset",
                 // music
                 "Artists", "Albums", "Tracks", "Genres", "SmartPlaylists",
                 "MoodPlaylists", "Playlists",

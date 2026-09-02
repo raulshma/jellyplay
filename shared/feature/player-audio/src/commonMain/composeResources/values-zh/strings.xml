@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Audio player queue undo (enhancements §5.2) -->
+    <string name="audio_undo_action">撤销</string>
+    <string name="audio_undo_queue_cleared">队列已清空</string>
+    <string name="audio_undo_track_removed">曲目已移除</string>
+    <string name="audio_undo_track_moved">曲目已移动</string>
+    <string name="audio_undo_skipped_next">已跳至下一曲</string>
+    <string name="audio_undo_skipped_previous">已跳至上一曲</string>
+
+    <!-- A→B repeat (enhancements §5.4) -->
+    <string name="audio_ab_set_point_a">设置 A 点</string>
+    <string name="audio_ab_set_point_b">设置 B 点</string>
+    <string name="audio_ab_clear">清除 A–B</string>
+    <string name="audio_ab_point_a_label">A</string>
+    <string name="audio_ab_loop_active_label">A-B</string>
+
+    <!-- Common -->
+    <string name="audio_cancel">取消</string>
+    <string name="audio_search">搜索</string>
+    <string name="audio_reset">重置</string>
+    <string name="audio_open">打开</string>
+
+    <!-- Top bar / menu -->
+    <string name="audio_topbar_now_playing">正在播放</string>
+    <string name="audio_topbar_minimize">最小化</string>
+    <string name="audio_topbar_lyrics">歌词</string>
+    <string name="audio_topbar_queue">队列</string>
+    <string name="audio_topbar_more">更多</string>
+    <string name="audio_menu_speed">速度 (%1$s)</string>
+    <string name="audio_menu_equalizer">均衡器</string>
+    <string name="audio_menu_audio_effects">音效</string>
+    <string name="audio_menu_dialogue_boost">人声增强</string>
+    <string name="audio_menu_dialogue_boost_with_strength">人声增强 · %1$s</string>
+    <string name="audio_menu_night_mode">夜间模式</string>
+    <string name="audio_menu_night_mode_with_strength">夜间模式 · %1$s</string>
+    <string name="audio_menu_ambient_mode">氛围模式</string>
+    <string name="audio_menu_add_to_playlist">添加到播放列表</string>
+    <string name="audio_menu_sleep_timer">睡眠定时器</string>
+    <string name="audio_menu_sleep_timer_active">睡眠定时器 · %1$s</string>
+    <string name="audio_menu_karaoke_mode">卡拉OK 模式</string>
+    <string name="audio_menu_karaoke_mode_on">卡拉OK 模式 · 开</string>
+
+    <!-- Transport / secondary controls -->
+    <string name="audio_controls_previous">上一曲</string>
+    <string name="audio_controls_next">下一曲</string>
+    <string name="audio_controls_pause">暂停</string>
+    <string name="audio_controls_play">播放</string>
+    <string name="audio_controls_shuffle">随机播放</string>
+    <string name="audio_controls_repeat_off">关闭循环</string>
+    <string name="audio_controls_repeat_all">全部循环</string>
+    <string name="audio_controls_repeat_one">单曲循环</string>
+    <string name="audio_controls_favorite">收藏</string>
+    <string name="audio_controls_download">下载</string>
+
+    <!-- Lyrics -->
+    <string name="audio_lyrics_finding">正在查找歌词…</string>
+    <string name="audio_lyrics_none_found">未找到歌词</string>
+    <string name="audio_lyrics_karaoke_on">卡拉OK 已开启</string>
+    <string name="audio_lyrics_karaoke_off">卡拉OK 已关闭</string>
+    <string name="audio_lyrics_adjust_timing">调整歌词时间</string>
+    <string name="audio_lyrics_search">搜索歌词</string>
+    <string name="audio_lyrics_offset">歌词偏移</string>
+    <string name="audio_lyrics_find">查找歌词</string>
+    <string name="audio_lyrics_search_placeholder">搜索艺术家、歌曲…</string>
+    <string name="audio_lyrics_clear">清除</string>
+    <string name="audio_lyrics_synced">已同步</string>
+    <string name="audio_lyrics_plain">纯文本</string>
+    <string name="audio_lyrics_source_embedded">内嵌</string>
+
+    <!-- Sleep timer -->
+    <string name="audio_sleep_timer_title">睡眠定时器</string>
+    <string name="audio_sleep_timer_end_of_episode">本集结束时</string>
+    <string name="audio_sleep_timer_duration">时长</string>
+
+    <!-- Equalizer -->
+    <string name="audio_equalizer_title">均衡器</string>
+
+    <!-- Audio effects -->
+    <string name="audio_effects_title">音效</string>
+    <string name="audio_effects_bass_boost">低音增强</string>
+    <string name="audio_effects_virtualizer">虚拟化 / 空间音频</string>
+    <string name="audio_effects_reverb">混响</string>
+    <string name="audio_effects_dialogue_boost">人声增强</string>
+    <string name="audio_effects_night_mode">夜间模式</string>
+    <string name="audio_effects_lr_balance">左右声道平衡</string>
+    <string name="audio_effects_balance_left">左 %1$d%%</string>
+    <string name="audio_effects_balance_right">右 %1$d%%</string>
+    <string name="audio_effects_balance_center">居中</string>
+    <string name="audio_effects_pitch">音调</string>
+    <string name="audio_effects_pitch_original">原始</string>
+    <string name="audio_effects_pitch_value">%1$s 个半音</string>
+    <string name="audio_effects_auto_eq">按风格自动 EQ</string>
+    <string name="audio_effects_auto_eq_description">根据曲目风格应用 EQ 预设</string>
+
+    <!-- Queue sheet -->
+    <string name="audio_queue_title">队列</string>
+    <string name="audio_queue_remove">从队列中移除</string>
+    <string name="audio_queue_position">%1$d / %2$d</string>
+
+    <!-- Add to playlist picker -->
+    <string name="audio_playlist_picker_title">添加到播放列表</string>
+    <string name="audio_no_playlists">暂无播放列表</string>
+    <string name="audio_playlist_items_count">%1$d 项</string>
+
+    <!-- Speed picker -->
+    <string name="audio_speed_title">播放速度</string>
+
+    <!-- Ambient -->
+    <string name="audio_ambient_tap_to_exit">点击任意位置退出</string>
+
+    <!-- Download delete dialog -->
+    <string name="audio_download_delete_title">删除下载</string>
+    <string name="audio_download_delete_message">删除该曲目的已下载文件？</string>
+    <string name="audio_download_delete_confirm">删除</string>
+
+    <!-- Playback error -->
+    <string name="audio_error_retry">重试</string>
+
+    <!-- Up next strip -->
+    <string name="audio_up_next">下一首</string>
+
+    <!-- Cast -->
+    <string name="audio_cast">投射</string>
+    <string name="audio_cast_connected">投射已连接</string>
+    <string name="audio_cast_to_device">投射到设备</string>
+    <string name="audio_cast_no_devices">未找到投射设备。请确保您的设备在同一网络。</string>
+    <string name="audio_cast_ok">确定</string>
+</resources>

@@ -1,10 +1,5 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
-import androidx.work.Configuration
-import androidx.work.WorkManager
-import androidx.work.testing.WorkManagerTestInitHelper
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
@@ -18,7 +13,6 @@ import com.raulshma.jellyplay.core.model.OfflineSubtitleEntry
 import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
-import dagger.Lazy
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -60,13 +54,14 @@ import java.io.File
  *
  * Constructed like [DownloadRepositoryImplResumeTest]; the subtitle path touches
  * only `playbackRepository` (URL resolution) and on-disk files, so the rest are
- * relaxed mocks.
+ * relaxed mocks. V3 downloads conveyor: the impl moved to :shared:core:data
+ * jvmShared — this suite constructs it through the seam ctor (same fakes as the
+ * resume suite).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
 class DownloadRepositoryImplSubtitlesTest {
 
-    private val context: Context = ApplicationProvider.getApplicationContext()
     private val downloadDao: DownloadDao = mockk(relaxed = true)
     private val offlineMediaDao: OfflineMediaDao = mockk(relaxed = true)
     private val playbackStateDao: PlaybackStateDao = mockk(relaxed = true)
@@ -77,25 +72,26 @@ class DownloadRepositoryImplSubtitlesTest {
     private val httpClient: OkHttpClient = mockk()
     private val preferencesStore: DownloadsStore = mockk(relaxed = true)
     private val json: Json = Json
-    private val downloadDelegate: Lazy<DownloadDelegate> = mockk(relaxed = true)
+    private val downloadDelegate: kotlin.Lazy<DownloadDelegate> = lazy { mockk<DownloadDelegate>(relaxed = true) }
     private val storagePolicy: StoragePolicy = mockk(relaxed = true)
-    private val downloadEnqueuer: DownloadEnqueuer = mockk(relaxed = true)
-    private val storageLayout: DownloadStorageLayout = mockk(relaxed = true)
+    private val downloadEnqueuer: DownloadEnqueueCoordinator = mockk(relaxed = true)
+    private val storageLayout: DownloadStorageLayoutContract = mockk(relaxed = true)
     private val syncComparator: OfflineSyncComparator = mockk(relaxed = true)
     private val episodeCatalogue: EpisodeCatalogue = mockk(relaxed = true)
+    private val progressNotifier: DownloadProgressNotifier = mockk(relaxed = true)
+    private val imagePreloader: OfflineImagePreloader = mockk(relaxed = true)
 
     private lateinit var tempDir: File
     private lateinit var downloadPath: File
     private val itemId = "item-1"
 
     private fun repository(testClient: OkHttpClient = httpClient) = DownloadRepositoryImpl(
-        context = context,
         downloadDao = downloadDao,
         offlineMediaDao = offlineMediaDao,
         playbackStateDao = playbackStateDao,
         syncBaselineDao = syncBaselineDao,
         database = database,
-        mediaRepository = mediaRepository,
+        mediaRepository = MediaRepositoryAccess { mediaRepository },
         episodeCatalogue = episodeCatalogue,
         playbackRepository = playbackRepository,
         httpClient = testClient,
@@ -106,6 +102,8 @@ class DownloadRepositoryImplSubtitlesTest {
         downloadEnqueuer = downloadEnqueuer,
         storageLayout = storageLayout,
         syncComparator = syncComparator,
+        progressNotifier = progressNotifier,
+        imagePreloader = imagePreloader,
     )
 
     private fun subtitlesDir(): File =
@@ -126,10 +124,6 @@ class DownloadRepositoryImplSubtitlesTest {
 
     @Before
     fun setUp() {
-        WorkManagerTestInitHelper.initializeTestWorkManager(
-            context,
-            Configuration.Builder().setMinimumLoggingLevel(android.util.Log.DEBUG).build(),
-        )
         tempDir = File(System.getProperty("java.io.tmpdir"), "jellyplay-sub-test-${System.nanoTime()}").apply { mkdirs() }
         downloadPath = File(tempDir, "video.mkv").apply { createNewFile() }
     }

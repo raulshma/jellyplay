@@ -11,10 +11,6 @@
 # kotlinx-serialization and the Jellyfin SDK ship consumer R8 rules covering
 # serializer lookup and org.jellyfin.sdk.model.api.** — no app-level keeps needed.
 
--keepclassmembers class * {
-    @dagger.hilt.android.lifecycle.HiltViewModel <init>(...);
-}
-
 # libmpv - JNI library, must keep all classes and methods
 -keep class is.xyz.mpv.** { *; }
 -keepclassmembers class is.xyz.mpv.** { *; }
@@ -41,8 +37,13 @@
 -dontwarn androidx.datastore.**
 
 # WorkManager
--keepclassmembers class * extends androidx.work.Worker {
-    <init>(android.content.Context,androidx.work.WorkerParameters);
+# All workers are CoroutineWorkers (ListenableWorker subtree, not the Worker
+# base class the old rule matched). Keep class NAMES so WorkSpec strings
+# persisted by a previous app version still resolve after R8 renaming, and
+# keep the (Context, WorkerParameters) ctors for the reflection fallback.
+-keepnames class * extends androidx.work.ListenableWorker
+-keepclassmembers class * extends androidx.work.ListenableWorker {
+    public <init>(android.content.Context,androidx.work.WorkerParameters);
 }
 
 # Kotlin coroutines

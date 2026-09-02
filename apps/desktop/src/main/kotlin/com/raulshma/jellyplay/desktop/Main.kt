@@ -1,0 +1,708 @@
+package com.raulshma.jellyplay.desktop
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.awt.ComposeWindow
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Tray
+import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPlacement
+import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.ui.Alignment
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.request.crossfade
+import coil3.serviceLoaderEnabled
+import com.raulshma.jellyplay.core.data.di.dataJvmModule
+import com.raulshma.jellyplay.core.data.di.desktopDataModule
+import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
+import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
+import com.raulshma.jellyplay.core.database.di.databaseDaosModule
+import com.raulshma.jellyplay.core.database.di.desktopDatabaseModule
+import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
+import com.raulshma.jellyplay.core.datastore.di.desktopDatastoreModule
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
+import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
+import com.raulshma.jellyplay.core.network.di.desktopNetworkModule
+import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
+import com.raulshma.jellyplay.core.network.di.networkJvmModule
+import com.raulshma.jellyplay.desktop.player.desktopPlayerModule
+import com.raulshma.jellyplay.feature.search.di.searchModule
+import com.raulshma.jellyplay.feature.library.di.desktopPhotoExportModule
+import com.raulshma.jellyplay.feature.library.di.libraryModule
+import com.raulshma.jellyplay.feature.music.di.musicModule
+import com.raulshma.jellyplay.feature.music.feedback.desktopMusicMessageBusModule
+import com.raulshma.jellyplay.feature.livetv.di.liveTvModule
+import com.raulshma.jellyplay.feature.downloads.di.downloadsModule
+import com.raulshma.jellyplay.feature.syncplay.di.syncPlayModule
+import com.raulshma.jellyplay.feature.settings.di.settingsModule
+import com.raulshma.jellyplay.feature.settings.di.desktopSettingsPlatformModule
+import com.raulshma.jellyplay.feature.admin.di.adminModule
+
+
+import com.raulshma.jellyplay.feature.editor.di.editorModule
+
+import com.raulshma.jellyplay.feature.calendar.di.calendarModule
+
+
+import com.raulshma.jellyplay.feature.requests.di.requestsModule
+import com.raulshma.jellyplay.feature.shortcuts.di.shortcutsModule
+
+import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
+
+import com.raulshma.jellyplay.feature.insights.di.insightsModule
+
+import com.raulshma.jellyplay.feature.details.desktopDetailsPlatformModule
+import com.raulshma.jellyplay.feature.details.detailsModule
+import com.raulshma.jellyplay.feature.player.audio.di.playerAudioModule
+import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
+
+import com.raulshma.jellyplay.core.ui.di.coreUiMessageModule
+import com.raulshma.jellyplay.feature.home.di.homeModule
+import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
+import com.raulshma.jellyplay.feature.auth.di.authModule
+import com.raulshma.jellyplay.feature.auth.di.desktopAuthPlatformModule
+import com.raulshma.jellyplay.feature.player.live.di.playerLiveModule
+import com.raulshma.jellyplay.feature.player.video.di.desktopPlayerVideoModule
+
+
+import org.koin.compose.koinInject
+import org.koin.core.context.startKoin
+
+fun main() {
+    // Wave 12A startup baseline: t0 is the literal first statement so every
+    // mark below measures against true process start. Marks themselves are
+    // AtomicLong writes (~zero cost); everything heavier (JSON emission,
+    // auto-exit timer) only arms when a jellyplay.perf.* property is set —
+    // see DesktopStartupPerf.
+    val bootT0Nanos = System.nanoTime()
+    val paths = DesktopPaths.resolve()
+    java.io.File(paths.dataDir.toString()).mkdirs()
+    java.io.File(paths.configDir.toString()).mkdirs()
+
+    // Bundled libmpv (packaged builds): jpackage installs the app-resources
+    // dir (fetchBundledLibmpv's windows-x64 subtree, apps/desktop/
+    // build.gradle.kts) next to the jars and the Compose launcher exposes it
+    // as compose.application.resources.dir — point JNA at it so playback
+    // works with zero user setup. Dev `gradlew run` covers the same need via
+    // the run task's jna.library.path, and an explicit MPV_LIBRARY env still
+    // wins (MpvLib.load checks it before JNA's search path).
+    System.getProperty("compose.application.resources.dir")?.let { resourcesDir ->
+        if (java.io.File(resourcesDir, "libmpv-2.dll").isFile) {
+            System.setProperty("jna.library.path", resourcesDir)
+        }
+    }
+
+    // Wave 10A crash scaffold: hooks the JVM-wide uncaught-exception handler
+    // BEFORE anything that can throw (Koin graph, player engines, compose
+    // window), then consumes the previous session's crash marker — if the
+    // last run recorded an uncaught throwable, log it here and surface a
+    // one-line note + log path in the About dialog via DesktopAppRoot.
+    val crashHandler = DesktopCrashHandler(logsDir = paths.logsDirNio).install()
+    val previousCrash = crashHandler.consumePreviousCrashMarker()
+    if (previousCrash != null) {
+        println(
+            "[JellyPlay] previous session ended unexpectedly; " +
+                "crash log: ${previousCrash.logFile} (${previousCrash.crashedAtUtc})",
+        )
+    }
+
+    val startupPerf = DesktopStartupPerf(
+        logsDirNio = paths.logsDirNio,
+        bootT0Nanos = bootT0Nanos,
+    )
+    startupPerf.scheduleMeasurementHooksIfRequested()
+
+    val koinApp = startKoin {
+        modules(
+            datastoreCommonModule,
+            desktopDatastoreModule(paths.dataDir),
+            databaseDaosModule,
+            desktopDatabaseModule(paths.databaseFile),
+            networkJvmModule,
+            desktopNetworkModule(paths.configDir),
+            dataJvmModule,
+            desktopDataModule(paths.dataDirNio),
+            desktopPlayerModule,
+            // Video player (wave 8C registration, wave 9A playback): the
+            // VideoPlayerViewModel is commonMain and live-resolvable here, the
+            // SwingPanel/HWND video surface composes inside Route.VideoPlayer,
+            // and desktopPlayerModule supplies the per-session mpv
+            // PlayerEngineFactory binding (this module deliberately does not —
+            // MpvDesktopEngine is an app-layer type). Windows only:
+            // DesktopAppRoot keeps Route.VideoPlayer dead-end-guarded on other
+            // OSes where no embedded surface exists. The no-op seam bindings in
+            // the module still cover those guarded OSes.
+            desktopPlayerVideoModule,
+            // V3 feature conveyor: search — LIVE since the Phase X desktop
+            // nav v1 (DesktopAppRoot renders searchSection as a rail
+            // destination; Home is the start tab); all VM deps resolve
+            // since the MediaRepository cluster flip.
+            searchModule,
+            // …library, second conveyor item — LIVE like search: the VM
+            // deps resolved with the cluster flip, and desktopPhotoExport
+            // supplies the photo-export actual (unsupported=no-op).
+            libraryModule,
+            desktopPhotoExportModule(),
+            // …music, third conveyor item — LIVE since Wave wC (browse) and
+            // fully playable since wave 9B: desktopPlayerModule provides the
+            // real desktop audio core (DesktopAudioQueueManager over an
+            // audio-only MpvDesktopEngine + DefaultAudioQueueFacade), so
+            // play/enqueue/instant-mix drive real playback and track clicks
+            // navigate to the now-live Route.AudioPlayer. Since wave 21B the
+            // message-bus actual feeds a relay the shell's snackbar host
+            // collects (DesktopAppRoot) — error messages surface instead of
+            // dropping.
+            musicModule,
+            desktopMusicMessageBusModule(),
+            // …livetv, fourth conveyor item — LIVE since the cluster flip
+            // (mediaRepository and friends are Koin singles in dataJvm
+            // Module now); nav v1 renders liveTvSection in the rail.
+            liveTvModule,
+            // …downloads, fifth conveyor item — fully live since the
+            // cluster flip: single-item AND series downloads resolve
+            // (MediaRepository/UserDataMutator are Koin-owned), the
+            // in-process DesktopDownloadManager and the 6 h auto-download
+            // loop start below, and nav v1 renders downloadsSection.
+            downloadsModule,
+            // …syncplay, sixth conveyor item — LIVE since the cluster flip:
+            // the former mediaRepository edge resolves from dataJvmModule,
+            // and nav v1 renders syncPlaySection in the rail.
+            syncPlayModule,
+            // …settings, seventh conveyor item — LIVE since the admin
+            // repositories' Koin flip (Wave wB): the last Hilt-only edges
+            // (SettingsViewModel/AboutViewModel's AdminRepository) resolve
+            // from dataJvmModule, and nav v1+ renders settingsSection in the
+            // rail (with the desktop platform actuals below). Desktop's
+            // update-check row went live with the AppUpdate split (Wave xB;
+            // AppUpdateRepository resolves from desktopDataModule), and the
+            // storage actuals went REAL with wave 21B (downloads + http-cache
+            // walked/cleared, Coil's temp-dir disk cache cleared through the
+            // injected image-cache handle).
+            settingsModule,
+            desktopSettingsPlatformModule(
+                dataDir = paths.dataDirNio,
+                configDir = paths.configDirNio,
+                imageCache = desktopCoilImageCacheOps(),
+            ),
+            // …admin, eighth conveyor item — LIVE since the same flip:
+            // AdminRepository + AdminStatisticsRepository are Koin singles in
+            // dataJvmModule on both platforms, and nav v1+ renders
+            // adminSection in the rail (gated by the desktop admin-status
+            // state in DesktopAppRoot). The Android-only plugin-config
+            // WebView ViewModel lives in androidAdminModule and is never
+            // registered here (the shared PluginConfigHost desktop actual
+            // renders its "not available" fallback).
+            adminModule,
+
+
+            // …editor, ninth conveyor item — LIVE since the wave 18B store
+            // promotion: StreamingSubtitleStoreImpl moved to jvmShared and
+            // desktopDataModule binds the real file-backed store (appdata
+            // streaming-subtitles subtree), so the EditorViewModel ctor graph
+            // fully resolves and DesktopAppRoot renders editorSection (the
+            // details screen's edit push, admin-gated like Android). Wave 20A
+            // gave the upload sheets native AWT file pickers
+            // (DesktopEditorFilePicker), so upload-from-file works alongside
+            // URL image upload and remote/provider subtitle search.
+            editorModule,
+
+            // …calendar, conveyor feature — LIVE and wired in nav v1
+            // (calendarSection in the rail): ArrRepository + SeerrRepository
+            // (dataJvmModule) and ExperimentalStore (datastoreCommonModule)
+            // all resolve on desktop.
+            calendarModule,
+
+
+            // …requests, eleventh conveyor item — LIVE and wired in nav v1
+            // (requestsSection in the rail): the entire ctor graph is
+            // Koin-native on BOTH platforms (SeerrRepository +
+            // ArrRepository from dataJvmModule, ExperimentalStore from
+            // datastoreCommonModule above).
+            requestsModule,
+
+
+
+
+            // …shortcuts, a later conveyor item — LIVE and wired in nav v1
+            // (shortcutsSection in the rail): the single ctor dep
+            // (AuthRepository) resolves from dataJvmModule.
+            shortcutsModule,
+
+            // …newsletter, conveyor item after requests — LIVE since the
+            // cluster flip (the former mediaRepository edge now resolves
+            // from dataJvmModule) and wired in nav v1 (newsletterSection in
+            // the rail).
+            newsletterModule,
+
+
+            // …insights, conveyor feature — LIVE since the cluster flip:
+            // all three heatmap-VM ctor deps resolve on desktop
+            // (WatchHistoryRepository + PlaybackRepository from
+            // dataJvmModule, MediaRepository from the flipped cluster), and
+            // nav v1 renders insightsSection in the rail. The share seam's
+            // desktop actual (wave 20C) writes a tmpdir PNG and hands it to
+            // the system viewer, so the share button is visible.
+            insightsModule,
+
+
+
+
+
+            // …onboarding, conveyor feature — fully live registration
+            // (calendar/requests/shortcuts class): all four wizard VM deps
+            // resolve on desktop (PreferenceProjections/
+            // SeerrPreferencesStore/PreferencesEditor from datastoreCommon
+            // Module, SeerrSecureCredentialsStore from desktopDatastore
+            // Module). Nav v1 registers onboardingSection (reachable from
+            // Shortcuts), and wave 21B added the first-run gate: the shell
+            // pushes Route.Onboarding once per authenticated session while
+            // the persisted onboarding_completed flag is unset (same pref
+            // the Android app gates on; completion through the shared wizard
+            // writes it, so the gate never re-fires).
+            onboardingModule,
+
+            // …arrqueue, conveyor feature — LIVE and wired in nav v1
+            // (arrQueueSection in the rail): ArrRepository from
+            // dataJvmModule and ExperimentalStore from
+            // datastoreCommonModule resolve on desktop.
+            arrqueueModule,
+
+            // …auth, Phase X cutover (feature-conveyor transform from the
+            // legacy :feature:auth): the entire ctor graph resolves on
+            // desktop (AuthRepository + ServerDiscoveryRepository from
+            // dataJvmModule, LocalNetworkStatus — the auth seam's fun-interface
+            // probe in feature/auth (blames a connect failure on the Android
+            // 17+ local-network permission), NOT core/ui's same-named
+            // composition local — from the jvmMain platform pick below), so
+            // this registration is live-resolvable — NOT
+            // dormant-for-missing-deps. Wave 19A unified sign-in
+            // on these shared screens: the signed-out gate
+            // (DesktopSignedOutAuthHost) and the signed-in settings drill-ins
+            // (DesktopAppRoot's authSection entries) both instantiate these
+            // ViewModels; the legacy DesktopSignInPane pane is retired.
+            authModule,
+            desktopAuthPlatformModule,
+
+            // …player-live, conveyor feature (wave 7B): documented-latent.
+            // The shared live-player ViewModel + LastChannelStore resolve
+            // (data/datastore graph), but the three platform seams (engine
+            // factory, audio, transcode-reasons renderer) are
+            // Android-only definitions and the player screen lives in the
+            // module's androidMain — Route.LiveTvChannelPlayer stays
+            // guarded in DesktopAppRoot, so nothing instantiates the VM on
+            // desktop (same latent class as the player-adjacent features).
+            playerLiveModule,
+
+
+
+            // …details, Phase X cutover wave (legacy :feature:details was the
+            // largest never-conveyor module): registration fully
+            // live — every data-layer ctor dep is Koin-native
+            // (dataJvmModule/datastoreCommonModule), AudioQueueFacade comes
+            // from desktopPlayerModule's DefaultAudioQueueFacade binding
+            // (wave 9B), and the module-local platform seams below supply
+            // no-op audio/theme playback + the appdata storage probe.
+            // DesktopAppRoot wires detailsSection behind every shared
+            // screen that pushes a detail route (search results, requests/
+            // calendar → SeerrDetail, person rows), so detail VMs
+            // instantiate for real.
+            detailsModule,
+            desktopDetailsPlatformModule(paths.dataDirNio),
+            // Home conveyor: LIVE since the wave 8B desktop wiring — the
+            // four WorkManager/widget-backed HomeViewModel ctor deps
+            // (PlaybackSyncScheduler, TvWatchNextScheduler,
+            // ContinueWatchingBroadcaster, LibrarySyncHook) resolve to the
+            // no-op desktop defs in desktopDataModule, and DesktopAppRoot
+            // wires homeSection in the rail (HomeLifecycleSeam's jvm actual
+            // stays a no-op, so sections refresh on their own flows rather
+            // than a process start/stop signal).
+            coreUiMessageModule,
+            homeModule,
+            // …player-audio, wave 7A conveyor (legacy :feature:player:audio
+            // deleted): LIVE since wave 9B — desktopPlayerModule provides the
+            // four playback/cast ctor deps (AudioQueueManager/
+            // AudioEffectsManager/AudioPlayerEngine over the shared
+            // DesktopAudioQueueManager single, plus the never-connected
+            // DesktopAudioPlayerCast), DesktopAppRoot registers
+            // audioPlayerSection and music track clicks navigate to
+            // Route.AudioPlayer for real.
+            playerAudioModule,
+
+
+
+
+            // …subtitle-tester, the FINAL conveyor feature, deliberately has
+            // NO registration here: the entire feature (ViewModel, screen,
+            // preview engine host, raw-asset factory) lives in the shared
+            // module's androidMain — its engine factory and font provider
+            // actuals are Android-only (Koin-owned since wave 8) with no
+            // desktop halves — so there is no
+            // commonMain Koin module to register. The shared settings-search
+            // row for Route.SubtitleTester stays unreachable on desktop
+            // (LanguageSettings' push is intercepted by the guard); desktop's
+            // navigateFilter intercepts the un-registered routes a shared
+            // screen pushes TODAY — the guard list is hand-enumerated
+            // (isDesktopDeadEndRoute in DesktopAppRoot) and must be kept
+            // in sync when features gain or change pushed routes.
+
+        )
+    }
+
+    // Wave 12A startup mark: Koin graph construction is the first heavy
+    // milestone of boot (module list above is untouched — no reordering).
+    startupPerf.markKoinStarted()
+
+    // V3 downloads conveyor: the desktop download engine — in-process
+    // supervisor observing PENDING rows (resume + reconnect edge handled
+    // inside), plus the auto-download loop. Construction is side-effect free;
+    // start() launches the loops on the application scope and is idempotent.
+    koinApp.koin.get<DesktopDownloadManager>().start()
+    koinApp.koin.get<DesktopAutoDownloadScheduler>().start()
+
+    // Wave 9B real audio: the desktop audio core's app-lifetime kickoff —
+    // restore the persisted queue/state and observe queue changes for Room
+    // persistence (the Android Application.onCreate `manager.start()` twin;
+    // equally safe off the cold-start critical path).
+    koinApp.koin.get<com.raulshma.jellyplay.desktop.player.DesktopAudioQueueManager>().start()
+
+    // Desktop image engine: an explicit OkHttp fetcher over the Koin-owned
+    // base STREAMING client (same seam as the Android app's imageClient) —
+    // the streaming client derives from the base client via newBuilder(), so
+    // it shares the base sslSocketFactory/hostnameVerifier and the SAME
+    // dynamic self-signed trust layer (grants read at handshake time). The
+    // previous shape let coil-network-okhttp self-register via ServiceLoader
+    // with its OWN default OkHttpClient, which would have kept failing the
+    // TLS handshake against a self-signed server the user had granted —
+    // every other surface would connect while artwork stayed broken. The
+    // explicit registration below wins either way (first match loses to it),
+    // but serviceLoaderEnabled(false) makes the exclusivity STRUCTURAL
+    // instead of registration-order luck: the ServiceLoader factory can
+    // never resurrect its default-client fetcher behind our back (wave-21
+    // review round — it was dormant-first-match-loser; keep it that way by
+    // construction). The lambda defers the Koin resolution to the first
+    // image load (well after startKoin); crossfade stays the only other
+    // tweak.
+    SingletonImageLoader.setSafe {
+        ImageLoader.Builder(it)
+            .serviceLoaderEnabled(false)
+            .components {
+                add(
+                    OkHttpNetworkFetcherFactory(
+                        callFactory = {
+                            koinApp.koin.get<okhttp3.OkHttpClient>(NetworkQualifiers.streamingHttpClient)
+                        },
+                    ),
+                )
+            }
+            .crossfade(true)
+            .build()
+    }
+
+    // Window placement memory: restore the last session's floating bounds
+    // when they're still reachable on the CURRENT monitor setup (sanitize
+    // rejects the docked-laptop-then-undocked case), else launch centered.
+    // This replaces the old always-1280x800-at-OS-default placement — an
+    // undecorated frame gets the raw Windows cascade (top-left, stepped),
+    // never the centered position a decorated frame's dialog logic gives.
+    val windowStateStore = DesktopWindowStateStore(
+        paths.configDirNio.resolve("window-state.properties"),
+    )
+    val savedWindowGeometry = windowStateStore.load()
+        ?.let { DesktopWindowStateStore.sanitize(it, DesktopWindowStateStore.availableScreens()) }
+    val pxToDp = desktopPxToDpFactor()
+
+    application {
+        val windowState = rememberWindowState(
+            position = savedWindowGeometry
+                ?.let { WindowPosition((it.x / pxToDp).dp, (it.y / pxToDp).dp) }
+                ?: WindowPosition(Alignment.Center),
+            width = ((savedWindowGeometry?.width ?: DEFAULT_WINDOW_WIDTH_PX) / pxToDp).dp,
+            height = ((savedWindowGeometry?.height ?: DEFAULT_WINDOW_HEIGHT_PX) / pxToDp).dp,
+        )
+        val showAbout = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+        // Wave 12A: runtime icon for the title bar + tray (packaging icons are
+        // NOT on the runtime classpath — see DesktopAppIcon). Null means the
+        // resource was unreadable; the window then simply stays icon-less.
+        val appIcon = remember { desktopAppIconOrNull() }
+        // AWT-side window handle so the tray's Show action can restore/focus
+        // the ComposeWindow from outside the Window content lambda.
+        val windowRef = remember {
+            java.util.concurrent.atomic.AtomicReference<ComposeWindow?>(null)
+        }
+
+        // Startup marks, wave 12A. windowShownNanos is the AWT-authoritative
+        // visibility event. firstFrameNanos resumes when the frame clock
+        // delivers the first frame after this root content applies its initial
+        // composition — DesktopAppRoot composes inside this same pass, so it is
+        // the same frame boundary without threading a callback through
+        // DesktopAppRoot (≤1-frame slop vs a true "painted" hook; documented).
+        LaunchedEffect(startupPerf) {
+            withFrameNanos { /* resume at first produced frame */ }
+            startupPerf.markFirstFrame(System.nanoTime())
+        }
+
+        // File→Refresh (Ctrl+R) signal into DesktopAppRoot's home entry.
+        // extraBufferCapacity=1 keeps tryEmit non-suspending and coalesces
+        // repeat invocations while a refresh is already running.
+        val homeRefreshRequests = remember {
+            kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        }
+
+        // F11 fullscreen toggle — shared by the window key handler and the
+        // title bar's View menu (the old MenuBar item's exact behavior).
+        val toggleFullscreen = {
+            windowState.placement =
+                if (windowState.placement == WindowPlacement.Fullscreen) WindowPlacement.Floating
+                else WindowPlacement.Fullscreen
+        }
+
+        Window(
+            state = windowState,
+            title = "JellyPlay",
+            icon = appIcon,
+            undecorated = true,
+            onCloseRequest = ::exitApplication,
+            // Keyboard accelerators for the DesktopTitleBar menus. The old
+            // AWT MenuBar delivered these natively even without Compose
+            // focus; the window-level preview handler is the closest
+            // equivalent — it sees every key before the Compose focus chain
+            // (and also when nothing is focused), then declines everything
+            // it doesn't own so route-level handlers (Esc/back, media keys
+            // in DesktopAppRoot) are unaffected.
+            onPreviewKeyEvent = { event ->
+                if (event.type != KeyEventType.KeyDown) {
+                    false
+                } else if (event.isCtrlPressed && event.key == Key.R) {
+                    homeRefreshRequests.tryEmit(Unit)
+                    true
+                } else if (event.isCtrlPressed && event.key == Key.Q) {
+                    exitApplication()
+                    true
+                } else if (event.key == Key.F11) {
+                    toggleFullscreen()
+                    true
+                } else {
+                    false
+                }
+            },
+        ) {
+            // Manual maximize state. WindowPlacement.Maximized (AWT
+            // MAXIMIZED_BOTH) is unusable on an undecorated window: the frame
+            // is a WS_POPUP, which Windows never zooms natively, so AWT only
+            // applies the maximized SIZE (position ignored, restore broken).
+            // We swap bounds ourselves instead — work area on maximize, saved
+            // bounds on restore.
+            var maximizedRestoreBounds by remember {
+                mutableStateOf<java.awt.Rectangle?>(null)
+            }
+
+            DisposableEffect(startupPerf) {
+                val composeWindow = window
+                windowRef.set(composeWindow)
+                val shownListener = object : java.awt.event.WindowAdapter() {
+                    override fun windowOpened(e: java.awt.event.WindowEvent?) {
+                        startupPerf.markWindowShown()
+                        composeWindow.removeWindowListener(this)
+                    }
+                }
+                composeWindow.addWindowListener(shownListener)
+                onDispose {
+                    composeWindow.removeWindowListener(shownListener)
+                    windowRef.compareAndSet(composeWindow, null)
+                }
+            }
+
+            // Last-session replay of the manual maximize: rememberWindowState
+            // above only restores the FLOATING bounds; when the previous
+            // session closed maximized, redo the bounds swap once the AWT
+            // window exists (windowOpened, same timing the perf marks rely
+            // on — applying bounds mid-composition would fight the initial
+            // pack()).
+            DisposableEffect(savedWindowGeometry) {
+                if (savedWindowGeometry?.maximized != true) {
+                    onDispose { }
+                } else {
+                    val maximizeListener = object : java.awt.event.WindowAdapter() {
+                        override fun windowOpened(e: java.awt.event.WindowEvent?) {
+                            window.removeWindowListener(this)
+                            if (maximizedRestoreBounds == null) {
+                                maximizedRestoreBounds = window.bounds
+                                window.workAreaOrNull()?.let { window.bounds = it }
+                            }
+                        }
+                    }
+                    window.addWindowListener(maximizeListener)
+                    onDispose { window.removeWindowListener(maximizeListener) }
+                }
+            }
+
+            // Persist the floating geometry on window teardown. This covers
+            // every exit path (title-bar close, Ctrl+Q, tray Quit — all
+            // funnel into exitApplication, which disposes the composition).
+            // Fullscreen exit deliberately SKIPS the write: the AWT bounds
+            // at that point are the screen fill, not anything the user
+            // positioned, so the previous session's real geometry wins.
+            // (Crash mid-session loses the last position — accepted; a
+            // move/resize listener would fire continuously during drags.)
+            DisposableEffect(Unit) {
+                onDispose {
+                    if (windowState.placement != WindowPlacement.Fullscreen && !window.bounds.isEmpty) {
+                        windowStateStore.save(
+                            DesktopWindowGeometry.fromRectangle(
+                                rectangle = maximizedRestoreBounds ?: window.bounds,
+                                maximized = maximizedRestoreBounds != null,
+                            ),
+                        )
+                    }
+                }
+            }
+
+            val toggleMaximize: () -> Unit = {
+                if (maximizedRestoreBounds != null) {
+                    window.bounds = maximizedRestoreBounds
+                    maximizedRestoreBounds = null
+                } else {
+                    maximizedRestoreBounds = window.bounds
+                    window.workAreaOrNull()?.let { window.bounds = it }
+                }
+            }
+
+            // Preference-driven theming, the shared wrapper the Android
+            // Activities use (JellyPlayPreferenceTheme): every appearance pref —
+            // theme variant (Synthwave/Aurora/Sakura/…), theme mode (DARK/LIGHT/
+            // SYSTEM/SCHEDULED), OLED, contrast, accent swatch, font scale —
+            // resolves from PreferenceProjections.mainPreferences (Koin single,
+            // datastoreCommonModule), so the desktop Settings appearance rows
+            // re-theme the window live. Material You dynamicTheming is a no-op
+            // seam on desktop (dynamicPlatformColorScheme returns null there and
+            // the scheme cascade falls through to the brand palettes).
+            val projections: PreferenceProjections = koinInject()
+            val preferences by projections.mainPreferences.collectAsState()
+            val darkTheme = rememberPreferenceDarkTheme(preferences)
+            JellyPlayPreferenceTheme(preferences = preferences, darkTheme = darkTheme) {
+                // Themed fallback surface: the undecorated window has no
+                // native chrome, so without this the pre-theme AWT white
+                // would flash through the splash/signed-out panes in dark
+                // mode.
+                Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    // The custom title bar replaces the OS caption (theme
+                    // mismatch) AND the AWT MenuBar (an undecorated frame has
+                    // no menu strip on Windows — the menus moved into the
+                    // bar, see DesktopTitleBar). Hidden in true fullscreen so
+                    // F11 video playback gets the whole screen.
+                    if (windowState.placement != WindowPlacement.Fullscreen) {
+                        DesktopTitleBar(
+                            icon = appIcon,
+                            isMaximized = maximizedRestoreBounds != null,
+                            onMinimize = { windowState.isMinimized = true },
+                            onToggleMaximize = toggleMaximize,
+                            onClose = ::exitApplication,
+                            onRefresh = { homeRefreshRequests.tryEmit(Unit) },
+                            onExit = ::exitApplication,
+                            onToggleFullscreen = toggleFullscreen,
+                            isFullscreenActive = windowState.placement == WindowPlacement.Fullscreen,
+                            onAbout = { showAbout.value = true },
+                        )
+                    }
+                    DesktopAppRoot(
+                        showAbout = showAbout.value,
+                        onDismissAbout = { showAbout.value = false },
+                        previousCrashLogPath = previousCrash?.logFile?.toString(),
+                        // Wave 13B session harness only (screenshots + key
+                        // injection); unused on every normal boot path.
+                        windowRef = windowRef,
+                        homeRefreshRequests = homeRefreshRequests,
+                    )
+                }
+            }
+        }
+
+        // Wave 12A tray affordance. STRICTLY ADDITIVE semantics: closing the
+        // window still quits (onCloseRequest above is unchanged) — there is no
+        // hide-to-tray behavior here. Skipped entirely when the runtime icon
+        // failed to load or AWT exposes no system tray (headless/locked-down
+        // sessions; CMP's isTraySupported() is metadata-internal at 1.11.1, so
+        // availability is probed via systemTrayAvailable(), see DesktopAppIcon).
+        if (appIcon != null && systemTrayAvailable()) {
+            Tray(
+                icon = appIcon,
+                tooltip = "JellyPlay",
+                menu = {
+                    Item("Show JellyPlay") {
+                        // Tray item clicks come back through AWT menu
+                        // machinery; compose desktop's own composition runs on
+                        // that same AWT event thread, and this hop costs one
+                        // loop turn while guaranteeing every future listener
+                        // variant stays on-thread.
+                        // Window restore/focus itself lives in DesktopTrayActions
+                        // (wave 13A extraction — null path unit-covered; the
+                        // visual restore still needs a one-time manual eyeball,
+                        // see docs/perf notes + gate report).
+                        java.awt.EventQueue.invokeLater {
+                            windowState.isMinimized = false
+                            DesktopTrayActions.showMainWindow(windowRef.get())
+                        }
+                    }
+                    Item("Quit") { DesktopTrayActions.quit { exitApplication() } }
+                },
+            )
+        }
+    }
+}
+
+/**
+ * The current monitor's work area (screen minus taskbar) in the window's own
+ * coordinate space, or null when the graphics configuration is unavailable.
+ * Used for the manual maximize of the undecorated window — see the
+ * maximizedRestoreBounds comment in the Window content.
+ */
+private fun java.awt.Window.workAreaOrNull(): java.awt.Rectangle? {
+    val gc = graphicsConfiguration ?: return null
+    val insets = java.awt.Toolkit.getDefaultToolkit().getScreenInsets(gc)
+    return java.awt.Rectangle(
+        gc.bounds.x + insets.left,
+        gc.bounds.y + insets.top,
+        gc.bounds.width - insets.left - insets.right,
+        gc.bounds.height - insets.top - insets.bottom,
+    )
+}
+
+/**
+ * AWT-pixels-per-dp for converting saved window geometry back into the dp
+ * WindowState speaks. Compose Desktop derives its density from the toolkit's
+ * screen resolution (96 = 100%); reading the same value here makes restored
+ * pixel bounds round-trip exactly instead of drifting per display scale.
+ * Headless JVMs report nonsense — guard to identity.
+ */
+private fun desktopPxToDpFactor(): Float =
+    runCatching {
+        java.awt.Toolkit.getDefaultToolkit().screenResolution / 96f
+    }.getOrDefault(1f)
+        .takeIf { it > 0f && !it.isNaN() }
+        ?: 1f
+
+/** First-launch window size (no saved state) in AWT px — 1280x800dp at 100%. */
+private const val DEFAULT_WINDOW_WIDTH_PX = 1280
+private const val DEFAULT_WINDOW_HEIGHT_PX = 800

@@ -2,15 +2,12 @@ package com.raulshma.jellyplay.core.data.worker
 
 import android.content.Context
 import android.util.Log
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.firstOrNull
 
 /**
@@ -31,10 +28,9 @@ import kotlinx.coroutines.flow.firstOrNull
  * worker returned `Result.success()` unconditionally, leaving a persistently
  * broken server path invisible to operators.
  */
-@HiltWorker
-class AutoDownloadWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted params: WorkerParameters,
+class AutoDownloadWorker(
+    context: Context,
+    params: WorkerParameters,
     private val episodeCatalogue: EpisodeCatalogue,
     private val downloadRepository: DownloadRepository,
     private val downloadIntake: DownloadIntake,

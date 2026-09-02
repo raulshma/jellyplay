@@ -7,7 +7,6 @@ import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,7 +17,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * State surfaced to the "Play On" sheet + persistent mini bar at the app shell.
@@ -60,8 +58,7 @@ data class PlayOnUiState(
  * The PlayTo call is `JellyfinRemotePlayCastStrategy.loadMedia` →
  * `AdminApiClient.play(sessionId, "PlayNow", [itemId], …)`.
  */
-@HiltViewModel
-class PlayOnViewModel @Inject constructor(
+class PlayOnViewModel(
     private val jellyfinStrategy: JellyfinRemotePlayCastStrategy,
     private val audioPlaybackManager: AudioPlaybackManager,
 ) : JellyPlayViewModel() {

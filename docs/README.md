@@ -17,6 +17,7 @@ built with Kotlin and Jetpack Compose.
 | [Music player & synced lyrics](./lyrics-music-player.md) | Get the most out of your music library |
 | [Player engines comparison](./player-engines.md) | Choose between ExoPlayer, libmpv, and LibVLC |
 | [Playback progress sync](./playback-progress-sync.md) | How watch progress is reported and synced |
+| [Jellyfin CORS for the web client](./jellyfin-cors.md) | Reverse-proxy CORS setup for JellyPlay Web |
 
 ## What is JellyPlay?
 

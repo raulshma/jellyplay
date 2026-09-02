@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Live TV feature user-facing strings (enhancements §2.2) -->
+    <string name="livetv_no_channels_available">没有可用的频道</string>
+
+    <!-- Live TV tabbed screen (matches jellyfin-web Live TV collection) -->
+    <string name="livetv_tab_programs">节目</string>
+    <string name="livetv_tab_guide">节目指南</string>
+    <string name="livetv_tab_channels">频道</string>
+    <string name="livetv_tab_recordings">录像</string>
+    <string name="livetv_tab_schedule">日程</string>
+    <string name="livetv_tab_series">剧集</string>
+
+
+    <string name="livetv_no_programs_available">没有可用的节目</string>
+    <string name="livetv_no_recordings_available">没有可用的录像</string>
+    <string name="livetv_no_scheduled_recordings">没有计划的录像</string>
+    <string name="livetv_no_series_recordings">没有剧集录像</string>
+
+    <string name="livetv_section_latest_recordings">最新录像</string>
+    <string name="livetv_section_active_recordings">进行中的录像</string>
+    <string name="livetv_section_upcoming_recordings">即将开始的录像</string>
+
+    <string name="livetv_record_once">录像</string>
+    <string name="livetv_record_series">录制剧集</string>
+    <string name="livetv_cancel_recording">取消录像</string>
+    <string name="livetv_cancel_series">取消剧集</string>
+    <string name="livetv_delete">删除</string>
+    <string name="livetv_delete_recording_cd">删除录像</string>
+    <string name="livetv_delete_recording_title">删除录像？</string>
+    <string name="livetv_delete_recording_body">删除“%1$s”？此操作无法撤销。</string>
+    <string name="livetv_record_success">录像已安排</string>
+    <string name="livetv_record_failed">设置录像失败</string>
+    <string name="livetv_record_canceled">录像已取消</string>
+
+    <!-- Channel detail screen -->
+    <string name="livetv_channel_watch_live">观看直播</string>
+    <string name="livetv_channel_on_today">今日播出</string>
+    <string name="livetv_channel_live">直播</string>
+    <string name="livetv_channel_no_program_info">没有节目信息</string>
+    <string name="livetv_channel_load_failed">加载节目指南失败</string>
+
+    <!-- Live TV host & EPG screen (extracted from hardcoded strings) -->
+    <string name="livetv_screen_title">直播电视</string>
+    <string name="livetv_epg_title">节目指南</string>
+    <string name="livetv_no_guide_available">没有可用的节目指南</string>
+    <string name="livetv_record_program_prompt">录制节目？</string>
+    <string name="livetv_record_single_timer_note">将在服务器上安排单个计时器。</string>
+    <string name="livetv_record_schedule_failed">无法安排录制</string>
+    <string name="livetv_recording_in_progress">录制中…</string>
+    <string name="livetv_scheduling_timer">正在安排计时器</string>
+    <string name="livetv_action_cancel">取消</string>
+    <string name="livetv_action_close">关闭</string>
+    <string name="livetv_action_done">完成</string>
+    <string name="livetv_action_ok">确定</string>
+    <string name="livetv_schedule_start">开始: %1$s</string>
+    <string name="livetv_schedule_end">结束: %1$s</string>
+
+    <!-- Channel / program affordances (batch) -->
+    <string name="livetv_watch">观看</string>
+    <string name="livetv_recording_status">录制中</string>
+    <string name="livetv_recording_now">● 正在录制</string>
+
+    <!-- EPG grid & live pill labels (batch) -->
+    <string name="livetv_will_be_recorded">将录制「%1$s」。</string>
+    <string name="livetv_channel">频道</string>
+    <string name="livetv_live">直播</string>
+</resources>

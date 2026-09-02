@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ════════════════════════════════════════════════════════════════════
+         Media Detail feature strings.
+
+         Prefixed `detail_` so they never collide with other modules once
+         resources are merged at the app level. Mirrors the `core_` convention
+         in core/ui/src/main/res/values/strings.xml.
+         ════════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Section titles / headers ─────────────────────────────────────── -->
+    <string name="detail_section_tracks">트랙</string>
+    <string name="detail_section_items">항목</string>
+    <string name="detail_section_cast_crew">출연진 &amp; 제작진</string>
+    <string name="detail_section_cast">출연진</string>
+    <string name="detail_section_crew">제작진</string>
+    <string name="detail_section_more_like_this">비슷한 작품</string>
+    <string name="detail_section_special_features">부가 영상</string>
+    <string name="detail_section_chapters">챕터</string>
+    <string name="detail_see_all">모두 보기</string>
+    <string name="detail_more_like_this_on_device">기기 내</string>
+    <string name="detail_section_videos">동영상</string>
+    <string name="detail_section_seasons">시즌</string>
+    <string name="detail_section_reviews">리뷰</string>
+
+    <!-- ── Primary action button labels ─────────────────────────────────── -->
+    <string name="detail_play_play">재생</string>
+    <string name="detail_play_resume">이어보기</string>
+    <string name="detail_play_finding_episode">에피소드 찾는 중</string>
+    <string name="detail_play_no_episodes_available">재생 가능한 에피소드 없음</string>
+    <string name="detail_play_no_episodes">에피소드 없음</string>
+
+    <!-- ── Segment availability chip (rendered near the Play button) ──────── -->
+    <string name="detail_skip_available_intro">인트로 건너뛰기 가능</string>
+    <string name="detail_skip_available_credits">크레딧 건너뛰기 가능</string>
+    <string name="detail_skip_available_both">인트로·크레딧 건너뛰기</string>
+
+    <!-- ── Up Next card label ───────────────────────────────────────────── -->
+    <string name="detail_up_next">다음</string>
+
+    <!-- ── Smart-play templates (verb + S#:E#) ────────────────────────────
+         Positional args: %1$d = season number, %2$d = episode number. -->
+    <string name="detail_resume_episode">이어보기 S%1$d:E%2$d</string>
+    <string name="detail_next_up_episode">다음 S%1$d:E%2$d</string>
+    <string name="detail_play_episode">재생 S%1$d:E%2$d</string>
+    <string name="detail_replay_episode">다시 재생 S%1$d:E%2$d</string>
+
+    <!-- ── Action icon content descriptions (TalkBack) ──────────────────── -->
+    <string name="detail_cd_mark_as_watched">시청함으로 표시</string>
+    <string name="detail_cd_mark_as_unwatched">시청 안 함으로 표시</string>
+    <string name="detail_cd_favorite">즐겨찾기</string>
+    <string name="detail_cd_options">옵션</string>
+    <string name="detail_cd_episode_play">재생</string>
+    <string name="detail_cd_track_play">재생</string>
+    <string name="detail_cd_collapse">접기</string>
+    <string name="detail_cd_expand">펼치기</string>
+    <string name="detail_cd_sort_oldest_first">오래된 순 정렬</string>
+    <string name="detail_cd_sort_newest_first">최신 순 정렬</string>
+
+    <!-- ── Episode / season card labels ─────────────────────────────────── -->
+    <string name="detail_season_format">시즌 %1$d</string>
+    <string name="detail_spoiler">스포일러</string>
+    <string name="detail_watched_badge">시청함</string>
+    <string name="detail_cd_switch_to_list">세로 에피소드 목록으로 전환</string>
+    <string name="detail_cd_switch_to_cards">가로 에피소드 카드로 전환</string>
+    <string name="detail_time_left_format">%1$s 남음</string>
+
+    <!-- ── Overflow / options menu ──────────────────────────────────────── -->
+    <string name="detail_option_edit">편집</string>
+    <string name="detail_option_share">공유</string>
+    <string name="detail_option_downloading">다운로드 중…</string>
+    <string name="detail_option_downloading_percent">다운로드 중 (%1$d%%)</string>
+    <string name="detail_option_download">다운로드</string>
+    <string name="detail_option_downloading_series">시리즈 다운로드 중…</string>
+    <string name="detail_option_download_series">시리즈 다운로드</string>
+    <string name="detail_option_hide_from_next_up">다음에 볼 작품에서 숨기기</string>
+    <string name="detail_option_hide_from_continue_watching">이어보기에서 숨기기</string>
+    <string name="detail_option_show_in_next_up">다음에 볼 작품에 표시</string>
+    <string name="detail_option_show_in_continue_watching">이어보기에 표시</string>
+    <string name="detail_option_technical_info">기술 정보</string>
+
+    <!-- ── Series download sheet ────────────────────────────────────────── -->
+    <string name="detail_select_all">전체 선택</string>
+    <string name="detail_deselect_all">전체 선택 해제</string>
+    <string name="detail_episodes_selected_format">에피소드 %2$d개 중 %1$d개 선택됨</string>
+    <plurals name="detail_episode_count">
+        <item quantity="other">에피소드 %1$d개</item>
+    </plurals>
+    <string name="detail_cancel">취소</string>
+
+    <!-- ── Add to Playlist picker ──────────────────────────────────────── -->
+    <string name="detail_option_add_to_playlist">재생목록에 추가</string>
+    <string name="detail_playlist_picker_title">재생목록에 추가</string>
+    <string name="detail_playlist_watch_later">나중에 볼 작품</string>
+    <string name="detail_playlist_create_new">새 재생목록 만들기</string>
+    <string name="detail_playlist_new_title">새 재생목록</string>
+    <string name="detail_playlist_name_label">이름</string>
+    <string name="detail_playlist_desc_label">설명 (선택)</string>
+    <string name="detail_playlist_create">만들기</string>
+    <string name="detail_msg_no_playlists">아직 재생목록이 없습니다</string>
+    <!-- %1$s = playlist name -->
+    <string name="detail_msg_added_to_playlist">\"%1$s\"에 추가됨</string>
+    <string name="detail_msg_added_to_watch_later">나중에 볼 작품에 추가됨</string>
+    <!-- %1$s = playlist name -->
+    <string name="detail_msg_playlist_created">\"%1$s\" 재생목록을 만들고 항목을 추가했습니다</string>
+    <string name="detail_msg_couldnt_add_to_playlist">재생목록에 추가할 수 없습니다</string>
+    <plurals name="detail_playlist_item_count">
+        <item quantity="other">항목 %1$d개</item>
+    </plurals>
+
+    <!-- ── 컬렉션에 추가 ────────────────────────────────────────────── -->
+    <string name="detail_option_add_to_collection">컬렉션에 추가</string>
+    <string name="detail_collection_picker_title">컬렉션에 추가</string>
+    <string name="detail_collection_create_new">새 컬렉션 만들기</string>
+    <string name="detail_collection_new_title">새 컬렉션</string>
+    <string name="detail_collection_name_label">이름</string>
+    <string name="detail_collection_create">만들기</string>
+    <string name="detail_msg_no_collections">컬렉션이 없습니다</string>
+    <!-- %1$s = 컬렉션 이름 -->
+    <string name="detail_msg_added_to_collection">\"%1$s\"에 추가했습니다</string>
+    <!-- %1$s = 컬렉션 이름 -->
+    <string name="detail_msg_collection_created">\"%1$s\" 컬렉션을 만들고 항목을 추가했습니다</string>
+    <string name="detail_msg_couldnt_add_to_collection">컬렉션에 추가할 수 없습니다</string>
+    <plurals name="detail_collection_item_count">
+        <item quantity="other">항목 %1$d개</item>
+    </plurals>
+
+    <!-- ── 인스턴트 믹스 (오디오) ────────────────────────────────────── -->
+    <string name="detail_option_instant_mix">인스턴트 믹스 시작</string>
+    <string name="detail_instant_mix_empty">이 항목에 사용할 믹스가 없습니다</string>
+    <string name="detail_instant_mix_failed">인스턴트 믹스를 시작할 수 없습니다</string>
+
+    <!-- ── 함께 보기 (SyncPlay) ──────────────────────────────────────── -->
+    <string name="detail_option_watch_party">함께 보기 시작</string>
+    <string name="detail_watch_party_default_name">함께 보기</string>
+    <string name="detail_msg_watch_party_started">함께 보기를 시작했습니다</string>
+    <string name="detail_msg_watch_party_failed">함께 보기를 시작할 수 없습니다</string>
+
+    <!-- ── Stream picker (audio / subtitle) ─────────────────────────────── -->
+    <string name="detail_select_audio">오디오 선택</string>
+    <string name="detail_select_subtitle">자막 선택</string>
+    <string name="detail_stream_auto">자동</string>
+    <string name="detail_stream_default">기본</string>
+    <string name="detail_stream_subtitle_off">끄기</string>
+    <string name="detail_stream_default_badge">기본</string>
+    <string name="detail_audio_track_format">트랙 %1$d</string>
+    <string name="detail_subtitle_track_format">트랙 %1$d</string>
+    <string name="detail_download_quality">품질</string>
+    <string name="detail_subtitle_off">끔</string>
+    <string name="detail_audio_channels_format">%1$dCH</string>
+
+    <!-- ── Download dialogs ─────────────────────────────────────────────── -->
+    <string name="detail_download_dialog_title">다운로드</string>
+    <string name="detail_download_anyway">그래도 다운로드</string>
+    <string name="detail_cellular_download_title">모바일 데이터로 대용량 다운로드</string>
+    <string name="detail_cellular_download_message">종량제 네트워크에 연결되어 있습니다. 이 다운로드는 약 %1$d MB이며 상당한 모바일 데이터를 사용할 수 있습니다.</string>
+    <string name="detail_estimated_size">예상 용량: %1$s</string>
+    <string name="detail_available_storage">사용 가능한 저장 공간: %1$s</string>
+    <string name="detail_not_enough_storage">사용 가능한 저장 공간이 부족합니다.</string>
+
+    <!-- ── File-size formatting ─────────────────────────────────────────── -->
+    <string name="detail_size_gb">%1$.1f GB</string>
+    <string name="detail_size_mb">%1$.1f MB</string>
+    <string name="detail_size_kb">%1$.1f KB</string>
+    <string name="detail_size_b">%1$d B</string>
+    <string name="detail_size_unknown">알 수 없음</string>
+
+    <!-- ── Share ────────────────────────────────────────────────────────── -->
+    <string name="detail_share_via">다음으로 공유</string>
+
+    <!-- ── Snackbar / user feedback (from ViewModel) ────────────────────── -->
+    <string name="detail_msg_couldnt_update_favorite">즐겨찾기를 업데이트할 수 없습니다</string>
+    <string name="detail_msg_couldnt_mark_played">재생됨으로 표시할 수 없습니다</string>
+    <string name="detail_msg_download_started">다운로드가 시작되었습니다</string>
+    <string name="detail_msg_download_start_failed">다운로드를 시작할 수 없습니다</string>
+    <string name="detail_msg_couldnt_mark_unplayed">재생 안 됨으로 표시할 수 없습니다</string>
+    <string name="detail_mark_season_watched">시즌을 시청함으로 표시</string>
+    <string name="detail_mark_season_unwatched">시즌을 시청 안 함으로 표시</string>
+    <string name="detail_mark_series_watched_confirm_title">시리즈를 시청한 것으로 표시하시겠습니까?</string>
+    <string name="detail_mark_series_watched_confirm_message">모든 에피소드가 시청한 것으로 표시되고 모든 이어보기 위치가 삭제됩니다.</string>
+    <string name="detail_mark_series_unwatched_confirm_title">시리즈를 시청하지 않은 것으로 표시하시겠습니까?</string>
+    <string name="detail_mark_series_unwatched_confirm_message">모든 에피소드가 시청하지 않은 것으로 표시됩니다.</string>
+    <string name="detail_mark_season_watched_confirm_title">시즌을 시청한 것으로 표시하시겠습니까?</string>
+    <string name="detail_mark_season_watched_confirm_message">이 시즌의 모든 에피소드가 시청한 것으로 표시되고 이어보기 위치가 삭제됩니다.</string>
+    <string name="detail_mark_season_unwatched_confirm_title">시즌을 시청하지 않은 것으로 표시하시겠습니까?</string>
+    <string name="detail_mark_season_unwatched_confirm_message">이 시즌의 모든 에피소드가 시청하지 않은 것으로 표시됩니다.</string>
+    <string name="detail_cd_season_options">시즌을 시청함 또는 시청 안 함으로 표시</string>
+    <string name="detail_msg_no_episodes_queued">대기열에 추가할 수 있는 에피소드가 없습니다</string>
+    <string name="detail_msg_hidden_from_next_up">다음에 볼 작품에서 숨겨짐</string>
+    <string name="detail_msg_shown_in_next_up">다음에 볼 작품에 표시됨</string>
+    <string name="detail_msg_hidden_from_continue_watching">이어보기에서 숨겨짐</string>
+    <string name="detail_msg_shown_in_continue_watching">이어보기에 표시됨</string>
+
+    <!-- ── Snackbar: episodes queued (plurals) ──────────────────────────── -->
+    <plurals name="detail_episodes_queued">
+        <item quantity="other">에피소드 %1$d개가 다운로드 대기열에 추가됨</item>
+    </plurals>
+
+    <!-- ── ViewModel error messages (shown via ErrorScreen / snackbar) ──── -->
+    <string name="detail_error_load_failed">상세 정보를 불러올 수 없습니다</string>
+    <string name="detail_error_access_denied">이 항목에 접근 권한이 없습니다.</string>
+    <string name="detail_error_details_not_loaded">미디어 상세 정보가 로드되지 않았습니다</string>
+    <string name="detail_error_no_source">다운로드할 수 있는 미디어 소스가 없습니다</string>
+    <string name="detail_error_download_failed">다운로드 실패</string>
+    <string name="detail_error_not_a_series">시리즈가 아닙니다</string>
+    <string name="detail_error_queue_failed">다운로드 대기열 추가 실패</string>
+    <string name="detail_error_unavailable_offline">이 항목은 오프라인에서 사용할 수 없습니다.</string>
+
+    <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
+    <string name="detail_option_manage_series">시리즈 관리</string>
+    <string name="detail_manage_title">시리즈 관리</string>
+    <!-- Series-level actions -->
+    <string name="detail_manage_refresh_metadata">메타데이터 새로고침</string>
+    <string name="detail_manage_refresh_scan">새로고침 &amp; 스캔</string>
+    <string name="detail_manage_search_series">검색</string>
+    <!-- %1$s = formatted size (e.g. "12.3 GB") -->
+    <string name="detail_manage_disk_used_format">디스크: %1$s</string>
+    <!-- Series monitored indicator -->
+    <string name="detail_manage_monitored">모니터링 중</string>
+    <string name="detail_manage_unmonitored">모니터링 안 함</string>
+    <!-- Season header -->
+    <string name="detail_manage_season_format">시즌 %1$d</string>
+    <string name="detail_manage_season_specials">스페셜</string>
+    <!-- %1$d = downloaded count, %2$d = total count -->
+    <string name="detail_manage_season_count_format">%1$d/%2$d</string>
+    <!-- Episode status badges -->
+    <string name="detail_manage_status_downloaded">다운로드됨</string>
+    <string name="detail_manage_status_missing">누락됨</string>
+    <string name="detail_manage_status_unmonitored">모니터링 안 함</string>
+    <string name="detail_manage_status_unaired">미방영</string>
+    <!-- Episode actions -->
+    <string name="detail_manage_search">자동 검색</string>
+    <string name="detail_manage_monitor">모니터링</string>
+    <string name="detail_manage_unmonitor">모니터링 해제</string>
+    <string name="detail_manage_delete_file">파일 삭제</string>
+    <!-- Delete-file confirmation dialog. %1$s = episode title, %2$s = SxxExx -->
+    <string name="detail_manage_delete_title">에피소드 파일 삭제</string>
+    <string name="detail_manage_delete_message">\"%1$s\" (%2$s)의 파일을 삭제하시겠습니까? Sonarr에서 제거되며, 교체본을 검색할 수 있습니다.</string>
+    <string name="detail_manage_delete_confirm">삭제</string>
+    <!-- Empty / error states -->
+    <string name="detail_manage_no_episodes">Sonarr에서 이 시리즈의 에피소드를 찾을 수 없습니다.</string>
+    <string name="detail_manage_not_tracked">이 시리즈를 추적하는 Sonarr 서버가 없습니다.</string>
+    <!-- Content descriptions (TalkBack / TV) -->
+    <string name="detail_manage_cd_search_season">시즌의 모니터링 항목 검색</string>
+    <string name="detail_manage_cd_toggle_monitor_season">시즌의 모든 에피소드 모니터링 전환</string>
+    <string name="detail_manage_cd_toggle_monitor_episode">에피소드 모니터링 전환</string>
+    <string name="detail_manage_cd_episode_menu">에피소드 옵션</string>
+
+    <!-- Localized error messages -->
+    <string name="detail_manage_series_load_error">Jellyfin에서 시리즈를 불러올 수 없습니다.</string>
+    <string name="detail_manage_series_no_tvdb">이 시리즈에는 tvdb id가 없습니다. Sonarr에서 조회할 수 없습니다.</string>
+    <string name="detail_manage_series_not_tracked">이 시리즈를 추적하는 Sonarr 서버가 없습니다. 먼저 Sonarr에 시리즈를 추가하세요.</string>
+
+    <!-- ── Seerr request / status buttons ──────────────────────────────── -->
+    <string name="detail_available">사용 가능</string>
+    <string name="detail_request">요청</string>
+    <string name="detail_seerr_processing">처리 중</string>
+    <string name="detail_seerr_pending">대기 중</string>
+    <string name="detail_seerr_requested">요청됨</string>
+
+    <!-- ── Seerr horizontal sections ───────────────────────────────────── -->
+    <string name="detail_section_recommendations">추천</string>
+    <string name="detail_section_similar">비슷함</string>
+
+    <!-- ── External links (brand names: never translate) ───────────────── -->
+    <string name="detail_link_tmdb" translatable="false">TMDB</string>
+    <string name="detail_link_imdb" translatable="false">IMDb</string>
+    <string name="detail_link_tvdb" translatable="false">TVDB</string>
+
+    <!-- ── Release-type icons (TalkBack) ───────────────────────────────── -->
+    <string name="detail_cd_release_theatrical">극장 개봉</string>
+    <string name="detail_cd_release_digital">디지털 개봉</string>
+    <string name="detail_cd_release_physical">실물 출시</string>
+
+    <!-- ── Media Info screen ───────────────────────────────────────────── -->
+    <string name="detail_media_info_title_video">비디오</string>
+    <string name="detail_media_info_title_audio">오디오</string>
+    <string name="detail_media_info_title_subtitles">자막</string>
+    <string name="detail_media_info_no_info">미디어 정보 없음</string>
+    <string name="detail_media_info_no_info_description">이 항목에 대한 기술 정보를 사용할 수 없습니다</string>
+
+    <!-- auto-localized: previously translatable="false" (2) -->
+    <string name="detail_section_seerr_recommendations">Seerr 추천</string>
+    <string name="detail_section_seerr_similar">Seerr 유사 작품</string>
+
+    <!-- Localized UI text extracted from SeerrDetailScreen -->
+    <string name="detail_seerr_unknown_error">알 수 없는 오류</string>
+    <string name="detail_seerr_overview">개요</string>
+    <string name="detail_seerr_episodes_count">%1$d 에피소드</string>
+    <string name="detail_seerr_season_n">시즌 %1$d</string>
+    <string name="detail_seerr_director_format">감독: %1$s</string>
+    <string name="detail_seerr_show_more">더 보기</string>
+    <string name="detail_seerr_video">비디오</string>
+    <string name="detail_seerr_information">정보</string>
+    <string name="detail_seerr_status">상태</string>
+    <string name="detail_seerr_unknown">알 수 없음</string>
+    <string name="detail_seerr_release_date">개봉일</string>
+    <string name="detail_seerr_revenue">수익</string>
+    <string name="detail_seerr_budget">예산</string>
+    <string name="detail_seerr_language">언어</string>
+    <string name="detail_seerr_country">국가</string>
+    <string name="detail_seerr_studios">스튜디오</string>
+    <string name="detail_seerr_currently_streaming_on">현재 스트리밍 중</string>
+
+    <!-- 빈 상태 -->
+    <string name="detail_collection_empty_title">이 컬렉션이 비어 있습니다</string>
+    <string name="detail_collection_empty_description">이 컬렉션에 추가된 항목이 여기에 표시됩니다.</string>
+    <string name="detail_person_empty_title">제목을 찾을 수 없습니다</string>
+    <string name="detail_person_empty_description">이 인물에는 현재 필터와 일치하는 제목이 없습니다.</string>
+    <string name="detail_season_empty_title">사용 가능한 에피소드가 없습니다</string>
+    <string name="detail_season_empty_description">에피소드가 추가되면 여기에 표시됩니다.</string>
+
+    <!-- Unified download / offline-detail strings. Resync falls back to default. -->
+    <string name="detail_download_info">다운로드 정보</string>
+    <string name="detail_file_size">파일 크기</string>
+    <string name="detail_status">상태</string>
+    <string name="detail_progress">진행률</string>
+    <string name="detail_download_status_pending">대기 중</string>
+    <string name="detail_download_status_queued">대기열에 있음</string>
+    <string name="detail_download_status_downloading">다운로드 중</string>
+    <string name="detail_download_status_paused">일시정지됨</string>
+    <string name="detail_download_status_completed">완료됨</string>
+    <string name="detail_download_status_failed">실패</string>
+    <string name="detail_download_status_cancelled">취소됨</string>
+    <string name="detail_watch_status">시청 상태</string>
+    <string name="detail_watched_status_watched">시청함</string>
+    <string name="detail_watched_status_label">시청함</string>
+    <string name="detail_watched_status_in_progress">진행 중</string>
+    <string name="detail_watched_status_started">시작됨</string>
+    <string name="detail_position">위치</string>
+    <string name="detail_position_of">%2$s 중 %1$s</string>
+    <string name="detail_last_watched">마지막 시청</string>
+    <string name="detail_close">닫기</string>
+    <string name="detail_delete">삭제</string>
+    <string name="detail_delete_download_title">다운로드 삭제</string>
+    <string name="detail_delete_download_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까? %2$s이(가) 확보됩니다.</string>
+    <string name="detail_delete_episode_title">에피소드 삭제</string>
+    <string name="detail_delete_episode_cd">에피소드 삭제</string>
+    <string name="detail_delete_episode_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까?</string>
+    <string name="detail_delete_downloads_title">다운로드 삭제</string>
+    <string name="detail_select_episodes_to_remove">기기에서 제거할 에피소드를 선택하세요.</string>
+    <string name="detail_episodes_selected">에피소드 %2$d개 중 %1$d개 선택됨</string>
+    <string name="detail_episodes_selected_with_freed">에피소드 %2$d개 중 %1$d개 선택됨 · %3$s</string>
+    <string name="detail_delete_count">%1$d개 삭제</string>
+    <string name="detail_delete_count_with_freed">%1$d개 삭제 · %2$s</string>
+    <string name="detail_season_default">시즌 %1$d</string>
+    <string name="detail_delete_entire_series">전체 시리즈 삭제</string>
+    <string name="detail_option_delete_downloads">다운로드 삭제</string>
+    <plurals name="detail_episodes_count">
+        <item quantity="other">에피소드 %1$d개</item>
+    </plurals>
+
+    <!-- Sync / resync download -->
+    <string name="detail_resync_title">다운로드 동기화</string>
+    <string name="detail_resync_checking">업데이트 확인 중…</string>
+    <string name="detail_resync_update_available">새 정보가 있습니다</string>
+    <string name="detail_resync_media_changed">미디어 파일이 변경됨 — 재다운로드 필요</string>
+    <string name="detail_resync_in_progress">최신 세부 정보 동기화 중…</string>
+    <string name="detail_resync_complete">다운로드가 최신 세부 정보와 동기화됨</string>
+    <string name="detail_resync_failed">동기화 실패</string>
+    <string name="detail_resync_up_to_date">이 다운로드는 최신 상태입니다.</string>
+    <string name="detail_resync_description">서버에 더 새로운 정보가 있습니다. 동기화하여 메타데이터와 이미지를 새로 고치세요.</string>
+    <string name="detail_resync_change_metadata">메타데이터 업데이트됨 (개요, 출연진, 평점)</string>
+    <string name="detail_resync_change_images">아트워크 업데이트됨 (포스터/배경)</string>
+    <string name="detail_resync_change_media">미디어 파일 자체가 변경됨</string>
+    <string name="detail_resync_media_explanation">메타데이터 동기화로는 미디어 파일을 업데이트할 수 없습니다. 새 파일을 받으려면 이 항목을 삭제하고 다시 다운로드하세요.</string>
+    <string name="detail_resync_action">지금 동기화</string>
+    <string name="detail_resync_redownload">미디어 재다운로드</string>
+
+    <!-- Local subtitles -->
+    <string name="detail_local_subtitles">자막</string>
+    <string name="detail_local_subtitle_off">끔</string>
+    <string name="detail_local_subtitle_default_badge">기본</string>
+    <string name="detail_local_subtitle_forced_badge">강제</string>
+
+    <!-- Download Details Sheet -->
+    <string name="detail_download_details_title">다운로드 세부정보</string>
+    <string name="detail_download_section_download">다운로드</string>
+    <string name="detail_download_section_media">미디어</string>
+    <string name="detail_download_section_media_info">미디어 정보</string>
+    <string name="detail_download_section_files">다운로드된 파일</string>
+    <string name="detail_downloaded_bytes">다운로드된 크기</string>
+    <string name="detail_downloaded_date">다운로드 날짜</string>
+    <string name="detail_container">컨테이너</string>
+    <string name="detail_file_present">파일 존재 여부</string>
+    <string name="detail_media_source">미디어 소스</string>
+    <string name="detail_download_path">경로</string>
+    <string name="detail_media_title">제목</string>
+    <string name="detail_media_type">유형</string>
+    <string name="detail_original_title">원제</string>
+    <string name="detail_year">연도</string>
+    <string name="detail_runtime">재생 시간</string>
+    <string name="detail_episode_label">에피소드</string>
+    <string name="detail_view_download_details">다운로드 세부정보 보기</string>
+    <string name="detail_download_tab_overview">개요</string>
+    <string name="detail_download_tab_media_info">미디어 정보</string>
+    <string name="detail_download_tab_storage">저장 공간</string>
+
+    <!-- Inventory -->
+    <string name="detail_download_files_total">디스크 총 용량</string>
+    <string name="detail_download_files_loading">파일 크기 계산 중…</string>
+    <string name="detail_download_files_empty">다운로드된 파일을 찾을 수 없습니다</string>
+    <plurals name="detail_files_count">
+        <item quantity="other">%1$d개 파일</item>
+    </plurals>
+    <string name="detail_file_category_media">미디어</string>
+    <string name="detail_file_category_subtitle">자막</string>
+    <string name="detail_file_category_trickplay">트릭플레이</string>
+    <string name="detail_file_category_segment">세그먼트</string>
+    <string name="detail_file_category_image">이미지</string>
+</resources>

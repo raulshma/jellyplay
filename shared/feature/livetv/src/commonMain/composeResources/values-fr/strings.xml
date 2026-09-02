@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Live TV feature user-facing strings (enhancements §2.2) -->
+    <string name="livetv_no_channels_available">Aucune chaîne disponible</string>
+
+    <!-- Live TV tabbed screen (matches jellyfin-web Live TV collection) -->
+    <string name="livetv_tab_programs">Programmes</string>
+    <string name="livetv_tab_guide">Guide</string>
+    <string name="livetv_tab_channels">Chaînes</string>
+    <string name="livetv_tab_recordings">Enregistrements</string>
+    <string name="livetv_tab_schedule">Programmation</string>
+    <string name="livetv_tab_series">Séries</string>
+
+
+    <string name="livetv_no_programs_available">Aucun programme disponible</string>
+    <string name="livetv_no_recordings_available">Aucun enregistrement disponible</string>
+    <string name="livetv_no_scheduled_recordings">Aucun enregistrement programmé</string>
+    <string name="livetv_no_series_recordings">Aucun enregistrement de série</string>
+
+    <string name="livetv_section_latest_recordings">Derniers enregistrements</string>
+    <string name="livetv_section_active_recordings">Enregistrements actifs</string>
+    <string name="livetv_section_upcoming_recordings">Enregistrements à venir</string>
+
+    <string name="livetv_record_once">Enregistrer</string>
+    <string name="livetv_record_series">Enregistrer la série</string>
+    <string name="livetv_cancel_recording">Annuler l\'enregistrement</string>
+    <string name="livetv_cancel_series">Annuler la série</string>
+    <string name="livetv_delete">Supprimer</string>
+    <string name="livetv_delete_recording_cd">Supprimer l\'enregistrement</string>
+    <string name="livetv_delete_recording_title">Supprimer l\'enregistrement ?</string>
+    <string name="livetv_delete_recording_body">Supprimer « %1$s » ? Action irréversible.</string>
+    <string name="livetv_record_success">Enregistrement programmé</string>
+    <string name="livetv_record_failed">Échec de la programmation de l\'enregistrement</string>
+    <string name="livetv_record_canceled">Enregistrement annulé</string>
+
+    <!-- Channel detail screen -->
+    <string name="livetv_channel_watch_live">Regarder en direct</string>
+    <string name="livetv_channel_on_today">Diffusé aujourd\'hui</string>
+    <string name="livetv_channel_live">DIRECT</string>
+    <string name="livetv_channel_no_program_info">Aucune information sur le programme</string>
+    <string name="livetv_channel_load_failed">Échec du chargement du guide des programmes</string>
+
+    <!-- Live TV host & EPG screen (extracted from hardcoded strings) -->
+    <string name="livetv_screen_title">TV en directe</string>
+    <string name="livetv_epg_title">Guide des programmes</string>
+    <string name="livetv_no_guide_available">Aucun guide des programmes disponible</string>
+    <string name="livetv_record_program_prompt">Enregistrer le programme ?</string>
+    <string name="livetv_record_single_timer_note">Un minuteur unique sera programmé sur le serveur.</string>
+    <string name="livetv_record_schedule_failed">Impossible de programmer l\'enregistrement</string>
+    <string name="livetv_recording_in_progress">Enregistrement…</string>
+    <string name="livetv_scheduling_timer">Programmation du minuteur</string>
+    <string name="livetv_action_cancel">Annuler</string>
+    <string name="livetv_action_close">Fermer</string>
+    <string name="livetv_action_done">Terminé</string>
+    <string name="livetv_action_ok">OK</string>
+    <string name="livetv_schedule_start">Début : %1$s</string>
+    <string name="livetv_schedule_end">Fin : %1$s</string>
+
+    <!-- Channel / program affordances (batch) -->
+    <string name="livetv_watch">Visionner</string>
+    <string name="livetv_recording_status">Enregistrement</string>
+    <string name="livetv_recording_now">● Enregistrement en cours</string>
+
+    <!-- EPG grid & live pill labels (batch) -->
+    <string name="livetv_will_be_recorded">"%1$s" sera enregistré.</string>
+    <string name="livetv_channel">Chaîne</string>
+    <string name="livetv_live">DIRECT</string>
+</resources>

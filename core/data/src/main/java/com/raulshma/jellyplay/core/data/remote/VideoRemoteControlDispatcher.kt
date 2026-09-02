@@ -8,8 +8,6 @@ import com.raulshma.jellyplay.core.model.remote.PlaybackDomain
 import com.raulshma.jellyplay.core.model.remote.PlaystateCommand
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Routes remote "Play" / "Playstate" / "GeneralCommand" messages to the
@@ -22,8 +20,7 @@ import javax.inject.Singleton
  * other thread (`IllegalStateException: Player is accessed on the wrong
  * thread`).
  */
-@Singleton
-class VideoRemoteControlDispatcher @Inject constructor(
+class VideoRemoteControlDispatcher(
     private val activePlayerController: ActivePlayerController,
     private val remoteNavigationBridge: RemoteNavigationBridge,
 ) : RemoteControlDispatcher {

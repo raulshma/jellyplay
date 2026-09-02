@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Screen / scaffold -->
+    <string name="arrqueue_title">Fila de atividade</string>
+    <string name="arrqueue_refresh">Atualizar</string>
+
+    <!-- Common buttons -->
+    <string name="arrqueue_unknown_error">Erro desconhecido</string>
+    <string name="arrqueue_retry">Tentar novamente</string>
+    <string name="arrqueue_cancel">Cancelar</string>
+    <string name="arrqueue_delete">Excluir</string>
+    <string name="arrqueue_grab">Forçar</string>
+    <string name="arrqueue_import">Importar</string>
+
+    <!-- Selection bar -->
+    <string name="arrqueue_selected_count">%1$d selecionado(s)</string>
+    <string name="arrqueue_select_all">Selecionar tudo</string>
+    <string name="arrqueue_clear_selection">Limpar seleção</string>
+
+    <!-- Status chips -->
+    <string name="arrqueue_status_downloading">Baixando</string>
+    <string name="arrqueue_status_queued">Em fila</string>
+    <string name="arrqueue_status_paused">Pausado</string>
+    <string name="arrqueue_status_completed">Concluído</string>
+    <string name="arrqueue_status_imported">Importado</string>
+    <string name="arrqueue_status_failed">Falhou</string>
+    <string name="arrqueue_status_warning">Aviso</string>
+    <string name="arrqueue_status_unknown">Desconhecido</string>
+
+    <!-- Feature disabled state -->
+    <string name="arrqueue_disabled_title">A integração direta com *arr está desativada</string>
+    <string name="arrqueue_disabled_body">Ative-a em Configurações → Integrações para ver a fila de download combinada.</string>
+    <string name="arrqueue_open_settings">Abrir configurações do *arr</string>
+
+    <!-- Empty state -->
+    <string name="arrqueue_empty_title">A fila está vazia</string>
+    <string name="arrqueue_empty_body">Nada baixando no Radarr / Sonarr.</string>
+
+    <!-- Grab -->
+    <string name="arrqueue_grab_title">Forçar captura do release</string>
+    <string name="arrqueue_grab_message">Enviar \"%1$s\" ao seu cliente de download agora?</string>
+    <string name="arrqueue_grab_sent">Captura enviada para \"%1$s\"</string>
+
+    <!-- Import -->
+    <string name="arrqueue_import_title">Forçar importação</string>
+    <string name="arrqueue_import_message">Importar \"%1$s\" em %2$s agora?</string>
+    <string name="arrqueue_import_sent">Importação enviada para \"%1$s\"</string>
+
+    <!-- Remove / delete dialog -->
+    <string name="arrqueue_remove_selected_title">Remover selecionados?</string>
+    <string name="arrqueue_remove_item_title">Remover \"%1$s\"?</string>
+    <string name="arrqueue_remove_body_bulk">Escolha como remover estes itens da fila.</string>
+    <string name="arrqueue_remove_body_single">Escolha como remover este item da fila.</string>
+    <string name="arrqueue_remove_only">Apenas remover</string>
+    <string name="arrqueue_remove_search">Remover e buscar novamente</string>
+    <string name="arrqueue_blocklist_search">Lista de bloqueio e buscar</string>
+</resources>

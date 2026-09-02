@@ -10,8 +10,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Singleton bridge that exposes just enough playback state for the
@@ -27,8 +25,7 @@ import javax.inject.Singleton
  *
  * The overlay UI collects these flows and renders a compact media controller.
  */
-@Singleton
-class FloatingPlayerState @Inject constructor(
+class FloatingPlayerState(
     private val activePlayerController: ActivePlayerController,
     private val miniPlayerState: VideoMiniPlayerState,
 ) {

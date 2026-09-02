@@ -5,9 +5,7 @@ import android.util.Log
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.data.repository.DownloadEnqueuer
 import com.raulshma.jellyplay.core.model.DownloadStatus
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
-import javax.inject.Inject
 
 /**
  * Cold-start download recovery. Extracted out of `JellyPlayApplication` so the
@@ -18,8 +16,8 @@ import javax.inject.Inject
  * `FAILED` rows. Both enqueues use `ExistingWorkPolicy.KEEP` so an in-flight
  * worker is never cancelled by a process restart.
  */
-class DownloadRecoveryInitializer @Inject constructor(
-    @ApplicationContext private val context: Context,
+class DownloadRecoveryInitializer (
+    private val context: Context,
     private val downloadDao: DownloadDao,
     private val downloadEnqueuer: DownloadEnqueuer,
 ) {

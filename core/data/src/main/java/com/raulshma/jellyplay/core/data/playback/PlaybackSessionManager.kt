@@ -8,13 +8,9 @@ import androidx.annotation.GuardedBy
 import androidx.media3.common.Player
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class PlaybackSessionManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class PlaybackSessionManager(
+    private val context: Context,
 ) {
     interface Listener {
         fun onSessionChanged(newSession: MediaSession?, oldSession: MediaSession?)

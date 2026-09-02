@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.shell
 
 import android.content.Intent
-import android.os.Build
+import com.raulshma.jellyplay.core.data.update.ApkInstallBuilder
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.update.PendingAppUpdate
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
@@ -9,8 +9,6 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.update.AppUpdateDecision
 import com.raulshma.jellyplay.update.UpdateState
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,9 +23,9 @@ import kotlinx.coroutines.launch
  * commands the update sheet issues. Dismissal suppression, auto-download
  * policy, and the pending-APK restore on launch are private to this module.
  */
-@Singleton
-class UpdateCoordinator @Inject constructor(
+class UpdateCoordinator (
     private val appUpdateRepository: AppUpdateRepository,
+    private val apkInstallBuilder: ApkInstallBuilder,
     private val experimentalStore: ExperimentalStore,
 ) : ShellCoordinator() {
     /**
@@ -97,9 +95,7 @@ class UpdateCoordinator @Inject constructor(
      */
     private fun checkForAppUpdate(experimental: ExperimentalSlice) {
         commandScope.launch {
-            val result = appUpdateRepository.checkForUpdate(
-                supportedAbis = Build.SUPPORTED_ABIS,
-            )
+            val result = appUpdateRepository.checkForUpdate()
             result.onSuccess { info ->
                 if (!info.isUpdateAvailable) return@onSuccess // stay Idle.
                 // Honor a prior dismissal: if the user dismissed this exact
@@ -123,9 +119,7 @@ class UpdateCoordinator @Inject constructor(
             _updateState.value = UpdateState.Checking
             val experimental = experimentalStore.experimental.first()
             val pending = runCatching { appUpdateRepository.getPendingUpdate() }.getOrNull()
-            val result = appUpdateRepository.checkForUpdate(
-                supportedAbis = Build.SUPPORTED_ABIS,
-            )
+            val result = appUpdateRepository.checkForUpdate()
             // Manual checks ignore the dismissal suppression entirely — the
             // user explicitly asked. Always hit the network so a release
             // published *after* the on-disk APK was downloaded can still
@@ -170,7 +164,7 @@ class UpdateCoordinator @Inject constructor(
         downloadJob = commandScope.launch {
             try {
                 _updateState.value = UpdateState.Downloading(info, 0f, 0L, info.releaseSize)
-                val result = appUpdateRepository.downloadApk(info) { fraction, read, total ->
+                val result = appUpdateRepository.downloadUpdate(info) { fraction, read, total ->
                     _updateState.value = UpdateState.Downloading(info, fraction, read, total)
                 }
                 result
@@ -220,7 +214,7 @@ class UpdateCoordinator @Inject constructor(
      */
     fun buildInstallIntent(): Intent? =
         (_updateState.value as? UpdateState.Downloaded)?.file
-            ?.let { appUpdateRepository.buildInstallIntent(it) }
+            ?.let { apkInstallBuilder.buildInstallIntent(it) }
 
     /**
      * Hides the update sheet and cancels any active download. When dismissed

@@ -64,11 +64,16 @@ jobs:
       # (org.gradle.workers.max=12, 6g daemon heap). GitHub runners have
       # 4 cores / 16 GB, so the default autobuild OOMs during Kotlin
       # compilation. Build with capped parallelism and runner-sized heaps.
+      # --no-build-cache: a fully warm cache (restored by setup-java's gradle
+      # cache) makes every compile task FROM-CACHE, no javac/kotlinc runs, and
+      # CodeQL's tracer sees zero sources — "could not process any code
+      # written in Java/Kotlin" at database finalize. Cheap builds (workflow/
+      # docs-only changes) hit exactly that; force real compilation.
       - name: Build (Gradle, debug variants of all modules)
         if: matrix.language == 'java-kotlin'
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --max-workers=2 \
+          ./gradlew assembleDebug --no-daemon --no-build-cache --max-workers=2 \
             "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" \
             "-Pkotlin.daemon.jvmargs=-Xmx3g -XX:+UseParallelGC"
 

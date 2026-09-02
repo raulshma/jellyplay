@@ -1,0 +1,338 @@
+name: KMP Build
+
+# Shared-tree (KMP) verification: docs/kmp-migration-plan.md Phase 0.
+# Compiles every configured target of the shared/ tree on all three desktop
+# OSes and runs its common tests. The android-app job below covers the :app
+# module itself — its phone/tv unit tests (audit F5) and the phoneDebug APK
+# compose-resources guard (audit F1).
+
+on:
+  push:
+    # kmp-alpha included: it receives direct dev/v* merges that never open a
+    # PR, which let three test regressions (MigrationTest WAL replay,
+    # getText null-idiom, UpdateCoordinatorTest signature drift) land
+    # unverified during the v0.10.6 merges.
+    branches: ['main', 'master', 'kmp-alpha']
+  pull_request:
+  workflow_dispatch:
+
+# Least-privilege GITHUB_TOKEN for every job in this workflow — checkout,
+# build, test, and artifact upload need no write scopes (CodeQL
+# actions/missing-workflow-permissions).
+permissions:
+  contents: read
+
+# Keyed on the HEAD BRANCH, not github.ref: pushing kmp-alpha with an open
+# PR fires BOTH the push event (ref refs/heads/kmp-alpha) and pull_request
+# synchronize (ref refs/pull/N/merge) — distinct github.ref values meant the
+# cancel-in-progress guard never matched and every commit built the full
+# matrix twice. Head-branch keying makes both events share one group; the
+# surviving run's checks attach to the commit SHA either way, so the PR still
+# reports them.
+concurrency:
+  group: kmp-build-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+# bash on every OS: pwsh choked on the folded multi-line Gradle invocations
+# (ParserError at line 18) and mangled -PjellyplayVersion=0.1.0 into '0' on
+# windows-latest. bash ships on all three hosted runners, and with the
+# gradlew exec bit restored in git, ./gradlew runs everywhere unchanged.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  shared-targets:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+
+      - name: Build shared targets (JVM + wasm + Android)
+        # The AGP KMP library plugin exposes no per-variant assembleDebug;
+        # android target verifies via its single androidMain compilation.
+        # wasmJs target exists on model/datastore/designsystem/ui/network/
+        # data/player-contract plus the calendar/requests/details feature
+        # modules (waves 16A/15B/16C) and the apps:web shell (§Phase W) —
+        # only database ships without it (no Room on wasm v1, plan §Phase W).
+        # data gained wasm in 15B when the Room-backed repositories moved to
+        # its jvmShared source set (the lane line below caught up in 20D —
+        # the target existed but was never compiled here, so wasm-only
+        # breakage in core:data surfaced only via :apps:web).
+        # player-contract gained wasm in W.3 when MediaEngine's supertypes
+        # (PlayerLifecycleCallbacks, RemotePlayableEngine) moved into it from
+        # shared core:data in the same packages.
+        # Keep this ONE folded scalar: a blank line inside `run: >` is a hard
+        # newline that splits the invocation into separate shell commands —
+        # blank lines left by the dev/v0.10.7 merge made bash die on an
+        # orphaned ":shared:feature:editor:jvmJar" fragment (exit 127) after
+        # gradle itself had gone green on the truncated task list.
+        # And NO `#` comments inside the scalar either: they fold into the
+        # single command line, bash then treats them and EVERYTHING after as
+        # a shell comment, and the trailing --max-workers/heap overrides
+        # silently never reach gradle — which is why the first two OOM-fix
+        # attempts were no-ops while the build kept dying at the same
+        # "Not enough memory" compiler error. The overrides are runner-sized
+        # because gradle.properties is tuned for an 18-core dev box (6g
+        # daemon, 12 workers) and OOMs the Kotlin daemon on 4-core runners
+        # across the full multi-target graph (same medicine codeql.yml
+        # takes); the full graph only started running on CI at all once the
+        # blank-line bug above was fixed.
+        run: >
+          ./gradlew
+          :shared:core:model:jvmJar
+          :shared:core:model:compileKotlinWasmJs
+          :shared:core:model:compileAndroidMain
+          :shared:core:designsystem:jvmJar
+          :shared:core:designsystem:compileKotlinWasmJs
+          :shared:core:designsystem:compileAndroidMain
+          :shared:core:datastore:jvmJar
+          :shared:core:datastore:compileKotlinWasmJs
+          :shared:core:datastore:compileAndroidMain
+          :shared:core:database:jvmJar
+          :shared:core:database:compileAndroidMain
+          :shared:core:network:jvmJar
+          :shared:core:network:compileKotlinWasmJs
+          :shared:core:network:compileAndroidMain
+          :shared:core:data:jvmJar
+          :shared:core:data:compileKotlinWasmJs
+          :shared:core:data:compileAndroidMain
+          :shared:core:ui:jvmJar
+          :shared:core:ui:compileKotlinWasmJs
+          :shared:core:ui:compileAndroidMain
+          :shared:core:player-contract:jvmJar
+          :shared:core:player-contract:compileKotlinWasmJs
+          :shared:core:player-contract:compileAndroidMain
+          :shared:feature:search:jvmJar
+          :shared:feature:search:compileAndroidMain
+          :shared:feature:library:jvmJar
+          :shared:feature:library:compileAndroidMain
+          :shared:feature:music:jvmJar
+          :shared:feature:music:compileAndroidMain
+          :shared:feature:livetv:jvmJar
+          :shared:feature:livetv:compileAndroidMain
+          :shared:feature:downloads:jvmJar
+          :shared:feature:downloads:compileAndroidMain
+          :shared:feature:syncplay:jvmJar
+          :shared:feature:syncplay:compileAndroidMain
+          :shared:feature:settings:jvmJar
+          :shared:feature:settings:compileAndroidMain
+          :shared:feature:admin:jvmJar
+          :shared:feature:admin:compileAndroidMain
+          :shared:feature:editor:jvmJar
+          :shared:feature:editor:compileAndroidMain
+          :shared:feature:calendar:jvmJar
+          :shared:feature:calendar:compileAndroidMain
+          :shared:feature:calendar:compileKotlinWasmJs
+          :shared:feature:requests:jvmJar
+          :shared:feature:requests:compileAndroidMain
+          :shared:feature:requests:compileKotlinWasmJs
+          :shared:feature:shortcuts:jvmJar
+          :shared:feature:shortcuts:compileAndroidMain
+          :shared:feature:newsletter:jvmJar
+          :shared:feature:newsletter:compileAndroidMain
+          :shared:feature:insights:jvmJar
+          :shared:feature:insights:compileAndroidMain
+          :shared:feature:onboarding:jvmJar
+          :shared:feature:onboarding:compileAndroidMain
+          :shared:feature:subtitle-tester:jvmJar
+          :shared:feature:subtitle-tester:compileAndroidMain
+          :shared:feature:arrqueue:jvmJar
+          :shared:feature:arrqueue:compileAndroidMain
+          :shared:feature:auth:jvmJar
+          :shared:feature:auth:compileAndroidMain
+          :shared:feature:details:jvmJar
+          :shared:feature:details:compileAndroidMain
+          :shared:feature:details:compileKotlinWasmJs
+          :shared:feature:home:jvmJar
+          :shared:feature:home:compileAndroidMain
+          :shared:feature:player-live:jvmJar
+          :shared:feature:player-live:compileAndroidMain
+          :shared:feature:player-audio:jvmJar
+          :shared:feature:player-audio:compileAndroidMain
+          :shared:feature:player-video:jvmJar
+          :shared:feature:player-video:compileAndroidMain
+          :apps:web:compileKotlinWasmJs
+          --stacktrace
+          --max-workers=2
+          "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
+          "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+
+      - name: Shared tests (JVM)
+        run: >
+          ./gradlew
+          :shared:core:model:jvmTest
+          :shared:core:designsystem:jvmTest
+          :shared:core:datastore:jvmTest
+          :shared:core:database:jvmTest
+          :shared:core:network:jvmTest
+          :shared:core:data:jvmTest
+          :shared:core:ui:jvmTest
+          :shared:core:player-contract:jvmTest
+          :shared:feature:search:jvmTest
+          :shared:feature:library:jvmTest
+          :shared:feature:music:jvmTest
+          :shared:feature:livetv:jvmTest
+          :shared:feature:downloads:jvmTest
+          :shared:feature:syncplay:jvmTest
+          :shared:feature:settings:jvmTest
+          :shared:feature:admin:jvmTest
+          :shared:feature:editor:jvmTest
+          :shared:feature:calendar:jvmTest
+          :shared:feature:requests:jvmTest
+          :shared:feature:shortcuts:jvmTest
+          :shared:feature:newsletter:jvmTest
+          :shared:feature:insights:jvmTest
+          :shared:feature:onboarding:jvmTest
+          :shared:feature:subtitle-tester:jvmTest
+          :shared:feature:arrqueue:jvmTest
+          :shared:feature:details:jvmTest
+          :shared:feature:auth:jvmTest
+          :shared:feature:home:jvmTest
+          :shared:feature:player-live:jvmTest
+          :shared:feature:player-audio:jvmTest
+          :shared:feature:player-video:jvmTest
+          --stacktrace
+          --max-workers=2
+          "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
+          "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+
+      - name: Print test failure details
+        # Gradle 9's console prints only one-line "FAILED" entries; the
+        # assertion messages live in the JUnit XML. The SelfSignedTrust /
+        # datastore failures need their "got $error" text to diagnose.
+        if: failure()
+        run: |
+          shopt -s nullglob
+          for f in $(find . -path '*build/test-results*' -name 'TEST-*.xml' 2>/dev/null); do
+            grep -q '<failure' "$f" || continue
+            echo "===== $f ====="
+            sed -n 's/.*<failure message="\([^"]*\)".*/MSG: \1/p' "$f"
+            sed -n 's/.*<failure[^>]*>\([^<]\{1,\}\).*/TEXT: \1/p' "$f" | head -c 3000
+            echo
+          done || true
+
+      - name: Android app androidTest assembly (relocated player-video UI tests)
+        # Wave 7C: the legacy :feature:player:video androidTest set moved to
+        # :app (AGP KMP library plugins expose no androidTest compilation —
+        # syncplay relocation precedent); compile-gate it here.
+        run: ./gradlew :app:assemblePhoneDebugAndroidTest --stacktrace
+
+      - name: Shell tests (Koin registration guard + packaging asset suites)
+        # :apps:desktop:test hosts the Koin-registration ratchet
+        # (KoinModuleRegistrationGuardTest) — startKoin wiring is runtime-only
+        # and invisible to every compile gate (arrqueue/shortcuts lessons,
+        # plan §Phase X) — plus the wave-10A DesktopCrashHandlerTest and
+        # PackagingIconAssetsTest suites, so it must run in CI, not just
+        # locally.
+        run: ./gradlew :apps:desktop:test --stacktrace
+
+  android-app:
+    # Wave 22c audit findings F1 + F5: the :app module previously ran in NO
+    # lane of this workflow — its unit tests existed only as local wave gates
+    # (F5), and the wave-21 P0 (AGP-9 KMP library modules shipping Res
+    # accessors with no backing .cvr assets — fixed by
+    # androidResources { enable = true } in every shared module) had no
+    # automated check because no gate ever opened the built APK (F1). The
+    # :app:verifyPhoneDebugComposeResources task closes that: it derives the
+    # resource-carrying shared modules and their locale sets from the source
+    # tree at execution time and asserts every assets/composeResources/
+    # <packageOfResClass>/ prefix carries a .cvr entry per locale in the
+    # built phoneDebug APK (wave-21 baseline: 216 = 24 modules x 9 locales).
+    # No explicit Android SDK setup is needed: hosted ubuntu runners ship the
+    # SDK (same reliance as release.yml and codeql.yml).
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+
+      - name: App unit tests (phone + tv debug)
+        # F5: run in CI, not just as local wave gates (wave-21 baseline:
+        # 94 phone / 98 tv tests).
+        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest --stacktrace
+
+      - name: Compose-resources APK guard (wave-21 P0 regression guard, F1)
+        # dependsOn assemblePhoneDebug — the guard opens the built APKs.
+        run: ./gradlew :app:verifyPhoneDebugComposeResources --stacktrace
+
+  desktop-package:
+    # Wave 10A release engineering: packaging dry-run per OS. Proves the
+    # nativeDistributions config stays buildable and produces real installers:
+    # :apps:desktop:packageDistributionForCurrentOS picks the targetFormats
+    # valid for the runner (ubuntu → deb+rpm, windows → msi with the CMP
+    # plugin's auto-downloaded WiX toolset, macos → dmg). Runs standalone —
+    # it depends only on the repo checkout, nothing fragile.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+
+      - name: Package desktop installers for current OS
+        # -PjellyplayVersion mirrors the release-lane contract documented in
+        # apps/desktop/build.gradle.kts (numeric x.y.z only; jpackage/msi
+        # constraint).
+        run: ./gradlew :apps:desktop:packageDistributionForCurrentOS -PjellyplayVersion=0.1.0 --stacktrace
+
+      - name: Dump jpackage logs on failure
+        # Compose's ExternalToolRunner only NAMES the runner-local *-out/-err
+        # files on jpackage failure — without this the actual cause never
+        # reaches the Actions log (macos createDistributable exit 1 had zero
+        # stderr in-log).
+        if: failure()
+        run: |
+          shopt -s nullglob
+          for f in apps/desktop/build/compose/logs/**/*.txt apps/desktop/build/compose/logs/*/*.txt; do
+            echo "===== $f ====="
+            cat "$f"
+          done
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-installers-${{ matrix.os }}
+          # Default (non-proguard) build type lands under main/ —
+          # packageReleaseDistributionForCurrentOS would use main-release/.
+          path: apps/desktop/build/compose/binaries/main/*
+          retention-days: 7
+          if-no-files-found: error

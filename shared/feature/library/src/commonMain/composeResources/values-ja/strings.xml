@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Library feature user-facing strings (enhancements §2.2) -->
+    <string name="library_photo_saved_to_gallery">ギャラリーに保存しました</string>
+    <string name="library_failed_to_load_items">アイテムの読み込みに失敗しました</string>
+    <string name="library_failed_to_load_more_items">アイテムの続きの読み込みに失敗しました</string>
+
+    <!-- LibraryScreen -->
+    <string name="library_title">ライブラリー</string>
+    <string name="library_filters">フィルター</string>
+    <string name="library_all">すべて</string>
+    <string name="library_clear_all">すべて解除</string>
+    <plurals name="library_item_count">
+        <item quantity="other">%1$d 件のアイテム</item>
+    </plurals>
+    <string name="library_no_items_found">アイテムが見つかりません</string>
+    <string name="library_no_downloads_offline">まだダウンロードはありません</string>
+    <string name="library_try_adjusting_filters">フィルターを調整してみてください</string>
+    <string name="library_list_view">リスト表示</string>
+    <string name="library_grid_view">グリッド表示</string>
+    <string name="library_thumb_view">サムネイル表示</string>
+    <string name="library_smart_playlists">スマートプレイリスト</string>
+    <string name="library_mood_playlists">ムードプレイリスト</string>
+    <string name="library_playlists">プレイリスト</string>
+    <string name="library_shuffle">シャッフル</string>
+    <string name="library_jump_to_letter">先頭文字へジャンプ</string>
+
+    <!-- LibraryFilterSheet -->
+    <string name="library_reset">リセット</string>
+    <string name="library_sort_by">並べ替え</string>
+    <string name="library_media_type">メディアの種類</string>
+    <string name="library_status">状態</string>
+    <string name="library_sort_in_progress">進行中</string>
+    <string name="library_filter_resumable">進行中</string>
+    <string name="library_filter_downloaded">ダウンロード済み</string>
+    <string name="library_genres">ジャンル</string>
+    <string name="library_year_range">公開年</string>
+    <string name="library_tags">タグ</string>
+    <string name="library_minimum_rating">最低評価</string>
+    <string name="library_apply_filters">フィルターを適用</string>
+    <string name="library_collapse">折りたたむ</string>
+    <string name="library_expand">展開する</string>
+
+    <!-- FavoritesScreen -->
+    <string name="library_favorites">お気に入り</string>
+    <string name="library_failed_to_load_favorites">お気に入りの読み込みに失敗しました</string>
+    <string name="library_no_favorites">お気に入りはありません</string>
+    <string name="library_no_favorites_description">お気に入りに追加したアイテムがここに表示されます</string>
+
+    <!-- StudioDetailScreen -->
+    <string name="library_failed_to_load_more">続きの読み込みに失敗しました</string>
+
+    <!-- PhotoAlbumScreen -->
+    <string name="library_photos">写真</string>
+    <string name="library_sort_options">並べ替えオプション</string>
+    <string name="library_failed_to_load_photos">写真の読み込みに失敗しました</string>
+    <string name="library_no_photos_found">写真が見つかりません</string>
+
+    <!-- ── Photo viewer (PhotoViewerScreen) ────────────────────────────── -->
+    <string name="library_photo_adjustments">調整</string>
+    <string name="library_photo_slideshow">スライドショー</string>
+    <string name="library_photo_start_slideshow">スライドショーを開始</string>
+    <string name="library_photo_stop_slideshow">スライドショーを停止</string>
+    <!-- %1$d = brightness as integer percent -->
+    <string name="library_photo_brightness">明るさ %1$d%%</string>
+    <!-- %1$d = contrast as integer percent -->
+    <string name="library_photo_contrast">コントラスト %1$d%%</string>
+    <!-- %1$d = saturation as integer percent -->
+    <string name="library_photo_saturation">彩度 %1$d%%</string>
+    <string name="library_photo_failed_to_load">写真を読み込めませんでした</string>
+    <!-- ── Photo viewer icon content descriptions (TalkBack) ───────────── -->
+    <string name="library_cd_close">閉じる</string>
+    <string name="library_cd_share">共有</string>
+    <string name="library_cd_save">保存</string>
+    <string name="library_cd_info">情報</string>
+    <string name="library_cd_adjust">調整</string>
+    <string name="library_cd_previous">前へ</string>
+    <string name="library_cd_next">次へ</string>
+</resources>

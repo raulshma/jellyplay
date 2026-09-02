@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - 'v[0-9]+*'
+      # Pre-release channels (v0.11.0-alpha, v1.0.0-rc) belong to
+      # kmp-release.yml — the glob above would otherwise match them too and
+      # publish Android APKs as the latest STABLE release.
+      - '!v[0-9]+*-*'
       - 'release/**'
   workflow_dispatch:
 
@@ -155,7 +159,7 @@ jobs:
           done
 
       - name: Upload APK Artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: apk-${{ matrix.flavor }}
           path: jellyplay-*.apk
@@ -171,7 +175,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download APK Artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           path: apks
           merge-multiple: true

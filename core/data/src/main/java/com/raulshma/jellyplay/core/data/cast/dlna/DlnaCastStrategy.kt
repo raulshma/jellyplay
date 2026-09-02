@@ -7,7 +7,6 @@ import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.CastStrategy
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DlnaDeviceRef
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -18,12 +17,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class DlnaCastStrategy @Inject constructor(
-    @ApplicationContext private val appContext: Context,
+class DlnaCastStrategy(
+    private val appContext: Context,
     private val okHttpClient: OkHttpClient,
     private val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore,
 ) : CastStrategy {
@@ -270,9 +266,12 @@ class DlnaCastStrategy @Inject constructor(
             val state = UpnpControlPoint.getTransportInfo(controlUrl, client = okHttpClient)
             _rendererIsPlaying.value = state == TransportState.PLAYING
 
-            if (device.renderingControlUrl != null) {
+            // UpnpDevice moved to :shared:core:data — cross-module public vals
+            // no longer smart-cast after a null check, so bind a local first.
+            val renderingControlUrl = device.renderingControlUrl
+            if (renderingControlUrl != null) {
                 val volume = UpnpControlPoint.getVolume(
-                    device.renderingControlUrl, client = okHttpClient
+                    renderingControlUrl, client = okHttpClient
                 )
                 _rendererVolume.value = volume
             }

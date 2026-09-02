@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ════════════════════════════════════════════════════════════════════
+         Media Detail feature strings.
+
+         Prefixed `detail_` so they never collide with other modules once
+         resources are merged at the app level. Mirrors the `core_` convention
+         in core/ui/src/main/res/values/strings.xml.
+         ════════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Section titles / headers ─────────────────────────────────────── -->
+    <string name="detail_section_tracks">曲目</string>
+    <string name="detail_section_items">项目</string>
+    <string name="detail_section_cast_crew">演员 &amp; 职员表</string>
+    <string name="detail_section_cast">演员</string>
+    <string name="detail_section_crew">职员</string>
+    <string name="detail_section_more_like_this">类似推荐</string>
+    <string name="detail_section_special_features">特别收录</string>
+    <string name="detail_section_chapters">章节</string>
+    <string name="detail_see_all">查看全部</string>
+    <string name="detail_more_like_this_on_device">本机</string>
+    <string name="detail_section_videos">视频</string>
+    <string name="detail_section_seasons">季</string>
+    <string name="detail_section_reviews">评论</string>
+
+    <!-- ── Primary action button labels ─────────────────────────────────── -->
+    <string name="detail_play_play">播放</string>
+    <string name="detail_play_resume">继续播放</string>
+    <string name="detail_play_finding_episode">正在查找剧集</string>
+    <string name="detail_play_no_episodes_available">没有可用的剧集</string>
+    <string name="detail_play_no_episodes">没有剧集</string>
+
+    <!-- ── Segment availability chip (rendered near the Play button) ──────── -->
+    <string name="detail_skip_available_intro">可跳过片头</string>
+    <string name="detail_skip_available_credits">可跳过片尾</string>
+    <string name="detail_skip_available_both">可跳过片头和片尾</string>
+
+    <!-- ── Up Next card label ───────────────────────────────────────────── -->
+    <string name="detail_up_next">下一集</string>
+
+    <!-- ── Smart-play templates (verb + S#:E#) ────────────────────────────
+         Positional args: %1$d = season number, %2$d = episode number. -->
+    <string name="detail_resume_episode">继续播放 S%1$d:E%2$d</string>
+    <string name="detail_next_up_episode">下一集 S%1$d:E%2$d</string>
+    <string name="detail_play_episode">播放 S%1$d:E%2$d</string>
+    <string name="detail_replay_episode">重新播放 S%1$d:E%2$d</string>
+
+    <!-- ── Action icon content descriptions (TalkBack) ──────────────────── -->
+    <string name="detail_cd_mark_as_watched">标记为已观看</string>
+    <string name="detail_cd_mark_as_unwatched">标记为未观看</string>
+    <string name="detail_cd_favorite">收藏</string>
+    <string name="detail_cd_options">选项</string>
+    <string name="detail_cd_episode_play">播放</string>
+    <string name="detail_cd_track_play">播放</string>
+    <string name="detail_cd_collapse">收起</string>
+    <string name="detail_cd_expand">展开</string>
+    <string name="detail_cd_sort_oldest_first">按最早排序</string>
+    <string name="detail_cd_sort_newest_first">按最新排序</string>
+
+    <!-- ── Episode / season card labels ─────────────────────────────────── -->
+    <string name="detail_season_format">第 %1$d 季</string>
+    <string name="detail_spoiler">剧透</string>
+    <string name="detail_watched_badge">已观看</string>
+    <string name="detail_cd_switch_to_list">切换到垂直剧集列表</string>
+    <string name="detail_cd_switch_to_cards">切换到横向剧集卡片</string>
+    <string name="detail_time_left_format">剩余 %1$s</string>
+
+    <!-- ── Overflow / options menu ──────────────────────────────────────── -->
+    <string name="detail_option_edit">编辑</string>
+    <string name="detail_option_share">分享</string>
+    <string name="detail_option_downloading">正在下载…</string>
+    <string name="detail_option_downloading_percent">正在下载 (%1$d%%)</string>
+    <string name="detail_option_download">下载</string>
+    <string name="detail_option_downloading_series">正在下载剧集…</string>
+    <string name="detail_option_download_series">下载剧集</string>
+    <string name="detail_option_hide_from_next_up">在「下一集」中隐藏</string>
+    <string name="detail_option_hide_from_continue_watching">在「继续观看」中隐藏</string>
+    <string name="detail_option_show_in_next_up">在「下一集」中显示</string>
+    <string name="detail_option_show_in_continue_watching">在「继续观看」中显示</string>
+    <string name="detail_option_technical_info">技术信息</string>
+
+    <!-- ── Series download sheet ────────────────────────────────────────── -->
+    <string name="detail_select_all">全选</string>
+    <string name="detail_deselect_all">取消全选</string>
+    <string name="detail_episodes_selected_format">已选择 %2$d 集中的 %1$d 集</string>
+    <plurals name="detail_episode_count">
+        <item quantity="other">%1$d 集</item>
+    </plurals>
+    <string name="detail_cancel">取消</string>
+
+    <!-- ── Add to Playlist picker ──────────────────────────────────────── -->
+    <string name="detail_option_add_to_playlist">添加到播放列表</string>
+    <string name="detail_playlist_picker_title">添加到播放列表</string>
+    <string name="detail_playlist_watch_later">稍后观看</string>
+    <string name="detail_playlist_create_new">创建新播放列表</string>
+    <string name="detail_playlist_new_title">新播放列表</string>
+    <string name="detail_playlist_name_label">名称</string>
+    <string name="detail_playlist_desc_label">描述（可选）</string>
+    <string name="detail_playlist_create">创建</string>
+    <string name="detail_msg_no_playlists">暂无播放列表</string>
+    <!-- %1$s = playlist name -->
+    <string name="detail_msg_added_to_playlist">已添加到“%1$s”</string>
+    <string name="detail_msg_added_to_watch_later">已添加到「稍后观看」</string>
+    <!-- %1$s = playlist name -->
+    <string name="detail_msg_playlist_created">已创建“%1$s”并添加项目</string>
+    <string name="detail_msg_couldnt_add_to_playlist">无法添加到播放列表</string>
+    <plurals name="detail_playlist_item_count">
+        <item quantity="other">%1$d 个项目</item>
+    </plurals>
+
+    <!-- ── 添加到合集 ────────────────────────────────────────────────── -->
+    <string name="detail_option_add_to_collection">添加到合集</string>
+    <string name="detail_collection_picker_title">添加到合集</string>
+    <string name="detail_collection_create_new">创建新合集</string>
+    <string name="detail_collection_new_title">新合集</string>
+    <string name="detail_collection_name_label">名称</string>
+    <string name="detail_collection_create">创建</string>
+    <string name="detail_msg_no_collections">暂无合集</string>
+    <!-- %1$s = 合集名称 -->
+    <string name="detail_msg_added_to_collection">已添加到“%1$s”</string>
+    <!-- %1$s = 合集名称 -->
+    <string name="detail_msg_collection_created">已创建“%1$s”并添加项目</string>
+    <string name="detail_msg_couldnt_add_to_collection">无法添加到合集</string>
+    <plurals name="detail_collection_item_count">
+        <item quantity="other">%1$d 个项目</item>
+    </plurals>
+
+    <!-- ── 即时混音 (音频) ──────────────────────────────────────────── -->
+    <string name="detail_option_instant_mix">开始即时混音</string>
+    <string name="detail_instant_mix_empty">此项目没有可用的混音</string>
+    <string name="detail_instant_mix_failed">无法开始即时混音</string>
+
+    <!-- ── 观影派对 (SyncPlay) ──────────────────────────────────────── -->
+    <string name="detail_option_watch_party">开始观影派对</string>
+    <string name="detail_watch_party_default_name">观影派对</string>
+    <string name="detail_msg_watch_party_started">观影派对已开始</string>
+    <string name="detail_msg_watch_party_failed">无法开始观影派对</string>
+
+    <!-- ── Stream picker (audio / subtitle) ─────────────────────────────── -->
+    <string name="detail_select_audio">选择音频</string>
+    <string name="detail_select_subtitle">选择字幕</string>
+    <string name="detail_stream_auto">自动</string>
+    <string name="detail_stream_default">默认</string>
+    <string name="detail_stream_subtitle_off">关闭</string>
+    <string name="detail_stream_default_badge">默认</string>
+    <string name="detail_audio_track_format">音轨 %1$d</string>
+    <string name="detail_subtitle_track_format">字幕轨道 %1$d</string>
+    <string name="detail_download_quality">质量</string>
+    <string name="detail_subtitle_off">关闭</string>
+    <string name="detail_audio_channels_format">%1$d 声道</string>
+
+    <!-- ── Download dialogs ─────────────────────────────────────────────── -->
+    <string name="detail_download_dialog_title">下载</string>
+    <string name="detail_download_anyway">仍然下载</string>
+    <string name="detail_cellular_download_title">使用移动网络大流量下载</string>
+    <string name="detail_cellular_download_message">你正在使用计费网络。此下载约 %1$d MB，可能会消耗大量移动数据。</string>
+    <string name="detail_estimated_size">预计大小：%1$s</string>
+    <string name="detail_available_storage">可用存储空间：%1$s</string>
+    <string name="detail_not_enough_storage">没有足够的可用存储空间。</string>
+
+    <!-- ── File-size formatting ─────────────────────────────────────────── -->
+    <string name="detail_size_gb">%1$.1f GB</string>
+    <string name="detail_size_mb">%1$.1f MB</string>
+    <string name="detail_size_kb">%1$.1f KB</string>
+    <string name="detail_size_b">%1$d B</string>
+    <string name="detail_size_unknown">未知</string>
+
+    <!-- ── Share ────────────────────────────────────────────────────────── -->
+    <string name="detail_share_via">分享方式</string>
+
+    <!-- ── Snackbar / user feedback (from ViewModel) ────────────────────── -->
+    <string name="detail_msg_couldnt_update_favorite">无法更新收藏</string>
+    <string name="detail_msg_couldnt_mark_played">无法标记为已播放</string>
+    <string name="detail_msg_download_started">下载已开始</string>
+    <string name="detail_msg_download_start_failed">无法开始下载</string>
+    <string name="detail_msg_couldnt_mark_unplayed">无法标记为未播放</string>
+    <string name="detail_mark_season_watched">将整季标记为已观看</string>
+    <string name="detail_mark_season_unwatched">将整季标记为未观看</string>
+    <string name="detail_mark_series_watched_confirm_title">将整部剧集标记为已观看？</string>
+    <string name="detail_mark_series_watched_confirm_message">这会将每一集标记为已观看，并清除所有续看进度。</string>
+    <string name="detail_mark_series_unwatched_confirm_title">将整部剧集标记为未观看？</string>
+    <string name="detail_mark_series_unwatched_confirm_message">这会将每一集标记为未观看。</string>
+    <string name="detail_mark_season_watched_confirm_title">将整季标记为已观看？</string>
+    <string name="detail_mark_season_watched_confirm_message">这会将本季每一集标记为已观看，并清除其续看进度。</string>
+    <string name="detail_mark_season_unwatched_confirm_title">将整季标记为未观看？</string>
+    <string name="detail_mark_season_unwatched_confirm_message">这会将本季每一集标记为未观看。</string>
+    <string name="detail_cd_season_options">将整季标记为已观看或未观看</string>
+    <string name="detail_msg_no_episodes_queued">无法加入任何剧集</string>
+    <string name="detail_msg_hidden_from_next_up">已在「下一集」中隐藏</string>
+    <string name="detail_msg_shown_in_next_up">已在「下一集」中显示</string>
+    <string name="detail_msg_hidden_from_continue_watching">已在「继续观看」中隐藏</string>
+    <string name="detail_msg_shown_in_continue_watching">已在「继续观看」中显示</string>
+
+    <!-- ── Snackbar: episodes queued (plurals) ──────────────────────────── -->
+    <plurals name="detail_episodes_queued">
+        <item quantity="other">已将 %1$d 集加入下载队列</item>
+    </plurals>
+
+    <!-- ── ViewModel error messages (shown via ErrorScreen / snackbar) ──── -->
+    <string name="detail_error_load_failed">无法加载详情</string>
+    <string name="detail_error_access_denied">你没有该项目的访问权限。</string>
+    <string name="detail_error_details_not_loaded">媒体详情未加载</string>
+    <string name="detail_error_no_source">没有可用于下载的媒体源</string>
+    <string name="detail_error_download_failed">下载失败</string>
+    <string name="detail_error_not_a_series">这不是剧集</string>
+    <string name="detail_error_queue_failed">加入下载队列失败</string>
+    <string name="detail_error_unavailable_offline">此项目离线不可用。</string>
+
+    <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
+    <string name="detail_option_manage_series">管理剧集</string>
+    <string name="detail_manage_title">管理剧集</string>
+    <!-- Series-level actions -->
+    <string name="detail_manage_refresh_metadata">刷新元数据</string>
+    <string name="detail_manage_refresh_scan">刷新 &amp; 扫描</string>
+    <string name="detail_manage_search_series">搜索</string>
+    <!-- %1$s = formatted size (e.g. "12.3 GB") -->
+    <string name="detail_manage_disk_used_format">磁盘：%1$s</string>
+    <!-- Series monitored indicator -->
+    <string name="detail_manage_monitored">已监控</string>
+    <string name="detail_manage_unmonitored">未监控</string>
+    <!-- Season header -->
+    <string name="detail_manage_season_format">第 %1$d 季</string>
+    <string name="detail_manage_season_specials">特别篇</string>
+    <!-- %1$d = downloaded count, %2$d = total count -->
+    <string name="detail_manage_season_count_format">%1$d/%2$d</string>
+    <!-- Episode status badges -->
+    <string name="detail_manage_status_downloaded">已下载</string>
+    <string name="detail_manage_status_missing">缺失</string>
+    <string name="detail_manage_status_unmonitored">未监控</string>
+    <string name="detail_manage_status_unaired">未播出</string>
+    <!-- Episode actions -->
+    <string name="detail_manage_search">自动搜索</string>
+    <string name="detail_manage_monitor">监控</string>
+    <string name="detail_manage_unmonitor">取消监控</string>
+    <string name="detail_manage_delete_file">删除文件</string>
+    <!-- Delete-file confirmation dialog. %1$s = episode title, %2$s = SxxExx -->
+    <string name="detail_manage_delete_title">删除剧集文件</string>
+    <string name="detail_manage_delete_message">删除“%1$s”(%2$s) 的文件？Sonarr 将会移除该文件，你可以搜索替代资源。</string>
+    <string name="detail_manage_delete_confirm">删除</string>
+    <!-- Empty / error states -->
+    <string name="detail_manage_no_episodes">未在 Sonarr 中找到此剧集的任何集。</string>
+    <string name="detail_manage_not_tracked">没有 Sonarr 服务器跟踪此剧集。</string>
+    <!-- Content descriptions (TalkBack / TV) -->
+    <string name="detail_manage_cd_search_season">搜索本季中已监控的内容</string>
+    <string name="detail_manage_cd_toggle_monitor_season">切换整季所有剧集的监控状态</string>
+    <string name="detail_manage_cd_toggle_monitor_episode">切换该集的监控状态</string>
+    <string name="detail_manage_cd_episode_menu">剧集选项</string>
+
+    <!-- Localized error messages -->
+    <string name="detail_manage_series_load_error">无法从 Jellyfin 加载剧集。</string>
+    <string name="detail_manage_series_no_tvdb">此剧集没有 tvdb id；Sonarr 无法查找。</string>
+    <string name="detail_manage_series_not_tracked">没有 Sonarr 服务器跟踪此剧集。请先在 Sonarr 中添加该剧集。</string>
+
+    <!-- ── Seerr request / status buttons ──────────────────────────────── -->
+    <string name="detail_available">可用</string>
+    <string name="detail_request">请求</string>
+    <string name="detail_seerr_processing">处理中</string>
+    <string name="detail_seerr_pending">等待中</string>
+    <string name="detail_seerr_requested">已请求</string>
+
+    <!-- ── Seerr horizontal sections ───────────────────────────────────── -->
+    <string name="detail_section_recommendations">推荐</string>
+    <string name="detail_section_similar">相似</string>
+
+    <!-- ── External links (brand names: never translate) ───────────────── -->
+    <string name="detail_link_tmdb" translatable="false">TMDB</string>
+    <string name="detail_link_imdb" translatable="false">IMDb</string>
+    <string name="detail_link_tvdb" translatable="false">TVDB</string>
+
+    <!-- ── Release-type icons (TalkBack) ───────────────────────────────── -->
+    <string name="detail_cd_release_theatrical">院线上映</string>
+    <string name="detail_cd_release_digital">数字发行</string>
+    <string name="detail_cd_release_physical">实体发行</string>
+
+    <!-- ── Media Info screen ───────────────────────────────────────────── -->
+    <string name="detail_media_info_title_video">视频</string>
+    <string name="detail_media_info_title_audio">音频</string>
+    <string name="detail_media_info_title_subtitles">字幕</string>
+    <string name="detail_media_info_no_info">无媒体信息</string>
+    <string name="detail_media_info_no_info_description">此项目没有可用的技术信息</string>
+
+    <!-- auto-localized: previously translatable="false" (2) -->
+    <string name="detail_section_seerr_recommendations">Seerr 推荐</string>
+    <string name="detail_section_seerr_similar">Seerr 相似内容</string>
+
+    <!-- Localized UI text extracted from SeerrDetailScreen -->
+    <string name="detail_seerr_unknown_error">未知错误</string>
+    <string name="detail_seerr_overview">概述</string>
+    <string name="detail_seerr_episodes_count">%1$d 集</string>
+    <string name="detail_seerr_season_n">第 %1$d 季</string>
+    <string name="detail_seerr_director_format">导演: %1$s</string>
+    <string name="detail_seerr_show_more">显示更多</string>
+    <string name="detail_seerr_video">视频</string>
+    <string name="detail_seerr_information">信息</string>
+    <string name="detail_seerr_status">状态</string>
+    <string name="detail_seerr_unknown">未知</string>
+    <string name="detail_seerr_release_date">上映日期</string>
+    <string name="detail_seerr_revenue">票房</string>
+    <string name="detail_seerr_budget">预算</string>
+    <string name="detail_seerr_language">语言</string>
+    <string name="detail_seerr_country">国家</string>
+    <string name="detail_seerr_studios">工作室</string>
+    <string name="detail_seerr_currently_streaming_on">当前可在以下平台观看</string>
+
+    <!-- 空状态 -->
+    <string name="detail_collection_empty_title">此合集为空</string>
+    <string name="detail_collection_empty_description">添加到此合集的项目将显示在这里。</string>
+    <string name="detail_person_empty_title">未找到片名</string>
+    <string name="detail_person_empty_description">此人没有符合当前筛选条件的片名。</string>
+    <string name="detail_season_empty_title">没有可用的剧集</string>
+    <string name="detail_season_empty_description">添加剧集后将显示在这里。</string>
+
+    <!-- Unified download / offline-detail strings. Resync falls back to default. -->
+    <string name="detail_download_info">下载信息</string>
+    <string name="detail_file_size">文件大小</string>
+    <string name="detail_status">状态</string>
+    <string name="detail_progress">进度</string>
+    <string name="detail_download_status_pending">等待中</string>
+    <string name="detail_download_status_queued">已排队</string>
+    <string name="detail_download_status_downloading">下载中</string>
+    <string name="detail_download_status_paused">已暂停</string>
+    <string name="detail_download_status_completed">已完成</string>
+    <string name="detail_download_status_failed">失败</string>
+    <string name="detail_download_status_cancelled">已取消</string>
+    <string name="detail_watch_status">观看状态</string>
+    <string name="detail_watched_status_watched">已观看</string>
+    <string name="detail_watched_status_label">已观看</string>
+    <string name="detail_watched_status_in_progress">观看中</string>
+    <string name="detail_watched_status_started">已开始</string>
+    <string name="detail_position">进度位置</string>
+    <string name="detail_position_of">%2$s 中的 %1$s</string>
+    <string name="detail_last_watched">上次观看</string>
+    <string name="detail_close">关闭</string>
+    <string name="detail_delete">删除</string>
+    <string name="detail_delete_download_title">删除下载</string>
+    <string name="detail_delete_download_message">从设备移除“%1$s”？此操作将释放 %2$s。</string>
+    <string name="detail_delete_episode_title">删除剧集</string>
+    <string name="detail_delete_episode_cd">删除剧集</string>
+    <string name="detail_delete_episode_message">从设备移除“%1$s”？</string>
+    <string name="detail_delete_downloads_title">删除下载</string>
+    <string name="detail_select_episodes_to_remove">选择要从设备移除的剧集。</string>
+    <string name="detail_episodes_selected">已选 %1$d / %2$d 集</string>
+    <string name="detail_episodes_selected_with_freed">已选 %1$d / %2$d 集 · %3$s</string>
+    <string name="detail_delete_count">删除 %1$d</string>
+    <string name="detail_delete_count_with_freed">删除 %1$d · %2$s</string>
+    <string name="detail_season_default">第 %1$d 季</string>
+    <string name="detail_delete_entire_series">删除整部剧集</string>
+    <string name="detail_option_delete_downloads">删除下载</string>
+    <plurals name="detail_episodes_count">
+        <item quantity="other">%1$d 集</item>
+    </plurals>
+
+    <!-- Sync / resync download -->
+    <string name="detail_resync_title">同步下载</string>
+    <string name="detail_resync_checking">正在检查更新…</string>
+    <string name="detail_resync_update_available">有新的信息可用</string>
+    <string name="detail_resync_media_changed">媒体文件已更改 — 需要重新下载</string>
+    <string name="detail_resync_in_progress">正在同步最新详情…</string>
+    <string name="detail_resync_complete">下载已与最新详情同步</string>
+    <string name="detail_resync_failed">同步失败</string>
+    <string name="detail_resync_up_to_date">此下载已是最新。</string>
+    <string name="detail_resync_description">服务器上有更新的信息。同步以刷新元数据和图片。</string>
+    <string name="detail_resync_change_metadata">元数据已更新（简介、演员、评分）</string>
+    <string name="detail_resync_change_images">图片已更新（海报/背景）</string>
+    <string name="detail_resync_change_media">媒体文件本身已更改</string>
+    <string name="detail_resync_media_explanation">元数据同步无法更新媒体文件。删除并重新下载此项目以获取新文件。</string>
+    <string name="detail_resync_action">立即同步</string>
+    <string name="detail_resync_redownload">重新下载媒体</string>
+
+    <!-- Local subtitles -->
+    <string name="detail_local_subtitles">字幕</string>
+    <string name="detail_local_subtitle_off">关闭</string>
+    <string name="detail_local_subtitle_default_badge">默认</string>
+    <string name="detail_local_subtitle_forced_badge">强制</string>
+
+    <!-- Download Details Sheet -->
+    <string name="detail_download_details_title">下载详情</string>
+    <string name="detail_download_section_download">下载</string>
+    <string name="detail_download_section_media">媒体</string>
+    <string name="detail_download_section_media_info">媒体信息</string>
+    <string name="detail_download_section_files">已下载文件</string>
+    <string name="detail_downloaded_bytes">已下载大小</string>
+    <string name="detail_downloaded_date">下载日期</string>
+    <string name="detail_container">容器</string>
+    <string name="detail_file_present">文件是否存在</string>
+    <string name="detail_media_source">媒体源</string>
+    <string name="detail_download_path">路径</string>
+    <string name="detail_media_title">标题</string>
+    <string name="detail_media_type">类型</string>
+    <string name="detail_original_title">原名</string>
+    <string name="detail_year">年份</string>
+    <string name="detail_runtime">时长</string>
+    <string name="detail_episode_label">剧集</string>
+    <string name="detail_view_download_details">查看下载详情</string>
+    <string name="detail_download_tab_overview">概览</string>
+    <string name="detail_download_tab_media_info">媒体信息</string>
+    <string name="detail_download_tab_storage">存储</string>
+
+    <!-- Inventory -->
+    <string name="detail_download_files_total">磁盘总计</string>
+    <string name="detail_download_files_loading">正在计算文件大小…</string>
+    <string name="detail_download_files_empty">未找到已下载文件</string>
+    <plurals name="detail_files_count">
+        <item quantity="other">%1$d 个文件</item>
+    </plurals>
+    <string name="detail_file_category_media">媒体</string>
+    <string name="detail_file_category_subtitle">字幕</string>
+    <string name="detail_file_category_trickplay">快进预览</string>
+    <string name="detail_file_category_segment">分段</string>
+    <string name="detail_file_category_image">图片</string>
+</resources>

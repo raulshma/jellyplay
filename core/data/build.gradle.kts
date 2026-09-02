@@ -1,7 +1,5 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.serialization)
 }
 
@@ -44,15 +42,21 @@ android {
 }
 
 dependencies {
-    implementation(project(":core:model"))
-    implementation(project(":core:network"))
-    implementation(project(":core:database"))
-    implementation(project(":core:datastore"))
+    // KMP cutover shim (docs/kmp-migration-plan.md §Phase C4): portable data
+    // classes migrate into :shared:core:data under the identical package;
+    // this module keeps all of its code until each file moves and re-exports
+    // the shared module so every consumer keeps compiling unchanged. DI
+    // wiring moves to Koin at §Phase C4/X.
+    api(project(":shared:core:data"))
 
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.android.compiler)
-    implementation(libs.hilt.work)
-    ksp(libs.hilt.compiler)
+    implementation(project(":shared:core:model"))
+    implementation(project(":shared:core:network"))
+    implementation(project(":shared:core:database"))
+    implementation(project(":shared:core:datastore"))
+
+    // Wave 8A/8B: Koin owns construction (androidCoreDataModule +
+    // CoreDataWorkerFactory). No Hilt remains in this module.
+    implementation(libs.koin.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.paging.runtime)

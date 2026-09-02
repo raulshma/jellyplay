@@ -6,15 +6,17 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
-import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
+import com.raulshma.jellyplay.core.data.di.koin
 
 @UnstableApi
-@AndroidEntryPoint
 class JellyPlayPlaybackService : MediaLibraryService(), PlaybackSessionManager.Listener {
 
-    @Inject lateinit var sessionManager: PlaybackSessionManager
-    @Inject lateinit var audioPlaybackManager: AudioPlaybackManager
+    // Wave 8A: Hilt left this module — the two media3 singletons resolve from
+    // the Koin container (androidCoreDataModule), which the app composition
+    // root starts before super.onCreate(). Lazy keeps construction off the
+    // service's critical path until a lifecycle callback actually needs them.
+    private val sessionManager: PlaybackSessionManager by lazy { koin().get() }
+    private val audioPlaybackManager: AudioPlaybackManager by lazy { koin().get() }
 
     private var notificationProvider: JellyPlayNotificationProvider? = null
 

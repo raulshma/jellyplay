@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Downloads feature user-facing strings -->
+
+    <!-- Screen titles / scaffolds -->
+    <string name="downloads_screen_title">Download</string>
+    <string name="downloads_library_title">Scaricati</string>
+
+    <!-- Empty states -->
+    <string name="downloads_empty_title">Nessun download</string>
+    <string name="downloads_empty_description">I contenuti scaricati appariranno qui</string>
+    <string name="downloads_no_downloaded_content">Ancora nessun contenuto scaricato</string>
+    <string name="downloads_no_matches">Nessuna corrispondenza</string>
+    <string name="downloads_no_items_in_category">Nessun elemento scaricato in questa categoria</string>
+
+    <!-- Storage / counts -->
+    <string name="downloads_storage_used">Spazio utilizzato: %1$s</string>
+    <string name="downloads_on_device">· %1$s sul dispositivo</string>
+    <plurals name="downloads_item_count">
+        <item quantity="one">%1$d elemento</item>
+        <item quantity="many">%1$d elementi</item>
+        <item quantity="other">%1$d elementi</item>
+    </plurals>
+    <string name="downloads_selected_count">%1$d selezionati</string>
+
+    <!-- Common actions / buttons -->
+    <string name="downloads_delete">Elimina</string>
+    <string name="downloads_cancel">Annulla</string>
+    <string name="downloads_close">Chiudi</string>
+    <string name="downloads_action_play">Riproduci</string>
+    <string name="downloads_action_pause">Pausa</string>
+    <string name="downloads_action_resume">Riprendi</string>
+    <string name="downloads_action_retry">Riprova</string>
+    <string name="downloads_action_cancel">Annulla</string>
+    <string name="downloads_action_delete">Elimina</string>
+    <string name="downloads_action_lower_priority">Abbassa priorità</string>
+    <string name="downloads_action_move_to_front">Sposta in cima</string>
+    <string name="downloads_action_select_all">Seleziona tutto</string>
+    <string name="downloads_action_clear_selection">Cancella selezione</string>
+    <string name="downloads_pause_all">Metti in pausa tutto</string>
+    <string name="downloads_retry_failed">Riprova tutti i falliti</string>
+    <string name="downloads_clear_cd">Cancella</string>
+    <string name="downloads_search_cd">Cerca</string>
+    <string name="downloads_sort_cd">Ordina</string>
+    <string name="downloads_search_downloads_placeholder">Cerca download…</string>
+    <string name="downloads_selection_hint">Tieni premuto su un download per selezionarlo e applicare azioni collettive</string>
+
+    <!-- Delete dialogs -->
+    <string name="downloads_delete_download_title">Elimina download</string>
+    <string name="downloads_delete_download_message">Rimuovere \"%1$s\" dal dispositivo? Libera %2$s.</string>
+    <string name="downloads_delete_downloads_title">Elimina download</string>
+    <plurals name="downloads_delete_downloads_message">
+        <item quantity="one">Rimuovere %1$d download selezionato dal dispositivo?</item>
+        <item quantity="many">Rimuovere %1$d download selezionati dal dispositivo?</item>
+        <item quantity="other">Rimuovere %1$d download selezionati dal dispositivo?</item>
+    </plurals>
+    <string name="downloads_frees_up_sentence"> Libera %1$s.</string>
+    <string name="downloads_deleted">Eliminato</string>
+    <string name="downloads_deleted_message">Download eliminato</string>
+
+    <!-- Download statuses -->
+    <string name="downloads_status_queued">In coda</string>
+    <string name="downloads_status_waiting">In attesa…</string>
+    <string name="downloads_status_failed">Non riuscito</string>
+    <string name="downloads_status_paused">In pausa</string>
+    <string name="downloads_status_cancelled">Annullato</string>
+
+    <!-- Offline detail -->
+    <string name="downloads_status">Stato</string>
+
+    <!-- Seasons / episodes -->
+
+    <!-- Library sort / filter -->
+    <string name="downloads_sort_recent">Recenti</string>
+    <string name="downloads_sort_name">Nome (A–Z)</string>
+    <string name="downloads_sort_rating">Valutazione</string>
+    <string name="downloads_sort_size">Dimensione</string>
+    <string name="downloads_filter_all">Tutto</string>
+    <string name="downloads_filter_videos">Video</string>
+    <string name="downloads_filter_music">Musica</string>
+    <!-- Offline download resync -->
+    <string name="downloads_resync">Sincronizza</string>
+    <string name="downloads_resync_media_changed">Il file multimediale è cambiato — è necessario ri-scaricare</string>
+    <string name="downloads_resync_action">Sincronizza ora</string>
+    <string name="downloads_resync_check_all">Controlla tutti gli aggiornamenti</string>
+    <string name="downloads_resync_check_all_cd">Controlla ogni download per aggiornamenti disponibili</string>
+    <string name="downloads_resync_batch_title">Aggiornamenti disponibili</string>
+    <string name="downloads_resync_batch_empty">Nessun download da aggiornare.</string>
+    <string name="downloads_resync_batch_checking">Controllo dei download…</string>
+    <string name="downloads_resync_resync_all">Sincronizza tutto</string>
+    <string name="downloads_resync_progress">%1$d di %2$d sincronizzati</string>
+
+    <!-- Force resync (granular item + data selection) -->
+    <string name="downloads_force_resync_action">Forza sincronizzazione</string>
+    <string name="downloads_force_resync_title">Forza sincronizzazione</string>
+    <string name="downloads_force_resync_description">Scegli quali elementi scaricati e quali dati aggiornare dal server, a prescindere dal rilevamento di un aggiornamento.</string>
+    <string name="downloads_force_resync_items_header">Elementi da sincronizzare</string>
+    <string name="downloads_force_resync_data_header">Dati da sincronizzare</string>
+    <string name="downloads_force_resync_data_metadata">Metadati</string>
+    <string name="downloads_force_resync_data_metadata_desc">Riassunto, cast, valutazioni</string>
+    <string name="downloads_force_resync_data_chapters">Capitoli</string>
+    <string name="downloads_force_resync_data_chapters_desc">Marcatori dei capitoli</string>
+    <string name="downloads_force_resync_data_poster">Locandina</string>
+    <string name="downloads_force_resync_data_poster_desc">Immagine principale</string>
+    <string name="downloads_force_resync_data_backdrop">Sfondo</string>
+    <string name="downloads_force_resync_data_backdrop_desc">Immagine di sfondo</string>
+    <string name="downloads_force_resync_data_subtitles">Sottotitoli</string>
+    <string name="downloads_force_resync_data_subtitles_desc">Tracce sottotitoli esterne</string>
+    <string name="downloads_force_resync_data_trickplay">Trickplay</string>
+    <string name="downloads_force_resync_data_trickplay_desc">Miniature di anteprima ricerca</string>
+    <string name="downloads_force_resync_data_segments">Segmenti</string>
+    <string name="downloads_force_resync_data_segments_desc">Punti di salto intro/outro</string>
+    <string name="downloads_force_resync_summary">Sincronizza %1$d elementi</string>
+    <string name="downloads_force_resync_empty">Nessun elemento scaricato da sincronizzare.</string>
+    <string name="downloads_force_resync_in_progress">Sincronizzazione di %1$d di %2$d…</string>
+    <string name="downloads_force_resync_done">%1$d di %2$d sincronizzati.</string>
+    <string name="downloads_force_resync_no_data">Seleziona almeno un tipo di dati da sincronizzare.</string>
+</resources>

@@ -5,18 +5,19 @@ import android.content.Context
 import android.content.Intent
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRecord
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
-import dagger.hilt.android.AndroidEntryPoint
+import com.raulshma.jellyplay.core.notification.di.koin
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
-@AndroidEntryPoint
 class NotificationActionReceiver : BroadcastReceiver() {
 
-    @Inject lateinit var seenMediaRepository: SeenMediaRepository
+    // Wave 8A: Hilt left this module — the repository single resolves from
+    // the Koin container on first use (the app composition root starts it
+    // long before any broadcast can arrive).
+    private val seenMediaRepository: SeenMediaRepository by lazy { koin().get() }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

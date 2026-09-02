@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Live TV feature user-facing strings (enhancements §2.2) -->
+    <string name="livetv_no_channels_available">Sem canais disponíveis</string>
+
+    <!-- Live TV tabbed screen (matches jellyfin-web Live TV collection) -->
+    <string name="livetv_tab_programs">Programas</string>
+    <string name="livetv_tab_guide">Guia</string>
+    <string name="livetv_tab_channels">Canais</string>
+    <string name="livetv_tab_recordings">Gravações</string>
+    <string name="livetv_tab_schedule">Agenda</string>
+    <string name="livetv_tab_series">Séries</string>
+
+
+    <string name="livetv_no_programs_available">Sem programas disponíveis</string>
+    <string name="livetv_no_recordings_available">Sem gravações disponíveis</string>
+    <string name="livetv_no_scheduled_recordings">Sem gravações agendadas</string>
+    <string name="livetv_no_series_recordings">Sem gravações de séries</string>
+
+    <string name="livetv_section_latest_recordings">Gravações recentes</string>
+    <string name="livetv_section_active_recordings">Gravações ativas</string>
+    <string name="livetv_section_upcoming_recordings">Próximas gravações</string>
+
+    <string name="livetv_record_once">Gravar</string>
+    <string name="livetv_record_series">Gravar série</string>
+    <string name="livetv_cancel_recording">Cancelar gravação</string>
+    <string name="livetv_cancel_series">Cancelar série</string>
+    <string name="livetv_delete">Excluir</string>
+    <string name="livetv_delete_recording_cd">Excluir gravação</string>
+    <string name="livetv_delete_recording_title">Excluir gravação?</string>
+    <string name="livetv_delete_recording_body">Excluir \"%1$s\"? Isso não pode ser desfeito.</string>
+    <string name="livetv_record_success">Gravação agendada</string>
+    <string name="livetv_record_failed">Falha ao agendar gravação</string>
+    <string name="livetv_record_canceled">Gravação cancelada</string>
+
+    <!-- Channel detail screen -->
+    <string name="livetv_channel_watch_live">Ver em direto</string>
+    <string name="livetv_channel_on_today">Hoje</string>
+    <string name="livetv_channel_live">DIRETO</string>
+    <string name="livetv_channel_no_program_info">Sem informação do programa</string>
+    <string name="livetv_channel_load_failed">Falha ao carregar o guia de programas</string>
+
+    <!-- Live TV host & EPG screen (extracted from hardcoded strings) -->
+    <string name="livetv_screen_title">TV em Direto</string>
+    <string name="livetv_epg_title">Guia de programas</string>
+    <string name="livetv_no_guide_available">Sem guia de programas disponível</string>
+    <string name="livetv_record_program_prompt">Gravar programa?</string>
+    <string name="livetv_record_single_timer_note">Será agendado um único temporizador no servidor.</string>
+    <string name="livetv_record_schedule_failed">Não foi possível agendar a gravação</string>
+    <string name="livetv_recording_in_progress">Gravação…</string>
+    <string name="livetv_scheduling_timer">A agendar temporizador</string>
+    <string name="livetv_action_cancel">Cancelar</string>
+    <string name="livetv_action_close">Fechar</string>
+    <string name="livetv_action_done">Concluído</string>
+    <string name="livetv_action_ok">OK</string>
+    <string name="livetv_schedule_start">Início: %1$s</string>
+    <string name="livetv_schedule_end">Fim: %1$s</string>
+
+    <!-- Channel / program affordances (batch) -->
+    <string name="livetv_watch">Ver</string>
+    <string name="livetv_recording_status">Gravação</string>
+    <string name="livetv_recording_now">● A gravar agora</string>
+
+    <!-- EPG grid & live pill labels (batch) -->
+    <string name="livetv_will_be_recorded">"%1$s" será gravado.</string>
+    <string name="livetv_channel">Canal</string>
+    <string name="livetv_live">AO VIVO</string>
+</resources>

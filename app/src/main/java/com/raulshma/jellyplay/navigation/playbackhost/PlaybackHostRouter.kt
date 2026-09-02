@@ -32,7 +32,7 @@ sealed interface HostDecision {
     data class DedicatedActivity(val args: PlayerActivityArgs) : HostDecision
 
     /**
-     * Compose inside the nav shell (audio player, Live TV).
+     * Compose inside the nav shell (audio player).
      */
     data object InNav : HostDecision
 
@@ -49,29 +49,27 @@ object PlaybackHostRouter {
             HostDecision.ExternalPlayer(route.itemId, route.mediaSourceId, route.startPositionTicks)
 
         // Live TV quirk (deliberate, pinned by test): hands off to an external
-        // app when EXTERNAL is preferred, but composes in-nav for every other
-        // engine choice (see the InNav branch below).
-        //
-        // TODO(pip): in-nav player PiP (e.g. LiveTV) is broken since the
-        //  PlayerActivity migration (55cd569f8) removed
-        //  MainActivity:supportsPictureInPicture — a former enterPipMode()
-        //  call now always fails, so the stubbed in-nav onEnterPip chain was
-        //  deleted. Restore by answering DedicatedActivity here (and mounting
-        //  live playback in PlayerActivity), not by reviving the stub.
+        // app when EXTERNAL is preferred; every other engine choice mounts in
+        // the dedicated activity below (wave 19C — live PiP restored by
+        // hosting live playback in PlayerActivity, whose full PiP apparatus
+        // MainActivity can't offer since 55cd569f8 removed its
+        // supportsPictureInPicture).
         route is Route.LiveTvChannelPlayer && preferredPlayer == PlayerType.EXTERNAL ->
             HostDecision.ExternalPlayer(route.channelId, null, 0L)
 
-        // Known gap (deliberately NOT handled here — decision item recorded
-        // in docs/architecture/plans/10-playback-host-seam.md, "PIN-lock"):
-        // PlayerActivity performs no PIN/biometric check. With a lock enabled,
-        // a media-notification tap opens PlayerActivity directly via its
-        // class-name PendingIntent and reaches full playback without
-        // challenge — MainActivity's lock gate never runs. If/when the gate
-        // is enforced, it plugs in right here: refuse DedicatedActivity while
-        // locked (fall back to routing through MainActivity's gate).
+        // PIN/biometric gate (wave 20E — CLOSED): PlayerActivity enforces
+        // MainActivity's lock itself now — its onCreate/onNewIntent redirect
+        // to MainActivity (whose gate renders the lock screen) while a lock
+        // is configured and the app-scoped AppLockState says locked, so the
+        // media-notification class-name PendingIntent no longer reaches
+        // playback without a challenge. The router stays lock-blind by
+        // design: the gate is a host-activity concern
+        // (AppLockRedirect.shouldRedirect), not a routing input — gating the
+        // DedicatedActivity answer here would not cover the notification
+        // path at all (the PendingIntent starts PlayerActivity directly).
         route is Route.VideoPlayer ->
             HostDecision.DedicatedActivity(
-                PlayerActivityArgs(
+                PlayerActivityArgs.Video(
                     itemId = route.itemId,
                     mediaSourceId = route.mediaSourceId,
                     startPositionTicks = route.startPositionTicks,
@@ -80,13 +78,26 @@ object PlaybackHostRouter {
                 ),
             )
 
-        // Audio always composes in-nav (never external). Live TV *deliberately*
-        // composes in-nav for non-EXTERNAL engines: LivePlayerScreen manages
-        // its own engine lifecycle (channel zapping keeps the ExoPlayer
-        // instance alive across channel swaps) and gains nothing from the
-        // dedicated activity today — this is the chosen host, not an omission.
-        // Changing the answer for Live TV is a one-line edit here.
-        route is Route.AudioPlayer || route is Route.LiveTvChannelPlayer -> HostDecision.InNav
+        // Wave 19C (live PiP): Live TV moved out of the nav shell — the
+        // dedicated PlayerActivity hosts LivePlayerScreen, whose PiP apparatus
+        // (auto-enter on home, remote actions, aspect-shaped window) serves
+        // live through the live VM's PipController seam. LivePlayerScreen
+        // keeps its engine lifecycle across channel zaps inside that host
+        // (the reused engine survives a zap; a route swap re-tunes via
+        // PlayerActivity.onNewIntent).
+        route is Route.LiveTvChannelPlayer ->
+            HostDecision.DedicatedActivity(
+                PlayerActivityArgs.Live(
+                    channelId = route.channelId,
+                    channelName = route.channelName,
+                    subtitleStreamIndex = route.subtitleStreamIndex,
+                    audioStreamIndex = route.audioStreamIndex,
+                ),
+            )
+
+        // Audio always composes in-nav (never external, never the dedicated
+        // activity — the audio host owns its own mini-player/background flow).
+        route is Route.AudioPlayer -> HostDecision.InNav
 
         else -> HostDecision.NotPlayback
     }

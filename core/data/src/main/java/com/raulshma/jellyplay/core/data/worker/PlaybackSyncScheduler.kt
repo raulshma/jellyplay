@@ -8,10 +8,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.Duration
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Schedules the playback-progress offline outbox drain. Defined as an
@@ -27,14 +24,11 @@ import javax.inject.Singleton
  *
  * Both use KEEP policies so reconnect + periodic never enqueue duplicate runs.
  */
-interface PlaybackSyncScheduler {
-    fun enqueuePeriodic()
-    fun enqueueNow()
-}
+// C4 part 2: the PlaybackSyncScheduler interface moved verbatim to
+// :shared:core:data commonMain worker/PlaybackSyncScheduler.kt (same package).
 
-@Singleton
-class PlaybackSyncSchedulerImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
+class PlaybackSyncSchedulerImpl(
+    private val context: Context,
 ) : PlaybackSyncScheduler {
     override fun enqueuePeriodic() {
         val constraints = Constraints.Builder()

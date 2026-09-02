@@ -12,10 +12,7 @@ import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
+import org.koin.mp.KoinPlatform
 import kotlinx.coroutines.runBlocking
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 
@@ -35,20 +32,12 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
  */
 class ContinueWatchingWidgetService : RemoteViewsService() {
 
-    @EntryPoint
-    @InstallIn(SingletonComponent::class)
-    interface WidgetEntryPoint {
-        fun widgetDataStore(): WidgetDataStore
-        fun playbackRepository(): PlaybackRepository
-    }
-
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
-        val entryPoint = EntryPointAccessors.fromApplication(
-            applicationContext,
-            WidgetEntryPoint::class.java,
-        )
-        val store = entryPoint.widgetDataStore()
-        val playbackRepo = entryPoint.playbackRepository()
+        // Koin accessors (wave 8B — Hilt removal): resolved straight from the
+        // application container, same shape the EntryPoint call used.
+        val koin = KoinPlatform.getKoin()!!
+        val store: WidgetDataStore = koin.get()
+        val playbackRepo: PlaybackRepository = koin.get()
         val appWidgetId = intent.getIntExtra(
             AppWidgetManager.EXTRA_APPWIDGET_ID,
             AppWidgetManager.INVALID_APPWIDGET_ID

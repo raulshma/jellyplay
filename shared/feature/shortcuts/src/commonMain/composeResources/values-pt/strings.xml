@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcuts_screen_title">Atalhos</string>
+    <string name="shortcuts_filter_all">Todos</string>
+    <string name="shortcuts_category_library">Biblioteca</string>
+    <string name="shortcuts_category_services">Serviços</string>
+    <string name="shortcuts_category_system">Sistema</string>
+    <string name="shortcuts_empty_title">Nenhum atalho disponível</string>
+    <string name="shortcuts_empty_description">Navegue pelo app para descobrir recursos e conteúdos</string>
+    <string name="shortcuts_empty_action">Explorar biblioteca</string>
+    <string name="shortcuts_item_downloads_title">Downloads</string>
+    <string name="shortcuts_item_downloads_description">Conteúdo offline e gerenciamento de downloads.</string>
+    <string name="shortcuts_item_favorites_title">Favoritos</string>
+    <string name="shortcuts_item_favorites_description">Mídias curtidas e com marcador.</string>
+    <string name="shortcuts_item_watch_history_title">Histórico</string>
+    <string name="shortcuts_item_watch_history_description">Mapa de calor de progresso e estatísticas de exibição.</string>
+    <string name="shortcuts_item_live_tv_title">TV ao vivo</string>
+    <string name="shortcuts_item_live_tv_description">Programas de TV ao vivo, guia, canais e gravações.</string>
+    <string name="shortcuts_item_playlists_title">Listas de reprodução</string>
+    <string name="shortcuts_item_playlists_description">Suas listas de reprodução curadas e salvas, incluindo Assistir depois.</string>
+    <string name="shortcuts_item_syncplay_description">Assista junto com reprodução sincronizada.</string>
+    <string name="shortcuts_item_requests_title">Pedidos</string>
+    <string name="shortcuts_item_requests_description">Peça filmes e programas de TV.</string>
+    <string name="shortcuts_item_newsletters_title">Boletins</string>
+    <string name="shortcuts_item_newsletters_description">Últimos boletins e novidades.</string>
+    <string name="shortcuts_item_seerr_description">Configurar integração do Seerr.</string>
+    <string name="shortcuts_item_activity_queue_title">Fila de atividade</string>
+    <string name="shortcuts_item_activity_queue_description">Fila de download combinada do Radarr/Sonarr e gerenciamento.</string>
+    <string name="shortcuts_item_upcoming_title">Em breve</string>
+    <string name="shortcuts_item_upcoming_description">Calendário de lançamentos combinado do Sonarr/Radarr.</string>
+    <string name="shortcuts_item_arr_description">Conexões diretas a servidores *arr e substituições.</string>
+    <string name="shortcuts_item_settings_title">Ajustes</string>
+    <string name="shortcuts_item_settings_description">Aparência, reprodução, áudio e opções do app.</string>
+    <string name="shortcuts_item_server_mgmt_title">Gestão do servidor</string>
+    <string name="shortcuts_item_server_mgmt_description">Conexão e configuração do servidor.</string>
+    <string name="shortcuts_item_switch_user_title">Trocar usuário</string>
+    <string name="shortcuts_item_switch_user_description">Gerenciar usuários e perfis do servidor.</string>
+    <string name="shortcuts_item_admin_title">Administrador</string>
+    <string name="shortcuts_item_admin_description">Painel, estado, atividade e tarefas.</string>
+    <string name="shortcuts_item_setup_wizard_title">Assistente de configuração</string>
+    <string name="shortcuts_item_setup_wizard_description">Executar o fluxo de configuração inicial.</string>
+    <string name="shortcuts_item_about_title">Sobre</string>
+    <string name="shortcuts_item_about_description">Versão, licenças e informações do app.</string>
+</resources>

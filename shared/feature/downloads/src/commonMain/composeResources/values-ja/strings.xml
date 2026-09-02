@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Downloads feature user-facing strings -->
+
+    <!-- Screen titles / scaffolds -->
+    <string name="downloads_screen_title">ダウンロード</string>
+    <string name="downloads_library_title">ダウンロード済み</string>
+
+    <!-- Empty states -->
+    <string name="downloads_empty_title">まだダウンロードはありません</string>
+    <string name="downloads_empty_description">ダウンロードしたコンテンツはここに表示されます</string>
+    <string name="downloads_no_downloaded_content">ダウンロード済みのコンテンツはまだありません</string>
+    <string name="downloads_no_matches">一致なし</string>
+    <string name="downloads_no_items_in_category">このカテゴリにダウンロード済みのアイテムはありません</string>
+
+    <!-- Storage / counts -->
+    <string name="downloads_storage_used">使用容量: %1$s</string>
+    <string name="downloads_on_device">· 端末に %1$s</string>
+    <plurals name="downloads_item_count">
+        <item quantity="other">%1$d 件</item>
+    </plurals>
+    <string name="downloads_selected_count">%1$d 件選択中</string>
+
+    <!-- Common actions / buttons -->
+    <string name="downloads_delete">削除</string>
+    <string name="downloads_cancel">キャンセル</string>
+    <string name="downloads_close">閉じる</string>
+    <string name="downloads_action_play">再生</string>
+    <string name="downloads_action_pause">一時停止</string>
+    <string name="downloads_action_resume">再開</string>
+    <string name="downloads_action_retry">再試行</string>
+    <string name="downloads_action_cancel">キャンセル</string>
+    <string name="downloads_action_delete">削除</string>
+    <string name="downloads_action_lower_priority">優先度を下げる</string>
+    <string name="downloads_action_move_to_front">先頭に移動</string>
+    <string name="downloads_action_select_all">すべて選択</string>
+    <string name="downloads_action_clear_selection">選択を解除</string>
+    <string name="downloads_pause_all">すべて一時停止</string>
+    <string name="downloads_retry_failed">失敗したものをすべて再試行</string>
+    <string name="downloads_clear_cd">クリア</string>
+    <string name="downloads_search_cd">検索</string>
+    <string name="downloads_sort_cd">並べ替え</string>
+    <string name="downloads_search_downloads_placeholder">ダウンロードを検索…</string>
+    <string name="downloads_selection_hint">ダウンロードを長押しして選択し、一括操作を適用できます</string>
+
+    <!-- Delete dialogs -->
+    <string name="downloads_delete_download_title">ダウンロードを削除</string>
+    <string name="downloads_delete_download_message">「%1$s」を端末から削除しますか？%2$s が解放されます。</string>
+    <string name="downloads_delete_downloads_title">ダウンロードを削除</string>
+    <plurals name="downloads_delete_downloads_message">
+        <item quantity="other">選択した %1$d 件のダウンロードを端末から削除しますか？</item>
+    </plurals>
+    <string name="downloads_frees_up_sentence"> %1$s が解放されます。</string>
+    <string name="downloads_deleted">削除済み</string>
+    <string name="downloads_deleted_message">ダウンロードを削除しました</string>
+
+    <!-- Download statuses -->
+    <string name="downloads_status_queued">待機中</string>
+    <string name="downloads_status_waiting">待機中…</string>
+    <string name="downloads_status_failed">失敗</string>
+    <string name="downloads_status_paused">一時停止</string>
+    <string name="downloads_status_cancelled">キャンセル済み</string>
+
+    <!-- Offline detail -->
+    <string name="downloads_status">ステータス</string>
+
+    <!-- Seasons / episodes -->
+
+    <!-- Library sort / filter -->
+    <string name="downloads_sort_recent">最近</string>
+    <string name="downloads_sort_name">名前（A–Z）</string>
+    <string name="downloads_sort_rating">評価</string>
+    <string name="downloads_sort_size">サイズ</string>
+    <string name="downloads_filter_all">すべて</string>
+    <string name="downloads_filter_videos">動画</string>
+    <string name="downloads_filter_music">音楽</string>
+    <!-- Offline download resync -->
+    <string name="downloads_resync">同期</string>
+    <string name="downloads_resync_media_changed">メディアファイルが変更されました — 再ダウンロードが必要です</string>
+    <string name="downloads_resync_action">今すぐ同期</string>
+    <string name="downloads_resync_check_all">すべて更新を確認</string>
+    <string name="downloads_resync_check_all_cd">すべてのダウンロードの更新を確認</string>
+    <string name="downloads_resync_batch_title">利用可能な更新</string>
+    <string name="downloads_resync_batch_empty">更新が必要なダウンロードはありません。</string>
+    <string name="downloads_resync_batch_checking">ダウンロードを確認中…</string>
+    <string name="downloads_resync_resync_all">すべて同期</string>
+    <string name="downloads_resync_progress">%1$d / %2$d 件 同期済み</string>
+
+    <!-- Force resync (granular item + data selection) -->
+    <string name="downloads_force_resync_action">強制同期</string>
+    <string name="downloads_force_resync_title">強制同期</string>
+    <string name="downloads_force_resync_description">更新が検出されたかどうかにかかわらず、サーバーから更新するダウンロードアイテムとデータを選択します。</string>
+    <string name="downloads_force_resync_items_header">同期するアイテム</string>
+    <string name="downloads_force_resync_data_header">同期するデータ</string>
+    <string name="downloads_force_resync_data_metadata">メタデータ</string>
+    <string name="downloads_force_resync_data_metadata_desc">概要、キャスト、評価</string>
+    <string name="downloads_force_resync_data_chapters">チャプター</string>
+    <string name="downloads_force_resync_data_chapters_desc">チャプターマーカー</string>
+    <string name="downloads_force_resync_data_poster">ポスター</string>
+    <string name="downloads_force_resync_data_poster_desc">メインアートワーク</string>
+    <string name="downloads_force_resync_data_backdrop">背景</string>
+    <string name="downloads_force_resync_data_backdrop_desc">背景アートワーク</string>
+    <string name="downloads_force_resync_data_subtitles">字幕</string>
+    <string name="downloads_force_resync_data_subtitles_desc">外部字幕トラック</string>
+    <string name="downloads_force_resync_data_trickplay">トリックプレイ</string>
+    <string name="downloads_force_resync_data_trickplay_desc">シークバーのサムネイル</string>
+    <string name="downloads_force_resync_data_segments">セグメント</string>
+    <string name="downloads_force_resync_data_segments_desc">イントロ/エンディングのスキップポイント</string>
+    <string name="downloads_force_resync_summary">%1$d 件を同期</string>
+    <string name="downloads_force_resync_empty">同期するダウンロード済みアイテムがありません。</string>
+    <string name="downloads_force_resync_in_progress">%1$d / %2$d 件を同期中…</string>
+    <string name="downloads_force_resync_done">%1$d / %2$d 件を同期しました。</string>
+    <string name="downloads_force_resync_no_data">同期するデータを少なくとも1つ選択してください。</string>
+</resources>

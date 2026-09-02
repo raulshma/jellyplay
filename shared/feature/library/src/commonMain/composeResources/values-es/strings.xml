@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Library feature user-facing strings (enhancements §2.2) -->
+    <string name="library_photo_saved_to_gallery">Guardada en la galería</string>
+    <string name="library_failed_to_load_items">Error al cargar los elementos</string>
+    <string name="library_failed_to_load_more_items">Error al cargar más elementos</string>
+
+    <!-- LibraryScreen -->
+    <string name="library_title">Biblioteca</string>
+    <string name="library_filters">Filtros</string>
+    <string name="library_all">Todo</string>
+    <string name="library_clear_all">Borrar todo</string>
+    <plurals name="library_item_count">
+        <item quantity="one">%1$d elemento</item>
+        <item quantity="other">%1$d elementos</item>
+    </plurals>
+    <string name="library_no_items_found">No se encontraron elementos</string>
+    <string name="library_no_downloads_offline">Aún no hay descargas</string>
+    <string name="library_try_adjusting_filters">Prueba a ajustar tus filtros</string>
+    <string name="library_list_view">Vista de lista</string>
+    <string name="library_grid_view">Vista de cuadrícula</string>
+    <string name="library_thumb_view">Vista de miniaturas</string>
+    <string name="library_smart_playlists">Listas inteligentes</string>
+    <string name="library_mood_playlists">Listas por estado de ánimo</string>
+    <string name="library_playlists">Listas de reproducción</string>
+    <string name="library_shuffle">Aleatorio</string>
+    <string name="library_jump_to_letter">Ir a una letra</string>
+
+    <!-- LibraryFilterSheet -->
+    <string name="library_reset">Restablecer</string>
+    <string name="library_sort_by">Ordenar por</string>
+    <string name="library_media_type">Tipo de contenido</string>
+    <string name="library_status">Estado</string>
+    <string name="library_sort_in_progress">En curso</string>
+    <string name="library_filter_resumable">En curso</string>
+    <string name="library_filter_downloaded">Descargado</string>
+    <string name="library_genres">Géneros</string>
+    <string name="library_year_range">Rango de años</string>
+    <string name="library_tags">Etiquetas</string>
+    <string name="library_minimum_rating">Puntuación mínima</string>
+    <string name="library_apply_filters">Aplicar filtros</string>
+    <string name="library_collapse">Contraer</string>
+    <string name="library_expand">Expandir</string>
+
+    <!-- FavoritesScreen -->
+    <string name="library_favorites">Favoritos</string>
+    <string name="library_failed_to_load_favorites">Error al cargar los favoritos</string>
+    <string name="library_no_favorites">Sin favoritos</string>
+    <string name="library_no_favorites_description">Los elementos que marques como favoritos aparecerán aquí</string>
+
+    <!-- StudioDetailScreen -->
+    <string name="library_failed_to_load_more">Error al cargar más</string>
+
+    <!-- PhotoAlbumScreen -->
+    <string name="library_photos">Fotos</string>
+    <string name="library_sort_options">Opciones de ordenación</string>
+    <string name="library_failed_to_load_photos">Error al cargar las fotos</string>
+    <string name="library_no_photos_found">No se encontraron fotos</string>
+
+    <!-- ── Photo viewer (PhotoViewerScreen) ────────────────────────────── -->
+    <string name="library_photo_adjustments">Ajustes</string>
+    <string name="library_photo_slideshow">Presentación</string>
+    <string name="library_photo_start_slideshow">Iniciar presentación</string>
+    <string name="library_photo_stop_slideshow">Detener presentación</string>
+    <!-- %1$d = brightness as integer percent -->
+    <string name="library_photo_brightness">Brillo %1$d%%</string>
+    <!-- %1$d = contrast as integer percent -->
+    <string name="library_photo_contrast">Contraste %1$d%%</string>
+    <!-- %1$d = saturation as integer percent -->
+    <string name="library_photo_saturation">Saturación %1$d%%</string>
+    <string name="library_photo_failed_to_load">No se pudo cargar la foto</string>
+    <!-- ── Photo viewer icon content descriptions (TalkBack) ───────────── -->
+    <string name="library_cd_close">Cerrar</string>
+    <string name="library_cd_share">Compartir</string>
+    <string name="library_cd_save">Guardar</string>
+    <string name="library_cd_info">Información</string>
+    <string name="library_cd_adjust">Ajustar</string>
+    <string name="library_cd_previous">Anterior</string>
+    <string name="library_cd_next">Siguiente</string>
+</resources>

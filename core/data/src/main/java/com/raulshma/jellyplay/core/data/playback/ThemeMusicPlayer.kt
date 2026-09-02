@@ -9,7 +9,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,8 +16,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Plays ambient theme music on media detail pages when the
@@ -28,9 +25,8 @@ import javax.inject.Singleton
  * playback. The player loops a single theme song at a low ambient volume and
  * is stopped when the detail screen is left.
  */
-@Singleton
-class ThemeMusicPlayer @Inject constructor(
-    @ApplicationContext private val context: Context,
+class ThemeMusicPlayer(
+    private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val appearanceStore: AppearanceStore,

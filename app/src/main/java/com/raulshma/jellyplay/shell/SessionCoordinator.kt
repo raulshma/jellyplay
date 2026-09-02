@@ -14,9 +14,6 @@ import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.startup.CacheMaintenanceInitializer
 import com.raulshma.jellyplay.widget.ContinueWatchingWidget
 import com.raulshma.jellyplay.widget.WidgetWorkScheduler
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -40,9 +37,8 @@ import kotlinx.coroutines.withTimeoutOrNull
  * [revokeServerSession] end it. Everything else (endpoint selection,
  * capability ordering) stays private to this module.
  */
-@Singleton
-class SessionCoordinator @Inject constructor(
-    @ApplicationContext private val context: Context,
+class SessionCoordinator(
+    private val context: Context,
     private val authRepository: AuthRepository,
     private val realtimeConnection: RealtimeConnection,
     private val experimentalStore: ExperimentalStore,

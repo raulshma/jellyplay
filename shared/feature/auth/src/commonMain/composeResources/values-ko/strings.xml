@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Login screen -->
+    <string name="auth_sign_in_title">로그인</string>
+    <string name="auth_sign_in">로그인</string>
+    <string name="auth_signing_in">로그인 중…</string>
+    <string name="auth_username">사용자 이름</string>
+    <string name="auth_password">비밀번호</string>
+    <string name="auth_error_username_required">사용자 이름을 입력하세요</string>
+    <string name="auth_login_failed">로그인 실패</string>
+    <string name="auth_back_to_sign_in">로그인으로 돌아가기</string>
+
+    <!-- Add Server screen -->
+    <string name="auth_add_server_title">서버 추가</string>
+    <string name="auth_add_server">서버 추가</string>
+    <string name="auth_connect_to_jellyfin">Jellyfin에 연결</string>
+    <string name="auth_add_server_subtitle">네트워크에서 서버를 찾거나 주소를 직접 입력하세요</string>
+    <string name="auth_or_enter_manually">또는 직접 입력</string>
+    <string name="auth_scanning_for_servers">서버 검색 중…</string>
+    <string name="auth_stop">중지</string>
+    <string name="auth_server_one_found">서버 %1$d개 찾음</string>
+    <string name="auth_server_one_found_scanning">서버 %1$d개 찾음…</string>
+    <string name="auth_servers_found">서버 %1$d개 찾음</string>
+    <string name="auth_servers_found_scanning">서버 %1$d개 찾음…</string>
+    <string name="auth_collapse">접기</string>
+    <string name="auth_expand">펼치기</string>
+    <string name="auth_discovery_unavailable">검색을 사용할 수 없음</string>
+    <string name="auth_retry">다시 시도</string>
+    <string name="auth_no_servers_found">네트워크에서 서버를 찾을 수 없습니다</string>
+    <string name="auth_connect">연결</string>
+    <string name="auth_connecting">연결 중…</string>
+    <string name="auth_server_address">서버 주소</string>
+    <string name="auth_server_address_invalid">유효한 URL을 입력하세요 (예: https://host:port)</string>
+
+    <!-- Server connection errors -->
+    <string name="auth_error_server_address_required">서버 주소를 입력하세요</string>
+    <string name="auth_error_resolve_address">서버 주소를 확인할 수 없습니다</string>
+    <string name="auth_error_could_not_connect">서버에 연결할 수 없습니다</string>
+    <string name="auth_error_connection_timeout">연결 시간 초과</string>
+    <string name="auth_error_ssl">SSL/TLS 오류 - 서버 인증서를 확인하세요</string>
+    <string name="auth_error_cleartext">HTTP 연결은 허용되지 않습니다. HTTPS를 사용하세요.</string>
+    <string name="auth_error_connection_failed">서버 연결 실패</string>
+    <string name="auth_tls_trust_title">이 서버의 인증서를 신뢰하시겠습니까?</string>
+    <string name="auth_tls_trust_body">%1$s 서버가 JellyPlay에서 확인할 수 없는 인증서(자체 서명 또는 신뢰할 수 없음)를 사용하고 있습니다. 신뢰하면 JellyPlay가 이 서버에 안전하게 연결할 수 있습니다. 나중에 설정 → 서버 관리에서 철회할 수 있습니다.</string>
+    <string name="auth_tls_trust_confirm">신뢰하고 연결</string>
+
+    <!-- Android 17+ local network permission -->
+    <string name="auth_error_local_network_denied">로컬 네트워크 액세스가 차단되었습니다. Wi-Fi의 서버에 연결하려면 로컬 네트워크 권한을 허용하세요.</string>
+    <string name="auth_local_network_rationale_title">로컬 네트워크 액세스</string>
+    <string name="auth_local_network_rationale_body">JellyPlay가 Wi-Fi의 Jellyfin 서버를 검색하고 연결하려면 로컬 네트워크 액세스가 필요합니다.</string>
+    <string name="auth_local_network_allow">액세스 허용</string>
+
+    <!-- Quick Connect screen -->
+    <string name="auth_qc_starting">Quick Connect 시작 중…</string>
+    <string name="auth_qc_enter_code">이 코드를 다른 기기에 입력하세요</string>
+    <string name="auth_qc_path">Jellyfin → 사용자 설정 → Quick Connect</string>
+    <string name="auth_qc_waiting">승인 대기 중…</string>
+    <string name="auth_cancel">취소</string>
+    <string name="auth_qc_connected">✓ 연결됨!</string>
+    <string name="auth_qc_failed">Quick Connect 실패</string>
+    <string name="auth_try_again">다시 시도</string>
+
+    <!-- Quick Connect errors (ViewModel) -->
+    <string name="auth_qc_error_check_availability">Quick Connect 사용 가능 여부를 확인할 수 없습니다</string>
+    <string name="auth_qc_error_not_enabled">이 서버에서 Quick Connect가 활성화되어 있지 않습니다</string>
+    <string name="auth_qc_error_initiate">Quick Connect를 시작할 수 없습니다</string>
+    <string name="auth_qc_error_polling">Quick Connect 폴링 실패</string>
+    <string name="auth_qc_error_auth">Quick Connect 인증 실패</string>
+    <string name="auth_qc_error_timeout">Quick Connect 시간 초과. 다시 시도해 주세요.</string>
+
+    <!-- Server list screen -->
+    <string name="auth_loading">불러오는 중…</string>
+    <string name="auth_no_servers_added_title">추가된 서버가 없음</string>
+    <string name="auth_no_servers_added_desc">Jellyfin 서버를 추가하여 시작하세요</string>
+    <string name="auth_remove_server">서버 제거</string>
+    <string name="auth_remove_server_title">서버를 제거하시겠어요?</string>
+    <string name="auth_remove_server_message">이 작업은 \"%1$s\" 및 저장된 모든 사용자를 제거합니다. 되돌릴 수 없습니다.</string>
+    <string name="auth_remove">제거</string>
+
+    <!-- User selection screen -->
+    <string name="auth_loading_users">사용자 불러오는 중…</string>
+    <string name="auth_no_users_title">이 서버에 사용자가 없음</string>
+    <string name="auth_no_users_desc">사용자를 추가하여 시작하세요</string>
+    <string name="auth_add_user">사용자 추가</string>
+    <string name="auth_user_placeholder">사용자</string>
+    <string name="auth_remove_user">사용자 제거</string>
+    <string name="auth_remove_user_title">사용자를 제거하시겠어요?</string>
+    <string name="auth_remove_user_message">이 서버에서 \"%1$s\"을(를) 제거하시겠어요? 사용하려면 다시 로그인해야 합니다.</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="auth_quick_connect">빠른 연결</string>
+
+    <!-- Server health indicator -->
+    <string name="server_health_healthy">온라인</string>
+    <string name="server_health_unreachable">오프라인</string>
+    <string name="server_health_checking">확인 중…</string>
+</resources>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcuts_screen_title">快捷方式</string>
+    <string name="shortcuts_filter_all">全部</string>
+    <string name="shortcuts_category_library">媒体库</string>
+    <string name="shortcuts_category_services">服务</string>
+    <string name="shortcuts_category_system">系统</string>
+    <string name="shortcuts_empty_title">没有可用的快捷方式</string>
+    <string name="shortcuts_empty_description">浏览应用以发现功能和内容</string>
+    <string name="shortcuts_empty_action">浏览媒体库</string>
+    <string name="shortcuts_item_downloads_title">下载</string>
+    <string name="shortcuts_item_downloads_description">离线内容和下载管理。</string>
+    <string name="shortcuts_item_favorites_title">收藏</string>
+    <string name="shortcuts_item_favorites_description">已点赞和加书签的媒体。</string>
+    <string name="shortcuts_item_watch_history_title">观看历史</string>
+    <string name="shortcuts_item_watch_history_description">进度热力图和观看统计。</string>
+    <string name="shortcuts_item_live_tv_title">直播电视</string>
+    <string name="shortcuts_item_live_tv_description">直播电视节目、节目指南、频道和录像。</string>
+    <string name="shortcuts_item_playlists_title">播放列表</string>
+    <string name="shortcuts_item_playlists_description">您精心整理和保存的播放列表，包括稍后观看。</string>
+    <string name="shortcuts_item_syncplay_description">同步播放，一起观看。</string>
+    <string name="shortcuts_item_requests_title">请求</string>
+    <string name="shortcuts_item_requests_description">请求电影和电视节目。</string>
+    <string name="shortcuts_item_newsletters_title">简报</string>
+    <string name="shortcuts_item_newsletters_description">最新简报和更新。</string>
+    <string name="shortcuts_item_seerr_description">配置 Seerr 集成。</string>
+    <string name="shortcuts_item_activity_queue_title">活动队列</string>
+    <string name="shortcuts_item_activity_queue_description">合并的 Radarr/Sonarr 下载队列和管理。</string>
+    <string name="shortcuts_item_upcoming_title">即将推出</string>
+    <string name="shortcuts_item_upcoming_description">合并的 Sonarr/Radarr 发布日历。</string>
+    <string name="shortcuts_item_arr_description">直接的 *arr 服务器连接和覆盖。</string>
+    <string name="shortcuts_item_settings_title">设置</string>
+    <string name="shortcuts_item_settings_description">外观、播放、音频和应用选项。</string>
+    <string name="shortcuts_item_server_mgmt_title">服务器管理</string>
+    <string name="shortcuts_item_server_mgmt_description">服务器连接和配置。</string>
+    <string name="shortcuts_item_switch_user_title">切换用户</string>
+    <string name="shortcuts_item_switch_user_description">管理服务器用户和配置文件。</string>
+    <string name="shortcuts_item_admin_title">管理</string>
+    <string name="shortcuts_item_admin_description">仪表板、健康、活动和任务。</string>
+    <string name="shortcuts_item_setup_wizard_title">设置向导</string>
+    <string name="shortcuts_item_setup_wizard_description">运行初始配置流程。</string>
+    <string name="shortcuts_item_about_title">关于</string>
+    <string name="shortcuts_item_about_description">版本、许可证和应用信息。</string>
+</resources>

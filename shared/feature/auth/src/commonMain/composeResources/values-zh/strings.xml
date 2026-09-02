@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Login screen -->
+    <string name="auth_sign_in_title">登录</string>
+    <string name="auth_sign_in">登录</string>
+    <string name="auth_signing_in">正在登录…</string>
+    <string name="auth_username">用户名</string>
+    <string name="auth_password">密码</string>
+    <string name="auth_error_username_required">请输入用户名</string>
+    <string name="auth_login_failed">登录失败</string>
+    <string name="auth_back_to_sign_in">返回登录</string>
+
+    <!-- Add Server screen -->
+    <string name="auth_add_server_title">添加服务器</string>
+    <string name="auth_add_server">添加服务器</string>
+    <string name="auth_connect_to_jellyfin">连接到 Jellyfin</string>
+    <string name="auth_add_server_subtitle">在网络中查找服务器，或手动输入地址</string>
+    <string name="auth_or_enter_manually">或手动输入</string>
+    <string name="auth_scanning_for_servers">正在扫描服务器…</string>
+    <string name="auth_stop">停止</string>
+    <string name="auth_server_one_found">找到 %1$d 个服务器</string>
+    <string name="auth_server_one_found_scanning">找到 %1$d 个服务器…</string>
+    <string name="auth_servers_found">找到 %1$d 个服务器</string>
+    <string name="auth_servers_found_scanning">找到 %1$d 个服务器…</string>
+    <string name="auth_collapse">收起</string>
+    <string name="auth_expand">展开</string>
+    <string name="auth_discovery_unavailable">发现功能不可用</string>
+    <string name="auth_retry">重试</string>
+    <string name="auth_no_servers_found">在您的网络中未找到服务器</string>
+    <string name="auth_connect">连接</string>
+    <string name="auth_connecting">正在连接…</string>
+    <string name="auth_server_address">服务器地址</string>
+    <string name="auth_server_address_invalid">请输入有效的 URL（例如 https://host:port）</string>
+
+    <!-- Server connection errors -->
+    <string name="auth_error_server_address_required">请输入服务器地址</string>
+    <string name="auth_error_resolve_address">无法解析服务器地址</string>
+    <string name="auth_error_could_not_connect">无法连接到服务器</string>
+    <string name="auth_error_connection_timeout">连接超时</string>
+    <string name="auth_error_ssl">SSL/TLS 错误 - 请检查服务器证书</string>
+    <string name="auth_error_cleartext">不允许使用 HTTP 连接。请使用 HTTPS。</string>
+    <string name="auth_error_connection_failed">连接服务器失败</string>
+    <string name="auth_tls_trust_title">信任此服务器的证书？</string>
+    <string name="auth_tls_trust_body">%1$s 服务器使用了 JellyPlay 无法验证的证书（自签名或不受信任）。信任后 JellyPlay 即可安全连接该服务器。之后可在“设置 → 服务器管理”中撤销。</string>
+    <string name="auth_tls_trust_confirm">信任并连接</string>
+
+    <!-- Android 17+ local network permission -->
+    <string name="auth_error_local_network_denied">本地网络访问已被阻止。请授予本地网络权限以访问您 Wi-Fi 上的服务器。</string>
+    <string name="auth_local_network_rationale_title">本地网络访问</string>
+    <string name="auth_local_network_rationale_body">JellyPlay 需要本地网络访问权限才能发现并连接您 Wi-Fi 上的 Jellyfin 服务器。</string>
+    <string name="auth_local_network_allow">允许访问</string>
+
+    <!-- Quick Connect screen -->
+    <string name="auth_qc_starting">正在启动 Quick Connect…</string>
+    <string name="auth_qc_enter_code">请在另一台设备上输入此代码</string>
+    <string name="auth_qc_path">Jellyfin → 用户设置 → Quick Connect</string>
+    <string name="auth_qc_waiting">等待批准…</string>
+    <string name="auth_cancel">取消</string>
+    <string name="auth_qc_connected">✓ 已连接！</string>
+    <string name="auth_qc_failed">Quick Connect 失败</string>
+    <string name="auth_try_again">重试</string>
+
+    <!-- Quick Connect errors (ViewModel) -->
+    <string name="auth_qc_error_check_availability">无法检查 Quick Connect 的可用性</string>
+    <string name="auth_qc_error_not_enabled">此服务器未启用 Quick Connect</string>
+    <string name="auth_qc_error_initiate">无法启动 Quick Connect</string>
+    <string name="auth_qc_error_polling">Quick Connect 轮询失败</string>
+    <string name="auth_qc_error_auth">Quick Connect 身份验证失败</string>
+    <string name="auth_qc_error_timeout">Quick Connect 超时。请重试。</string>
+
+    <!-- Server list screen -->
+    <string name="auth_loading">加载中…</string>
+    <string name="auth_no_servers_added_title">未添加服务器</string>
+    <string name="auth_no_servers_added_desc">添加您的 Jellyfin 服务器以开始</string>
+    <string name="auth_remove_server">移除服务器</string>
+    <string name="auth_remove_server_title">移除服务器？</string>
+    <string name="auth_remove_server_message">这将移除“%1$s”及其上保存的所有用户。此操作无法撤销。</string>
+    <string name="auth_remove">移除</string>
+
+    <!-- User selection screen -->
+    <string name="auth_loading_users">正在加载用户…</string>
+    <string name="auth_no_users_title">此服务器上没有用户</string>
+    <string name="auth_no_users_desc">添加用户以开始</string>
+    <string name="auth_add_user">添加用户</string>
+    <string name="auth_user_placeholder">用户</string>
+    <string name="auth_remove_user">移除用户</string>
+    <string name="auth_remove_user_title">移除用户？</string>
+    <string name="auth_remove_user_message">从此服务器移除“%1$s”？您需要重新登录才能使用。</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="auth_quick_connect">快速连接</string>
+
+    <!-- Server health indicator -->
+    <string name="server_health_healthy">在线</string>
+    <string name="server_health_unreachable">离线</string>
+    <string name="server_health_checking">检查中…</string>
+</resources>

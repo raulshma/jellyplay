@@ -20,42 +20,135 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = uri("https://jitpack.io") }
+        // KGP tool-distribution governance (wave 13C — the settings-level
+        // decision the wave-12D lanes deferred, see the wasmJsNodeTest notes
+        // in shared/core/{model,ui}/build.gradle.kts): Kotlin's
+        // kotlinWasmNodeJsSetup / kotlinWasmYarnSetup / kotlinWasmBinaryenSetup
+        // tasks DOWNLOAD their tool archives through an ivy repository they
+        // register on the PROJECT at task-graph time (KGP 2.3.21
+        // targets/js/AbstractSetupTask.withUrlRepo), which
+        // FAIL_ON_PROJECT_REPOS rejects outright ("'Distributions at
+        // https://nodejs.org/dist' was added by unknown code" — declaring a
+        // lookalike here does NOT help; the detector fires on the add
+        // itself). The working split, using KGP's documented escape hatch
+        // (EnvSpec.downloadBaseUrl: "If the property has no value,
+        // repository is not added, so this can be used to add your own
+        // repository"): the ROOT build script nulls the wasm node/yarn/binaryen
+        // downloadBaseUrl properties so KGP adds nothing, and THESE
+        // settings-owned repos serve the exact coordinates KGP resolves —
+        //   org.nodejs:node:<ver>:<platform>-<arch>@zip from
+        //   https://nodejs.org/dist "v[revision]/[artifact](-v[revision]-<classifier]).[ext]"
+        //   com.yarnpkg:yarn:<ver>@tar.gz from
+        //   https://github.com/yarnpkg/yarn/releases/download
+        //     "v[revision]/[artifact](-v[revision]).[ext]"
+        //   com.github.webassembly:binaryen:<ver>:<platform>@tar.gz from
+        //   https://github.com/WebAssembly/binaryen/releases/download
+        //     "version_[revision]/binaryen-version_[revision]-[classifier].[ext]"
+        // (all artifact-metadata-only ivy repos; patternLayout and
+        // metadataSources mirror KGP's own registration exactly, with a
+        // deliberately broader includeGroup filter where KGP uses
+        // includeModule). Group-scoped content filters keep the
+        // repositories from serving anything but tool distributions. Net
+        // effect: FAIL_ON_PROJECT_REPOS keeps failing real ungoverned repos,
+        // while webpack, binaryen and the wasmJsNodeTest lanes run with no
+        // PREFER_PROJECT flip anywhere.
+        ivy("https://nodejs.org/dist") {
+            patternLayout {
+                artifact("v[revision]/[artifact](-v[revision]-[classifier]).[ext]")
+            }
+            metadataSources { artifact() }
+            content { includeGroup("org.nodejs") }
+        }
+        ivy("https://github.com/yarnpkg/yarn/releases/download") {
+            patternLayout {
+                artifact("v[revision]/[artifact](-v[revision]).[ext]")
+            }
+            metadataSources { artifact() }
+            content { includeGroup("com.yarnpkg") }
+        }
+        ivy("https://github.com/WebAssembly/binaryen/releases/download") {
+            patternLayout {
+                artifact("version_[revision]/binaryen-version_[revision]-[classifier].[ext]")
+            }
+            metadataSources { artifact() }
+            content { includeGroup("com.github.webassembly") }
+        }
     }
 }
 
 rootProject.name = "JellyPlay"
 include(":app")
-include(":core:model")
-include(":core:designsystem")
-include(":core:network")
-include(":core:database")
-include(":core:datastore")
 include(":core:data")
 include(":core:ui")
 include(":core:notification")
 include(":core:testing")
-include(":feature:auth")
-include(":feature:home")
-include(":feature:library")
-include(":feature:search")
-include(":feature:details")
-include(":feature:player:core")
-include(":feature:player:video")
-include(":feature:player:audio")
-include(":feature:player:live")
-include(":feature:downloads")
-include(":feature:settings")
-include(":feature:subtitle-tester")
-include(":feature:music")
-include(":feature:livetv")
-include(":feature:syncplay")
-include(":feature:editor")
-include(":feature:admin")
-include(":feature:onboarding")
-include(":feature:newsletter")
-include(":feature:insights")
-include(":feature:requests")
-include(":feature:shortcuts")
-include(":feature:arrqueue")
-include(":feature:calendar")
+
+
+
+
+
+
 include(":baselineprofile")
+
+// KMP shell (docs/kmp-migration-plan.md): the parallel tree that legacy modules
+// migrate into, phase by phase. Lives beside (not inside) the Android tree so
+// the existing app keeps building untouched until cutover.
+include(":shared:core:model")
+include(":shared:core:designsystem")
+include(":shared:core:datastore")
+include(":shared:core:database")
+include(":shared:core:network")
+include(":shared:core:data")
+include(":shared:core:ui")
+include(":shared:core:player-contract")
+
+// Feature conveyor (plan §Phase V3): one shared feature module per migration
+// PR, same shape as the shared core stack above.
+include(":shared:feature:search")
+include(":shared:feature:library")
+include(":shared:feature:music")
+include(":shared:feature:livetv")
+include(":shared:feature:downloads")
+include(":shared:feature:syncplay")
+include(":shared:feature:settings")
+include(":shared:feature:admin")
+include(":shared:feature:requests")
+
+include(":shared:feature:newsletter")
+
+include(":shared:feature:editor")
+
+include(":shared:feature:calendar")
+
+
+include(":shared:feature:shortcuts")
+
+include(":shared:feature:insights")
+
+
+
+include(":shared:feature:onboarding")
+
+include(":shared:feature:arrqueue")
+
+include(":shared:feature:home")
+
+
+
+
+include(":shared:feature:subtitle-tester")
+include(":shared:feature:player-live")
+include(":shared:feature:player-video")
+include(":shared:feature:details")
+
+include(":shared:feature:auth")
+include(":shared:feature:player-audio")
+
+
+// Desktop shell (plan §Phase V1b)
+include(":apps:desktop")
+
+// Web shell (plan §Phase W): wasmJs/browser app over the shared datastore
+// DI stack, with the W.1 Ktor API transport and W.4 Coil3 image engine
+// landed (three routes live: Requests, Upcoming Calendar, Seerr Detail).
+include(":apps:web")

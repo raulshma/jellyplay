@@ -1,0 +1,329 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="player_audio">Áudio</string>
+    <string name="player_subtitles">Legendas</string>
+    <string name="player_resumed_message">Recontinuado de onde deixou</string>
+    <string name="player_reset_to_auto">Repor para Automático</string>
+    <string name="player_track_default">Predefinido</string>
+    <string name="player_track_none">Nenhum</string>
+
+    <string name="track_badge_forced">Forçada</string>
+    <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_default">Predefinido</string>
+
+    <!-- Companion dashboard -->
+    <string name="player_video_lyrics">Letras</string>
+    <string name="player_video_media_tracks">Faixas de mídia</string>
+    <string name="player_video_disconnect">Desconectar</string>
+
+    <!-- Aspect ratio sheet -->
+    <string name="player_video_aspect_ratio">Proporção da tela</string>
+    <string name="player_video_aspect_auto">Automático (%1$s)</string>
+    <string name="player_video_aspect_detected">Detectada: %1$s</string>
+
+    <!-- Playback error overlay -->
+    <string name="player_video_playback_error">Erro de reprodução</string>
+    <string name="player_video_playback_error_retryable">A reprodução foi interrompida. Tente novamente neste motor ou experimente outro diferente.</string>
+    <string name="player_video_playback_error_fatal">Não foi possível reproduzir este vídeo neste motor. Experimente outro motor de reprodução ou feche para voltar.</string>
+    <string name="player_video_retry_on">Repetir em %1$s</string>
+    <string name="player_video_retry_with">Repetir com %1$s</string>
+    <string name="player_video_try_another_engine">Experimentar outro motor</string>
+    <string name="player_video_dismiss">Descartar</string>
+
+    <!-- Subtitle style controls / sheet -->
+    <string name="player_video_subtitle_settings">Definições de legendas</string>
+    <string name="player_video_open_tester">Abrir testador</string>
+    <string name="player_video_reset">Repor</string>
+    <string name="player_video_reset_all">Repor tudo</string>
+    <string name="player_video_pick_color">Escolher uma cor</string>
+    <string name="player_video_hue">Matiz</string>
+    <string name="player_video_saturation">Saturação</string>
+    <string name="player_video_value">Valor</string>
+    <string name="player_video_apply">Aplicar</string>
+    <string name="player_video_cancel">Cancelar</string>
+    <string name="player_video_override_subtitle_styles">Substituir estilos de legendas</string>
+    <string name="player_video_override_subtitle_styles_hint">Aplicar tamanho, cores e bordas personalizadas</string>
+    <string name="player_video_ass_basic_notice">O estilo completo ASS/SSA é suportado no ExoPlayer e no mpv. Este motor renderiza as legendas com um estilo básico.</string>
+    <string name="player_video_ass_embedded_notice">Neste motor, as legendas ASS/SSA são renderizadas com o estilo incorporado. As cores, bordas e Forçar personalizados aplicam-se apenas a SRT/VTT.</string>
+    <string name="player_video_font_size">Tamanho da letra: %1$dsp</string>
+    <string name="player_video_font">Letra</string>
+    <string name="player_video_bundled_default">Predefinida incluída</string>
+    <string name="player_video_pick">Escolher…</string>
+    <string name="player_video_bold">Negrito</string>
+    <string name="player_video_italic">Itálico</string>
+    <string name="player_video_ass_styling">Estilo ASS</string>
+    <string name="player_video_ass_respect">Respeitar</string>
+    <string name="player_video_ass_force">Forçar</string>
+    <string name="player_video_ass_scale_hint">Manter o estilo incorporado; aplicar apenas o seu tamanho e posição</string>
+    <string name="player_video_ass_force_hint">Substituir o estilo incorporado pelas suas cores, letra e bordas</string>
+    <string name="player_video_font_color">Cor da letra</string>
+    <string name="player_video_background_color">Cor de fundo</string>
+    <string name="player_video_background_opacity">Opacidade do fundo: %1$d%%</string>
+    <string name="player_video_edge_type">Tipo de contorno</string>
+    <string name="player_video_edge_none">Nenhum</string>
+    <string name="player_video_edge_outline">Contorno</string>
+    <string name="player_video_edge_shadow">Sombra</string>
+    <string name="player_video_edge_raised">Elevado</string>
+    <string name="player_video_edge_depressed">Afundado</string>
+    <string name="player_video_edge_color">Cor do contorno</string>
+    <string name="player_video_border_style">Estilo da borda</string>
+    <string name="player_video_border_outline_shadow">Contorno+Sombra</string>
+    <string name="player_video_border_opaque_box">Caixa opaca</string>
+    <string name="player_video_border_background_box">Caixa de fundo</string>
+    <string name="player_video_border_width">Largura da borda: %1$s</string>
+    <string name="player_video_shadow_offset">Deslocamento da sombra: %1$s</string>
+    <string name="player_video_subtitle_offset">Desvio das legendas: %1$s</string>
+    <string name="player_video_vertical_position">Posição vertical: %1$d%%</string>
+
+    <!-- Sleep timer sheet -->
+    <string name="player_video_sleep_timer">Temporizador</string>
+    <string name="player_video_sleep_timer_on">Temporizador \u00B7 %1$s</string>
+    <string name="player_video_cancel_sleep_timer">Cancelar temporizador (%1$s restante)</string>
+    <string name="player_video_custom_duration">Duração personalizada</string>
+    <string name="player_video_custom_ellipsis">Personalizada…</string>
+    <string name="player_video_end_of_episode">Fim do episódio</string>
+    <string name="player_video_minutes">Minutos</string>
+    <string name="player_video_enter_1_600">Introduza 1–600</string>
+    <string name="player_video_start">Iniciar</string>
+
+    <!-- SyncPlay sheet -->
+    <string name="player_video_leave_group">Sair do grupo</string>
+    <string name="player_video_ignore_wait">Ignorar espera</string>
+    <string name="player_video_ignore_wait_hint">Não pausar para utilizadores em buffer</string>
+    <string name="player_video_repeat_one">Repetir um</string>
+    <string name="player_video_repeat_all">Repetir todos</string>
+    <string name="player_video_repeat_none">Não repetir</string>
+    <string name="player_video_shuffle">Aleatório</string>
+    <string name="player_video_sorted">Ordenado</string>
+    <string name="player_video_pause">Pausar</string>
+    <string name="player_video_play">Reproduzir</string>
+    <string name="player_video_stop">Parar</string>
+    <string name="player_video_synced">Sincronizado</string>
+    <string name="player_video_buffering">A armazenar</string>
+    <string name="player_video_group">Grupo</string>
+
+    <!-- Subtitle manager sheet -->
+    <string name="player_video_download">Transferir</string>
+    <string name="player_video_search">Pesquisar</string>
+    <string name="player_video_upload">Enviar</string>
+    <string name="player_video_load_from_device">Carregar a partir do dispositivo</string>
+    <string name="player_video_no_remote_subtitles">Sem legendas remotas disponíveis.</string>
+    <string name="player_video_unknown">Desconhecido</string>
+    <string name="player_video_perfect_match">Correspondência perfeita</string>
+    <string name="player_video_taking_a_while">A demorar um pouco…</string>
+    <string name="player_video_use">Usar</string>
+    <string name="player_video_failed_tap_to_retry">Falhou — toque para repetir</string>
+    <string name="player_video_search_failed">A pesquisa falhou</string>
+    <string name="player_video_load_subtitles_failed">Não foi possível carregar as legendas</string>
+    <string name="player_video_no_results_found">Sem resultados</string>
+    <string name="player_video_pick_language_hint">Escolha um idioma e pesquise para encontrar legendas.</string>
+    <string name="player_video_change_file">Alterar: %1$s</string>
+    <string name="player_video_select_file">Selecionar ficheiro (.srt, .ass, .ssa, .vtt)</string>
+    <string name="player_video_language">Idioma</string>
+    <string name="player_video_forced_subtitle">Legenda forçada</string>
+    <string name="player_video_hearing_impaired">Deficientes auditivos</string>
+    <string name="player_video_uploading">A enviar…</string>
+
+    <!-- Player controls -->
+    <string name="player_video_back">Voltar</string>
+    <string name="player_video_current_time">Hora atual</string>
+    <string name="player_video_previous_episode">Episódio anterior</string>
+    <string name="player_video_next_episode">Episódio seguinte</string>
+    <string name="player_video_lock_screen">Bloquear ecrã</string>
+    <string name="player_video_rotate_screen">Rodar ecrã</string>
+    <string name="player_video_more_options">Mais opções</string>
+    <string name="player_video_audio">Áudio</string>
+    <string name="player_video_subtitles">Legendas</string>
+    <string name="player_video_subtitle_hub_section_tracks">Faixas</string>
+    <string name="player_video_subtitle_hub_section_style">Estilo</string>
+    <string name="player_video_subtitle_hub_section_get">Obter</string>
+    <string name="player_video_subtitle_hub_section_delay">Atraso</string>
+    <string name="player_video_subtitle_downloaded_device_only">Salvo apenas no dispositivo (offline)</string>
+    <string name="player_video_chapters">Capítulos</string>
+    <string name="player_video_episodes">Episódios</string>
+    <string name="player_video_syncplay">SyncPlay</string>
+    <string name="player_video_aspect_ratio_label">Proporção da tela</string>
+    <string name="player_video_info">Informações</string>
+    <string name="player_video_ends_at">Termina às %1$s</string>
+
+    <!-- Player overflow menu -->
+    <string name="player_video_dialogue_boost">Ampliação de diálogos</string>
+    <string name="player_video_dialogue_boost_on">Ampliação de diálogos \u00B7 %1$s</string>
+    <string name="player_video_night_mode">Modo noturno</string>
+    <string name="player_video_night_mode_on">Modo noturno \u00B7 %1$s</string>
+    <string name="player_video_audio_normalization">Normalização de áudio</string>
+    <string name="player_video_normalization_on">Normalização \u00B7 %1$s</string>
+    <string name="player_video_channel_mixing">Mixagem de canais</string>
+    <string name="player_video_channel_mix_on">Mixagem \u00B7 %1$s</string>
+    <string name="player_video_av_sync">Sincronia A/V</string>
+    <string name="player_video_playback_mode">Modo de reprodução</string>
+    <string name="player_video_playback_mode_on">%1$s \u00B7 Ativado</string>
+    <string name="player_video_decoder">Descodificador</string>
+    <string name="player_video_passthrough">Passthrough</string>
+    <string name="player_video_stats_for_nerds">Estatísticas para geeks</string>
+    <string name="player_video_stats_for_nerds_on">Estatísticas para geeks \u00B7 Ativado</string>
+    <string name="player_video_video_filters">Filtros de vídeo</string>
+    <string name="player_video_video_filters_on">Filtros de vídeo \u00B7 Ativado</string>
+    <string name="player_video_capture_frame">Capturar fotograma</string>
+    <string name="player_video_ab_repeat">Repetição A/B</string>
+    <string name="player_video_ab_repeat_on">Repetição A/B \u00B7 Ativado</string>
+    <string name="player_video_set_a_point">Definir ponto A</string>
+    <string name="player_video_set_b_point">Definir ponto B</string>
+    <string name="player_video_clear_ab_repeat">Limpar repetição A/B</string>
+    <string name="player_video_set_a_point_at">Definir ponto A \u00B7 %1$s</string>
+    <string name="player_video_set_b_point_at">Definir ponto B \u00B7 %1$s</string>
+    <string name="player_video_ab_repeat_badge_enabled">Repetição A/B ativada — vá ao ponto inicial e use «Definir ponto A»</string>
+    <string name="player_video_ab_repeat_badge_a_set">A definido em %1$s — vá ao ponto final e use «Definir ponto B»</string>
+    <string name="player_video_ab_repeat_badge_active">Repetindo %1$s \u2192 %2$s</string>
+    <string name="player_video_ab_repeat_badge_cleared">Repetição A/B limpa</string>
+    <string name="player_audio_only">Som apenas</string>
+    <string name="player_audio_only_on">Som apenas — vídeo oculto</string>
+
+    <!-- Video filter sheet -->
+    <string name="player_video_brightness">Brilho</string>
+    <string name="player_video_contrast">Contraste</string>
+    <string name="player_video_sharpness">Nitidez</string>
+    <string name="player_video_rotation">Rotação</string>
+    <string name="player_video_red_gain">Ganho vermelho</string>
+    <string name="player_video_green_gain">Ganho verde</string>
+    <string name="player_video_blue_gain">Ganho azul</string>
+    <string name="player_video_gaussian_blur">Desfocagem gaussiana</string>
+
+    <!-- Playback info overlay -->
+    <string name="player_video_playback_info">Informações de reprodução</string>
+    <string name="player_video_media_source">Fonte multimédia</string>
+    <string name="player_video_video">Vídeo</string>
+    <string name="player_video_active_controls">Controlos ativos</string>
+    <string name="player_video_player_errors">Erros do reprodutor</string>
+    <string name="player_video_container">Contentor</string>
+    <string name="player_video_size">Tamanho</string>
+    <string name="player_video_bitrate">Taxa de bits</string>
+    <string name="player_video_play_method">Método de reprodução</string>
+    <string name="player_video_connection">Ligação</string>
+    <string name="player_video_metered">Limitada</string>
+    <string name="player_video_unmetered">Ilimitada</string>
+    <string name="player_video_codec">Codec</string>
+    <string name="player_video_resolution">Resolução</string>
+    <string name="player_video_hdr_format">Formato HDR</string>
+    <string name="player_video_range">Gama</string>
+    <string name="player_video_frame_rate">Taxa de fotogramas</string>
+    <string name="player_video_track_n">Faixa %1$d</string>
+    <string name="player_video_channels">Canais</string>
+    <string name="player_video_player_engine">Motor do reprodutor</string>
+    <string name="player_video_decoder_mode">Modo do descodificador</string>
+    <string name="player_video_speed">Velocidade</string>
+    <string name="player_video_audio_delay">Atraso de áudio</string>
+    <string name="player_video_night_mode_label">Modo noturno</string>
+    <string name="player_video_dialogue_boost_label">Ampliação de diálogos</string>
+    <string name="player_video_audio_passthrough">Passthrough de áudio</string>
+    <string name="player_video_active_audio">Áudio ativo</string>
+    <string name="player_video_active_subtitle">Legenda ativa</string>
+    <string name="player_video_off">Desligado</string>
+    <string name="player_video_on">Ativado</string>
+
+    <!-- Misc. hardcoded strings -->
+    <string name="player_video_reset_audio">Repor áudio</string>
+    <string name="player_video_subtitle_delay">Atraso das legendas</string>
+    <string name="player_video_subtitle_delay_close">Fechar atraso das legendas</string>
+    <string name="player_video_subtitle_delay_reset">Repor</string>
+    <string name="player_video_subtitle_delay_decrease">Reduzir atraso das legendas</string>
+    <string name="player_video_subtitle_delay_increase">Aumentar atraso das legendas</string>
+    <string name="player_video_subtitle_delay_voice_heard">Voz ouvida</string>
+    <string name="player_video_subtitle_delay_text_seen">Texto visto</string>
+    <string name="player_video_subtitle_delay_show_controls">Ajustar atraso</string>
+    <string name="player_video_subtitle_delay_hub_hint">Ajuste o tempo das legendas em relação ao vídeo. Use a sobreposição para ver as legendas deslocarem-se enquanto ajusta.</string>
+    <string name="player_video_av_sync_audio_helper">Negativo: áudio mais cedo. Positivo: áudio mais tarde.</string>
+    <string name="player_video_av_sync_decrease">Diminuir %1$s</string>
+    <string name="player_video_av_sync_increase">Aumentar %1$s</string>
+    <string name="player_video_picture_in_picture">Imagem na imagem</string>
+    <string name="player_video_play_next">Reproduzir seguinte</string>
+    <string name="player_video_turn_on_autoplay">Ativar reprodução automática</string>
+    <string name="player_video_enter_pin">Introduzir PIN</string>
+    <string name="player_video_unlock_player">Desbloquear reprodutor</string>
+    <string name="player_video_incorrect_pin">PIN incorreto</string>
+    <string name="player_video_no_episodes_found">Nenhum episódio encontrado para esta temporada</string>
+    <string name="player_video_poster">Cartaz</string>
+    <string name="player_video_selected">Selecionado</string>
+    <string name="player_video_volume">Volume</string>
+    <string name="player_video_hdr_label">HDR: %1$s</string>
+    <string name="player_video_duration">Duração</string>
+    <string name="player_video_remember_audio_language">Memorizar idioma de áudio para esta série</string>
+    <string name="player_video_remember_subtitle_language">Memorizar idioma de legendas para esta série</string>
+    <string name="player_video_remember_subtitles_off">Manter legendas desativadas para esta série</string>
+    <string name="player_video_error_offline_file_missing">Erro: ficheiro offline em falta</string>
+    <string name="player_video_error_loading_media">Erro ao carregar conteúdo</string>
+    <string name="player_video_error_offline_stream">Está sem ligação \u2014 reconecte-se para reproduzir este título</string>
+    <string name="player_video_error_next_episode_load">Não foi possível carregar o próximo episódio. Verifique a ligação e tente novamente</string>
+    <string name="player_video_trickplay_thumbnail">Miniatura trickplay</string>
+
+    <plurals name="player_video_participants">
+        <item quantity="one">%1$d participante</item>
+        <item quantity="other">%1$d participantes</item>
+    </plurals>
+
+    <!-- Localized UI text extracted from player/video components -->
+    <string name="player_video_stats_playback">Reproducao</string>
+    <string name="player_video_stats_network">Rede</string>
+    <string name="player_video_stats_performance">Desempenho</string>
+    <string name="player_video_stats_engine">Mecanismo</string>
+    <string name="player_video_stats_state">Estado</string>
+    <string name="player_video_stats_playing">Reproduzindo</string>
+    <string name="player_video_stats_position">Posicao</string>
+    <string name="player_video_stats_progress">Progresso</string>
+    <string name="player_video_stats_buffer_health">Integridade do buffer</string>
+    <string name="player_video_stats_buffered">Em buffer</string>
+    <string name="player_video_stats_clock">Relogio</string>
+    <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_color_range">Intervallo de cores</string>
+    <string name="player_video_stats_color_depth">Profundidade de cores</string>
+    <string name="player_video_stats_sample_rate">Taxa de amostragem</string>
+    <string name="player_video_stats_session_id">ID da sessao</string>
+    <string name="player_video_stats_quality">Qualidade</string>
+    <string name="player_video_stats_est_bandwidth">Largura de banda est.</string>
+    <string name="player_video_stats_stream_bitrate">Taxa de bits do fluxo</string>
+    <string name="player_video_stats_dropped_frames">Quadros descartados</string>
+    <string name="player_video_stats_total_frames">Quadros totais</string>
+    <string name="player_video_stats_drop_rate">Taxa de descarte</string>
+    <string name="player_video_stats_buffer_size">Tamanho do buffer</string>
+    <string name="player_video_stats_vo_dropped_frames">Quadros VO descartados</string>
+    <string name="player_video_stats_vo_delay">Atraso VO</string>
+    <string name="player_video_stats_display_rate">Taxa de exibicao</string>
+    <string name="player_video_stats_player">Player</string>
+    <string name="player_video_cast_connecting">Conectando</string>
+    <string name="player_video_casting">Transmitindo</string>
+    <string name="player_video_season_n">Temporada %1$d</string>
+    <string name="player_video_no_episodes_available">Nenhum episodio disponivel</string>
+    <string name="player_video_watched">Assistido</string>
+    <string name="player_video_time_left">Restam %1$s</string>
+    <string name="player_video_now_playing">Reproduzindo agora</string>
+    <string name="player_video_quality_title">Qualidade</string>
+    <string name="player_video_quality_description">As alteracoes se aplicam imediatamente para streams adaptativos. Para reproducao direta, isso define a taxa de bits maxima de reproducao.</string>
+    <string name="player_video_adaptive_bitrate_cap">Limite de bitrate adaptativo</string>
+    <string name="player_video_adaptive_bitrate_on">Limita a qualidade em redes limitadas</string>
+    <string name="player_video_adaptive_bitrate_off">Desativado - qualidade total (reproducao direta)</string>
+    <string name="player_video_skip_intro">Pular introducao</string>
+    <string name="player_video_overview_tab">Visao geral</string>
+    <string name="player_video_lyrics_subtitles_tab">Letras / Legendas</string>
+    <string name="player_video_synopsis">Sinopse</string>
+    <string name="player_video_cast_and_crew">Elenco &amp; Equipe</string>
+    <string name="player_video_audio_stream">Fluxo de audio</string>
+    <string name="player_video_episode_title">E%1$d: %2$s</string>
+    <string name="player_video_seek_backward_10s">-10s</string>
+    <string name="player_video_seek_forward_30s">+30秒</string>
+    <string name="player_video_cast_connecting_device">Conectando ao dispositivo...</string>
+    <string name="player_video_cast_connected_streaming">Conectado / Transmitindo</string>
+    <string name="player_video_companion">JellyPlay Companion</string>
+
+    <!-- Localized error messages -->
+    <string name="player_video_font_invalid_format">O arquivo selecionado não é uma fonte .ttf ou .otf.</string>
+
+    <string name="player_video_subtitle_provider_all">Tudo</string>
+
+    <!-- Acessibilidade: semântica de leitor de tela para a área de gestos de brilho/volume (P5 §3.1) -->
+    <string name="a11y_gesture_controls">Controles de brilho e volume</string>
+    <string name="a11y_brightness_increase">Aumentar brilho</string>
+    <string name="a11y_brightness_decrease">Diminuir brilho</string>
+    <string name="a11y_volume_increase">Aumentar volume</string>
+    <string name="a11y_volume_decrease">Diminuir volume</string>
+    <string name="player_direct_play_fallback">A reprodução direta falhou — mudando para transcodificação (%1$s)</string>
+</resources>

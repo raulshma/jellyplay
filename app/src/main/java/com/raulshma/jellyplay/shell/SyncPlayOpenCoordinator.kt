@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.shell
 
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -26,8 +24,7 @@ data class SyncPlayOpenRequest(
  * playing-item change, reset when the group is left) is private to this
  * module.
  */
-@Singleton
-class SyncPlayOpenCoordinator @Inject constructor(
+class SyncPlayOpenCoordinator (
     private val syncPlayManager: SyncPlayManager,
 ) {
     private val _openRequests = MutableSharedFlow<SyncPlayOpenRequest>(extraBufferCapacity = 4)

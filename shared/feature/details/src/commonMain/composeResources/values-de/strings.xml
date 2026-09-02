@@ -1,0 +1,417 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ════════════════════════════════════════════════════════════════════
+         Media Detail feature strings.
+
+         Prefixed `detail_` so they never collide with other modules once
+         resources are merged at the app level. Mirrors the `core_` convention
+         in core/ui/src/main/res/values/strings.xml.
+         ════════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Section titles / headers ─────────────────────────────────────── -->
+    <string name="detail_section_tracks">Titel</string>
+    <string name="detail_section_items">Einträge</string>
+    <string name="detail_section_cast_crew">Besetzung &amp; Crew</string>
+    <string name="detail_section_cast">Besetzung</string>
+    <string name="detail_section_crew">Crew</string>
+    <string name="detail_section_more_like_this">Ähnliches</string>
+    <string name="detail_section_special_features">Extras</string>
+    <string name="detail_section_chapters">Kapitel</string>
+    <string name="detail_see_all">Alle anzeigen</string>
+    <string name="detail_more_like_this_on_device">Auf dem Gerät</string>
+    <string name="detail_section_videos">Videos</string>
+    <string name="detail_section_seasons">Staffeln</string>
+    <string name="detail_section_reviews">Rezensionen</string>
+
+    <!-- ── Primary action button labels ─────────────────────────────────── -->
+    <string name="detail_play_play">Abspielen</string>
+    <string name="detail_play_resume">Fortsetzen</string>
+    <string name="detail_play_finding_episode">Episode wird gesucht</string>
+    <string name="detail_play_no_episodes_available">Keine Episoden verfügbar</string>
+    <string name="detail_play_no_episodes">Keine Episoden</string>
+
+    <!-- ── Segment availability chip (rendered near the Play button) ──────── -->
+    <string name="detail_skip_available_intro">Intro überspringen verfügbar</string>
+    <string name="detail_skip_available_credits">Abspann überspringen verfügbar</string>
+    <string name="detail_skip_available_both">Intro &amp; Abspann überspringen</string>
+
+    <!-- ── Up Next card label ───────────────────────────────────────────── -->
+    <string name="detail_up_next">Nächstes</string>
+
+    <!-- ── Smart-play templates (verb + S#:E#) ────────────────────────────
+         Positional args: %1$d = season number, %2$d = episode number. -->
+    <string name="detail_resume_episode">S%1$d:E%2$d fortsetzen</string>
+    <string name="detail_next_up_episode">Als Nächstes S%1$d:E%2$d</string>
+    <string name="detail_play_episode">S%1$d:E%2$d abspielen</string>
+    <string name="detail_replay_episode">S%1$d:E%2$d erneut abspielen</string>
+
+    <!-- ── Action icon content descriptions (TalkBack) ──────────────────── -->
+    <string name="detail_cd_mark_as_watched">Als gesehen markieren</string>
+    <string name="detail_cd_mark_as_unwatched">Als ungesehen markieren</string>
+    <string name="detail_cd_favorite">Favorit</string>
+    <string name="detail_cd_options">Optionen</string>
+    <string name="detail_cd_episode_play">Abspielen</string>
+    <string name="detail_cd_track_play">Abspielen</string>
+    <string name="detail_cd_collapse">Einklappen</string>
+    <string name="detail_cd_expand">Ausklappen</string>
+    <string name="detail_cd_sort_oldest_first">Älteste zuerst sortieren</string>
+    <string name="detail_cd_sort_newest_first">Neueste zuerst sortieren</string>
+
+    <!-- ── Episode / season card labels ─────────────────────────────────── -->
+    <string name="detail_season_format">Staffel %1$d</string>
+    <string name="detail_spoiler">Spoiler</string>
+    <string name="detail_watched_badge">Gesehen</string>
+    <string name="detail_cd_switch_to_list">Zur vertikalen Episodenliste wechseln</string>
+    <string name="detail_cd_switch_to_cards">Zu horizontalen Episodenkarten wechseln</string>
+    <string name="detail_time_left_format">noch %1$s</string>
+
+    <!-- ── Overflow / options menu ──────────────────────────────────────── -->
+    <string name="detail_option_edit">Bearbeiten</string>
+    <string name="detail_option_share">Teilen</string>
+    <string name="detail_option_downloading">Wird heruntergeladen…</string>
+    <string name="detail_option_downloading_percent">Wird heruntergeladen (%1$d%%)</string>
+    <string name="detail_option_download">Herunterladen</string>
+    <string name="detail_option_downloading_series">Serie wird heruntergeladen…</string>
+    <string name="detail_option_download_series">Serie herunterladen</string>
+    <string name="detail_option_hide_from_next_up">Aus „Als Nächstes\" ausblenden</string>
+    <string name="detail_option_hide_from_continue_watching">Aus „Weitersehen\" ausblenden</string>
+    <string name="detail_option_show_in_next_up">In „Als Nächstes\" anzeigen</string>
+    <string name="detail_option_show_in_continue_watching">In „Weitersehen\" anzeigen</string>
+    <string name="detail_option_technical_info">Technische Infos</string>
+
+    <!-- ── Series download sheet ────────────────────────────────────────── -->
+    <string name="detail_select_all">Alle auswählen</string>
+    <string name="detail_deselect_all">Auswahl aufheben</string>
+    <string name="detail_episodes_selected_format">%1$d von %2$d Episoden ausgewählt</string>
+    <plurals name="detail_episode_count">
+        <item quantity="one">%1$d Episode</item>
+        <item quantity="other">%1$d Episoden</item>
+    </plurals>
+    <string name="detail_cancel">Abbrechen</string>
+
+    <!-- ── Add to Playlist picker ──────────────────────────────────────── -->
+    <string name="detail_option_add_to_playlist">Zur Wiedergabeliste hinzufügen</string>
+    <string name="detail_playlist_picker_title">Zur Wiedergabeliste hinzufügen</string>
+    <string name="detail_playlist_watch_later">Später ansehen</string>
+    <string name="detail_playlist_create_new">Neue Wiedergabeliste erstellen</string>
+    <string name="detail_playlist_new_title">Neue Wiedergabeliste</string>
+    <string name="detail_playlist_name_label">Name</string>
+    <string name="detail_playlist_desc_label">Beschreibung (optional)</string>
+    <string name="detail_playlist_create">Erstellen</string>
+    <string name="detail_msg_no_playlists">Noch keine Wiedergabelisten</string>
+    <!-- %1$s = playlist name -->
+    <string name="detail_msg_added_to_playlist">Zu „%1$s\" hinzugefügt</string>
+    <string name="detail_msg_added_to_watch_later">Zu „Später ansehen\" hinzugefügt</string>
+    <!-- %1$s = playlist name -->
+    <string name="detail_msg_playlist_created">„%1$s\" erstellt und Eintrag hinzugefügt</string>
+    <string name="detail_msg_couldnt_add_to_playlist">Zur Wiedergabeliste hinzufügen fehlgeschlagen</string>
+    <plurals name="detail_playlist_item_count">
+        <item quantity="one">%1$d Eintrag</item>
+        <item quantity="other">%1$d Einträge</item>
+    </plurals>
+
+    <!-- ── Add to Collection picker ────────────────────────────────────── -->
+    <string name="detail_option_add_to_collection">Zur Sammlung hinzufügen</string>
+    <string name="detail_collection_picker_title">Zur Sammlung hinzufügen</string>
+    <string name="detail_collection_create_new">Neue Sammlung erstellen</string>
+    <string name="detail_collection_new_title">Neue Sammlung</string>
+    <string name="detail_collection_name_label">Name</string>
+    <string name="detail_collection_create">Erstellen</string>
+    <string name="detail_msg_no_collections">Noch keine Sammlungen</string>
+    <!-- %1$s = Sammlungsname -->
+    <string name="detail_msg_added_to_collection">Zu „%1$s\" hinzugefügt</string>
+    <!-- %1$s = Sammlungsname -->
+    <string name="detail_msg_collection_created">„%1$s\" erstellt und Eintrag hinzugefügt</string>
+    <string name="detail_msg_couldnt_add_to_collection">Zur Sammlung hinzufügen fehlgeschlagen</string>
+    <plurals name="detail_collection_item_count">
+        <item quantity="one">%1$d Eintrag</item>
+        <item quantity="other">%1$d Einträge</item>
+    </plurals>
+
+    <!-- ── Instant Mix (Audio-Einträge) ──────────────────────────────── -->
+    <string name="detail_option_instant_mix">Sofort-Mix starten</string>
+    <string name="detail_instant_mix_empty">Kein Mix für diesen Eintrag verfügbar</string>
+    <string name="detail_instant_mix_failed">Sofort-Mix konnte nicht gestartet werden</string>
+
+    <!-- ── Watch Party (SyncPlay) ──────────────────────────────────────── -->
+    <string name="detail_option_watch_party">Watchparty starten</string>
+    <string name="detail_watch_party_default_name">Watchparty</string>
+    <string name="detail_msg_watch_party_started">Watchparty gestartet</string>
+    <string name="detail_msg_watch_party_failed">Watchparty konnte nicht gestartet werden</string>
+
+    <!-- ── Stream picker (audio / subtitle) ─────────────────────────────── -->
+    <string name="detail_select_audio">Audio wählen</string>
+    <string name="detail_select_subtitle">Untertitel wählen</string>
+    <string name="detail_stream_auto">Auto</string>
+    <string name="detail_stream_default">Standard</string>
+    <string name="detail_stream_subtitle_off">Aus</string>
+    <string name="detail_stream_default_badge">STANDARD</string>
+    <string name="detail_audio_track_format">Titel %1$d</string>
+    <string name="detail_subtitle_track_format">Titel %1$d</string>
+    <string name="detail_download_quality">Qualität</string>
+    <string name="detail_subtitle_off">AUS</string>
+    <string name="detail_audio_channels_format">%1$d-Kanal</string>
+
+    <!-- ── Download dialogs ─────────────────────────────────────────────── -->
+    <string name="detail_download_dialog_title">Herunterladen</string>
+    <string name="detail_download_anyway">Trotzdem herunterladen</string>
+    <string name="detail_cellular_download_title">Großer Download über Mobilfunk</string>
+    <string name="detail_cellular_download_message">Du bist in einem getakteten Netzwerk. Dieser Download umfasst etwa %1$d MB und kann erhebliche mobile Daten verbrauchen.</string>
+    <string name="detail_estimated_size">Geschätzte Größe: %1$s</string>
+    <string name="detail_available_storage">Verfügbarer Speicher: %1$s</string>
+    <string name="detail_not_enough_storage">Nicht genug Speicherplatz verfügbar.</string>
+
+    <!-- ── File-size formatting ─────────────────────────────────────────── -->
+    <string name="detail_size_gb">%1$.1f GB</string>
+    <string name="detail_size_mb">%1$.1f MB</string>
+    <string name="detail_size_kb">%1$.1f KB</string>
+    <string name="detail_size_b">%1$d B</string>
+    <string name="detail_size_unknown">Unbekannt</string>
+
+    <!-- ── Share ────────────────────────────────────────────────────────── -->
+    <string name="detail_share_via">Teilen über</string>
+
+    <!-- ── Snackbar / user feedback (from ViewModel) ────────────────────── -->
+    <string name="detail_msg_couldnt_update_favorite">Favorit konnte nicht aktualisiert werden</string>
+    <string name="detail_msg_couldnt_mark_played">Als gespielt markieren fehlgeschlagen</string>
+    <string name="detail_msg_download_started">Download gestartet</string>
+    <string name="detail_msg_download_start_failed">Download konnte nicht gestartet werden</string>
+    <string name="detail_msg_couldnt_mark_unplayed">Als ungespielt markieren fehlgeschlagen</string>
+    <string name="detail_mark_season_watched">Staffel als gesehen markieren</string>
+    <string name="detail_mark_season_unwatched">Staffel als ungesehen markieren</string>
+    <string name="detail_mark_series_watched_confirm_title">Serie als gesehen markieren?</string>
+    <string name="detail_mark_series_watched_confirm_message">Dadurch werden alle Folgen als gesehen markiert und alle Wiedergabepositionen gelöscht.</string>
+    <string name="detail_mark_series_unwatched_confirm_title">Serie als ungesehen markieren?</string>
+    <string name="detail_mark_series_unwatched_confirm_message">Dadurch werden alle Folgen als ungesehen markiert.</string>
+    <string name="detail_mark_season_watched_confirm_title">Staffel als gesehen markieren?</string>
+    <string name="detail_mark_season_watched_confirm_message">Dadurch werden alle Folgen dieser Staffel als gesehen markiert und ihre Wiedergabepositionen gelöscht.</string>
+    <string name="detail_mark_season_unwatched_confirm_title">Staffel als ungesehen markieren?</string>
+    <string name="detail_mark_season_unwatched_confirm_message">Dadurch werden alle Folgen dieser Staffel als ungesehen markiert.</string>
+    <string name="detail_cd_season_options">Staffel als gesehen oder ungesehen markieren</string>
+    <string name="detail_msg_no_episodes_queued">Es konnten keine Episoden in die Warteschlange aufgenommen werden</string>
+    <string name="detail_msg_hidden_from_next_up">Aus „Als Nächstes\" ausgeblendet</string>
+    <string name="detail_msg_shown_in_next_up">In „Als Nächstes\" angezeigt</string>
+    <string name="detail_msg_hidden_from_continue_watching">Aus „Weitersehen\" ausgeblendet</string>
+    <string name="detail_msg_shown_in_continue_watching">In „Weitersehen\" angezeigt</string>
+
+    <!-- ── Snackbar: episodes queued (plurals) ──────────────────────────── -->
+    <plurals name="detail_episodes_queued">
+        <item quantity="one">%1$d Episode zum Download in die Warteschlange aufgenommen</item>
+        <item quantity="other">%1$d Episoden zum Download in die Warteschlange aufgenommen</item>
+    </plurals>
+
+    <!-- ── ViewModel error messages (shown via ErrorScreen / snackbar) ──── -->
+    <string name="detail_error_load_failed">Details konnten nicht geladen werden</string>
+    <string name="detail_error_access_denied">Du hast keinen Zugriff auf diesen Eintrag.</string>
+    <string name="detail_error_details_not_loaded">Mediendetails nicht geladen</string>
+    <string name="detail_error_no_source">Keine Medienquelle für den Download verfügbar</string>
+    <string name="detail_error_download_failed">Download fehlgeschlagen</string>
+    <string name="detail_error_not_a_series">Dies ist keine Serie</string>
+    <string name="detail_error_queue_failed">Downloads konnten nicht in die Warteschlange aufgenommen werden</string>
+    <string name="detail_error_unavailable_offline">Dieser Eintrag ist offline nicht verfügbar.</string>
+
+    <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
+    <string name="detail_option_manage_series">Serie verwalten</string>
+    <string name="detail_manage_title">Serie verwalten</string>
+    <!-- Series-level actions -->
+    <string name="detail_manage_refresh_metadata">Metadaten aktualisieren</string>
+    <string name="detail_manage_refresh_scan">Aktualisieren &amp; Scannen</string>
+    <string name="detail_manage_search_series">Suchen</string>
+    <!-- %1$s = formatted size (e.g. "12.3 GB") -->
+    <string name="detail_manage_disk_used_format">Speicher: %1$s</string>
+    <!-- Series monitored indicator -->
+    <string name="detail_manage_monitored">Überwacht</string>
+    <string name="detail_manage_unmonitored">Nicht überwacht</string>
+    <!-- Season header -->
+    <string name="detail_manage_season_format">Staffel %1$d</string>
+    <string name="detail_manage_season_specials">Specials</string>
+    <!-- %1$d = downloaded count, %2$d = total count -->
+    <string name="detail_manage_season_count_format">%1$d/%2$d</string>
+    <!-- Episode status badges -->
+    <string name="detail_manage_status_downloaded">Heruntergeladen</string>
+    <string name="detail_manage_status_missing">Fehlt</string>
+    <string name="detail_manage_status_unmonitored">Nicht überwacht</string>
+    <string name="detail_manage_status_unaired">Nicht ausgestrahlt</string>
+    <!-- Episode actions -->
+    <string name="detail_manage_search">Automatische Suche</string>
+    <string name="detail_manage_monitor">Überwachen</string>
+    <string name="detail_manage_unmonitor">Nicht überwachen</string>
+    <string name="detail_manage_delete_file">Datei löschen</string>
+    <!-- Delete-file confirmation dialog. %1$s = episode title, %2$s = SxxExx -->
+    <string name="detail_manage_delete_title">Episodendatei löschen</string>
+    <string name="detail_manage_delete_message">Die Datei für „%1$s\" (%2$s) löschen? Sonarr entfernt sie und du kannst nach einem Ersatz suchen.</string>
+    <string name="detail_manage_delete_confirm">Löschen</string>
+    <!-- Empty / error states -->
+    <string name="detail_manage_no_episodes">Für diese Serie wurden in Sonarr keine Episoden gefunden.</string>
+    <string name="detail_manage_not_tracked">Diese Serie wird von keinem Sonarr-Server überwacht.</string>
+    <!-- Content descriptions (TalkBack / TV) -->
+    <string name="detail_manage_cd_search_season">Überwachte in Staffel suchen</string>
+    <string name="detail_manage_cd_toggle_monitor_season">Überwachung für alle Episoden der Staffel umschalten</string>
+    <string name="detail_manage_cd_toggle_monitor_episode">Überwachung für Episode umschalten</string>
+    <string name="detail_manage_cd_episode_menu">Episoden-Optionen</string>
+
+    <!-- Localized error messages -->
+    <string name="detail_manage_series_load_error">Serien konnten nicht von Jellyfin geladen werden.</string>
+    <string name="detail_manage_series_no_tvdb">Diese Serie hat keine TVDb-ID; Sonarr kann sie nicht finden.</string>
+    <string name="detail_manage_series_not_tracked">Kein Sonarr-Server verfolgt diese Serie. Füge die Serie zuerst in Sonarr hinzu.</string>
+
+    <!-- ── Seerr request / status buttons ──────────────────────────────── -->
+    <string name="detail_available">Verfügbar</string>
+    <string name="detail_request">Anfordern</string>
+    <string name="detail_seerr_processing">Wird verarbeitet</string>
+    <string name="detail_seerr_pending">Ausstehend</string>
+    <string name="detail_seerr_requested">Angefordert</string>
+
+    <!-- ── Seerr horizontal sections ───────────────────────────────────── -->
+    <string name="detail_section_recommendations">Empfehlungen</string>
+    <string name="detail_section_similar">Ähnlich</string>
+
+    <!-- ── External links (brand names: never translate) ───────────────── -->
+    <string name="detail_link_tmdb" translatable="false">TMDB</string>
+    <string name="detail_link_imdb" translatable="false">IMDb</string>
+    <string name="detail_link_tvdb" translatable="false">TVDB</string>
+
+    <!-- ── Release-type icons (TalkBack) ───────────────────────────────── -->
+    <string name="detail_cd_release_theatrical">Kinostart</string>
+    <string name="detail_cd_release_digital">Digitale Veröffentlichung</string>
+    <string name="detail_cd_release_physical">Physische Veröffentlichung</string>
+
+    <!-- ── Media Info screen ───────────────────────────────────────────── -->
+    <string name="detail_media_info_title_video">Video</string>
+    <string name="detail_media_info_title_audio">Audio</string>
+    <string name="detail_media_info_title_subtitles">Untertitel</string>
+    <string name="detail_media_info_no_info">Keine Medieninformationen</string>
+    <string name="detail_media_info_no_info_description">Für diesen Eintrag sind keine technischen Informationen verfügbar</string>
+
+    <!-- auto-localized: previously translatable="false" (2) -->
+    <string name="detail_section_seerr_recommendations">Seerr-Empfehlungen</string>
+    <string name="detail_section_seerr_similar">Ähnlich laut Seerr</string>
+
+    <!-- Localized UI text extracted from SeerrDetailScreen -->
+    <string name="detail_seerr_unknown_error">Unbekannter Fehler</string>
+    <string name="detail_seerr_overview">Übersicht</string>
+    <string name="detail_seerr_episodes_count">%1$d Episoden</string>
+    <string name="detail_seerr_season_n">Staffel %1$d</string>
+    <string name="detail_seerr_director_format">Regisseur: %1$s</string>
+    <string name="detail_seerr_show_more">Mehr anzeigen</string>
+    <string name="detail_seerr_video">Video</string>
+    <string name="detail_seerr_information">Informationen</string>
+    <string name="detail_seerr_status">Status</string>
+    <string name="detail_seerr_unknown">Unbekannt</string>
+    <string name="detail_seerr_release_date">Veröffentlichungsdatum</string>
+    <string name="detail_seerr_revenue">Einnahmen</string>
+    <string name="detail_seerr_budget">Budget</string>
+    <string name="detail_seerr_language">Sprache</string>
+    <string name="detail_seerr_country">Land</string>
+    <string name="detail_seerr_studios">Studios</string>
+    <string name="detail_seerr_currently_streaming_on">Aktuell streambar auf</string>
+
+    <!-- Leere Zustände -->
+    <string name="detail_collection_empty_title">Diese Sammlung ist leer</string>
+    <string name="detail_collection_empty_description">Elemente in dieser Sammlung erscheinen hier.</string>
+    <string name="detail_person_empty_title">Keine Titel gefunden</string>
+    <string name="detail_person_empty_description">Diese Person hat keine Titel, die dem aktuellen Filter entsprechen.</string>
+    <string name="detail_season_empty_title">Keine Episoden verfügbar</string>
+    <string name="detail_season_empty_description">Episoden erscheinen hier, sobald sie hinzugefügt werden.</string>
+
+    <!-- Unified download / offline-detail strings. Resync falls back to default. -->
+    <string name="detail_download_info">Download-Info</string>
+    <string name="detail_file_size">Dateigröße</string>
+    <string name="detail_status">Status</string>
+    <string name="detail_progress">Fortschritt</string>
+    <string name="detail_download_status_pending">Ausstehend</string>
+    <string name="detail_download_status_queued">In der Warteschlange</string>
+    <string name="detail_download_status_downloading">Wird heruntergeladen</string>
+    <string name="detail_download_status_paused">Angehalten</string>
+    <string name="detail_download_status_completed">Abgeschlossen</string>
+    <string name="detail_download_status_failed">Fehlgeschlagen</string>
+    <string name="detail_download_status_cancelled">Abgebrochen</string>
+    <string name="detail_watch_status">Wiedergabestatus</string>
+    <string name="detail_watched_status_watched">Angesehen</string>
+    <string name="detail_watched_status_label">Angesehen</string>
+    <string name="detail_watched_status_in_progress">In Arbeit</string>
+    <string name="detail_watched_status_started">Begonnen</string>
+    <string name="detail_position">Position</string>
+    <string name="detail_position_of">%1$s von %2$s</string>
+    <string name="detail_last_watched">Zuletzt angesehen</string>
+    <string name="detail_close">Schließen</string>
+    <string name="detail_delete">Löschen</string>
+    <string name="detail_delete_download_title">Download löschen</string>
+    <string name="detail_delete_download_message">"%1$s" vom Gerät entfernen? Das gibt %2$s frei.</string>
+    <string name="detail_delete_episode_title">Episode löschen</string>
+    <string name="detail_delete_episode_cd">Episode löschen</string>
+    <string name="detail_delete_episode_message">"%1$s" vom Gerät entfernen?</string>
+    <string name="detail_delete_downloads_title">Downloads löschen</string>
+    <string name="detail_select_episodes_to_remove">Wähle Episoden aus, die vom Gerät entfernt werden sollen.</string>
+    <string name="detail_episodes_selected">%1$d von %2$d Episoden ausgewählt</string>
+    <string name="detail_episodes_selected_with_freed">%1$d von %2$d Episoden ausgewählt · %3$s</string>
+    <string name="detail_delete_count">%1$d löschen</string>
+    <string name="detail_delete_count_with_freed">%1$d löschen · %2$s</string>
+    <string name="detail_season_default">Staffel %1$d</string>
+    <string name="detail_delete_entire_series">Ganze Serie löschen</string>
+    <string name="detail_option_delete_downloads">Downloads löschen</string>
+    <plurals name="detail_episodes_count">
+        <item quantity="one">%1$d Episode</item>
+        <item quantity="other">%1$d Episoden</item>
+    </plurals>
+
+    <!-- Sync / resync download -->
+    <string name="detail_resync_title">Download synchronisieren</string>
+    <string name="detail_resync_checking">Suche nach Updates…</string>
+    <string name="detail_resync_update_available">Neue Informationen verfügbar</string>
+    <string name="detail_resync_media_changed">Mediendatei geändert — erneuter Download erforderlich</string>
+    <string name="detail_resync_in_progress">Synchronisiere neueste Details…</string>
+    <string name="detail_resync_complete">Download mit neuesten Details synchronisiert</string>
+    <string name="detail_resync_failed">Synchronisierung fehlgeschlagen</string>
+    <string name="detail_resync_up_to_date">Dieser Download ist auf dem neuesten Stand.</string>
+    <string name="detail_resync_description">Auf dem Server sind neuere Informationen verfügbar. Synchronisieren, um Metadaten und Bilder zu aktualisieren.</string>
+    <string name="detail_resync_change_metadata">Aktualisierte Metadaten (Übersicht, Besetzung, Bewertungen)</string>
+    <string name="detail_resync_change_images">Aktualisierte Bilder (Poster/Hintergrund)</string>
+    <string name="detail_resync_change_media">Die Mediendatei selbst hat sich geändert</string>
+    <string name="detail_resync_media_explanation">Eine Metadaten-Synchronisierung kann die Mediendatei nicht aktualisieren. Lösche diesen Eintrag und lade ihn erneut herunter, um die neue Datei zu erhalten.</string>
+    <string name="detail_resync_action">Jetzt synchronisieren</string>
+    <string name="detail_resync_redownload">Medien erneut herunterladen</string>
+
+    <!-- Local subtitles -->
+    <string name="detail_local_subtitles">Untertitel</string>
+    <string name="detail_local_subtitle_off">Aus</string>
+    <string name="detail_local_subtitle_default_badge">STANDARD</string>
+    <string name="detail_local_subtitle_forced_badge">ERZWUNGEN</string>
+
+    <!-- Download Details Sheet -->
+    <string name="detail_download_details_title">Download-Details</string>
+    <string name="detail_download_section_download">Download</string>
+    <string name="detail_download_section_media">Medien</string>
+    <string name="detail_download_section_media_info">Medien-Info</string>
+    <string name="detail_download_section_files">Heruntergeladene Dateien</string>
+    <string name="detail_downloaded_bytes">Heruntergeladene Größe</string>
+    <string name="detail_downloaded_date">Download-Datum</string>
+    <string name="detail_container">Container</string>
+    <string name="detail_file_present">Datei vorhanden</string>
+    <string name="detail_media_source">Medienquelle</string>
+    <string name="detail_download_path">Pfad</string>
+    <string name="detail_media_title">Titel</string>
+    <string name="detail_media_type">Typ</string>
+    <string name="detail_original_title">Originaltitel</string>
+    <string name="detail_year">Jahr</string>
+    <string name="detail_runtime">Laufzeit</string>
+    <string name="detail_episode_label">Episode</string>
+    <string name="detail_view_download_details">Download-Details anzeigen</string>
+    <string name="detail_download_tab_overview">Übersicht</string>
+    <string name="detail_download_tab_media_info">Medien-Info</string>
+    <string name="detail_download_tab_storage">Speicher</string>
+
+    <!-- Inventory -->
+    <string name="detail_download_files_total">Gesamt auf Speicher</string>
+    <string name="detail_download_files_loading">Berechne Dateigrößen…</string>
+    <string name="detail_download_files_empty">Keine heruntergeladenen Dateien gefunden</string>
+    <plurals name="detail_files_count">
+        <item quantity="one">%1$d Datei</item>
+        <item quantity="other">%1$d Dateien</item>
+    </plurals>
+    <string name="detail_file_category_media">Medien</string>
+    <string name="detail_file_category_subtitle">Untertitel</string>
+    <string name="detail_file_category_trickplay">Trickplay</string>
+    <string name="detail_file_category_segment">Segmente</string>
+    <string name="detail_file_category_image">Bilder</string>
+</resources>

@@ -13,8 +13,6 @@ import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,9 +21,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Named
-import javax.inject.Singleton
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -43,12 +38,11 @@ import kotlin.coroutines.resumeWithException
  * [getCacheDataSourceFactory] degrades to passthrough — returning the upstream
  * factory unchanged — so playback never breaks.
  */
-@Singleton
-open class AudioStreamCache @Inject constructor(
-    @ApplicationContext private val context: Context,
-    @Named("streaming") private val streamingOkHttpClient: OkHttpClient,
+open class AudioStreamCache(
+    private val context: Context,
+    private val streamingOkHttpClient: OkHttpClient,
     private val audioCacheStore: com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore,
-    @ApplicationScope private val scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) {
     /** Override in tests to point at a temp dir. */
     protected open fun resolveCacheDir(): File = File(context.cacheDir, "audio_cache")

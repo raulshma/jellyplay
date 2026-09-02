@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.shell
 
+import android.content.Intent
+import com.raulshma.jellyplay.core.data.update.ApkInstallBuilder
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.update.PendingAppUpdate
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
@@ -58,11 +60,12 @@ class UpdateCoordinatorTest {
         Dispatchers.setMain(dispatcher)
         every { experimentalStore.experimental } returns experimental
         coEvery { appUpdateRepository.getPendingUpdate() } returns null
-        coEvery { appUpdateRepository.checkForUpdate(any()) } returns
+        coEvery { appUpdateRepository.checkForUpdate() } returns
             Result.success(updateInfo(latestVersion = "1.0.0", isAvailable = false))
 
         coordinator = UpdateCoordinator(
             appUpdateRepository = appUpdateRepository,
+            apkInstallBuilder = ApkInstallBuilder { Intent(Intent.ACTION_VIEW) },
             experimentalStore = experimentalStore,
         )
     }
@@ -83,7 +86,7 @@ class UpdateCoordinatorTest {
         val state = coordinator.updateState.value
         assertTrue(state is UpdateState.Downloaded)
         assertEquals(pendingApk, (state as UpdateState.Downloaded).file)
-        coVerify(exactly = 0) { appUpdateRepository.checkForUpdate(any()) }
+        coVerify(exactly = 0) { appUpdateRepository.checkForUpdate() }
     }
 
     @Test
@@ -91,7 +94,7 @@ class UpdateCoordinatorTest {
         coordinator.onSessionRestored()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { appUpdateRepository.checkForUpdate(any()) }
+        coVerify(exactly = 1) { appUpdateRepository.checkForUpdate() }
         assertEquals(UpdateState.Idle, coordinator.updateState.value)
     }
 
@@ -104,7 +107,7 @@ class UpdateCoordinatorTest {
 
         assertEquals(UpdateState.Idle, coordinator.updateState.value)
         coVerify(exactly = 0) { appUpdateRepository.getPendingUpdate() }
-        coVerify(exactly = 0) { appUpdateRepository.checkForUpdate(any()) }
+        coVerify(exactly = 0) { appUpdateRepository.checkForUpdate() }
     }
 
     @Test
@@ -121,7 +124,7 @@ class UpdateCoordinatorTest {
 
         // The on-disk APK is suppressed for the dismissed version, so the
         // launch-time path must ask the network instead of surfacing it.
-        coVerify(exactly = 1) { appUpdateRepository.checkForUpdate(any()) }
+        coVerify(exactly = 1) { appUpdateRepository.checkForUpdate() }
         assertEquals(UpdateState.Idle, coordinator.updateState.value)
     }
 
@@ -142,7 +145,7 @@ class UpdateCoordinatorTest {
 
         val state = coordinator.updateState.value
         assertTrue(state is UpdateState.Downloaded)
-        coVerify(exactly = 0) { appUpdateRepository.checkForUpdate(any()) }
+        coVerify(exactly = 0) { appUpdateRepository.checkForUpdate() }
     }
 
     @Test
@@ -159,14 +162,14 @@ class UpdateCoordinatorTest {
         coordinator.onSessionRestored()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { appUpdateRepository.checkForUpdate(any()) }
+        coVerify(exactly = 1) { appUpdateRepository.checkForUpdate() }
         assertEquals(UpdateState.Idle, coordinator.updateState.value)
     }
 
     @Test
     fun `cancelDownload cancels active download and restores update available state`() = runTest(dispatcher) {
         val info = updateInfo("1.2.3")
-        coEvery { appUpdateRepository.downloadApk(info, any()) } coAnswers {
+        coEvery { appUpdateRepository.downloadUpdate(info, any()) } coAnswers {
             kotlinx.coroutines.awaitCancellation()
         }
 
@@ -186,7 +189,7 @@ class UpdateCoordinatorTest {
     @Test
     fun `dismissUpdate cancels active download and transitions to Idle`() = runTest(dispatcher) {
         val info = updateInfo("1.2.3")
-        coEvery { appUpdateRepository.downloadApk(info, any()) } coAnswers {
+        coEvery { appUpdateRepository.downloadUpdate(info, any()) } coAnswers {
             kotlinx.coroutines.awaitCancellation()
         }
 

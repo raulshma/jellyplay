@@ -1,0 +1,446 @@
+<resources>
+    <!-- ════════════════════════════════════════════════════════════════════
+         Media Detail feature strings.
+
+         Prefixed `detail_` so they never collide with other modules once
+         resources are merged at the app level. Mirrors the `core_` convention
+         in core/ui/src/main/res/values/strings.xml.
+         ════════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Section titles / headers ─────────────────────────────────────── -->
+    <string name="detail_section_tracks">Tracks</string>
+    <string name="detail_section_items">Items</string>
+    <string name="detail_section_cast_crew">Cast &amp; Crew</string>
+    <string name="detail_section_cast">Cast</string>
+    <string name="detail_section_crew">Crew</string>
+    <string name="detail_section_more_like_this">More Like This</string>
+    <string name="detail_section_special_features">Special Features</string>
+    <string name="detail_section_chapters">Chapters</string>
+    <string name="detail_see_all">See all</string>
+    <string name="detail_more_like_this_on_device">On-device</string>
+    <string name="detail_section_videos">Videos</string>
+    <string name="detail_section_seasons">Seasons</string>
+    <string name="detail_section_seerr_recommendations">Seerr Recommendations</string>
+    <string name="detail_section_seerr_similar">Seerr Similar</string>
+    <string name="detail_section_reviews">Reviews</string>
+    <!-- Review author rating format: %1$.1f = 0-10 rating. Same in every locale. -->
+    <string name="detail_review_rating" translatable="false">%1$.1f / 10</string>
+
+    <!-- ── Primary action button labels ─────────────────────────────────── -->
+    <string name="detail_play_play">Play</string>
+    <string name="detail_play_resume">Resume</string>
+    <string name="detail_play_finding_episode">Finding Episode</string>
+    <string name="detail_play_no_episodes_available">No Episodes Available</string>
+    <string name="detail_play_no_episodes">No Episodes</string>
+
+    <!-- ── Segment availability chip (rendered near the Play button) ──────── -->
+    <string name="detail_skip_available_intro">Intro skip available</string>
+    <string name="detail_skip_available_credits">Credits skip available</string>
+    <string name="detail_skip_available_both">Intro &amp; credits skip</string>
+
+    <!-- ── Up Next card label ───────────────────────────────────────────── -->
+    <string name="detail_up_next">Up Next</string>
+
+    <!-- ── Smart-play templates (verb + S#:E#) ────────────────────────────
+         Positional args: %1$d = season number, %2$d = episode number. -->
+    <string name="detail_resume_episode">Resume S%1$d:E%2$d</string>
+    <string name="detail_next_up_episode">Next Up S%1$d:E%2$d</string>
+    <string name="detail_play_episode">Play S%1$d:E%2$d</string>
+    <string name="detail_replay_episode">Replay S%1$d:E%2$d</string>
+
+    <!-- ── Action icon content descriptions (TalkBack) ──────────────────── -->
+    <string name="detail_cd_mark_as_watched">Mark as Watched</string>
+    <string name="detail_cd_mark_as_unwatched">Mark as Unwatched</string>
+    <string name="detail_cd_favorite">Favorite</string>
+    <string name="detail_cd_options">Options</string>
+    <string name="detail_cd_episode_play">Play</string>
+    <string name="detail_cd_track_play">Play</string>
+    <string name="detail_cd_collapse">Collapse</string>
+    <string name="detail_cd_expand">Expand</string>
+    <string name="detail_cd_sort_oldest_first">Sort oldest first</string>
+    <string name="detail_cd_sort_newest_first">Sort newest first</string>
+    <string name="detail_cd_hide_up_next">Hide Up Next section</string>
+
+    <!-- ── Episode / season card labels ─────────────────────────────────── -->
+    <string name="detail_season_format">Season %1$d</string>
+    <string name="detail_spoiler">Spoiler</string>
+    <string name="detail_watched_badge">Watched</string>
+    <string name="detail_cd_switch_to_list">Switch to vertical episode list</string>
+    <string name="detail_cd_switch_to_cards">Switch to horizontal episode cards</string>
+    <string name="detail_time_left_format">%1$s left</string>
+
+    <!-- ── Overflow / options menu ──────────────────────────────────────── -->
+    <string name="detail_option_edit">Edit</string>
+    <string name="detail_option_share">Share</string>
+    <string name="detail_option_downloading">Downloading…</string>
+    <string name="detail_option_downloading_percent">Downloading (%1$d%%)</string>
+    <string name="detail_option_download">Download</string>
+    <string name="detail_option_downloading_series">Downloading Series…</string>
+    <string name="detail_option_download_series">Download Series</string>
+    <string name="detail_option_hide_from_next_up">Hide from Next Up</string>
+    <string name="detail_option_hide_from_continue_watching">Hide from Continue Watching</string>
+    <string name="detail_option_show_in_next_up">Show in Next Up</string>
+    <string name="detail_option_show_in_continue_watching">Show in Continue Watching</string>
+    <string name="detail_option_hide_detail_up_next">Hide Up Next Section</string>
+    <string name="detail_option_show_detail_up_next">Show Up Next Section</string>
+    <string name="detail_option_technical_info">Technical Info</string>
+
+    <!-- ── Series download sheet ────────────────────────────────────────── -->
+    <string name="detail_select_all">Select All</string>
+    <string name="detail_deselect_all">Deselect All</string>
+    <string name="detail_episodes_selected_format">%1$d of %2$d episodes selected</string>
+    <plurals name="detail_episode_count">
+        <item quantity="one">%1$d episode</item>
+        <item quantity="other">%1$d episodes</item>
+    </plurals>
+    <string name="detail_cancel">Cancel</string>
+
+    <!-- ── Add to Playlist picker ──────────────────────────────────────── -->
+    <string name="detail_option_add_to_playlist">Add to Playlist</string>
+    <string name="detail_playlist_picker_title">Add to Playlist</string>
+    <string name="detail_playlist_watch_later">Watch Later</string>
+    <string name="detail_playlist_create_new">Create new playlist</string>
+    <string name="detail_playlist_new_title">New Playlist</string>
+    <string name="detail_playlist_name_label">Name</string>
+    <string name="detail_playlist_desc_label">Description (optional)</string>
+    <string name="detail_playlist_create">Create</string>
+    <string name="detail_msg_no_playlists">No playlists yet</string>
+    <!-- %1$s = playlist name -->
+    <string name="detail_msg_added_to_playlist">Added to \"%1$s\"</string>
+    <string name="detail_msg_added_to_watch_later">Added to Watch Later</string>
+    <!-- %1$s = playlist name -->
+    <string name="detail_msg_playlist_created">Created \"%1$s\" and added item</string>
+    <string name="detail_msg_couldnt_add_to_playlist">Couldn\'t add to playlist</string>
+    <plurals name="detail_playlist_item_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+
+    <!-- ── Add to Collection picker ────────────────────────────────────── -->
+    <string name="detail_option_add_to_collection">Add to Collection</string>
+    <string name="detail_collection_picker_title">Add to Collection</string>
+    <string name="detail_collection_create_new">Create new collection</string>
+    <string name="detail_collection_new_title">New Collection</string>
+    <string name="detail_collection_name_label">Name</string>
+    <string name="detail_collection_create">Create</string>
+    <string name="detail_msg_no_collections">No collections yet</string>
+    <!-- %1$s = collection name -->
+    <string name="detail_msg_added_to_collection">Added to \"%1$s\"</string>
+    <!-- %1$s = collection name -->
+    <string name="detail_msg_collection_created">Created \"%1$s\" and added item</string>
+    <string name="detail_msg_couldnt_add_to_collection">Couldn\'t add to collection</string>
+    <plurals name="detail_collection_item_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+
+    <!-- ── Instant Mix (audio items) ──────────────────────────────────── -->
+    <string name="detail_option_instant_mix">Start instant mix</string>
+    <string name="detail_instant_mix_empty">No mix available for this item</string>
+    <string name="detail_instant_mix_failed">Couldn\'t start instant mix</string>
+
+    <!-- ── Watch Party (SyncPlay) ──────────────────────────────────────── -->
+    <string name="detail_option_watch_party">Start watch party</string>
+    <string name="detail_watch_party_default_name">Watch party</string>
+    <string name="detail_msg_watch_party_started">Watch party started</string>
+    <string name="detail_msg_watch_party_failed">Couldn\'t start watch party</string>
+
+    <!-- ── Stream picker (audio / subtitle) ─────────────────────────────── -->
+    <string name="detail_select_audio">Select Audio</string>
+    <string name="detail_select_subtitle">Select Subtitle</string>
+    <string name="detail_stream_auto">Auto</string>
+    <string name="detail_stream_default">Default</string>
+    <string name="detail_stream_subtitle_off">Off</string>
+    <string name="detail_stream_default_badge">DEFAULT</string>
+    <string name="detail_audio_track_format">Track %1$d</string>
+    <string name="detail_subtitle_track_format">Track %1$d</string>
+    <string name="detail_download_quality">Quality</string>
+    <string name="detail_subtitle_off">OFF</string>
+    <string name="detail_audio_channels_format">%1$dCH</string>
+
+    <!-- ── Download dialogs ─────────────────────────────────────────────── -->
+    <string name="detail_download_dialog_title">Download</string>
+    <string name="detail_download_anyway">Download anyway</string>
+    <string name="detail_cellular_download_title">Large download on cellular</string>
+    <string name="detail_cellular_download_message">You are on a metered network. This download is about %1$d MB and may use significant mobile data.</string>
+    <string name="detail_estimated_size">Estimated size: %1$s</string>
+    <string name="detail_available_storage">Available storage: %1$s</string>
+    <string name="detail_not_enough_storage">Not enough storage space available.</string>
+    <string name="detail_download_advanced">Advanced</string>
+    <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
+    <string name="detail_download_subtitles_all">All subtitles</string>
+    <string name="detail_download_subtitles_none">No subtitles</string>
+    <plurals name="detail_download_subtitles_count">
+        <item quantity="one">%1$d subtitle</item>
+        <item quantity="other">%1$d subtitles</item>
+    </plurals>
+
+    <!-- ── File-size formatting ─────────────────────────────────────────── -->
+    <string name="detail_size_gb">%1$.1f GB</string>
+    <string name="detail_size_mb">%1$.1f MB</string>
+    <string name="detail_size_kb">%1$.1f KB</string>
+    <string name="detail_size_b">%1$d B</string>
+    <string name="detail_size_unknown">Unknown</string>
+
+    <!-- ── Share ────────────────────────────────────────────────────────── -->
+    <string name="detail_share_via">Share via</string>
+
+    <!-- ── Snackbar / user feedback (from ViewModel) ────────────────────── -->
+    <string name="detail_msg_couldnt_update_favorite">Couldn\'t update favorite</string>
+    <string name="detail_msg_couldnt_mark_played">Couldn\'t mark as played</string>
+    <string name="detail_msg_download_started">Download started</string>
+    <string name="detail_msg_download_start_failed">Couldn\u2019t start the download</string>
+    <string name="detail_msg_couldnt_mark_unplayed">Couldn\'t mark as unplayed</string>
+    <string name="detail_mark_season_watched">Mark season as watched</string>
+    <string name="detail_mark_season_unwatched">Mark season as unwatched</string>
+    <!-- Confirm dialogs for multi-episode mark-played cascades.
+         Jellyfin recurses into children and clears every resume position, so the
+         tap is gated behind a confirm that names the episode count. -->
+    <string name="detail_mark_series_watched_confirm_title">Mark series as watched?</string>
+    <string name="detail_mark_series_watched_confirm_message">This marks every episode as watched and clears all resume positions.</string>
+    <string name="detail_mark_series_unwatched_confirm_title">Mark series as unwatched?</string>
+    <string name="detail_mark_series_unwatched_confirm_message">This marks every episode as unwatched.</string>
+    <string name="detail_mark_season_watched_confirm_title">Mark season as watched?</string>
+    <string name="detail_mark_season_watched_confirm_message">This marks every episode in this season as watched and clears their resume positions.</string>
+    <string name="detail_mark_season_unwatched_confirm_title">Mark season as unwatched?</string>
+    <string name="detail_mark_season_unwatched_confirm_message">This marks every episode in this season as unwatched.</string>
+    <string name="detail_cd_season_options">Mark season watched or unwatched</string>
+    <string name="detail_msg_no_episodes_queued">No episodes could be queued</string>
+    <string name="detail_msg_hidden_from_next_up">Hidden from Next Up</string>
+    <string name="detail_msg_shown_in_next_up">Shown in Next Up</string>
+    <string name="detail_msg_hidden_from_continue_watching">Hidden from Continue Watching</string>
+    <string name="detail_msg_shown_in_continue_watching">Shown in Continue Watching</string>
+
+    <!-- ── Snackbar: episodes queued (plurals) ──────────────────────────── -->
+    <plurals name="detail_episodes_queued">
+        <item quantity="one">%1$d episode queued for download</item>
+        <item quantity="other">%1$d episodes queued for download</item>
+    </plurals>
+
+    <!-- ── ViewModel error messages (shown via ErrorScreen / snackbar) ──── -->
+    <string name="detail_error_load_failed">Couldn\'t load details</string>
+    <string name="detail_error_access_denied">You don\'t have access to this item.</string>
+    <string name="detail_error_unavailable_offline">This item isn\'t available offline.</string>
+    <string name="detail_error_details_not_loaded">Media details not loaded</string>
+    <string name="detail_error_no_source">No media source available for download</string>
+    <string name="detail_error_download_failed">Download failed</string>
+    <string name="detail_error_not_a_series">This is not a series</string>
+    <string name="detail_error_queue_failed">Failed to queue downloads</string>
+
+    <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
+    <string name="detail_option_manage_series">Manage Series</string>
+    <string name="detail_manage_title">Manage Series</string>
+    <!-- Series-level actions -->
+    <string name="detail_manage_refresh_metadata">Refresh Metadata</string>
+    <string name="detail_manage_refresh_scan">Refresh &amp; Scan</string>
+    <string name="detail_manage_search_series">Search</string>
+    <!-- %1$s = formatted size (e.g. "12.3 GB") -->
+    <string name="detail_manage_disk_used_format">Disk: %1$s</string>
+    <!-- Series monitored indicator -->
+    <string name="detail_manage_monitored">Monitored</string>
+    <string name="detail_manage_unmonitored">Unmonitored</string>
+    <!-- Season header -->
+    <string name="detail_manage_season_format">Season %1$d</string>
+    <string name="detail_manage_season_specials">Specials</string>
+    <!-- %1$d = downloaded count, %2$d = total count -->
+    <string name="detail_manage_season_count_format">%1$d/%2$d</string>
+    <!-- Episode status badges -->
+    <string name="detail_manage_status_downloaded">Downloaded</string>
+    <string name="detail_manage_status_missing">Missing</string>
+    <string name="detail_manage_status_unmonitored">Unmonitored</string>
+    <string name="detail_manage_status_unaired">Unaired</string>
+    <!-- Episode actions -->
+    <string name="detail_manage_search">Automatic Search</string>
+    <string name="detail_manage_monitor">Monitor</string>
+    <string name="detail_manage_unmonitor">Unmonitor</string>
+    <string name="detail_manage_delete_file">Delete File</string>
+    <!-- Delete-file confirmation dialog. %1$s = episode title, %2$s = SxxExx -->
+    <string name="detail_manage_delete_title">Delete Episode File</string>
+    <string name="detail_manage_delete_message">Delete the file for \"%1$s\" (%2$s)? Sonarr will remove it and you can search for a replacement.</string>
+    <string name="detail_manage_delete_confirm">Delete</string>
+    <!-- Empty / error states -->
+    <string name="detail_manage_no_episodes">No episodes found in Sonarr for this series.</string>
+    <string name="detail_manage_not_tracked">No Sonarr server tracks this series.</string>
+    <!-- Localized error messages -->
+    <string name="detail_manage_series_load_error">Couldn\'t load series from Jellyfin.</string>
+    <string name="detail_manage_series_no_tvdb">This series has no tvdb id; Sonarr can\'t look it up.</string>
+    <string name="detail_manage_series_not_tracked">No Sonarr server tracks this series. Add the series in Sonarr first.</string>
+    <!-- Content descriptions (TalkBack / TV) -->
+    <string name="detail_manage_cd_search_season">Search monitored in season</string>
+    <string name="detail_manage_cd_toggle_monitor_season">Toggle monitor for all episodes in season</string>
+    <string name="detail_manage_cd_toggle_monitor_episode">Toggle monitor for episode</string>
+    <string name="detail_manage_cd_episode_menu">Episode options</string>
+
+    <!-- ── Seerr request / status buttons ──────────────────────────────── -->
+    <string name="detail_available">Available</string>
+    <string name="detail_request">Request</string>
+    <string name="detail_seerr_processing">Processing</string>
+    <string name="detail_seerr_pending">Pending</string>
+    <string name="detail_seerr_requested">Requested</string>
+
+    <!-- ── Seerr horizontal sections ───────────────────────────────────── -->
+    <string name="detail_section_recommendations">Recommendations</string>
+    <string name="detail_section_similar">Similar</string>
+
+    <!-- ── External links (brand names: never translate) ───────────────── -->
+    <string name="detail_link_tmdb" translatable="false">TMDB</string>
+    <string name="detail_link_imdb" translatable="false">IMDb</string>
+    <string name="detail_link_tvdb" translatable="false">TVDB</string>
+
+    <!-- ── Release-type icons (TalkBack) ───────────────────────────────── -->
+    <string name="detail_cd_release_theatrical">Theatrical Release</string>
+    <string name="detail_cd_release_digital">Digital Release</string>
+    <string name="detail_cd_release_physical">Physical Release</string>
+
+    <!-- ── Media Info screen ───────────────────────────────────────────── -->
+    <string name="detail_media_info_title_video">Video</string>
+    <string name="detail_media_info_title_audio">Audio</string>
+    <string name="detail_media_info_title_subtitles">Subtitles</string>
+    <string name="detail_media_info_no_info">No Media Info</string>
+    <string name="detail_media_info_no_info_description">Technical information is not available for this item</string>
+
+    <!-- Localized UI text extracted from SeerrDetailScreen -->
+    <string name="detail_seerr_unknown_error">Unknown error</string>
+    <string name="detail_seerr_overview">Overview</string>
+    <string name="detail_seerr_episodes_count">%1$d Episodes</string>
+    <string name="detail_seerr_season_n">Season %1$d</string>
+    <string name="detail_seerr_director_format">Director: %1$s</string>
+    <string name="detail_seerr_show_more">Show more</string>
+    <string name="detail_seerr_video">Video</string>
+    <string name="detail_seerr_information">Information</string>
+    <string name="detail_seerr_status">Status</string>
+    <string name="detail_seerr_unknown">Unknown</string>
+    <string name="detail_seerr_release_date">Release Date</string>
+    <string name="detail_seerr_revenue">Revenue</string>
+    <string name="detail_seerr_budget">Budget</string>
+    <string name="detail_seerr_language">Language</string>
+    <string name="detail_seerr_country">Country</string>
+    <string name="detail_seerr_studios">Studios</string>
+    <string name="detail_seerr_currently_streaming_on">Currently Streaming On</string>
+
+    <!-- Empty states -->
+    <string name="detail_collection_empty_title">This collection is empty</string>
+    <string name="detail_collection_empty_description">Items added to this collection will appear here.</string>
+    <string name="detail_person_empty_title">No titles found</string>
+    <string name="detail_person_empty_description">This person has no titles matching the current filter.</string>
+    <string name="detail_season_empty_title">No episodes available</string>
+    <string name="detail_season_empty_description">Episodes will appear here once they\'re added.</string>
+
+    <!-- ── Unified download / offline-detail strings ────────────────────────────
+         Ported from feature/downloads.
+         Prefixed `detail_` so feature/details owns its own R-class entries without
+         depending on feature/downloads. Translations live alongside in values-*.
+         Resync strings are English-only here (mirroring feature/downloads, which
+         never translated them); locales fall back to these defaults. -->
+    <string name="detail_download_info">Download info</string>
+    <string name="detail_file_size">File size</string>
+    <string name="detail_status">Status</string>
+    <string name="detail_progress">Progress</string>
+
+    <!-- DownloadAttachment status labels (DownloadInfoCard). English-only here,
+         mirroring the resync strings above; locales fall back to these defaults. -->
+    <string name="detail_download_status_pending">Pending</string>
+    <string name="detail_download_status_queued">Queued</string>
+    <string name="detail_download_status_downloading">Downloading</string>
+    <string name="detail_download_status_paused">Paused</string>
+    <string name="detail_download_status_completed">Completed</string>
+    <string name="detail_download_status_failed">Failed</string>
+    <string name="detail_download_status_cancelled">Cancelled</string>
+
+    <!-- Download-details bottom sheet (tapped from DownloadInfoCard). English-only
+         here, mirroring the resync strings above; locales fall back to these defaults. -->
+    <string name="detail_download_details_title">Download details</string>
+    <string name="detail_download_tab_overview">Overview</string>
+    <string name="detail_download_tab_media_info">Media Info</string>
+    <string name="detail_download_tab_storage">Storage</string>
+    <string name="detail_download_section_download">Download</string>
+    <string name="detail_download_section_media">Media</string>
+    <string name="detail_download_section_media_info">Media info</string>
+    <string name="detail_download_section_files">Downloaded files</string>
+    <string name="detail_downloaded_bytes">Downloaded size</string>
+    <string name="detail_downloaded_date">Date downloaded</string>
+    <string name="detail_container">Container</string>
+    <string name="detail_file_present">File present</string>
+    <string name="detail_media_source">Media source</string>
+    <string name="detail_download_path">Path</string>
+    <string name="detail_media_title">Title</string>
+    <string name="detail_media_type">Type</string>
+    <string name="detail_original_title">Original title</string>
+    <string name="detail_year">Year</string>
+    <string name="detail_runtime">Runtime</string>
+    <string name="detail_episode_label">Episode</string>
+    <string name="detail_view_download_details">View download details</string>
+
+    <!-- Download-details: on-disk file inventory (media + sidecar artifacts). -->
+    <string name="detail_download_files_total">Total on disk</string>
+    <string name="detail_download_files_loading">Calculating file sizes…</string>
+    <string name="detail_download_files_empty">No downloaded files found</string>
+    <plurals name="detail_files_count">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <string name="detail_file_category_media">Media</string>
+    <string name="detail_file_category_subtitle">Subtitles</string>
+    <string name="detail_file_category_trickplay">Trickplay</string>
+    <string name="detail_file_category_segment">Segments</string>
+    <string name="detail_file_category_image">Images</string>
+
+    <string name="detail_watch_status">Watch status</string>
+    <string name="detail_watched_status_watched">Watched</string>
+    <string name="detail_watched_status_label">Watched</string>
+    <string name="detail_watched_status_in_progress">In progress</string>
+    <string name="detail_watched_status_started">Started</string>
+    <string name="detail_position">Position</string>
+    <string name="detail_position_of">%1$s of %2$s</string>
+    <string name="detail_last_watched">Last watched</string>
+    <string name="detail_close">Close</string>
+    <string name="detail_delete">Delete</string>
+
+    <!-- Delete confirmations for an attached download / downloaded episode. -->
+    <string name="detail_delete_download_title">Delete download</string>
+    <string name="detail_delete_download_message">Remove \"%1$s\" from your device? This frees up %2$s.</string>
+    <string name="detail_delete_episode_title">Delete episode</string>
+    <string name="detail_delete_episode_cd">Delete episode</string>
+    <string name="detail_delete_episode_message">Remove \"%1$s\" from your device?</string>
+
+    <!-- Series batch-delete sheet (ported from the old offline-series screen). -->
+    <string name="detail_delete_downloads_title">Delete downloads</string>
+    <string name="detail_select_episodes_to_remove">Select episodes to remove from your device.</string>
+    <string name="detail_episodes_selected">%1$d of %2$d episodes selected</string>
+    <string name="detail_episodes_selected_with_freed">%1$d of %2$d episodes selected · %3$s</string>
+    <string name="detail_delete_count">Delete %1$d</string>
+    <string name="detail_delete_count_with_freed">Delete %1$d · %2$s</string>
+    <string name="detail_season_default">Season %1$d</string>
+    <string name="detail_delete_entire_series">Delete entire series</string>
+    <string name="detail_option_delete_downloads">Delete downloads</string>
+
+    <!-- Aggregate local-series header ("N episodes · size"). -->
+    <plurals name="detail_episodes_count">
+        <item quantity="one">%1$d episode</item>
+        <item quantity="other">%1$d episodes</item>
+    </plurals>
+
+    <!-- Resync / re-download freshness banner + sheet. -->
+    <string name="detail_resync_title">Sync download</string>
+    <string name="detail_resync_checking">Checking for updates…</string>
+    <string name="detail_resync_update_available">New information available</string>
+    <string name="detail_resync_media_changed">Media file changed — re-download required</string>
+    <string name="detail_resync_in_progress">Syncing latest details…</string>
+    <string name="detail_resync_complete">Download synced with latest details</string>
+    <string name="detail_resync_failed">Sync failed</string>
+    <string name="detail_resync_up_to_date">This download is up to date.</string>
+    <string name="detail_resync_description">Newer information is available on the server. Sync to refresh metadata and images.</string>
+    <string name="detail_resync_change_metadata">Updated metadata (overview, cast, ratings)</string>
+    <string name="detail_resync_change_images">Updated artwork (poster/backdrop)</string>
+    <string name="detail_resync_change_media">The media file itself changed</string>
+    <string name="detail_resync_media_explanation">A metadata sync can\'t update the media file. Delete and re-download this item to get the new file.</string>
+    <string name="detail_resync_action">Sync now</string>
+    <string name="detail_resync_redownload">Re-download media</string>
+
+    <!-- Local-origin subtitle selector (manifest-backed; no audio inventory). -->
+    <string name="detail_local_subtitles">Subtitles</string>
+    <string name="detail_local_subtitle_off">Off</string>
+    <string name="detail_local_subtitle_default_badge">DEFAULT</string>
+    <string name="detail_local_subtitle_forced_badge">FORCED</string>
+
+</resources>

@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Audio player queue undo (enhancements §5.2) -->
+    <string name="audio_undo_action">Deshacer</string>
+    <string name="audio_undo_queue_cleared">Cola borrada</string>
+    <string name="audio_undo_track_removed">Pista eliminada</string>
+    <string name="audio_undo_track_moved">Pista movida</string>
+    <string name="audio_undo_skipped_next">Saltado a la siguiente</string>
+    <string name="audio_undo_skipped_previous">Saltado a la anterior</string>
+
+    <!-- A→B repeat (enhancements §5.4) -->
+    <string name="audio_ab_set_point_a">Fijar punto A</string>
+    <string name="audio_ab_set_point_b">Fijar punto B</string>
+    <string name="audio_ab_clear">Borrar A–B</string>
+    <string name="audio_ab_point_a_label">A</string>
+    <string name="audio_ab_loop_active_label">A-B</string>
+
+    <!-- Common -->
+    <string name="audio_cancel">Cancelar</string>
+    <string name="audio_search">Buscar</string>
+    <string name="audio_reset">Restablecer</string>
+    <string name="audio_open">Abrir</string>
+
+    <!-- Top bar / menu -->
+    <string name="audio_topbar_now_playing">Reproduciendo ahora</string>
+    <string name="audio_topbar_minimize">Minimizar</string>
+    <string name="audio_topbar_lyrics">Letras</string>
+    <string name="audio_topbar_queue">Cola</string>
+    <string name="audio_topbar_more">Más</string>
+    <string name="audio_menu_speed">Velocidad (%1$s)</string>
+    <string name="audio_menu_equalizer">Ecualizador</string>
+    <string name="audio_menu_audio_effects">Efectos de audio</string>
+    <string name="audio_menu_dialogue_boost">Refuerzo de diálogos</string>
+    <string name="audio_menu_dialogue_boost_with_strength">Refuerzo de diálogos · %1$s</string>
+    <string name="audio_menu_night_mode">Modo nocturno</string>
+    <string name="audio_menu_night_mode_with_strength">Modo nocturno · %1$s</string>
+    <string name="audio_menu_ambient_mode">Modo ambiente</string>
+    <string name="audio_menu_add_to_playlist">Añadir a lista de reproducción</string>
+    <string name="audio_menu_sleep_timer">Temporizador de sueño</string>
+    <string name="audio_menu_sleep_timer_active">Temporizador de sueño · %1$s</string>
+    <string name="audio_menu_karaoke_mode">Modo karaoke</string>
+    <string name="audio_menu_karaoke_mode_on">Modo karaoke · Activado</string>
+
+    <!-- Transport / secondary controls -->
+    <string name="audio_controls_previous">Anterior</string>
+    <string name="audio_controls_next">Siguiente</string>
+    <string name="audio_controls_pause">Pausar</string>
+    <string name="audio_controls_play">Reproducir</string>
+    <string name="audio_controls_shuffle">Aleatorio</string>
+    <string name="audio_controls_repeat_off">Repetición desactivada</string>
+    <string name="audio_controls_repeat_all">Repetir todo</string>
+    <string name="audio_controls_repeat_one">Repetir uno</string>
+    <string name="audio_controls_favorite">Favorito</string>
+    <string name="audio_controls_download">Descargar</string>
+
+    <!-- Lyrics -->
+    <string name="audio_lyrics_finding">Buscando letras…</string>
+    <string name="audio_lyrics_none_found">No se encontraron letras</string>
+    <string name="audio_lyrics_karaoke_on">Karaoke activado</string>
+    <string name="audio_lyrics_karaoke_off">Karaoke desactivado</string>
+    <string name="audio_lyrics_adjust_timing">Ajustar la sincronía de las letras</string>
+    <string name="audio_lyrics_search">Buscar letras</string>
+    <string name="audio_lyrics_offset">Desfase de las letras</string>
+    <string name="audio_lyrics_find">Buscar letras</string>
+    <string name="audio_lyrics_search_placeholder">Buscar artista, canción…</string>
+    <string name="audio_lyrics_clear">Borrar</string>
+    <string name="audio_lyrics_synced">Sincronizadas</string>
+    <string name="audio_lyrics_plain">Sin sincronía</string>
+    <string name="audio_lyrics_source_embedded">Incrustadas</string>
+
+    <!-- Sleep timer -->
+    <string name="audio_sleep_timer_title">Temporizador de sueño</string>
+    <string name="audio_sleep_timer_end_of_episode">Fin del episodio</string>
+    <string name="audio_sleep_timer_duration">Duración</string>
+
+    <!-- Equalizer -->
+    <string name="audio_equalizer_title">Ecualizador</string>
+
+    <!-- Audio effects -->
+    <string name="audio_effects_title">Efectos de audio</string>
+    <string name="audio_effects_bass_boost">Refuerzo de graves</string>
+    <string name="audio_effects_virtualizer">Virtualizador / Espacial</string>
+    <string name="audio_effects_reverb">Reverberación</string>
+    <string name="audio_effects_dialogue_boost">Refuerzo de diálogos</string>
+    <string name="audio_effects_night_mode">Modo nocturno</string>
+    <string name="audio_effects_lr_balance">Balance L/R</string>
+    <string name="audio_effects_balance_left">Izquierda %1$d%%</string>
+    <string name="audio_effects_balance_right">Derecha %1$d%%</string>
+    <string name="audio_effects_balance_center">Centro</string>
+    <string name="audio_effects_pitch">Tono</string>
+    <string name="audio_effects_pitch_original">Original</string>
+    <string name="audio_effects_pitch_value">%1$s semitonos</string>
+    <string name="audio_effects_auto_eq">Auto-EQ por género</string>
+    <string name="audio_effects_auto_eq_description">Aplicar preset de EQ según el género de la pista</string>
+
+    <!-- Queue sheet -->
+    <string name="audio_queue_title">Cola</string>
+    <string name="audio_queue_remove">Quitar de la cola</string>
+    <string name="audio_queue_position">%1$d de %2$d</string>
+
+    <!-- Add to playlist picker -->
+    <string name="audio_playlist_picker_title">Añadir a lista de reproducción</string>
+    <string name="audio_no_playlists">Aún no hay listas</string>
+    <string name="audio_playlist_items_count">%1$d elementos</string>
+
+    <!-- Speed picker -->
+    <string name="audio_speed_title">Velocidad de reproducción</string>
+
+    <!-- Ambient -->
+    <string name="audio_ambient_tap_to_exit">Toca cualquier parte para salir</string>
+
+    <!-- Download delete dialog -->
+    <string name="audio_download_delete_title">Eliminar descarga</string>
+    <string name="audio_download_delete_message">¿Quitar el archivo descargado de esta pista?</string>
+    <string name="audio_download_delete_confirm">Eliminar</string>
+
+    <!-- Playback error -->
+    <string name="audio_error_retry">Reintentar</string>
+
+    <!-- Up next strip -->
+    <string name="audio_up_next">A continuación</string>
+
+    <!-- Cast -->
+    <string name="audio_cast">Transmitir</string>
+    <string name="audio_cast_connected">Transmisión conectada</string>
+    <string name="audio_cast_to_device">Transmitir al dispositivo</string>
+    <string name="audio_cast_no_devices">No se encontraron dispositivos para transmitir. Asegúrate de que tu dispositivo esté en la misma red.</string>
+    <string name="audio_cast_ok">Aceptar</string>
+</resources>

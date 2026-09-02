@@ -1,0 +1,71 @@
+<resources>
+    <!-- Live TV feature user-facing strings (enhancements §2.2) -->
+    <string name="livetv_no_channels_available">No channels available</string>
+
+    <!-- Live TV tabbed screen (matches jellyfin-web Live TV collection) -->
+    <string name="livetv_tab_programs">Programs</string>
+    <string name="livetv_tab_guide">Guide</string>
+    <string name="livetv_tab_channels">Channels</string>
+    <string name="livetv_tab_recordings">Recordings</string>
+    <string name="livetv_tab_schedule">Schedule</string>
+    <string name="livetv_tab_series">Series</string>
+
+
+    <string name="livetv_no_programs_available">No programs available</string>
+    <string name="livetv_no_recordings_available">No recordings available</string>
+    <string name="livetv_no_scheduled_recordings">No scheduled recordings</string>
+    <string name="livetv_no_series_recordings">No series recordings</string>
+
+    <string name="livetv_section_latest_recordings">Latest Recordings</string>
+    <string name="livetv_section_active_recordings">Active Recordings</string>
+    <string name="livetv_section_upcoming_recordings">Upcoming Recordings</string>
+
+    <string name="livetv_record_once">Record</string>
+    <string name="livetv_record_series">Record Series</string>
+    <string name="livetv_cancel_recording">Cancel Recording</string>
+    <string name="livetv_cancel_series">Cancel Series</string>
+    <string name="livetv_delete">Delete</string>
+    <string name="livetv_delete_recording_cd">Delete recording</string>
+    <string name="livetv_delete_recording_title">Delete recording?</string>
+    <string name="livetv_delete_recording_body">Delete \"%1$s\"? This cannot be undone.</string>
+    <string name="livetv_record_success">Recording scheduled</string>
+    <string name="livetv_record_failed">Failed to set recording</string>
+    <string name="livetv_record_canceled">Recording canceled</string>
+
+    <!-- Channel detail screen -->
+    <string name="livetv_channel_watch_live">Watch Live</string>
+    <string name="livetv_channel_on_today">On Today</string>
+    <string name="livetv_channel_live">LIVE</string>
+    <string name="livetv_channel_no_program_info">No program information</string>
+    <string name="livetv_channel_load_failed">Failed to load program guide</string>
+
+    <!-- Live TV host & EPG screen (extracted from hardcoded strings) -->
+    <string name="livetv_screen_title">Live TV</string>
+    <string name="livetv_epg_title">Program Guide</string>
+    <string name="livetv_no_guide_available">No program guide available</string>
+    <string name="livetv_record_program_prompt">Record program?</string>
+    <string name="livetv_record_single_timer_note">A single timer will be scheduled on the server.</string>
+    <string name="livetv_record_schedule_failed">Couldn\'t schedule recording</string>
+    <string name="livetv_recording_in_progress">Recording…</string>
+    <string name="livetv_scheduling_timer">Scheduling timer</string>
+
+    <!-- Common action labels (extracted from hardcoded strings) -->
+    <string name="livetv_action_cancel">Cancel</string>
+    <string name="livetv_action_close">Close</string>
+    <string name="livetv_action_done">Done</string>
+    <string name="livetv_action_ok">OK</string>
+
+    <!-- Schedule detail dialog (extracted from hardcoded strings) -->
+    <string name="livetv_schedule_start">Start: %1$s</string>
+    <string name="livetv_schedule_end">End: %1$s</string>
+
+    <!-- Channel / program affordances (batch) -->
+    <string name="livetv_watch">Watch</string>
+    <string name="livetv_recording_status">Recording</string>
+    <string name="livetv_recording_now">● Recording now</string>
+
+    <!-- EPG grid & live pill labels (batch) -->
+    <string name="livetv_will_be_recorded">"%1$s" will be recorded.</string>
+    <string name="livetv_channel">Channel</string>
+    <string name="livetv_live">LIVE</string>
+</resources>

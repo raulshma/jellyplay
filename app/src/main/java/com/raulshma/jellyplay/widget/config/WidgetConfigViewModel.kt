@@ -6,13 +6,11 @@ import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.LibraryRecommendationsSource
 import com.raulshma.jellyplay.core.model.SeerrWidgetSource
 import com.raulshma.jellyplay.core.model.WidgetConfig
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * Backs [WidgetConfigActivity] with the current per-widget source
@@ -23,8 +21,7 @@ import javax.inject.Inject
  * Supports per-widget configuration via [appWidgetId]. Each widget
  * instance can have its own independent configuration.
  */
-@HiltViewModel
-class WidgetConfigViewModel @Inject constructor(
+class WidgetConfigViewModel(
     private val widgetDataStore: WidgetDataStore,
 ) : ViewModel() {
 

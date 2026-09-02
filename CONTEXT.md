@@ -2,27 +2,33 @@
 
 Orientation for engineers (and coding agents) new to JellyPlay's playback stack.
 User-facing feature docs live in `docs/`; this file is about how the code is
-shaped. Player code lives in two Gradle modules: `feature/player/core` (the
-engine-agnostic `MediaEngine` contract and engine-shared machinery) and
-`feature/player/video` (the VOD player screen, ViewModel, and session
+shaped. The repo is mid-KMP-migration (docs/kmp-migration-plan.md): every
+feature lives in `shared/feature/*` (KMP, commonMain + platform actuals), the
+core stack in `shared/core/*`, and the legacy tree is down to the Android-only
+remainder — `core:data`, `core:ui` (shim files), `core:notification`,
+`core:testing`, and `:app` — plus the `apps/desktop` and `apps/web` shells.
+DI is Koin-only repo-wide (Hilt went extinct after the last flip). Player code
+lives in two shared modules: `shared/core/player-contract` (the engine-agnostic
+`MediaEngine` contract and engine-shared machinery) and
+`shared/feature/player-video` (the VOD player screen, ViewModel, and session
 collaborators). Paths below are relative to the repo root.
 
 ## Engine layer
 
-- **`MediaEngine`** (`feature/player/core/src/main/java/com/raulshma/jellyplay/feature/player/video/engine/MediaEngine.kt`)
+- **`MediaEngine`** (`shared/core/player-contract/src/commonMain/kotlin/com/raulshma/jellyplay/feature/player/video/engine/MediaEngine.kt`)
   is the single strategy interface every playback backend implements —
   `ExoPlayerEngine`, `MpvPlayerEngine`, `LibVlcPlayerEngine` and `NoOpEngine`
-  (external playback) under `feature/player/video/src/main/java/.../engine/`.
+  (external playback) under `shared/feature/player-video/src/androidMain/.../engine/`.
   It is deliberately one wide contract (load/`PlaybackRequest`, reactive state
   `StateFlow`s, tracks, capabilities via `EngineCapabilities`, config via
   `updateConfig(EngineConfig)`) rather than role interfaces — a previous split
   delivered no decoupling because no consumer ever depended on a narrow role.
-- **`PlayerEngineFactory`** (`feature/player/video/src/main/java/.../engine/PlayerEngineFactory.kt`)
-  maps a `PlayerType` to a concrete engine. It is a process-wide `@Singleton`
+- **`PlayerEngineFactory`** (`shared/feature/player-video/src/commonMain/kotlin/.../engine/PlayerEngineFactory.kt`)
+  maps a `PlayerType` to a concrete engine. It is a process-wide Koin single
   so the shared Media3 `DefaultBandwidthMeter` (adaptive-bitrate learning)
   survives across streams; `resetBandwidthMeter()` is the test/diagnostics
   escape hatch.
-- **`EngineEventCoordinator`** (`feature/player/video/src/main/java/.../EngineEventCoordinator.kt`)
+- **`EngineEventCoordinator`** (`shared/feature/player-video/src/commonMain/kotlin/.../EngineEventCoordinator.kt`)
   owns the engine-event *policies*: guarded play/buffering mirrors, the
   FORCE_DIRECT_PLAY → transcode one-shot fallback latch, the 20 s
   initial-buffering watchdog, subtitle toasts, and pass-out protection. Its
@@ -33,14 +39,14 @@ collaborators). Paths below are relative to the repo root.
   `FakeMediaEngine` plus an injected clock. Since Stage B of the refactor it is
   constructed, re-armed and executed by `PlaybackSession`; the ViewModel only
   collects its mirror `StateFlow`s.
-- **`BasePlayerEngine`** (`feature/player/core/src/main/java/com/raulshma/jellyplay/feature/player/video/engine/BasePlayerEngine.kt`)
+- **`BasePlayerEngine`** (`shared/feature/player-video/src/androidMain/kotlin/com/raulshma/jellyplay/feature/player/video/engine/BasePlayerEngine.kt`)
   is the shared boilerplate base for the three reloadable adapters. It hoists
   the byte-identical 8 `StateFlow`/`SharedFlow` backing fields, the
   main-thread `engineScope`/`mainHandler` pair, the `updateConfig` dedup guard,
   and the polling/stats-toggle setters. Each adapter still owns its native
   player handle, track/subtitle logic, stats projection, volume/mute contract
   and `positionFlow` wiring — `NoOpEngine` does NOT extend this class.
-- **`ReloadablePlayerEngine`** (`feature/player/video/src/main/java/com/raulshma/jellyplay/feature/player/video/engine/ReloadablePlayerEngine.kt`)
+- **`ReloadablePlayerEngine`** (`shared/feature/player-video/src/androidMain/kotlin/com/raulshma/jellyplay/feature/player/video/engine/ReloadablePlayerEngine.kt`)
   is the second layer for the three reloadable engines (extends `BasePlayerEngine`).
   It hoists `PlaybackSnapshot` / `withPreservedPlayback` (position+speed+isPlaying
   preservation across a rebuild), the `0–1` volume clamp + `0.05f` unmute floor
@@ -49,15 +55,16 @@ collaborators). Paths below are relative to the repo root.
   `snapshotIsPlaying()` hook covers both snapshot and current checks (ExoPlayer
   overrides it to read `player.isPlaying` synchronously; `currentIsPlaying()`
   delegates to it).
-- **`EnginePositionTicker`** (`feature/player/core/src/main/java/com/raulshma/jellyplay/feature/player/video/engine/EnginePositionTicker.kt`)
+- **`EnginePositionTicker`** (`shared/core/player-contract/src/commonMain/kotlin/com/raulshma/jellyplay/feature/player/video/engine/EnginePositionTicker.kt`)
   is the shared polling-ticker loop used by every `positionFlow`. It lives in
-  `:feature:player:core` so both the production adapters (`:feature:player:video`
-  via `ReloadablePlayerEngine.positionFlowWithTicker`) and the test-double
-  `FakeMediaEngine` (`:feature:player:core:testFixtures`) share one
+  `:shared:core:player-contract` so both the production adapters
+  (`:shared:feature:player-video` via `ReloadablePlayerEngine.positionFlowWithTicker`)
+  and the test-double `FakeMediaEngine` (a common-pure twin in player-video's
+  `jvmTest` — KMP testFixtures are unsupported on AGP 9) share one
   implementation — the bounded paused-wait (`POSITION_PAUSED_RECHECK_MS = 2_500L`),
   play↔pause edge detection and `delay(pollingIntervalMs)` live in exactly one
   place.
-- **`PlayerLifecycleManager`** (`core/data/src/main/java/com/raulshma/jellyplay/core/data/playback/PlayerLifecycleManager.kt`)
+- **`PlayerLifecycleManager`** (`shared/core/data/src/jvmShared/kotlin/com/raulshma/jellyplay/core/data/playback/PlayerLifecycleManager.kt` — moved out of commonMain with the wave-15B jvmShared split)
   is the Activity↔engine lifecycle bridge: the host Activity calls
   `onActivityPause()` / `onActivityResume()`, which delegate straight to the
   `@Volatile activeCallbacks` engine reference (set by `PlayerSessionManager`
@@ -66,9 +73,10 @@ collaborators). Paths below are relative to the repo root.
 
 ## Playback session (`PlaybackSession`)
 
-**`PlaybackSession`** (`feature/player/video/src/main/java/.../PlaybackSession.kt`)
+**`PlaybackSession`** (`shared/feature/player-video/src/commonMain/kotlin/.../PlaybackSession.kt`)
 is the "deep module" extracted from `VideoPlayerViewModel` (Stage B of the
-video-player refactor; history in `PlaybackSessionTest.kt`). One instance owns
+video-player refactor; it now lives in commonMain with the rest of the session
+cluster). One instance owns
 a playback session's lifecycle:
 
 - **initialize** — the ordered load entry: latch resets, remote "Play On"
@@ -103,16 +111,18 @@ SyncPlay reattach). `sessionState` / `engineFlow` are direct aliases of
 ordering is unchanged.
 
 **God-count rule** (ratcheted by
-`ControllerOwnershipTest.godStateWiringCount_neverIncreases`): the literals
-`getUiState =` / `updateUiState =` / `uiState = _uiState` appear in exactly 3
-places across `feature/player/video` src/main — `SettingsProjector`'s pair and
-`PlaybackProgressReporter`'s raw handle, both in `VideoPlayerViewModel.kt`.
-`PlaybackSession.kt` and the other migrated controllers must stay literally
-free of `VideoPlayerUiState` references.
+`ControllerOwnershipTest.godStateWiringCount_neverIncreases`, player-video
+`jvmTest`): the literals `getUiState =` / `updateUiState =` /
+`uiState = _uiState` appear in exactly 3 places across
+`shared/feature/player-video` commonMain+androidMain — `SettingsProjector`'s
+pair and `PlaybackProgressReporter`'s raw handle, both in
+`VideoPlayerViewModel.kt` (commonMain since the 8C split). `PlaybackSession.kt`
+and the other migrated controllers must stay literally free of
+`VideoPlayerUiState` references.
 
 ## Playback source resolution
 
-- **`SessionLoadPipeline`** (`feature/player/video/src/main/java/.../SessionLoadPipeline.kt`)
+- **`SessionLoadPipeline`** (`shared/feature/player-video/src/commonMain/kotlin/.../SessionLoadPipeline.kt`)
   owns the *order* of load stages: SyncPlay queue reconcile → prefs projection
   → remembered-muted restore → cinema gate (early return) → offline-resume
   resolution → playhead seed → `loadMedia` → per-item hydration → stream
@@ -121,7 +131,7 @@ free of `VideoPlayerUiState` references.
   always lifts. It writes uiState only through the VM-implemented
   `SessionLoadOutputs` and calls VM bodies through `SessionLoadHooks` — stage
   order is pinned by `SessionLoadPipelineTest`.
-- **`PlayerSessionManager`** (`feature/player/video/src/main/java/.../PlayerSessionManager.kt`)
+- **`PlayerSessionManager`** (`shared/feature/player-video/src/commonMain/kotlin/.../PlayerSessionManager.kt`)
   owns *what a load means*: how a Jellyfin item becomes a playable source.
   `loadMedia` resolves a `PlaybackSource` (Auto/Offline/Online) against the
   downloads DB via `PlaybackSourceResolver`. Online: fetch `MediaDetail`,
@@ -140,11 +150,11 @@ free of `VideoPlayerUiState` references.
 
 ## Direct Play ↔ Transcode
 
-`PlaybackMode` (`core/model/src/main/java/.../PreferenceModels.kt`) is
+`PlaybackMode` (`shared/core/model/src/commonMain/kotlin/.../PreferenceModels.kt`) is
 `AUTO` / `FORCE_DIRECT_PLAY` / `FORCE_TRANSCODE`. With **AUTO** the server
 decides via PlaybackInfo against the device profile and the effective max
 bitrate resolved by **`AdaptiveBitrateManager`**
-(`core/data/src/main/java/.../playback/AdaptiveBitrateManager.kt`): quality
+(`shared/core/data/src/jvmShared/kotlin/.../playback/AdaptiveBitrateManager.kt`): quality
 tiers (360p–4K), a 2.5 Mbps cap on metered networks, data-saver clamping, and
 a manual cap; with adaptive bitrate disabled the cap is `null` and the server
 direct-plays anything decodable. **FORCE_DIRECT_PLAY** requests the
@@ -163,14 +173,14 @@ fetches the live session's `TranscodingInfo` reasons; they land in
 
 ## Trickplay
 
-`TrickplayInfo` (`core/model/src/main/java/.../TrickplayInfo.kt`) is the
+`TrickplayInfo` (`shared/core/model/src/commonMain/kotlin/.../TrickplayInfo.kt`) is the
 server's thumbnail manifest descriptor (tile geometry, count, interval,
 bandwidth) carried on `MediaSource.trickplayInfo`. On load, the pipeline's
 `initializeTrickplay` hook runs the VM's three-way selection: server info
 cached into the download dir, a local bundle shipped with the download
 (`OfflineTrickplayHelper`), or a fresh server manifest — the chosen info is
 stored in `uiPrefs.trickplayInfo` and the tile cache initialized in
-`TrickplayManager` (`feature/player/video/.../trickplay/`). The prefs
+`TrickplayManager` (`shared/feature/player-video/src/androidMain/.../trickplay/`). The prefs
 `trickplayEnabled` and `trickplayOnSeekGesture` live in the `uiPrefs` slice;
 when gesture previews are on, the seek overlay calls
 `VideoPlayerViewModel.getTrickplayThumbnail(positionMs)` to render
@@ -178,7 +188,7 @@ thumbnails while scrubbing.
 
 ## SyncPlay
 
-**`SyncPlayBridge`** (`feature/player/video/src/main/java/.../SyncPlayBridge.kt`)
+**`SyncPlayBridge`** (`shared/feature/player-video/src/commonMain/kotlin/.../SyncPlayBridge.kt`)
 bridges the process-wide `SyncPlayManager` singleton to the local session:
 it forwards group playback commands to the engine, reports local state back,
 and owns the group-display slice `SyncPlayUiState` (group name, participants,
@@ -193,7 +203,7 @@ first stage additionally reconciles the group queue.
 
 ## State slices (`VideoPlayerUiState`)
 
-`VideoPlayerUiState` (`feature/player/video/src/main/java/.../VideoPlayerUiState.kt`)
+`VideoPlayerUiState` (`shared/feature/player-video/src/commonMain/kotlin/.../VideoPlayerUiState.kt`)
 is seven stored slices — `gestures` (`GesturePrefsState`), `segmentState`
 (`SegmentState`), `media` (`MediaContentState`), `autoplay`
 (`AutoplayState`), `videoFx` (`VideoFxState`), `episodes`
@@ -215,7 +225,7 @@ all — each controller exposes its own `StateFlow`.
 
 ## Seerr request state
 
-**`SeerrRequestStateHolder`** (`core/data/src/main/java/.../seerr/SeerrRequestStateHolder.kt`)
+**`SeerrRequestStateHolder`** (`shared/core/data/src/commonMain/kotlin/.../seerr/SeerrRequestStateHolder.kt`)
 is the deep module for the Seerr request lifecycle. Its ONLY state interface is
 `snapshot: Flow<SeerrRequestSnapshot>` (a cold combine of its six internal
 `MutableStateFlow`s — request result, radarr/sonarr service lists, services
@@ -230,7 +240,7 @@ else on the holder is a command: `requestMedia` (owns the whole
 loading → success/error result choreography), `prefetchDetails`,
 `loadServiceDetails`, `loadTvSeasons`, `clearRequestResult`. There is no public
 per-field state accessor and no `setRequestResult` escape hatch.
-`SeerrRequestSnapshot` itself lives in `core/model/.../seerr/` with the other
+`SeerrRequestSnapshot` itself lives in `shared/core/model/.../seerr/` with the other
 Seerr state models, so core/ui can see it: `SeerrRequestDialog`'s
 snapshot-taking overload is the ONE fold of snapshot → dialog fields (screens
 pass `snapshot =` instead of re-mapping eight fields per screen).
@@ -241,7 +251,7 @@ post-request side effects ride instead of a consumer re-implementing the
 choreography around a direct `SeerrRequestDelegate` call.
 
 The optimistic **PENDING flip** lives at the model level
-(`core/model/src/main/java/.../seerr/SeerrModels.kt`):
+(`shared/core/model/src/commonMain/kotlin/.../seerr/SeerrModels.kt`):
 `SeerrMovieDetails.withPendingRequest(item)` / `SeerrTvDetails` counterpart
 match the detail's own `id == item.id` (not `mediaInfo.tmdbId` — Overseerr
 omits `mediaInfo` entirely from `/movie/{id}` and `/tv/{id}` for never-requested
@@ -250,8 +260,8 @@ media, so a tmdbId match would never fire and the button would stay on
 set `status = SeerrMediaStatus.PENDING`, and leave non-matching details
 untouched. Pure and unit-tested; no feature-code imports.
 
-Four ViewModels construct a per-VM instance (deliberately not Hilt — each
-passes its own `scope` to `SeerrRequestDelegate`): `DetailViewModel` and
+Four ViewModels construct a per-VM instance (deliberately not a shared Koin
+single — each passes its own `scope` to `SeerrRequestDelegate`): `DetailViewModel` and
 `SearchViewModel`/`SeerrDetailViewModel` expose `snapshotIn(scope)` as
 `seerrSnapshot` (Search/Seerr-detail) or fold it into uiState as a single
 `seerrRequest` field (`DetailUiState`); `HomeViewModel` embeds it into
@@ -261,7 +271,7 @@ snapshot fields; commands go through the ViewModel wrappers (or the
 
 ## Home feature
 
-**`HomeRefresher`** (`feature/home/src/main/java/com/raulshma/jellyplay/feature/home/HomeRefresher.kt`)
+**`HomeRefresher`** (`shared/feature/home/src/commonMain/kotlin/com/raulshma/jellyplay/feature/home/HomeRefresher.kt`)
 is the Home feed's deep module. Its public interface is five members —
 `state`, `request(RefreshTrigger)`, `start`, `stop`, `patchItems` — plus the
 mutex-protected `fetchOnce(force)` suspend core that the internal identity
@@ -295,7 +305,7 @@ optimistic played/unplayed container forwards through `patchItems`, which
 maps the patch over every section (the same item can appear in several, and
 every visible card must flip together).
 
-**`HomeViewModel`** (`feature/home/src/main/java/com/raulshma/jellyplay/feature/home/HomeViewModel.kt`)
+**`HomeViewModel`** (`shared/feature/home/src/commonMain/kotlin/com/raulshma/jellyplay/feature/home/HomeViewModel.kt`)
 is a flows + `onEvent` facade. Its public surface is StateFlows
 (`uiState`, `activeDownloadCount`, the `SyncStatusStateHolder`
 re-exposures, `searchQuery`, `searchHistory`, `undoActions`,
@@ -329,7 +339,7 @@ inline section-config sheet's three pref mirrors). Same precedent as
 `SeerrRequestState`'s embedded snapshot: no per-field hand-sync.
 
 **`HomeSearchSession`**
-(`feature/home/src/main/java/com/raulshma/jellyplay/feature/home/HomeSearchSession.kt`)
+(`shared/feature/home/src/commonMain/kotlin/com/raulshma/jellyplay/feature/home/HomeSearchSession.kt`)
 is the search bar's SESSION half: it owns the expanded flag (snapshot
 state) and the close ordering — collapse the surface → `ClearSearch` →
 drop keyboard focus — as one method (`close(clearFocus)`), with
@@ -359,7 +369,7 @@ Pinned by `HomeQuickActionsTest`; the `resolveActions` gate keys on
 `explicitOffline` — a read of the render source carried by
 `HomeSurface.Content`, not a `.value` snapshot of any VM singleton.
 
-**`HomeRenderSource`** (`feature/home/src/main/java/.../HomeRenderSource.kt`)
+**`HomeRenderSource`** (`shared/feature/home/src/commonMain/kotlin/.../HomeRenderSource.kt`)
 is the home screen's single offline-render predicate: `Online` / `Offline` /
 `FallbackPending`, folded ONCE per gate emission by the pure
 `computeHomeRenderSource` and carried as `HomeUiState.renderSource`. The
@@ -369,7 +379,7 @@ by the series smart-play funnel) all branch on that one value — no site
 re-derives the predicate from `offlineMode` + error/sections.
 
 **`OfflineHomeGate`**
-(`feature/home/src/main/java/com/raulshma/jellyplay/feature/home/OfflineHomeGate.kt`)
+(`shared/feature/home/src/commonMain/kotlin/com/raulshma/jellyplay/feature/home/OfflineHomeGate.kt`)
 owns "when does the home render downloads?": the offline collection gate,
 BOTH gated collectors (library + episodes — their emissions stay
 independent so large episode batches don't delay the library's
@@ -384,7 +394,7 @@ uiState. Semantics worth remembering: a failed fetch over a
 CONFIRMED-empty offline library is `Online` (the hard-error screen) — only
 unprobed-or-populated downloads make the implicit fallback render.
 
-**`OfflineHomeContent`** (`feature/home/src/main/java/.../OfflineHomeSections.kt`)
+**`OfflineHomeContent`** (`shared/feature/home/src/commonMain/kotlin/.../OfflineHomeSections.kt`)
 is the offline home's render model, derived in ONE pass by
 `buildOfflineHomeContent` (filtered library + episodes, the derived sections,
 and the id→item lookup built once per emission). The screen remembers one
@@ -422,38 +432,39 @@ repository's SQL `searchOffline`), and `isFinishedOffline`
 `playedPercentage` is percent, while `toMediaItem` normalizes via the tick
 ratio).
 
-Test surfaces: `HomeRefresherTest` (plain JUnit + `MainDispatcherRule`,
-constructs the refresher directly with a fake `awaitOutboxDrained`) pins
+Test surfaces (all kotlin.test on the module's `jvmTest`, ported with the
+feature): `HomeRefresherTest` (constructs the refresher directly with a fake
+`awaitOutboxDrained`) pins
 cadence, throttles, the offline transitions, the going-online sequence and
-its timeout, and `patchItems`; `HomeViewModelTest` (Robolectric — the
-refresher's and sync holder's collaborators are folded into the two
-injected factories below, so those sub-module dependencies no longer
-surface on the VM) pins the UiState folds, the event funnel and the
-identity routing through a real `HomeSession` — every test runs through a
-`vmTest` helper whose `finally` stops the periodic loop INSIDE the
-coroutine (an `@After` is too late: runTest's completion never returns
-while its scheduler drives the infinite loop); `OfflineHomeGateTest`
-drives the gate module through its interface with one mocked repository
-(no VM, no Robolectric); `OfflineHomeContentTest` pins the one-pass
-aggregate; `OfflineShelfTest` pins the shared partition/query/threshold
-rules; `HomeRenderSourceTest` pins the render-source fold's corners and the
-render-source/offline-mode equivalence in BOTH directions;
-`HomeSectionPrefsTest` (core/model, beside the algebra) pins the three
-section-config write policies directly (formerly reachable only through
-the VM harness), and `HomeDiscoveryStoreTest` pins the store commands'
-read-modify-write + normalization; `HomeSurfaceTest` pins the render-branch
-fold's precedence (and that `Content` carries the winning render source);
-`HomeQuickActionsTest` pins the quick-action routing table;
-`HomeSearchSessionTest` pins the close ordering;
-`HomeSectionConfigSheetTest` pins the production `sectionConfigCapabilities`
-derivation (the old suite asserted a local copy with a DIFFERENT rule);
-`HomeSearchOverlayTest` and `HomeBackgroundPipelineTest` assert the
-extracted production subtitle/target-colour functions, not local copies;
-`HomeUiStateTest` pins only the state-class defaults.
+its timeout, and `patchItems`; `HomeViewModelTest` (kotlin.test on the
+shared module's `jvmTest` — no Robolectric; the refresher's and sync
+holder's collaborators are folded into the two injected factories below, so
+those sub-module dependencies no longer surface on the VM) pins the UiState
+folds, the event funnel and the identity routing through a real
+`HomeSession` — every test runs through a `vmTest` helper whose `finally`
+stops the periodic loop INSIDE the coroutine (an `@After` is too late:
+runTest's completion never returns while its scheduler drives the infinite
+loop); `OfflineHomeGateTest` drives the gate module through its interface
+with one mocked repository (no VM); `OfflineHomeContentTest` pins the
+one-pass aggregate; `OfflineShelfTest` (shared/core/model `commonTest`) pins
+the shared partition/query/threshold rules; `HomeRenderSourceTest` pins the
+render-source fold's corners and the render-source/offline-mode equivalence
+in BOTH directions; `HomeSectionPrefsTest` (core/model, beside the algebra)
+pins the three section-config write policies directly (formerly reachable
+only through the VM harness), and `HomeDiscoveryStoreTest` pins the store
+commands' read-modify-write + normalization; `HomeSurfaceTest` pins the
+render-branch fold's precedence (and that `Content` carries the winning
+render source); `HomeQuickActionsTest` pins the quick-action routing table;
+`HomeSearchSessionTest` pins the close ordering; `HomeSectionConfigSheetTest`
+pins the production `sectionConfigCapabilities` derivation (the old suite
+asserted a local copy with a DIFFERENT rule); `HomeSearchOverlayTest` and
+`HomeBackgroundPipelineTest` assert the extracted production
+subtitle/target-colour functions, not local copies; `HomeUiStateTest` pins
+only the state-class defaults.
 
 ## Session identity
 
-**`HomeSession`** (`core/data/src/main/java/com/raulshma/jellyplay/core/data/session/HomeSession.kt`)
+**`HomeSession`** (`shared/core/data/src/jvmShared/kotlin/com/raulshma/jellyplay/core/data/session/HomeSession.kt`)
 is the identity module. The atomic session source is the network engine:
 `JellyfinApiEngine.session` publishes `ActiveSession?` — one server plus
 its authenticated user as ONE value, updated inside the engine's critical
@@ -474,7 +485,7 @@ evictions where staleness is benign). `HomeViewModel` subscribes to
 `transitions` directly for its scroll-reset/refresh choreography — that
 stays.
 
-**`SessionCacheRegistry`** (`core/data/src/main/java/com/raulshma/jellyplay/core/data/session/SessionCacheRegistry.kt`)
+**`SessionCacheRegistry`** (`shared/core/data/src/commonMain/kotlin/com/raulshma/jellyplay/core/data/session/SessionCacheRegistry.kt`)
 is the single home for identity reactions. It owns the ONE collector on
 `HomeSession.transitions`; anything that must react to an identity change
 registers instead of writing a bespoke collector:
@@ -495,12 +506,13 @@ identity's SWR room rows), `episode-catalogue` (an action —
 `invalidateAll()` also bumps the in-flight epoch, which a bare cache clear
 wouldn't), `playback` (the media-segments cache) and `seerr` (the detail
 cache). Reactions run in registration order. Session- and identity-path
-collectors in core:data (`HomeSession`, `SessionCacheRegistry`, the
-repositories' registrations) inject the `@ApplicationScope CoroutineScope`
-bound in core:datastore's `CoroutineScopeModule` instead of hand-rolling
-`CoroutineScope(SupervisorJob() + …)` (HomeSession's `@Inject` constructor
-included; its two-arg primary constructor remains the cross-module test
-seam). The longer-lived playback/cast/syncplay/network managers still own
+collectors in shared/core/data (`HomeSession`, `SessionCacheRegistry`, the
+repositories' registrations) inject the application-scope `CoroutineScope`
+(`named("applicationScope")` Koin single, owned by shared/core:datastore's
+Koin modules) instead of hand-rolling
+`CoroutineScope(SupervisorJob() + …)` — HomeSession included; its two-arg
+constructor doubles as the cross-module test seam. The longer-lived
+playback/cast/syncplay/network managers still own
 private scopes; identity-path code must not.
 
 The identity-keyed-cache policy: an in-memory cache holding user-scoped
@@ -508,7 +520,7 @@ data uses the `TtlCache` identity overloads (`get`/`put`/`remove(identity,
 key)` with a `CacheIdentity`) so a wrong identity is a guaranteed miss by
 construction — no parallel invalidation channel. core:data caches get the
 identity from `HomeSession.cacheIdentity()`/`cacheIdentitySnapshot()`.
-Below that layer, core:network cannot depend on core:data, so
+Below that layer, shared/core/network cannot depend on shared/core/data, so
 `LibraryApiClientImpl` keys off the engine's atomic session read directly
 (`currentHomeCacheIdentity()`); its favorite-flag cache is an
 identity-keyed `TtlCache`, which is why `clearFavoriteCache()` and the
@@ -526,27 +538,30 @@ persisted identity is the stable source there, and logout clears both.
 
 ## Settings search
 
-The settings-search knowledge lives in `feature/settings`, next to the
-screens it deep-links into — not in core/ui. Each screen (or screen family)
+The settings-search knowledge lives in `shared/feature/settings`, next to the
+screens it deep-links into — not in shared/core/ui. Each screen (or screen family)
 declares its items in a `*SearchItems.kt` file co-located with the screen
 (`PlaybackSettingsSearchItems.kt` beside `PlaybackSettingsScreen.kt` also
 hosts the MPV/VLC/ExoPlayer engine, SyncPlay, casting and Live TV & DVR
 groups). Every item is a
 `SettingsSearchItem(id, titleRes, subtitleRes, categoryRes, keywords, route,
-icon, isAdvanced)`; `SettingsSearchCatalog` aggregates the per-screen lists
-in one curated flat order (256 items — the matcher's stable sort uses that
+icon, isAdvanced)` (the `*Res` fields are Compose `StringResource`s since the
+KMP move — locale resolves lazily at render/match time); `SettingsSearchCatalog`
+aggregates the per-screen lists
+in one curated flat order (257 items — the matcher's stable sort uses that
 order as the tiebreaker, so keep additions deliberate). The `ss_<id>_title`
-/`ss_<id>_subtitle` strings live in feature/settings' `strings.xml`; the 14
-`ss_cat_*` category strings stay in core/ui because both feature modules
+/`ss_<id>_subtitle` strings live in feature/settings' Compose resources; the 14
+`ss_cat_*` category strings stay in shared/core/ui because both feature modules
 render them.
 
-`SettingsSearchProvider` (`core/ui/.../settingssearch/SettingsSearchProvider.kt`)
-is the seam: a one-property interface defined in core/ui so feature/home
-depends only on core/ui (Gradle star topology intact), while the Hilt
-binding — `SettingsSearchModule` in feature/settings providing
-`SettingsSearchCatalog` as a `@Singleton` — resolves at app level.
+`SettingsSearchProvider` (`shared/core/ui/.../settingssearch/SettingsSearchProvider.kt`)
+is the seam: a one-property interface defined in shared/core/ui so feature/home
+depends only on core/ui (Gradle star topology intact), while the Koin
+binding — settingsModule in shared/feature/settings providing
+`SettingsSearchCatalog` itself as the `SettingsSearchProvider` single —
+resolves at app level.
 `HomeViewModel` injects the provider and re-exposes the core/ui
-`settingsSearchResults(queries, context, provider)` pipeline as a
+`settingsSearchResults(queries, provider)` pipeline as a
 VM function; `HomeScreen`'s `HomeTopDockScrim` leaf collects it behind the
 "settings in home search" appearance gate. The in-settings search
 (`SettingsScreen`) skips DI and reads `SettingsSearchCatalog.items` directly
@@ -563,18 +578,52 @@ left are the sign-out dialogs (`ACTION_ONLY_IDS`), the on-screen screensaver
 group (`Route.Settings` targets) and the host-indirected setup wizard.
 `AppearanceSettingsScreen`'s drill-ins go through the same facade.
 
-Adding a settings screen now touches: the route (NavKey.kt — unchanged
-persistence contract), the screen itself, and its items in the co-located
-`*SearchItems.kt` (+ the new strings in feature/settings' `strings.xml`, +
+Adding a settings screen now touches: the route (NavKey.kt in
+shared/core/ui — unchanged persistence contract), the screen itself, and its
+items in the co-located
+`*SearchItems.kt` (+ the new strings in feature/settings' Compose resources, +
 one line in `SettingsSearchCatalog`). No core/ui edit, no new callback
-field. `SettingsSearchCatalogTest` (feature/settings, JVM-only — parses
-both modules' `strings.xml` from disk like the old matcher test did) pins
-id uniqueness, string resolvability and the 256-item aggregation;
-`SettingsSearchMatcherTest` (core/ui) is synthetic and pins matching only.
+field. `SettingsSearchCatalogTest` (feature/settings `jvmTest`, kotlin.test —
+resource resolvability is compile-time-guaranteed by the generated
+`StringResource` accessors, so the suite pins id uniqueness, resource/category
+cardinality, keywords and the 257-item aggregation);
+`SettingsSearchMatcherTest` (shared/core/ui `jvmTest`) is synthetic and pins matching only.
+
+The settings **icon prewarmer** derives its workload from the same catalog:
+the 257 catalog rows × 3 resource slots (title/subtitle/category `StringResource`
+accessors) = 771 reads over 528 distinct resources — the dedup happens at the
+generated-accessor level, so the prewarmer warms the 528 distinct entries and
+the count is pinned by the catalog test.
+
+## Theme variants (v0.10.6)
+
+**`ThemeVariant`** (`shared/core/designsystem/src/commonMain/kotlin/com/raulshma/jellyplay/core/designsystem/theme/ThemeVariant.kt`)
+is the single registry for the theme fleet: `STANDARD`, `SYNTHWAVE`,
+`SOOTHING`, `MONOCHROME` (pre-existing) plus the four v0.10.6 arrivals
+`VIVID`, `AURORA`, `SAKURA`, `VECTOR_POP`. The enum carries the derived
+facts every consumer used to re-derive — `isDarkLocked` (SYNTHWAVE, AURORA
+paint dark-only gradients so the light/dark picker goes inert) and
+`allowsOled` (the OLED pure-black surface treatment; suppressed for the
+dark-locked gradients and for Soothing/Monochrome) — plus two extension
+surfaces that replaced every per-variant `if` chain: `accentOptions()`
+returning the variant's `VariantAccent(id, label, lightColor, darkColor)`
+swatch list (null = no accent picker: Standard uses the global accent,
+Monochrome is fixed; Synthwave/Soothing keep their historical palettes, the
+four new variants own theirs in their theme files) and
+`backgroundBrush()` returning the full-bleed vertical gradient (Synthwave +
+Aurora) or null, which is what the app shell's
+`LocalThemeVariant.current.backgroundBrush()` background switch and the
+`JellyPlayScreenScaffold`'s remembered-background transparency check both
+read. The old `LocalIsSynthwave` / `synthwaveBackgroundBrush` pairs are
+gone. Per-variant schemes live beside the registry
+(`AuroraTheme.kt`, `SakuraTheme.kt`, `VectorPopTheme.kt`, `VividTheme.kt`);
+`AppearanceSettingsScreen` renders one generalized
+`VariantAccentPicker(variant)` (in shared/core/ui's `AccentColorPicker.kt`)
+instead of the former hardcoded Synthwave/Soothing swatch rows.
 
 ## Decided deepenings (2026-08-30 architecture review)
 
-**`HomeSurface`** (IMPLEMENTED, `feature/home/.../HomeSurface.kt`) is the
+**`HomeSurface`** (IMPLEMENTED, `shared/feature/home/src/commonMain/.../HomeSurface.kt`) is the
 home screen's render-branch fold: ONE pure `homeSurface(state, offlineContent)`
 computation producing a sealed surface — fixed precedence `HardError` →
 `NoDownloads` → `Music` → `Content` — where `Content` carries the
@@ -593,7 +642,7 @@ so it buys width, not depth. The remove-download quick action stays
 Explicit-offline-only (pinned as-is); revisit if the implicit fallback
 should offer it.
 
-**`HomeRefresherFactory`** (IMPLEMENTED, `feature/home`) is the refresher's
+**`HomeRefresherFactory`** (IMPLEMENTED, `shared/feature/home`) is the refresher's
 construction seam: an `@Inject` factory owning the nine pure-DI
 collaborators, `create()` taking only VM-owned runtime inputs (scope, the
 sync holder's drain gate, the preference-mirror providers) — plus
@@ -654,13 +703,13 @@ collection types (now including `livetv`, whose UserView duplicates the
 drawer's primary Live TV item) plus the DVR recordings library Jellyfin
 injects with no collection type and the exact name "Recordings" (its
 content lives in the Live TV screen's Recordings tab). Screen content
-opens the drawer through `LocalTvDrawerOpener` (core/ui `tv/TvMode.kt`),
+opens the drawer through `LocalTvDrawerOpener` (shared/core/ui `tv/TvMode.kt`),
 provided by the scaffold around its content slot with a no-op default
 (including phone): D-pad Left at a content left edge calls it instead of
 relying on geometric focus search into the rail, which fails when the
 selected rail entry is recycled out of the lazy column.
 
-`LibraryScreen` (feature/library) applies the same philosophy to its stacked
+`LibraryScreen` (shared/feature/library) applies the same philosophy to its stacked
 TV header rows: geometric D-pad search between them is unreliable (chip-row
 focus bounds overlap; the alphabet rail interleaves on the right edge), so
 each row intercepts its own vertical hops (`onDpadKey`) and redirects them to
@@ -671,7 +720,7 @@ row; the wrappable active-tags row keeps Up/Down geometric, and each header
 row plus the content area carries `openDrawerOnLeftExit` (the
 `LocalTvDrawerOpener` exit hook).
 
-Focus-restorer contract (`core/ui` `tv/FocusRestorer.kt`): focus
+Focus-restorer contract (`shared/core/ui` `tv/FocusRestorer.kt`): focus
 properties attach to the next INNER focus target, so `tvFocusRestorer`
 must be placed BEFORE the focus group it manages
 (`tvFocusRestorer(fallback).focusGroup()`), and because `onEnter`/`onExit`

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Screen -->
+    <string name="shortcuts_screen_title">Shortcuts</string>
+
+    <!-- Filter -->
+    <string name="shortcuts_filter_all">All</string>
+
+    <!-- Categories -->
+    <string name="shortcuts_category_library">Library</string>
+    <string name="shortcuts_category_services">Services</string>
+    <string name="shortcuts_category_system">System</string>
+
+    <!-- Empty state -->
+    <string name="shortcuts_empty_title">No shortcuts available</string>
+    <string name="shortcuts_empty_description">Browse the app to discover features and content</string>
+    <string name="shortcuts_empty_action">Browse Library</string>
+    <string name="shortcuts_search_placeholder">Search shortcuts…</string>
+    <string name="shortcuts_search_no_results">No shortcuts match \"%1$s\"</string>
+    <string name="shortcuts_search_clear">Clear search</string>
+    <string name="shortcuts_admin_badge">Admin</string>
+
+    <!-- Hero -->
+
+    <!-- Featured -->
+
+    <!-- Shortcut items -->
+    <string name="shortcuts_item_downloads_title">Downloads</string>
+    <string name="shortcuts_item_downloads_description">Offline content and download management.</string>
+    <string name="shortcuts_item_favorites_title">Favorites</string>
+    <string name="shortcuts_item_favorites_description">Liked and bookmarked media.</string>
+    <string name="shortcuts_item_watch_history_title">Watch History</string>
+    <string name="shortcuts_item_watch_history_description">Progress heatmap and viewing stats.</string>
+    <string name="shortcuts_item_live_tv_title">Live TV</string>
+    <string name="shortcuts_item_live_tv_description">Live TV programs, guide, channels, and recordings.</string>
+    <string name="shortcuts_item_playlists_title">Playlists</string>
+    <string name="shortcuts_item_playlists_description">Your curated and saved playlists, including Watch Later.</string>
+    <string name="shortcuts_item_syncplay_title" translatable="false">SyncPlay</string>
+    <string name="shortcuts_item_syncplay_description">Watch together with synchronized playback.</string>
+    <string name="shortcuts_item_requests_title">Requests</string>
+    <string name="shortcuts_item_requests_description">Request movies and TV shows.</string>
+    <string name="shortcuts_item_newsletters_title">Newsletters</string>
+    <string name="shortcuts_item_newsletters_description">Latest newsletters and updates.</string>
+    <string name="shortcuts_item_seerr_title" translatable="false">Seerr</string>
+    <string name="shortcuts_item_seerr_description">Configure Seerr integration.</string>
+    <string name="shortcuts_item_activity_queue_title">Activity Queue</string>
+    <string name="shortcuts_item_activity_queue_description">Combined Radarr/Sonarr download queue and management.</string>
+    <string name="shortcuts_item_upcoming_title">Upcoming</string>
+    <string name="shortcuts_item_upcoming_description">Combined Sonarr/Radarr release calendar.</string>
+    <string name="shortcuts_item_arr_title" translatable="false">Radarr / Sonarr</string>
+    <string name="shortcuts_item_arr_description">Direct *arr server connections and overrides.</string>
+    <string name="shortcuts_item_settings_title">Settings</string>
+    <string name="shortcuts_item_settings_description">Appearance, playback, audio, and app options.</string>
+    <string name="shortcuts_item_server_mgmt_title">Server Mgmt</string>
+    <string name="shortcuts_item_server_mgmt_description">Server connection and configuration.</string>
+    <string name="shortcuts_item_switch_user_title">Switch User</string>
+    <string name="shortcuts_item_switch_user_description">Manage server users and profiles.</string>
+    <string name="shortcuts_item_admin_title">Admin</string>
+    <string name="shortcuts_item_admin_description">Dashboard, health, activity, and tasks.</string>
+    <string name="shortcuts_item_setup_wizard_title">Setup Wizard</string>
+    <string name="shortcuts_item_setup_wizard_description">Run the initial configuration flow.</string>
+    <string name="shortcuts_item_about_title">About</string>
+    <string name="shortcuts_item_about_description">Version, licenses, and app information.</string>
+</resources>

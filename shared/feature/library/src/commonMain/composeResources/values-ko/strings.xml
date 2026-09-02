@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Library feature user-facing strings (enhancements §2.2) -->
+    <string name="library_photo_saved_to_gallery">갤러리에 저장됨</string>
+    <string name="library_failed_to_load_items">항목을 불러오지 못했습니다</string>
+    <string name="library_failed_to_load_more_items">항목을 더 불러오지 못했습니다</string>
+
+    <!-- LibraryScreen -->
+    <string name="library_title">라이브러리</string>
+    <string name="library_filters">필터</string>
+    <string name="library_all">전체</string>
+    <string name="library_clear_all">모두 지우기</string>
+    <plurals name="library_item_count">
+        <item quantity="other">항목 %1$d개</item>
+    </plurals>
+    <string name="library_no_items_found">항목을 찾을 수 없습니다</string>
+    <string name="library_no_downloads_offline">아직 다운로드가 없습니다</string>
+    <string name="library_try_adjusting_filters">필터를 조정해 보세요</string>
+    <string name="library_list_view">목록 보기</string>
+    <string name="library_grid_view">격자 보기</string>
+    <string name="library_thumb_view">섬네일 보기</string>
+    <string name="library_smart_playlists">스마트 재생목록</string>
+    <string name="library_mood_playlists">분위기 재생목록</string>
+    <string name="library_playlists">재생목록</string>
+    <string name="library_shuffle">셔플</string>
+    <string name="library_jump_to_letter">글자로 이동</string>
+
+    <!-- LibraryFilterSheet -->
+    <string name="library_reset">재설정</string>
+    <string name="library_sort_by">정렬 기준</string>
+    <string name="library_media_type">미디어 유형</string>
+    <string name="library_status">상태</string>
+    <string name="library_sort_in_progress">재생 중</string>
+    <string name="library_filter_resumable">재생 중</string>
+    <string name="library_filter_downloaded">다운로드됨</string>
+    <string name="library_genres">장르</string>
+    <string name="library_year_range">연도 범위</string>
+    <string name="library_tags">태그</string>
+    <string name="library_minimum_rating">최소 평점</string>
+    <string name="library_apply_filters">필터 적용</string>
+    <string name="library_collapse">접기</string>
+    <string name="library_expand">펼치기</string>
+
+    <!-- FavoritesScreen -->
+    <string name="library_favorites">즐겨찾기</string>
+    <string name="library_failed_to_load_favorites">즐겨찾기를 불러오지 못했습니다</string>
+    <string name="library_no_favorites">즐겨찾기 없음</string>
+    <string name="library_no_favorites_description">즐겨찾기한 항목이 여기에 표시됩니다</string>
+
+    <!-- StudioDetailScreen -->
+    <string name="library_failed_to_load_more">더 불러오지 못했습니다</string>
+
+    <!-- PhotoAlbumScreen -->
+    <string name="library_photos">사진</string>
+    <string name="library_sort_options">정렬 옵션</string>
+    <string name="library_failed_to_load_photos">사진을 불러오지 못했습니다</string>
+    <string name="library_no_photos_found">사진을 찾을 수 없습니다</string>
+
+    <!-- ── Photo viewer (PhotoViewerScreen) ────────────────────────────── -->
+    <string name="library_photo_adjustments">조정</string>
+    <string name="library_photo_slideshow">슬라이드쇼</string>
+    <string name="library_photo_start_slideshow">슬라이드쇼 시작</string>
+    <string name="library_photo_stop_slideshow">슬라이드쇼 중지</string>
+    <!-- %1$d = brightness as integer percent -->
+    <string name="library_photo_brightness">밝기 %1$d%%</string>
+    <!-- %1$d = contrast as integer percent -->
+    <string name="library_photo_contrast">대비 %1$d%%</string>
+    <!-- %1$d = saturation as integer percent -->
+    <string name="library_photo_saturation">채도 %1$d%%</string>
+    <string name="library_photo_failed_to_load">사진을 불러오지 못했습니다</string>
+    <!-- ── Photo viewer icon content descriptions (TalkBack) ───────────── -->
+    <string name="library_cd_close">닫기</string>
+    <string name="library_cd_share">공유</string>
+    <string name="library_cd_save">저장</string>
+    <string name="library_cd_info">정보</string>
+    <string name="library_cd_adjust">조정</string>
+    <string name="library_cd_previous">이전</string>
+    <string name="library_cd_next">다음</string>
+</resources>

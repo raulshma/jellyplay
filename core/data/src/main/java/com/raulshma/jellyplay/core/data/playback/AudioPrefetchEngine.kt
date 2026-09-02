@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -13,8 +12,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlin.math.max
 
 /**
@@ -29,13 +26,12 @@ import kotlin.math.max
  * Back-fill is implicit: recently-played tracks remain in the LRU cache and
  * are evicted by [LeastRecentlyUsedCacheEvictor] under pressure.
  */
-@Singleton
-class AudioPrefetchEngine @Inject constructor(
+class AudioPrefetchEngine(
     private val audioStreamCache: AudioStreamCache,
     private val policyGuard: AudioCachePolicyGuard,
     private val playbackRepository: PlaybackRepository,
     private val audioCacheStore: com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore,
-    @ApplicationScope private val backgroundScope: CoroutineScope,
+    private val backgroundScope: CoroutineScope,
 ) {
     // Late-bound by AudioPlaybackManager.start()
     private var queueProvider: (() -> List<AudioQueueItem>)? = null

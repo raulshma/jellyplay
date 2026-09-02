@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcuts_screen_title">바로가기</string>
+    <string name="shortcuts_filter_all">전체</string>
+    <string name="shortcuts_category_library">라이브러리</string>
+    <string name="shortcuts_category_services">서비스</string>
+    <string name="shortcuts_category_system">시스템</string>
+    <string name="shortcuts_empty_title">사용 가능한 바로가기가 없습니다</string>
+    <string name="shortcuts_empty_description">앱을 탐색하여 기능과 콘텐츠를 발견하세요</string>
+    <string name="shortcuts_empty_action">라이브러리 탐색</string>
+    <string name="shortcuts_item_downloads_title">다운로드</string>
+    <string name="shortcuts_item_downloads_description">오프라인 콘텐츠 및 다운로드 관리.</string>
+    <string name="shortcuts_item_favorites_title">즐겨찾기</string>
+    <string name="shortcuts_item_favorites_description">좋아요 및 북마크한 미디어.</string>
+    <string name="shortcuts_item_watch_history_title">시청 기록</string>
+    <string name="shortcuts_item_watch_history_description">진행 상태 히트맵 및 시청 통계.</string>
+    <string name="shortcuts_item_live_tv_title">라이브 TV</string>
+    <string name="shortcuts_item_live_tv_description">라이브 TV 프로그램, 가이드, 채널, 녹화.</string>
+    <string name="shortcuts_item_playlists_title">재생목록</string>
+    <string name="shortcuts_item_playlists_description">큐레이션하고 저장한 재생목록, 나중에 볼 콘텐츠 포함.</string>
+    <string name="shortcuts_item_syncplay_description">동기화된 재생으로 함께 시청.</string>
+    <string name="shortcuts_item_requests_title">요청</string>
+    <string name="shortcuts_item_requests_description">영화와 TV 프로그램을 요청하세요.</string>
+    <string name="shortcuts_item_newsletters_title">뉴스레터</string>
+    <string name="shortcuts_item_newsletters_description">최신 뉴스레터 및 업데이트.</string>
+    <string name="shortcuts_item_seerr_description">Seerr 연동 구성.</string>
+    <string name="shortcuts_item_activity_queue_title">활동 대기열</string>
+    <string name="shortcuts_item_activity_queue_description">Radarr/Sonarr 다운로드 대기열 통합 및 관리.</string>
+    <string name="shortcuts_item_upcoming_title">예정</string>
+    <string name="shortcuts_item_upcoming_description">Sonarr/Radarr 릴리스 캘린더 통합.</string>
+    <string name="shortcuts_item_arr_description">*arr 서버 직접 연결 및 재정의.</string>
+    <string name="shortcuts_item_settings_title">설정</string>
+    <string name="shortcuts_item_settings_description">외관, 재생, 오디오 및 앱 옵션.</string>
+    <string name="shortcuts_item_server_mgmt_title">서버 관리</string>
+    <string name="shortcuts_item_server_mgmt_description">서버 연결 및 구성.</string>
+    <string name="shortcuts_item_switch_user_title">사용자 전환</string>
+    <string name="shortcuts_item_switch_user_description">서버 사용자 및 프로필 관리.</string>
+    <string name="shortcuts_item_admin_title">관리자</string>
+    <string name="shortcuts_item_admin_description">대시보드, 상태, 활동 및 작업.</string>
+    <string name="shortcuts_item_setup_wizard_title">설정 마법사</string>
+    <string name="shortcuts_item_setup_wizard_description">초기 구성 흐름을 실행하세요.</string>
+    <string name="shortcuts_item_about_title">정보</string>
+    <string name="shortcuts_item_about_description">버전, 라이선스 및 앱 정보.</string>
+</resources>

@@ -1,0 +1,397 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Shared / generic -->
+    <string name="admin_cancel">취소</string>
+    <string name="admin_delete">삭제</string>
+    <string name="admin_save">저장</string>
+    <string name="admin_add">추가</string>
+    <string name="admin_refresh">새로고침</string>
+    <string name="admin_view_all">모두 보기</string>
+    <string name="admin_continue">계속</string>
+    <string name="admin_install">설치</string>
+    <string name="admin_uninstall">제거</string>
+    <string name="admin_retry">재시도</string>
+    <string name="admin_back">뒤로</string>
+    <string name="admin_dismiss">닫기</string>
+    <string name="admin_name">이름</string>
+    <string name="admin_url">URL</string>
+    <string name="admin_ok">확인</string>
+    <string name="admin_unknown_error">알 수 없는 오류</string>
+    <string name="admin_deleting">삭제 중…</string>
+    <string name="admin_scanning">스캔 중…</string>
+    <string name="admin_scan_now">지금 스캔</string>
+    <string name="admin_select_all">모두 선택</string>
+    <string name="admin_media_types">미디어 유형</string>
+    <string name="admin_dry_run">시험 실행(미리보기 전용)</string>
+
+    <!-- Content descriptions -->
+    <string name="admin_edit_cd">편집</string>
+    <string name="admin_delete_cd">삭제</string>
+    <string name="admin_uninstall_cd">제거</string>
+    <string name="admin_remove_cd">제거</string>
+    <string name="admin_cancel_cd">취소</string>
+    <string name="admin_share_cd">공유</string>
+    <string name="admin_add_user_cd">사용자 추가</string>
+    <string name="admin_delete_user_cd">사용자 삭제</string>
+    <string name="admin_shutdown_cd">종료</string>
+    <string name="admin_stop_live_cd">라이브 중지</string>
+    <string name="admin_start_live_cd">라이브 시작</string>
+    <string name="admin_stop">중지</string>
+    <string name="admin_stop_session_cd">재생 중지</string>
+    <string name="admin_stop_session_title">재생을 중지하시겠습니까?</string>
+    <string name="admin_stop_session_body">\"%1$s\"에서 재생 중인 미디어를 중지하시겠습니까?</string>
+    <string name="admin_run">실행</string>
+
+    <!-- Relative time -->
+    <string name="admin_just_now">방금</string>
+    <string name="admin_min_ago">%1$d분 전</string>
+    <string name="admin_hours_ago">%1$d시간 전</string>
+    <string name="admin_days_ago">%1$d일 전</string>
+
+    <!-- Media item types -->
+    <string name="admin_type_movie">영화</string>
+    <string name="admin_type_series">시리즈</string>
+    <string name="admin_type_episode">에피소드</string>
+    <string name="admin_type_audio">오디오</string>
+    <string name="admin_type_music_video">뮤직비디오</string>
+    <string name="admin_type_book">도서</string>
+
+    <!-- AccessDeniedScreen -->
+    <string name="admin_access_denied_title">접근 거부됨</string>
+    <string name="admin_access_denied_body">이 영역에 접근할 권한이 없습니다.</string>
+    <string name="admin_access_denied_contact">오류라고 생각되면 서버 관리자에게 문의하세요.</string>
+
+    <!-- AuditHistoryTab -->
+    <string name="admin_no_audit_history">아직 감사 기록이 없습니다</string>
+    <string name="admin_audit_history_tab">감사 기록</string>
+
+    <!-- AdminDashboardScreen -->
+    <string name="admin_dashboard_title">대시보드</string>
+    <string name="admin_restart_server_title">서버 재시작</string>
+    <string name="admin_restart_server_body">Jellyfin 서버를 재시작하시겠습니까? 모든 활성 세션이 연결 해제됩니다.</string>
+    <string name="admin_restart">재시작</string>
+    <string name="admin_shutdown_server_title">서버 종료</string>
+    <string name="admin_shutdown_server_body">Jellyfin 서버를 종료하시겠습니까? 수동으로 다시 시작해야 합니다.</string>
+    <string name="admin_shutdown">종료</string>
+
+    <!-- DevicesScreen -->
+    <string name="admin_devices_title">기기</string>
+    <string name="admin_delete_device_title">기기 삭제</string>
+    <string name="admin_delete_device_body">\"%1$s\"를 삭제하시겠습니까? 연결된 모든 세션이 로그아웃됩니다.</string>
+    <string name="admin_edit_device_name_title">기기 이름 편집</string>
+    <string name="admin_custom_name">사용자 지정 이름</string>
+    <string name="admin_no_devices">기기를 찾을 수 없습니다</string>
+    <string name="admin_devices_search_placeholder">이름 또는 사용자로 검색</string>
+
+    <!-- LogsScreen -->
+    <string name="admin_logs_title">로그</string>
+    <string name="admin_no_log_files">로그 파일을 찾을 수 없습니다</string>
+    <string name="admin_no_activity_log">활동 로그 항목이 없습니다</string>
+    <string name="admin_logs_search_placeholder">메시지 필터</string>
+
+    <!-- Plugins -->
+    <string name="admin_plugins_title">플러그인</string>
+    <string name="admin_installed_tab">설치됨</string>
+    <string name="admin_catalog_tab">카탈로그</string>
+    <string name="admin_repositories_tab">리포지토리</string>
+    <string name="admin_search_plugins">플러그인 검색…</string>
+    <string name="admin_installed">설치됨</string>
+    <string name="admin_install_third_party_title">타사 플러그인을 설치하시겠습니까?</string>
+    <string name="admin_install_third_party_body">플러그인은 Jellyfin 서버와 동일한 시스템 접근 권한을 갖습니다. 신뢰할 수 있는 출처의 플러그인만 설치하세요. %1$s을(를) 설치하시겠습니까?</string>
+    <string name="admin_latest_version">최신: v%1$s</string>
+    <string name="admin_installing">%1$s 설치 중</string>
+    <string name="admin_add_repository_title">리포지토리 추가</string>
+    <string name="admin_plugin_settings_title">%1$s 설정</string>
+    <string name="admin_uninstall_plugin_title">플러그인 제거</string>
+    <string name="admin_uninstall_plugin_body">%1$s를 제거하시겠습니까? 이 작업은 되돌릴 수 없습니다.</string>
+    <string name="admin_uninstall_plugin_confirm_title">플러그인을 제거하시겠습니까?</string>
+    <string name="admin_plugin_management_alpha">플러그인 관리 - 알파</string>
+    <string name="admin_plugin_experimental">이 기능은 실험적입니다. 본인 책임하에 사용하세요.</string>
+
+    <!-- StaleMediaScreen -->
+    <string name="admin_stale_media_title">오래된 미디어</string>
+    <string name="admin_scan_results_tab">스캔 결과</string>
+    <string name="admin_configuration_tab">구성</string>
+    <string name="admin_scan_configuration">스캔 구성</string>
+    <string name="admin_stale_threshold">오래됨 임계값: %1$d일</string>
+    <string name="admin_use_date_added">라이브러리에 추가된 날짜 사용</string>
+    <string name="admin_include_never_played">재생한 적 없는 항목 포함</string>
+    <string name="admin_delete_from_library">라이브러리에서 삭제</string>
+
+    <!-- WatchedMediaCleanupScreen -->
+    <string name="admin_watched_cleanup_title">시청한 미디어 정리</string>
+    <string name="admin_cleanup_configuration">정리 구성</string>
+    <string name="admin_confirm_deletion">삭제 확인</string>
+    <string name="admin_confirm_deletion_body">다음 %1$d개의 시청한 항목이 라이브러리에서 제거됩니다:</string>
+    <string name="admin_minimum_days_watched">시청 이후 최소 일수: %1$d</string>
+    <string name="admin_no_minimum_time">최소 시간 필터 없음</string>
+    <string name="admin_keep_favorites">즐겨찾기 유지</string>
+    <string name="admin_include_partially_watched">일부 시청한 항목 포함</string>
+
+    <!-- Statistics -->
+    <string name="admin_user_statistics_title">사용자 통계</string>
+    <string name="admin_watched_more">이번 달에 %1$s%% 더 시청했습니다</string>
+    <string name="admin_watched_less">이번 달에 %1$s%% 덜 시청했습니다</string>
+    <string name="admin_duration_vs_last">%1$s(지난달 %2$s 대비)</string>
+    <string name="admin_content_breakdown">콘텐츠 분석</string>
+    <string name="admin_by_genre">장르별</string>
+    <string name="admin_playback_methods">재생 방법</string>
+    <string name="admin_clients_devices">클라이언트 및 기기</string>
+    <string name="admin_chart">차트</string>
+    <string name="admin_list">목록</string>
+
+    <!-- ScheduledTasksScreen -->
+    <string name="admin_scheduled_tasks_title">예약된 작업</string>
+
+    <!-- Users -->
+    <string name="admin_users_title">사용자</string>
+    <string name="admin_no_users">사용자 없음</string>
+    <string name="admin_new_user_title">새 사용자</string>
+    <string name="admin_password_optional">비밀번호(선택)</string>
+    <string name="admin_create">만들기</string>
+    <string name="admin_delete_user_title">사용자 삭제</string>
+    <string name="admin_delete_user_body">\"%1$s\"를 삭제하시겠습니까? 되돌릴 수 없습니다.</string>
+    <string name="admin_new_password">새 비밀번호</string>
+    <string name="admin_discard">취소</string>
+    <string name="admin_save_changes">변경 사항 저장</string>
+    <string name="admin_could_not_reload">업데이트된 사용자를 다시 로드할 수 없습니다</string>
+
+    <!-- User detail: tabs / sections -->
+    <string name="admin_sign_in">로그인</string>
+    <string name="admin_sign_in_desc">이 사용자의 비밀번호를 설정하거나 재설정합니다.</string>
+    <string name="admin_danger_zone">위험 구역</string>
+    <string name="admin_danger_zone_desc">이 사용자를 서버에서 영구히 제거합니다.</string>
+    <string name="admin_library_access">라이브러리 접근</string>
+    <string name="admin_enable_all_libraries">모든 라이브러리 접근 활성화</string>
+    <string name="admin_channel_access">채널 접근</string>
+    <string name="admin_enable_all_channels">모든 채널 접근 활성화</string>
+    <string name="admin_media_deletion_from">미디어 삭제 위치</string>
+    <string name="admin_all_libraries">모든 라이브러리</string>
+    <string name="admin_device_access">기기 접근</string>
+    <string name="admin_enable_all_devices">모든 기기에서 접근 활성화</string>
+    <string name="admin_security_limits">보안 제한</string>
+    <string name="admin_security_limits_desc">동시 세션 및 로그인 보호.</string>
+    <string name="admin_max_active_sessions">최대 활성 세션</string>
+    <string name="admin_zero_blank_unlimited">0 또는 빈칸 = 무제한</string>
+    <string name="admin_login_attempts">잠금 전 로그인 시도 횟수</string>
+    <string name="admin_blank_no_lockout">비움 = 잠금 없음</string>
+    <string name="admin_identity">신원</string>
+    <string name="admin_identity_desc">이 사용자가 누구이고 어떻게 표시되는지 제어합니다.</string>
+    <string name="admin_administrator">관리자</string>
+    <string name="admin_active">활성</string>
+    <string name="admin_hidden">숨김</string>
+    <string name="admin_hidden_desc">이 사용자를 로그인 화면에서 숨기기</string>
+    <string name="admin_allow_preference_access">사용자 환경설정 접근 허용</string>
+    <string name="admin_allow_preference_access_desc">사용자가 자신의 표시 환경설정을 변경하도록 허용</string>
+    <string name="admin_max_parental_rating">최대 등급 제한</string>
+    <string name="admin_max_parental_rating_desc">선택한 등급 이상의 콘텐츠 숨기기.</string>
+    <string name="admin_block_unrated">등급 없는 콘텐츠 차단</string>
+    <string name="admin_block_unrated_desc">등급이 없는 특정 미디어 유형 차단.</string>
+    <string name="admin_allow_tags">태그가 있는 콘텐츠 허용</string>
+    <string name="admin_allow_tags_desc">이 태그 중 하나를 가진 미디어만 표시됩니다.</string>
+    <string name="admin_block_tags">태그가 있는 콘텐츠 차단</string>
+    <string name="admin_block_tags_desc">이 태그 중 하나를 가진 미디어는 숨겨집니다.</string>
+    <string name="admin_rating">등급</string>
+    <string name="admin_change_password">비밀번호 변경</string>
+    <string name="admin_add_tag">태그 추가</string>
+
+    <!-- User detail: access schedule -->
+    <string name="admin_access_schedules_title">접근 일정</string>
+    <string name="admin_access_schedules_desc">이 사용자가 로그인할 수 있는 시간을 제한합니다.</string>
+    <string name="admin_add_schedule">일정 추가</string>
+    <string name="admin_day">요일</string>
+    <string name="admin_start_time">시작 %1$s</string>
+    <string name="admin_end_time">종료 %1$s</string>
+
+    <!-- User detail: permissions -->
+    <string name="admin_playback">재생</string>
+    <string name="admin_playback_desc">이 사용자가 재생할 수 있는 항목과 트랜스코딩 방식.</string>
+    <string name="admin_allow_media_playback">미디어 재생 허용</string>
+    <string name="admin_allow_media_playback_desc">영화, 시리즈, 음악 재생</string>
+    <string name="admin_allow_audio_transcoding">오디오 트랜스코딩 허용</string>
+    <string name="admin_allow_video_transcoding">비디오 트랜스코딩 허용</string>
+    <string name="admin_allow_remuxing">리먹스 허용</string>
+    <string name="admin_allow_remuxing_desc">재인코딩 없는 다이렉트 스트림 재생</string>
+    <string name="admin_content">콘텐츠</string>
+    <string name="admin_content_desc">미디어 삭제 및 다운로드.</string>
+    <string name="admin_allow_media_deletion">미디어 삭제 허용</string>
+    <string name="admin_allow_media_downloading">미디어 다운로드 허용</string>
+    <string name="admin_features">기능</string>
+    <string name="admin_features_desc">라이브 TV, 원격 제어 및 원격 접근.</string>
+    <string name="admin_allow_live_tv">라이브 TV 접근 허용</string>
+    <string name="admin_allow_live_tv_desc">채널 가이드 탐색</string>
+    <string name="admin_allow_live_tv_mgmt">라이브 TV 관리 허용</string>
+    <string name="admin_allow_live_tv_mgmt_desc">녹화 및 타이머 관리</string>
+    <string name="admin_allow_remote_control">다른 사용자 원격 제어 허용</string>
+    <string name="admin_management_control">관리 및 제어</string>
+    <string name="admin_management_control_desc">서버, 컬렉션 및 기기 제어.</string>
+    <string name="admin_allow_collection_mgmt">컬렉션 관리 허용</string>
+    <string name="admin_allow_subtitle_mgmt">자막 관리 허용</string>
+    <string name="admin_allow_remote_shared">공유 기기 원격 제어 허용</string>
+    <string name="admin_force_transcoding_remote">원격 미디어 소스 트랜스코딩 강제</string>
+    <string name="admin_force_transcoding_remote_desc">클라이언트 지원 여부와 관계없이 모든 원격 스트림 트랜스코딩</string>
+    <string name="admin_streaming">스트리밍</string>
+    <string name="admin_streaming_desc">SyncPlay 및 원격 비트레이트 제한.</string>
+    <string name="admin_remote_bitrate_limit">원격 클라이언트 비트레이트 제한</string>
+    <string name="admin_remote_bitrate_limit_desc">Mbps. 비움 = 무제한</string>
+
+    <!-- Quick actions -->
+    <string name="admin_qa_statistics">통계</string>
+    <string name="admin_qa_tasks">작업</string>
+    <string name="admin_qa_watched">시청함</string>
+
+    <!-- Stat labels -->
+    <string name="admin_stat_total_users">전체 사용자</string>
+    <string name="admin_stat_active_now">지금 활동 중</string>
+    <string name="admin_stat_total_plays">총 재생 수</string>
+    <string name="admin_stat_movies">영화</string>
+    <string name="admin_stat_episodes">에피소드</string>
+    <string name="admin_stat_songs">곡</string>
+
+    <!-- Tabs -->
+    <string name="admin_tab_profile">프로필</string>
+    <string name="admin_tab_access">접근</string>
+    <string name="admin_tab_parental">자녀 보호</string>
+    <string name="admin_tab_account">계정</string>
+    <string name="admin_tab_log_files">로그 파일</string>
+    <string name="admin_tab_activity_log">활동 로그</string>
+
+    <!-- Plugin status badges -->
+    <string name="admin_status_active">활성</string>
+    <string name="admin_status_restart">재시작</string>
+    <string name="admin_status_error">오류</string>
+    <string name="admin_status_deleted">삭제됨</string>
+    <string name="admin_status_disabled">비활성화됨</string>
+    <string name="admin_status_superseded">대체됨</string>
+    <string name="admin_status_unsupported">지원되지 않음</string>
+
+    <!-- Empty states / errors -->
+    <string name="admin_no_plugins_found">플러그인을 찾을 수 없습니다</string>
+    <string name="admin_no_plugins_installed">설치된 플러그인 없음</string>
+    <string name="admin_package_repositories">패키지 리포지토리</string>
+    <string name="admin_no_repositories">구성된 리포지토리가 없습니다</string>
+    <string name="admin_failed_load_statistics">통계를 불러올 수 없습니다</string>
+    <string name="admin_failed_load_user_details">사용자 세부정보를 불러올 수 없습니다</string>
+    <string name="admin_failed_load_config">구성을 불러올 수 없습니다</string>
+    <string name="admin_no_config_page">구성 페이지를 찾을 수 없습니다</string>
+    <string name="admin_loading">불러오는 중…</string>
+    <string name="admin_user_fallback">사용자</string>
+
+    <!-- Plugin detail metadata -->
+    <string name="admin_description">설명</string>
+    <string name="admin_version_history">버전 기록</string>
+    <string name="admin_loading_version_history">버전 기록 불러오는 중…</string>
+    <string name="admin_configuration">구성</string>
+    <string name="admin_edit_plugin_settings">플러그인 설정 편집</string>
+    <string name="admin_current">현재</string>
+    <string name="admin_details">세부정보</string>
+    <string name="admin_status">상태</string>
+    <string name="admin_version">버전</string>
+    <string name="admin_developer">개발자</string>
+    <string name="admin_repository">리포지토리</string>
+    <string name="admin_bundled">번들</string>
+    <string name="admin_unknown">알 수 없음</string>
+    <string name="admin_disable">비활성화</string>
+    <string name="admin_enable">활성화</string>
+    <string name="admin_restarting">재시작 중</string>
+
+    <!-- Scan progress / counts -->
+    <string name="admin_scan_progress_stale">%1$d개 확인, %2$d개 오래된 항목 발견</string>
+    <string name="admin_scan_progress_watched">%1$d개 확인, %2$d개 시청한 항목 발견</string>
+    <string name="admin_n_selected">%1$d개 선택됨</string>
+    <string name="admin_n_items">%1$d개 항목</string>
+    <string name="admin_n_lines">%1$d줄</string>
+    <string name="admin_scanning_library">라이브러리 스캔 중</string>
+    <string name="admin_scan_progress_pct">스캔 중 %1$d%%</string>
+
+    <!-- Misc UI batch3 -->
+    <string name="admin_quick_access">빠른 접근</string>
+    <string name="admin_scan_library">라이브러리 스캔</string>
+    <string name="admin_pause_live_logs">라이브 로그 일시정지</string>
+    <string name="admin_resume_live_logs">라이브 로그 재개</string>
+    <string name="admin_live_streaming_active">라이브 스트리밍 활성</string>
+    <string name="admin_completion">완료율</string>
+    <string name="admin_load_more">더 불러오기</string>
+    <string name="admin_loading_dots">불러오는 중…</string>
+    <string name="admin_activity_30_days">활동(30일)</string>
+    <string name="admin_watch_time_trend">시청 시간 추이(30일)</string>
+    <string name="admin_most_watched_genres">가장 많이 본 장르</string>
+    <string name="admin_top_watched">시청 횟수 상위</string>
+    <string name="admin_music_listening">음악 청취</string>
+    <string name="admin_listening_time">청취 시간</string>
+    <string name="admin_top_artists">상위 아티스트</string>
+    <string name="admin_top_genres">상위 장르</string>
+    <string name="admin_top_tracks">상위 트랙</string>
+    <string name="admin_no_breakdown_data">분석 데이터가 없습니다</string>
+    <string name="admin_no_data">데이터가 없습니다</string>
+    <string name="admin_no_trend_data">추이 데이터가 없습니다</string>
+    <string name="admin_no_activity_data">활동 데이터가 없습니다</string>
+    <string name="admin_no_watch_time_data">시청 시간 데이터가 없습니다</string>
+    <string name="admin_no_music_data">음악 데이터가 없습니다</string>
+    <string name="admin_no_stale_found">오래된 미디어가 없습니다</string>
+    <string name="admin_run_scan_stale">오래된 미디어를 찾으려면 스캔을 실행하세요</string>
+    <string name="admin_no_watched_found">시청한 미디어가 없습니다</string>
+    <string name="admin_run_scan_watched">시청한 미디어를 찾으려면 스캔을 실행하세요</string>
+    <string name="admin_reset_password">비밀번호 재설정</string>
+    <string name="admin_set_password">비밀번호 설정</string>
+    <string name="admin_reset">재설정</string>
+    <string name="admin_set">설정</string>
+    <string name="admin_leave_blank_password">비밀번호를 재설정/지우려면 비워두세요.</string>
+    <string name="admin_no_schedules">설정된 일정이 없습니다</string>
+    <string name="admin_no_libraries_found">라이브러리를 찾을 수 없습니다</string>
+    <string name="admin_cannot_change_own_admin">본인의 관리자 상태는 변경할 수 없습니다</string>
+    <string name="admin_cannot_remove_last_admin">마지막 관리자는 제거할 수 없습니다</string>
+    <string name="admin_cannot_disable_self">본인을 비활성화할 수 없습니다</string>
+    <string name="admin_disabled_cannot_sign_in">비활성화된 사용자는 로그인할 수 없습니다</string>
+    <string name="admin_no_limit">제한 없음</string>
+
+    <!-- Scheduled task trigger chips -->
+    <string name="admin_trigger_daily">매일</string>
+    <string name="admin_trigger_weekly">매주</string>
+    <string name="admin_trigger_on_startup">시작 시</string>
+    <string name="admin_trigger_every_hours">%1$d시간마다</string>
+    <string name="admin_trigger_every_days">%1$d일마다</string>
+
+    <!-- Statistics chart toggle -->
+    <string name="admin_chart_weekly">주간</string>
+    <string name="admin_chart_monthly">월간</string>
+
+    <!-- Access schedule day labels -->
+    <string name="admin_day_sun">일</string>
+    <string name="admin_day_mon">월</string>
+    <string name="admin_day_tue">화</string>
+    <string name="admin_day_wed">수</string>
+    <string name="admin_day_thu">목</string>
+    <string name="admin_day_fri">금</string>
+    <string name="admin_day_sat">토</string>
+    <string name="admin_schedule_everyday">매일</string>
+    <string name="admin_schedule_weekday">평일</string>
+    <string name="admin_schedule_weekend">주말</string>
+
+    <!-- Plugin / catalog metadata labels (batch) -->
+    <string name="admin_plugin_version">v%1$s</string>
+    <string name="admin_plugin_by_author">에서 %1$s</string>
+
+    <!-- Statistics time-unit suffixes (compact chart labels) -->
+    <string name="admin_unit_hours">시간 </string>
+    <string name="admin_unit_minutes">분</string>
+
+    <!-- Dashboard section titles (batch) -->
+    <string name="admin_active_sessions">활성 세션</string>
+    <string name="admin_library">라이브러리</string>
+
+    <!-- Audit history row labels (batch) -->
+    <string name="admin_audit_by_user">에서 %1$s</string>
+    <string name="admin_audit_items_removed">%1$d개 항목 제거됨</string>
+
+    <!-- User statistics sort & export -->
+    <string name="user_stats_sort_plays">재생 수</string>
+    <string name="user_stats_sort_time">시청 시간</string>
+    <string name="user_stats_sort_name">이름</string>
+    <string name="user_stats_sort_cd">정렬</string>
+    <string name="user_stats_export_cd">CSV 내보내기</string>
+    <string name="user_stats_export_shared">내보냈습니다</string>
+
+    <string name="admin_plugin_config_unavailable">이 플랫폼에서는 플러그인 구성을 사용할 수 없습니다.</string>
+</resources>

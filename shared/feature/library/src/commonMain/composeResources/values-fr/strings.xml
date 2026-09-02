@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Library feature user-facing strings (enhancements §2.2) -->
+    <string name="library_photo_saved_to_gallery">Enregistrée dans la galerie</string>
+    <string name="library_failed_to_load_items">Échec du chargement des éléments</string>
+    <string name="library_failed_to_load_more_items">Échec du chargement d\'autres éléments</string>
+
+    <!-- LibraryScreen -->
+    <string name="library_title">Bibliothèque</string>
+    <string name="library_filters">Filtres</string>
+    <string name="library_all">Tout</string>
+    <string name="library_clear_all">Tout effacer</string>
+    <plurals name="library_item_count">
+        <item quantity="one">%1$d élément</item>
+        <item quantity="other">%1$d éléments</item>
+    </plurals>
+    <string name="library_no_items_found">Aucun élément trouvé</string>
+    <string name="library_no_downloads_offline">Aucun téléchargement pour le moment</string>
+    <string name="library_try_adjusting_filters">Essayez d\'ajuster vos filtres</string>
+    <string name="library_list_view">Vue en liste</string>
+    <string name="library_grid_view">Vue en grille</string>
+    <string name="library_thumb_view">Vue en miniatures</string>
+    <string name="library_smart_playlists">Playlists intelligentes</string>
+    <string name="library_mood_playlists">Playlists par ambiance</string>
+    <string name="library_playlists">Playlists</string>
+    <string name="library_shuffle">Lecture aléatoire</string>
+    <string name="library_jump_to_letter">Aller à la lettre</string>
+
+    <!-- LibraryFilterSheet -->
+    <string name="library_reset">Réinitialiser</string>
+    <string name="library_sort_by">Trier par</string>
+    <string name="library_media_type">Type de média</string>
+    <string name="library_status">Statut</string>
+    <string name="library_sort_in_progress">En cours</string>
+    <string name="library_filter_resumable">En cours</string>
+    <string name="library_filter_downloaded">Téléchargé</string>
+    <string name="library_genres">Genres</string>
+    <string name="library_year_range">Plage d\'années</string>
+    <string name="library_tags">Étiquettes</string>
+    <string name="library_minimum_rating">Note minimale</string>
+    <string name="library_apply_filters">Appliquer les filtres</string>
+    <string name="library_collapse">Réduire</string>
+    <string name="library_expand">Développer</string>
+
+    <!-- FavoritesScreen -->
+    <string name="library_favorites">Favoris</string>
+    <string name="library_failed_to_load_favorites">Échec du chargement des favoris</string>
+    <string name="library_no_favorites">Aucun favori</string>
+    <string name="library_no_favorites_description">Les éléments marqués comme favoris apparaîtront ici</string>
+
+    <!-- StudioDetailScreen -->
+    <string name="library_failed_to_load_more">Échec du chargement supplémentaire</string>
+
+    <!-- PhotoAlbumScreen -->
+    <string name="library_photos">Photos</string>
+    <string name="library_sort_options">Options de tri</string>
+    <string name="library_failed_to_load_photos">Échec du chargement des photos</string>
+    <string name="library_no_photos_found">Aucune photo trouvée</string>
+
+    <!-- ── Photo viewer (PhotoViewerScreen) ────────────────────────────── -->
+    <string name="library_photo_adjustments">Réglages</string>
+    <string name="library_photo_slideshow">Diaporama</string>
+    <string name="library_photo_start_slideshow">Lancer le diaporama</string>
+    <string name="library_photo_stop_slideshow">Arrêter le diaporama</string>
+    <!-- %1$d = brightness as integer percent -->
+    <string name="library_photo_brightness">Luminosité %1$d%%</string>
+    <!-- %1$d = contrast as integer percent -->
+    <string name="library_photo_contrast">Contraste %1$d%%</string>
+    <!-- %1$d = saturation as integer percent -->
+    <string name="library_photo_saturation">Saturation %1$d%%</string>
+    <string name="library_photo_failed_to_load">Impossible de charger la photo</string>
+    <!-- ── Photo viewer icon content descriptions (TalkBack) ───────────── -->
+    <string name="library_cd_close">Fermer</string>
+    <string name="library_cd_share">Partager</string>
+    <string name="library_cd_save">Enregistrer</string>
+    <string name="library_cd_info">Infos</string>
+    <string name="library_cd_adjust">Ajuster</string>
+    <string name="library_cd_previous">Précédent</string>
+    <string name="library_cd_next">Suivant</string>
+</resources>

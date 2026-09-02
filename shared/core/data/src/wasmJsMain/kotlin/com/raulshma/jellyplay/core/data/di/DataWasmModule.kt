@@ -1,0 +1,89 @@
+package com.raulshma.jellyplay.core.data.di
+
+import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.repository.ArrRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.SeerrRepositoryImpl
+import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
+import com.raulshma.jellyplay.core.data.session.WasmSessionIdentityProvider
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
+import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
+import org.koin.core.module.Module
+import org.koin.dsl.module
+
+/**
+ * Wave 15B: the wasmJs slice of the data graph — exactly the repos the
+ * requests feature consumes, wired the same way `DataKoinModule` wires them
+ * on the JVM:
+ *  - [SessionIdentityProvider] is the [WasmSessionIdentityProvider] over the
+ *    ONE shared [AtomicSessionState] that `networkWasmModule` owns (do NOT
+ *    construct a second one here — the wasm auth/library/playback clients
+ *    publish through that instance).
+ *  - [SessionCacheRegistry], [SeerrRepository] and [ArrRepository] are the
+ *    promoted commonMain singletons; ctor deps resolve from
+ *    `datastoreCommonModule` (stores + application scope) and
+ *    `networkWasmModule`.
+ *
+ * DEPENDENCY CLOSURE (wave 15C update — the follow-up this module's first
+ * revision documented is DONE): the wasm clients this module's repos need —
+ * `SeerrApiClient`/`TmdbApiClient`/`RadarrApiClient`/`SonarrApiClient` — are
+ * registered by `networkWasmModule` (15A's KtorWasm* client bindings), and
+ * the web shell's startKoin (apps/web Main.kt) lists BOTH modules plus
+ * `requestsModule`, so the requests ViewModels resolve end-to-end at
+ * runtime on web (browser-verified by tools/e2e/web-verify.mjs). The
+ * credentials-UI cut this note used to carry is closed by wave 16B: the
+ * shell's Seerr pane (WebSeerrPane) saves and persists the API key
+ * (localStorage carve-out — the other web credential stores stay
+ * session-memory only). Still true: session-cookie Seerr auth is
+ * browser-impossible (forbidden `Cookie` header), so only API-key creds
+ * can ever function on web.
+ */
+val dataWasmModule: Module = module {
+
+    single {
+        WasmSessionIdentityProvider(
+            sessionState = get(),
+            collectorScope = get(DatastoreQualifiers.applicationScope),
+        )
+    }
+    single<SessionIdentityProvider> { get<WasmSessionIdentityProvider>() }
+
+    single {
+        SessionCacheRegistry(
+            sessionIdentity = get(),
+            scope = get(DatastoreQualifiers.applicationScope),
+        )
+    }
+
+    single {
+        SeerrRepositoryImpl(
+            seerrApiClient = get(),
+            tmdbApiClient = get(),
+            seerrPreferencesStore = get(),
+            secureCredentialsStore = get(),
+            sessionIdentity = get(),
+            sessionCacheRegistry = get(),
+            cacheScope = get(DatastoreQualifiers.applicationScope),
+        )
+    }
+    single<SeerrRepository> { get<SeerrRepositoryImpl>() }
+
+    // Wave 16C: SeerrRequestDelegate moved to commonMain (zero JVM imports —
+    // pure kotlinx.coroutines + core:model), so the web graph can serve the
+    // SeerrDetailViewModel ctor the same way DataKoinModule does on the JVM
+    // (single { SeerrRequestDelegate(get()) } over the SeerrRepository above).
+    single { SeerrRequestDelegate(get()) }
+
+    single {
+        ArrRepositoryImpl(
+            radarrApiClient = get(),
+            sonarrApiClient = get(),
+            seerrRepository = get(),
+            arrPreferencesStore = get(),
+            cacheScope = get(DatastoreQualifiers.applicationScope),
+        )
+    }
+    single<ArrRepository> { get<ArrRepositoryImpl>() }
+}

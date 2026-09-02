@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pending playback-progress sync indicator shown on the home dock. -->
+    <string name="sync_icon_content_description">Sincronizzazione riproduzione: %1$d elementi in attesa. Apri i dettagli di sincronizzazione.</string>
+
+    <!-- Sync details sheet. -->
+    <string name="sync_details_title">Sincronizzazione avanzamento visione in attesa</string>
+    <string name="sync_items_queued">%1$d elementi in coda</string>
+    <string name="sync_up_to_date">Aggiornato</string>
+    <string name="sync_will_sync_when_online">Sincronizzerà automaticamente quando torni online</string>
+    <string name="syncing">Sincronizzazione…</string>
+    <string name="sync_now">Sincronizza ora</string>
+    <string name="sync_now_disabled_offline">Riconnettiti per sincronizzare</string>
+    <string name="sync_close">Chiudi</string>
+
+    <!-- Event types shown per pending row. -->
+    <string name="sync_event_start">Iniziato</string>
+    <string name="sync_event_progress">Avanzamento</string>
+    <string name="sync_event_stop">Fermato</string>
+    <string name="sync_event_played">Segnato come riprodotto</string>
+    <string name="sync_event_unplayed">Segnato come non riprodotto</string>
+    <string name="sync_event_favorite">Aggiunto ai preferiti</string>
+    <string name="sync_event_unfavorite">Rimosso dai preferiti</string>
+
+    <!-- Title shown for a pending row whose media could not be resolved. -->
+    <string name="sync_unknown_title">Elemento sconosciuto</string>
+
+    <!-- Home dock / search affordances. -->
+    <string name="home_back">Indietro</string>
+    <string name="home_search">Cerca</string>
+    <string name="home_clear_search">Cancella ricerca</string>
+    <string name="home_search_placeholder">Cerca film, serie, musica…</string>
+
+
+    <string name="home_settings">Impostazioni</string>
+    <string name="home_switch_user">Cambia utente</string>
+    <string name="home_go_online">Vai online</string>
+    <string name="home_go_offline">Vai offline</string>
+
+    <!-- Home empty / partial-load states. -->
+    <string name="home_no_content_available">Nessun contenuto disponibile</string>
+    <string name="home_no_content_description">Controlla le tue librerie Jellyfin e riprova dopo l\'aggiornamento.</string>
+    <string name="home_refresh">Aggiorna</string>
+    <string name="home_sections_load_failed">Impossibile caricare alcune sezioni.</string>
+    <string name="home_retry">Riprova</string>
+
+    <!-- Home section headers. -->
+    <string name="home_because_you_watched">Perché hai guardato %1$s</string>
+    <string name="home_discover">Scopri</string>
+    <string name="home_coming_soon">In arrivo</string>
+    <string name="home_continue_watching">Continua a guardare</string>
+    <string name="home_next_up">Prossimi contenuti</string>
+    <string name="home_implicit_offline_banner">Impossibile raggiungere il server — vengono mostrati i tuoi download.</string>
+    <string name="home_recently_downloaded">Scaricati di recente</string>
+    <string name="home_movies">Film</string>
+    <string name="home_series">Serie</string>
+    <string name="home_music">Musica</string>
+    <string name="home_downloaded">Scaricati</string>
+
+    <!-- Home continue-watching "Resume vs Details" dialog and hero actions. -->
+    <string name="home_resume_or_details">Riprendere la riproduzione o aprire i dettagli?</string>
+    <string name="home_resume">Riprendi</string>
+    <string name="home_details">Dettagli</string>
+    <string name="home_play">Riproduci</string>
+
+    <!-- Offline home states. -->
+    <string name="home_no_downloads_yet">Nessun download</string>
+    <string name="home_no_downloads_description">Scarica contenuti da online per accedervi offline.</string>
+    <string name="home_go_online_action">Vai online</string>
+
+    <!-- Home search overlay. -->
+    <string name="home_no_results_found">Nessun risultato trovato</string>
+    <string name="home_recent_searches">Ricerche recenti</string>
+    <string name="home_clear_all">Cancella tutto</string>
+    <string name="home_remove">Rimuovi</string>
+    <string name="home_library">Libreria</string>
+    <string name="home_movie">Film</string>
+    <string name="home_tv_show">Serie TV</string>
+    <string name="home_request_via_seerr">Richiedi tramite Seerr</string>
+    <string name="home_clear_search_history_title">Cancellare la cronologia di ricerca?</string>
+    <string name="home_clear_search_history_message">Questo rimuove tutte le tue ricerche recenti. Non può essere annullato.</string>
+    <string name="home_clear">Cancella</string>
+    <string name="home_cancel">Annulla</string>
+
+    <!-- Home section config sheet reorder (batch) -->
+    <string name="home_move_up">Sposta su</string>
+    <string name="home_move_down">Sposta giù</string>
+
+    <!-- Newsletter banner (batch) -->
+    <string name="home_newsletter_ready">Newsletter pronta</string>
+    <string name="home_newsletter_subtitle">Il tuo riepilogo settimanale è qui. Tocca per esplorare.</string>
+    <string name="home_dismiss">Ignora</string>
+
+    <!-- Localized error messages -->
+    <string name="home_error_load_content">Impossibile caricare i contenuti. Controlla la connessione e riprova.</string>
+    <string name="home_download_started">Download avviato</string>
+    <string name="home_download_start_failed">Impossibile avviare il download</string>
+    <string name="home_series_download_queued">Episodi in coda per il download</string>
+</resources>

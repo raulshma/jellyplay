@@ -15,8 +15,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Sends `PlaybackStart` / `PlaybackProgress` / `PlaybackStopped` to the
@@ -25,8 +23,7 @@ import javax.inject.Singleton
  * One progress loop polls the active engine / audio manager every 10s while
  * playing and every 60s while paused, until [stopSession] is called.
  */
-@Singleton
-class RemotePlaybackReporter @Inject constructor(
+class RemotePlaybackReporter(
     private val playbackRepository: PlaybackRepository,
     private val audioPlaybackManager: AudioPlaybackManager,
     private val authRepository: AuthRepository,

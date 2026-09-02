@@ -2,12 +2,10 @@ package com.raulshma.jellyplay.startup
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
-import javax.inject.Inject
 
 /**
  * Best-effort cache maintenance (lyrics cache pruning + offline orphan
@@ -18,10 +16,10 @@ import javax.inject.Inject
  * critical startup path. [cleanupOnce] is event-driven (triggered after the
  * first successful auth) instead of the previous fragile 10 s startup delay.
  */
-class CacheMaintenanceInitializer @Inject constructor(
+class CacheMaintenanceInitializer (
     private val mediaRepository: MediaRepository,
     private val offlineRepository: OfflineRepository,
-    @ApplicationScope private val applicationScope: CoroutineScope,
+    private val applicationScope: CoroutineScope,
 ) {
     private val ran = AtomicBoolean(false)
 

@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Audio player queue undo (enhancements §5.2) -->
+    <string name="audio_undo_action">실행 취소</string>
+    <string name="audio_undo_queue_cleared">대기열 삭제됨</string>
+    <string name="audio_undo_track_removed">트랙 제거됨</string>
+    <string name="audio_undo_track_moved">트랙 이동됨</string>
+    <string name="audio_undo_skipped_next">다음으로 건너뜀</string>
+    <string name="audio_undo_skipped_previous">이전으로 건너뜀</string>
+
+    <!-- A→B repeat (enhancements §5.4) -->
+    <string name="audio_ab_set_point_a">A 지점 설정</string>
+    <string name="audio_ab_set_point_b">B 지점 설정</string>
+    <string name="audio_ab_clear">A–B 해제</string>
+    <string name="audio_ab_point_a_label">A</string>
+    <string name="audio_ab_loop_active_label">A-B</string>
+
+    <!-- Common -->
+    <string name="audio_cancel">취소</string>
+    <string name="audio_search">검색</string>
+    <string name="audio_reset">재설정</string>
+    <string name="audio_open">열기</string>
+
+    <!-- Top bar / menu -->
+    <string name="audio_topbar_now_playing">지금 재생 중</string>
+    <string name="audio_topbar_minimize">최소화</string>
+    <string name="audio_topbar_lyrics">가사</string>
+    <string name="audio_topbar_queue">대기열</string>
+    <string name="audio_topbar_more">더보기</string>
+    <string name="audio_menu_speed">속도 (%1$s)</string>
+    <string name="audio_menu_equalizer">이퀄라이저</string>
+    <string name="audio_menu_audio_effects">오디오 효과</string>
+    <string name="audio_menu_dialogue_boost">대화 부스트</string>
+    <string name="audio_menu_dialogue_boost_with_strength">대화 부스트 · %1$s</string>
+    <string name="audio_menu_night_mode">나이트 모드</string>
+    <string name="audio_menu_night_mode_with_strength">나이트 모드 · %1$s</string>
+    <string name="audio_menu_ambient_mode">앰비언트 모드</string>
+    <string name="audio_menu_add_to_playlist">재생목록에 추가</string>
+    <string name="audio_menu_sleep_timer">슬립 타이머</string>
+    <string name="audio_menu_sleep_timer_active">슬립 타이머 · %1$s</string>
+    <string name="audio_menu_karaoke_mode">가라오케 모드</string>
+    <string name="audio_menu_karaoke_mode_on">가라오케 모드 · 켜짐</string>
+
+    <!-- Transport / secondary controls -->
+    <string name="audio_controls_previous">이전</string>
+    <string name="audio_controls_next">다음</string>
+    <string name="audio_controls_pause">일시정지</string>
+    <string name="audio_controls_play">재생</string>
+    <string name="audio_controls_shuffle">셔플</string>
+    <string name="audio_controls_repeat_off">반복 끔</string>
+    <string name="audio_controls_repeat_all">전체 반복</string>
+    <string name="audio_controls_repeat_one">한 곡 반복</string>
+    <string name="audio_controls_favorite">즐겨찾기</string>
+    <string name="audio_controls_download">다운로드</string>
+
+    <!-- Lyrics -->
+    <string name="audio_lyrics_finding">가사 찾는 중…</string>
+    <string name="audio_lyrics_none_found">가사를 찾을 수 없습니다</string>
+    <string name="audio_lyrics_karaoke_on">가라오케 켜짐</string>
+    <string name="audio_lyrics_karaoke_off">가라오케 꺼짐</string>
+    <string name="audio_lyrics_adjust_timing">가사 타이밍 조정</string>
+    <string name="audio_lyrics_search">가사 검색</string>
+    <string name="audio_lyrics_offset">가사 오프셋</string>
+    <string name="audio_lyrics_find">가사 찾기</string>
+    <string name="audio_lyrics_search_placeholder">아티스트, 곡 검색…</string>
+    <string name="audio_lyrics_clear">지우기</string>
+    <string name="audio_lyrics_synced">동기화됨</string>
+    <string name="audio_lyrics_plain">일반</string>
+    <string name="audio_lyrics_source_embedded">포함됨</string>
+
+    <!-- Sleep timer -->
+    <string name="audio_sleep_timer_title">슬립 타이머</string>
+    <string name="audio_sleep_timer_end_of_episode">에피소드 끝</string>
+    <string name="audio_sleep_timer_duration">재생 시간</string>
+
+    <!-- Equalizer -->
+    <string name="audio_equalizer_title">이퀄라이저</string>
+
+    <!-- Audio effects -->
+    <string name="audio_effects_title">오디오 효과</string>
+    <string name="audio_effects_bass_boost">베이스 부스트</string>
+    <string name="audio_effects_virtualizer">가상화 / 공간</string>
+    <string name="audio_effects_reverb">리버브</string>
+    <string name="audio_effects_dialogue_boost">대화 부스트</string>
+    <string name="audio_effects_night_mode">나이트 모드</string>
+    <string name="audio_effects_lr_balance">좌/우 밸런스</string>
+    <string name="audio_effects_balance_left">왼쪽 %1$d%%</string>
+    <string name="audio_effects_balance_right">오른쪽 %1$d%%</string>
+    <string name="audio_effects_balance_center">중앙</string>
+    <string name="audio_effects_pitch">피치</string>
+    <string name="audio_effects_pitch_original">원본</string>
+    <string name="audio_effects_pitch_value">%1$s 반음</string>
+    <string name="audio_effects_auto_eq">장르별 자동 EQ</string>
+    <string name="audio_effects_auto_eq_description">트랙 장르에 따라 EQ 프리셋 적용</string>
+
+    <!-- Queue sheet -->
+    <string name="audio_queue_title">대기열</string>
+    <string name="audio_queue_remove">대기열에서 제거</string>
+    <string name="audio_queue_position">%1$d / %2$d</string>
+
+    <!-- Add to playlist picker -->
+    <string name="audio_playlist_picker_title">재생목록에 추가</string>
+    <string name="audio_no_playlists">재생목록이 없습니다</string>
+    <string name="audio_playlist_items_count">%1$d곡</string>
+
+    <!-- Speed picker -->
+    <string name="audio_speed_title">재생 속도</string>
+
+    <!-- Ambient -->
+    <string name="audio_ambient_tap_to_exit">종료하려면 아무 곳이나 탭하세요</string>
+
+    <!-- Download delete dialog -->
+    <string name="audio_download_delete_title">다운로드 삭제</string>
+    <string name="audio_download_delete_message">이 트랙의 다운로드한 파일을 제거하시겠습니까?</string>
+    <string name="audio_download_delete_confirm">삭제</string>
+
+    <!-- Playback error -->
+    <string name="audio_error_retry">다시 시도</string>
+
+    <!-- Up next strip -->
+    <string name="audio_up_next">다음 곡</string>
+
+    <!-- Cast -->
+    <string name="audio_cast">캐스트</string>
+    <string name="audio_cast_connected">캐스트 연결됨</string>
+    <string name="audio_cast_to_device">기기에 캐스트</string>
+    <string name="audio_cast_no_devices">캐스트 기기를 찾을 수 없습니다. 기기가 같은 네트워크에 있는지 확인하세요.</string>
+    <string name="audio_cast_ok">확인</string>
+</resources>

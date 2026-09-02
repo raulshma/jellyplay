@@ -1,0 +1,328 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="player_audio">音声</string>
+    <string name="player_subtitles">字幕</string>
+    <string name="player_resumed_message">前回の位置から再開しました</string>
+    <string name="player_reset_to_auto">自動にリセット</string>
+    <string name="player_track_default">デフォルト</string>
+    <string name="player_track_none">なし</string>
+
+    <string name="track_badge_forced">強制</string>
+    <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_default">デフォルト</string>
+
+    <!-- Companion dashboard -->
+    <string name="player_video_lyrics">歌詞</string>
+    <string name="player_video_media_tracks">メディアトラック</string>
+    <string name="player_video_disconnect">切断</string>
+
+    <!-- Aspect ratio sheet -->
+    <string name="player_video_aspect_ratio">アスペクト比</string>
+    <string name="player_video_aspect_auto">自動 (%1$s)</string>
+    <string name="player_video_aspect_detected">検出: %1$s</string>
+
+    <!-- Playback error overlay -->
+    <string name="player_video_playback_error">再生エラー</string>
+    <string name="player_video_playback_error_retryable">再生が中断されました。このエンジンで再試行するか、別のエンジンをお試しください。</string>
+    <string name="player_video_playback_error_fatal">この動画はこのエンジンでは再生できませんでした。別の再生エンジンをお試しいただくか、閉じて戻ってください。</string>
+    <string name="player_video_retry_on">%1$s で再試行</string>
+    <string name="player_video_retry_with">%1$s で再試行</string>
+    <string name="player_video_try_another_engine">別のエンジンを試す</string>
+    <string name="player_video_dismiss">閉じる</string>
+
+    <!-- Subtitle style controls / sheet -->
+    <string name="player_video_subtitle_settings">字幕の設定</string>
+    <string name="player_video_open_tester">テスターを開く</string>
+    <string name="player_video_reset">リセット</string>
+    <string name="player_video_reset_all">すべてリセット</string>
+    <string name="player_video_pick_color">色を選択</string>
+    <string name="player_video_hue">色相</string>
+    <string name="player_video_saturation">彩度</string>
+    <string name="player_video_value">明度</string>
+    <string name="player_video_apply">適用</string>
+    <string name="player_video_cancel">キャンセル</string>
+    <string name="player_video_override_subtitle_styles">字幕スタイルを上書き</string>
+    <string name="player_video_override_subtitle_styles_hint">カスタムサイズ、色、縁取りを適用</string>
+    <string name="player_video_ass_basic_notice">完全な ASS/SSA スタイルは ExoPlayer と mpv でサポートされています。このエンジンは基本的なスタイルで字幕をレンダリングします。</string>
+    <string name="player_video_ass_embedded_notice">このエンジンでは、ASS/SSA 字幕は埋め込みスタイルでレンダリングされます。カスタム色、縁取り、強制上書きは SRT/VTT のみに適用されます。</string>
+    <string name="player_video_font_size">フォントサイズ: %1$dsp</string>
+    <string name="player_video_font">フォント</string>
+    <string name="player_video_bundled_default">同梱のデフォルト</string>
+    <string name="player_video_pick">選択…</string>
+    <string name="player_video_bold">太字</string>
+    <string name="player_video_italic">斜体</string>
+    <string name="player_video_ass_styling">ASS スタイル</string>
+    <string name="player_video_ass_respect">尊重</string>
+    <string name="player_video_ass_force">強制</string>
+    <string name="player_video_ass_scale_hint">埋め込みスタイルを保持、サイズと位置のみ適用</string>
+    <string name="player_video_ass_force_hint">埋め込みスタイルを独自の色、フォント、縁取りで上書き</string>
+    <string name="player_video_font_color">フォントの色</string>
+    <string name="player_video_background_color">背景色</string>
+    <string name="player_video_background_opacity">背景の不透明度: %1$d%%</string>
+    <string name="player_video_edge_type">縁取りの種類</string>
+    <string name="player_video_edge_none">なし</string>
+    <string name="player_video_edge_outline">縁取り</string>
+    <string name="player_video_edge_shadow">影</string>
+    <string name="player_video_edge_raised">浮彫り</string>
+    <string name="player_video_edge_depressed">凹ませ</string>
+    <string name="player_video_edge_color">縁取りの色</string>
+    <string name="player_video_border_style">縁取りスタイル</string>
+    <string name="player_video_border_outline_shadow">縁取り+影</string>
+    <string name="player_video_border_opaque_box">不透明ボックス</string>
+    <string name="player_video_border_background_box">背景ボックス</string>
+    <string name="player_video_border_width">縁取りの幅: %1$s</string>
+    <string name="player_video_shadow_offset">影のオフセット: %1$s</string>
+    <string name="player_video_subtitle_offset">字幕のオフセット: %1$s</string>
+    <string name="player_video_vertical_position">垂直位置: %1$d%%</string>
+
+    <!-- Sleep timer sheet -->
+    <string name="player_video_sleep_timer">スリープタイマー</string>
+    <string name="player_video_sleep_timer_on">スリープタイマー \u00B7 %1$s</string>
+    <string name="player_video_cancel_sleep_timer">スリープタイマーをキャンセル (残り %1$s)</string>
+    <string name="player_video_custom_duration">カスタム時間</string>
+    <string name="player_video_custom_ellipsis">カスタム…</string>
+    <string name="player_video_end_of_episode">エピソードの終わり</string>
+    <string name="player_video_minutes">分</string>
+    <string name="player_video_enter_1_600">1–600 を入力</string>
+    <string name="player_video_start">開始</string>
+
+    <!-- SyncPlay sheet -->
+    <string name="player_video_leave_group">グループを退出</string>
+    <string name="player_video_ignore_wait">待機を無視</string>
+    <string name="player_video_ignore_wait_hint">バッファリング中のユーザーのために一時停止しない</string>
+    <string name="player_video_repeat_one">1曲リピート</string>
+    <string name="player_video_repeat_all">全曲リピート</string>
+    <string name="player_video_repeat_none">リピートなし</string>
+    <string name="player_video_shuffle">シャッフル</string>
+    <string name="player_video_sorted">並び替え</string>
+    <string name="player_video_pause">一時停止</string>
+    <string name="player_video_play">再生</string>
+    <string name="player_video_stop">停止</string>
+    <string name="player_video_synced">同期済み</string>
+    <string name="player_video_buffering">バッファリング中</string>
+    <string name="player_video_group">グループ</string>
+
+    <!-- Subtitle manager sheet -->
+    <string name="player_video_download">ダウンロード</string>
+    <string name="player_video_search">検索</string>
+    <string name="player_video_upload">アップロード</string>
+    <string name="player_video_load_from_device">デバイスから読み込み</string>
+    <string name="player_video_no_remote_subtitles">利用可能なリモート字幕がありません。</string>
+    <string name="player_video_unknown">不明</string>
+    <string name="player_video_perfect_match">完全一致</string>
+    <string name="player_video_taking_a_while">時間がかかっています…</string>
+    <string name="player_video_use">使用</string>
+    <string name="player_video_failed_tap_to_retry">失敗 — タップして再試行</string>
+    <string name="player_video_search_failed">検索に失敗しました</string>
+    <string name="player_video_load_subtitles_failed">字幕を読み込めませんでした</string>
+    <string name="player_video_no_results_found">結果が見つかりません</string>
+    <string name="player_video_pick_language_hint">言語を選択して検索すると字幕が見つかります。</string>
+    <string name="player_video_change_file">変更: %1$s</string>
+    <string name="player_video_select_file">ファイルを選択 (.srt, .ass, .ssa, .vtt)</string>
+    <string name="player_video_language">言語</string>
+    <string name="player_video_forced_subtitle">強制字幕</string>
+    <string name="player_video_hearing_impaired">聴覚障害者向け</string>
+    <string name="player_video_uploading">アップロード中…</string>
+
+    <!-- Player controls -->
+    <string name="player_video_back">戻る</string>
+    <string name="player_video_current_time">現在時刻</string>
+    <string name="player_video_previous_episode">前のエピソード</string>
+    <string name="player_video_next_episode">次のエピソード</string>
+    <string name="player_video_lock_screen">画面をロック</string>
+    <string name="player_video_rotate_screen">画面を回転</string>
+    <string name="player_video_more_options">その他のオプション</string>
+    <string name="player_video_audio">音声</string>
+    <string name="player_video_subtitles">字幕</string>
+    <string name="player_video_subtitle_hub_section_tracks">トラック</string>
+    <string name="player_video_subtitle_hub_section_style">スタイル</string>
+    <string name="player_video_subtitle_hub_section_get">取得</string>
+    <string name="player_video_subtitle_hub_section_delay">遅延</string>
+    <string name="player_video_subtitle_downloaded_device_only">デバイスにのみ保存（オフライン）</string>
+    <string name="player_video_chapters">チャプター</string>
+    <string name="player_video_episodes">エピソード</string>
+    <string name="player_video_syncplay">SyncPlay</string>
+    <string name="player_video_aspect_ratio_label">アスペクト比</string>
+    <string name="player_video_info">情報</string>
+    <string name="player_video_ends_at">%1$s に終了</string>
+
+    <!-- Player overflow menu -->
+    <string name="player_video_dialogue_boost">ダイアログブースト</string>
+    <string name="player_video_dialogue_boost_on">ダイアログブースト \u00B7 %1$s</string>
+    <string name="player_video_night_mode">ナイトモード</string>
+    <string name="player_video_night_mode_on">ナイトモード \u00B7 %1$s</string>
+    <string name="player_video_audio_normalization">音声ノーマライズ</string>
+    <string name="player_video_normalization_on">ノーマライズ \u00B7 %1$s</string>
+    <string name="player_video_channel_mixing">チャンネルミックス</string>
+    <string name="player_video_channel_mix_on">チャンネルミックス \u00B7 %1$s</string>
+    <string name="player_video_av_sync">A/V 同期</string>
+    <string name="player_video_playback_mode">再生モード</string>
+    <string name="player_video_playback_mode_on">%1$s \u00B7 オン</string>
+    <string name="player_video_decoder">デコーダー</string>
+    <string name="player_video_passthrough">パススルー</string>
+    <string name="player_video_stats_for_nerds">詳細統計</string>
+    <string name="player_video_stats_for_nerds_on">詳細統計 \u00B7 オン</string>
+    <string name="player_video_video_filters">ビデオフィルター</string>
+    <string name="player_video_video_filters_on">ビデオフィルター \u00B7 オン</string>
+    <string name="player_video_capture_frame">フレームをキャプチャ</string>
+    <string name="player_video_ab_repeat">A/B リピート</string>
+    <string name="player_video_ab_repeat_on">A/B リピート \u00B7 オン</string>
+    <string name="player_video_set_a_point">A ポイントを設定</string>
+    <string name="player_video_set_b_point">B ポイントを設定</string>
+    <string name="player_video_clear_ab_repeat">A/B リピートをクリア</string>
+    <string name="player_video_set_a_point_at">A ポイントを設定 \u00B7 %1$s</string>
+    <string name="player_video_set_b_point_at">B ポイントを設定 \u00B7 %1$s</string>
+    <string name="player_video_ab_repeat_badge_enabled">A/B リピート オン — 開始点までシークして「A ポイントを設定」</string>
+    <string name="player_video_ab_repeat_badge_a_set">A を %1$s に設定 — 終了点までシークして「B ポイントを設定」</string>
+    <string name="player_video_ab_repeat_badge_active">%1$s → %2$s をループ中</string>
+    <string name="player_video_ab_repeat_badge_cleared">A/B リピートをクリアしました</string>
+    <string name="player_audio_only">音声のみ</string>
+    <string name="player_audio_only_on">音声のみ — 動画非表示</string>
+
+    <!-- Video filter sheet -->
+    <string name="player_video_brightness">明るさ</string>
+    <string name="player_video_contrast">コントラスト</string>
+    <string name="player_video_sharpness">シャープネス</string>
+    <string name="player_video_rotation">回転</string>
+    <string name="player_video_red_gain">赤ゲイン</string>
+    <string name="player_video_green_gain">緑ゲイン</string>
+    <string name="player_video_blue_gain">青ゲイン</string>
+    <string name="player_video_gaussian_blur">ガウスぼかし</string>
+
+    <!-- Playback info overlay -->
+    <string name="player_video_playback_info">再生情報</string>
+    <string name="player_video_media_source">メディアソース</string>
+    <string name="player_video_video">ビデオ</string>
+    <string name="player_video_active_controls">アクティブなコントロール</string>
+    <string name="player_video_player_errors">プレーヤーエラー</string>
+    <string name="player_video_container">コンテナ</string>
+    <string name="player_video_size">サイズ</string>
+    <string name="player_video_bitrate">ビットレート</string>
+    <string name="player_video_play_method">再生方式</string>
+    <string name="player_video_connection">接続</string>
+    <string name="player_video_metered">従量制</string>
+    <string name="player_video_unmetered">定額制</string>
+    <string name="player_video_codec">コーデック</string>
+    <string name="player_video_resolution">解像度</string>
+    <string name="player_video_hdr_format">HDR フォーマット</string>
+    <string name="player_video_range">範囲</string>
+    <string name="player_video_frame_rate">フレームレート</string>
+    <string name="player_video_track_n">トラック %1$d</string>
+    <string name="player_video_channels">チャンネル</string>
+    <string name="player_video_player_engine">プレーヤーエンジン</string>
+    <string name="player_video_decoder_mode">デコーダーモード</string>
+    <string name="player_video_speed">速度</string>
+    <string name="player_video_audio_delay">音声遅延</string>
+    <string name="player_video_night_mode_label">ナイトモード</string>
+    <string name="player_video_dialogue_boost_label">ダイアログブースト</string>
+    <string name="player_video_audio_passthrough">音声パススルー</string>
+    <string name="player_video_active_audio">アクティブな音声</string>
+    <string name="player_video_active_subtitle">アクティブな字幕</string>
+    <string name="player_video_off">オフ</string>
+    <string name="player_video_on">オン</string>
+
+    <!-- Misc. hardcoded strings -->
+    <string name="player_video_reset_audio">音声をリセット</string>
+    <string name="player_video_subtitle_delay">字幕の遅延</string>
+    <string name="player_video_subtitle_delay_close">字幕の遅延を閉じる</string>
+    <string name="player_video_subtitle_delay_reset">リセット</string>
+    <string name="player_video_subtitle_delay_decrease">字幕の遅延を減らす</string>
+    <string name="player_video_subtitle_delay_increase">字幕の遅延を増やす</string>
+    <string name="player_video_subtitle_delay_voice_heard">音声を聞いた</string>
+    <string name="player_video_subtitle_delay_text_seen">字幕を見た</string>
+    <string name="player_video_subtitle_delay_show_controls">遅延を調整</string>
+    <string name="player_video_subtitle_delay_hub_hint">動画に対する字幕のタイミングを調整します。オーバーレイを使えば、調整中に字幕がずれる様子を確認できます。</string>
+    <string name="player_video_av_sync_audio_helper">負: 音声が早くなります。正: 音声が遅くなります。</string>
+    <string name="player_video_av_sync_decrease">%1$s を減らす</string>
+    <string name="player_video_av_sync_increase">%1$s を増やす</string>
+    <string name="player_video_picture_in_picture">ピクチャーインピクチャー</string>
+    <string name="player_video_play_next">次を再生</string>
+    <string name="player_video_turn_on_autoplay">自動再生をオンにする</string>
+    <string name="player_video_enter_pin">PIN を入力</string>
+    <string name="player_video_unlock_player">プレーヤーのロック解除</string>
+    <string name="player_video_incorrect_pin">PIN が正しくありません</string>
+    <string name="player_video_no_episodes_found">このシーズンのエピソードが見つかりません</string>
+    <string name="player_video_poster">ポスター</string>
+    <string name="player_video_selected">選択済み</string>
+    <string name="player_video_volume">音量</string>
+    <string name="player_video_hdr_label">HDR: %1$s</string>
+    <string name="player_video_duration">時間</string>
+    <string name="player_video_remember_audio_language">このシリーズの音声言語を記憶</string>
+    <string name="player_video_remember_subtitle_language">このシリーズの字幕言語を記憶</string>
+    <string name="player_video_remember_subtitles_off">このシリーズの字幕をオフのままにする</string>
+    <string name="player_video_error_offline_file_missing">エラー: オフラインファイルが見つかりません</string>
+    <string name="player_video_error_loading_media">メディアの読み込みエラー</string>
+    <string name="player_video_error_offline_stream">オフラインです \u2014 このタイトルをストリーミングするには再接続してください</string>
+    <string name="player_video_error_next_episode_load">次のエピソードを読み込めませんでした。接続を確認して再試行してください</string>
+    <string name="player_video_trickplay_thumbnail">トリックプレイのサムネイル</string>
+
+    <plurals name="player_video_participants">
+        <item quantity="other">%1$d 人の参加者</item>
+    </plurals>
+
+    <!-- Localized UI text extracted from player/video components -->
+    <string name="player_video_stats_playback">再生</string>
+    <string name="player_video_stats_network">ネットワーク</string>
+    <string name="player_video_stats_performance">パフォーマンス</string>
+    <string name="player_video_stats_engine">エンジン</string>
+    <string name="player_video_stats_state">状態</string>
+    <string name="player_video_stats_playing">再生中</string>
+    <string name="player_video_stats_position">位置</string>
+    <string name="player_video_stats_progress">進行</string>
+    <string name="player_video_stats_buffer_health">バッファ状態</string>
+    <string name="player_video_stats_buffered">バッファ済み</string>
+    <string name="player_video_stats_clock">時計</string>
+    <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_color_range">色域</string>
+    <string name="player_video_stats_color_depth">色深度</string>
+    <string name="player_video_stats_sample_rate">サンプリングレート</string>
+    <string name="player_video_stats_session_id">セッションID</string>
+    <string name="player_video_stats_quality">品質</string>
+    <string name="player_video_stats_est_bandwidth">推定帯域幅</string>
+    <string name="player_video_stats_stream_bitrate">ストリームビットレート</string>
+    <string name="player_video_stats_dropped_frames">ドロップフレーム</string>
+    <string name="player_video_stats_total_frames">総フレーム数</string>
+    <string name="player_video_stats_drop_rate">ドロップ率</string>
+    <string name="player_video_stats_buffer_size">バッファサイズ</string>
+    <string name="player_video_stats_vo_dropped_frames">VOドロップフレーム</string>
+    <string name="player_video_stats_vo_delay">VO遅延</string>
+    <string name="player_video_stats_display_rate">ディスプレイレート</string>
+    <string name="player_video_stats_player">プレーヤー</string>
+    <string name="player_video_cast_connecting">接続中</string>
+    <string name="player_video_casting">キャスト中</string>
+    <string name="player_video_season_n">シーズン %1$d</string>
+    <string name="player_video_no_episodes_available">エピソードがありません</string>
+    <string name="player_video_watched">視聴済み</string>
+    <string name="player_video_time_left">残り %1$s</string>
+    <string name="player_video_now_playing">再生中</string>
+    <string name="player_video_quality_title">品質</string>
+    <string name="player_video_quality_description">適応ストリーミングでは変更は直ちに適用されます。ダイレクトプレイの場合、再生の最大ビットレートを設定します。</string>
+    <string name="player_video_adaptive_bitrate_cap">適応ビットレート上限</string>
+    <string name="player_video_adaptive_bitrate_on">従量制ネットワークで品質を制限</string>
+    <string name="player_video_adaptive_bitrate_off">オフ - 最高品質（ダイレクトプレイ）</string>
+    <string name="player_video_skip_intro">イントロをスキップ</string>
+    <string name="player_video_overview_tab">概要</string>
+    <string name="player_video_lyrics_subtitles_tab">歌詞 / 字幕</string>
+    <string name="player_video_synopsis">あらすじ</string>
+    <string name="player_video_cast_and_crew">キャスト＆クルー</string>
+    <string name="player_video_audio_stream">オーディオストリーム</string>
+    <string name="player_video_episode_title">第%1$d話: %2$s</string>
+    <string name="player_video_seek_backward_10s">-10秒</string>
+    <string name="player_video_seek_forward_30s">+30초</string>
+    <string name="player_video_cast_connecting_device">デバイスに接続中...</string>
+    <string name="player_video_cast_connected_streaming">接続済み / ストリーミング</string>
+    <string name="player_video_companion">JellyPlayコンパニオン</string>
+
+    <!-- Localized error messages -->
+    <string name="player_video_font_invalid_format">選択したファイルは.ttfまたは.otfフォントではありません。</string>
+
+    <string name="player_video_subtitle_provider_all">すべて</string>
+
+    <!-- アクセシビリティ: 明るさ/音量ジェスチャー領域のスクリーンリーダーセマンティクス (P5 §3.1) -->
+    <string name="a11y_gesture_controls">明るさと音量のコントロール</string>
+    <string name="a11y_brightness_increase">明るさを上げる</string>
+    <string name="a11y_brightness_decrease">明るさを下げる</string>
+    <string name="a11y_volume_increase">音量を上げる</string>
+    <string name="a11y_volume_decrease">音量を下げる</string>
+    <string name="player_direct_play_fallback">ダイレクトプレイに失敗しました — トランスコードに切り替えます（%1$s）</string>
+</resources>

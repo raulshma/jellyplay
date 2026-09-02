@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcuts_screen_title">ショートカット</string>
+    <string name="shortcuts_filter_all">すべて</string>
+    <string name="shortcuts_category_library">ライブラリ</string>
+    <string name="shortcuts_category_services">サービス</string>
+    <string name="shortcuts_category_system">システム</string>
+    <string name="shortcuts_empty_title">ショートカットはありません</string>
+    <string name="shortcuts_empty_description">アプリ内を探索して機能やコンテンツを見つけましょう</string>
+    <string name="shortcuts_empty_action">ライブラリを見る</string>
+    <string name="shortcuts_item_downloads_title">ダウンロード</string>
+    <string name="shortcuts_item_downloads_description">オフラインコンテンツとダウンロード管理。</string>
+    <string name="shortcuts_item_favorites_title">お気に入り</string>
+    <string name="shortcuts_item_favorites_description">高評価とブックマークしたメディア。</string>
+    <string name="shortcuts_item_watch_history_title">視聴履歴</string>
+    <string name="shortcuts_item_watch_history_description">進捗ヒートマップと視聴統計。</string>
+    <string name="shortcuts_item_live_tv_title">ライブ TV</string>
+    <string name="shortcuts_item_live_tv_description">ライブ TV 番組、ガイド、チャンネル、録画。</string>
+    <string name="shortcuts_item_playlists_title">プレイリスト</string>
+    <string name="shortcuts_item_playlists_description">キュレート済みおよび保存済みのプレイリスト（後で見るを含む）。</string>
+    <string name="shortcuts_item_syncplay_description">同期再生で一緒に視聴。</string>
+    <string name="shortcuts_item_requests_title">リクエスト</string>
+    <string name="shortcuts_item_requests_description">映画や TV 番組をリクエスト。</string>
+    <string name="shortcuts_item_newsletters_title">ニュースレター</string>
+    <string name="shortcuts_item_newsletters_description">最新のニュースレターと更新情報。</string>
+    <string name="shortcuts_item_seerr_description">Seerr 連携を設定。</string>
+    <string name="shortcuts_item_activity_queue_title">アクティビティキュー</string>
+    <string name="shortcuts_item_activity_queue_description">Radarr/Sonarr のダウンロードキューと管理を統合。</string>
+    <string name="shortcuts_item_upcoming_title">今後の予定</string>
+    <string name="shortcuts_item_upcoming_description">Sonarr/Radarr のリリースカレンダーを統合。</string>
+    <string name="shortcuts_item_arr_description">*arr サーバーへの直接接続と上書き設定。</string>
+    <string name="shortcuts_item_settings_title">設定</string>
+    <string name="shortcuts_item_settings_description">外観、再生、オーディオ、アプリのオプション。</string>
+    <string name="shortcuts_item_server_mgmt_title">サーバー管理</string>
+    <string name="shortcuts_item_server_mgmt_description">サーバー接続と構成。</string>
+    <string name="shortcuts_item_switch_user_title">ユーザー切り替え</string>
+    <string name="shortcuts_item_switch_user_description">サーバーのユーザーとプロファイルを管理。</string>
+    <string name="shortcuts_item_admin_title">管理</string>
+    <string name="shortcuts_item_admin_description">ダッシュボード、状態、アクティビティ、タスク。</string>
+    <string name="shortcuts_item_setup_wizard_title">セットアップウィザード</string>
+    <string name="shortcuts_item_setup_wizard_description">初期設定フローを実行。</string>
+    <string name="shortcuts_item_about_title">アプリ情報</string>
+    <string name="shortcuts_item_about_description">バージョン、ライセンス、アプリ情報。</string>
+</resources>

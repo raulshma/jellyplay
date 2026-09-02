@@ -3,11 +3,8 @@ package com.raulshma.jellyplay.core.data.worker
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
-import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Watches the network status and enqueues an immediate
@@ -23,13 +20,12 @@ import javax.inject.Singleton
  *
  * Constructed as a singleton so [start] is idempotent across callers.
  */
-@Singleton
-class PlaybackSyncReconnectListener @Inject constructor(
+class PlaybackSyncReconnectListener(
     private val networkMonitor: NetworkMonitor,
     private val offlineModeManager: OfflineModeManager,
     private val scheduler: PlaybackSyncScheduler,
     private val outbox: PlaybackOutboxRepository,
-    @ApplicationScope private val scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) {
     private val trigger = ReconnectTrigger(
         networkMonitor = networkMonitor,

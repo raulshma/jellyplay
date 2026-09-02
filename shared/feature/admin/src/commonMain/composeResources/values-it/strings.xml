@@ -1,0 +1,397 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Shared / generic -->
+    <string name="admin_cancel">Annulla</string>
+    <string name="admin_delete">Elimina</string>
+    <string name="admin_save">Salva</string>
+    <string name="admin_add">Aggiungi</string>
+    <string name="admin_refresh">Aggiorna</string>
+    <string name="admin_view_all">Vedi tutto</string>
+    <string name="admin_continue">Continua</string>
+    <string name="admin_install">Installa</string>
+    <string name="admin_uninstall">Disinstalla</string>
+    <string name="admin_retry">Riprova</string>
+    <string name="admin_back">Indietro</string>
+    <string name="admin_dismiss">Chiudi</string>
+    <string name="admin_name">Nome</string>
+    <string name="admin_url">URL</string>
+    <string name="admin_ok">OK</string>
+    <string name="admin_unknown_error">Errore sconosciuto</string>
+    <string name="admin_deleting">Eliminazione…</string>
+    <string name="admin_scanning">Scansione…</string>
+    <string name="admin_scan_now">Scansiona ora</string>
+    <string name="admin_select_all">Seleziona tutto</string>
+    <string name="admin_media_types">Tipi di supporto</string>
+    <string name="admin_dry_run">Simulazione (solo anteprima)</string>
+
+    <!-- Content descriptions -->
+    <string name="admin_edit_cd">Modifica</string>
+    <string name="admin_delete_cd">Elimina</string>
+    <string name="admin_uninstall_cd">Disinstalla</string>
+    <string name="admin_remove_cd">Rimuovi</string>
+    <string name="admin_cancel_cd">Annulla</string>
+    <string name="admin_share_cd">Condividi</string>
+    <string name="admin_add_user_cd">Aggiungi utente</string>
+    <string name="admin_delete_user_cd">Elimina utente</string>
+    <string name="admin_shutdown_cd">Arresta</string>
+    <string name="admin_stop_live_cd">Ferma live</string>
+    <string name="admin_start_live_cd">Avvia live</string>
+    <string name="admin_stop">Ferma</string>
+    <string name="admin_stop_session_cd">Ferma riproduzione</string>
+    <string name="admin_stop_session_title">Fermare la riproduzione?</string>
+    <string name="admin_stop_session_body">Fermare il media attualmente in riproduzione su \"%1$s\"?</string>
+    <string name="admin_run">Esegui</string>
+
+    <!-- Relative time -->
+    <string name="admin_just_now">Adesso</string>
+    <string name="admin_min_ago">%1$dm fa</string>
+    <string name="admin_hours_ago">%1$dh fa</string>
+    <string name="admin_days_ago">%1$dg fa</string>
+
+    <!-- Media item types -->
+    <string name="admin_type_movie">Film</string>
+    <string name="admin_type_series">Serie</string>
+    <string name="admin_type_episode">Episodio</string>
+    <string name="admin_type_audio">Audio</string>
+    <string name="admin_type_music_video">Video musicale</string>
+    <string name="admin_type_book">Libro</string>
+
+    <!-- AccessDeniedScreen -->
+    <string name="admin_access_denied_title">Accesso negato</string>
+    <string name="admin_access_denied_body">Non hai l\'autorizzazione per accedere a quest\'area.</string>
+    <string name="admin_access_denied_contact">Contatta l\'amministratore del server se ritieni sia un errore.</string>
+
+    <!-- AuditHistoryTab -->
+    <string name="admin_no_audit_history">Nessuno storico di audit</string>
+    <string name="admin_audit_history_tab">Storico di audit</string>
+
+    <!-- AdminDashboardScreen -->
+    <string name="admin_dashboard_title">Cruscotto</string>
+    <string name="admin_restart_server_title">Riavvia server</string>
+    <string name="admin_restart_server_body">Vuoi davvero riavviare il server Jellyfin? Tutte le sessioni attive verranno disconnesse.</string>
+    <string name="admin_restart">Riavvia</string>
+    <string name="admin_shutdown_server_title">Arresta server</string>
+    <string name="admin_shutdown_server_body">Vuoi davvero arrestare il server Jellyfin? Dovrà essere riavviato manualmente.</string>
+    <string name="admin_shutdown">Arresta</string>
+
+    <!-- DevicesScreen -->
+    <string name="admin_devices_title">Dispositivi</string>
+    <string name="admin_delete_device_title">Elimina dispositivo</string>
+    <string name="admin_delete_device_body">Eliminare «%1$s»? Verranno disconnesse tutte le sessioni associate.</string>
+    <string name="admin_edit_device_name_title">Modifica nome dispositivo</string>
+    <string name="admin_custom_name">Nome personalizzato</string>
+    <string name="admin_no_devices">Nessun dispositivo trovato</string>
+    <string name="admin_devices_search_placeholder">Cerca per nome o utente</string>
+
+    <!-- LogsScreen -->
+    <string name="admin_logs_title">Log</string>
+    <string name="admin_no_log_files">Nessun file di log trovato</string>
+    <string name="admin_no_activity_log">Nessuna voce nel log attività</string>
+    <string name="admin_logs_search_placeholder">Filtra messaggi</string>
+
+    <!-- Plugins -->
+    <string name="admin_plugins_title">Plugin</string>
+    <string name="admin_installed_tab">Installati</string>
+    <string name="admin_catalog_tab">Catalogo</string>
+    <string name="admin_repositories_tab">Repository</string>
+    <string name="admin_search_plugins">Cerca plugin…</string>
+    <string name="admin_installed">Installato</string>
+    <string name="admin_install_third_party_title">Installare plugin di terzi?</string>
+    <string name="admin_install_third_party_body">I plugin hanno lo stesso accesso al sistema del tuo server Jellyfin. Installa plugin solo da fonti attendibili. Continuare l\'installazione di %1$s?</string>
+    <string name="admin_latest_version">Ultima: v%1$s</string>
+    <string name="admin_installing">Installazione di %1$s</string>
+    <string name="admin_add_repository_title">Aggiungi repository</string>
+    <string name="admin_plugin_settings_title">Impostazioni di %1$s</string>
+    <string name="admin_uninstall_plugin_title">Disinstalla plugin</string>
+    <string name="admin_uninstall_plugin_body">Vuoi davvero disinstallare %1$s? Questa azione è irreversibile.</string>
+    <string name="admin_uninstall_plugin_confirm_title">Disinstallare il plugin?</string>
+    <string name="admin_plugin_management_alpha">Gestione plugin - Alpha</string>
+    <string name="admin_plugin_experimental">Questa funzione è sperimentale. Usala a tuo rischio.</string>
+
+    <!-- StaleMediaScreen -->
+    <string name="admin_stale_media_title">Media obsoleti</string>
+    <string name="admin_scan_results_tab">Risultati scansione</string>
+    <string name="admin_configuration_tab">Configurazione</string>
+    <string name="admin_scan_configuration">Configurazione scansione</string>
+    <string name="admin_stale_threshold">Soglia obsolescenza: %1$d giorni</string>
+    <string name="admin_use_date_added">Usa data di aggiunta alla libreria</string>
+    <string name="admin_include_never_played">Includi elementi mai riprodotti</string>
+    <string name="admin_delete_from_library">Elimina dalla libreria</string>
+
+    <!-- WatchedMediaCleanupScreen -->
+    <string name="admin_watched_cleanup_title">Pulizia media visti</string>
+    <string name="admin_cleanup_configuration">Configurazione pulizia</string>
+    <string name="admin_confirm_deletion">Conferma eliminazione</string>
+    <string name="admin_confirm_deletion_body">I seguenti %1$d elementi visti verranno rimossi dalla libreria:</string>
+    <string name="admin_minimum_days_watched">Giorni minimi dalla riproduzione: %1$d</string>
+    <string name="admin_no_minimum_time">Nessun filtro temporale minimo</string>
+    <string name="admin_keep_favorites">Mantieni preferiti</string>
+    <string name="admin_include_partially_watched">Includi visti parzialmente</string>
+
+    <!-- Statistics -->
+    <string name="admin_user_statistics_title">Statistiche utente</string>
+    <string name="admin_watched_more">Hai guardato %1$s%% in più questo mese</string>
+    <string name="admin_watched_less">Hai guardato %1$s%% in meno questo mese</string>
+    <string name="admin_duration_vs_last">%1$s contro %2$s del mese scorso</string>
+    <string name="admin_content_breakdown">Ripartizione contenuti</string>
+    <string name="admin_by_genre">Per genere</string>
+    <string name="admin_playback_methods">Metodi di riproduzione</string>
+    <string name="admin_clients_devices">Client e dispositivi</string>
+    <string name="admin_chart">Grafico</string>
+    <string name="admin_list">Lista</string>
+
+    <!-- ScheduledTasksScreen -->
+    <string name="admin_scheduled_tasks_title">Attività pianificate</string>
+
+    <!-- Users -->
+    <string name="admin_users_title">Utenti</string>
+    <string name="admin_no_users">Nessun utente</string>
+    <string name="admin_new_user_title">Nuovo utente</string>
+    <string name="admin_password_optional">Password (facoltativa)</string>
+    <string name="admin_create">Crea</string>
+    <string name="admin_delete_user_title">Elimina utente</string>
+    <string name="admin_delete_user_body">Eliminare «%1$s»? Irreversibile.</string>
+    <string name="admin_new_password">Nuova password</string>
+    <string name="admin_discard">Scarta</string>
+    <string name="admin_save_changes">Salva modifiche</string>
+    <string name="admin_could_not_reload">Impossibile ricaricare l\'utente aggiornato</string>
+
+    <!-- User detail: tabs / sections -->
+    <string name="admin_sign_in">Accesso</string>
+    <string name="admin_sign_in_desc">Imposta o reimposta la password di questo utente.</string>
+    <string name="admin_danger_zone">Zona pericolosa</string>
+    <string name="admin_danger_zone_desc">Rimuovi definitivamente questo utente dal server.</string>
+    <string name="admin_library_access">Accesso alla libreria</string>
+    <string name="admin_enable_all_libraries">Abilita accesso a tutte le librerie</string>
+    <string name="admin_channel_access">Accesso ai canali</string>
+    <string name="admin_enable_all_channels">Abilita accesso a tutti i canali</string>
+    <string name="admin_media_deletion_from">Eliminazione media da</string>
+    <string name="admin_all_libraries">Tutte le librerie</string>
+    <string name="admin_device_access">Accesso ai dispositivi</string>
+    <string name="admin_enable_all_devices">Abilita accesso da tutti i dispositivi</string>
+    <string name="admin_security_limits">Limiti di sicurezza</string>
+    <string name="admin_security_limits_desc">Sessioni simultanee e protezione accesso.</string>
+    <string name="admin_max_active_sessions">Sessioni attive max.</string>
+    <string name="admin_zero_blank_unlimited">0 o vuoto = illimitato</string>
+    <string name="admin_login_attempts">Tentativi di accesso prima del blocco</string>
+    <string name="admin_blank_no_lockout">Vuoto = nessun blocco</string>
+    <string name="admin_identity">Identità</string>
+    <string name="admin_identity_desc">Controlla chi è questo utente e come appare.</string>
+    <string name="admin_administrator">Amministratore</string>
+    <string name="admin_active">Attivo</string>
+    <string name="admin_hidden">Nascosto</string>
+    <string name="admin_hidden_desc">Nascondi questo utente dalla schermata di accesso</string>
+    <string name="admin_allow_preference_access">Consenti accesso alle preferenze</string>
+    <string name="admin_allow_preference_access_desc">Lascia che l\'utente modifichi le proprie preferenze</string>
+    <string name="admin_max_parental_rating">Classificazione genitori max.</string>
+    <string name="admin_max_parental_rating_desc">Nascondi i contenuti sopra la classificazione scelta.</string>
+    <string name="admin_block_unrated">Blocca contenuti non classificati</string>
+    <string name="admin_block_unrated_desc">Blocca tipi di media specifici senza classificazione.</string>
+    <string name="admin_allow_tags">Consenti contenuti con tag</string>
+    <string name="admin_allow_tags_desc">Sono visibili solo i media con uno di questi tag.</string>
+    <string name="admin_block_tags">Blocca contenuti con tag</string>
+    <string name="admin_block_tags_desc">I media con uno di questi tag sono nascosti.</string>
+    <string name="admin_rating">Classificazione</string>
+    <string name="admin_change_password">Cambia password</string>
+    <string name="admin_add_tag">Aggiungi tag</string>
+
+    <!-- User detail: access schedule -->
+    <string name="admin_access_schedules_title">Orari di accesso</string>
+    <string name="admin_access_schedules_desc">Limita quando questo utente può accedere.</string>
+    <string name="admin_add_schedule">Aggiungi orario</string>
+    <string name="admin_day">Giorno</string>
+    <string name="admin_start_time">Inizio %1$s</string>
+    <string name="admin_end_time">Fine %1$s</string>
+
+    <!-- User detail: permissions -->
+    <string name="admin_playback">Riproduzione</string>
+    <string name="admin_playback_desc">Cosa questo utente può riprodurre e come può essere transcodificato.</string>
+    <string name="admin_allow_media_playback">Consenti riproduzione media</string>
+    <string name="admin_allow_media_playback_desc">Riproduci film, serie e musica</string>
+    <string name="admin_allow_audio_transcoding">Consenti transcodifica audio</string>
+    <string name="admin_allow_video_transcoding">Consenti transcodifica video</string>
+    <string name="admin_allow_remuxing">Consenti remuxing</string>
+    <string name="admin_allow_remuxing_desc">Riproduzione in direct-stream senza ricodifica</string>
+    <string name="admin_content">Contenuto</string>
+    <string name="admin_content_desc">Eliminazione e download di media.</string>
+    <string name="admin_allow_media_deletion">Consenti eliminazione media</string>
+    <string name="admin_allow_media_downloading">Consenti download media</string>
+    <string name="admin_features">Funzioni</string>
+    <string name="admin_features_desc">TV in diretta, controllo remoto e accesso remoto.</string>
+    <string name="admin_allow_live_tv">Consenti accesso alla TV in diretta</string>
+    <string name="admin_allow_live_tv_desc">Sfoglia la guida dei canali</string>
+    <string name="admin_allow_live_tv_mgmt">Consenti gestione TV in diretta</string>
+    <string name="admin_allow_live_tv_mgmt_desc">Gestisci registrazioni e timer</string>
+    <string name="admin_allow_remote_control">Consenti controllo remoto di altri utenti</string>
+    <string name="admin_management_control">Gestione e controllo</string>
+    <string name="admin_management_control_desc">Controllo di server, collezioni e dispositivi.</string>
+    <string name="admin_allow_collection_mgmt">Consenti gestione collezioni</string>
+    <string name="admin_allow_subtitle_mgmt">Consenti gestione sottotitoli</string>
+    <string name="admin_allow_remote_shared">Consenti controllo remoto dei dispositivi condivisi</string>
+    <string name="admin_force_transcoding_remote">Forza transcodifica delle sorgenti remote</string>
+    <string name="admin_force_transcoding_remote_desc">Transcodifica tutti i flussi remoti a prescindere dal supporto del client</string>
+    <string name="admin_streaming">Streaming</string>
+    <string name="admin_streaming_desc">SyncPlay e limiti di bitrate remoto.</string>
+    <string name="admin_remote_bitrate_limit">Limite di bitrate per client remoti</string>
+    <string name="admin_remote_bitrate_limit_desc">Mbps. Vuoto = illimitato</string>
+
+    <!-- Quick actions -->
+    <string name="admin_qa_statistics">Statistiche</string>
+    <string name="admin_qa_tasks">Attività</string>
+    <string name="admin_qa_watched">Visti</string>
+
+    <!-- Stat labels -->
+    <string name="admin_stat_total_users">Utenti totali</string>
+    <string name="admin_stat_active_now">Attivi ora</string>
+    <string name="admin_stat_total_plays">Riproduzioni totali</string>
+    <string name="admin_stat_movies">Film</string>
+    <string name="admin_stat_episodes">Episodi</string>
+    <string name="admin_stat_songs">Brani</string>
+
+    <!-- Tabs -->
+    <string name="admin_tab_profile">Profilo</string>
+    <string name="admin_tab_access">Accesso</string>
+    <string name="admin_tab_parental">Genitori</string>
+    <string name="admin_tab_account">Account</string>
+    <string name="admin_tab_log_files">File di log</string>
+    <string name="admin_tab_activity_log">Log attività</string>
+
+    <!-- Plugin status badges -->
+    <string name="admin_status_active">Attivo</string>
+    <string name="admin_status_restart">Riavvia</string>
+    <string name="admin_status_error">Errore</string>
+    <string name="admin_status_deleted">Eliminato</string>
+    <string name="admin_status_disabled">Disattivato</string>
+    <string name="admin_status_superseded">Sostituito</string>
+    <string name="admin_status_unsupported">Non supportato</string>
+
+    <!-- Empty states / errors -->
+    <string name="admin_no_plugins_found">Nessun plugin trovato</string>
+    <string name="admin_no_plugins_installed">Nessun plugin installato</string>
+    <string name="admin_package_repositories">Repository dei pacchetti</string>
+    <string name="admin_no_repositories">Nessun repository configurato</string>
+    <string name="admin_failed_load_statistics">Impossibile caricare le statistiche</string>
+    <string name="admin_failed_load_user_details">Impossibile caricare i dettagli utente</string>
+    <string name="admin_failed_load_config">Impossibile caricare la configurazione</string>
+    <string name="admin_no_config_page">Nessuna pagina di configurazione trovata</string>
+    <string name="admin_loading">Caricamento…</string>
+    <string name="admin_user_fallback">Utente</string>
+
+    <!-- Plugin detail metadata -->
+    <string name="admin_description">Descrizione</string>
+    <string name="admin_version_history">Cronologia versioni</string>
+    <string name="admin_loading_version_history">Caricamento cronologia versioni…</string>
+    <string name="admin_configuration">Configurazione</string>
+    <string name="admin_edit_plugin_settings">Modifica impostazioni plugin</string>
+    <string name="admin_current">Attuale</string>
+    <string name="admin_details">Dettagli</string>
+    <string name="admin_status">Stato</string>
+    <string name="admin_version">Versione</string>
+    <string name="admin_developer">Sviluppatore</string>
+    <string name="admin_repository">Repository</string>
+    <string name="admin_bundled">Incluso</string>
+    <string name="admin_unknown">Sconosciuto</string>
+    <string name="admin_disable">Disattiva</string>
+    <string name="admin_enable">Attiva</string>
+    <string name="admin_restarting">Riavvio in corso</string>
+
+    <!-- Scan progress / counts -->
+    <string name="admin_scan_progress_stale">%1$d elementi controllati, %2$d obsoleti trovati</string>
+    <string name="admin_scan_progress_watched">%1$d elementi controllati, %2$d visti trovati</string>
+    <string name="admin_n_selected">%1$d selezionati</string>
+    <string name="admin_n_items">%1$d elementi</string>
+    <string name="admin_n_lines">%1$d righe</string>
+    <string name="admin_scanning_library">Scansione libreria</string>
+    <string name="admin_scan_progress_pct">Scansione %1$d%%</string>
+
+    <!-- Misc UI batch3 -->
+    <string name="admin_quick_access">Accesso rapido</string>
+    <string name="admin_scan_library">Scansiona libreria</string>
+    <string name="admin_pause_live_logs">Metti in pausa log live</string>
+    <string name="admin_resume_live_logs">Riprendi log live</string>
+    <string name="admin_live_streaming_active">Streaming live attivo</string>
+    <string name="admin_completion">Completamento</string>
+    <string name="admin_load_more">Carica altro</string>
+    <string name="admin_loading_dots">Caricamento…</string>
+    <string name="admin_activity_30_days">Attività (30 giorni)</string>
+    <string name="admin_watch_time_trend">Tendenza tempo di visione (30 giorni)</string>
+    <string name="admin_most_watched_genres">Generi più visti</string>
+    <string name="admin_top_watched">Più visti</string>
+    <string name="admin_music_listening">Ascolto musicale</string>
+    <string name="admin_listening_time">Tempo di ascolto</string>
+    <string name="admin_top_artists">Artisti principali</string>
+    <string name="admin_top_genres">Generi principali</string>
+    <string name="admin_top_tracks">Brani principali</string>
+    <string name="admin_no_breakdown_data">Nessun dato di ripartizione disponibile</string>
+    <string name="admin_no_data">Nessun dato disponibile</string>
+    <string name="admin_no_trend_data">Nessun dato di tendenza disponibile</string>
+    <string name="admin_no_activity_data">Nessun dato di attività disponibile</string>
+    <string name="admin_no_watch_time_data">Nessun dato sul tempo di visione disponibile</string>
+    <string name="admin_no_music_data">Nessun dato musicale disponibile</string>
+    <string name="admin_no_stale_found">Nessun media obsoleto trovato</string>
+    <string name="admin_run_scan_stale">Esegui una scansione per trovare media obsoleti</string>
+    <string name="admin_no_watched_found">Nessun media visto trovato</string>
+    <string name="admin_run_scan_watched">Esegui una scansione per trovare media visti</string>
+    <string name="admin_reset_password">Reimposta password</string>
+    <string name="admin_set_password">Imposta password</string>
+    <string name="admin_reset">Reimposta</string>
+    <string name="admin_set">Imposta</string>
+    <string name="admin_leave_blank_password">Lascia vuoto per reimpostare/cancellare la password.</string>
+    <string name="admin_no_schedules">Nessun orario impostato</string>
+    <string name="admin_no_libraries_found">Nessuna libreria trovata</string>
+    <string name="admin_cannot_change_own_admin">Impossibile modificare il proprio stato di amministratore</string>
+    <string name="admin_cannot_remove_last_admin">Impossibile rimuovere l\'ultimo amministratore</string>
+    <string name="admin_cannot_disable_self">Non puoi disattivare te stesso</string>
+    <string name="admin_disabled_cannot_sign_in">Gli utenti disattivati non possono accedere</string>
+    <string name="admin_no_limit">Nessun limite</string>
+
+    <!-- Scheduled task trigger chips -->
+    <string name="admin_trigger_daily">Giornaliero</string>
+    <string name="admin_trigger_weekly">Settimanale</string>
+    <string name="admin_trigger_on_startup">All\'avvio</string>
+    <string name="admin_trigger_every_hours">Ogni %1$dh</string>
+    <string name="admin_trigger_every_days">Ogni %1$dd</string>
+
+    <!-- Statistics chart toggle -->
+    <string name="admin_chart_weekly">Settimanale</string>
+    <string name="admin_chart_monthly">Mensile</string>
+
+    <!-- Access schedule day labels -->
+    <string name="admin_day_sun">Dom</string>
+    <string name="admin_day_mon">Lun</string>
+    <string name="admin_day_tue">Mar</string>
+    <string name="admin_day_wed">Mer</string>
+    <string name="admin_day_thu">Gio</string>
+    <string name="admin_day_fri">Ven</string>
+    <string name="admin_day_sat">Sab</string>
+    <string name="admin_schedule_everyday">Giornaliero</string>
+    <string name="admin_schedule_weekday">Giorni feriali</string>
+    <string name="admin_schedule_weekend">Fine settimana</string>
+
+    <!-- Plugin / catalog metadata labels (batch) -->
+    <string name="admin_plugin_version">v%1$s</string>
+    <string name="admin_plugin_by_author">di %1$s</string>
+
+    <!-- Statistics time-unit suffixes (compact chart labels) -->
+    <string name="admin_unit_hours">h </string>
+    <string name="admin_unit_minutes">m</string>
+
+    <!-- Dashboard section titles (batch) -->
+    <string name="admin_active_sessions">Sessioni attive</string>
+    <string name="admin_library">Libreria</string>
+
+    <!-- Audit history row labels (batch) -->
+    <string name="admin_audit_by_user">di %1$s</string>
+    <string name="admin_audit_items_removed">%1$d elementi rimossi</string>
+
+    <!-- User statistics sort & export -->
+    <string name="user_stats_sort_plays">Riproduzioni</string>
+    <string name="user_stats_sort_time">Tempo di visione</string>
+    <string name="user_stats_sort_name">Nome</string>
+    <string name="user_stats_sort_cd">Ordina</string>
+    <string name="user_stats_export_cd">Esporta CSV</string>
+    <string name="user_stats_export_shared">Statistiche esportate</string>
+
+    <string name="admin_plugin_config_unavailable">La configurazione del plugin non è disponibile su questa piattaforma.</string>
+</resources>

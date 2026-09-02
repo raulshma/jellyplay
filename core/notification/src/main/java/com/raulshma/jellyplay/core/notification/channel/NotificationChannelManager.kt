@@ -6,13 +6,9 @@ import android.content.Context
 import android.os.Build
 import com.raulshma.jellyplay.core.notification.R
 import com.raulshma.jellyplay.core.model.NotificationPreferences
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class NotificationChannelManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class NotificationChannelManager(
+    private val context: Context,
 ) {
 
     fun ensureChannel(libraryId: String, libraryName: String, prefs: NotificationPreferences) {
