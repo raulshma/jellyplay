@@ -155,6 +155,17 @@ kotlin {
                 implementation(libs.kotlinx.browser)
             }
         }
+
+        // Minimal wasmJs test source set (the module's first): pure-logic
+        // canary only — kotlin("test") on the Kotlin-provided Node runner
+        // (wasmJsNodeTest; no browser/CDP infra in unit tests). See
+        // src/wasmJsTest/.../WebShellPureHelpersTest.kt for what is asserted
+        // and why the connect-flow classifier stays out of reach (private).
+        val wasmJsTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
     }
 }
 

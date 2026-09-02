@@ -61,6 +61,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    // UserMessageBusTest pins the one-shot Channel semantics with coroutines-test.
+    testImplementation(libs.coroutines.test)
     // RoutePredicatesTest round-trips NavKeys through nav3 serialization.
     testImplementation(libs.navigation3.runtime)
     testImplementation(libs.kotlinx.serialization.json)

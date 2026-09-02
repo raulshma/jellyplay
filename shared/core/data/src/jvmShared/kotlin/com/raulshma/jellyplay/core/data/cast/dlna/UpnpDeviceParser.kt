@@ -62,9 +62,9 @@ object UpnpDeviceParser {
             val iconUrl = resolveUrl(baseUrl, parseBestIcon(deviceElement))
 
             val services = parseServiceList(deviceElement)
-            val avTransportUrl = services[AV_TRANSPORT_TYPE]?.let { resolveUrl(baseUrl, it) }
-            val renderingControlUrl = services[RENDERING_CONTROL_TYPE]?.let { resolveUrl(baseUrl, it) }
-            val connectionManagerUrl = services[CONNECTION_MANAGER_TYPE]?.let { resolveUrl(baseUrl, it) }
+            val avTransportUrl = serviceControlUrl(services, AV_TRANSPORT_TYPE)?.let { resolveUrl(baseUrl, it) }
+            val renderingControlUrl = serviceControlUrl(services, RENDERING_CONTROL_TYPE)?.let { resolveUrl(baseUrl, it) }
+            val connectionManagerUrl = serviceControlUrl(services, CONNECTION_MANAGER_TYPE)?.let { resolveUrl(baseUrl, it) }
 
             if (avTransportUrl == null) {
                 Log.d(TAG, "Device $friendlyName has no AVTransport service, skipping")
@@ -124,6 +124,17 @@ object UpnpDeviceParser {
             result[serviceType] = controlUrl
         }
         return result
+    }
+
+    /**
+     * Device descriptions declare versioned service types
+     * (`urn:schemas-upnp-org:service:AVTransport:1`), so the version-less
+     * constants must match by prefix — an exact-map lookup never hits and
+     * would reject every real device as "no AVTransport service".
+     */
+    private fun serviceControlUrl(services: Map<String, String>, serviceType: String): String? {
+        return services[serviceType]
+            ?: services.entries.firstOrNull { it.key.startsWith("$serviceType:") }?.value
     }
 
     private fun getTagValue(element: org.w3c.dom.Element, tagName: String): String? {
