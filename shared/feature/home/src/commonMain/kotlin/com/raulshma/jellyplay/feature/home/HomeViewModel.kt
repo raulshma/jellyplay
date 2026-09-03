@@ -213,14 +213,14 @@ internal class HomeViewModel(
      * The offline collection gate — when the home renders downloads — as one
      * module (see [OfflineHomeGate]): the gate flow, both gated collectors
      * and the render-source fold, behind a single [OfflineHomeGate.state]
-     * flow. The refresher's `fetchFailedEmpty` is its only input from the
+     * flow. The refresher's `fetchFailed` is its only input from the
      * refresh machinery.
      */
     private val offlineHomeGate = OfflineHomeGate(
         scope = scope,
         offlineMode = offlineModeManager.offlineMode,
         offlineRepository = offlineRepository,
-        fetchFailedEmpty = refresher.state.map { it.fetchFailedEmpty },
+        fetchFailed = refresher.state.map { it.fetchFailed },
         // The offline home's layout mirror (#147): the cached online sections
         // the offline home reproduces filtered to downloads. runCatching so a
         // corrupt blob degrades to the generic offline rows instead of
@@ -471,6 +471,8 @@ internal class HomeViewModel(
                         nextUpExcludedSeriesIds = prefs.home.nextUpExcludedSeriesIds,
                         mergeCwAndNextUp = prefs.home.mergeContinueWatchingAndNextUp,
                         sectionOrder = prefs.home.homeSectionOrder,
+                        nextUpRewatching = prefs.home.nextUpRewatching,
+                        nextUpMaxDays = prefs.home.nextUpMaxDays,
                     ),
                 ) }
 

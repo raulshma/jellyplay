@@ -31,7 +31,18 @@ class OfflineHomeContentTest {
         OfflineMediaItem(id = "a1", name = "Album", mediaType = MediaType.MUSIC),
     )
     private val episodes = listOf(
-        OfflineMediaItem(id = "e1", name = "Ep", mediaType = MediaType.EPISODE, seriesId = "s1"),
+        // Carries watch activity (a resume row below the played threshold):
+        // the series is Next Up-eligible and the episode itself — unplayed,
+        // no resume position — is its next episode.
+        OfflineMediaItem(
+            id = "e1",
+            name = "Ep",
+            mediaType = MediaType.EPISODE,
+            seriesId = "s1",
+            seasonNumber = 1,
+            episodeNumber = 1,
+            lastPlayedDate = "2026-01-01",
+        ),
     )
 
     @Test

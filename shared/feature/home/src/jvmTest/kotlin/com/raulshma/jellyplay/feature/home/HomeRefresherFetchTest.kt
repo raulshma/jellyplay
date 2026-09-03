@@ -55,8 +55,10 @@ import kotlin.test.assertTrue
  *  - `fetchOnce` success with failed section types raises `partialLoadError`
  *    while keeping the loaded sections (zero-item sections are NOT failures).
  *  - `fetchOnce` failure over EMPTY sections sets `error` (and therefore
- *    `fetchFailedEmpty`); failure over EXISTING sections keeps the stale
- *    sections, never sets `error`, and clears `partialLoadError`.
+ *    `fetchFailed`); failure over EXISTING sections keeps the stale
+ *    sections AND still sets `error` — the stale snapshot cannot refresh, so
+ *    `fetchFailed` must open the implicit-offline gate instead of freezing
+ *    the pre-failure server rows.
  *  - An offline `fetchOnce` never touches the repository yet still stamps the
  *    refresh clock fresh (the onStart stale check must not re-fetch right
  *    after an offline attempt).
@@ -179,7 +181,7 @@ class HomeRefresherFetchTest {
     }
 
     @Test
-    fun fetchOnce_failureWithEmptySections_setsError_andFetchFailedEmpty() = runTest {
+    fun fetchOnce_failureWithEmptySections_setsError_andFetchFailed() = runTest {
         coEvery { mediaRepository.getHomeSections(any(), any()) } returns
             Result.failure(RuntimeException("server down"))
         val refresher = buildRefresher()
@@ -190,14 +192,14 @@ class HomeRefresherFetchTest {
         assertEquals("server down", refresher.state.value.error)
         assertTrue(refresher.state.value.sections.isEmpty())
         assertTrue(
-            refresher.state.value.fetchFailedEmpty,
-            "error + empty sections is the implicit-offline precondition",
+            refresher.state.value.fetchFailed,
+            "a failed fetch is the implicit-offline precondition",
         )
         assertFalse(refresher.state.value.partialLoadError)
     }
 
     @Test
-    fun fetchOnce_failureWithExistingSections_keepsStaleSections_andNeverSetsError() = runTest {
+    fun fetchOnce_failureWithExistingSections_keepsStaleSections_andSetsFetchFailed() = runTest {
         val stale = section(HomeSectionType.LATEST_MEDIA, listOf(item("m1")))
         coEvery { mediaRepository.getHomeSections(any(), any()) } returns
             Result.success(HomeSectionsResult(sections = listOf(stale)))
@@ -206,19 +208,22 @@ class HomeRefresherFetchTest {
         runCurrent()
         assertTrue(refresher.state.value.sections.isNotEmpty())
 
-        // The follow-up fetch fails — the stale content must survive untouched.
+        // The follow-up fetch fails — the stale content must survive untouched,
+        // but the failure is recorded so the offline gate can take over the
+        // rows the frozen snapshot can no longer refresh (CW / Next Up).
         coEvery { mediaRepository.getHomeSections(any(), any()) } returns
             Result.failure(RuntimeException("flaky network"))
         refresher.fetchOnce()
         runCurrent()
 
-        assertNull(
+        assertEquals(
+            "flaky network",
             refresher.state.value.error,
-            "a failure with content on screen must degrade to stale, not a hard error",
+            "a failure with content on screen still records the failure",
         )
         assertEquals(listOf(stale), refresher.state.value.sections)
         assertFalse(refresher.state.value.partialLoadError)
-        assertFalse(refresher.state.value.fetchFailedEmpty)
+        assertTrue(refresher.state.value.fetchFailed)
     }
 
     @Test
@@ -386,19 +391,19 @@ class HomeRefresherFetchTest {
         }
     }
 
-    // ── HomeRefreshState.fetchFailedEmpty boundary ──────────────────────────
+    // ── HomeRefreshState.fetchFailed boundary ──────────────────────────────
 
     @Test
-    fun fetchFailedEmpty_errorWithSectionsOnScreen_isFalse() {
+    fun fetchFailed_isErrorRegardlesOfSectionsOnScreen() {
+        // Sections on screen no longer disqualify the implicit-offline
+        // fallback: they are the stale pre-failure snapshot, which is exactly
+        // when the offline rows must take over.
         val state = HomeRefreshState(
             sections = listOf(section(HomeSectionType.LATEST_MEDIA)),
             error = "server down",
         )
-        assertFalse(
-            state.fetchFailedEmpty,
-            "content still on screen disqualifies the implicit-offline fallback",
-        )
-        assertTrue(HomeRefreshState(error = "x").fetchFailedEmpty)
+        assertTrue(state.fetchFailed)
+        assertFalse(HomeRefreshState().fetchFailed)
     }
 
     // ── fixtures ─────────────────────────────────────────────────────────────

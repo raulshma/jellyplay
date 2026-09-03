@@ -302,9 +302,14 @@ internal class HomeRefresher(
                         runCatching { librarySyncHook.onLibraryScanComplete() }
                     }
                     .onFailure { throwable ->
-                        if (_state.value.sections.isEmpty()) {
-                            _state.update { s -> s.copy(error = throwable.message ?: "${throwable::class.simpleName}") }
-                        }
+                        // Always record the failure — stale sections stay on
+                        // screen, but `fetchFailed` (error != null) is what
+                        // opens the implicit-offline gate downstream, so a
+                        // server that can't be reached while content is cached
+                        // still swaps Continue Watching / Next Up to the
+                        // locally derived rows instead of freezing the
+                        // pre-offline server snapshot.
+                        _state.update { s -> s.copy(error = throwable.message ?: "${throwable::class.simpleName}") }
                         _state.update { it.copy(partialLoadError = false) }
                     }
 
@@ -948,13 +953,19 @@ internal data class HomeRefreshState(
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
 ) {
     /**
-     * The server fetch failed and left nothing to show — the precondition for
-     * the implicit-offline fallback (online mode + downloads present). The
-     * offline collection gate in [com.raulshma.jellyplay.feature.home.HomeViewModel]
-     * keys on this, and the same gate folds it into
+     * The server fetch failed — the precondition for the implicit-offline
+     * fallback (online mode + downloads present). Sections on screen do NOT
+     * disqualify the fallback: they are the stale pre-failure snapshot, and
+     * keeping them rendered would freeze Continue Watching / Next Up at
+     * server data that can no longer refresh. The offline collection gate in
+     * [com.raulshma.jellyplay.feature.home.HomeViewModel] keys on this, and
+     * the same gate folds it into
      * [com.raulshma.jellyplay.feature.home.HomeUiState.renderSource] via
-     * [com.raulshma.jellyplay.feature.home.computeHomeRenderSource].
+     * [com.raulshma.jellyplay.feature.home.computeHomeRenderSource] — which
+     * only keeps the online feed when downloads are confirmed absent (the
+     * hard-error screen then owns the empty-sections corner via
+     * [com.raulshma.jellyplay.feature.home.homeSurface]).
      */
-    val fetchFailedEmpty: Boolean
-        get() = error != null && sections.isEmpty()
+    val fetchFailed: Boolean
+        get() = error != null
 }

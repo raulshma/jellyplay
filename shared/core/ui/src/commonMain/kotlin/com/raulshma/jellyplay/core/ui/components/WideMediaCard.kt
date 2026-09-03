@@ -1,9 +1,6 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -12,7 +9,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.ContentScale
@@ -70,44 +66,25 @@ fun WideMediaCard(
     MediaCardScaffold(
         onClick = onClick,
         image = { imageModifier ->
-            if (backdropUrl.isBlank() && imageUrl.isNotBlank()) {
-                // Portrait-only fallback (#147): offline Continue Watching
-                // cards often have no downloaded backdrop (Jellyfin rarely
-                // has one for episodes), and center-cropping the poster into
-                // this 16:9 frame zoomed into the middle of the artwork —
-                // visibly different from the online card. Letterbox instead:
-                // a blurred crop of the same art fills the frame and the
-                // full poster renders fit-inside on top.
-                Box(modifier = imageModifier) {
-                    MediaImage(
-                        url = imageUrl,
-                        contentDescription = null,
-                        blurHash = item.blurHashes.primary,
-                        modifier = Modifier
-                            .matchParentSize()
-                            .blur(18.dp),
-                        contentScale = ContentScale.Crop,
-                        crossfade = false,
-                    )
-                    MediaImage(
-                        url = imageUrl,
-                        contentDescription = item.name,
-                        modifier = Modifier.matchParentSize(),
-                        contentScale = ContentScale.Fit,
-                        crossfade = false,
-                    )
-                }
-            } else {
-                MediaImage(
-                    url = backdropUrl,
-                    fallbackUrls = remember(imageUrl) { if (imageUrl.isNotBlank()) listOf(imageUrl) else emptyList() },
-                    contentDescription = item.name,
-                    blurHash = item.blurHashes.backdrop,
-                    modifier = imageModifier,
-                    contentScale = ContentScale.Crop,
-                    crossfade = false,
-                )
-            }
+            // One render pipeline for online and offline cards alike: the
+            // backdrop fills the 16:9 frame (Crop) and falls back to the
+            // primary image — the same chain the online row drives with
+            // server URLs and the offline row with local file paths. Episode
+            // primaries are landscape thumbs, so the fallback crop is
+            // full-bleed both ways; a portrait poster without any backdrop
+            // center-crops exactly like the online card does. (A letterbox
+            // variant here made offline episode cards render blurred bands +
+            // a fitted image instead of the online full-bleed — removed for
+            // offline/online parity.)
+            MediaImage(
+                url = backdropUrl,
+                fallbackUrls = remember(imageUrl) { if (imageUrl.isNotBlank()) listOf(imageUrl) else emptyList() },
+                contentDescription = item.name,
+                blurHash = item.blurHashes.backdrop,
+                modifier = imageModifier,
+                contentScale = ContentScale.Crop,
+                crossfade = false,
+            )
         },
         title = item.displayTitle(),
         modifier = modifier,
