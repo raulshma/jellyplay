@@ -362,7 +362,7 @@ class HomeViewModelTest {
     @Test
     fun signIn_fetchesSections_andOrdersThem() = vmTest {
         coEvery {
-            mediaRepository.getHomeSections(any())
+            mediaRepository.getHomeSections(any(), any<Boolean>())
         } returns Result.success(
             HomeSectionsResult(
                 sections = listOf(
@@ -396,7 +396,7 @@ class HomeViewModelTest {
         val shared = item("cw1").copy(playbackPositionTicks = 5_000_000_000L)
         val other = item("other")
         coEvery {
-            mediaRepository.getHomeSections(any())
+            mediaRepository.getHomeSections(any(), any<Boolean>())
         } returns Result.success(
             HomeSectionsResult(
                 sections = listOf(
@@ -428,7 +428,7 @@ class HomeViewModelTest {
     @Test
     fun signOut_clearsSections() = vmTest {
         coEvery {
-            mediaRepository.getHomeSections(any())
+            mediaRepository.getHomeSections(any(), any<Boolean>())
         } returns Result.success(
             HomeSectionsResult(sections = listOf(section(HomeSectionType.CONTINUE_WATCHING))),
         )
@@ -451,7 +451,7 @@ class HomeViewModelTest {
         val fetchGate = CompletableDeferred<Unit>()
         var fetchCalls = 0
         coEvery {
-            mediaRepository.getHomeSections(any())
+            mediaRepository.getHomeSections(any(), any<Boolean>())
         } coAnswers {
             fetchCalls++
             if (fetchCalls == 1) Result.success(HomeSectionsResult(sections = emptyList()))
@@ -504,7 +504,7 @@ class HomeViewModelTest {
         // run on the repository's withContext(Dispatchers.Default) and block a
         // worker thread for the full timeout, leaking past test teardown.
         coEvery {
-            mediaRepository.getHomeSections(any())
+            mediaRepository.getHomeSections(any(), any<Boolean>())
         } coAnswers { CompletableDeferred<Result<HomeSectionsResult>>().await() }
         viewModel = buildViewModel()
         signIn("u1")
@@ -538,7 +538,7 @@ class HomeViewModelTest {
     @Test
     fun prefChange_withUnrelatedPrefs_doesNotRefetch() = vmTest {
         coEvery {
-            mediaRepository.getHomeSections(any())
+            mediaRepository.getHomeSections(any(), any<Boolean>())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
         viewModel = buildViewModel()
         signIn("u1")
@@ -547,7 +547,7 @@ class HomeViewModelTest {
         // Reset invocation count after the sign-in fetch.
         io.mockk.clearMocks(mediaRepository, answers = false, recordedCalls = true, childMocks = false)
         coEvery {
-            mediaRepository.getHomeSections(any())
+            mediaRepository.getHomeSections(any(), any<Boolean>())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
 
         // Toggle a pref that is NOT in the home-section diff set (oledMode).
@@ -555,7 +555,7 @@ class HomeViewModelTest {
         runCurrent()
 
         coVerify(exactly = 0) {
-            mediaRepository.getHomeSections(any())
+            mediaRepository.getHomeSections(any(), any<Boolean>())
         }
     }
 
@@ -654,7 +654,7 @@ class HomeViewModelTest {
     @Test
     fun fetchAndUpdateSections_onFailure_setsErrorState() = vmTest {
         coEvery {
-            mediaRepository.getHomeSections(any())
+            mediaRepository.getHomeSections(any(), any<Boolean>())
         } returns Result.failure(RuntimeException("Connection timeout"))
         viewModel = buildViewModel()
 
@@ -670,7 +670,7 @@ class HomeViewModelTest {
     @Test
     fun offlineLibraryCollection_onlineFetchSuccess_neverCollected() = vmTest {
         coEvery {
-            mediaRepository.getHomeSections(any())
+            mediaRepository.getHomeSections(any(), any<Boolean>())
         } returns Result.success(
             HomeSectionsResult(sections = listOf(section(HomeSectionType.LATEST_MEDIA, listOf(item("m1"))))),
         )
@@ -696,7 +696,7 @@ class HomeViewModelTest {
         every { offlineRepository.getOfflineLibrary() } returns libraryFlow
         every { offlineRepository.getOfflineEpisodes() } returns flowOf(episodes)
         coEvery {
-            mediaRepository.getHomeSections(any())
+            mediaRepository.getHomeSections(any(), any<Boolean>())
         } returns Result.failure(RuntimeException("Connection timeout"))
         viewModel = buildViewModel()
 
@@ -866,7 +866,7 @@ class HomeViewModelTest {
         // actually exist — the render-source fold treats a failed fetch over a
         // confirmed-empty offline library as the hard-error screen (Online),
         // where no card can fire a play at all.
-        coEvery { mediaRepository.getHomeSections(any()) } returns
+        coEvery { mediaRepository.getHomeSections(any(), any<Boolean>()) } returns
             Result.failure(IOException("server down"))
         every { offlineRepository.getOfflineLibrary() } returns flowOf(
             listOf(OfflineMediaItem(id = "dl-1", name = "Downloaded", mediaType = MediaType.MOVIE)),

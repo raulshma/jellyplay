@@ -41,12 +41,14 @@ class OfflineMediaDaoTest {
     private fun createMedia(
         id: String = "media-1",
         mediaType: String = "MOVIE",
+        parentId: String? = null,
         seriesId: String? = null,
         seasonId: String? = null,
     ) = OfflineMediaEntity(
         id = id,
         name = "Test Media",
         mediaType = mediaType,
+        parentId = parentId,
         seriesId = seriesId,
         seasonId = seasonId,
     )
@@ -342,5 +344,381 @@ class OfflineMediaDaoTest {
 
         // No playback row is created for ep-1 => effectively not played.
         assertEquals(false, playbackStateDao.getById("ep-1")?.isPlayed ?: false)
+    }
+
+    // ── hierarchy browse queries ─────────────────────────────────────
+
+    @Test
+    fun `getTopLevelItemsInLibrary filters by parentId and top-level media types`() = runTest {
+        offlineMediaDao.upsert(createMedia(id = "m1", mediaType = "MOVIE", parentId = "lib-1"))
+        offlineMediaDao.upsert(createMedia(id = "m2", mediaType = "SERIES", parentId = "lib-1"))
+        offlineMediaDao.upsert(createMedia(id = "m3", mediaType = "MOVIE", parentId = "lib-2"))
+        offlineMediaDao.upsert(createMedia(id = "ep-1", mediaType = "EPISODE", parentId = "lib-1"))
+
+        val items = offlineMediaDao.getTopLevelItemsInLibrary("lib-1").first()
+
+        assertEquals(setOf("m1", "m2"), items.map { it.media.id }.toSet())
+    }
+
+    @Test
+    fun `getSeasonsForSeries returns only seasons ordered by seasonNumber`() = runTest {
+        fun season(id: String, number: Int) = OfflineMediaEntity(
+            id = id, name = "Season $number", mediaType = "SEASON",
+            seriesId = "series-1", seasonNumber = number,
+        )
+        offlineMediaDao.upsert(season("s3", 3))
+        offlineMediaDao.upsert(season("s1", 1))
+        offlineMediaDao.upsert(season("s2", 2))
+        // An episode of the same series must not appear in the seasons query.
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "ep-1", name = "Ep", mediaType = "EPISODE", seriesId = "series-1"),
+        )
+
+        val seasons = offlineMediaDao.getSeasonsForSeries("series-1").first()
+
+        assertEquals(listOf("s1", "s2", "s3"), seasons.map { it.media.id })
+    }
+
+    @Test
+    fun `getEpisodesForSeason returns only episodes ordered by episodeNumber`() = runTest {
+        fun episode(id: String, seasonId: String, number: Int) = OfflineMediaEntity(
+            id = id, name = "Ep $number", mediaType = "EPISODE",
+            seriesId = "series-1", seasonId = seasonId, episodeNumber = number,
+        )
+        offlineMediaDao.upsert(episode("e4", "season-1", 4))
+        offlineMediaDao.upsert(episode("e2", "season-1", 2))
+        offlineMediaDao.upsert(episode("e3", "season-1", 3))
+        offlineMediaDao.upsert(episode("e9", "season-2", 9))
+
+        val episodes = offlineMediaDao.getEpisodesForSeason("season-1").first()
+
+        assertEquals(listOf("e2", "e3", "e4"), episodes.map { it.media.id })
+    }
+
+    @Test
+    fun `getEpisodesForSeries returns every episode season- then episode-ordered`() = runTest {
+        fun episode(id: String, seasonNumber: Int, episodeNumber: Int) = OfflineMediaEntity(
+            id = id, name = "Ep $id", mediaType = "EPISODE",
+            seriesId = "series-1", seasonId = "season-$seasonNumber",
+            seasonNumber = seasonNumber, episodeNumber = episodeNumber,
+        )
+        offlineMediaDao.upsert(episode("s1e2", 1, 2))
+        offlineMediaDao.upsert(episode("s2e1", 2, 1))
+        offlineMediaDao.upsert(episode("s1e1", 1, 1))
+        // A SEASON row shares the seriesId but must be excluded.
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(
+                id = "season-1", name = "Season 1", mediaType = "SEASON",
+                seriesId = "series-1", seasonNumber = 1,
+            ),
+        )
+
+        val episodes = offlineMediaDao.getEpisodesForSeries("series-1")
+
+        assertEquals(listOf("s1e1", "s1e2", "s2e1"), episodes.map { it.media.id })
+    }
+
+    @Test
+    fun `getDownloadedEpisodes returns episodes of every series and no other type`() = runTest {
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "e1", name = "Ep 1", mediaType = "EPISODE", seriesId = "series-1"),
+        )
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "e2", name = "Ep 2", mediaType = "EPISODE", seriesId = "series-2"),
+        )
+        offlineMediaDao.upsert(createMedia(id = "mv", mediaType = "MOVIE"))
+
+        val episodes = offlineMediaDao.getDownloadedEpisodes().first()
+
+        assertEquals(setOf("e1", "e2"), episodes.map { it.media.id }.toSet())
+    }
+
+    @Test
+    fun `getChildrenByParent returns the parent's rows ordered by indexNumber`() = runTest {
+        fun child(id: String, parent: String, index: Int?) = OfflineMediaEntity(
+            id = id, name = id, mediaType = "MOVIE", parentId = parent, indexNumber = index,
+        )
+        offlineMediaDao.upsert(child("c3", "p-1", 3))
+        offlineMediaDao.upsert(child("c1", "p-1", 1))
+        offlineMediaDao.upsert(child("c2", "p-1", 2))
+        offlineMediaDao.upsert(child("other", "p-2", 0))
+
+        val children = offlineMediaDao.getChildrenByParent("p-1").first()
+
+        assertEquals(listOf("c1", "c2", "c3"), children.map { it.media.id })
+    }
+
+    // ── metadata lookups ─────────────────────────────────────────────
+
+    @Test
+    fun `getByIds returns only the requested rows`() = runTest {
+        offlineMediaDao.upsert(createMedia(id = "m1"))
+        offlineMediaDao.upsert(createMedia(id = "m2"))
+        offlineMediaDao.upsert(createMedia(id = "m3"))
+
+        val rows = offlineMediaDao.getByIds(listOf("m1", "m3"))
+
+        assertEquals(setOf("m1", "m3"), rows.map { it.id }.toSet())
+    }
+
+    @Test
+    fun `getByIdFlow re-emits after an upsert`() = runTest {
+        val emissions = Channel<String?>(capacity = Channel.UNLIMITED)
+        val collector = launch {
+            offlineMediaDao.getByIdFlow("m1").collect { emissions.send(it?.name) }
+        }
+        assertEquals(null, emissions.receive())
+
+        offlineMediaDao.upsert(createMedia(id = "m1", mediaType = "MOVIE").copy(name = "Renamed"))
+        assertEquals("Renamed", emissions.receive())
+        collector.cancel()
+    }
+
+    @Test
+    fun `getByIdWithPlayback joins the playback state row`() = runTest {
+        offlineMediaDao.upsert(createMedia(id = "m1"))
+        playbackStateDao.upsert(
+            PlaybackStateEntity(
+                id = "m1",
+                playedPercentage = 55.0,
+                isFavorite = true,
+                playbackPositionTicks = 1_000L,
+                lastPlayedDate = "2026-07-21T10:00:00Z",
+            ),
+        )
+
+        val row = offlineMediaDao.getByIdWithPlayback("m1")
+
+        assertNotNull(row)
+        assertEquals("m1", row!!.media.id)
+        assertEquals(55.0, row.playedPercentage!!, 0.0)
+        assertEquals(true, row.isFavorite)
+        assertEquals(1_000L, row.playbackPositionTicks)
+    }
+
+    @Test
+    fun `getByIdWithPlayback returns null playback columns for a row without state`() = runTest {
+        offlineMediaDao.upsert(createMedia(id = "m1"))
+
+        val row = offlineMediaDao.getByIdWithPlayback("m1")
+
+        assertNotNull(row)
+        assertNull(row!!.playedPercentage)
+        assertNull(row.isPlayed)
+        assertNull(row.isFavorite)
+    }
+
+    @Test
+    fun `getByIdWithPlayback returns null for a missing id`() = runTest {
+        assertNull(offlineMediaDao.getByIdWithPlayback("nonexistent"))
+    }
+
+    @Test
+    fun `getByIdWithPlaybackFlow emits the joined row`() = runTest {
+        offlineMediaDao.upsert(createMedia(id = "m1"))
+
+        val row = offlineMediaDao.getByIdWithPlaybackFlow("m1").first()
+
+        assertNotNull(row)
+        assertEquals("m1", row!!.media.id)
+    }
+
+    // ── deletes ──────────────────────────────────────────────────────
+
+    @Test
+    fun `deleteBySeasonId removes that season's episodes only`() = runTest {
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "e1", name = "Ep 1", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-1"),
+        )
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "e2", name = "Ep 2", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-2"),
+        )
+
+        offlineMediaDao.deleteBySeasonId("season-1")
+
+        assertNull(offlineMediaDao.getById("e1"))
+        assertNotNull(offlineMediaDao.getById("e2"))
+    }
+
+    @Test
+    fun `cleanupOrphans removes childless seasons and series but keeps intact chains`() = runTest {
+        // Intact chain: series-1 → season-1 → ep-1.
+        offlineMediaDao.upsert(createMedia(id = "series-1", mediaType = "SERIES"))
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "season-1", name = "S1", mediaType = "SEASON", seriesId = "series-1"),
+        )
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "ep-1", name = "Ep", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-1"),
+        )
+        // Orphans: a childless series and a childless season.
+        offlineMediaDao.upsert(createMedia(id = "series-2", mediaType = "SERIES"))
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "season-2", name = "S2", mediaType = "SEASON", seriesId = "series-1"),
+        )
+
+        offlineMediaDao.cleanupOrphans()
+
+        assertNull(offlineMediaDao.getById("season-2"), "childless season must be removed")
+        assertNull(offlineMediaDao.getById("series-2"), "childless series must be removed")
+        assertNotNull(offlineMediaDao.getById("series-1"))
+        assertNotNull(offlineMediaDao.getById("season-1"))
+        assertNotNull(offlineMediaDao.getById("ep-1"))
+    }
+
+    // ── search ───────────────────────────────────────────────────────
+
+    @Test
+    fun `search matches name and series name case-insensitively with prefix ranking`() = runTest {
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "a", name = "Interstellar", mediaType = "MOVIE"),
+        )
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "b", name = "Battle Interlude", mediaType = "MOVIE"),
+        )
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "c", name = "Ep One", mediaType = "EPISODE", seriesName = "Interlude Show"),
+        )
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "d", name = "Unrelated", mediaType = "MOVIE"),
+        )
+
+        // Lowercase pattern: default LIKE case-insensitivity + ESCAPE clause.
+        val results = offlineMediaDao.search("%inte%", "inte%", 10)
+
+        // Prefix hit first, then the contains-hits alphabetically (NOCASE).
+        assertEquals(listOf("a", "b", "c"), results.map { it.media.id })
+    }
+
+    @Test
+    fun `search escapes LIKE wildcards in the pattern`() = runTest {
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "pct", name = "Discount %Deal", mediaType = "MOVIE"),
+        )
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "plain", name = "Discount Deal", mediaType = "MOVIE"),
+        )
+
+        // The escaped pattern matches only a LITERAL '%' in the name.
+        val results = offlineMediaDao.search("%\\%%", "\\%%", 10)
+
+        assertEquals(listOf("pct"), results.map { it.media.id })
+    }
+
+    @Test
+    fun `search respects the limit`() = runTest {
+        offlineMediaDao.upsert(OfflineMediaEntity(id = "a", name = "Interstellar", mediaType = "MOVIE"))
+        offlineMediaDao.upsert(OfflineMediaEntity(id = "b", name = "Battle Interlude", mediaType = "MOVIE"))
+        offlineMediaDao.upsert(OfflineMediaEntity(id = "c", name = "Final Interlude", mediaType = "MOVIE"))
+
+        val results = offlineMediaDao.search("%inte%", "inte%", 2)
+
+        assertEquals(2, results.size)
+    }
+
+    // ── projections / batch reads ────────────────────────────────────
+
+    @Test
+    fun `getDownloadedItemIds includes episodes unlike the top-level queries`() = runTest {
+        offlineMediaDao.upsert(createMedia(id = "mv", mediaType = "MOVIE"))
+        offlineMediaDao.upsert(createMedia(id = "series-1", mediaType = "SERIES"))
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "season-1", name = "S1", mediaType = "SEASON", seriesId = "series-1"),
+        )
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "ep-1", name = "Ep", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-1"),
+        )
+
+        val ids = offlineMediaDao.getDownloadedItemIds()
+
+        // SEASON is intentionally excluded (it is not a downloadable item);
+        // EPISODE is intentionally included (freshness checks cover episodes).
+        assertEquals(setOf("mv", "series-1", "ep-1"), ids.toSet())
+    }
+
+    @Test
+    fun `getLocalImagePaths returns the persisted paths`() = runTest {
+        offlineMediaDao.upsert(
+            createMedia(id = "m1").copy(posterPath = "/data/poster.jpg", backdropPath = "/data/backdrop.jpg"),
+        )
+
+        val paths = offlineMediaDao.getLocalImagePaths("m1")
+
+        assertNotNull(paths)
+        assertEquals("/data/poster.jpg", paths!!.posterPath)
+        assertEquals("/data/backdrop.jpg", paths.backdropPath)
+    }
+
+    @Test
+    fun `getLocalImagePaths returns nulls for a row without images`() = runTest {
+        offlineMediaDao.upsert(createMedia(id = "m1"))
+
+        val paths = offlineMediaDao.getLocalImagePaths("m1")
+
+        assertNotNull(paths)
+        assertNull(paths!!.posterPath)
+        assertNull(paths.backdropPath)
+    }
+
+    @Test
+    fun `getAllPeopleJson returns id and peopleJson for every row`() = runTest {
+        offlineMediaDao.upsert(createMedia(id = "m1").copy(peopleJson = """[{"name":"Alice"}]"""))
+        offlineMediaDao.upsert(createMedia(id = "m2"))
+
+        val rows = offlineMediaDao.getAllPeopleJson()
+
+        assertEquals(2, rows.size)
+        assertEquals("""[{"name":"Alice"}]""", rows.first { it.id == "m1" }.peopleJson)
+        assertNull(rows.first { it.id == "m2" }.peopleJson)
+    }
+
+    @Test
+    fun `getRelatedByGenre matches a CSV genre without substring false positives`() = runTest {
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "cur", name = "Current", mediaType = "MOVIE", genres = "Action,SciFi"),
+        )
+        // "ActionAdventure" must NOT match a search for "Action" (the CSV wrap
+        // prevents the substring false positive).
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "fused", name = "Fused", mediaType = "MOVIE", genres = "ActionAdventure"),
+        )
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "yes", name = "Match", mediaType = "MOVIE", genres = "Drama,Action"),
+        )
+        // Only MOVIE/SERIES participate — an episode with the genre is excluded.
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "ep", name = "Ep", mediaType = "EPISODE", seriesId = "s", genres = "Action"),
+        )
+
+        val related = offlineMediaDao.getRelatedByGenre("cur", "Action", 10)
+
+        assertEquals(listOf("yes"), related.map { it.media.id })
+    }
+
+    @Test
+    fun `getRelatedByStudio matches a CSV studio`() = runTest {
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "cur", name = "Current", mediaType = "MOVIE", studios = "A24,Netflix"),
+        )
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "fused", name = "Fused", mediaType = "MOVIE", studios = "A24Studios"),
+        )
+        offlineMediaDao.upsert(
+            OfflineMediaEntity(id = "yes", name = "Match", mediaType = "MOVIE", studios = "Hulu,A24"),
+        )
+
+        val related = offlineMediaDao.getRelatedByStudio("cur", "A24", 10)
+
+        assertEquals(listOf("yes"), related.map { it.media.id })
+    }
+
+    @Test
+    fun `getRelatedByGenre respects the limit`() = runTest {
+        offlineMediaDao.upsert(OfflineMediaEntity(id = "cur", name = "Current", mediaType = "MOVIE", genres = "Action"))
+        offlineMediaDao.upsert(OfflineMediaEntity(id = "r1", name = "R1", mediaType = "MOVIE", genres = "Action"))
+        offlineMediaDao.upsert(OfflineMediaEntity(id = "r2", name = "R2", mediaType = "MOVIE", genres = "Action"))
+
+        val related = offlineMediaDao.getRelatedByGenre("cur", "Action", 1)
+
+        assertEquals(1, related.size)
     }
 }

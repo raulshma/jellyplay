@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.library
 
 import androidx.lifecycle.SavedStateHandle
+import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -8,12 +9,14 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -34,6 +37,7 @@ class StudioDetailViewModelTest {
     private lateinit var mediaRepository: MediaRepository
     private lateinit var userDataMutator: UserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
+    private lateinit var mediaDownloadActions: MediaDownloadActions
 
     @BeforeTest
     fun setUp() {
@@ -41,8 +45,10 @@ class StudioDetailViewModelTest {
         mediaRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
+        mediaDownloadActions = mockk(relaxed = true)
 
         every { imageUrlProvider.getImageUrl(any(), any()) } returns "https://example.com/image.jpg"
+        every { mediaDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
     }
 
     @AfterTest
@@ -65,7 +71,7 @@ class StudioDetailViewModelTest {
             mediaRepository = mediaRepository,
             userDataMutator = userDataMutator,
             imageUrlProvider = imageUrlProvider,
-            mediaDownloadActions = mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
+            mediaDownloadActions = mediaDownloadActions,
         )
     }
 
@@ -127,5 +133,48 @@ class StudioDetailViewModelTest {
         coVerify {
             userDataMutator.setPlayed("m1", false, UserDataMutator.FlipMode.Silent, emptyList(), null)
         }
+    }
+
+    // ── Download quick actions (studio grid) ─────────────────────────────────
+
+    @Test
+    fun `downloadItem routes through downloadAndReport with the plain open-detail callback`() = runTest {
+        val viewModel = createViewModel()
+        val item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)
+        var routedTo: String? = null
+
+        // The relaxed mock swallows downloadAndReport without ever invoking the
+        // callback. Mirror the real cascade (NeedsDetailScreen → onOpenDetail
+        // with the plain item id) so the routing actually happens.
+        coEvery { mediaDownloadActions.downloadAndReport(any(), any()) } coAnswers {
+            secondArg<(String) -> Unit>()(firstArg<MediaItem>().id)
+        }
+
+        viewModel.downloadItem(item) { routedTo = it }
+        advanceUntilIdle()
+
+        // This host has no pre-presented series sheet: the callback passes the
+        // item id straight through to the shared report-and-route cascade.
+        coVerify(exactly = 1) { mediaDownloadActions.downloadAndReport(item, any()) }
+        assertEquals("m1", routedTo)
+    }
+
+    @Test
+    fun `removeItemDownload delegates to the shared delete routing`() = runTest {
+        val viewModel = createViewModel()
+        val item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)
+
+        viewModel.removeItemDownload(item)
+
+        verify(exactly = 1) { mediaDownloadActions.removeDownload(item) }
+    }
+
+    @Test
+    fun `downloadedIds re-exposes the shared actions flow`() = runTest {
+        every { mediaDownloadActions.downloadedIds } returns MutableStateFlow(setOf("done-1"))
+
+        val viewModel = createViewModel()
+
+        assertEquals(setOf("done-1"), viewModel.downloadedIds.value)
     }
 }

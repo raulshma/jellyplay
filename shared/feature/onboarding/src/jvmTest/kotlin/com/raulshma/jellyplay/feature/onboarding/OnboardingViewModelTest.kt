@@ -189,6 +189,16 @@ class OnboardingViewModelTest {
     }
 
     @Test
+    fun `nextStep at the final step stays put instead of overflowing`() = runTest(mainDispatcher) {
+        val vm = newViewModel()
+
+        vm.setStep(OnboardingStep.count - 1)
+        vm.nextStep()
+
+        assertEquals(OnboardingStep.count - 1, vm.currentStep.value)
+    }
+
+    @Test
     fun `skipOnboarding jumps to the final review step instead of completing`() = runTest(mainDispatcher) {
         val vm = newViewModel()
 

@@ -19,8 +19,10 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -130,6 +132,131 @@ class PlaylistsViewModelTest {
         assertEquals(PlaylistDialogState.None, viewModel.dialogState)
         assertFalse(viewModel.isMutating)
     }
+
+    @Test
+    fun createPlaylist_failure_setsFallbackErrorAndKeepsDialogOpen() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+        coEvery { mediaRepository.createPlaylist("New", null, any(), any()) } returns
+            Result.failure(RuntimeException())
+
+        viewModel.openCreateDialog()
+        viewModel.createPlaylist("New", "")
+        advanceUntilIdle()
+
+        assertEquals("Failed to create playlist", viewModel.error)
+        assertEquals(PlaylistDialogState.Create(), viewModel.dialogState)
+        assertFalse(viewModel.isMutating)
+    }
+
+    // ── Delete dialog + mutation ─────────────────────────────────────────────
+
+    @Test
+    fun openDeleteDialog_readOnlyPlaylist_setsErrorAndKeepsDialogClosed() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+
+        viewModel.openDeleteDialog(playlists[1])
+
+        assertEquals("This playlist cannot be deleted", viewModel.error)
+        assertEquals(PlaylistDialogState.None, viewModel.dialogState)
+    }
+
+    @Test
+    fun openDeleteDialog_deletablePlaylist_opensDialog() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+
+        viewModel.openDeleteDialog(playlists[0])
+
+        assertEquals(PlaylistDialogState.Delete(playlists[0]), viewModel.dialogState)
+    }
+
+    @Test
+    fun dismissDialog_returnsToNone() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+        viewModel.openCreateDialog()
+
+        viewModel.dismissDialog()
+
+        assertEquals(PlaylistDialogState.None, viewModel.dialogState)
+    }
+
+    @Test
+    fun deletePlaylist_success_closesDialogAndReloads() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+        coEvery { mediaRepository.deletePlaylist("pl1") } returns Result.success(Unit)
+
+        viewModel.openDeleteDialog(playlists[0])
+        viewModel.deletePlaylist(playlists[0])
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.deletePlaylist("pl1") }
+        assertEquals(PlaylistDialogState.None, viewModel.dialogState)
+        assertFalse(viewModel.isMutating)
+    }
+
+    @Test
+    fun deletePlaylist_failure_setsFallbackError() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+        coEvery { mediaRepository.deletePlaylist("pl1") } returns Result.failure(RuntimeException("locked"))
+
+        viewModel.deletePlaylist(playlists[0])
+        advanceUntilIdle()
+
+        assertEquals("locked", viewModel.error)
+        assertFalse(viewModel.isMutating)
+    }
+
+    // ── Update (rename) ──────────────────────────────────────────────────────
+
+    @Test
+    fun updatePlaylist_blankName_isIgnored() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+
+        viewModel.updatePlaylist("pl1", "   ", "overview")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { mediaRepository.updatePlaylist(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun updatePlaylist_success_trimsWritesClosesDialogAndReloads() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+        coEvery { mediaRepository.updatePlaylist("pl1", "Renamed", null, any()) } returns Result.success(Unit)
+
+        viewModel.openEditDialog(playlists[0])
+        viewModel.updatePlaylist("pl1", "  Renamed  ", "   ")
+        advanceUntilIdle()
+
+        // Blank overview collapses to null; the dialog closes and the list reloads.
+        coVerify(exactly = 1) { mediaRepository.updatePlaylist("pl1", "Renamed", null, any()) }
+        assertEquals(PlaylistDialogState.None, viewModel.dialogState)
+        assertFalse(viewModel.isMutating)
+    }
+
+    @Test
+    fun updatePlaylist_failure_setsFallbackError() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+        coEvery { mediaRepository.updatePlaylist(any(), any(), any(), any()) } returns
+            Result.failure(RuntimeException())
+
+        viewModel.updatePlaylist("pl1", "Renamed", "")
+        advanceUntilIdle()
+
+        assertEquals("Failed to update playlist", viewModel.error)
+        assertFalse(viewModel.isMutating)
+    }
+
+    // ── Error lifecycle ──────────────────────────────────────────────────────
+
+    @Test
+    fun clearError_resetsTheErrorState() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+        viewModel.openEditDialog(playlists[1]) // read-only → error
+        assertEquals("This playlist is read-only", viewModel.error)
+
+        viewModel.clearError()
+
+        assertEquals(null, viewModel.error)
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -167,12 +294,97 @@ class MusicBrowseViewModelTest {
     }
 
     @Test
+    fun init_loadsPlaylists() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), viewModel.playlists.value)
+    }
+
+    @Test
     fun setAlbumSort_updatesSortFlow() = runTest(mainDispatcher) {
         advanceUntilIdle()
 
         viewModel.setAlbumSort(MusicSortOption.DATE_ADDED)
 
         assertEquals(MusicSortOption.DATE_ADDED, viewModel.albumSort.value)
+    }
+
+    @Test
+    fun perTabSorts_stayIndependent() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+
+        viewModel.setArtistSort(MusicSortOption.YEAR)
+        viewModel.setTrackSort(MusicSortOption.RANDOM)
+
+        // Mutating one tab's sort must never leak into the other tabs'.
+        assertEquals(MusicSortOption.YEAR, viewModel.artistSort.value)
+        assertEquals(MusicSortOption.NAME, viewModel.albumSort.value)
+        assertEquals(MusicSortOption.RANDOM, viewModel.trackSort.value)
+    }
+
+    @Test
+    fun pagedStreams_queryPerMediaTypeWithTheTabSort() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+
+        // Each tab is a distinct flatMapLatest generation over its own media
+        // type; the NAME default travels as SORT_NAME.
+        viewModel.artists.first()
+        viewModel.albums.first()
+        viewModel.tracks.first()
+
+        verify(exactly = 1) {
+            mediaRepository.getMediaItemsPaged(
+                any(),
+                com.raulshma.jellyplay.core.model.LibraryFilters(
+                    mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.ARTIST),
+                    sortBy = com.raulshma.jellyplay.core.model.SortOption.SORT_NAME,
+                ),
+                any(),
+                any(),
+            )
+        }
+        verify(exactly = 1) {
+            mediaRepository.getMediaItemsPaged(
+                any(),
+                com.raulshma.jellyplay.core.model.LibraryFilters(
+                    mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.ALBUM),
+                    sortBy = com.raulshma.jellyplay.core.model.SortOption.SORT_NAME,
+                ),
+                any(),
+                any(),
+            )
+        }
+        verify(exactly = 1) {
+            mediaRepository.getMediaItemsPaged(
+                any(),
+                com.raulshma.jellyplay.core.model.LibraryFilters(
+                    mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.AUDIO),
+                    sortBy = com.raulshma.jellyplay.core.model.SortOption.SORT_NAME,
+                ),
+                any(),
+                any(),
+            )
+        }
+    }
+
+    @Test
+    fun setTrackSort_requeriesTheTrackPager() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+
+        viewModel.setTrackSort(MusicSortOption.YEAR)
+        viewModel.tracks.first()
+
+        verify(exactly = 1) {
+            mediaRepository.getMediaItemsPaged(
+                any(),
+                com.raulshma.jellyplay.core.model.LibraryFilters(
+                    mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.AUDIO),
+                    sortBy = com.raulshma.jellyplay.core.model.SortOption.YEAR_DESC,
+                ),
+                any(),
+                any(),
+            )
+        }
     }
 
     @Test

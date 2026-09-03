@@ -536,8 +536,14 @@ class OfflineHomeSectionsTest {
         )
 
         // Latest TV dropped twice over: globally enabled but disabled for its
-        // library via the override; Recently Added survives.
-        assertEquals(listOf("offline_srv_recent"), sections.map { it.id })
+        // library via the override; Recently Added survives. The "show"
+        // download is not surfaced by any mirrored row, so the generic
+        // fallback rows append for it (#147 coverage guarantee) — the movie
+        // is already covered by the mirrored Recently Added row.
+        assertEquals(
+            listOf("offline_srv_recent", "offline_recently_downloaded", "offline_series"),
+            sections.map { it.id },
+        )
     }
 
     @Test

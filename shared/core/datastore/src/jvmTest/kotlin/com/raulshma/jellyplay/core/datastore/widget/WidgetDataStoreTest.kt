@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
+import com.raulshma.jellyplay.core.model.WidgetConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -151,5 +152,120 @@ class WidgetDataStoreTest {
         store.setWidgetLastRefreshMs(1_234_567_890L)
 
         assertEquals(1_234_567_890L, store.widgetLastRefreshMs.first())
+    }
+
+    // ── widget config (legacy global + per-widget) ───────────────────
+
+    @Test
+    fun `legacy widget config round-trips`() = runTest {
+        val config = WidgetConfig(continueWatchingItemCount = 5)
+
+        store.setWidgetConfig(config)
+
+        assertEquals(config, store.widgetConfig.first())
+    }
+
+    @Test
+    fun `corrupt legacy config blob degrades to the default config`() = runTest {
+        store.setWidgetConfig(WidgetConfig(continueWatchingItemCount = 5))
+        dataStore.edit { it[stringPreferencesKey("widget_config")] = "{broken" }
+
+        assertEquals(WidgetConfig(), store.widgetConfig.first())
+    }
+
+    @Test
+    fun `per-widget config round-trips and resolves by widget id`() = runTest {
+        val configA = WidgetConfig(continueWatchingItemCount = 4)
+        val configB = WidgetConfig(continueWatchingItemCount = 8)
+
+        store.setWidgetConfigForId(1, configA)
+        store.setWidgetConfigForId(2, configB)
+
+        assertEquals(configA, store.getWidgetConfigForId(1).first())
+        assertEquals(configB, store.getWidgetConfigForId(2).first())
+    }
+
+    @Test
+    fun `per-widget lookup falls back to the legacy config when the id has none`() = runTest {
+        val legacy = WidgetConfig(continueWatchingItemCount = 6)
+        store.setWidgetConfig(legacy)
+        store.setWidgetConfigForId(1, WidgetConfig(continueWatchingItemCount = 4))
+
+        assertEquals(legacy, store.getWidgetConfigForId(2).first())
+    }
+
+    @Test
+    fun `per-widget lookup with neither entry falls back to the default config`() = runTest {
+        assertEquals(WidgetConfig(), store.getWidgetConfigForId(99).first())
+    }
+
+    @Test
+    fun `corrupt per-widget blob falls back to the legacy config`() = runTest {
+        val legacy = WidgetConfig(continueWatchingItemCount = 6)
+        store.setWidgetConfig(legacy)
+        store.setWidgetConfigForId(1, WidgetConfig(continueWatchingItemCount = 4))
+        dataStore.edit { it[stringPreferencesKey("widget_configs")] = "not-json" }
+
+        // Per-widget decode fails → null → legacy config is used.
+        assertEquals(legacy, store.getWidgetConfigForId(1).first())
+    }
+
+    @Test
+    fun `removeWidgetConfigForId drops only that widget's entry`() = runTest {
+        val configA = WidgetConfig(continueWatchingItemCount = 4)
+        val configB = WidgetConfig(continueWatchingItemCount = 8)
+        store.setWidgetConfigForId(1, configA)
+        store.setWidgetConfigForId(2, configB)
+
+        store.removeWidgetConfigForId(1)
+
+        assertEquals(WidgetConfig(), store.getWidgetConfigForId(1).first(), "falls back to default after removal")
+        assertEquals(configB, store.getWidgetConfigForId(2).first())
+    }
+
+    @Test
+    fun `getWidgetConfigForIdSync serves the per-widget config once the snapshot is warm`() = runTest {
+        val configA = WidgetConfig(continueWatchingItemCount = 4)
+        store.setWidgetConfigForId(1, configA)
+        store.setWidgetConfig(WidgetConfig(continueWatchingItemCount = 6))
+
+        // The eager snapshot StateFlow warms asynchronously on the store scope;
+        // poll (bounded) until it has materialized, then the sync accessor must
+        // serve per-widget[1].
+        val deadline = System.currentTimeMillis() + 5_000
+        var synced = store.getWidgetConfigForIdSync(1)
+        while (synced != configA && System.currentTimeMillis() < deadline) {
+            Thread.sleep(25)
+            synced = store.getWidgetConfigForIdSync(1)
+        }
+        assertEquals(configA, synced)
+    }
+
+    @Test
+    fun `getWidgetConfigForIdSync falls back to the legacy config for unknown ids`() = runTest {
+        val legacy = WidgetConfig(continueWatchingItemCount = 6)
+        store.setWidgetConfigForId(1, WidgetConfig(continueWatchingItemCount = 4))
+        store.setWidgetConfig(legacy)
+
+        val deadline = System.currentTimeMillis() + 5_000
+        var synced = store.getWidgetConfigForIdSync(2)
+        while (synced != legacy && System.currentTimeMillis() < deadline) {
+            Thread.sleep(25)
+            synced = store.getWidgetConfigForIdSync(2)
+        }
+        assertEquals(legacy, synced)
+    }
+
+    @Test
+    fun `continueWatchingSnapshot returns the persisted payload on a cold store`() = runTest {
+        val items = listOf(MediaItem("cw-cold", "Persisted", mediaType = MediaType.MOVIE))
+        // Seed through one store instance, then observe through a FRESH store
+        // whose eager snapshot has not warmed yet — the sync accessor must do
+        // its one bounded disk read and render the persisted payload instead
+        // of the empty placeholder.
+        store.setContinueWatching(items)
+        val coldStore = WidgetDataStore(dataStore, scope)
+
+        assertEquals(items, coldStore.continueWatchingSnapshot())
     }
 }

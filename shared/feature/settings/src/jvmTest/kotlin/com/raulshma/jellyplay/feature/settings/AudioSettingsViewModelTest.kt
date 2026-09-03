@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
 import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.model.AudioPreferences
 import io.mockk.coVerify
 import io.mockk.every
@@ -36,6 +37,11 @@ import kotlin.test.assertSame
  * setters persist through the owning store inside `editor.edit { }` (captured
  * and replayed against a stub scope, since a relaxed editor mock never runs
  * the block), and the clear-cache action reaches the [AudioCacheClearer] seam.
+ *
+ * Later top-up round: also pins the cross-slice routing the store-owner
+ * contract depends on — `setPreferAudioDescription` must land on the SUBTITLE
+ * store (not audio), the night-mode/skip-threshold group on the audio store,
+ * and the volume-boost group on the audioEffects store.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AudioSettingsViewModelTest {
@@ -51,6 +57,10 @@ class AudioSettingsViewModelTest {
     private lateinit var audioStore: AudioStore
     private lateinit var audioEffectsStore: AudioEffectsStore
     private lateinit var audioCacheStore: AudioCacheStore
+    private lateinit var subtitleLanguageStore: SubtitleLanguageStore
+
+    /** Every `edit { }` block the VM hands the editor, in call order. */
+    private val editBlocks = mutableListOf<suspend PreferencesEditScope.() -> Unit>()
 
     @BeforeTest
     fun setUp() {
@@ -64,11 +74,17 @@ class AudioSettingsViewModelTest {
         audioStore = mockk(relaxed = true)
         audioEffectsStore = mockk(relaxed = true)
         audioCacheStore = mockk(relaxed = true)
+        subtitleLanguageStore = mockk(relaxed = true)
+        editBlocks.clear()
         every { projections.audioPreferences } returns MutableStateFlow(AudioPreferences())
         every { appearanceStore.showAdvancedSettings } returns MutableStateFlow(false)
         every { editScope.audio } returns audioStore
         every { editScope.audioEffects } returns audioEffectsStore
         every { editScope.audioCache } returns audioCacheStore
+        every { editScope.subtitle } returns subtitleLanguageStore
+        // List capture: blocks append across calls (the per-test slot in
+        // [captureEdit] re-stubs over this when a suite wants a single block).
+        every { editor.edit(capture(editBlocks)) } returns mockk<Job>()
     }
 
     @AfterTest
@@ -137,5 +153,52 @@ class AudioSettingsViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { audioCacheClearer.clear() }
+    }
+
+    // ------------------------------------------------- top-ups: cross-slice routing
+
+    /** Every `edit { }` block captured by the setUp list stub, in call order. */
+    private suspend fun replayAllEdits() = editBlocks.forEach { it.invoke(editScope) }
+
+    @Test
+    fun `prefer-audio-description persists through the SUBTITLE store, not audio`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.setPreferAudioDescription(true)
+        advanceUntilIdle()
+        replayAllEdits()
+
+        // Cross-slice routing is load-bearing: the audio screen's recompose
+        // scope must not own this write — the subtitle slice does. (The audio
+        // store does not even expose this setter; only the subtitle store does.)
+        coVerify(exactly = 1) { subtitleLanguageStore.setPreferAudioDescription(true) }
+    }
+
+    @Test
+    fun `night-mode and skip-threshold setters persist through the audio store`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.setAudioNightModeVolume(0.6f)
+        viewModel.setAudioNightModeGain(12)
+        viewModel.setAudioSkipPreviousThresholdMs(3_500L)
+        advanceUntilIdle()
+        replayAllEdits()
+
+        coVerify(exactly = 1) { audioStore.setAudioNightModeVolume(0.6f) }
+        coVerify(exactly = 1) { audioStore.setAudioNightModeGain(12) }
+        coVerify(exactly = 1) { audioStore.setAudioSkipPreviousThresholdMs(3_500L) }
+    }
+
+    @Test
+    fun `volume boost persists through the audioEffects store`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.setVolumeBoostEnabled(true)
+        viewModel.setVolumeBoostGain(8)
+        advanceUntilIdle()
+        replayAllEdits()
+
+        coVerify(exactly = 1) { audioEffectsStore.setVolumeBoostEnabled(true) }
+        coVerify(exactly = 1) { audioEffectsStore.setVolumeBoostGain(8) }
     }
 }

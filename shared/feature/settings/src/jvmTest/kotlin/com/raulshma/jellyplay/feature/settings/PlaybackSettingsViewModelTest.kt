@@ -4,12 +4,21 @@ import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
+import com.raulshma.jellyplay.core.datastore.audio.AudioStore
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
+import com.raulshma.jellyplay.core.model.CastingStrategy
+import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
+import com.raulshma.jellyplay.core.model.MediaSegmentType
+import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.SegmentBehavior
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -40,6 +49,11 @@ import kotlin.test.assertSame
  * edit block, each routed test captures the block and replays it against a
  * stub [PreferencesEditScope] to verify the store call — the toggle/coerce
  * POLICY stays in the store (pinned there), here we pin only the routing.
+ *
+ * Later top-up round: also pins the cross-slice routing — engine configs land
+ * on the engine store, `setAudioDelayMs` on the AUDIO store, sync-play/casting
+ * on the syncPlayCast store, segment behavior on the videoPlayer store — plus
+ * the single-category `resetCategory` delegation.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlaybackSettingsViewModelTest {
@@ -54,6 +68,12 @@ class PlaybackSettingsViewModelTest {
     private lateinit var editScope: PreferencesEditScope
     private lateinit var playbackStore: PlaybackStore
     private lateinit var videoPlayerStore: VideoPlayerStore
+    private lateinit var engineStore: PlayerEngineStore
+    private lateinit var audioStore: AudioStore
+    private lateinit var syncPlayCastStore: SyncPlayCastStore
+
+    /** Every `edit { }` block the VM hands the editor, in call order. */
+    private val editBlocks = mutableListOf<suspend PreferencesEditScope.() -> Unit>()
 
     @BeforeTest
     fun setUp() {
@@ -66,10 +86,20 @@ class PlaybackSettingsViewModelTest {
         editScope = mockk(relaxed = true)
         playbackStore = mockk(relaxed = true)
         videoPlayerStore = mockk(relaxed = true)
+        engineStore = mockk(relaxed = true)
+        audioStore = mockk(relaxed = true)
+        syncPlayCastStore = mockk(relaxed = true)
+        editBlocks.clear()
         every { projections.playbackPreferences } returns MutableStateFlow(PlaybackPreferences())
         every { appearanceStore.showAdvancedSettings } returns MutableStateFlow(false)
         every { editScope.playback } returns playbackStore
         every { editScope.videoPlayer } returns videoPlayerStore
+        every { editScope.engine } returns engineStore
+        every { editScope.audio } returns audioStore
+        every { editScope.syncPlayCast } returns syncPlayCastStore
+        // List capture for the multi-block top-ups below (the per-test slot in
+        // [captureEdit] re-stubs over this when a suite wants a single block).
+        every { editor.edit(capture(editBlocks)) } returns mockk<Job>()
     }
 
     @AfterTest
@@ -141,5 +171,74 @@ class PlaybackSettingsViewModelTest {
 
         verify(exactly = 1) { editor.resetCategory(PreferenceResetCategory.PLAYBACK) }
         verify(exactly = 1) { editor.resetCategory(PreferenceResetCategory.PLAYER_ENGINES) }
+    }
+
+    // ------------------------------------------------------- top-up round
+
+    /** Replays the blocks captured by the setUp list stub, in call order. */
+    private suspend fun replayAllEdits() = editBlocks.forEach { it.invoke(editScope) }
+
+    @Test
+    fun `engine-config setters persist through the engine store`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.setMpvConfig(MpvEngineConfig())
+        viewModel.setLibVlcConfig(LibVlcEngineConfig())
+        viewModel.setExoPlayerConfig(ExoPlayerEngineConfig())
+        advanceUntilIdle()
+        replayAllEdits()
+
+        coVerify(exactly = 1) { engineStore.setMpvConfig(any()) }
+        coVerify(exactly = 1) { engineStore.setLibVlcConfig(any()) }
+        coVerify(exactly = 1) { engineStore.setExoPlayerConfig(any()) }
+    }
+
+    @Test
+    fun `audio-delay persists through the AUDIO store, not videoPlayer`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.setAudioDelayMs(250L)
+        advanceUntilIdle()
+        replayAllEdits()
+
+        coVerify(exactly = 1) { audioStore.setAudioDelay(250L) }
+    }
+
+    @Test
+    fun `sync-play and casting setters persist through the syncPlayCast store`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.setSyncPlayToleranceMs(5_000L)
+        viewModel.setBackgroundCastingEnabled(true)
+        viewModel.setPreferredRenderer(null)
+        viewModel.setDefaultCastingStrategy(CastingStrategy.PREFER_DLNA)
+        advanceUntilIdle()
+        replayAllEdits()
+
+        coVerify(exactly = 1) { syncPlayCastStore.setSyncPlayToleranceMs(5_000L) }
+        coVerify(exactly = 1) { syncPlayCastStore.setBackgroundCastingEnabled(true) }
+        coVerify(exactly = 1) { syncPlayCastStore.setPreferredRenderer(null) }
+        coVerify(exactly = 1) { syncPlayCastStore.setDefaultCastingStrategy(CastingStrategy.PREFER_DLNA) }
+    }
+
+    @Test
+    fun `segment behavior persists through the videoPlayer store`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.setSegmentBehavior(MediaSegmentType.INTRO, SegmentBehavior.AUTO_SKIP)
+        advanceUntilIdle()
+        replayAllEdits()
+
+        coVerify(exactly = 1) { videoPlayerStore.setSegmentBehavior(MediaSegmentType.INTRO, SegmentBehavior.AUTO_SKIP) }
+    }
+
+    @Test
+    fun `single-category reset delegates to the editor`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.resetCategory(PreferenceResetCategory.PLAYBACK)
+        advanceUntilIdle()
+
+        verify(exactly = 1) { editor.resetCategory(PreferenceResetCategory.PLAYBACK) }
     }
 }

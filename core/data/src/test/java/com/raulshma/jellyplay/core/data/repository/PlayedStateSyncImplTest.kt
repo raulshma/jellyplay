@@ -190,6 +190,45 @@ class PlayedStateSyncImplTest {
     }
 
     @Test
+    fun `reconcile pushes played when an unsynced PLAYED intent exists (#153)`() = runTest {
+        // The watched flip never reached the server (pending or dead-lettered
+        // outbox row): the server's unplayed state is NOT newer knowledge, so
+        // reconcile must push the local fact instead of erasing it.
+        every { offlineModeManager.isOffline } returns false
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = true)
+        coEvery { playbackOutboxRepository.hasUnsyncedPlayedIntent("item-1") } returns true
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
+            mediaDetail(mediaItem(isPlayed = false))
+        )
+        coEvery { apiClient.markPlayed("item-1") } returns Result.success(Unit)
+
+        val result = sync.reconcileOfflineRow("item-1")
+
+        assertEquals(PlayedStateSync.ComputeResult.PLAYED, result)
+        coVerify(exactly = 0) { offlineRepository.applyPlayedState("item-1", isPlayed = false) }
+        coVerify(exactly = 1) { apiClient.markPlayed("item-1") }
+    }
+
+    @Test
+    fun `reconcile re-stages the intent when the push for an unsynced flip fails (#153)`() = runTest {
+        every { offlineModeManager.isOffline } returns false
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = true)
+        coEvery { playbackOutboxRepository.hasUnsyncedPlayedIntent("item-1") } returns true
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
+            mediaDetail(mediaItem(isPlayed = false))
+        )
+        coEvery { apiClient.markPlayed("item-1") } returns Result.failure(RuntimeException("offline"))
+
+        val result = sync.reconcileOfflineRow("item-1")
+
+        // The flip's failure fallback re-stages the intent in the outbox and
+        // reports success; nothing was cleared locally.
+        assertEquals(PlayedStateSync.ComputeResult.PLAYED, result)
+        coVerify(exactly = 0) { offlineRepository.applyPlayedState("item-1", isPlayed = false) }
+        coVerify(exactly = 1) { playbackOutboxRepository.enqueuePlayedState("item-1", isPlayed = true) }
+    }
+
+    @Test
     fun `reconcile updates position when server is newer`() = runTest {
         // Server lastPlayedDate is recent past (newer than the 2020 offline row,
         // but not future-dated — the impl guards against future server clocks).

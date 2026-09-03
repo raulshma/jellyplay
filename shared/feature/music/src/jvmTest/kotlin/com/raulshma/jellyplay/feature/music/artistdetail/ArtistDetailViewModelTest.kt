@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_mix_unavailable
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -187,5 +188,53 @@ class ArtistDetailViewModelTest {
         viewModel.consumeMixEvent()
 
         assertNull(viewModel.mixFirstTrackId)
+    }
+
+    // ── Load failure split: albums failure is silent ─────────────────────────
+
+    @Test
+    fun loadArtist_albumsFailure_isSilentAndStillClearsLoading() = runTest(mainDispatcher) {
+        // The albums branch has an onSuccess but no onFailure: a failed album
+        // read leaves the list empty and surfaces no error (the detail is the
+        // screen's identity — if that fails, the error path fires instead).
+        coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns Result.success(
+            MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
+        )
+        coEvery { mediaRepository.getArtistAlbums("ar1", any()) } returns
+            Result.failure(RuntimeException("albums gone"))
+
+        viewModel.loadArtist("ar1")
+        advanceUntilIdle()
+
+        assertEquals("Artist", viewModel.artistName)
+        assertEquals(emptyList(), viewModel.albums)
+        assertNull(viewModel.error)
+        assertFalse(viewModel.isLoading)
+    }
+
+    @Test
+    fun refreshArtist_bypassesTheDetailCache() = runTest(mainDispatcher) {
+        loadArtist()
+        advanceUntilIdle()
+        coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.success(
+            MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
+        )
+        coEvery { mediaRepository.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+
+        viewModel.refreshArtist("ar1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.getMediaDetail("ar1", true) }
+        assertEquals(albums, viewModel.albums)
+        assertFalse(viewModel.isLoading)
+    }
+
+    @Test
+    fun getImageUrl_andBackdrop_delegateToProvider() {
+        every { imageUrlProvider.getImageUrl("i1") } returns "img"
+        every { imageUrlProvider.getBackdropUrl("i1") } returns "bd"
+
+        assertEquals("img", viewModel.getImageUrl("i1"))
+        assertEquals("bd", viewModel.getBackdropUrl("i1"))
     }
 }
