@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
@@ -22,6 +24,8 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
 import com.raulshma.jellyplay.core.ui.components.SeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
+import com.raulshma.jellyplay.core.ui.components.mouseDragToScroll
+import com.raulshma.jellyplay.core.ui.components.mouseWheelToHorizontalScroll
 
 /**
  * A single display-only (non-user-scrollable) horizontal row of [SeerrMediaCard]s.
@@ -86,7 +90,12 @@ internal fun SeerrDiscoverRow(
         // simply inert on them rather than opening a different affordance.
         LocalMediaPreviewController provides null,
     ) {
+        // userScrollEnabled stays false (the row is display-only for touch),
+        // but the state is hoisted so the desktop mouse-drag / wheel modifiers
+        // can still scroll it — on desktop this row was otherwise unscrollable.
+        val rowState = rememberLazyListState()
         LazyRow(
+            state = rowState,
             modifier = Modifier
                 .fillMaxWidth()
                 .focusGroup()
@@ -95,7 +104,9 @@ internal fun SeerrDiscoverRow(
                 // Stay transparent over the ambient backdrop (matches the media
                 // rows); otherwise paint the flat background colour.
                 .then(if (homeBackdropEnabled) Modifier else Modifier.background(backgroundColor))
-                .padding(horizontal = rowHorizontalPadding, vertical = spacing / 2),
+                .padding(horizontal = rowHorizontalPadding, vertical = spacing / 2)
+                .mouseDragToScroll(rowState, Orientation.Horizontal)
+                .mouseWheelToHorizontalScroll(rowState),
             horizontalArrangement = Arrangement.spacedBy(spacing),
             userScrollEnabled = false,
         ) {

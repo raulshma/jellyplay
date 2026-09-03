@@ -59,6 +59,8 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.navigation.applyNavCustomization
+import com.raulshma.jellyplay.core.ui.navigation.navKey
 import com.raulshma.jellyplay.core.ui.tv.LocalTvDrawerOpener
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -120,6 +122,32 @@ internal fun isExcludedTvDrawerFolder(folder: LibraryFolder): Boolean {
     return folder.collectionType == null &&
         folder.name.equals("Recordings", ignoreCase = true)
 }
+
+/**
+ * TV-drawer primary destinations in display order (#152).
+ *
+ * The drawer has no overflow menu, so Shortcuts rides as an explicit primary
+ * item — but its *position* still comes from the stored nav customization like
+ * every other item. [baseRoutes] arrive pre-customized (hidden items dropped,
+ * survivors in stored relative order) from the shared [applyNavCustomization]
+ * pass, so Shortcuts is appended to the candidates and the union is ranked by
+ * [navItemOrder] through the same contract: unknown order entries are ignored
+ * and routes missing from the order keep their input relative order (which
+ * puts a never-reordered Shortcuts last, preserving the legacy layout).
+ *
+ * Keys are [navKey] literals on both sides — never `simpleName`, which R8
+ * obfuscates in release builds.
+ */
+internal fun tvPrimaryRoutes(
+    baseRoutes: List<Route>,
+    includeShortcuts: Boolean,
+    navItemOrder: List<String>,
+): List<Route> = applyNavCustomization(
+    items = baseRoutes + listOfNotNull(Route.Shortcuts.takeIf { includeShortcuts }),
+    keyOf = { it.navKey },
+    hiddenNavItems = emptySet(),
+    navItemOrder = navItemOrder,
+)
 
 private fun libraryIcon(collectionType: String?): ImageVector = when (collectionType?.lowercase()) {
     "movies" -> Tabler.Outline.Movie

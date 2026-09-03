@@ -33,6 +33,16 @@
 # Navigation 3
 -dontwarn androidx.navigation3.**
 
+# Navigation routes — the restore contract persists back-stack entries as
+# `{type = <binary class name>, value = ...}` via nav3's reflective
+# NavKeySerializer (Class.forName), and the nav-customization vocabulary
+# historically derived keys from simple names (#152). Neither kotlinx-
+# serialization (explicit allowobfuscation) nor navigation3 (empty consumer
+# rules) keeps these names, so pin them here — without this, every
+# name-derived comparison silently stops matching in minified release builds
+# while debug builds keep working.
+-keep class com.raulshma.jellyplay.core.ui.navigation.Route**
+
 # DataStore
 -dontwarn androidx.datastore.**
 
