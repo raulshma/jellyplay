@@ -463,10 +463,12 @@ fun main() {
             startupPerf.markFirstFrame(System.nanoTime())
         }
 
-        // File→Refresh (Ctrl+R) signal into DesktopAppRoot's home entry.
+        // File→Refresh (Ctrl+R) signal into DesktopAppRoot. The scaffold dispatches
+        // it to whatever pull-to-refresh screen is active via
+        // LocalPullToRefreshRegistry (see DesktopNavScaffold).
         // extraBufferCapacity=1 keeps tryEmit non-suspending and coalesces
         // repeat invocations while a refresh is already running.
-        val homeRefreshRequests = remember {
+        val menuRefreshRequests = remember {
             kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         }
 
@@ -495,7 +497,7 @@ fun main() {
                 if (event.type != KeyEventType.KeyDown) {
                     false
                 } else if (event.isCtrlPressed && event.key == Key.R) {
-                    homeRefreshRequests.tryEmit(Unit)
+                    menuRefreshRequests.tryEmit(Unit)
                     true
                 } else if (event.isCtrlPressed && event.key == Key.Q) {
                     exitApplication()
@@ -619,7 +621,7 @@ fun main() {
                             onMinimize = { windowState.isMinimized = true },
                             onToggleMaximize = toggleMaximize,
                             onClose = ::exitApplication,
-                            onRefresh = { homeRefreshRequests.tryEmit(Unit) },
+                            onRefresh = { menuRefreshRequests.tryEmit(Unit) },
                             onExit = ::exitApplication,
                             onToggleFullscreen = toggleFullscreen,
                             isFullscreenActive = windowState.placement == WindowPlacement.Fullscreen,
@@ -633,7 +635,7 @@ fun main() {
                         // Wave 13B session harness only (screenshots + key
                         // injection); unused on every normal boot path.
                         windowRef = windowRef,
-                        homeRefreshRequests = homeRefreshRequests,
+                        menuRefreshRequests = menuRefreshRequests,
                     )
                 }
             }

@@ -23,7 +23,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
@@ -57,6 +59,7 @@ import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences
+import com.raulshma.jellyplay.core.ui.components.mouseScroll
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -327,13 +330,20 @@ private fun HorizontalMediaScroller(
             itemWidth = itemWidth,
             itemSpacing = spacing,
             contentPadding = PaddingValues(0.dp),
-            modifier = modifier.padding(horizontal = contentPad),
+            modifier = modifier
+                .mouseScroll(carouselState, Orientation.Horizontal)
+                .padding(horizontal = contentPad),
         ) { index -> itemContent(index) }
     } else {
+        // Hoisted so the desktop mouse-drag / wheel-scroll modifiers below can
+        // drive the same state the touch gestures use.
+        val lazyListState = rememberLazyListState()
         LazyRow(
+            state = lazyListState,
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
-            modifier = modifier,
+            modifier = modifier
+                .mouseScroll(lazyListState, Orientation.Horizontal),
         ) {
             // Stable keys + contentType let Compose preserve scroll position
             // across recompositions and reuse item slots efficiently.

@@ -805,6 +805,7 @@ private fun MainContent(
                     tvDrawerListState = tvDrawerListState,
                     libraryFolders = libraryFolders,
                     hiddenNavItems = preferences.hiddenNavItems,
+                    navItemOrder = preferences.navItemOrder,
                     nowPlayingEnabled = audioItemId != null,
                     showMiniPlayer = showMiniPlayer,
                     audioPlaybackManager = audioPlaybackManager,
@@ -957,6 +958,7 @@ private fun TvContent(
     tvDrawerListState: androidx.compose.foundation.lazy.LazyListState,
     libraryFolders: List<com.raulshma.jellyplay.core.model.LibraryFolder>,
     hiddenNavItems: Set<String> = emptySet(),
+    navItemOrder: List<String> = emptyList(),
     nowPlayingEnabled: Boolean,
     showMiniPlayer: Boolean,
     audioPlaybackManager: AudioPlaybackManager,
@@ -988,24 +990,26 @@ private fun TvContent(
             // fresh TvNavItem instances each time, invalidating the drawer.
             // Shortcuts is no longer a top-level tab on phone (relocated to the
             // ⋮ overflow). The TV drawer has no overflow menu, so keep Shortcuts
-            // reachable here as an explicit primary item.
+            // reachable here as an explicit primary item — positioned by the
+            // stored nav order like every other item (#152).
             val shortcutsLabel = stringResource(R.string.menu_shortcuts)
-            val primaryNavItems = remember(activeTopLevelRoutes, shortcutsLabel, hiddenNavItems) {
-                val baseItems = activeTopLevelRoutes.entries.map { (route, label) ->
+            val primaryNavItems = remember(activeTopLevelRoutes, shortcutsLabel, hiddenNavItems, navItemOrder) {
+                tvPrimaryRoutes(
+                    baseRoutes = activeTopLevelRoutes.keys.toList(),
+                    includeShortcuts = SHORTCUTS_NAV_KEY !in hiddenNavItems,
+                    navItemOrder = navItemOrder,
+                ).map { route ->
+                    // Shortcuts's label is a real string resource; the other
+                    // routes carry their display label in activeTopLevelRoutes.
                     TvNavItem(
                         route = route,
-                        label = label,
+                        label = if (route == Route.Shortcuts) {
+                            shortcutsLabel
+                        } else {
+                            activeTopLevelRoutes.getValue(route)
+                        },
                         icon = routeToIcon(route),
                     )
-                }
-                if (SHORTCUTS_NAV_KEY !in hiddenNavItems) {
-                    baseItems + TvNavItem(
-                        route = Route.Shortcuts,
-                        label = shortcutsLabel,
-                        icon = routeToIcon(Route.Shortcuts),
-                    )
-                } else {
-                    baseItems
                 }
             }
             TvNavigationDrawer(

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.home
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +47,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.components.mouseScroll
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import androidx.compose.ui.graphics.Color
 import coil3.size.Size as CoilSize
@@ -129,8 +132,13 @@ fun HomeSearchResultsOverlay(
             val movieLabel = stringResource(Res.string.home_movie)
             val seriesLabel = stringResource(Res.string.home_tv_show)
             val musicLabel = stringResource(Res.string.home_music)
+            val resultsListState = rememberLazyListState()
             LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
+                state = resultsListState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // Desktop: mouse drag scrolls the results (wheel already does).
+                    .mouseScroll(resultsListState, Orientation.Vertical),
                 contentPadding = PaddingValues(vertical = 8.dp),
             ) {
                 if (!hasAnyResults && searchHistory.isNotEmpty()) {
