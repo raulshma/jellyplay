@@ -16,6 +16,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -73,5 +74,49 @@ class SeriesViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.error?.contains("boom") == true)
+    }
+
+    // ── Detail sheet round trip ──────────────────────────────────────────────
+
+    @Test
+    fun dismissDetail_clears_the_selected_series_timer() = runTest(mainDispatcher) {
+        val timer = DvrSeriesTimer(id = "st-1", name = "Nightly News")
+        viewModel.showDetail(timer)
+        assertEquals(timer, viewModel.uiState.value.selectedTimer)
+
+        viewModel.dismissDetail()
+
+        assertNull(viewModel.uiState.value.selectedTimer)
+    }
+
+    // ── Cancel paths ─────────────────────────────────────────────────────────
+
+    @Test
+    fun cancelSeries_failure_surfaces_the_error_and_keeps_the_sheet_open() = runTest(mainDispatcher) {
+        coEvery { mediaRepository.cancelSeriesTimer("st-1") } returns Result.failure(RuntimeException("denied"))
+        val timer = DvrSeriesTimer(id = "st-1", name = "Nightly News")
+        viewModel.showDetail(timer)
+
+        viewModel.cancelSeries("st-1")
+        advanceUntilIdle()
+
+        assertEquals("denied", viewModel.uiState.value.error)
+        assertEquals(timer, viewModel.uiState.value.selectedTimer)
+    }
+
+    @Test
+    fun cancelSeries_success_clears_the_selection_and_reloads_the_list() = runTest(mainDispatcher) {
+        val timers = listOf(DvrSeriesTimer(id = "st-1", name = "Nightly News"))
+        coEvery { mediaRepository.getSeriesTimers(any()) } returns Result.success(timers)
+        coEvery { mediaRepository.cancelSeriesTimer("st-1") } returns Result.success(Unit)
+
+        viewModel.cancelSeries("st-1")
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.selectedTimer)
+        assertEquals(timers, viewModel.uiState.value.seriesTimers)
+        assertFalse(viewModel.uiState.value.isLoading)
+        // init load + post-cancel reload.
+        coVerify(exactly = 2) { mediaRepository.getSeriesTimers(any()) }
     }
 }

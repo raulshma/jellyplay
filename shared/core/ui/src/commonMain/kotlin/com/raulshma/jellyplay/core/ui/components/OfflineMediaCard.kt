@@ -14,12 +14,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.Download
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -52,6 +53,11 @@ fun OfflineMediaCard(
      * the affordance.
      */
     showStatusBadge: Boolean = true,
+    // Row-level parity passthroughs (#147): the offline home rows render the
+    // same chrome as online rows — bottom scrim, card clipping, shared-element
+    // transitions — instead of a visually thinner card.
+    gradientBrush: Brush? = null,
+    clipToShape: Boolean = false,
 ) {
     // Memoised so recompositions of this card don't re-run the mapping or
     // re-allocate the fallback list (unstable List params would otherwise
@@ -78,6 +84,8 @@ fun OfflineMediaCard(
             sharedElementKey = sharedElementKey,
             showProgress = hasProgress,
             progressPercent = progressFraction,
+            clipToShape = clipToShape,
+            gradientBrush = gradientBrush,
         )
 
         // Watched state is rendered solely by PosterCard's pref-gated tick
@@ -88,14 +96,22 @@ fun OfflineMediaCard(
         // standalone library where completed vs in-flight states matter.
         if (showStatusBadge) {
             when (item.downloadStatus) {
-                DownloadStatus.COMPLETED -> OfflineStatusChip(
-                    label = stringResource(Res.string.core_ui_downloaded),
-                    icon = Tabler.Outline.Check,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp),
-                )
+                DownloadStatus.COMPLETED ->
+                    // A watched item already renders PosterCard's tick badge in
+                    // this exact corner (#147) — stacking the chip here produced
+                    // two check-style "watched" indicators at once. And for the
+                    // unwatched case the chip carries the Download glyph, not a
+                    // check, so it can never read as a second watched style.
+                    if (!mediaItem.isPlayed) {
+                        OfflineStatusChip(
+                            label = stringResource(Res.string.core_ui_downloaded),
+                            icon = Tabler.Outline.Download,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp),
+                        )
+                    }
                 DownloadStatus.DOWNLOADING -> {
                     val progress = if (item.totalSizeBytes > 0) {
                         (item.downloadedBytes.toFloat() / item.totalSizeBytes).coerceIn(0f, 1f)
@@ -121,7 +137,7 @@ fun OfflineMediaCard(
 @Composable
 private fun OfflineStatusChip(
     label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     tint: Color,
     modifier: Modifier = Modifier,
 ) {

@@ -656,4 +656,60 @@ class RequestsViewModelTest {
         verify(exactly = 1) { seerrRepository.stopPolling() }
         assertNotNull(viewModel)
     }
+
+    // ── single-request retry / delete / decline ───────────────────────────
+
+    @Test
+    fun retryRequest_delegates_to_the_repository_and_refreshes() = runTest(mainDispatcher) {
+        stubRequests { Result.success(page(listOf(item(1)))) }
+        coEvery { seerrRepository.retryRequest(1) } returns Result.success(item(1))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        val callsAfterInit = requestCalls.size
+
+        viewModel.retryRequest(1)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { seerrRepository.retryRequest(1) }
+        assertFalse(viewModel.state.value.actionInProgress)
+        assertNull(viewModel.state.value.actionError)
+        // The post-action refresh fired a fresh first-page query (skip 0).
+        assertEquals(callsAfterInit + 1, requestCalls.size)
+        assertEquals(0, requestCalls.last().skip)
+    }
+
+    @Test
+    fun deleteRequest_delegates_to_the_repository_and_refreshes() = runTest(mainDispatcher) {
+        stubRequests { Result.success(page(listOf(item(1)))) }
+        coEvery { seerrRepository.deleteRequest(1) } returns Result.success(Unit)
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        val callsAfterInit = requestCalls.size
+
+        viewModel.deleteRequest(1)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { seerrRepository.deleteRequest(1) }
+        assertFalse(viewModel.state.value.actionInProgress)
+        assertNull(viewModel.state.value.actionError)
+        assertEquals(callsAfterInit + 1, requestCalls.size)
+        assertEquals(0, requestCalls.last().skip)
+    }
+
+    @Test
+    fun single_declineRequest_failure_sets_actionError_and_skips_the_refresh() = runTest(mainDispatcher) {
+        stubRequests { Result.success(page(listOf(item(1)))) }
+        coEvery { seerrRepository.declineRequest(1) } returns Result.failure(RuntimeException("denied"))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        val callsAfterInit = requestCalls.size
+
+        viewModel.declineRequest(1)
+        advanceUntilIdle()
+
+        assertEquals("denied", viewModel.state.value.actionError)
+        assertFalse(viewModel.state.value.actionInProgress)
+        // Failure path keeps the list as-is — no refresh query fired.
+        assertEquals(callsAfterInit, requestCalls.size)
+    }
 }

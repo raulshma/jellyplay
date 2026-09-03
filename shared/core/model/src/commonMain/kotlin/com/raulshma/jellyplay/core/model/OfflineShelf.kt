@@ -46,10 +46,17 @@ fun OfflineMediaItem.matchesOfflineQuery(query: String): Boolean {
 val OFFLINE_WATCHED_THRESHOLD_PERCENT: Double = OFFLINE_WATCHED_THRESHOLD * 100
 
 /**
+ * True when a played percentage counts as watched — the one comparison every
+ * surface holding a raw percentage should use, so it cannot drift from
+ * [isFinishedOffline]'s rule.
+ */
+fun isWatchedPercentage(percentage: Double): Boolean = percentage >= OFFLINE_WATCHED_THRESHOLD_PERCENT
+
+/**
  * Finished by the same rule the display normalization
  * ([OfflineMediaItem.toMediaItem]) and the player's watched trigger use —
  * one fact, owned by [OFFLINE_WATCHED_THRESHOLD]; read it instead of
  * re-deriving the percentage math per surface.
  */
 val OfflineMediaItem.isFinishedOffline: Boolean
-    get() = playedPercentage >= OFFLINE_WATCHED_THRESHOLD_PERCENT
+    get() = isWatchedPercentage(playedPercentage)

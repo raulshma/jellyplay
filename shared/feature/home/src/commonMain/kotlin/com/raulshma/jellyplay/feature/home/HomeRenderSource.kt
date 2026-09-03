@@ -46,20 +46,24 @@ sealed interface HomeRenderSource {
  * The single offline-render predicate every home surface shares.
  *
  * Priority order matters: explicit offline wins outright; online requires a
- * healthy fetch. A failed, empty fetch is the implicit-offline precondition —
- * [FallbackPending] until the first library emission proves downloads exist
- * ([Offline.Implicit]) or don't (back to [Online], the hard-error screen).
+ * healthy fetch. A failed fetch is the implicit-offline precondition — stale
+ * cached sections do NOT keep the online feed alive (they can't refresh, so
+ * Continue Watching / Next Up would freeze at the pre-failure server
+ * snapshot): [FallbackPending] until the first library emission proves
+ * downloads exist ([Offline.Implicit]) or don't (back to [Online], where the
+ * hard-error screen still requires empty sections — see
+ * [homeSurface]).
  *
  * Public because [HomeUiState.renderSource] exposes it.
  */
 fun computeHomeRenderSource(
     offlineMode: OfflineMode,
-    fetchFailedEmpty: Boolean,
+    fetchFailed: Boolean,
     offlineLibrary: List<OfflineMediaItem>,
     fallbackPending: Boolean,
 ): HomeRenderSource = when {
     offlineMode != OfflineMode.ONLINE -> HomeRenderSource.Offline.Explicit
-    !fetchFailedEmpty -> HomeRenderSource.Online
+    !fetchFailed -> HomeRenderSource.Online
     fallbackPending -> HomeRenderSource.FallbackPending
     offlineLibrary.isNotEmpty() -> HomeRenderSource.Offline.Implicit
     else -> HomeRenderSource.Online

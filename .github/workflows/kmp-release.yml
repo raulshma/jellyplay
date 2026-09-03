@@ -1,15 +1,22 @@
 name: KMP Alpha Release
 
-# KMP alpha channel (kmp-alpha branch): publishes the DESKTOP installers and
-# the WEB wasm bundle as a GitHub PRE-RELEASE tagged v<x.y.z>-alpha.N. The
-# Android stable lane stays in release.yml — these two never mix:
-#  * release.yml's branch trigger excludes v*-… dashes, and
+# KMP alpha channel (release-alpha/* branches): publishes the DESKTOP
+# installers and the WEB wasm bundle as a GitHub PRE-RELEASE tagged
+# v<x.y.z>-alpha.N. The Android stable lane stays in release.yml — these two
+# never mix:
+#  * release-alpha/* is its own namespace: release.yml's v* and release/**
+#    triggers can never match it, and
 #  * prerelease:true keeps these off /releases/latest, so the Android
 #    in-app update checker (GitHubReleasesApiImpl) never offers an alpha.
 #
-# Push a branch named after the target version with the channel suffix —
-# v0.11.0-alpha — and this lane bumps the ordinal per existing tags
-# (v0.11.0-alpha.1, -alpha.2, …). The desktop packageVersion stays numeric
+# Push a branch under release-alpha/ named after the target version —
+# release-alpha/v0.11.0 — and this lane bumps the ordinal per existing tags
+# (v0.11.0-alpha.1, -alpha.2, …). No channel suffix needed on the version:
+# the version script reads the channel from the namespace (the -alpha in
+# release-alpha), so the branch name alone pins the tag to v<x.y.z>-alpha.N.
+# Top-level dashed branches (v0.11.0-alpha) no longer trigger this lane —
+# release-alpha/* is the only push path to a desktop/web release. The
+# desktop packageVersion stays numeric
 # (jpackage/msi constraint, apps/desktop/build.gradle.kts); the alpha marker
 # rides the display version (-PjellyplayVersionName → About screen) and the
 # release tag + asset names.
@@ -17,7 +24,7 @@ name: KMP Alpha Release
 on:
   push:
     branches:
-      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+      - 'release-alpha/**'
   workflow_dispatch:
 
 # Least-privilege GITHUB_TOKEN default; the release job below escalates to

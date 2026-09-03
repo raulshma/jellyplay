@@ -59,15 +59,34 @@ interface PlayedStateSync {
      *   - Server unplayed but local played → mirror the flip + hierarchy cascade.
      *   - Otherwise → most-recent activity wins by timestamp.
      *
-     * Returns [ComputeResult] so the caller does not re-derive inputs; returns
-     * null when there is nothing to reconcile (no offline row, no server row,
-     * stale/future timestamps).
+     * Returns [ReconcileOutcome] so the caller does not re-derive inputs —
+     * notably [ReconcileOutcome.UndeliveredIntent], which the sync worker
+     * must treat as a failed drain (#153).
      */
-    suspend fun reconcileOfflineRow(itemId: String): ComputeResult?
+    suspend fun reconcileOfflineRow(itemId: String): ReconcileOutcome
 
     /**
      * Outcome of a reconcile attempt. Exposed so the worker can log/count
      * without reaching back into the offline store for state it just wrote.
+     */
+    sealed interface ReconcileOutcome {
+        /** Row merged; [result] names what changed. */
+        data class Changed(val result: ComputeResult) : ReconcileOutcome
+
+        /** Nothing to do — no offline/server row, or stale/equal/future timestamps. */
+        data object NoChange : ReconcileOutcome
+
+        /**
+         * A played-state intent push did not land (flip() failed server-side
+         * and re-staged the outbox row). The caller must treat this as a
+         * failure: returning success would strand the freshly enqueued row
+         * until the 4h periodic backstop (#153).
+         */
+        data object UndeliveredIntent : ReconcileOutcome
+    }
+
+    /**
+     * The per-fact change a [ReconcileOutcome.Changed] reconcile made.
      */
     enum class ComputeResult { PLAYED, UNPLAYED, POSITION_UPDATED, NOOP }
 

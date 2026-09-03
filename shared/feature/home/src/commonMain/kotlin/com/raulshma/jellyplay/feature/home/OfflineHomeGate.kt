@@ -31,14 +31,15 @@ import kotlinx.coroutines.launch
  *
  * Interface: [state] ([OfflineHomeState] carries the render source plus both
  * offline lists). Inputs: the offline mode and the refresher's
- * `fetchFailedEmpty`. The fold keys on the SAME gate emission that opened the
+ * `fetchFailed`. The fold keys on the SAME gate emission that opened the
  * collection (the gate value is paired into every library emission inside
  * `flatMapLatest`), so the lag race the old mirror worked around is
  * structurally impossible here.
  *
  * The underlying repository flows re-emit on every download-progress write,
  * so they are collected ONLY while the gate is open (any offline mode, or an
- * online fetch that failed leaving nothing to show); the upstream collection
+ * online fetch that failed — the stale cached sections cannot refresh, so
+ * the offline rows take over); the upstream collection
  * is cancelled while the online home renders.
  *
  * [homeLayoutProvider] supplies the cached online home layout (see
@@ -49,7 +50,7 @@ internal class OfflineHomeGate(
     scope: CoroutineScope,
     offlineMode: Flow<OfflineMode>,
     offlineRepository: OfflineRepository,
-    fetchFailedEmpty: Flow<Boolean>,
+    fetchFailed: Flow<Boolean>,
     homeLayoutProvider: suspend () -> List<HomeSection> = { emptyList() },
 ) {
     private val _state = MutableStateFlow(OfflineHomeState())
@@ -58,7 +59,7 @@ internal class OfflineHomeGate(
     /** The gate value both collectors key on — see [OfflineGate.isCollecting]. */
     private val gate: Flow<OfflineGate> = combine(
         offlineMode,
-        fetchFailedEmpty,
+        fetchFailed,
     ) { mode, failedEmpty -> OfflineGate(mode, failedEmpty) }
         .distinctUntilChanged()
 
@@ -84,7 +85,7 @@ internal class OfflineHomeGate(
                             offlineLibrary = emission.items,
                             renderSource = computeHomeRenderSource(
                                 offlineMode = gate.mode,
-                                fetchFailedEmpty = gate.fetchFailedEmpty,
+                                fetchFailed = gate.fetchFailed,
                                 offlineLibrary = emission.items,
                                 fallbackPending = emission.pending,
                             ),
@@ -152,15 +153,15 @@ internal data class OfflineHomeState(
 
 /**
  * The offline collection gate value: [isCollecting] is the predicate both
- * collectors key on, and [mode]/[fetchFailedEmpty] feed
+ * collectors key on, and [mode]/[fetchFailed] feed
  * [computeHomeRenderSource] so the render-source fold reads the same gate
  * emission that opened/closed the collection.
  */
 internal data class OfflineGate(
     val mode: OfflineMode,
-    val fetchFailedEmpty: Boolean,
+    val fetchFailed: Boolean,
 ) {
-    val isCollecting: Boolean get() = mode != OfflineMode.ONLINE || fetchFailedEmpty
+    val isCollecting: Boolean get() = mode != OfflineMode.ONLINE || fetchFailed
 }
 
 /**

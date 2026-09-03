@@ -30,6 +30,42 @@ interface PlaybackOutboxDao {
     @Query("SELECT * FROM playback_outbox WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): PlaybackOutboxEntity?
 
+    /**
+     * Whether an undelivered intent row of [eventType] exists for [itemId] —
+     * pending OR dead-lettered. Dead-lettered rows are included on purpose:
+     * the intent never reached the server, so callers reconciling
+     * "server unplayed vs local played" must not treat the server's state as
+     * newer knowledge (#153).
+     *
+     * Known limitation: the row is keyed by itemId only — the whole offline
+     * mirror (`playback_state`, `offline_media`) is single-user-per-database,
+     * so this query inherits that assumption rather than scoping to a userId.
+     */
+    @Query(
+        """
+        SELECT EXISTS(
+            SELECT 1 FROM playback_outbox
+            WHERE itemId = :itemId AND eventType = :eventType
+        )
+        """
+    )
+    suspend fun hasUnsyncedIntent(itemId: String, eventType: String): Boolean
+
+    /**
+     * Deletes the item's rows for the given event types (pending and
+     * dead-lettered) once a push has delivered the latest local intent to the
+     * server. Without this, a dead-lettered flip that is later re-pushed by
+     * reconciliation would be re-pushed on every reconcile — forever
+     * overriding newer state set on other devices (#153).
+     */
+    @Query(
+        """
+        DELETE FROM playback_outbox
+        WHERE itemId = :itemId AND eventType IN (:eventTypes)
+        """
+    )
+    suspend fun deleteByItemAndTypes(itemId: String, eventTypes: List<String>)
+
     @Query("SELECT * FROM playback_outbox WHERE deadLetter = 0 ORDER BY createdAt ASC")
     suspend fun getAll(): List<PlaybackOutboxEntity>
 

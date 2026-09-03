@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -91,5 +92,63 @@ class CastAndCrewViewModelTest {
         assertTrue(viewModel.uiState.value is CastAndCrewUiState.Error)
         // Retry is owned by the data layer; this layer must not re-issue calls.
         coVerify(exactly = 1) { mediaRepository.getMediaDetail("m1") }
+    }
+
+    @Test
+    fun `load failure with null message falls back to the generic error`() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.failure(IllegalStateException())
+
+        viewModel.load("m1")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state is CastAndCrewUiState.Error)
+        assertEquals("Failed to load", (state as CastAndCrewUiState.Error).message)
+    }
+
+    @Test
+    fun `load resets a prior Success state to Loading before resolving`() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail(any()) } returns Result.success(
+            MediaDetail(
+                item = MediaItem(id = "m1", name = "Movie 1", mediaType = MediaType.MOVIE),
+                people = listOf(PersonInfo(id = "p1", name = "Actor", type = "Actor")),
+            ),
+        )
+
+        viewModel.load("m1")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is CastAndCrewUiState.Success)
+
+        // A second load for another item must flip back to Loading first — the
+        // previous title's cast must never bleed into the new screen.
+        val gate = kotlinx.coroutines.CompletableDeferred<Result<MediaDetail>>()
+        coEvery { mediaRepository.getMediaDetail("m2") } coAnswers { gate.await() }
+        viewModel.load("m2")
+        advanceUntilIdle()
+
+        assertEquals(CastAndCrewUiState.Loading, viewModel.uiState.value)
+
+        gate.complete(
+            Result.success(
+                MediaDetail(
+                    item = MediaItem(id = "m2", name = "Movie 2", mediaType = MediaType.MOVIE),
+                    people = emptyList(),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state is CastAndCrewUiState.Success)
+        assertEquals("Movie 2", (state as CastAndCrewUiState.Success).title)
+    }
+
+    @Test
+    fun `getImageUrl delegates to the injected provider`() {
+        every { imageUrlProvider.getImageUrl("p1") } returns "http://img/p1"
+
+        assertEquals("http://img/p1", viewModel.getImageUrl("p1"))
     }
 }

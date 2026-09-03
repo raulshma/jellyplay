@@ -113,6 +113,70 @@ class SettingsBackupMigrationTest {
     }
 
     @Test
+    fun `legacy restore fans a video-player field through to its owning store`() = runTest {
+        // The legacy aggregate fans out to every domain store, not just the
+        // playback cluster — a video-player field must land too.
+        val legacy = UserPreferences(videoGesturesEnabled = false, audioDefaultSpeed = 1.5f)
+
+        store.restorePreferences(legacy, restoreSecuritySensitive = false)
+        drainAfterWrite()
+
+        val slices = store.snapshotForBackup().slices
+        val video = PreferencesJson.import.decodeFromJsonElement(
+            com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice.serializer(),
+            slices.getValue(BackupSliceKey.VIDEO_PLAYER),
+        )
+        val audio = PreferencesJson.import.decodeFromJsonElement(
+            com.raulshma.jellyplay.core.datastore.audio.AudioSlice.serializer(),
+            slices.getValue(BackupSliceKey.AUDIO),
+        )
+        assertEquals(false, video.videoGesturesEnabled)
+        assertEquals(1.5f, audio.audioDefaultSpeed)
+    }
+
+    @Test
+    fun `legacy restore writes onboarding flag watch-later and favorites`() = runTest {
+        val legacy = UserPreferences(
+            onboardingCompleted = true,
+            watchLaterPlaylistId = "pl-3",
+            favoriteChannels = setOf("ch-1", "ch-2"),
+        )
+
+        store.restorePreferences(legacy, restoreSecuritySensitive = false)
+        drainAfterWrite()
+
+        val extras = store.snapshotForBackup().extras
+        assertTrue(extras.onboardingCompleted)
+        assertEquals("pl-3", extras.watchLaterPlaylistId)
+        assertEquals(setOf("ch-1", "ch-2"), extras.favoriteChannels)
+    }
+
+    @Test
+    fun `legacy restore without security opt-in preserves the lock config`() = runTest {
+        loadSecurityLocked()
+        val legacy = UserPreferences(pinLockEnabled = false, pinHash = null)
+
+        store.restorePreferences(legacy, restoreSecuritySensitive = false)
+        drainAfterWrite()
+
+        val after = store.securityStoreSnapshot()
+        assertTrue(after.pinLockEnabled, "lock config must survive an opt-out legacy restore")
+        assertEquals("existing-hash", after.pinHash)
+    }
+
+    @Test
+    fun `legacy restore with security opt-in applies the lock config`() = runTest {
+        val legacy = UserPreferences(pinLockEnabled = true, pinHash = "legacy-hash")
+
+        store.restorePreferences(legacy, restoreSecuritySensitive = true)
+        drainAfterWrite()
+
+        val after = store.securityStoreSnapshot()
+        assertTrue(after.pinLockEnabled)
+        assertEquals("legacy-hash", after.pinHash)
+    }
+
+    @Test
     fun `legacy v1 envelope decodes to the aggregate preferences`() = runTest {
         val prefs = UserPreferences(preferredPlayer = PlayerType.MPV)
         val v1 = LegacySettingsBackup(preferences = prefs)

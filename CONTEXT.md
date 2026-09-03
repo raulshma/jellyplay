@@ -386,7 +386,9 @@ independent so large episode batches don't delay the library's
 pending→loaded transition), and the render-source fold, behind one
 `state: StateFlow<OfflineHomeState>` (render source + both offline lists).
 Inputs: `offlineModeManager.offlineMode` and the refresher's
-`fetchFailedEmpty`. The fold keys on the SAME gate emission that opened
+`fetchFailed` (error != null — sections on screen do NOT disqualify the
+fallback; they are the stale pre-failure snapshot the offline rows must
+replace). The fold keys on the SAME gate emission that opened
 the collection (the gate value is paired into every library emission
 inside `flatMapLatest`), so the old mutable-mirror lag race is
 structurally impossible. The VM only folds `OfflineHomeState` into

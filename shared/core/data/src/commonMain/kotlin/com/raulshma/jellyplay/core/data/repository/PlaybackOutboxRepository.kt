@@ -99,6 +99,46 @@ interface PlaybackOutboxRepository {
     /** Snapshot of all pending entries ordered oldest-first. */
     suspend fun drain(): List<PlaybackOutboxEntry>
 
+    /**
+     * Whether an undelivered PLAYED intent (pending or dead-lettered) exists
+     * for [itemId]. Consumers reconciling offline rows against the server use
+     * this to avoid erasing a local watched flag the server never actually
+     * received (#153).
+     */
+    suspend fun hasUnsyncedPlayedIntent(itemId: String): Boolean
+
+    /**
+     * UNPLAYED mirror of [hasUnsyncedPlayedIntent]: an undelivered
+     * mark-unwatched intent exists for [itemId], so the server's "watched"
+     * state must not override the local intent (#153).
+     */
+    suspend fun hasUnsyncedUnplayedIntent(itemId: String): Boolean
+
+    /**
+     * Deletes the item's played-state intent rows (PLAYED/UNPLAYED, pending
+     * and dead-lettered) after a push has delivered the latest local intent
+     * to the server — otherwise a dead-lettered flip re-pushed by
+     * reconciliation would be re-pushed on every later reconcile (#153).
+     */
+    suspend fun deletePlayedStateIntents(itemId: String)
+
+    /**
+     * Delivery probe for a played-state flip push (#153): `flip()` /
+     * `markPlayed` report success even when the server call failed — they
+     * apply locally and (re-)stage the intent row instead, precisely so the
+     * intent survives. The surviving row is therefore the real delivery
+     * signal: absent after the push ⟺ the flip landed on the server.
+     *
+     * Single home for the probe so the drain (`PlaybackSyncWorker`) and
+     * reconcile (`PlayedStateSyncImpl`) cannot drift apart on it.
+     */
+    suspend fun isPlayedStateIntentDelivered(itemId: String, played: Boolean): Boolean =
+        !if (played) {
+            hasUnsyncedPlayedIntent(itemId)
+        } else {
+            hasUnsyncedUnplayedIntent(itemId)
+        }
+
     suspend fun delete(id: String)
 
     /**

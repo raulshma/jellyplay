@@ -79,22 +79,26 @@ eventually. Reporters stay simple.
 ### The outbox
 
 `playback_outbox` table (Room, migrated via `MIGRATION_35_36`). Each row is one
-event: `START`, `PROGRESS`, `STOP`, `PLAYED`, or `UNPLAYED`. The first three
-carry the full playback payload (sessionId, positionTicks, isPaused, playMethod,
-mediaSourceId); `PLAYED`/`UNPLAYED` carry only the target state (a user-driven
-watched flip). All rows carry `recordedAt` (capture time, for reconciliation)
-and `createdAt` (drain ordering).
+event: `START`, `PROGRESS`, `STOP`, `PLAYED`, `UNPLAYED`, `FAVORITE`, or
+`UNFAVORITE`. The first three carry the full playback payload (sessionId,
+positionTicks, isPaused, playMethod, mediaSourceId); `PLAYED`/`UNPLAYED` carry
+only the target state (a user-driven watched flip); `FAVORITE`/`UNFAVORITE`
+carry only the target favorite state. All rows carry `recordedAt` (capture
+time, for reconciliation) and `createdAt` (drain ordering).
 
 **Coalescence** (`PlaybackOutboxRepositoryImpl`):
 - Multiple `PROGRESS` entries for the same item collapse to one — the latest
   position/session/paused state wins. Only the most recent position matters.
 - `START` and `STOP` never coalesce — each is a distinct session boundary.
-- A `STOP` does not delete earlier `PROGRESS` for the item; the worker handles
-  that after a successful drain.
+- Enqueueing a `STOP` deletes earlier pending `PROGRESS` for the item under the
+  coalescence mutex: the STOP carries the final position, and a surviving
+  mid-position PROGRESS could otherwise drain after a dead-lettered STOP and
+  leave the server at a stale mid position.
 - `PLAYED`/`UNPLAYED` use a deterministic id (`played_state:$itemId`) so a
   re-flip REPLACE-lands in place — latest user intent wins, never more than one
   row per item. They do not touch the START/PROGRESS/STOP rows: a final position
-  and a watched state are orthogonal and can coexist.
+  and a watched state are orthogonal and can coexist. `FAVORITE`/`UNFAVORITE`
+  mirror this with `favorite_state:$itemId`.
 
 ### Local resume cache
 
@@ -103,6 +107,19 @@ writes the current position to `offline_media` on every position tick (throttled
 This is what `resolveOfflineResumeTicks` reads when resuming a downloaded item
 offline. The outbox is the *upward* sync path; `offline_media` is the *local*
 resume cache.
+
+Two #153 hardening rules on this write path:
+- Each progress write stamps `isPlayed = isWatchedPercentage(percentage)` —
+  once playback crosses the watched threshold (95%), the local row itself reads
+  as watched, even if the explicit threshold flip was lost to process death.
+- `playback_state`'s upsert keeps `isPlayed` sticky on conflict
+  (`isPlayed = playback_state.isPlayed OR excluded.isPlayed`): a sub-threshold
+  tick racing the threshold flip must never downgrade the row back to unwatched.
+  Only the explicit unwatch path clears the flag.
+
+The session's stop report also falls back to `lastPersistedPositionMs` when the
+engine reports position 0 right after `STATE_ENDED`, so the stop telemetry (and
+the server's chance to resolve final resume position) is not silently dropped.
 
 ## Drain on reconnect
 
@@ -119,17 +136,59 @@ progress captured while the process was killed flushes shortly after launch.
 1. **Bail** if Offline Mode is still enabled → `Result.success()` without
    draining. This releases the unique one-shot work slot; the ready-state
    listener immediately schedules a fresh drain when Offline Mode is disabled.
-2. **Drain** the outbox (oldest-first). For each entry, replay directly through
+2. **Drop superseded telemetry**: once a `PLAYED` flip is staged for an item,
+   its `START`/`PROGRESS`/`STOP` rows are deleted without replay. A trailing
+   STOP replayed after the flip can leave the server with a near-end position
+   and `Played=false` (the #153 "watched offline, online home shows mostly
+   completed" bug), and `markPlayedItem` already records a full-runtime
+   position, so the telemetry carries nothing the flip needs.
+3. **Drain** the outbox (oldest-first). For each entry, replay directly through
    `JellyfinApiClient` (bypassing the repository — a retry must not recurse into
    the outbox). On success, `outbox.delete(id)`. On failure, leave it and mark
    the run as failed.
-3. **Reconcile** each successfully-pushed item (see below).
-4. **Post foreground notification** while draining; dismiss on completion.
-5. **Trigger `UserDataSyncScheduler.enqueueNow()`** so Continue Watching, Next
+4. **Push derived watched flips**: items with no undelivered `PLAYED`/`UNPLAYED`
+   intent row (pending or dead-lettered — the intent row is the authority) that
+   the drain snapshot still surfaces via a telemetry row, and whose local
+   offline row already reads as watched (`isPlayed`, or ≥ the watched threshold
+   via `isFinishedOffline`), get a `markPlayed` derived at drain time — the
+   second net for a flip lost to process death at the threshold or an older
+   build's missing row (#153). (An item whose entire outbox was lost is not
+   surfaced here; reconcile's downloaded-items batch is its net.) The flip
+   routes through `MediaRepository.markPlayed` (not raw `PlayedStateSync.flip`)
+   so the repository's detail / home-sections / catalogue caches drop in the
+   same pass. `flip()` reports success even when the server call failed — it
+   stages a `PLAYED` outbox row instead — so delivery is detected from the
+   outbox: a row surviving the call means the flip did not land and the drain
+   marks itself failed for retry.
+5. **Reconcile** each successfully-pushed item (see below).
+6. **Post foreground notification** while draining; dismiss on completion.
+7. **Invalidate caches + emit a synthetic user-data change** for the drained
+   items — open detail sessions and the home refresher listen on the same
+   flow as WebSocket pushes and refresh, because the drain's `markPlayedItem`
+   calls may never arrive as a `UserDataChanged` echo on this socket. Then
+   trigger `UserDataSyncScheduler.enqueueNow()` so Continue Watching, Next
    Up, and detail caches re-fetch fresh server state instead of waiting for
    their 60s/2min TTLs or the 12h periodic tick.
-6. **Return** `Result.success` (all drained), `Result.retry` (some failed,
-   under MAX_RETRIES), or `Result.failure` (retries exhausted).
+8. **Return** `Result.success` (all drained) or `Result.retry` (some failed,
+   under the retry budget). Budget-exhausted entries are already dead-lettered
+   by then, so the drain always converges to success and the pending count
+   reaches 0.
+
+**Retry budgets** differ by event type: telemetry (`START`/`PROGRESS`/`STOP`)
+dead-letters after `MAX_RETRIES` (3) attempts — a stale position is harmless.
+User-intent events (`PLAYED`/`UNPLAYED`/`FAVORITE`/`UNFAVORITE`) get a much
+larger budget (`MAX_INTENT_RETRIES`, 10) before dead-lettering — a
+dead-lettered watched flip is a silently lost user action, which is precisely
+the #153 report. Dead-lettered rows are skipped by every later drain and
+excluded from the pending count; the only resurrection path is reconcile's
+delete-before-push (below), which re-pushes the intent with a fresh budget.
+
+`reconcileOfflineRow` reports a sealed `ReconcileOutcome`: `Changed(result)` /
+`NoChange` / `UndeliveredIntent`. The last one — `flip()` failed server-side
+and re-staged the outbox row — marks the drain failed for retry: returning
+success there would strand the freshly enqueued row until the 4-hour periodic
+backstop. A reconcile that merely *throws* stays best-effort/ignored, as
+before.
 
 A 4-hour periodic backstop (`PlaybackSyncScheduler.enqueuePeriodic`) catches
 any drain the reconnect signal misses.
@@ -138,16 +197,30 @@ any drain the reconnect signal misses.
 
 After pushing local progress up, `PlaybackSyncWorker.reconcileOfflineRow(itemId)`
 compares the local `offline_media` row against fresh server state. Three
-branches:
+branches, with an undelivered-intent exception on the first two (#153):
 
 1. **Server says played** → reset local to played (position 0, percentage 100).
    Covers: watched half offline, finished online, back offline.
+   *Exception*: if an undelivered `UNPLAYED` intent exists for the item
+   (pending or dead-lettered), the user marked it unwatched offline and the
+   server never heard it — the server's watched state is not newer knowledge,
+   so the unwatched flip is re-pushed instead.
 2. **Local played but server unplayed** → `applyPlayedState(itemId, false)` with
    hierarchy cascade. Covers: marked season unwatched online, reconnect races
    the offline cascade.
+   *Exception*: if an undelivered `PLAYED` intent exists (pending or
+   dead-lettered, or an offline watch whose flip was lost), the watch never
+   reached the server — `markPlayed` is pushed instead of clearing the local
+   state.
 3. **Neither played** → timestamp comparison. If server `lastPlayedDate` is
    newer than local `lastPlayedDate`, overwrite local position from server.
    Otherwise leave local (it's authoritative).
+
+In both intent branches the intent row is deleted **before** the push:
+`flip()` re-enqueues it when the server call fails, so the row survives
+exactly when the intent is still undelivered — and a formerly dead-lettered
+row returns with a fresh retry budget instead of lingering as a zombie that
+every later reconcile re-pushes over newer state set on another device.
 
 **Timestamp caveat**: `lastPlayedDate` from the Jellyfin SDK mapper is a bare
 `LocalDateTime` string with no offset (see `JellyfinDtoMappers`); local rows are
@@ -192,6 +265,8 @@ correct any drift on the next drain.
 | Marked watched/unwatched **offline** | Outbox | `enqueuePlayedState` + local mirror; drained on reconnect |
 | Race: marked unwatched, reconnect before cascade lands | Server | Reconcile branch 2: server unplayed wins |
 | Multi-device: another device marks played | Server | Reconcile by timestamp (server newer) |
+| Watched offline, flip row lost (process death) | Local | Drain-time derived `markPlayed` (#153) |
+| Undelivered intent vs. server's opposite state | Local intent | Reconcile pushes the intent instead of mirroring the server (#153) |
 
 ## User-visible indicators
 

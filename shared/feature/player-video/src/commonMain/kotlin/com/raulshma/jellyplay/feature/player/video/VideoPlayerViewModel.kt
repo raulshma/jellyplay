@@ -62,6 +62,7 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -554,7 +555,13 @@ class VideoPlayerViewModel(
             // local-only offline mark so a downloaded copy still shows watched,
             // matching how persistPlaybackPosition keeps writing the local resume
             // cache in incognito.
-            launch {
+            // NonCancellable: this callback fires at the very end of playback,
+            // exactly when VM teardown cancels the scope — without it the
+            // launch body may never run and the PLAYED outbox row is never
+            // enqueued. Losing that row is the #153 "watched offline, online
+            // home shows mostly completed" bug — once written to the outbox
+            // it survives anything, so the enqueue itself must land.
+            launch(NonCancellable) {
                 if (cachedAggregate.videoPlayer.incognitoModeEnabled) {
                     offlinePlaybackFacade.recordPlayed(itemId)
                 } else {

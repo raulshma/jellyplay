@@ -113,6 +113,8 @@ kotlin {
         // ride compose.desktop.currentOs. Host-OS only: jvmTest runs on it.
         getByName("jvmTest").dependencies {
             implementation(compose.desktop.currentOs)
+            // runTest/UnconfinedTestDispatcher for the Channel/StateFlow pure-logic tests.
+            implementation(libs.coroutines.test)
         }
         getByName("androidMain").dependencies {
             // Dominant-color extraction keeps the original Palette pipeline.

@@ -288,4 +288,102 @@ class EngineActivityEvidenceTest {
             EnginePlaybackState.valueOf(name)
         }
     }
+
+    // ── recorder lifecycle (hasAnyEngine / empty contract / dispose) ───────
+
+    @Test
+    fun `fresh recorder reports no engines and the NONE snapshot`() {
+        val recorder = EngineActivityRecorder()
+        assertFalse(recorder.hasAnyEngine, "no engine recorded yet")
+        assertEquals(EngineActivitySnapshot.NONE, recorder.latest())
+        recorder.dispose()
+    }
+
+    @Test
+    fun `hasAnyEngine flips synchronously on the first recordCreated`() {
+        val recorder = EngineActivityRecorder()
+        try {
+            // The record is appended on the CALLER's thread before the
+            // observers spawn — the factory's cheap poll guard must be true
+            // the moment create() returns, never a tick later.
+            recorder.recordCreated(FakeMediaEngine(), EngineActivitySnapshot.SURFACE_HWND)
+            assertTrue(recorder.hasAnyEngine)
+            assertEquals(
+                EngineActivitySnapshot.SURFACE_HWND,
+                recorder.latest().surface,
+                "the record exists even before any flow collector has run",
+            )
+        } finally {
+            recorder.dispose()
+        }
+    }
+
+    @Test
+    fun `dispose stops the position sampler`() {
+        val recorder = EngineActivityRecorder()
+        val engine = FakeMediaEngine()
+        recorder.recordCreated(engine, EngineActivitySnapshot.SURFACE_HWND)
+        engine.load(PlaybackRequest(uri = "http://server/stream", title = "test"))
+
+        // The sampler lands one sample per ~500 ms cadence tick.
+        pollUntil("first position sample", timeoutMs = 5_000) {
+            recorder.latest().positionSamples.isNotEmpty()
+        }
+
+        // Dispose, then wait out one cadence tick + margin so any in-flight
+        // sample lands before the baseline read (the cancel takes effect at
+        // the loop's next isActive check, not instantly).
+        recorder.dispose()
+        Thread.sleep(800)
+        val afterDispose = recorder.latest().positionSamples.size
+        Thread.sleep(1_300)
+        assertEquals(
+            afterDispose,
+            recorder.latest().positionSamples.size,
+            "a disposed recorder must sample nothing further (app-lifetime type, but the cancel is for tests)",
+        )
+    }
+
+    // ── sampling-cutoff boundaries (strict inequality contracts) ───────────
+
+    @Test
+    fun `advanceSinceMs excludes a sample exactly at the cutoff`() {
+        val snapshot = sample(
+            playing = true,
+            samples = listOf(
+                Triple(1_000L, 100L, true),
+                Triple(2_000L, 600L, true),
+            ),
+        )
+        // Strictly-after filter: at the exact injection instant only ONE
+        // sample qualifies → no advance evidence yet.
+        assertEquals(0L, snapshot.advanceSinceMs(2_000L))
+        assertEquals(0L, snapshot.advanceSinceMs(1_000L))
+        // One tick earlier and both samples count.
+        assertEquals(500L, snapshot.advanceSinceMs(999L))
+    }
+
+    @Test
+    fun `pausedSince ignores a pause recorded exactly at the cutoff`() {
+        val paused = sample(
+            playing = true,
+            samples = listOf(
+                Triple(1_000L, 0L, true),
+                Triple(2_000L, 300L, false),
+            ),
+        )
+        // The key lands at 2_000: a paused sample AT the instant is not
+        // evidence the key took effect (it may predate it).
+        assertFalse(paused.pausedSince(2_000L))
+        // One tick earlier and the same sample is post-key evidence.
+        assertTrue(paused.pausedSince(1_999L))
+
+        // And a paused-only history never verifies a toggle: the gate needs
+        // proof playback RAN first.
+        val neverPlayed = sample(
+            playing = false,
+            samples = listOf(Triple(1_000L, 0L, false), Triple(3_000L, 300L, false)),
+        )
+        assertFalse(neverPlayed.pausedSince(2_000L))
+    }
 }

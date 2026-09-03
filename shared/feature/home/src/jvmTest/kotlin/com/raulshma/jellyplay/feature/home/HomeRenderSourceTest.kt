@@ -24,12 +24,12 @@ class HomeRenderSourceTest {
         // when downloads exist — otherwise an implicit-before-explicit branch
         // reorder in computeHomeRenderSource would slip through.
         for (mode in OfflineMode.entries.filter { it != OfflineMode.ONLINE }) {
-            for (fetchFailedEmpty in listOf(false, true)) {
+            for (fetchFailed in listOf(false, true)) {
                 for (fallbackPending in listOf(false, true)) {
                     for (offlineLibrary in listOf(emptyList(), library)) {
                         assertEquals(
                             HomeRenderSource.Offline.Explicit,
-                            computeHomeRenderSource(mode, fetchFailedEmpty, offlineLibrary, fallbackPending),
+                            computeHomeRenderSource(mode, fetchFailed, offlineLibrary, fallbackPending),
                         )
                     }
                 }
@@ -39,11 +39,11 @@ class HomeRenderSourceTest {
 
     @Test
     fun onlineMode_neverYieldsExplicitOffline() {
-        for (fetchFailedEmpty in listOf(false, true)) {
+        for (fetchFailed in listOf(false, true)) {
             for (fallbackPending in listOf(false, true)) {
                 for (offlineLibrary in listOf(emptyList(), library)) {
                     assertFalse(
-                        computeHomeRenderSource(OfflineMode.ONLINE, fetchFailedEmpty, offlineLibrary, fallbackPending)
+                        computeHomeRenderSource(OfflineMode.ONLINE, fetchFailed, offlineLibrary, fallbackPending)
                             is HomeRenderSource.Offline.Explicit,
                     )
                 }
@@ -55,7 +55,7 @@ class HomeRenderSourceTest {
     fun healthyOnlineFetch_rendersOnline_evenWithStaleLibrary() {
         assertEquals(
             HomeRenderSource.Online,
-            computeHomeRenderSource(OfflineMode.ONLINE, fetchFailedEmpty = false, offlineLibrary = library, fallbackPending = false),
+            computeHomeRenderSource(OfflineMode.ONLINE, fetchFailed = false, offlineLibrary = library, fallbackPending = false),
         )
     }
 
@@ -63,7 +63,7 @@ class HomeRenderSourceTest {
     fun failedFetch_beforeFirstEmission_isFallbackPending() {
         assertEquals(
             HomeRenderSource.FallbackPending,
-            computeHomeRenderSource(OfflineMode.ONLINE, fetchFailedEmpty = true, offlineLibrary = emptyList(), fallbackPending = true),
+            computeHomeRenderSource(OfflineMode.ONLINE, fetchFailed = true, offlineLibrary = emptyList(), fallbackPending = true),
         )
     }
 
@@ -71,7 +71,7 @@ class HomeRenderSourceTest {
     fun failedFetch_withDownloads_isImplicitOffline() {
         assertEquals(
             HomeRenderSource.Offline.Implicit,
-            computeHomeRenderSource(OfflineMode.ONLINE, fetchFailedEmpty = true, offlineLibrary = library, fallbackPending = false),
+            computeHomeRenderSource(OfflineMode.ONLINE, fetchFailed = true, offlineLibrary = library, fallbackPending = false),
         )
     }
 
@@ -79,7 +79,7 @@ class HomeRenderSourceTest {
     fun failedFetch_confirmedEmpty_rendersOnline_hardError() {
         assertEquals(
             HomeRenderSource.Online,
-            computeHomeRenderSource(OfflineMode.ONLINE, fetchFailedEmpty = true, offlineLibrary = emptyList(), fallbackPending = false),
+            computeHomeRenderSource(OfflineMode.ONLINE, fetchFailed = true, offlineLibrary = emptyList(), fallbackPending = false),
         )
     }
 }

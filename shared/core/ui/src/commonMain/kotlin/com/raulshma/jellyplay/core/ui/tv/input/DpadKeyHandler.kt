@@ -89,11 +89,11 @@ class DpadKeyHandlerScope internal constructor() {
     private val detailedHandlers = mutableMapOf<DpadAction, ((DpadKeyEvent) -> Boolean)?>()
 
     fun onKey(action: DpadAction, handler: (() -> Boolean)?) {
-        simpleHandlers[action] = handler
+        if (handler == null) simpleHandlers.remove(action) else simpleHandlers[action] = handler
     }
 
     fun onKeyEvent(action: DpadAction, handler: ((DpadKeyEvent) -> Boolean)?) {
-        detailedHandlers[action] = handler
+        if (handler == null) detailedHandlers.remove(action) else detailedHandlers[action] = handler
     }
 
     internal fun handle(dpadKeyEvent: DpadKeyEvent): Boolean {

@@ -25,7 +25,7 @@ import kotlin.test.Test
 class OfflineHomeGateTest {
 
     private val offlineMode = MutableStateFlow(OfflineMode.ONLINE)
-    private val fetchFailedEmpty = MutableStateFlow(false)
+    private val fetchFailed = MutableStateFlow(false)
     private val libraryFlow = MutableSharedFlow<List<OfflineMediaItem>>(extraBufferCapacity = 8)
 
     private val offlineRepository: OfflineRepository = mockk<OfflineRepository>(relaxed = true).apply {
@@ -43,7 +43,7 @@ class OfflineHomeGateTest {
             scope = backgroundScope,
             offlineMode = offlineMode,
             offlineRepository = offlineRepository,
-            fetchFailedEmpty = fetchFailedEmpty,
+            fetchFailed = fetchFailed,
         )
         runCurrent()
 
@@ -55,17 +55,17 @@ class OfflineHomeGateTest {
     }
 
     @Test
-    fun failedEmptyFetch_opensGateAndRendersFallbackPendingThenImplicitOffline() = runTest {
+    fun failedFetch_opensGateAndRendersFallbackPendingThenImplicitOffline() = runTest {
         val gate = OfflineHomeGate(
             scope = backgroundScope,
             offlineMode = offlineMode,
             offlineRepository = offlineRepository,
-            fetchFailedEmpty = fetchFailedEmpty,
+            fetchFailed = fetchFailed,
         )
         runCurrent()
 
-        // Failed fetch with empty sections opens the gate (implicit offline).
-        fetchFailedEmpty.value = true
+        // Failed fetch opens the gate (implicit offline) — even when stale online sections are on screen.
+        fetchFailed.value = true
         runCurrent()
 
         // Pre-emission window: pending render source, not the hard error.
@@ -80,16 +80,16 @@ class OfflineHomeGateTest {
     }
 
     @Test
-    fun failedEmptyFetch_overConfirmedEmptyLibrary_staysOnline() = runTest {
+    fun failedFetch_overConfirmedEmptyLibrary_staysOnline() = runTest {
         val gate = OfflineHomeGate(
             scope = backgroundScope,
             offlineMode = offlineMode,
             offlineRepository = offlineRepository,
-            fetchFailedEmpty = fetchFailedEmpty,
+            fetchFailed = fetchFailed,
         )
         runCurrent()
 
-        fetchFailedEmpty.value = true
+        fetchFailed.value = true
         runCurrent()
         libraryFlow.tryEmit(emptyList())
         runCurrent()
@@ -105,7 +105,7 @@ class OfflineHomeGateTest {
             scope = backgroundScope,
             offlineMode = offlineMode,
             offlineRepository = offlineRepository,
-            fetchFailedEmpty = fetchFailedEmpty,
+            fetchFailed = fetchFailed,
         )
         runCurrent()
 
@@ -123,7 +123,7 @@ class OfflineHomeGateTest {
             scope = backgroundScope,
             offlineMode = offlineMode,
             offlineRepository = offlineRepository,
-            fetchFailedEmpty = fetchFailedEmpty,
+            fetchFailed = fetchFailed,
         )
         runCurrent()
 
@@ -136,7 +136,7 @@ class OfflineHomeGateTest {
         // Back online with a good fetch: the gate closes and the offline
         // slice resets to empty (the online home never renders stale rows).
         offlineMode.value = OfflineMode.ONLINE
-        fetchFailedEmpty.value = false
+        fetchFailed.value = false
         runCurrent()
 
         assertEquals(HomeRenderSource.Online, gate.state.value.renderSource)
@@ -151,7 +151,7 @@ class OfflineHomeGateTest {
             scope = backgroundScope,
             offlineMode = offlineMode,
             offlineRepository = offlineRepository,
-            fetchFailedEmpty = fetchFailedEmpty,
+            fetchFailed = fetchFailed,
         )
         runCurrent()
 

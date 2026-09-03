@@ -58,7 +58,10 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -1024,8 +1027,27 @@ class MediaRepositoryImpl(
     override suspend fun syncPlayMovePlaylistItem(playlistItemId: String, newIndex: Int): Result<Unit> =
         apiClient.syncPlayMovePlaylistItem(playlistItemId, newIndex)
 
-    override val userDataChanges: Flow<UserDataChange>
-        get() = userDataRealtimeChannel.changes
+    private val syntheticUserDataChanges = MutableSharedFlow<UserDataChange>(
+        extraBufferCapacity = SYNTHETIC_CHANGES_BUFFER,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+
+    /**
+     * WS pushes merged with [syntheticUserDataChanges] — local writers that
+     * reach the server outside the socket's echo (notably the offline outbox
+     * drain in PlaybackSyncWorker) feed the same consumer fan-out (home
+     * forced refresh, open detail sessions) through [notifyUserDataChanged].
+     */
+    override val userDataChanges: Flow<UserDataChange> =
+        merge(userDataRealtimeChannel.changes, syntheticUserDataChanges)
+
+    override fun notifyUserDataChanged(itemIds: List<String>) {
+        if (itemIds.isEmpty()) return
+        // No identity → nothing is keyed to a user yet; emitting would only
+        // risk refreshing another account's screens on a stale collector.
+        val userId = homeSession.currentIdentitySnapshot()?.userId ?: return
+        syntheticUserDataChanges.tryEmit(UserDataChange(userId, itemIds.distinct()))
+    }
 
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> {
         // Fan-out (online API + best-effort offline mirror, or local apply +
@@ -1287,6 +1309,12 @@ class MediaRepositoryImpl(
         private const val DETAIL_CACHE_MAX_ENTRIES = 30
         /** 2 minutes — short enough that server changes are reflected quickly. */
         private const val DETAIL_CACHE_TTL_MS = 2 * 60 * 1000L
+        /**
+         * Buffer for [syntheticUserDataChanges]: large enough that a drain of
+         * dozens of flips never suspends or drops wholesale, small enough to
+         * be pointless to tune. DROP_OLDEST keeps the tryEmit non-suspending.
+         */
+        private const val SYNTHETIC_CHANGES_BUFFER = 64
         /** 10 minutes — library folders change rarely during a session. */
         private const val FOLDERS_CACHE_TTL_MS = 10 * 60 * 1000L
         /** 2 minutes — "latest" content should feel fresh on re-entry. */

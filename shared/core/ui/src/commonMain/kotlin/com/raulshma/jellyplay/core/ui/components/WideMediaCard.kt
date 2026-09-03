@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -13,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -67,13 +66,23 @@ fun WideMediaCard(
     MediaCardScaffold(
         onClick = onClick,
         image = { imageModifier ->
+            // One render pipeline for online and offline cards alike: the
+            // backdrop fills the 16:9 frame (Crop) and falls back to the
+            // primary image — the same chain the online row drives with
+            // server URLs and the offline row with local file paths. Episode
+            // primaries are landscape thumbs, so the fallback crop is
+            // full-bleed both ways; a portrait poster without any backdrop
+            // center-crops exactly like the online card does. (A letterbox
+            // variant here made offline episode cards render blurred bands +
+            // a fitted image instead of the online full-bleed — removed for
+            // offline/online parity.)
             MediaImage(
                 url = backdropUrl,
                 fallbackUrls = remember(imageUrl) { if (imageUrl.isNotBlank()) listOf(imageUrl) else emptyList() },
                 contentDescription = item.name,
                 blurHash = item.blurHashes.backdrop,
                 modifier = imageModifier,
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                contentScale = ContentScale.Crop,
                 crossfade = false,
             )
         },

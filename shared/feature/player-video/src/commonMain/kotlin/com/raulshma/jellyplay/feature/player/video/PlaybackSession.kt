@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
+import com.raulshma.jellyplay.core.model.isWatchedPercentage
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -903,7 +904,17 @@ internal class PlaybackSession(
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         val sessionId = currentPlaySessionId
         if (sessionId == stopReportedForSession) return
-        val positionTicks = getReportPositionMs() * 10_000
+        val positionMs = getReportPositionMs().takeIf { it > 0L }
+            // Some engines report 0 right after STATE_ENDED; falling back to the
+            // last persisted position keeps the stop telemetry (and with it the
+            // server's chance to resolve played-ness / final resume position)
+            // instead of silently dropping the stop entirely (#153). The > 0
+            // guard skips the "never persisted" sentinel (Long.MIN_VALUE),
+            // whose ×10_000 overflow would feed garbage ticks into the check
+            // below instead of cleanly skipping the report.
+            ?: lastPersistedPositionMs.takeIf { it > 0L }
+            ?: 0L
+        val positionTicks = positionMs * 10_000
         if (positionTicks > 0) {
             stopReportedForSession = sessionId
             scope.launch {
@@ -952,11 +963,14 @@ internal class PlaybackSession(
         // resume state while offline. No-op for non-downloaded items.
         val durationMs = playerSessionManager.engine?.durationMs ?: 0L
         val positionTicks = positionMs * 10_000L // ms → ticks
-        val percentage = if (durationMs > 0L) {
-            (positionMs.toDouble() / durationMs.toDouble() * 100.0).coerceIn(0.0, 100.0)
-        } else 0.0
+        val percentage = mirrorPlayedPercentage(positionMs, durationMs)
         scope.launch {
-            offlinePlaybackFacade.recordProgress(itemId, positionTicks, percentage, isPlayed = false)
+            offlinePlaybackFacade.recordProgress(
+                itemId,
+                positionTicks,
+                percentage,
+                isPlayed = mirrorIsPlayed(percentage),
+            )
         }
     }
 
@@ -978,12 +992,33 @@ internal class PlaybackSession(
         pendingSeekProgressJob = scope.launch {
             delay(SEEK_PROGRESS_COALESCE_MS)
             val positionTicks = positionMs * 10_000L // ms → ticks
-            val percentage = if (durationMs > 0L) {
-                (positionMs.toDouble() / durationMs.toDouble() * 100.0).coerceIn(0.0, 100.0)
-            } else 0.0
-            offlinePlaybackFacade.recordProgress(itemId, positionTicks, percentage, isPlayed = false)
+            val percentage = mirrorPlayedPercentage(positionMs, durationMs)
+            offlinePlaybackFacade.recordProgress(
+                itemId,
+                positionTicks,
+                percentage,
+                isPlayed = mirrorIsPlayed(percentage),
+            )
         }
     }
+
+    /**
+     * Percentage of runtime played for the offline-mirror write — the shared
+     * math of [persistPlaybackPosition] and the coalesced seek write above.
+     */
+    private fun mirrorPlayedPercentage(positionMs: Long, durationMs: Long): Double =
+        if (durationMs > 0L) {
+            (positionMs.toDouble() / durationMs.toDouble() * 100.0).coerceIn(0.0, 100.0)
+        } else 0.0
+
+    /**
+     * The offline-mirror `isPlayed` value for a progress write: never write
+     * `false` over a mirror row that has already crossed the watched
+     * threshold — once playback passes 95%, the row must read as watched, or
+     * a tick racing the threshold callback would downgrade the very fact sync
+     * relies on (#153).
+     */
+    private fun mirrorIsPlayed(percentage: Double): Boolean = isWatchedPercentage(percentage)
 
     /**
      * After process death the Navigation 3 route still carries the *original*

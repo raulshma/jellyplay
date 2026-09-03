@@ -4,11 +4,14 @@ on:
   push:
     branches:
       - 'v[0-9]+*'
-      # Pre-release channels (v0.11.0-alpha, v1.0.0-rc) belong to
-      # kmp-release.yml — the glob above would otherwise match them too and
-      # publish Android APKs as the latest STABLE release.
+      # Pre-release channels live in kmp-release.yml under release-alpha/* —
+      # a namespace these globs can never match. The exclusions below guard
+      # dashed channel names (v0.11.0-alpha, release/v1.0.0-rc typos) from
+      # slipping through the positive globs and publishing Android APKs as
+      # the latest STABLE release.
       - '!v[0-9]+*-*'
       - 'release/**'
+      - '!release/v[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
 
 concurrency:

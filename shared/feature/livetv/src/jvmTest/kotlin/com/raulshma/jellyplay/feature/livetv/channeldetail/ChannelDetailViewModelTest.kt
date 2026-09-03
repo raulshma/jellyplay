@@ -219,6 +219,131 @@ class ChannelDetailViewModelTest {
         )
     }
 
+    // ── Remaining record/cancel actions and guards ───────────────────────────
+
+    @Test
+    fun recordProgram_failure_emits_Raw_message_and_skips_the_programs_refresh() = runTest(mainDispatcher) {
+        coEvery { mediaRepository.createTimer("prog-9") } returns Result.failure(RuntimeException("disk full"))
+        coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList())
+
+        viewModel.recordProgram(program(id = "prog-9", name = "X"))
+        advanceUntilIdle()
+
+        assertEquals(LiveTvUserMessage.Raw("disk full"), viewModel.messages.first())
+        // No refresh: the program list is only re-read after a successful action.
+        coVerify(exactly = 0) { mediaRepository.getLiveTvPrograms(any(), any(), any()) }
+    }
+
+    @Test
+    fun recordSeries_success_emits_RecordSuccess_and_refreshes_the_program_window() = runTest(mainDispatcher) {
+        coEvery { mediaRepository.createSeriesTimer("prog-9") } returns Result.success(Unit)
+        coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList())
+
+        viewModel.recordSeries(program(id = "prog-9", name = "X"))
+        advanceUntilIdle()
+
+        assertEquals(LiveTvUserMessage.RecordSuccess, viewModel.messages.first())
+        coVerify(exactly = 1) { mediaRepository.getLiveTvPrograms(any(), any(), any()) }
+    }
+
+    @Test
+    fun recordSeries_failure_emits_Raw_message() = runTest(mainDispatcher) {
+        coEvery { mediaRepository.createSeriesTimer("prog-9") } returns Result.failure(RuntimeException("nope"))
+
+        viewModel.recordSeries(program(id = "prog-9", name = "X"))
+        advanceUntilIdle()
+
+        assertEquals(LiveTvUserMessage.Raw("nope"), viewModel.messages.first())
+    }
+
+    @Test
+    fun cancelTimer_without_a_timerId_is_a_no_op() = runTest(mainDispatcher) {
+        viewModel.cancelTimer(program(id = "prog-9", name = "X", timerId = null))
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { mediaRepository.cancelTimer(any()) }
+    }
+
+    @Test
+    fun cancelSeries_success_emits_RecordCanceled_and_refreshes_the_program_window() = runTest(mainDispatcher) {
+        coEvery { mediaRepository.cancelSeriesTimer("st-9") } returns Result.success(Unit)
+        coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList())
+
+        viewModel.cancelSeries(program(id = "prog-9", name = "X", seriesTimerId = "st-9"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.cancelSeriesTimer("st-9") }
+        assertEquals(LiveTvUserMessage.RecordCanceled, viewModel.messages.first())
+        coVerify(exactly = 1) { mediaRepository.getLiveTvPrograms(any(), any(), any()) }
+    }
+
+    @Test
+    fun cancelSeries_without_a_seriesTimerId_is_a_no_op() = runTest(mainDispatcher) {
+        viewModel.cancelSeries(program(id = "prog-9", name = "X", seriesTimerId = null))
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { mediaRepository.cancelSeriesTimer(any()) }
+    }
+
+    // ── Hero/currentProgram refresh sync ─────────────────────────────────────
+
+    @Test
+    fun successful_record_refresh_keeps_the_hero_on_the_same_program_id() = runTest(mainDispatcher) {
+        // Initial load resolves the airing hero from the programs list…
+        val now = java.time.OffsetDateTime.now()
+        val airing = program(
+            id = "p-now", name = "Live",
+            start = now.minusMinutes(5), end = now.plusMinutes(25),
+        )
+        coEvery { mediaRepository.getLiveTvPrograms("chan-1", any(), any()) } returns
+            Result.success(listOf(airing))
+        viewModel.loadChannel("chan-1", "Ch")
+        advanceUntilIdle()
+        assertEquals("p-now", viewModel.uiState.value.currentProgram?.id)
+
+        // …after the timer is created, the refresh re-reads the window; the
+        // hero must follow the SAME program id with the fresh timer state.
+        coEvery { mediaRepository.getLiveTvPrograms("chan-1", any(), any()) } returns
+            Result.success(listOf(airing.copy(timerId = "timer-1")))
+        coEvery { mediaRepository.createTimer("p-now") } returns Result.success(Unit)
+
+        viewModel.recordProgram(program(id = "p-now", name = "Live"))
+        advanceUntilIdle()
+
+        assertEquals(LiveTvUserMessage.RecordSuccess, viewModel.messages.first())
+        assertEquals("p-now", viewModel.uiState.value.currentProgram?.id)
+        assertEquals("timer-1", viewModel.uiState.value.currentProgram?.timerId)
+    }
+
+    // ── Channel meta details ─────────────────────────────────────────────────
+
+    @Test
+    fun blank_server_channel_name_falls_back_to_the_nav_argument() = runTest(mainDispatcher) {
+        coEvery { mediaRepository.getLiveTvChannels(any(), any(), any(), any(), any()) } returns Result.success(
+            listOf(LiveTvChannel(id = "chan-1", name = "  ", number = "7")),
+        )
+        coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList())
+
+        viewModel.loadChannel("chan-1", "From Nav")
+        advanceUntilIdle()
+
+        assertEquals("From Nav", viewModel.uiState.value.channelName)
+        assertEquals("7", viewModel.uiState.value.channelNumber)
+    }
+
+    @Test
+    fun channel_without_an_image_tag_gets_an_empty_logo_url() = runTest(mainDispatcher) {
+        coEvery { mediaRepository.getLiveTvChannels(any(), any(), any(), any(), any()) } returns Result.success(
+            listOf(LiveTvChannel(id = "chan-1", name = "No Logo", number = "7", imageTag = null)),
+        )
+        coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList())
+
+        viewModel.loadChannel("chan-1", "No Logo")
+        advanceUntilIdle()
+
+        assertEquals("", viewModel.uiState.value.channelLogoUrl)
+    }
+
     private fun program(
         id: String,
         name: String,
@@ -226,6 +351,7 @@ class ChannelDetailViewModelTest {
         end: java.time.OffsetDateTime = java.time.OffsetDateTime.now().plusMinutes(30),
         imageTag: String? = "default-tag",
         timerId: String? = null,
+        seriesTimerId: String? = null,
     ) = LiveTvProgram(
         id = id,
         name = name,
@@ -234,5 +360,6 @@ class ChannelDetailViewModelTest {
         endDate = end.format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME),
         imageTag = imageTag,
         timerId = timerId,
+        seriesTimerId = seriesTimerId,
     )
 }
