@@ -145,7 +145,8 @@ internal fun tvPrimaryRoutes(
 ): List<Route> = applyNavCustomization(
     items = baseRoutes + listOfNotNull(Route.Shortcuts.takeIf { includeShortcuts }),
     keyOf = { it.navKey },
-    hiddenNavItems = emptySet(),
+    // Hiding was already applied upstream (that's why baseRoutes are
+    // "pre-customized"), so hiddenNavItems stays at its empty default.
     navItemOrder = navItemOrder,
 )
 

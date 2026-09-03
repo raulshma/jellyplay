@@ -21,7 +21,6 @@ fun EntryProviderScope<NavKey>.homeSection(
     playOnStrategy: HomePlayOnRedirect? = null,
     musicContent: @Composable () -> Unit,
     surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
-    refreshRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     entry<Route.Home> {
         // Build the callbacks once per navigator lifetime so the HomeScreen subtree
@@ -100,7 +99,6 @@ fun EntryProviderScope<NavKey>.homeSection(
             homeMode = homeMode,
             musicContent = musicContent,
             surpriseRequests = surpriseRequests,
-            refreshRequests = refreshRequests,
         )
     }
 }

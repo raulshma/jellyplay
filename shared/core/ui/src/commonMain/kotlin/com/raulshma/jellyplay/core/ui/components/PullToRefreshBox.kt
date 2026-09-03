@@ -9,9 +9,12 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox as Material3PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -39,6 +42,11 @@ import androidx.compose.ui.unit.Dp
  * first) that swallows backward vertical deltas while no touch pointer is
  * down. Touch pulls pass through untouched, so phones and tablets keep
  * native pull-to-refresh, and touch screens still respond to a finger.
+ *
+ * The wrapper also publishes its [onRefresh] into [LocalPullToRefreshRegistry]
+ * while composed and enabled, so a shell-level refresh affordance (the desktop
+ * File→Refresh menu item) reaches every pull-to-refresh screen without
+ * per-screen wiring.
  */
 @Composable
 fun PullToRefreshBox(
@@ -60,6 +68,16 @@ fun PullToRefreshBox(
 ) {
     val isTouchDown = remember { mutableStateOf(false) }
     val wheelGuard = remember(enabled) { WheelPullGuard(enabled, isTouchDown) }
+    // Expose this container's refresh action to the shell's global refresh
+    // affordance (desktop File→Refresh / Ctrl+R). Registration is gated on
+    // `enabled`, so a screen that takes itself out of pull-to-refresh (TV
+    // mode, an overlaid search) is equally out of the menu's reach.
+    val registry = LocalPullToRefreshRegistry.current
+    val activeOnRefresh by rememberUpdatedState(onRefresh)
+    DisposableEffect(registry, enabled) {
+        val unregister = if (enabled) registry.register { activeOnRefresh() } else null
+        onDispose { unregister?.invoke() }
+    }
     Material3PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
@@ -67,6 +85,10 @@ fun PullToRefreshBox(
             // Purely observational — nothing is consumed, so the content's
             // own gestures are unaffected.
             awaitEachGesture {
+                // A cancelled pointer stream can end without the all-up event
+                // that breaks the loop below; clear at gesture start so a
+                // stale `true` can't leave the wheel guard disabled.
+                isTouchDown.value = false
                 while (true) {
                     val event = awaitPointerEvent()
                     isTouchDown.value =
@@ -97,9 +119,11 @@ fun PullToRefreshBox(
 }
 
 /**
- * Consumes backward (pull-direction) vertical leftovers whenever no touch
- * pointer is down — the wheel/trackpad overscroll case — starving Material3's
- * connection before it can grow the pull distance.
+ * Consumes backward (pull-direction) vertical leftovers from user input
+ * whenever no touch pointer is down — the wheel/trackpad overscroll case —
+ * starving Material3's connection before it can grow the pull distance.
+ * SideEffect-sourced (programmatic) scrolls are left alone: nothing user-
+ * driven should be swallowed outside real pointer input.
  */
 private class WheelPullGuard(
     private val enabled: Boolean,
@@ -110,7 +134,9 @@ private class WheelPullGuard(
         available: Offset,
         source: NestedScrollSource,
     ): Offset {
-        if (!enabled || isTouchDown.value || available.y <= 0f) return Offset.Zero
+        if (!enabled || source != NestedScrollSource.UserInput || isTouchDown.value || available.y <= 0f) {
+            return Offset.Zero
+        }
         return Offset(0f, available.y)
     }
 }

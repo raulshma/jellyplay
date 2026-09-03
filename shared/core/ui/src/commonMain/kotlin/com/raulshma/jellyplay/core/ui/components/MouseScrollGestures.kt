@@ -68,6 +68,26 @@ fun Modifier.mouseDragToScroll(
 }
 
 /**
+ * The full mouse-scroll treatment for [state]: drag-to-scroll along
+ * [orientation], plus — for horizontal lists — vertical-wheel scrolling,
+ * which a horizontal list can't consume on its own. Vertical lists skip the
+ * wheel modifier because a vertical wheel over a vertical list already flows
+ * through the built-in scroll pipeline.
+ *
+ * Apply this instead of assembling [mouseDragToScroll] and
+ * [mouseWheelToHorizontalScroll] by hand so a row can't end up draggable
+ * while deaf to the wheel.
+ */
+fun Modifier.mouseScroll(
+    state: ScrollableState,
+    orientation: Orientation,
+): Modifier {
+    var result = this.mouseDragToScroll(state, orientation)
+    if (orientation == Orientation.Horizontal) result = result.mouseWheelToHorizontalScroll(state)
+    return result
+}
+
+/**
  * Scrolls a horizontal list with the vertical mouse wheel: one wheel unit maps
  * to ~10% of the row width (clamped to a quarter per event so browser
  * pixel-unit deltas and accelerated trackpad bursts can't jump pages), which

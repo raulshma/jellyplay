@@ -59,8 +59,7 @@ import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences
-import com.raulshma.jellyplay.core.ui.components.mouseDragToScroll
-import com.raulshma.jellyplay.core.ui.components.mouseWheelToHorizontalScroll
+import com.raulshma.jellyplay.core.ui.components.mouseScroll
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -332,8 +331,7 @@ private fun HorizontalMediaScroller(
             itemSpacing = spacing,
             contentPadding = PaddingValues(0.dp),
             modifier = modifier
-                .mouseDragToScroll(carouselState, Orientation.Horizontal)
-                .mouseWheelToHorizontalScroll(carouselState)
+                .mouseScroll(carouselState, Orientation.Horizontal)
                 .padding(horizontal = contentPad),
         ) { index -> itemContent(index) }
     } else {
@@ -345,8 +343,7 @@ private fun HorizontalMediaScroller(
             contentPadding = PaddingValues(horizontal = contentPad),
             horizontalArrangement = Arrangement.spacedBy(spacing),
             modifier = modifier
-                .mouseDragToScroll(lazyListState, Orientation.Horizontal)
-                .mouseWheelToHorizontalScroll(lazyListState),
+                .mouseScroll(lazyListState, Orientation.Horizontal),
         ) {
             // Stable keys + contentType let Compose preserve scroll position
             // across recompositions and reuse item slots efficiently.

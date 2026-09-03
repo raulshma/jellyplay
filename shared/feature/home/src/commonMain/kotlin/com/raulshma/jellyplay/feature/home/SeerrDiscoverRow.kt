@@ -24,8 +24,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
 import com.raulshma.jellyplay.core.ui.components.SeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
-import com.raulshma.jellyplay.core.ui.components.mouseDragToScroll
-import com.raulshma.jellyplay.core.ui.components.mouseWheelToHorizontalScroll
+import com.raulshma.jellyplay.core.ui.components.mouseScroll
 
 /**
  * A single display-only (non-user-scrollable) horizontal row of [SeerrMediaCard]s.
@@ -105,8 +104,7 @@ internal fun SeerrDiscoverRow(
                 // rows); otherwise paint the flat background colour.
                 .then(if (homeBackdropEnabled) Modifier else Modifier.background(backgroundColor))
                 .padding(horizontal = rowHorizontalPadding, vertical = spacing / 2)
-                .mouseDragToScroll(rowState, Orientation.Horizontal)
-                .mouseWheelToHorizontalScroll(rowState),
+                .mouseScroll(rowState, Orientation.Horizontal),
             horizontalArrangement = Arrangement.spacedBy(spacing),
             userScrollEnabled = false,
         ) {

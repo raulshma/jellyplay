@@ -999,19 +999,17 @@ private fun TvContent(
                     includeShortcuts = SHORTCUTS_NAV_KEY !in hiddenNavItems,
                     navItemOrder = navItemOrder,
                 ).map { route ->
-                    if (route == Route.Shortcuts) {
-                        TvNavItem(
-                            route = route,
-                            label = shortcutsLabel,
-                            icon = routeToIcon(route),
-                        )
-                    } else {
-                        TvNavItem(
-                            route = route,
-                            label = activeTopLevelRoutes.getValue(route),
-                            icon = routeToIcon(route),
-                        )
-                    }
+                    // Shortcuts's label is a real string resource; the other
+                    // routes carry their display label in activeTopLevelRoutes.
+                    TvNavItem(
+                        route = route,
+                        label = if (route == Route.Shortcuts) {
+                            shortcutsLabel
+                        } else {
+                            activeTopLevelRoutes.getValue(route)
+                        },
+                        icon = routeToIcon(route),
+                    )
                 }
             }
             TvNavigationDrawer(

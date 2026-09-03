@@ -47,7 +47,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.core.ui.components.mouseDragToScroll
+import com.raulshma.jellyplay.core.ui.components.mouseScroll
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import androidx.compose.ui.graphics.Color
 import coil3.size.Size as CoilSize
@@ -138,7 +138,7 @@ fun HomeSearchResultsOverlay(
                 modifier = Modifier
                     .fillMaxWidth()
                     // Desktop: mouse drag scrolls the results (wheel already does).
-                    .mouseDragToScroll(resultsListState, Orientation.Vertical),
+                    .mouseScroll(resultsListState, Orientation.Vertical),
                 contentPadding = PaddingValues(vertical = 8.dp),
             ) {
                 if (!hasAnyResults && searchHistory.isNotEmpty()) {

@@ -72,7 +72,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.SeerrCardLoadingState
-import com.raulshma.jellyplay.core.ui.components.mouseDragToScroll
+import com.raulshma.jellyplay.core.ui.components.mouseScroll
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberInt
 import kotlinx.coroutines.flow.Flow
@@ -352,7 +352,7 @@ internal fun HomeContentList(
                 .fillMaxSize()
                 // Desktop: mouse drag scrolls the page (the wheel already does
                 // via the built-in scrollable; drag is touch-only there).
-                .mouseDragToScroll(listState, Orientation.Vertical),
+                .mouseScroll(listState, Orientation.Vertical),
             contentPadding = PaddingValues(bottom = adaptiveInfo.bottomPadding(isTv)),
         ) {
             if (state.featuredItem != null && state.homeHeroEnabled) {

@@ -69,8 +69,10 @@ import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
+import com.raulshma.jellyplay.core.ui.components.LocalPullToRefreshRegistry
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch
+import com.raulshma.jellyplay.core.ui.components.PullToRefreshRegistry
 import com.raulshma.jellyplay.core.ui.components.SurpriseLaunchController
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -202,11 +204,11 @@ internal fun DesktopAppRoot(
     onDismissAbout: () -> Unit,
     previousCrashLogPath: String? = null,
     windowRef: AtomicReference<ComposeWindow?>? = null,
-    // File→Refresh signal (Main.kt's MenuBar owns the item; Ctrl+R). Emissions
-    // ride the shared refreshRequests seam into HomeScreen's Refresh event —
-    // no subscribers while the home entry is not composed, so a refresh fired
-    // from another tab is simply dropped rather than queued.
-    homeRefreshRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
+    // File→Refresh signal (Main.kt's MenuBar owns the item; Ctrl+R). The
+    // scaffold dispatches each emission into LocalPullToRefreshRegistry, so it
+    // refreshes whatever pull-to-refresh screen is active — not just Home —
+    // and is silently dropped when the current screen has no refresh action.
+    menuRefreshRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     val authRepository: AuthRepository = koinInject()
     val isAuthenticated by authRepository.isAuthenticated.collectAsState(initial = false)
@@ -249,7 +251,7 @@ internal fun DesktopAppRoot(
         // DesktopSignedOutAuthHost) — the legacy DesktopSignInPane pane is
         // retired with its v1 cut-list.
         !isAuthenticated -> DesktopSignedOutAuthHost()
-        else -> DesktopNavScaffold(homeRefreshRequests = homeRefreshRequests)
+        else -> DesktopNavScaffold(menuRefreshRequests = menuRefreshRequests)
     }
 
     if (showAbout) {
@@ -291,7 +293,7 @@ private fun SessionRestoreSplash() {
  */
 @Composable
 private fun DesktopNavScaffold(
-    homeRefreshRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
+    menuRefreshRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     val navigation = rememberNavigationState(
         startRoute = Route.Home,
@@ -300,6 +302,17 @@ private fun DesktopNavScaffold(
     )
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // File→Refresh / Ctrl+R dispatch (see DesktopAppRoot KDoc): pull-to-refresh
+    // screens self-register into this registry via PullToRefreshBox while they
+    // are composed and enabled, so a menu refresh lands on the active screen's
+    // own onRefresh — Library, Live TV, Music, Admin, Home, all of them — with
+    // the same spinner/forced-fetch semantics as the gesture. No registration
+    // (e.g. Settings is on top) → nothing to refresh; dropped silently.
+    val refreshRegistry = remember { PullToRefreshRegistry() }
+    LaunchedEffect(menuRefreshRequests, refreshRegistry) {
+        menuRefreshRequests.collect { refreshRegistry.refreshActive() }
+    }
 
     // Wave 13B session harness: publish the live back stack (nav3 is the
     // source of truth) so DesktopSessionHarness can push the player route and
@@ -522,7 +535,6 @@ private fun DesktopNavScaffold(
                         },
                     )
                 },
-                refreshRequests = homeRefreshRequests,
             )
             searchSection(guardedNavigator)
             librarySection(guardedNavigator)
@@ -736,6 +748,7 @@ private fun DesktopNavScaffold(
             LocalNetworkStatus provides networkMonitor.networkStatus,
             LocalServerHealth provides serverHealth,
             LocalSurpriseOnLaunch provides surpriseController,
+            LocalPullToRefreshRegistry provides refreshRegistry,
         ) {
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 NavDisplay(

@@ -619,8 +619,8 @@ val CUSTOMIZABLE_TOP_LEVEL_ROUTES: List<Route> = NAV_KEYS_BY_ROUTE.keys.toList()
  */
 fun applyNavCustomization(
     routes: Map<Route, String>,
-    hiddenNavItems: Set<String>,
-    navItemOrder: List<String>,
+    hiddenNavItems: Set<String> = emptySet(),
+    navItemOrder: List<String> = emptyList(),
 ): LinkedHashMap<Route, String> {
     val ordered = applyNavCustomization(
         routes.entries.toList(),
@@ -640,8 +640,8 @@ fun applyNavCustomization(
 fun <T> applyNavCustomization(
     items: List<T>,
     keyOf: (T) -> String,
-    hiddenNavItems: Set<String>,
-    navItemOrder: List<String>,
+    hiddenNavItems: Set<String> = emptySet(),
+    navItemOrder: List<String> = emptyList(),
 ): List<T> {
     val filtered = items.filter { keyOf(it) !in hiddenNavItems }
     if (navItemOrder.isEmpty()) return filtered
