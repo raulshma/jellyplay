@@ -27,7 +27,9 @@ import com.composables.icons.tabler.outline.LayoutList
 import com.composables.icons.tabler.outline.Menu2
 import com.composables.icons.tabler.outline.Search
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
+import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.SHORTCUTS_NAV_KEY
+import com.raulshma.jellyplay.core.ui.navigation.navKey
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
@@ -56,9 +58,11 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 /**
  * Describes a single floating-navigation-bar item for the customization UI.
  *
- * Keys are the [Route] simple class names that [UserPreferences.hiddenNavItems]
- * and [UserPreferences.navItemOrder] operate on — these are the exact strings
- * used by the nav-bar composition in `JellyPlayApp`.
+ * Keys are the stable [Route.navKey] strings that
+ * [com.raulshma.jellyplay.core.model.UserPreferences.hiddenNavItems]
+ * and [com.raulshma.jellyplay.core.model.UserPreferences.navItemOrder] operate
+ * on — the same strings every nav shell compares against via
+ * [com.raulshma.jellyplay.core.ui.navigation.applyNavCustomization].
  */
 private data class NavItemDescriptor(
     val key: String,
@@ -70,11 +74,11 @@ private data class NavItemDescriptor(
 // The union of video + music top-level routes, in their default display order.
 // Mirrors VIDEO_TOP_LEVEL_ROUTES / MUSIC_TOP_LEVEL_ROUTES in core:ui.
 private val NAV_ITEMS: List<NavItemDescriptor> = listOf(
-    NavItemDescriptor("Home", Res.string.settings_nav_item_home, Tabler.Outline.Home, Res.string.settings_nav_item_home_subtitle),
-    NavItemDescriptor("Library", Res.string.settings_nav_item_library, Tabler.Outline.LayoutList, Res.string.settings_nav_item_library_subtitle),
-    NavItemDescriptor("Search", Res.string.settings_nav_item_search, Tabler.Outline.Search, Res.string.settings_nav_item_search_subtitle),
-    NavItemDescriptor("LiveTv", Res.string.settings_nav_item_live_tv, Tabler.Outline.DeviceTv, Res.string.settings_nav_item_live_tv_subtitle),
-    NavItemDescriptor("MusicBrowse", Res.string.settings_nav_item_browse, Tabler.Outline.Disc, Res.string.settings_nav_item_browse_subtitle),
+    NavItemDescriptor(Route.Home.navKey, Res.string.settings_nav_item_home, Tabler.Outline.Home, Res.string.settings_nav_item_home_subtitle),
+    NavItemDescriptor(Route.Library.navKey, Res.string.settings_nav_item_library, Tabler.Outline.LayoutList, Res.string.settings_nav_item_library_subtitle),
+    NavItemDescriptor(Route.Search.navKey, Res.string.settings_nav_item_search, Tabler.Outline.Search, Res.string.settings_nav_item_search_subtitle),
+    NavItemDescriptor(Route.LiveTv.navKey, Res.string.settings_nav_item_live_tv, Tabler.Outline.DeviceTv, Res.string.settings_nav_item_live_tv_subtitle),
+    NavItemDescriptor(Route.MusicBrowse.navKey, Res.string.settings_nav_item_browse, Tabler.Outline.Disc, Res.string.settings_nav_item_browse_subtitle),
     NavItemDescriptor(SHORTCUTS_NAV_KEY, Res.string.settings_nav_item_shortcuts, Tabler.Outline.Apps, Res.string.settings_nav_item_shortcuts_subtitle),
 )
 
@@ -83,9 +87,11 @@ private val NAV_ITEMS: List<NavItemDescriptor> = listOf(
  * toggle individual items on/off and reorder them by drag, plus toggle the
  * hide-on-scroll behavior.
  *
- * Backed by [UserPreferences.hiddenNavItems] / [UserPreferences.navItemOrder] /
- * [UserPreferences.hideBottomNavOnScroll], which the nav-bar composition already
- * reads — so no further wiring is needed.
+ * Backed by [com.raulshma.jellyplay.core.model.UserPreferences.hiddenNavItems] /
+ * [com.raulshma.jellyplay.core.model.UserPreferences.navItemOrder] /
+ * hideBottomNavOnScroll, which every nav shell applies through
+ * [com.raulshma.jellyplay.core.ui.navigation.applyNavCustomization] — Android
+ * floating bar and desktop rail alike (#152).
  */
 @Composable
 fun NavigationCustomizationGroup(

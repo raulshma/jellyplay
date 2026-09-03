@@ -37,7 +37,7 @@ import kotlin.test.assertTrue
  *     from the server (online success) and mirrors it everywhere;
  *  4. `reconcileOfflineRow`: server-favorite wins, server-watched resets the
  *     local row, local-played-mirrors-unplayed, otherwise latest position
- *     wins; missing rows degrade to null;
+ *     wins; missing rows degrade to NoChange;
  *  5. `parseIsoToEpochMillis` accepts offset-aware and bare-local ISO shapes.
  */
 class PlayedStateSyncImplTest {
@@ -211,19 +211,19 @@ class PlayedStateSyncImplTest {
     // ── reconcileOfflineRow ──────────────────────────────────────────────────
 
     @Test
-    fun `reconcile returns null without an offline row`() = runTest {
+    fun `reconcile reports NoChange without an offline row`() = runTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns null
 
-        assertNull(sync.reconcileOfflineRow(ITEM_ID))
+        assertEquals(PlayedStateSync.ReconcileOutcome.NoChange, sync.reconcileOfflineRow(ITEM_ID))
     }
 
     @Test
-    fun `reconcile returns null when the server view is unavailable`() = runTest {
+    fun `reconcile reports NoChange when the server view is unavailable`() = runTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem()
         coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
             Result.failure(java.io.IOException("offline"))
 
-        assertNull(sync.reconcileOfflineRow(ITEM_ID))
+        assertEquals(PlayedStateSync.ReconcileOutcome.NoChange, sync.reconcileOfflineRow(ITEM_ID))
     }
 
     @Test
@@ -246,7 +246,7 @@ class PlayedStateSyncImplTest {
 
         val result = sync.reconcileOfflineRow(ITEM_ID)
 
-        assertEquals(PlayedStateSync.ComputeResult.PLAYED, result)
+        assertEquals(PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.PLAYED), result)
         coVerify(exactly = 1) {
             offlineRepository.updatePlaybackProgress(ITEM_ID, 0L, 100.0, true)
         }
@@ -260,7 +260,7 @@ class PlayedStateSyncImplTest {
 
         val result = sync.reconcileOfflineRow(ITEM_ID)
 
-        assertEquals(PlayedStateSync.ComputeResult.UNPLAYED, result)
+        assertEquals(PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.UNPLAYED), result)
         coVerify(exactly = 1) { offlineRepository.applyPlayedState(ITEM_ID, false) }
     }
 
@@ -268,32 +268,57 @@ class PlayedStateSyncImplTest {
     fun `an unsynced PLAYED intent pushes instead of mirroring the server unplayed (#153)`() = runTest {
         every { offlineModeManager.isOffline } returns false
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem(isPlayed = true)
+        // The intent row exists (branch taken) and the push delivers it.
         coEvery { outboxRepository.hasUnsyncedPlayedIntent(ITEM_ID) } returns true
+        coEvery { outboxRepository.isPlayedStateIntentDelivered(ITEM_ID, played = true) } returns true
         coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
             Result.success(detail(isPlayed = false))
         coEvery { apiClient.markPlayed(ITEM_ID) } returns Result.success(Unit)
 
         val result = sync.reconcileOfflineRow(ITEM_ID)
 
-        assertEquals(PlayedStateSync.ComputeResult.PLAYED, result)
+        assertEquals(PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.PLAYED), result)
         coVerify(exactly = 0) { offlineRepository.applyPlayedState(ITEM_ID, false) }
         coVerify(exactly = 1) { apiClient.markPlayed(ITEM_ID) }
+        coVerify(exactly = 1) { outboxRepository.deletePlayedStateIntents(ITEM_ID) }
     }
 
     @Test
-    fun `a failed push for an unsynced PLAYED intent keeps the local row and re-stages (#153)`() = runTest {
+    fun `an unsynced UNPLAYED intent pushes instead of adopting the server watched state (#153)`() = runTest {
+        every { offlineModeManager.isOffline } returns false
+        coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem(isPlayed = false)
+        coEvery { outboxRepository.hasUnsyncedUnplayedIntent(ITEM_ID) } returns true
+        coEvery { outboxRepository.isPlayedStateIntentDelivered(ITEM_ID, played = false) } returns true
+        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+            Result.success(detail(isPlayed = true))
+        coEvery { apiClient.markUnplayed(ITEM_ID) } returns Result.success(Unit)
+
+        val result = sync.reconcileOfflineRow(ITEM_ID)
+
+        assertEquals(PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.UNPLAYED), result)
+        coVerify(exactly = 0) { offlineRepository.updatePlaybackProgress(any(), any(), any(), any()) }
+        coVerify(exactly = 1) { apiClient.markUnplayed(ITEM_ID) }
+        coVerify(exactly = 1) { outboxRepository.deletePlayedStateIntents(ITEM_ID) }
+    }
+
+    @Test
+    fun `a failed push for an unsynced PLAYED intent re-stages it and reports undelivered (#153)`() = runTest {
         every { offlineModeManager.isOffline } returns false
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem(isPlayed = true)
+        // The row is deleted before the push, but the failed flip re-enqueues
+        // it — so the delivery probe still reports an undelivered intent.
         coEvery { outboxRepository.hasUnsyncedPlayedIntent(ITEM_ID) } returns true
+        coEvery { outboxRepository.isPlayedStateIntentDelivered(ITEM_ID, played = true) } returns false
         coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
             Result.success(detail(isPlayed = false))
         coEvery { apiClient.markPlayed(ITEM_ID) } returns Result.failure(RuntimeException("down"))
 
         val result = sync.reconcileOfflineRow(ITEM_ID)
 
-        // The flip's failure fallback re-stages the intent in the outbox and
-        // reports success; nothing was cleared locally.
-        assertEquals(PlayedStateSync.ComputeResult.PLAYED, result)
+        // flip() still reports success to its caller, but reconcile must not
+        // claim a delivery that did not happen — the surviving row carries the
+        // intent to the next drain.
+        assertEquals(PlayedStateSync.ReconcileOutcome.UndeliveredIntent, result)
         coVerify(exactly = 0) { offlineRepository.applyPlayedState(ITEM_ID, false) }
         coVerify(exactly = 1) { outboxRepository.enqueuePlayedState(ITEM_ID, true) }
     }
@@ -314,7 +339,7 @@ class PlayedStateSyncImplTest {
 
         val result = sync.reconcileOfflineRow(ITEM_ID)
 
-        assertEquals(PlayedStateSync.ComputeResult.POSITION_UPDATED, result)
+        assertEquals(PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.POSITION_UPDATED), result)
         val itemSlot = slot<String>()
         val positionSlot = slot<Long>()
         val percentageSlot = slot<Double>()
@@ -341,7 +366,7 @@ class PlayedStateSyncImplTest {
         coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
             Result.success(detail(isPlayed = false, lastPlayedDate = null))
 
-        assertEquals(PlayedStateSync.ComputeResult.NOOP, sync.reconcileOfflineRow(ITEM_ID))
+        assertEquals(PlayedStateSync.ReconcileOutcome.NoChange, sync.reconcileOfflineRow(ITEM_ID))
     }
 
     // ── parseIsoToEpochMillis ────────────────────────────────────────────────

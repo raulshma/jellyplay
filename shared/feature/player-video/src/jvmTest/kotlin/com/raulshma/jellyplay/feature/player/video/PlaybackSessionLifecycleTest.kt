@@ -131,7 +131,7 @@ class PlaybackSessionLifecycleTest {
         hooks = RecordingHooks(
             routeToRemote = { false },
             reclaimEngine = { null },
-            wasInSyncPlay = { wasInSyncPlay },
+            syncPlayProbe = { wasInSyncPlay },
         )
         positionStore = FakePositionStore()
         pipeline = mockk(relaxed = true)
@@ -285,7 +285,9 @@ class PlaybackSessionLifecycleTest {
         session.initialize(request(itemId = "item-2"))
 
         assertTrue(firstJob.isCancelled)
-        assertEquals("item-2", startedRequests.single().itemId)
+        // Both loads reached the pipeline (the first was cancelled after
+        // starting); the LATEST request is the one that owns the session.
+        assertEquals("item-2", startedRequests.last().itemId)
     }
 
     @Test
@@ -433,6 +435,9 @@ class PlaybackSessionLifecycleTest {
                 "wasInSyncPlay",
                 "tryReclaimMiniPlayer",
                 "onMiniPlayerReclaimed",
+                // Post-bind hydration of the reclaimed item (offline-mirror
+                // resume state) — part of the reclaim body, still no pipeline.
+                "hydrateReclaimedItem",
             ),
             hooks.calls,
             "the reclaim routing skips the full teardown and the pipeline; the veil lifts synchronously",
@@ -768,7 +773,10 @@ class PlaybackSessionLifecycleTest {
     private class RecordingHooks(
         var routeToRemote: (LoadRequest) -> Boolean,
         var reclaimEngine: (String) -> MediaEngine?,
-        var wasInSyncPlay: () -> Boolean,
+        // Named differently from the override: a same-named property makes
+        // `wasInSyncPlay()` inside the override resolve to the method itself
+        // (infinite recursion, StackOverflowError).
+        var syncPlayProbe: () -> Boolean,
     ) : SessionLifecycleHooks {
         val calls = mutableListOf<String>()
         val resetSelections = mutableListOf<MediaStreamSelection>()
@@ -806,7 +814,7 @@ class PlaybackSessionLifecycleTest {
 
         override fun wasInSyncPlay(): Boolean {
             calls += "wasInSyncPlay"
-            return wasInSyncPlay()
+            return syncPlayProbe()
         }
     }
 

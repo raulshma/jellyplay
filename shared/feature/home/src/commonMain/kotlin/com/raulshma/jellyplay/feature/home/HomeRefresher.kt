@@ -647,15 +647,22 @@ internal class HomeRefresher(
                             // reconnect; on timeout we fetch anyway and the next
                             // periodic refresh / pull-to-refresh re-syncs.
                             awaitOutboxDrained()
-                            // Cap the post-toggle fetch so a hung network call
-                            // cannot leave isGoingOnline (and the loader) stuck
-                            // on — the symptom was the Go Online button + app
-                            // bar spinners never clearing. On timeout we drop the
+                            // Forced: the drain just changed server state, and
+                            // a non-forced fetch could serve the 60-second
+                            // homeSectionsCache entry captured BEFORE the
+                            // drain — re-showing an episode just marked
+                            // watched/unwatched offline. force bypasses both
+                            // the repo cache and the network-layer latest/
+                            // similar caches.
+                            // Capped so a hung network call cannot leave
+                            // isGoingOnline (and the loader) stuck on — the
+                            // symptom was the Go Online button + app bar
+                            // spinners never clearing. On timeout we drop the
                             // result; a normal refresh/pull-to-refresh can
                             // still repopulate sections once the network
                             // recovers. The loader is force-cleared below.
                             withTimeoutOrNull(GOING_ONLINE_TIMEOUT_MS) {
-                                fetchOnce()
+                                fetchOnce(force = true)
                             }
                         } finally {
                             clearFullScreenLoader()

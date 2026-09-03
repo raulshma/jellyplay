@@ -191,6 +191,8 @@ internal class WebMediaRepositoryNarrow(
     // by nature; this getter keeps the same loud-throw contract.
     override val userDataChanges: Flow<UserDataChange> get() = offWeb("userDataChanges")
 
+    override fun notifyUserDataChanged(itemIds: List<String>) = offWeb("notifyUserDataChanged")
+
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> = offWeb("toggleFavorite")
 
     override suspend fun markPlayed(itemId: String): Result<Unit> = offWeb("markPlayed")

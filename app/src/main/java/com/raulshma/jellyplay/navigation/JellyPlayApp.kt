@@ -146,6 +146,8 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
 import com.raulshma.jellyplay.core.ui.navigation.SHORTCUTS_NAV_KEY
+import com.raulshma.jellyplay.core.ui.navigation.applyNavCustomization
+import com.raulshma.jellyplay.core.ui.navigation.navKey
 import com.raulshma.jellyplay.core.ui.navigation.toNavRouteClass
 import com.raulshma.jellyplay.core.ui.tv.TvScaffold
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -478,35 +480,10 @@ private fun MainContent(
                 HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
                 HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
             }.let { routes ->
-                val hidden = preferences.hiddenNavItems
-                val order = preferences.navItemOrder
-                // Server-bound destinations with no offline fallback. Hidden
-                // by simpleName to stay consistent with the user hidden-item
-                // filter below (also keyed on simpleName). Library is NOT in
-                // here: its grid auto-switches to the offline store (#147).
-                val offlineHidden = if (isOffline) {
-                    setOf(Route.LiveTv::class.simpleName)
-                } else {
-                    emptySet()
-                }
-                val filtered = routes.filterKeys { route ->
-                    route::class.simpleName !in hidden && route::class.simpleName !in offlineHidden
-                }
-                if (order.isEmpty()) {
-                    LinkedHashMap(filtered)
-                } else {
-                    val ordered = linkedMapOf<Route, String>()
-                    for (name in order) {
-                        val entry = filtered.entries.find { it.key::class.simpleName == name }
-                        if (entry != null) ordered[entry.key] = entry.value
-                    }
-                    for (entry in filtered) {
-                        if (entry.key::class.simpleName !in order) {
-                            ordered[entry.key] = entry.value
-                        }
-                    }
-                    ordered
-                }
+                // Server-bound destination with no offline fallback. Library is
+                // NOT here: its grid auto-switches to the offline store (#147).
+                val offlineHidden = if (isOffline) setOf(Route.LiveTv.navKey) else emptySet()
+                applyNavCustomization(routes, preferences.hiddenNavItems + offlineHidden, preferences.navItemOrder)
             }
         }
     }

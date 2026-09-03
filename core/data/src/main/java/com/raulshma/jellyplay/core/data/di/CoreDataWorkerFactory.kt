@@ -69,6 +69,7 @@ class CoreDataWorkerFactory : WorkerFactory() {
                 playedStateSync = koin().get(),
                 offlineRepository = koin().get(),
                 userDataSyncScheduler = koin().get(),
+                mediaRepository = koin().get(),
             )
             DownloadWorker::class.simpleName -> DownloadWorker(
                 context, workerParameters,

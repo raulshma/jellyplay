@@ -31,6 +31,36 @@ class ApplyNavCustomizationTest {
     }
 
     @Test
+    fun everyTopLevelDestinationHasAnExplicitNavKey() {
+        // The navKey doc promises an explicit mapping for every customizable
+        // top-level destination (CUSTOMIZABLE_TOP_LEVEL_ROUTES) — a route that
+        // falls through to `simpleName` is exactly the rename/obfuscation
+        // fragility the mapping exists to prevent.
+        CUSTOMIZABLE_TOP_LEVEL_ROUTES.forEach { route ->
+            assertEquals(
+                route::class.simpleName,
+                route.navKey,
+                "${route::class.simpleName} must be explicitly mapped in navKey",
+            )
+        }
+    }
+
+    @Test
+    fun listOverloadFiltersAndOrdersDescriptorsDirectly() {
+        // The desktop rail passes descriptor objects keyed by navKey — no
+        // route→label map round-trip.
+        data class Item(val key: String, val label: String)
+
+        val items = listOf(Item("Home", "Home"), Item("Search", "Search"), Item("Settings", "Settings"))
+
+        val filtered = applyNavCustomization(items, { it.key }, hiddenNavItems = setOf("Search"), navItemOrder = emptyList())
+        assertEquals(listOf("Home", "Settings"), filtered.map { it.key })
+
+        val ordered = applyNavCustomization(items, { it.key }, hiddenNavItems = emptySet(), navItemOrder = listOf("Settings", "Home"))
+        assertEquals(listOf("Settings", "Home", "Search"), ordered.map { it.key })
+    }
+
+    @Test
     fun emptyCustomizationKeepsInputOrder() {
         val applied = applyNavCustomization(routes, hiddenNavItems = emptySet(), navItemOrder = emptyList())
         assertEquals(routes.keys.toList(), applied.keys.toList())

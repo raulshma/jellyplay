@@ -40,6 +40,13 @@ interface PlaybackStateDao {
      * `isFavorite` is preserved. `WHERE id = :itemId` matches zero rows for a
      * non-downloaded item; the INSERT branch is harmless in that case because
      * the repository only calls this for items it has seeded.
+     *
+     * On conflict, `isPlayed` is sticky: a stored `true` is never downgraded
+     * to `false` by a progress write. A tick that races the watched-threshold
+     * flip (threshold callback sets `true`, a later sub-threshold tick reports
+     * `false`) must not un-watch the row — only the explicit unwatch path
+     * ([applyPlayedStateToHierarchy]) clears the flag (#153). `false` still
+     * lands on rows that were never watched.
      */
     @Query(
         """
@@ -48,7 +55,7 @@ interface PlaybackStateDao {
         ON CONFLICT(id) DO UPDATE SET
             playbackPositionTicks = excluded.playbackPositionTicks,
             playedPercentage = excluded.playedPercentage,
-            isPlayed = excluded.isPlayed,
+            isPlayed = playback_state.isPlayed OR excluded.isPlayed,
             lastPlayedDate = excluded.lastPlayedDate
         """
     )

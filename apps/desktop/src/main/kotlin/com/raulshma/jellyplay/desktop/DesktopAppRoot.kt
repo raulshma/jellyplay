@@ -64,6 +64,7 @@ import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
+import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.ServerHealth
@@ -73,6 +74,8 @@ import com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch
 import com.raulshma.jellyplay.core.ui.components.SurpriseLaunchController
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.navigation.applyNavCustomization
+import com.raulshma.jellyplay.core.ui.navigation.navKey
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
 import com.raulshma.jellyplay.feature.admin.navigation.adminSection
 import com.raulshma.jellyplay.feature.arrqueue.navigation.arrQueueSection
@@ -341,6 +344,10 @@ private fun DesktopNavScaffold(
     LaunchedEffect(homeDiscoveryStore) {
         homeDiscoveryStore.homeDiscovery.collect { slice -> homeMode = slice.homeMode }
     }
+    // Bottom-nav customization (#152): the same NavigationStore the phone
+    // settings write through drives which items this rail shows and in what
+    // order (see the rail composition below).
+    val navigationStore: NavigationStore = koinInject()
     val onHomeModeChange: (HomeMode) -> Unit = { mode ->
         homeMode = mode
         scope.launch { homeDiscoveryStore.setHomeMode(mode) }
@@ -682,30 +689,33 @@ private fun DesktopNavScaffold(
                 // own vertical padding is only 4dp) and under the last item
                 // when the list is scrolled to the bottom.
                 Spacer(Modifier.height(12.dp))
-                DesktopRailItem(Route.Home, "Home", Tabler.Outline.Home, currentTopLevel, guardedNavigator)
-                DesktopRailItem(Route.Search, "Search", Tabler.Outline.Search, currentTopLevel, guardedNavigator)
-                DesktopRailItem(Route.Library, "Library", Tabler.Outline.Library, currentTopLevel, guardedNavigator)
-                DesktopRailItem(Route.LiveTv, "Live TV", Tabler.Outline.DeviceTv, currentTopLevel, guardedNavigator)
-                // Same icon the Android app's nav uses for Route.MusicBrowse
-                // (JellyPlayApp.routeToIcon): Tabler.Outline.Disc.
-                DesktopRailItem(Route.MusicBrowse, "Music", Tabler.Outline.Disc, currentTopLevel, guardedNavigator)
-                DesktopRailItem(Route.Downloads, "Downloads", Tabler.Outline.Download, currentTopLevel, guardedNavigator)
-                DesktopRailItem(Route.Newsletter, "Newsletter", Tabler.Outline.Mail, currentTopLevel, guardedNavigator)
-                DesktopRailItem(Route.WatchProgressHeatmap, "Insights", Tabler.Outline.Flame, currentTopLevel, guardedNavigator)
-                DesktopRailItem(Route.SyncPlay, "SyncPlay", Tabler.Outline.Users, currentTopLevel, guardedNavigator)
-
+                // Rail items come from the stored nav customization
+                // (Appearance → Navigation): hidden items drop off, custom
+                // order is honored, then the rest keep the default order.
+                // Group spacers are preserved between consecutive items whose
+                // group changes, so a custom order can interleave groups.
+                val navPrefs by navigationStore.navigation.collectAsState()
+                val railDescriptors = remember(navPrefs) {
+                    applyNavCustomization(
+                        DESKTOP_RAIL_ITEMS,
+                        { it.route.navKey },
+                        navPrefs.hiddenNavItems,
+                        navPrefs.navItemOrder,
+                    )
+                }
+                railDescriptors.forEachIndexed { index, descriptor ->
+                    if (index > 0 && descriptor.group != railDescriptors[index - 1].group) {
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    DesktopRailItem(
+                        descriptor.route,
+                        descriptor.label,
+                        descriptor.icon,
+                        currentTopLevel,
+                        guardedNavigator,
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
-
-                DesktopRailItem(Route.Requests, "Requests", Tabler.Outline.Movie, currentTopLevel, guardedNavigator)
-                DesktopRailItem(Route.UpcomingCalendar, "Calendar", Tabler.Outline.Calendar, currentTopLevel, guardedNavigator)
-                DesktopRailItem(Route.ArrQueue, "Arr Queue", Tabler.Outline.Stack, currentTopLevel, guardedNavigator)
-                DesktopRailItem(Route.Shortcuts, "Shortcuts", Tabler.Outline.Bolt, currentTopLevel, guardedNavigator)
-
-                Spacer(Modifier.height(12.dp))
-
-                DesktopRailItem(Route.Settings, "Settings", Tabler.Outline.Settings, currentTopLevel, guardedNavigator)
-                DesktopRailItem(Route.AdminDashboard, "Admin", Tabler.Outline.Shield, currentTopLevel, guardedNavigator)
-                    Spacer(Modifier.height(12.dp))
                 }
             }
         }
@@ -743,24 +753,44 @@ private fun DesktopNavScaffold(
     }
 }
 
-/** Rail + tab-switch destinations; Home is the start tab (same as the Android shell). */
-private val DESKTOP_TOP_LEVEL_ROUTES: Set<Route> = setOf(
-    Route.Home,
-    Route.Search,
-    Route.Library,
-    Route.LiveTv,
-    Route.MusicBrowse,
-    Route.Downloads,
-    Route.Newsletter,
-    Route.WatchProgressHeatmap,
-    Route.SyncPlay,
-    Route.Requests,
-    Route.UpcomingCalendar,
-    Route.ArrQueue,
-    Route.Shortcuts,
-    Route.Settings,
-    Route.AdminDashboard,
+/**
+ * One rail destination: route, label, icon, and the visual group it belongs to
+ * (a spacer is rendered between consecutive items of different groups). The
+ * route set here is what [applyNavCustomization] filters/orders against the
+ * stored nav-customization preference, so items hidden from Appearance →
+ * Navigation on the phone settings also drop off this rail (#152).
+ */
+private data class DesktopRailDescriptor(
+    val route: Route,
+    val label: String,
+    val icon: ImageVector,
+    val group: DesktopRailGroup,
 )
+
+/** The rail's visual clusters — a spacer renders between consecutive groups. */
+private enum class DesktopRailGroup { Browsing, Tools, System }
+
+private val DESKTOP_RAIL_ITEMS: List<DesktopRailDescriptor> = listOf(
+    DesktopRailDescriptor(Route.Home, "Home", Tabler.Outline.Home, DesktopRailGroup.Browsing),
+    DesktopRailDescriptor(Route.Search, "Search", Tabler.Outline.Search, DesktopRailGroup.Browsing),
+    DesktopRailDescriptor(Route.Library, "Library", Tabler.Outline.Library, DesktopRailGroup.Browsing),
+    DesktopRailDescriptor(Route.LiveTv, "Live TV", Tabler.Outline.DeviceTv, DesktopRailGroup.Browsing),
+    // Same icon the Android app's nav uses for Route.MusicBrowse (Tabler.Outline.Disc).
+    DesktopRailDescriptor(Route.MusicBrowse, "Music", Tabler.Outline.Disc, DesktopRailGroup.Browsing),
+    DesktopRailDescriptor(Route.Downloads, "Downloads", Tabler.Outline.Download, DesktopRailGroup.Browsing),
+    DesktopRailDescriptor(Route.Newsletter, "Newsletter", Tabler.Outline.Mail, DesktopRailGroup.Browsing),
+    DesktopRailDescriptor(Route.WatchProgressHeatmap, "Insights", Tabler.Outline.Flame, DesktopRailGroup.Browsing),
+    DesktopRailDescriptor(Route.SyncPlay, "SyncPlay", Tabler.Outline.Users, DesktopRailGroup.Browsing),
+    DesktopRailDescriptor(Route.Requests, "Requests", Tabler.Outline.Movie, DesktopRailGroup.Tools),
+    DesktopRailDescriptor(Route.UpcomingCalendar, "Calendar", Tabler.Outline.Calendar, DesktopRailGroup.Tools),
+    DesktopRailDescriptor(Route.ArrQueue, "Arr Queue", Tabler.Outline.Stack, DesktopRailGroup.Tools),
+    DesktopRailDescriptor(Route.Shortcuts, "Shortcuts", Tabler.Outline.Bolt, DesktopRailGroup.Tools),
+    DesktopRailDescriptor(Route.Settings, "Settings", Tabler.Outline.Settings, DesktopRailGroup.System),
+    DesktopRailDescriptor(Route.AdminDashboard, "Admin", Tabler.Outline.Shield, DesktopRailGroup.System),
+)
+
+/** Rail + tab-switch destinations; Home is the start tab (same as the Android shell). */
+private val DESKTOP_TOP_LEVEL_ROUTES: Set<Route> = DESKTOP_RAIL_ITEMS.map { it.route }.toSet()
 
 /**
  * The saved-state configuration every desktop NavDisplay shares: the sealed

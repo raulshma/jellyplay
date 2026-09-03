@@ -195,6 +195,21 @@ class PlaybackOutboxRepositoryImpl constructor(
         dao.getAll().map { it.toDomain() }
     }
 
+    override suspend fun hasUnsyncedPlayedIntent(itemId: String): Boolean = withContext(Dispatchers.IO) {
+        dao.hasUnsyncedIntent(itemId, PlaybackOutboxEventType.PLAYED.name)
+    }
+
+    override suspend fun hasUnsyncedUnplayedIntent(itemId: String): Boolean = withContext(Dispatchers.IO) {
+        dao.hasUnsyncedIntent(itemId, PlaybackOutboxEventType.UNPLAYED.name)
+    }
+
+    override suspend fun deletePlayedStateIntents(itemId: String) = withContext(Dispatchers.IO) {
+        dao.deleteByItemAndTypes(
+            itemId,
+            listOf(PlaybackOutboxEventType.PLAYED.name, PlaybackOutboxEventType.UNPLAYED.name),
+        )
+    }
+
     override suspend fun delete(id: String) = withContext(Dispatchers.IO) {
         dao.deleteById(id)
     }

@@ -224,6 +224,17 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
      */
     val userDataChanges: Flow<UserDataChange>
 
+    /**
+     * Emits [itemIds] into [userDataChanges] as a synthetic change, as if the
+     * server had pushed them. For local writers whose mutation reached the
+     * server through a path the WebSocket echo cannot cover (e.g. the offline
+     * outbox drain, whose markPlayedItem the socket session may never see as
+     * a UserDataChanged push) — the home refresher and open detail sessions
+     * listen on the same flow and refresh exactly like they do for a server
+     * push. No-op with no ids or before login.
+     */
+    fun notifyUserDataChanged(itemIds: List<String>)
+
     suspend fun toggleFavorite(itemId: String): Result<Boolean>
 
     suspend fun markPlayed(itemId: String): Result<Unit>

@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
  * synchronous prefix (latch resets, transport re-arm, routing early-returns)
  * has run.
  */
-class LoadRequest(
+data class LoadRequest(
     val itemId: String,
     val mediaSourceId: String?,
     val startPositionTicks: Long,

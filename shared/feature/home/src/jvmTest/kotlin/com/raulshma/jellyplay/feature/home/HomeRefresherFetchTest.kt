@@ -227,20 +227,29 @@ class HomeRefresherFetchTest {
         fakeTimeSource.nowMs = 50_000L
         val refresher = buildRefresher()
 
-        refresher.fetchOnce()
-        runCurrent()
-        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
-        assertNull(refresher.state.value.error)
+        try {
+            refresher.fetchOnce()
+            runCurrent()
+            coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+            assertNull(refresher.state.value.error)
 
-        // The offline attempt counted as fresh: 50s later (past no other
-        // threshold, under the 60s onStart staleness window) going back
-        // online and foregrounding must NOT immediately re-fetch.
-        every { offlineModeManager.isOffline } returns false
-        fakeTimeSource.nowMs = 100_000L
-        refresher.start()
-        runCurrent()
+            // The offline attempt counted as fresh: 50s later (past no other
+            // threshold, under the 60s onStart staleness window) going back
+            // online and foregrounding must NOT immediately re-fetch.
+            every { offlineModeManager.isOffline } returns false
+            fakeTimeSource.nowMs = 100_000L
+            refresher.start()
+            runCurrent()
 
-        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+            coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+        } finally {
+            // stop() in the test body, not just @AfterTest: runTest advances
+            // virtual time to idle before returning, which would fire the
+            // periodic loop against the unstubbed (relaxed) getHomeSections
+            // and fail THIS test with a ClassCastException after its own
+            // assertions already passed.
+            refresher.stop()
+        }
     }
 
     @Test
@@ -278,7 +287,19 @@ class HomeRefresherFetchTest {
 
     @Test
     fun request_discoverEnabled_fetchesDiscoverStandalone_withoutTouchingSections() = runTest {
-        val prefs = SeerrPreferences(enabled = true, discoverEnabled = true, discoverTrending = true)
+        // Trending-only: SeerrPreferences defaults the other four discover
+        // types on, and their endpoints are not stubbed below — a relaxed
+        // mock returns Result.success(Object) for them and the fan-out dies
+        // with a ClassCastException before the state write.
+        val prefs = SeerrPreferences(
+            enabled = true,
+            discoverEnabled = true,
+            discoverTrending = true,
+            discoverPopularMovies = false,
+            discoverPopularTv = false,
+            discoverUpcomingMovies = false,
+            discoverUpcomingTv = false,
+        )
         val trending = listOf(seerrItem(1, "Trending Movie"))
         coEvery { seerrRepository.getTrending(any()) } returns
             Result.success(SeerrSearchResponse(results = trending))

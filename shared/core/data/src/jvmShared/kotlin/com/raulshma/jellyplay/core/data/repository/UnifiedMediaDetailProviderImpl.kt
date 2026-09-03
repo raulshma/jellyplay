@@ -227,6 +227,13 @@ class UnifiedMediaDetailProviderImpl(
         private val refCount = AtomicLong(0L)
         @Volatile private var started = false
         @Volatile private var lastTick = -1L
+        // Previous offline mode seen by the [start] collector. An offline→
+        // online transition must re-resolve with force=true: the 2-minute
+        // detail cache can hold a pre-drain snapshot (fetched while offline
+        // networking flapped), and the outbox drain that just ran changed the
+        // server's view. Without this, an already-open detail screen keeps
+        // serving the stale entry for up to the cache TTL.
+        @Volatile private var lastMode: OfflineMode? = null
         // Probe cache: (file lastModified millis → streams). Re-probe only when
         // the file changes; stable across re-resolves (refresh/expand) so opening
         // the detail screen probes once per file version per session. Not private
@@ -284,8 +291,11 @@ class UnifiedMediaDetailProviderImpl(
                 combine(refreshTick, offlineModeManager.offlineMode) { tick, mode -> tick to mode }
                     .distinctUntilChanged()
                     .collect { (tick, mode) ->
-                        val force = tick != lastTick
+                        val cameOnline = lastMode != null &&
+                            lastMode != OfflineMode.ONLINE && mode == OfflineMode.ONLINE
+                        val force = tick != lastTick || cameOnline
                         lastTick = tick
+                        lastMode = mode
                         resolveFor(mode, force)
                     }
             }

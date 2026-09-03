@@ -77,6 +77,11 @@ class PlaybackSyncWorkerTest {
         // Derived watched flips route through the repository (cache
         // invalidation included); relaxed mocks cannot synthesize Result.
         coEvery { mediaRepository.markPlayed(any()) } returns Result.success(Unit)
+        // Relaxed mocks cannot pick a sealed-interface answer; default to the
+        // benign outcome (tests override where the branch matters).
+        coEvery { playedStateSync.reconcileOfflineRow(any()) } returns PlayedStateSync.ReconcileOutcome.NoChange
+        // Delivery probe default: flips land.
+        coEvery { outbox.isPlayedStateIntentDelivered(any(), any()) } returns true
     }
 
     private fun buildWorker(runAttemptCount: Int = 0): PlaybackSyncWorker =
@@ -147,7 +152,8 @@ class PlaybackSyncWorkerTest {
     @Test
     fun `downloaded items are reconciled even with an empty outbox`() = runTest {
         coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("d1", "d2")
-        coEvery { playedStateSync.reconcileOfflineRow(any()) } returns PlayedStateSync.ComputeResult.PLAYED
+        coEvery { playedStateSync.reconcileOfflineRow(any()) } returns
+            PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.PLAYED)
 
         val result = buildWorker().doWork()
 
@@ -161,7 +167,7 @@ class PlaybackSyncWorkerTest {
     @Test
     fun `downloaded items reconcile with all NOOP does not trigger userDataSync`() = runTest {
         coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("d1")
-        coEvery { playedStateSync.reconcileOfflineRow(any()) } returns PlayedStateSync.ComputeResult.NOOP
+        coEvery { playedStateSync.reconcileOfflineRow(any()) } returns PlayedStateSync.ReconcileOutcome.NoChange
 
         buildWorker().doWork()
 
@@ -307,6 +313,9 @@ class PlaybackSyncWorkerTest {
             entry("e2", "item-1", PlaybackOutboxEventType.STOP),
             entry("e3", "item-1", PlaybackOutboxEventType.PLAYED),
         )
+        // The drop gate reads the outbox (pending + dead-lettered), not just
+        // the drain snapshot — model the staged PLAYED row.
+        coEvery { outbox.hasUnsyncedPlayedIntent("item-1") } returns true
 
         val result = buildWorker().doWork()
 
@@ -316,6 +325,23 @@ class PlaybackSyncWorkerTest {
         coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
         coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(match { it.eventType == PlaybackOutboxEventType.PLAYED }) }
         coVerify(exactly = 3) { outbox.delete(any()) }
+    }
+
+    @Test
+    fun `a dead-lettered PLAYED intent still suppresses telemetry replay`() = runTest {
+        coEvery { outbox.drain() } returns listOf(
+            entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS),
+            entry("e2", "item-1", PlaybackOutboxEventType.STOP),
+        )
+        // The PLAYED row exhausted its budget in an earlier drain — it is not
+        // in the snapshot, but it still authorizes dropping the telemetry.
+        coEvery { outbox.hasUnsyncedPlayedIntent("item-1") } returns true
+
+        val result = buildWorker().doWork()
+
+        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        coVerify(exactly = 0) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 2) { outbox.delete(any()) }
     }
 
     @Test
@@ -453,6 +479,21 @@ class PlaybackSyncWorkerTest {
 
         // Reconcile is best-effort (wrapped in runCatching); the push still succeeded.
         assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+    }
+
+    @Test
+    fun `an undelivered reconcile intent push retries the drain (#153)`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
+        // reconcileOfflineRow re-pushed a staged PLAYED intent; the server
+        // call failed and flip() re-enqueued the row (UndeliveredIntent).
+        coEvery { playedStateSync.reconcileOfflineRow("item-1") } returns
+            PlayedStateSync.ReconcileOutcome.UndeliveredIntent
+
+        val result = buildWorker().doWork()
+
+        // Returning success here would strand the freshly re-enqueued intent
+        // row until the 4h periodic backstop — the drain must retry instead.
+        assertTrue(result is androidx.work.ListenableWorker.Result.Retry)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────

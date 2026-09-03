@@ -112,8 +112,12 @@ class RequestsViewModel(
         .map { it.enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION) }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
+    // Eagerly shared (not `WhileSubscribed`): [loadRequests] reads it via
+    // `.value` without holding a collector (same trap as [directArrEnabled]
+    // above) and no screen collects it — under `WhileSubscribed` the value
+    // would stay `null` forever and "My Requests" would never filter.
     val currentUser: StateFlow<SeerrCurrentUser?> = seerrRepository.currentUser
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
+        .stateIn(scope, SharingStarted.Eagerly, null)
 
     val isAdmin: StateFlow<Boolean> = seerrRepository.isAdmin()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)

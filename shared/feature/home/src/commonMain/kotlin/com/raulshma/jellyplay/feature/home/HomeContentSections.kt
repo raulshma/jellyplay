@@ -504,6 +504,16 @@ internal fun HomeContentList(
                         // long-press configure affordance (configurable types
                         // only — same gate as the online branch).
                         onSectionLongClick = sectionLongClick,
+                        // Mirrored RECENTLY_ADDED / LATEST_MEDIA rows keep the
+                        // online "See All" pill and play overlay (#147).
+                        onSeeAllClick = remember(callbacks, section.type, section.libraryId, section.collectionType, sectionTitle) {
+                            if (section.type == HomeSectionType.RECENTLY_ADDED || section.type == HomeSectionType.LATEST_MEDIA) {
+                                { callbacks.onSeeAllClick(section.type, section.libraryId, section.collectionType, sectionTitle) }
+                            } else null
+                        },
+                        onPlayClick = remember(callbacks) {
+                            { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) }
+                        },
                         onFocusedItemChange = callbacks.onFocusedMediaItem,
                     )
                 } else if (section.type == HomeSectionType.CONTINUE_WATCHING || section.type == HomeSectionType.NEXT_UP) {

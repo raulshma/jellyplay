@@ -266,21 +266,6 @@ internal fun buildOfflineHomeSections(
     }
     val showNextUpRow = prefs.nextUpEnabled && !prefs.mergeCwAndNextUp && nextUp.isNotEmpty()
 
-    // Cached-layout mirror first (#147): when the snapshot exists and yields
-    // at least one row, it IS the offline layout. Falls through to the generic
-    // rows otherwise so downloads are never unreachable.
-    if (cachedLayout.isNotEmpty()) {
-        val itemsById = offlineItemsById(library, episodes)
-        val mirrored = mirrorCachedLayoutSections(
-            cachedLayout,
-            itemsById,
-            prefs,
-            titles,
-            DerivedCwNextUp(mergedContinueWatching, showNextUpRow, nextUp),
-        )
-        if (mirrored.isNotEmpty()) return mirrored
-    }
-
     val sections = buildList {
         if (mergedContinueWatching.isNotEmpty()) {
             add(
@@ -343,6 +328,41 @@ internal fun buildOfflineHomeSections(
             )
         }
     }
+    // Cached-layout mirror first (#147): when the snapshot exists and yields
+    // at least one row, it IS the offline layout. Generic fallback rows are
+    // then APPENDED for content the mirror does not already surface — so a
+    // download whose snapshot row dropped (type disabled at fetch time, empty
+    // mirror filter) is still reachable, and re-enabled-while-offline types
+    // degrade to their nearest generic row instead of vanishing.
+    if (cachedLayout.isNotEmpty()) {
+        val itemsById = offlineItemsById(library, episodes)
+        val mirrored = mirrorCachedLayoutSections(
+            cachedLayout,
+            itemsById,
+            prefs,
+            titles,
+            DerivedCwNextUp(mergedContinueWatching, showNextUpRow, nextUp),
+        )
+        if (mirrored.isNotEmpty()) {
+            val covered = mirrored
+                .asSequence()
+                .flatMap { it.items.asSequence() }
+                .mapTo(HashSet()) { it.id }
+            // The appended fallback tail gets the same section-order
+            // normalization as the pure-generic path below — the mirror rows
+            // keep the snapshot order verbatim, but the fallbacks among
+            // themselves should still follow the user's configured order.
+            // Each fallback row keeps only its uncovered items: a partially
+            // covered generic row must not re-show its covered items in a
+            // second row (mirrored row + fallback tail).
+            val fallback = sections.mapNotNull { row ->
+                val uncovered = row.items.filter { it.id !in covered }
+                if (uncovered.isEmpty()) null else row.copy(items = uncovered)
+            }
+            return mirrored + orderOfflineSections(fallback, prefs.sectionOrder)
+        }
+    }
+
     return orderOfflineSections(sections, prefs.sectionOrder)
 }
 
@@ -368,11 +388,11 @@ private data class DerivedCwNextUp(
  * downloaded, or when unplayable offline (LIVE_TV). The snapshot order is
  * returned verbatim — it already encodes the user's layout.
  *
- * Known limitation: a section type ABSENT from the snapshot (disabled when it
- * was fetched) does not reappear when re-enabled while offline — the mirror
- * only reproduces row types the snapshot contains. And while any mirrored row
- * survives, the generic fallback rows (e.g. Recently Downloaded) stay
- * suppressed; they return only once every mirrored row filters to empty.
+ * Coverage: rows whose content the mirror cannot surface are not lost —
+ * [buildOfflineHomeSections] appends the generic fallback rows for any item
+ * id the mirrored rows do not already show, so every download stays reachable
+ * while offline even when its snapshot row dropped or its type was absent
+ * from the snapshot.
  */
 private fun mirrorCachedLayoutSections(
     cachedLayout: List<HomeSection>,

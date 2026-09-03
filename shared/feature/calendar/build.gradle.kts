@@ -109,6 +109,7 @@ kotlin {
         getByName("jvmTest").dependencies {
             implementation(kotlin("test"))
             implementation(libs.coroutines.test)
+            implementation(libs.mockk)
         }
         getByName("androidMain").dependencies {
             // The user-messenger actual bridges to the app-wide

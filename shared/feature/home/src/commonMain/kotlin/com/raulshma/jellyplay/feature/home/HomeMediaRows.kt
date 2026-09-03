@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
@@ -55,6 +56,7 @@ import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -98,6 +100,7 @@ import com.raulshma.jellyplay.feature.home.generated.resources.Res
  * / Next Up rows render through [ContinueWatchingRow] with local-file
  * resolvers instead.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun OfflineHomeMediaRow(
     title: String,
@@ -108,25 +111,52 @@ internal fun OfflineHomeMediaRow(
     onRowFocused: (() -> Unit)? = null,
     clippingEnabled: Boolean = false,
     onSectionLongClick: (() -> Unit)? = null,
+    // "See All" pill for the section types that get one online (mirrored rows
+    // keep the affordance — same visual row as the online layout, #147).
+    onSeeAllClick: (() -> Unit)? = null,
+    // Play overlay on the card, mirroring HomeMediaRow's onPlayClick.
+    onPlayClick: ((OfflineMediaItem) -> Unit)? = null,
     // TV-only: reports the D-pad-focused item so the screen's Menu key can
     // open its quick actions (the offline card's own long-press handles touch).
     onFocusedItemChange: ((MediaItem) -> Unit)? = null,
 ) {
+    val isTv = LocalTvMode.current
+    val cardPrefs = LocalCardDisplayPreferences.current
     val metrics = homeRowMetrics()
+    // Same hide-watched row filter as HomeMediaRow, so mirrored rows behave
+    // identically to their online counterparts (#147).
+    val effectiveItems = remember(items, cardPrefs.hideWatchedItems) {
+        hideWatchedFilter(items, cardPrefs.hideWatchedItems) { it.toMediaItem().isPlayed }
+    }
+    if (effectiveItems.isEmpty()) return
+    // Row-shared bottom scrim, matching the online poster rows.
+    val posterSurfaceColor = MaterialTheme.colorScheme.surface
+    val posterScrimBrush = remember(posterSurfaceColor) { posterScrim(posterSurfaceColor) }
+    // Same TV focus affordance as HomeMediaRow: Up-exits from the row land on
+    // the See All pill when one exists.
+    val seeAllFocusRequester = remember { FocusRequester() }
+    val rowModifier = if (isTv && onSeeAllClick != null) {
+        Modifier.seeAllExitOnUp(seeAllFocusRequester)
+    } else {
+        Modifier
+    }
 
     Column(modifier = modifier) {
         HomeRowTitle(
             title = title,
             contentPad = metrics.contentPad,
             onLongClick = onSectionLongClick,
+            onSeeAllClick = onSeeAllClick,
+            seeAllFocusRequester = seeAllFocusRequester,
         )
         HomeItemRow(
-            items = items,
+            items = effectiveItems,
             key = { it.id },
             cardWidth = metrics.cardWidth,
             spacing = metrics.spacing,
             contentPad = metrics.contentPad,
             clippingEnabled = clippingEnabled,
+            modifier = rowModifier,
             focusRequester = focusRequester,
             onRowFocused = onRowFocused,
             onFocusedItemChange = { item ->
@@ -138,13 +168,48 @@ internal fun OfflineHomeMediaRow(
             OfflineMediaCard(
                 item = item,
                 onClick = { onItemClick(item) },
+                onPlayClick = onPlayClick?.let { click -> ({ click(item) }) },
                 modifier = mod.width(metrics.cardWidth),
                 showStatusBadge = false,
+                sharedElementKey = "poster_${item.id}",
+                clipToShape = clippingEnabled,
+                gradientBrush = posterScrimBrush,
             )
         }
     }
 }
 
+
+/**
+ * Shared poster-row chrome — the pieces [OfflineHomeMediaRow] mirrors from
+ * [HomeMediaRow] so offline rows behave identically to their online
+ * counterparts (#147). Extracted so the two rows cannot drift apart.
+ */
+
+/** Drops watched items when the pref is on, so the whole card slot disappears. */
+private fun <T> hideWatchedFilter(
+    items: List<T>,
+    hideWatched: Boolean,
+    isPlayed: (T) -> Boolean,
+): List<T> = if (hideWatched) items.filterNot(isPlayed) else items
+
+/** The row-shared poster bottom scrim over [surfaceColor]. */
+private fun posterScrim(surfaceColor: Color): Brush =
+    Brush.verticalGradient(listOf(Color.Transparent, surfaceColor.copy(alpha = 0.45f)))
+
+/**
+ * TV focus routing for rows with a "See All" pill: the pill hugs the header's
+ * trailing edge, so geometric focus search from the cards below rarely ranks
+ * it — redirect Up-exits from the row to the pill explicitly.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+private fun Modifier.seeAllExitOnUp(seeAllFocusRequester: FocusRequester): Modifier =
+    focusProperties {
+        exit = { direction ->
+            if (direction == FocusDirection.Up) seeAllFocusRequester
+            else FocusRequester.Default
+        }
+    }
 
 /**
  * The row chrome metrics every home row derives from the adaptive info —
@@ -369,7 +434,7 @@ fun <T> ContinueWatchingRow(
     }
 }
 
-@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun HomeMediaRow(
     title: String,
@@ -399,13 +464,13 @@ fun HomeMediaRow(
     seriesBackdropResolver: (String) -> String = { "" },
 ) {
     val isTv = LocalTvMode.current
-    val cardPrefs = com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences.current
+    val cardPrefs = LocalCardDisplayPreferences.current
     val metrics = homeRowMetrics()
     val cardWidth = metrics.cardWidth
     // Apply "hide watched items" filter at the row wrapper so the entire card
     // (and its slot in the scroller) disappears rather than leaving a gap.
     val effectiveItems = remember(items, cardPrefs.hideWatchedItems) {
-        if (cardPrefs.hideWatchedItems) items.filterNot { it.isPlayed } else items
+        hideWatchedFilter(items, cardPrefs.hideWatchedItems) { it.isPlayed }
     }
     // When the filter empties a row, hide the whole row (header included) so
     // the user doesn't see section titles for fully-watched content.
@@ -413,21 +478,14 @@ fun HomeMediaRow(
     // The poster bottom-scrim gradient is identical across every card in the
     // same theme state, so compute it once per row instead of per card.
     val posterSurfaceColor = MaterialTheme.colorScheme.surface
-    val posterScrimBrush = remember(posterSurfaceColor) {
-        Brush.verticalGradient(listOf(Color.Transparent, posterSurfaceColor.copy(alpha = 0.45f)))
-    }
+    val posterScrimBrush = remember(posterSurfaceColor) { posterScrim(posterSurfaceColor) }
 
     // The See All pill hugs the header's trailing edge, so geometric focus search
     // from the cards below rarely ranks it. Redirect Up-exits from the row to the
     // pill explicitly (sections without one keep the default search).
     val seeAllFocusRequester = remember { FocusRequester() }
     val rowModifier = if (isTv && onSeeAllClick != null) {
-        Modifier.focusProperties {
-            exit = { direction ->
-                if (direction == FocusDirection.Up) seeAllFocusRequester
-                else FocusRequester.Default
-            }
-        }
+        Modifier.seeAllExitOnUp(seeAllFocusRequester)
     } else {
         Modifier
     }

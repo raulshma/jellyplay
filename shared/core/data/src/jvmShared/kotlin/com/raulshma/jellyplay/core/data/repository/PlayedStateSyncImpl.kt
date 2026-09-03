@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync.ComputeResult
+import com.raulshma.jellyplay.core.data.repository.PlayedStateSync.ReconcileOutcome
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
@@ -144,11 +145,12 @@ class PlayedStateSyncImpl(
         }
     }
 
-    override suspend fun reconcileOfflineRow(itemId: String): ComputeResult? {
-        val offline = offlineRepository.getOfflineItem(itemId) ?: return null
+    override suspend fun reconcileOfflineRow(itemId: String): ReconcileOutcome {
+        val offline = offlineRepository.getOfflineItem(itemId) ?: return ReconcileOutcome.NoChange
         // Pull a fresh server view (bypass any cached detail so a stale cache
         // cannot mask a newer played/position state).
-        val serverItem = mediaRepository.value.getMediaDetail(itemId, force = true).getOrNull()?.item ?: return null
+        val serverItem = mediaRepository.value.getMediaDetail(itemId, force = true).getOrNull()?.item
+            ?: return ReconcileOutcome.NoChange
 
         // Favorite is a user preference shared across devices, so the server is
         // authoritative: if it disagrees with the local row, adopt the server's
@@ -161,24 +163,38 @@ class PlayedStateSyncImpl(
 
         // Server watched (e.g. finished online) always wins — reset the local
         // row so a later offline resume starts the next episode / 0, not a
-        // stale half-watched position.
+        // stale half-watched position. Symmetric exception (#153): an
+        // undelivered UNPLAYED intent means the user marked the item unwatched
+        // offline and the server never heard it — the server's watched state
+        // is not newer knowledge, so push the local intent instead of
+        // adopting it.
         if (serverItem.isPlayed) {
+            if (playbackOutboxRepository.hasUnsyncedUnplayedIntent(itemId)) {
+                return pushUnsyncedIntent(itemId, played = false)
+            }
             offlineRepository.updatePlaybackProgress(
                 itemId = itemId,
                 positionTicks = 0L,
                 percentage = 100.0,
                 isPlayed = true,
             )
-            return ComputeResult.PLAYED
+            return ReconcileOutcome.Changed(ComputeResult.PLAYED)
         }
 
-        // Server unplayed but local played: the user marked the item (or its
-        // season/series) unwatched online and that change has not yet reached
-        // the local store. Mirror the flip — including the hierarchy cascade —
-        // so the offline screen does not show stale watched state.
+        // Server unplayed but local played: EITHER the user marked the item
+        // unwatched online and that change has not yet reached the local store
+        // (mirror the flip), OR a local watched intent never reached the
+        // server — a pending/dead-lettered PLAYED outbox row, or an offline
+        // watch whose flip was lost (the #153 "watched offline, online home
+        // shows mostly completed" bug). The unsynced-intent check separates
+        // the two: when the server never received the watch, its unplayed
+        // state is not newer knowledge — push instead of clearing.
         if (offline.isPlayed) {
+            if (playbackOutboxRepository.hasUnsyncedPlayedIntent(itemId)) {
+                return pushUnsyncedIntent(itemId, played = true)
+            }
             offlineRepository.applyPlayedState(itemId, isPlayed = false)
-            return ComputeResult.UNPLAYED
+            return ReconcileOutcome.Changed(ComputeResult.UNPLAYED)
         }
 
         // Otherwise the most recent activity wins. Both sides are epoch-millis
@@ -187,13 +203,13 @@ class PlayedStateSyncImpl(
         // server omits the offset), and the offline row stores
         // OffsetDateTime.now().toString(). `parseIsoToEpochMillis` accepts
         // both shapes so the comparison is zone-correct regardless of source.
-        val serverMillis = parseIsoToEpochMillis(serverItem.lastPlayedDate) ?: return ComputeResult.NOOP
+        val serverMillis = parseIsoToEpochMillis(serverItem.lastPlayedDate) ?: return ReconcileOutcome.NoChange
         if (serverMillis > System.currentTimeMillis()) {
             // Sanity guard against future-dated server clocks.
-            return ComputeResult.NOOP
+            return ReconcileOutcome.NoChange
         }
         val offlineMillis = offline.lastPlayedDate?.let { parseIsoToEpochMillis(it) } ?: 0L
-        if (serverMillis <= offlineMillis) return ComputeResult.NOOP
+        if (serverMillis <= offlineMillis) return ReconcileOutcome.NoChange
 
         val runTime = serverItem.runTimeTicks ?: offline.runTimeTicks
         val percentage = PlayedStateSync.computePlayedPercentage(
@@ -207,7 +223,33 @@ class PlayedStateSyncImpl(
             percentage = percentage,
             isPlayed = false,
         )
-        return ComputeResult.POSITION_UPDATED
+        return ReconcileOutcome.Changed(ComputeResult.POSITION_UPDATED)
+    }
+
+    /**
+     * Delete-before-push for an undelivered played-state intent (#153): the
+     * row (pending or dead-lettered) is removed BEFORE the push, so a
+     * delivered flip leaves nothing behind, and a formerly dead-lettered row
+     * returns with a fresh retry budget instead of lingering as a zombie that
+     * every later reconcile re-pushes.
+     *
+     * Delivery is detected via the outbox probe
+     * ([PlaybackOutboxRepository.isPlayedStateIntentDelivered] — the surviving
+     * row is the real delivery signal): [ReconcileOutcome.UndeliveredIntent]
+     * when the push did not land (the re-enqueued row carries it to the next
+     * drain).
+     */
+    private suspend fun pushUnsyncedIntent(itemId: String, played: Boolean): ReconcileOutcome {
+        runCatching { playbackOutboxRepository.deletePlayedStateIntents(itemId) }
+        flip(itemId, played)
+        val delivered = runCatching {
+            playbackOutboxRepository.isPlayedStateIntentDelivered(itemId, played)
+        }.getOrDefault(false)
+        return when {
+            !delivered -> ReconcileOutcome.UndeliveredIntent
+            played -> ReconcileOutcome.Changed(ComputeResult.PLAYED)
+            else -> ReconcileOutcome.Changed(ComputeResult.UNPLAYED)
+        }
     }
 
     companion object {
