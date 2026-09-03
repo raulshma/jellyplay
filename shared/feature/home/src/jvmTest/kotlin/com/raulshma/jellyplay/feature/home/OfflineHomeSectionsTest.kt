@@ -197,6 +197,24 @@ class OfflineHomeSectionsTest {
     }
 
     @Test
+    fun `continue watching orders mixed-offset timestamps chronologically`() {
+        // A UTC-stamped play at 09:30Z is LATER than a +02:00-stamped play at
+        // 10:00 (08:00Z); lexicographic string ordering would reverse them.
+        val sections = buildOfflineHomeSections(
+            library = listOf(
+                offline("plus", playedPercentage = 40.0, playbackPositionTicks = 40L, lastPlayedDate = "2026-01-10T10:00:00+02:00"),
+                offline("z", playedPercentage = 40.0, playbackPositionTicks = 40L, lastPlayedDate = "2026-01-10T09:30:00Z"),
+            ),
+            episodes = emptyList(),
+            titles = titles,
+            prefs = defaultPrefs,
+        )
+
+        val cw = sections.first { it.id == "offline_continue_watching" }
+        assertEquals(listOf("z", "plus"), cw.items.map { it.id })
+    }
+
+    @Test
     fun `continue watching is capped at twenty items`() {
         val library = (1..25).map { i ->
             offline("m$i", playedPercentage = 50.0, playbackPositionTicks = 5L, lastPlayedDate = "2026-01-%02d".format(i))
@@ -407,6 +425,52 @@ class OfflineHomeSectionsTest {
             listOf("e2"),
             buildOfflineHomeSections(emptyList(), episodes, titles, defaultPrefs.copy(nextUpMaxDays = 0))
                 .first { it.id == "offline_next_up" }.items.map { it.id },
+        )
+    }
+
+    @Test
+    fun `next up ranks a series with only resumable activity by its watch date`() {
+        // s1's only activity is a mid-watch (resumable, unplayed) E1 — its
+        // fresh E2 must outrank s2's entry (played Jan 5) because s1's watch
+        // happened later (Jan 20), not sink to the tail for lacking a PLAYED
+        // anchor.
+        val sections = buildOfflineHomeSections(
+            library = emptyList(),
+            episodes = listOf(
+                episode("s1e1", seriesId = "s1", episodeNumber = 1, playedPercentage = 40.0, playbackPositionTicks = 40L, lastPlayedDate = "2026-01-20"),
+                episode("s1e2", seriesId = "s1", episodeNumber = 2),
+                episode("s2e1", seriesId = "s2", episodeNumber = 1, isPlayed = true, lastPlayedDate = "2026-01-05"),
+                episode("s2e2", seriesId = "s2", episodeNumber = 2),
+            ),
+            titles = titles,
+            prefs = defaultPrefs,
+        )
+
+        assertEquals(
+            listOf("s1e2", "s2e2"),
+            sections.first { it.id == "offline_next_up" }.items.map { it.id },
+        )
+    }
+
+    @Test
+    fun `next up orders mixed-offset timestamps chronologically`() {
+        // utc's 09:30Z play (Jan 10) is LATER than local's 10:00+02:00 play
+        // (08:00Z); lexicographic string ordering would reverse the entries.
+        val sections = buildOfflineHomeSections(
+            library = emptyList(),
+            episodes = listOf(
+                episode("l1", seriesId = "local", episodeNumber = 1, isPlayed = true, lastPlayedDate = "2026-01-10T10:00:00+02:00"),
+                episode("l2", seriesId = "local", episodeNumber = 2),
+                episode("u1", seriesId = "utc", episodeNumber = 1, isPlayed = true, lastPlayedDate = "2026-01-10T09:30:00Z"),
+                episode("u2", seriesId = "utc", episodeNumber = 2),
+            ),
+            titles = titles,
+            prefs = defaultPrefs,
+        )
+
+        assertEquals(
+            listOf("u2", "l2"),
+            sections.first { it.id == "offline_next_up" }.items.map { it.id },
         )
     }
 

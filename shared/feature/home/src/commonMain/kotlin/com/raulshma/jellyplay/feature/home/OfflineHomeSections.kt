@@ -264,11 +264,11 @@ internal fun buildOfflineHomeSections(
     // seconds scrubbed into a file is not a resume point).
     val continueWatching = if (prefs.continueWatchingEnabled) {
         (library.asSequence().filter { it.mediaType != MediaType.SERIES } + episodes.asSequence())
-            .filter { (it.playbackPositionTicks ?: 0L) > 0L }
+            .filter { it.hasResumePosition() }
             .filter { it.playedPercentage >= 1.0 && !it.isPlayed && !it.isFinishedOffline }
             .filter { it.id !in prefs.hiddenCwItemIds }
             .sortedWith(
-                compareByDescending<OfflineMediaItem> { it.lastPlayedDate ?: "" }
+                compareByDescending<OfflineMediaItem> { isoEpochMillis(it.lastPlayedDate) ?: Long.MIN_VALUE }
                     .thenByDescending { it.createdAt }
             )
             .take(CONTINUE_WATCHING_LIMIT)
@@ -278,15 +278,7 @@ internal fun buildOfflineHomeSections(
     }
 
     val nextUp = if (prefs.nextUpEnabled) {
-        computeOfflineNextUp(
-            episodes = episodes,
-            excludedSeriesIds = prefs.nextUpExcludedSeriesIds,
-            enableRewatching = prefs.nextUpRewatching,
-            // Same cutoff the online fetch sends as `nextUpDateCutoff`:
-            // now - maxDays, compared against the stored ISO timestamps.
-            nextUpDateCutoff = prefs.nextUpMaxDays.takeIf { it > 0 }
-                ?.let { java.time.OffsetDateTime.now().minusDays(it.toLong()).toString() },
-        )
+        computeOfflineNextUp(episodes, prefs)
     } else {
         emptyList()
     }
@@ -520,7 +512,7 @@ internal fun orderOfflineSections(
  * (TVSeriesManager + NextUpService), restricted to what is downloaded:
  *
  *  1. **Series selection** — only series with watch activity (any downloaded
- *     episode carrying a `lastPlayedDate`); ordered by most recent activity,
+ *     episode carrying a parseable `lastPlayedDate`); ordered by most recent activity,
  *     capped, and dropped entirely when older than the user's Next Up date
  *     cutoff (`nextUpMaxDays`, the `nextUpDateCutoff` param the online fetch
  *     sends).
@@ -535,8 +527,18 @@ internal fun orderOfflineSections(
  *     param), a second per-series pass picks the first PLAYED episode after
  *     the most-recently-played one, appended alongside the regular entry.
  *
- * Entries sort by their anchor's last-played date (most recent first), then
- * series id for stability; the row is capped at [NEXT_UP_LIMIT].
+ * Entries sort by their series' most recent watch activity (most recent
+ * first), then series id for stability; the row is capped at [NEXT_UP_LIMIT].
+ * Sorting by the series activity — not the anchor episode's date — keeps a
+ * series whose only activity is a resumable (unplayed) episode ranked by
+ * when that watch happened instead of sinking to the row's tail.
+ *
+ * Stored `lastPlayedDate` strings mix server-synced ISO stamps (UTC `Z`,
+ * nanosecond fraction) with local `OffsetDateTime.now().toString()` writes
+ * (host-zone offset, variable precision), so every date ordering and the
+ * cutoff compare go through [isoEpochMillis] — those forms are NOT
+ * lexicographically comparable (a `+02:00` stamp vs a `Z` stamp mis-orders
+ * by hours).
  *
  * Named divergence: the server additionally interleaves specials
  * (`DisplaySpecialsWithinSeasons`) via aired-before/after ordering — the
@@ -545,44 +547,41 @@ internal fun orderOfflineSections(
  */
 private fun computeOfflineNextUp(
     episodes: List<OfflineMediaItem>,
-    excludedSeriesIds: Set<String>,
-    enableRewatching: Boolean,
-    nextUpDateCutoff: String?,
+    prefs: OfflineHomeSectionPrefs,
 ): List<OfflineMediaItem> {
     if (episodes.isEmpty()) return emptyList()
 
-    /** One next-up row entry: the episode plus its sort key. */
+    /** One next-up row entry: the episode plus its sort key (series activity, epoch millis). */
     data class NextUpEntry(
         val episode: OfflineMediaItem,
-        val lastWatched: String,
+        val lastWatched: Long,
         val seriesId: String,
     )
 
     // Specials (season 0) and unsighted episodes (null season) are not
     // Next Up material — the server's `ParentIndexNumber != 0` filter.
-    val regular = episodes.filter { it.seasonNumber != null && it.seasonNumber != 0 }
+    val nonSpecials = episodes.filter { it.seasonNumber != null && it.seasonNumber != 0 }
 
     val bySeries = LinkedHashMap<String, MutableList<OfflineMediaItem>>()
-    for (episode in regular) {
+    for (episode in nonSpecials) {
         val seriesId = episode.seriesId ?: continue
-        if (seriesId in excludedSeriesIds) continue
+        if (seriesId in prefs.nextUpExcludedSeriesIds) continue
         bySeries.getOrPut(seriesId) { ArrayList() }.add(episode)
     }
+
+    // Same cutoff the online fetch sends as `nextUpDateCutoff`: now - maxDays.
+    val cutoffMillis = prefs.nextUpMaxDays.takeIf { it > 0 }
+        ?.let { System.currentTimeMillis() - it.toLong() * MILLIS_PER_DAY }
 
     val entries = ArrayList<NextUpEntry>(bySeries.size)
     for ((seriesId, group) in bySeries) {
         // Season/episode order; nulls first (mirrors the DAO query's ASC sort).
-        val ordered = group.sortedWith(
-            compareBy(
-                { it.seasonNumber ?: Int.MIN_VALUE },
-                { it.episodeNumber ?: Int.MIN_VALUE },
-            )
-        )
+        val ordered = group.sortedWith(seasonEpisodeOrder)
 
         // Series eligibility: any watch activity, within the date cutoff.
-        val lastActivity = ordered.maxOf { it.lastPlayedDate ?: "" }
-        if (lastActivity.isEmpty()) continue
-        if (nextUpDateCutoff != null && lastActivity < nextUpDateCutoff) continue
+        val lastActivityMillis =
+            ordered.mapNotNull { isoEpochMillis(it.lastPlayedDate) }.maxOrNull() ?: continue
+        if (cutoffMillis != null && lastActivityMillis < cutoffMillis) continue
 
         // Anchor: the highest played episode by (season, episode).
         val anchor = ordered.lastOrNull { it.isPlayed }
@@ -593,29 +592,25 @@ private fun computeOfflineNextUp(
         val unplayed = ordered.asSequence().filter { !it.isPlayed }
         val regularCandidate =
             (if (anchor != null) unplayed.filter { isAfter(it, anchor) } else unplayed)
-                .filter { (it.playbackPositionTicks ?: 0L) == 0L }
+                .filter { !it.hasResumePosition() }
                 .firstOrNull()
         if (regularCandidate != null) {
-            entries += NextUpEntry(regularCandidate, anchor?.lastPlayedDate ?: "", seriesId)
+            entries += NextUpEntry(regularCandidate, lastActivityMillis, seriesId)
         }
 
         // Rewatch pass: the first PLAYED episode after the most-recently
         // played one (server keys the rewatch anchor by date, not position).
-        if (enableRewatching) {
+        if (prefs.nextUpRewatching) {
             val played = ordered.filter { it.isPlayed }
-            val dateAnchor = played.maxByOrNull { it.lastPlayedDate ?: "" }
+            val dateAnchor =
+                played.maxByOrNull { isoEpochMillis(it.lastPlayedDate) ?: Long.MIN_VALUE }
             if (dateAnchor != null) {
                 val rewatchCandidate = played
                     .filter { isAfter(it, dateAnchor) }
-                    .filter { (it.playbackPositionTicks ?: 0L) == 0L }
-                    .minWithOrNull(
-                        compareBy(
-                            { it.seasonNumber ?: Int.MIN_VALUE },
-                            { it.episodeNumber ?: Int.MIN_VALUE },
-                        )
-                    )
+                    .filter { !it.hasResumePosition() }
+                    .minWithOrNull(seasonEpisodeOrder)
                 if (rewatchCandidate != null) {
-                    entries += NextUpEntry(rewatchCandidate, dateAnchor.lastPlayedDate ?: "", seriesId)
+                    entries += NextUpEntry(rewatchCandidate, lastActivityMillis, seriesId)
                 }
             }
         }
@@ -630,15 +625,47 @@ private fun computeOfflineNextUp(
         .map { it.episode }
 }
 
+/** (season, episode) order with nulls first — the one ordering every Next Up pass shares. */
+private val seasonEpisodeOrder: Comparator<OfflineMediaItem> = compareBy(
+    { it.seasonNumber ?: Int.MIN_VALUE },
+    { it.episodeNumber ?: Int.MIN_VALUE },
+)
+
 /** True when [episode] sits strictly after [anchor] in (season, episode) order. */
 private fun isAfter(
     episode: OfflineMediaItem,
     anchor: OfflineMediaItem?,
-): Boolean {
-    if (anchor == null) return true
-    val season = episode.seasonNumber ?: Int.MIN_VALUE
-    val number = episode.episodeNumber ?: Int.MIN_VALUE
-    val anchorSeason = anchor.seasonNumber ?: Int.MIN_VALUE
-    val anchorNumber = anchor.episodeNumber ?: Int.MIN_VALUE
-    return season > anchorSeason || (season == anchorSeason && number > anchorNumber)
+): Boolean = anchor == null || seasonEpisodeOrder.compare(episode, anchor) > 0
+
+/** True when the item carries a playback position — the server's `IsResumable` position rule. */
+private fun OfflineMediaItem.hasResumePosition(): Boolean = (playbackPositionTicks ?: 0L) > 0L
+
+/** Milliseconds in one day — the `nextUpMaxDays` cutoff unit. */
+private const val MILLIS_PER_DAY = 86_400_000L
+
+/**
+ * Parses the `lastPlayedDate` forms the offline store carries into comparable
+ * epoch millis: server-synced ISO stamps (offset / `Z`, up to nanosecond
+ * fraction), local `OffsetDateTime.now().toString()` writes (host-zone
+ * offset, variable precision) and bare local dates. Null when blank or
+ * unparseable — callers treat null as "no activity".
+ */
+private fun isoEpochMillis(value: String?): Long? {
+    if (value.isNullOrBlank()) return null
+    val zone = java.time.ZoneId.systemDefault()
+    return try {
+        when {
+            value.length == 10 -> // bare local date (`2026-01-05`)
+                java.time.LocalDate.parse(value).atStartOfDay(zone).toInstant().toEpochMilli()
+            ISO_OFFSET_SUFFIX.containsMatchIn(value) ->
+                java.time.OffsetDateTime.parse(value).toInstant().toEpochMilli()
+            else -> // bare local date-time, no offset
+                java.time.LocalDateTime.parse(value).atZone(zone).toInstant().toEpochMilli()
+        }
+    } catch (_: java.time.format.DateTimeParseException) {
+        null
+    }
 }
+
+/** Trailing `Z` / `±HH:mm` offset on a stored ISO timestamp. */
+private val ISO_OFFSET_SUFFIX = Regex("(?:Z|[+-]\\d{2}:\\d{2})$")
