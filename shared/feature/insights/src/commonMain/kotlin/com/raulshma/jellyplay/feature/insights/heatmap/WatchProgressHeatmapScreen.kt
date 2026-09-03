@@ -37,7 +37,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import androidx.compose.runtime.Composable
