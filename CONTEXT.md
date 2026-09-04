@@ -550,6 +550,20 @@ body — not three signatures in lockstep (screen → scrim → dock).
 the icon-colour lerp, hide-on-scroll, and the query/settings-search leaf
 collections) forward the bundles.
 
+The dock's hide-on-scroll is one shared policy with the app-shell floating
+nav bar: **`ScrollDirectionVisibility`**
+(`shared/core/ui/.../components/ScrollDirectionVisibility.kt`) owns
+direction detection, the dead-zone threshold (dock 12dp, nav 15px), the
+at-top force (dock ON, nav OFF) and the forced-visible gate; each site
+keeps only a thin feed. `HomeTopDockScrim` collects a `snapshotFlow` over
+the shared `LazyListState` into `onListScrolled` — offset comparisons are
+per-emission, never accumulated, and the first emission (or a `prime` at
+effect (re)start) only syncs tracking — while `PhoneContent`'s
+`NestedScrollConnection` forwards `available.y` to `onScrollDelta`. The
+nav's `LocalFloatingNavVisibility` value is the module's exposed
+`visibleState`. Pinned in `ScrollDirectionVisibilityTest` (core/ui
+`jvmTest`).
+
 The home rows share one chassis: `HomeItemRow<T>` (`HomeMediaRows.kt`) owns
 the TV (`TvFocusableItemRow`) / touch (`HorizontalMediaScroller`) branch
 with the card as a `(item, modifier)` slot, and `HomeRowTitle` is the

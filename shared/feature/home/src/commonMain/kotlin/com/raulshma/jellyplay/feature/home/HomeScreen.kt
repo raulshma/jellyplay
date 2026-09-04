@@ -76,6 +76,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.DeleteDownloadedEpisodesSheet
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.ScrollDirectionVisibility
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
@@ -1004,33 +1005,46 @@ private fun HomeTopDockScrim(
     // on scroll-up, always visible at the very top. The dock is an overlay
     // sibling of the LazyColumn (not a scroll ancestor), so it can't host a
     // NestedScrollConnection; direction is derived here from the shared
-    // LazyListState via snapshotFlow. Kept inside this leaf so the 510-line
+    // LazyListState via snapshotFlow. The policy itself (direction detection,
+    // the 12dp threshold, the at-top force, the forced-visible gate) lives in
+    // core/ui's ScrollDirectionVisibility — the same class the app-shell nav
+    // bar feeds from its NestedScrollConnection — so this leaf is only the
+    // feed + the animation. Kept inside this leaf so the 510-line
     // MainHomeContent orchestrator never recomposes on scroll — the same
     // isolation discipline as scrollFraction above. Forced visible while
     // search is focused and disabled entirely on TV.
     val listState = homeScrollState.listState
     val canHide = dockState.hideTopHeaderOnScroll && !isTv
-    var isHeaderVisible by remember { mutableStateOf(true) }
     val hideThresholdPx = with(LocalDensity.current) { 12.dp.toPx() }
+    // The gate lambda must observe the CURRENT settings/focus values (not the
+    // first composition's), so it re-reads them through rememberUpdatedState;
+    // the module itself stays one remembered instance (recreated only if the
+    // density — and with it the px threshold — changes).
+    val dockCanHideNow by rememberUpdatedState(canHide && !dockState.isSearchFocused)
+    val scrollVisibility = remember(hideThresholdPx) {
+        ScrollDirectionVisibility(
+            thresholdPx = hideThresholdPx,
+            forceVisibleAtTop = true,
+            canHide = { dockCanHideNow },
+        )
+    }
+    val isHeaderVisible = scrollVisibility.visible
     LaunchedEffect(canHide, dockState.isSearchFocused) {
         if (!canHide || dockState.isSearchFocused) {
-            isHeaderVisible = true
+            scrollVisibility.resetToVisible()
             return@LaunchedEffect
         }
-        var prevIndex = listState.firstVisibleItemIndex
-        var prevOffset = listState.firstVisibleItemScrollOffset
+        // Re-prime the module's tracking from the live list position — the
+        // same per-effect prevIndex/prevOffset initialization as before — then
+        // feed every emission through the shared policy.
+        scrollVisibility.prime(
+            index = listState.firstVisibleItemIndex,
+            offsetPx = listState.firstVisibleItemScrollOffset.toFloat(),
+        )
         snapshotFlow {
             listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
         }.collect { (index, offset) ->
-            when {
-                index == 0 && offset == 0 -> isHeaderVisible = true
-                index > prevIndex -> isHeaderVisible = false
-                index < prevIndex -> isHeaderVisible = true
-                offset - prevOffset > hideThresholdPx -> isHeaderVisible = false
-                prevOffset - offset > hideThresholdPx -> isHeaderVisible = true
-            }
-            prevIndex = index
-            prevOffset = offset
+            scrollVisibility.onListScrolled(index, offset.toFloat())
         }
     }
     val hideProgress by animateFloatAsState(

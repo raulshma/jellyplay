@@ -131,6 +131,7 @@ import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
+import com.raulshma.jellyplay.core.ui.components.ScrollDirectionVisibility
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.feedback.UserMessage
 import com.raulshma.jellyplay.core.ui.feedback.resolve
@@ -684,8 +685,21 @@ private fun MainContent(
     val bottomNavHeight = Dimensions.floatingNavHeight // Canonical floating nav-bar height
     val bottomNavHeightPx = with(LocalDensity.current) { bottomNavHeight.toPx() }
     val bottomNavOffsetHeightPx = remember { mutableFloatStateOf(0f) }
-    val isBottomNavVisibleState = remember { mutableStateOf(true) }
-    var isBottomNavVisible by isBottomNavVisibleState
+    // Hide-on-scroll policy for the floating nav bar: core/ui's shared
+    // ScrollDirectionVisibility — the same policy the home dock feeds from its
+    // LazyListState. The nav's mechanism adapter is the NestedScrollConnection
+    // in PhoneContent below. There is deliberately NO at-top rule
+    // (forceVisibleAtTop = false — the nav never force-shows on returning to a
+    // list's top) and NO per-update canHide gate (canHide = null — its only
+    // gate is the settings-off reset LaunchedEffect in PhoneContent), matching
+    // the former inline state machine exactly. The module owns the visible
+    // state: `visibleState` is what LocalFloatingNavVisibility provides, and
+    // the offset animation below reads `visible` exactly as it read the former
+    // bare MutableState.
+    val bottomNavScrollVisibility = remember {
+        ScrollDirectionVisibility(thresholdPx = 15f, forceVisibleAtTop = false)
+    }
+    var isBottomNavVisible by bottomNavScrollVisibility.visibleState
 
     val animatedBottomNavOffset by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (isBottomNavVisible) 0f else -bottomNavHeightPx * 2,
@@ -722,7 +736,7 @@ private fun MainContent(
         LocalTvTypography provides tvTypography,
         LocalPerformanceMode provides preferences.performanceMode,
         com.raulshma.jellyplay.core.ui.feedback.LocalHapticsEnabled provides preferences.hapticsEnabled,
-        LocalFloatingNavVisibility provides isBottomNavVisibleState,
+        LocalFloatingNavVisibility provides bottomNavScrollVisibility.visibleState,
         com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController provides mediaPreviewController,
         com.raulshma.jellyplay.core.ui.preview.LocalMediaPeekEnabled provides
             preferences.isExperimentalEnabled(ExperimentalFeature.MEDIA_CARD_PEEK),
@@ -851,7 +865,7 @@ private fun MainContent(
                         onAmbientClick = onAmbientClick,
                         isAudioPlayerScreen = isAudioPlayerScreen,
                         isExpanded = isExpanded,
-                        isBottomNavVisibleState = isBottomNavVisibleState,
+                        bottomNavScrollVisibility = bottomNavScrollVisibility,
                         hideBottomNavOnScroll = preferences.hideBottomNavOnScroll,
                         bottomNavOffsetHeightPx = bottomNavOffsetHeightPx,
                         showMiniPlayer = showMiniPlayer,
@@ -1098,7 +1112,7 @@ private fun PhoneContent(
     onAmbientClick: () -> Unit,
     isAudioPlayerScreen: Boolean,
     isExpanded: Boolean,
-    isBottomNavVisibleState: androidx.compose.runtime.MutableState<Boolean>,
+    bottomNavScrollVisibility: ScrollDirectionVisibility,
     hideBottomNavOnScroll: Boolean,
     bottomNavOffsetHeightPx: androidx.compose.runtime.MutableFloatState,
     showMiniPlayer: Boolean,
@@ -1115,7 +1129,6 @@ private fun PhoneContent(
 ) {
     val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    var isBottomNavVisible by isBottomNavVisibleState
 
     // Play On (cast-to-Jellyfin-session) lives at the app shell so the mini
     // transport persists across tabs. Owned by an activity-scoped VM: both
@@ -1156,17 +1169,17 @@ private fun PhoneContent(
         // identity stays stable, but it is only attached to the tree when the
         // setting is on.
         androidx.compose.runtime.LaunchedEffect(hideBottomNavOnScroll) {
-            if (!hideBottomNavOnScroll) isBottomNavVisible = true
+            if (!hideBottomNavOnScroll) bottomNavScrollVisibility.resetToVisible()
         }
         val nestedScrollConnection = remember {
             object : NestedScrollConnection {
                 override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                     val delta = available.y
-                    if (delta < -15f) {
-                        isBottomNavVisible = false
-                    } else if (delta > 15f) {
-                        isBottomNavVisible = true
-                    }
+                    // The policy (15px dead zone, hide on scroll-down / show
+                    // on scroll-up, no at-top rule, no per-update gate) lives
+                    // in the shared ScrollDirectionVisibility; this connection
+                    // is only the feed.
+                    bottomNavScrollVisibility.onScrollDelta(delta)
                     return Offset.Zero
                 }
             }
