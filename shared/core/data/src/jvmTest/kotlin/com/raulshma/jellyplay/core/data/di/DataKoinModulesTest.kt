@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
+import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -206,8 +207,8 @@ class DataKoinModulesTest {
                 "MediaRepositoryCacheInvalidation must alias the MediaRepository single (one cache set, not two)",
             )
             assertTrue(
-                koin.get<LyricsRepository>() === mediaRepository,
-                "LyricsRepository must alias the MediaRepository single (MediaRepository extends it)",
+                koin.get<LyricsRepository>() is LyricsRepositoryImpl,
+                "LyricsRepository resolves to the extracted lyrics engine (no longer a MediaRepository view)",
             )
             assertResolves<PlayedStateSync>(koin)
             assertResolves<UserDataMutator>(koin)

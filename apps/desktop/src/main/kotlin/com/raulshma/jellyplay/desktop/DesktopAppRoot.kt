@@ -74,6 +74,8 @@ import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshRegistry
 import com.raulshma.jellyplay.core.ui.components.SurpriseLaunchController
+import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATION_BY_ROUTE
+import com.raulshma.jellyplay.core.ui.navigation.NavDestination
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.applyNavCustomization
@@ -716,12 +718,12 @@ private fun DesktopNavScaffold(
                     )
                 }
                 railDescriptors.forEachIndexed { index, descriptor ->
-                    if (index > 0 && descriptor.group != railDescriptors[index - 1].group) {
+                    if (index > 0 && descriptor.railGroup != railDescriptors[index - 1].railGroup) {
                         Spacer(Modifier.height(12.dp))
                     }
                     DesktopRailItem(
                         descriptor.route,
-                        descriptor.label,
+                        descriptor.railLabel,
                         descriptor.icon,
                         currentTopLevel,
                         guardedNavigator,
@@ -767,40 +769,28 @@ private fun DesktopNavScaffold(
 }
 
 /**
- * One rail destination: route, label, icon, and the visual group it belongs to
- * (a spacer is rendered between consecutive items of different groups). The
- * route set here is what [applyNavCustomization] filters/orders against the
- * stored nav-customization preference, so items hidden from Appearance →
- * Navigation on the phone settings also drop off this rail (#152).
+ * The rail renders the shared [NavDestination] registry — label, icon and
+ * group come from the one destination-facts table in core/ui (the former
+ * per-shell `DesktopRailDescriptor` list is gone). Only the rail's OWN
+ * display order stays here; it is per-shell policy, not a destination fact.
  */
-private data class DesktopRailDescriptor(
-    val route: Route,
-    val label: String,
-    val icon: ImageVector,
-    val group: DesktopRailGroup,
-)
-
-/** The rail's visual clusters — a spacer renders between consecutive groups. */
-private enum class DesktopRailGroup { Browsing, Tools, System }
-
-private val DESKTOP_RAIL_ITEMS: List<DesktopRailDescriptor> = listOf(
-    DesktopRailDescriptor(Route.Home, "Home", Tabler.Outline.Home, DesktopRailGroup.Browsing),
-    DesktopRailDescriptor(Route.Search, "Search", Tabler.Outline.Search, DesktopRailGroup.Browsing),
-    DesktopRailDescriptor(Route.Library, "Library", Tabler.Outline.Library, DesktopRailGroup.Browsing),
-    DesktopRailDescriptor(Route.LiveTv, "Live TV", Tabler.Outline.DeviceTv, DesktopRailGroup.Browsing),
-    // Same icon the Android app's nav uses for Route.MusicBrowse (Tabler.Outline.Disc).
-    DesktopRailDescriptor(Route.MusicBrowse, "Music", Tabler.Outline.Disc, DesktopRailGroup.Browsing),
-    DesktopRailDescriptor(Route.Downloads, "Downloads", Tabler.Outline.Download, DesktopRailGroup.Browsing),
-    DesktopRailDescriptor(Route.Newsletter, "Newsletter", Tabler.Outline.Mail, DesktopRailGroup.Browsing),
-    DesktopRailDescriptor(Route.WatchProgressHeatmap, "Insights", Tabler.Outline.Flame, DesktopRailGroup.Browsing),
-    DesktopRailDescriptor(Route.SyncPlay, "SyncPlay", Tabler.Outline.Users, DesktopRailGroup.Browsing),
-    DesktopRailDescriptor(Route.Requests, "Requests", Tabler.Outline.Movie, DesktopRailGroup.Tools),
-    DesktopRailDescriptor(Route.UpcomingCalendar, "Calendar", Tabler.Outline.Calendar, DesktopRailGroup.Tools),
-    DesktopRailDescriptor(Route.ArrQueue, "Arr Queue", Tabler.Outline.Stack, DesktopRailGroup.Tools),
-    DesktopRailDescriptor(Route.Shortcuts, "Shortcuts", Tabler.Outline.Bolt, DesktopRailGroup.Tools),
-    DesktopRailDescriptor(Route.Settings, "Settings", Tabler.Outline.Settings, DesktopRailGroup.System),
-    DesktopRailDescriptor(Route.AdminDashboard, "Admin", Tabler.Outline.Shield, DesktopRailGroup.System),
-)
+private val DESKTOP_RAIL_ITEMS: List<NavDestination> = listOf(
+    Route.Home,
+    Route.Search,
+    Route.Library,
+    Route.LiveTv,
+    Route.MusicBrowse,
+    Route.Downloads,
+    Route.Newsletter,
+    Route.WatchProgressHeatmap,
+    Route.SyncPlay,
+    Route.Requests,
+    Route.UpcomingCalendar,
+    Route.ArrQueue,
+    Route.Shortcuts,
+    Route.Settings,
+    Route.AdminDashboard,
+).mapNotNull(NAV_DESTINATION_BY_ROUTE::get)
 
 /** Rail + tab-switch destinations; Home is the start tab (same as the Android shell). */
 private val DESKTOP_TOP_LEVEL_ROUTES: Set<Route> = DESKTOP_RAIL_ITEMS.map { it.route }.toSet()

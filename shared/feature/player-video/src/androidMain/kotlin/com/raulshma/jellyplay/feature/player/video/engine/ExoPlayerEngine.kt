@@ -76,7 +76,7 @@ import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.subtitle.AssSupport
 import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
-import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalog
 import io.github.peerless2012.ass.media.AssHandler
 import io.github.peerless2012.ass.media.kt.withAssMkvSupport
 import io.github.peerless2012.ass.media.parser.AssSubtitleParserFactory
@@ -796,7 +796,7 @@ class ExoPlayerEngine(
         request: PlaybackRequest,
     ): List<MediaItem.SubtitleConfiguration> =
         request.externalSubtitles.mapNotNull { sub ->
-            val mimeType = sub.mimeType ?: SubtitleMimeMapper.mapCodecToMime(sub.codec ?: sub.label) ?: return@mapNotNull null
+            val mimeType = sub.mimeType ?: SubtitleFormatCatalog.mapCodecToMime(sub.codec ?: sub.label) ?: return@mapNotNull null
             MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.url))
                 .setId(sub.id)
                 .setMimeType(mimeType)
@@ -1767,7 +1767,7 @@ class ExoPlayerEngine(
         val exo = player ?: return@runOnPlayerThread
         val item = currentMediaItem ?: return@runOnPlayerThread
         val mimeType = source.mimeType
-            ?: SubtitleMimeMapper.mapCodecToMime(source.codec ?: source.label)
+            ?: SubtitleFormatCatalog.mapCodecToMime(source.codec ?: source.label)
             ?: run {
                 // A silent drop here used to strand the subtitle-download flow:
                 // the row flipped to "Use" but no track ever surfaced, so the

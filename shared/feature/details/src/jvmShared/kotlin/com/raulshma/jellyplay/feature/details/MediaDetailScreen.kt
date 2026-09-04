@@ -563,8 +563,8 @@ fun MediaDetailScreen(
                         onShowDetailUpNext = { viewModel.setShowDetailUpNext(true) },
                         onHideDetailUpNext = { viewModel.setShowDetailUpNext(false) },
                         onManageSeries = { onManageSeries(itemId) },
-                        onAddToPlaylist = { viewModel.playlists.openPlaylistPicker() },
-                        onAddToCollection = { viewModel.collections.openCollectionPicker() },
+                        onAddToPlaylist = { viewModel.playlists.openPicker() },
+                        onAddToCollection = { viewModel.collections.openPicker() },
                         onStartInstantMix = { viewModel.startInstantMix() },
                         onStartWatchParty = { viewModel.watchParty.startScreenItem() },
                         onMediaQuickActions = { item -> quickActionController.show(item) },
@@ -645,61 +645,61 @@ fun MediaDetailScreen(
         // owning helper at the composition site that reads it — a closed sheet
         // composes nothing and the content core never sees a playlist tick. ──
         val playlistState by viewModel.playlists.state.collectAsStateWithLifecycle()
-        if (playlistState.showPlaylistPicker && detail != null) {
+        if (playlistState.showPicker && detail != null) {
             val playlistSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             TvSafeSheet(
-                onDismissRequest = { viewModel.playlists.dismissPlaylistPicker() },
+                onDismissRequest = { viewModel.playlists.dismissPicker() },
                 sheetState = playlistSheetState,
             ) {
                 AddToPlaylistSheet(
-                    playlists = playlistState.playlists,
-                    isLoading = playlistState.isLoadingPlaylists,
-                    isAdding = playlistState.isAddingToPlaylist,
-                    onWatchLater = { viewModel.playlists.addToWatchLater() },
-                    onPick = { playlist -> viewModel.playlists.addToPlaylist(playlist) },
-                    onCreateNew = { viewModel.playlists.openCreatePlaylistDialog() },
-                    onDismiss = { viewModel.playlists.dismissPlaylistPicker() },
+                    playlists = playlistState.targets,
+                    isLoading = playlistState.isLoadingTargets,
+                    isAdding = playlistState.isAdding,
+                    onWatchLater = { viewModel.watchLater.addToWatchLater() },
+                    onPick = { playlist -> viewModel.playlists.addTo(playlist) },
+                    onCreateNew = { viewModel.playlists.openCreateDialog() },
+                    onDismiss = { viewModel.playlists.dismissPicker() },
                 )
             }
         }
 
-        if (playlistState.showCreatePlaylistDialog) {
+        if (playlistState.showCreateDialog) {
             CreatePlaylistDialog(
-                isLoading = playlistState.isAddingToPlaylist,
+                isLoading = playlistState.isAdding,
                 onConfirm = { name, overview ->
-                    viewModel.playlists.createAndAddPlaylist(name, overview)
+                    viewModel.playlists.createAndAdd(name, overview)
                 },
-                onDismiss = { viewModel.playlists.dismissCreatePlaylistDialog() },
+                onDismiss = { viewModel.playlists.dismissCreateDialog() },
             )
         }
 
-        // ── Add-to-Collection sheet + create dialog (mirror of the playlist
-        // block; same collection locality). ──
+        // ── Add-to-Collection sheet + create dialog (the same
+        // AddToTargetActions module with the collection adapter). ──
         val collectionState by viewModel.collections.state.collectAsStateWithLifecycle()
-        if (collectionState.showCollectionPicker && detail != null) {
+        if (collectionState.showPicker && detail != null) {
             val collectionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             TvSafeSheet(
-                onDismissRequest = { viewModel.collections.dismissCollectionPicker() },
+                onDismissRequest = { viewModel.collections.dismissPicker() },
                 sheetState = collectionSheetState,
             ) {
                 AddToCollectionSheet(
-                    collections = collectionState.collections,
-                    isLoading = collectionState.isLoadingCollections,
-                    isAdding = collectionState.isAddingToCollection,
-                    onPick = { collection -> viewModel.collections.addToCollection(collection) },
-                    onCreateNew = { viewModel.collections.openCreateCollectionDialog() },
-                    onDismiss = { viewModel.collections.dismissCollectionPicker() },
+                    collections = collectionState.targets,
+                    isLoading = collectionState.isLoadingTargets,
+                    isAdding = collectionState.isAdding,
+                    onPick = { collection -> viewModel.collections.addTo(collection) },
+                    onCreateNew = { viewModel.collections.openCreateDialog() },
+                    onDismiss = { viewModel.collections.dismissPicker() },
                 )
             }
         }
 
-        if (collectionState.showCreateCollectionDialog) {
+        if (collectionState.showCreateDialog) {
             CreateCollectionDialog(
-                isLoading = collectionState.isAddingToCollection,
+                isLoading = collectionState.isAdding,
                 onConfirm = { name ->
-                    viewModel.collections.createAndAddCollection(name)
+                    viewModel.collections.createAndAdd(name)
                 },
-                onDismiss = { viewModel.collections.dismissCreateCollectionDialog() },
+                onDismiss = { viewModel.collections.dismissCreateDialog() },
             )
         }
 

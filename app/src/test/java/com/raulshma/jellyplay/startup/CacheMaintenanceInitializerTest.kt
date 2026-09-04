@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.startup
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -24,13 +24,13 @@ import org.junit.Test
  */
 class CacheMaintenanceInitializerTest {
 
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val lyricsRepository: LyricsRepository = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     @Before
     fun setUp() {
-        coEvery { mediaRepository.cleanupLyricsCache() } returns Unit
+        coEvery { lyricsRepository.cleanupLyricsCache() } returns Unit
         coEvery { offlineRepository.cleanupOrphans() } returns Unit
     }
 
@@ -40,7 +40,7 @@ class CacheMaintenanceInitializerTest {
     }
 
     private fun createInitializer() = CacheMaintenanceInitializer(
-        mediaRepository = mediaRepository,
+        lyricsRepository = lyricsRepository,
         offlineRepository = offlineRepository,
         applicationScope = scope,
     )
@@ -49,7 +49,7 @@ class CacheMaintenanceInitializerTest {
     fun `cleanup runs both maintenance passes`() = runBlocking {
         createInitializer().cleanup()
 
-        coVerify(exactly = 1) { mediaRepository.cleanupLyricsCache() }
+        coVerify(exactly = 1) { lyricsRepository.cleanupLyricsCache() }
         coVerify(exactly = 1) { offlineRepository.cleanupOrphans() }
     }
 
@@ -57,7 +57,7 @@ class CacheMaintenanceInitializerTest {
     fun `cleanupOnce runs the passes exactly once across repeated calls`() = runBlocking {
         val lyricsRan = CompletableDeferred<Unit>()
         val orphansRan = CompletableDeferred<Unit>()
-        coEvery { mediaRepository.cleanupLyricsCache() } coAnswers { lyricsRan.complete(Unit) }
+        coEvery { lyricsRepository.cleanupLyricsCache() } coAnswers { lyricsRan.complete(Unit) }
         coEvery { offlineRepository.cleanupOrphans() } coAnswers { orphansRan.complete(Unit) }
 
         val initializer = createInitializer()
@@ -73,7 +73,7 @@ class CacheMaintenanceInitializerTest {
             orphansRan.await()
         }
 
-        coVerify(exactly = 1) { mediaRepository.cleanupLyricsCache() }
+        coVerify(exactly = 1) { lyricsRepository.cleanupLyricsCache() }
         coVerify(exactly = 1) { offlineRepository.cleanupOrphans() }
     }
 }

@@ -205,7 +205,7 @@ class DetailViewModelTest {
                 offlineSyncManager = mockk(relaxed = true),
                 downloadIntake = mockk(relaxed = true),
             ),
-            playlists = PlaylistActions.Factory(
+            playlists = PlaylistTargets.Factory(
                 mediaRepository = mediaRepository,
                 appRuntimeStateStore = mockk<AppRuntimeStateStore>(relaxed = true),
             ),

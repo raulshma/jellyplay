@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.web
 
 import androidx.paging.PagingData
-import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
@@ -21,8 +20,6 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LiveTvRecording
-import com.raulshma.jellyplay.core.model.LrcLibTrack
-import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -67,8 +64,7 @@ internal class WebMediaRepositoryNarrow(
     LiveTvRepository,
     SyncPlayRepository,
     NewsletterRepository,
-    PlaylistRepository,
-    LyricsRepository {
+    PlaylistRepository {
 
     private fun offWeb(member: String): Nothing = throw UnsupportedOperationException(
         "MediaRepository on web serves only findItemByProviderId (SeerrDetail cross-link); " +
@@ -342,23 +338,8 @@ internal class WebMediaRepositoryNarrow(
 
     override suspend fun movePlaylistItem(playlistId: String, entryId: String, newIndex: Int): Result<Unit> = offWeb("movePlaylistItem")
 
-    // ── LyricsRepository ───────────────────────────────────────────────────
-
-    override suspend fun getLyrics(itemId: String): Result<LyricsResult> = offWeb("getLyrics")
-
-    override suspend fun getLyricsWithFallback(
-        itemId: String,
-        artistName: String?,
-        trackName: String?,
-        duration: Double?,
-    ): Result<LyricsResult> = offWeb("getLyricsWithFallback")
-
-    override suspend fun searchLyrics(query: String): Result<List<LrcLibTrack>> = offWeb("searchLyrics")
-
-    override suspend fun getLyricsById(lrcLibId: Long, itemId: String): Result<LyricsResult> = offWeb("getLyricsById")
-
-    override suspend fun cleanupLyricsCache() = offWeb("cleanupLyricsCache")
 }
+
 
 /**
  * The web shell's details platform pick (wave 16C): binds the narrow

@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
+import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -51,14 +52,12 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
-import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
 import com.raulshma.jellyplay.feature.player.video.state.GesturePrefsState
 import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
 import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
 import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
-import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 
 import kotlinx.coroutines.Job
@@ -91,9 +90,6 @@ private const val MIN_DURATION_FOR_SMART_DELETE_MS = 5 * 60 * 1000L
  * paths that change nothing (e.g. remote-play routing). Sized for the slowest
  * network preset's timeout chain (VERY_RELAXED 60 s + failover retries).
  */
-// internal so the latch tests can drive the scheduler by exactly this value.
-internal const val NEXT_EPISODE_SETTLE_TIMEOUT_MS = 90_000L
-
 // The process-death resume-position persistence (SavedStateHandle keys,
 // throttle/coalesce windows, the staleness threshold and the pure
 // resolveResumeTicks resolver) moved into PlaybackSession.kt behind the
@@ -183,6 +179,7 @@ class VideoPlayerViewModel(
      */
     private val platform: VideoPlayerPlatform,
     private val mediaRepository: MediaRepository,
+    private val lyricsRepository: LyricsRepository,
     private val playbackRepository: PlaybackRepository,
     private val subtitleProviderRepository: com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository,
     private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
@@ -321,8 +318,6 @@ class VideoPlayerViewModel(
      * overlay disables its play button on this flag, so rapid re-taps can
      * neither stack duplicate loads nor restart playback once per tap (#146).
      */
-    private val _nextEpisodeLoading = MutableStateFlow(false)
-    val isNextEpisodeLoading: StateFlow<Boolean> = _nextEpisodeLoading.asStateFlow()
 
     private val playerSessionManager = PlayerSessionManager(
         scope = scope,
@@ -714,8 +709,8 @@ class VideoPlayerViewModel(
             startPositionTracking = { progressReporter.startPositionTracking() },
             startProgressReporting = { progressReporter.startProgressReporting() },
             fetchMediaSegments = { itemId -> fetchMediaSegments(itemId) },
-            fetchAdjacentEpisodes = { detail -> fetchAdjacentEpisodes(detail) },
-            loadSeriesEpisodes = { detail -> loadSeriesEpisodes(detail) },
+            fetchAdjacentEpisodes = { detail -> episodeNavigator.refreshAdjacent(detail) },
+            loadSeriesEpisodes = { detail -> episodeNavigator.loadSeries(detail) },
             // No terminal-outcome action today; stated explicitly here so a
             // future consumer is a construction-site change, not a hidden
             // default somewhere else.
@@ -779,8 +774,8 @@ class VideoPlayerViewModel(
             // Old loadReclaimedEngine-hook tail: the uiState-writing
             // hydration fetches, in their old order.
             fetchMediaSegments(itemId)
-            fetchAdjacentEpisodes(detail)
-            loadSeriesEpisodes(detail)
+            episodeNavigator.refreshAdjacent(detail)
+            episodeNavigator.loadSeries(detail)
         }
 
         override fun releaseMiniPlayerState() {
@@ -874,6 +869,81 @@ class VideoPlayerViewModel(
         passOutHours = _uiState.flow.map { it.uiPrefs.passOutProtectionHours }.distinctUntilChanged(),
         onEngineEventCoordinatorRearmed = { startEngineEventCoordinatorOutputs() },
     )
+
+    /**
+     * Episode navigation (season/episode browsing, adjacent discovery,
+     * previous/next choreography with the #146 single-flight latch) — the
+     * extracted module; the VM keeps thin funnels for the screen, the PiP
+     * transport and the autoplay decision.
+     */
+    private val episodeNavigator = EpisodeNavigator(
+        scope = scope,
+        sessionState = playerSessionManager.sessionState,
+        sessionEvents = playbackSession.events,
+        getDetail = { mediaDetail },
+        getSeriesId = { mediaDetail?.item?.seriesId ?: _uiState.value.media.seriesId },
+        episodeCatalogue = episodeCatalogue,
+        trySyncPlayNext = { nextItemId ->
+            routeSyncPlayAdvance(nextItemId) { currentPlaylistItemId ->
+                syncPlay.sendNextItem(currentPlaylistItemId)
+            }
+        },
+        trySyncPlayPrevious = { previousItemId ->
+            routeSyncPlayAdvance(previousItemId) { currentPlaylistItemId ->
+                syncPlay.sendPreviousItem(currentPlaylistItemId)
+            }
+        },
+        onAdvanceFrom = { currentItemId ->
+            if (!cachedAggregate.videoPlayer.incognitoModeEnabled) {
+                runCatching { userDataMutator.setPlayed(currentItemId, played = true) }
+            }
+        },
+        reportLoadError = {
+            userMessageBus.error(getString(Res.string.player_video_error_next_episode_load))
+        },
+        initializeItem = { itemId, startPositionTicks ->
+            initialize(itemId, null, startPositionTicks)
+        },
+        updateEpisodes = { update ->
+            _uiState.update { it.copy(episodes = update(it.episodes)) }
+        },
+    )
+
+    /** True while a next-episode advance is in flight and unsettled (#146). */
+    val isNextEpisodeLoading: StateFlow<Boolean> get() = episodeNavigator.isNextEpisodeLoading
+
+    /**
+     * The group-queue check the next/previous advance lambdas share: when the
+     * SyncPlay group's queue holds the sibling item, the advance goes through
+     * the group command ([send] receives the currently-playing queue entry)
+     * and returns true; false falls back to a local reload.
+     */
+    private fun routeSyncPlayAdvance(
+        siblingItemId: String,
+        send: (currentPlaylistItemId: String) -> Unit,
+    ): Boolean {
+        if (!syncPlayManager.isInSyncPlaySession) return false
+        val group = syncPlayManager.currentGroup
+        val currentPlaylistItemId = group?.playingPlaylistItemId
+        val siblingInQueue = group?.playlistItemMap?.values?.contains(siblingItemId) == true
+        if (currentPlaylistItemId != null && siblingInQueue) {
+            send(currentPlaylistItemId)
+            return true
+        }
+        return false
+    }
+
+    /** Loads one season's episode list (episode sheet season click). */
+    fun loadSeasonEpisodes(seasonId: String) = episodeNavigator.loadSeason(seasonId)
+
+    /** Starts playback of a picked episode at its saved position. */
+    fun playEpisode(episodeId: String, startPositionTicks: Long = 0L) {
+        initialize(episodeId, null, startPositionTicks)
+    }
+
+    fun playPreviousEpisode() = episodeNavigator.previous()
+
+    fun playNextEpisode() = episodeNavigator.next()
 
     /**
      * Trickplay three-way selection for the session load spine:
@@ -1578,67 +1648,6 @@ class VideoPlayerViewModel(
     // onMiniPlayerReclaimed seams, the hydration fetches through
     // hydrateReclaimedItem.
 
-    private fun loadSeriesEpisodes(detail: MediaDetail) {
-        val seriesId = detail.item.seriesId ?: return
-        val currentSeasonId = detail.item.seasonId ?: return
-        launch {
-            _uiState.update { it.copy(episodes = it.episodes.copy(isLoadingEpisodes = true)) }
-            val seasonList = resolveSeasons(seriesId)
-            _uiState.update {
-                it.copy(episodes = it.episodes.copy(seriesSeasons = seasonList, currentSeasonId = currentSeasonId))
-            }
-            loadSeasonEpisodes(currentSeasonId)
-        }
-    }
-
-    fun loadSeasonEpisodes(seasonId: String) {
-        val seriesId = mediaDetail?.item?.seriesId ?: uiState.value.media.seriesId ?: return
-        launch {
-            _uiState.update { it.copy(episodes = it.episodes.copy(isLoadingEpisodes = true)) }
-            val episodeList = resolveEpisodes(seriesId, seasonId)
-            _uiState.update { it.copy(
-                episodes = it.episodes.copy(
-                    seasonEpisodes = episodeList,
-                    currentSeasonId = seasonId,
-                    isLoadingEpisodes = false,
-                ),
-            ) }
-        }
-    }
-
-    /**
-     * Resolves the season list for [seriesId] via the consolidated [EpisodeCatalogue]
-     * snapshot, branching on the current session's offline state. Offline reads
-     * the local download store (airplane-mode episode discovery); online hits the
-     * server. The catalogue owns single-flight + caching shared with the detail
-     * screen, so re-entry into the same series (back from a sibling season) is
-     * served from the snapshot rather than re-fetched.
-     */
-    private suspend fun resolveSeasons(seriesId: String): List<JellyfinMediaItem> {
-        val offline = playerSessionManager.sessionState.value.isOffline
-        return episodeCatalogue.loadSeriesEpisodes(seriesId, offline)
-            .getOrDefault(com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot.empty(seriesId))
-            .seasons
-    }
-
-    /**
-     * Resolves the episode list for [seasonId] under [seriesId] via the
-     * [EpisodeCatalogue], branching on offline state — mirrors [resolveSeasons].
-     * Online serves from the shared snapshot if that season is present, else
-     * fetches the one season; offline reads the store (ordered by episodeNumber
-     * ASC at the DAO level), enabling next-episode discovery, the "up next"
-     * overlay, and autoplay while offline.
-     */
-    private suspend fun resolveEpisodes(seriesId: String, seasonId: String): List<JellyfinMediaItem> {
-        val offline = playerSessionManager.sessionState.value.isOffline
-        return episodeCatalogue.loadSeasonEpisodes(seriesId, seasonId, offline)
-            .getOrDefault(emptyList())
-    }
-
-    fun playEpisode(episodeId: String, startPositionTicks: Long = 0L) {
-        initialize(episodeId, null, startPositionTicks)
-    }
-
     fun setScreenLocked(locked: Boolean) {
         _uiState.update { it.copy(isScreenLocked = locked) }
     }
@@ -2229,104 +2238,6 @@ class VideoPlayerViewModel(
         configChangeIntent.tryEmit(Unit)
     }
 
-    fun playPreviousEpisode() {
-        val detail = mediaDetail ?: return
-        val seriesId = detail.item.seriesId ?: return
-        val seasonId = detail.item.seasonId ?: return
-        val currentItemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        launch {
-            val episodes = resolveEpisodes(seriesId, seasonId)
-            val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
-            if (currentIndex <= 0) return@launch
-            val previous = episodes[currentIndex - 1]
-
-            if (syncPlayManager.isInSyncPlaySession) {
-                val group = syncPlayManager.currentGroup
-                val currentPlaylistItemId = group?.playingPlaylistItemId
-                val previousExistsInQueue = group?.playlistItemMap?.values?.contains(previous.id) == true
-                if (currentPlaylistItemId != null && previousExistsInQueue) {
-                    syncPlay.sendPreviousItem(currentPlaylistItemId)
-                    return@launch
-                }
-            }
-
-            // Resume the previous episode from its saved position (mirrors the
-            // episode picker), falling back to the start when none is recorded.
-            initialize(previous.id, null, previous.playbackPositionTicks ?: 0L)
-        }
-    }
-
-    fun playNextEpisode() {
-        val detail = mediaDetail ?: return
-        val seriesId = detail.item.seriesId ?: return
-        val seasonId = detail.item.seasonId ?: return
-        val currentItemId = playerSessionManager.sessionState.value.currentItemId ?: return
-        // Single-flight latch (#146): every tap used to launch an independent
-        // resolve → mark-played → initialize chain. Offline, each stage blocked
-        // on a full network timeout, so re-taps landed minutes later as
-        // staggered teardown+reload passes — one visible restart per extra tap.
-        if (!_nextEpisodeLoading.compareAndSet(false, true)) return
-        launch {
-            try {
-                val episodesResult = episodeCatalogue.loadSeasonEpisodes(
-                    seriesId,
-                    seasonId,
-                    playerSessionManager.sessionState.value.isOffline,
-                )
-                val episodes = episodesResult.getOrElse {
-                    // A failed resolution used to fall through to an empty list
-                    // and silently do nothing; tell the user instead.
-                    userMessageBus.error(getString(Res.string.player_video_error_next_episode_load))
-                    return@launch
-                }
-                val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
-                if (currentIndex < 0 || currentIndex + 1 >= episodes.size) return@launch
-                val next = episodes[currentIndex + 1]
-
-                // Auto-advancing is only reachable near the episode's end, so the
-                // current episode was effectively watched. Mark it played so it
-                // drops out of Continue Watching. This also covers the SyncPlay
-                // branch below, which bypasses [initialize] and its stopped-position
-                // report.
-                if (!cachedAggregate.videoPlayer.incognitoModeEnabled) {
-                    runCatching { userDataMutator.setPlayed(currentItemId, played = true) }
-                }
-
-                if (syncPlayManager.isInSyncPlaySession) {
-                    val group = syncPlayManager.currentGroup
-                    val currentPlaylistItemId = group?.playingPlaylistItemId
-                    val nextExistsInQueue = group?.playlistItemMap?.values?.contains(next.id) == true
-                    if (currentPlaylistItemId != null && nextExistsInQueue) {
-                        syncPlay.sendNextItem(currentPlaylistItemId)
-                        return@launch
-                    }
-                }
-
-                initialize(next.id, null, 0L)
-
-                // Keep holding the latch until the load actually settles — the
-                // session binds a different, non-null item or an error
-                // surfaces — so taps landing inside this window are ignored
-                // rather than queued as a second teardown+reload of the same
-                // episode (#146). The non-null guard matters: initialize()'s
-                // per-item teardown resets PlayerSessionState (currentItemId =
-                // null) BEFORE the pipeline rebinds the new item, and that
-                // transient must not read as "settled" — without it the latch
-                // releases the instant this line returns.
-                withTimeoutOrNull(NEXT_EPISODE_SETTLE_TIMEOUT_MS) {
-                    merge(
-                        playerSessionManager.sessionState.map {
-                            it.currentItemId != currentItemId && it.currentItemId != null
-                        },
-                        playbackSession.events.map { it is SessionEvent.ShowError },
-                    ).filter { settled -> settled }.first()
-                }
-            } finally {
-                _nextEpisodeLoading.value = false
-            }
-        }
-    }
-
     fun cancelAutoplay() {
         autoplayController.cancel()
         _uiState.update { it.copy(autoplay = it.autoplay.copy(autoplayCancelled = true)) }
@@ -2430,23 +2341,6 @@ class VideoPlayerViewModel(
         }
     }
 
-    private fun fetchAdjacentEpisodes(currentDetail: MediaDetail) {
-        val seriesId = currentDetail.item.seriesId ?: return
-        val seasonId = currentDetail.item.seasonId ?: return
-        launch {
-            val episodes = resolveEpisodes(seriesId, seasonId)
-            val currentItemId = playerSessionManager.sessionState.value.currentItemId
-            val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
-            val next = if (currentIndex >= 0 && currentIndex + 1 < episodes.size) {
-                episodes[currentIndex + 1]
-            } else null
-            val previous = if (currentIndex > 0) episodes[currentIndex - 1] else null
-            _uiState.update {
-                it.copy(episodes = it.episodes.copy(nextEpisode = next, previousEpisode = previous))
-            }
-        }
-    }
-
     fun skipCredits() {
         val state = positionAwareState()
 
@@ -2478,9 +2372,6 @@ class VideoPlayerViewModel(
         _uiState.update { state ->
             state.copy(
                 chapters = detail.chapters,
-                episodes = state.episodes.copy(
-                    currentSeasonId = detail.item.seasonId ?: state.episodes.currentSeasonId,
-                ),
                 media = state.media.copy(
                     overview = detail.item.overview ?: "",
                     people = detail.people,
@@ -2489,6 +2380,9 @@ class VideoPlayerViewModel(
                 ),
             )
         }
+        // The episode-slice write goes through the navigator's seam — it is
+        // the slice's single writer (CONTEXT.md).
+        episodeNavigator.adoptSeasonOf(detail)
         fetchCompanionLyrics(detail)
     }
 
@@ -2498,7 +2392,7 @@ class VideoPlayerViewModel(
             launch {
                 val artist = item.albumArtist ?: item.artistItems.firstOrNull()?.name ?: ""
                 val durationSec = (item.runTimeTicks ?: 0L) / 10_000_000L
-                val lyricsResult = mediaRepository.getLyricsWithFallback(
+                val lyricsResult = lyricsRepository.getLyricsWithFallback(
                     itemId = item.id,
                     artistName = artist,
                     trackName = item.name,
@@ -2778,12 +2672,10 @@ class VideoPlayerViewModel(
                 segmentState = SegmentState(
                     segmentBehaviors = currentState.segmentState.segmentBehaviors,
                 ),
-                // episodes: only the browser feature toggle carries across an
+                // episodes resets through the navigator's seam right after this
+                // update: only the browser feature toggle carries across an
                 // item switch — adjacency, season/episode lists, season id and
                 // the loading flag are per-item and reset to defaults.
-                episodes = EpisodeBrowserState(
-                    videoEpisodeBrowserEnabled = currentState.episodes.videoEpisodeBrowserEnabled,
-                ),
                 // videoFx: only the TV zoom carries across an item switch —
                 // the per-item effects and both aspect fields reset to defaults.
                 videoFx = VideoFxState(tvZoomModePercent = currentState.videoFx.tvZoomModePercent),
@@ -2797,6 +2689,9 @@ class VideoPlayerViewModel(
                 dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.NONE,
             )
         }
+        // The episode-slice reset goes through the navigator's seam — it is
+        // the slice's single writer (CONTEXT.md).
+        episodeNavigator.resetForItemSwitch()
 
         // Clear the high-frequency display streams the seek bar reads. They live
         // outside uiState (to avoid ~4 Hz whole-screen recomposition) and are

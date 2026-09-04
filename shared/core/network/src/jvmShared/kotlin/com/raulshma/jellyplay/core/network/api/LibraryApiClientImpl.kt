@@ -28,6 +28,8 @@ import com.raulshma.jellyplay.core.model.RecommendationResult
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.network.LyricsApi
+import com.raulshma.jellyplay.core.network.library.HomeSectionsAssemblyInputs
+import com.raulshma.jellyplay.core.network.library.assembleHomeSections
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -116,15 +118,11 @@ class LibraryApiClientImpl @Inject constructor(
         force: Boolean,
     ): Result<HomeSectionsResult> = engine.apiResultWithRetry {
         coroutineScope {
-            // Only enabledSections earns a local (read throughout the
-            // per-section logic below); everything else the query bundles is
-            // read at its single use site as query.<field>, so the value
-            // object stays intact instead of being re-flattened into
-            // positional locals at the seam.
+            // Only enabledSections earns a local (gates every deferred launch
+            // below); everything else the query bundles is read at its single
+            // use site as query.<field>, so the value object stays intact
+            // instead of being re-flattened into positional locals.
             val enabledSections = query.enabledSections
-            val sections = mutableListOf<HomeSection>()
-            val failedTypes = mutableSetOf<HomeSectionType>()
-            var firstError: Throwable? = null
 
             val continueWatchingDeferred = async {
                 if (HomeSectionType.CONTINUE_WATCHING in enabledSections) getContinueWatching()
@@ -169,153 +167,54 @@ class LibraryApiClientImpl @Inject constructor(
                     async { getRecommendations(limit = 20, seeds = recommendationSeeds, force = force) }
                 } else null
 
-            var continueWatchingIds = emptySet<String>()
-
-            if (HomeSectionType.CONTINUE_WATCHING in enabledSections) {
-                continueWatchingResult
-                    .onSuccess { list ->
-                        val filtered = list.filter { it.id !in query.hiddenCwItemIds }
-                        if (filtered.isNotEmpty()) {
-                            continueWatchingIds = filtered.map { it.id }.toSet()
-                            sections.add(HomeSectionType.CONTINUE_WATCHING.descriptor.section(filtered))
-                        }
-                    }
-                    .onFailure {
-                        if (firstError == null) firstError = it
-                        failedTypes.add(HomeSectionType.CONTINUE_WATCHING)
-                    }
-            }
-
-            if (HomeSectionType.NEXT_UP in enabledSections) {
-                nextUpResult
-                    .onSuccess { list ->
-                        // Drop items whose series is in the user's "remove from Next Up" blocklist.
-                        val filtered = list.filter { it.id !in continueWatchingIds }
-                            .filter { it.seriesId == null || it.seriesId !in query.nextUpExcludedSeriesIds }
-                        if (filtered.isNotEmpty()) {
-                            // Title comes from the descriptor ("Next Up") — the
-                            // pre-descriptor literal here had drifted to "NextUp".
-                            sections.add(HomeSectionType.NEXT_UP.descriptor.section(filtered))
-                        }
-                    }
-                    .onFailure {
-                        if (firstError == null) firstError = it
-                        failedTypes.add(HomeSectionType.NEXT_UP)
-                    }
-            }
-
-            val allLatestItems = mutableListOf<MediaItem>()
-
+            // Latest-media fan-out: one /Items/Latest per non-music folder,
+            // semaphore-bounded at 4, collected in folder order for the
+            // assembler — the fetch half stays here, the section-building
+            // and ordering policy lives in the shared pure assembler.
+            var latestPerFolder: List<Pair<LibraryFolder, Result<List<MediaItem>>>> = emptyList()
             if (HomeSectionType.LATEST_MEDIA in enabledSections || HomeSectionType.RECENTLY_ADDED in enabledSections) {
-                foldersResult
-                    .onSuccess { folders ->
-                        val filteredFolders = folders
-                            .filter { it.collectionType != "music" }
-                        val semaphore = Semaphore(4)
-                        val latestDeferred = filteredFolders
-                            .map { folder ->
-                                async {
-                                    semaphore.acquire()
-                                    try { folder to getLatestMediaForHome(folder.id, limit = 16, force = force) }
-                                    finally { semaphore.release() }
-                                }
-                            }
-                        latestDeferred.forEach { deferred ->
-                            val (folder, result) = deferred.await()
-                            val disabledForFolder = query.libraryHomeSectionOverrides[folder.id].orEmpty()
-                            result.onSuccess { latest ->
-                                // Only feed the aggregated Recently Added row from
-                                // libraries the user hasn't disabled it for.
-                                if (HomeSectionType.RECENTLY_ADDED !in disabledForFolder) {
-                                    allLatestItems.addAll(latest)
-                                }
-                                val latestEnabledForFolder = HomeSectionType.LATEST_MEDIA in enabledSections &&
-                                    HomeSectionType.LATEST_MEDIA !in disabledForFolder
-                                if (latest.isNotEmpty() && latestEnabledForFolder) {
-                                    val descriptor = HomeSectionType.LATEST_MEDIA.descriptor
-                                    sections.add(HomeSection(
-                                        id = descriptor.idFor(folder.id),
-                                        title = descriptor.titleFor(folder.name),
-                                        type = HomeSectionType.LATEST_MEDIA,
-                                        items = latest,
-                                        libraryId = folder.id,
-                                        collectionType = folder.collectionType,
-                                    ))
-                                }
-                            }.onFailure {
-                                // A per-folder Latest Media 403 (e.g. a stale
-                                // cached folder list racing with a permission
-                                // change) should surface as a partial-load
-                                // banner, not vanish silently.
-                                if (firstError == null) firstError = it
-                                if (HomeSectionType.LATEST_MEDIA in enabledSections) {
-                                    failedTypes.add(HomeSectionType.LATEST_MEDIA)
-                                }
+                foldersResult.onSuccess { folders ->
+                    val filteredFolders = folders
+                        .filter { it.collectionType != "music" }
+                    val semaphore = Semaphore(4)
+                    latestPerFolder = filteredFolders
+                        .map { folder ->
+                            async {
+                                semaphore.acquire()
+                                try { folder to getLatestMediaForHome(folder.id, limit = 16, force = force) }
+                                finally { semaphore.release() }
                             }
                         }
-                    }
-                    .onFailure {
-                        if (firstError == null) firstError = it
-                        // The shared folders fetch backs both Latest Media and
-                        // Recently Added rows; a failure starves both sections.
-                        if (HomeSectionType.LATEST_MEDIA in enabledSections) {
-                            failedTypes.add(HomeSectionType.LATEST_MEDIA)
-                        }
-                        if (HomeSectionType.RECENTLY_ADDED in enabledSections) {
-                            failedTypes.add(HomeSectionType.RECENTLY_ADDED)
-                        }
-                    }
-            }
-
-            if (HomeSectionType.RECENTLY_ADDED in enabledSections) {
-                val recentlyAddedItems = allLatestItems
-                    .distinctBy { it.id }
-                    .filter { it.id !in continueWatchingIds }
-                if (recentlyAddedItems.isNotEmpty()) {
-                    val recentlyAddedSection = HomeSectionType.RECENTLY_ADDED.descriptor.section(recentlyAddedItems)
-                    val latestMediaLastIndex = sections.indexOfLast { it.type == HomeSectionType.LATEST_MEDIA }
-                    val insertIndex = if (latestMediaLastIndex >= 0) latestMediaLastIndex + 1 else sections.size
-                    sections.add(insertIndex, recentlyAddedSection)
+                        .map { it.await() }
                 }
             }
 
-            // The deferred is non-null exactly when RECOMMENDATIONS is enabled
-            // (same condition that launched it above) — null-safe chaining
-            // keeps that invariant local instead of resting on an `!!` tied
-            // to a distant guard.
-            recommendationsDeferred?.await()
-                ?.onSuccess { result ->
-                    if (result.items.isNotEmpty()) {
-                        sections.add(HomeSectionType.RECOMMENDATIONS.descriptor.section(result.items, seedItem = result.seedItem))
-                    } else {
-                        // Fallback "For You" source when there are no similarity
-                        // seeds yet (new user, no watch history): surface favorited
-                        // / liked items so the home page still has discovery content
-                        //. Mirrors the search "Suggestions" data source.
-                        getSearchSuggestions(limit = 20)
-                            .onSuccess { search ->
-                                if (search.items.isNotEmpty()) {
-                                    sections.add(HomeSectionType.RECOMMENDATIONS.descriptor.section(search.items))
-                                }
-                            }
-                    }
-                }
-                ?.onFailure {
-                    if (firstError == null) firstError = it
-                    failedTypes.add(HomeSectionType.RECOMMENDATIONS)
-                }
+            val recommendationsResult = recommendationsDeferred?.await()
+            // Suggestions fallback fetched only when recommendations succeeded
+            // but produced no items (the same condition the former inline
+            // assembly fetched on).
+            val suggestions = recommendationsResult
+                ?.getOrNull()
+                ?.takeIf { it.items.isEmpty() }
+                ?.let { getSearchSuggestions(limit = 20).getOrNull()?.items.orEmpty() }
+                .orEmpty()
 
-            // Append user-pinned sections (collections / playlists / favorites /
-            // genres / studios). They are always fetched regardless of the
-            // enabledSections filter, and appended after the standard sections so
-            // the HomeViewModel's ordering logic places them at the end of the
-            // home screen in the user-chosen pin order.
-            pinnedDeferred.await().forEach { section -> sections.add(section) }
-
-            if (sections.isEmpty() && firstError != null) {
-                throw firstError!!
+            val output = assembleHomeSections(
+                HomeSectionsAssemblyInputs(
+                    query = query,
+                    continueWatchingResult = continueWatchingResult,
+                    nextUpResult = nextUpResult,
+                    foldersResult = foldersResult,
+                    latestPerFolder = latestPerFolder,
+                    recommendationsResult = recommendationsResult,
+                    suggestions = suggestions,
+                    pinnedSections = pinnedDeferred.await(),
+                ),
+            )
+            if (output.result.sections.isEmpty() && output.firstError != null) {
+                throw output.firstError!!
             }
-            HomeSectionsResult(sections, failedTypes.toSet())
+            output.result
         }
     }
 

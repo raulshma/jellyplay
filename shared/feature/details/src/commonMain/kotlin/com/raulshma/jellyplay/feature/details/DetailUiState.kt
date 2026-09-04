@@ -26,7 +26,8 @@ import com.raulshma.jellyplay.core.model.seerr.TmdbReview
  * detail/seasons/episodes tree plus remote-discovery ephemera written solely
  * by the ViewModel body. Per-sheet action state does NOT live here: downloads,
  * playlists, collections, and resync are owned by their action helpers
- * ([DownloadLifecycleActions], [PlaylistActions], [CollectionActions],
+ * ([DownloadLifecycleActions], [AddToTargetActions] with
+ * the playlist and collection adapters, [WatchLaterActions],
  * [ResyncActions]), which publish their own `StateFlow`s and are collected
  * directly by the sheet that needs them (see the `viewModel.downloads` /
  * `viewModel.playlists` / `viewModel.collections` / `viewModel.resync`

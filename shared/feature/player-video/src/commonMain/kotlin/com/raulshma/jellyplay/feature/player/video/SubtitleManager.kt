@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalog
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaStream
@@ -531,13 +532,7 @@ internal class SubtitleManager(
 
     fun addLocalSubtitle(uri: String, fileName: String) {
         val ext = fileName.substringAfterLast('.', "").lowercase()
-        val codec = when (ext) {
-            "srt" -> "srt"
-            "ass", "ssa" -> "ass"
-            "vtt" -> "vtt"
-            "ttml", "dfxp" -> "ttml"
-            else -> null
-        }
+        val codec = SubtitleFormatCatalog.codecForExtension(ext)
 
         val label = fileName.substringBeforeLast('.').ifBlank { "Local subtitle" }
         val source = SubtitleSource(
@@ -772,7 +767,7 @@ internal class SubtitleManager(
                     ensureActive()
                     fileResult.fold(
                         onSuccess = { file ->
-                            val codec = codecForFormat(file.format)
+                            val codec = SubtitleFormatCatalog.codecForExtension(file.format)
                             // Persist durably (filesDir, survives replay) so the
                             // subtitle is usable on-device even when the server is
                             // unreachable. The returned SavedSubtitle resolves to
@@ -798,7 +793,7 @@ internal class SubtitleManager(
                                 url = durableFile.toURI().toString(),
                                 label = result.displayName,
                                 language = result.language,
-                                mimeType = mimeForCodec(codec),
+                                mimeType = SubtitleFormatCatalog.mapCodecToMime(codec),
                                 codec = codec,
                                 isDefault = false,
                                 isForced = result.isForced,
@@ -893,22 +888,6 @@ internal class SubtitleManager(
                 }
             }
         }
-    }
-
-    private fun codecForFormat(format: String?): String? = when (format?.lowercase()) {
-        "srt", "subrip" -> "srt"
-        "ass", "ssa" -> "ass"
-        "vtt", "webvtt" -> "vtt"
-        "ttml", "dfxp" -> "ttml"
-        else -> null
-    }
-
-    private fun mimeForCodec(codec: String?): String? = when (codec) {
-        "srt" -> "application/x-subrip"
-        "ass" -> "text/x-ssa"
-        "vtt" -> "text/vtt"
-        "ttml" -> "application/ttml+xml"
-        else -> null
     }
 
     /**

@@ -17,7 +17,7 @@ import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelFormatter
 import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelInfo
-import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalog
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.MimeTypes
 import kotlinx.coroutines.flow.SharedFlow
@@ -208,7 +208,7 @@ internal class AndroidPlayerCastController(
                 if (subUrl.isNullOrBlank()) return@mapNotNull null
 
                 // Cast defaults unknown codecs to VTT — the most broadly supported.
-                val mimeType = SubtitleMimeMapper.mapCodecToMime(stream.codec) ?: MimeTypes.TEXT_VTT
+                val mimeType = SubtitleFormatCatalog.mapCodecToMime(stream.codec) ?: MimeTypes.TEXT_VTT
 
                 MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
                     .setMimeType(mimeType)

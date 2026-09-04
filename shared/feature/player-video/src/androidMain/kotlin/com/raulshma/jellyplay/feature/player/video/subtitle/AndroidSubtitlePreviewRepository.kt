@@ -115,11 +115,28 @@ class AndroidSubtitlePreviewRepository(
     private fun mimeFor(source: SubtitleSource): String? {
         source.mimeType?.let { return it }
         val codec = source.codec?.lowercase()
-        TEXT_MIME_BY_FORMAT[codec]?.let { return it }
         // ASS/SSA is explicitly unsupported: do not fall through to the URL
         // extension (an .ass source with a codec-less URL must stay null).
         if (codec in UNSUPPORTED_CODECS) return null
-        return TEXT_MIME_BY_FORMAT[source.url.substringAfterLast('.', "").lowercase()]
+        parseableTextMime(codec)?.let { return it }
+        val extension = source.url.substringAfterLast('.', "").lowercase()
+        return parseableTextMime(SubtitleFormatCatalog.codecForExtension(extension))
+    }
+
+    /**
+     * MIME for the codec/extension names Media3's
+     * DefaultSubtitleParserFactory can actually parse — a policy gate over
+     * [SubtitleFormatCatalog], not a second vocabulary. Callers hand it a
+     * codec/label; URL extensions fold through
+     * [SubtitleFormatCatalog.codecForExtension] first so alias spellings
+     * (`.tt`) resolve to their canonical codec before the gate.
+     */
+    private fun parseableTextMime(codecOrExtension: String?): String? {
+        return when (codecOrExtension) {
+            "srt", "subrip", "vtt", "webvtt", "ttml", "dfxp" ->
+                SubtitleFormatCatalog.mapCodecToMime(codecOrExtension)
+            else -> null
+        }
     }
 
     private companion object {
@@ -127,16 +144,6 @@ class AndroidSubtitlePreviewRepository(
 
         /** Max parsed-track lists held in the memo; LRU-evicted beyond this. */
         const val MAX_CACHED_SUBTITLE_TRACKS = 8
-
-        /** Codec / file-extension names → Media3 text MIME types. */
-        val TEXT_MIME_BY_FORMAT = mapOf(
-            "srt" to "application/x-subrip",
-            "subrip" to "application/x-subrip",
-            "vtt" to "text/vtt",
-            "webvtt" to "text/vtt",
-            "ttml" to "application/ttml+xml",
-            "dfxp" to "application/ttml+xml",
-        )
 
         /** Codecs that DefaultSubtitleParserFactory cannot parse (no MIME mapping). */
         val UNSUPPORTED_CODECS = setOf("ass", "ssa")

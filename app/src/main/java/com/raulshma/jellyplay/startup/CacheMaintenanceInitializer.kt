@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.startup
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * first successful auth) instead of the previous fragile 10 s startup delay.
  */
 class CacheMaintenanceInitializer (
-    private val mediaRepository: MediaRepository,
+    private val lyricsRepository: LyricsRepository,
     private val offlineRepository: OfflineRepository,
     private val applicationScope: CoroutineScope,
 ) {
@@ -25,7 +25,7 @@ class CacheMaintenanceInitializer (
 
     /** Runs the maintenance passes unconditionally. */
     suspend fun cleanup() {
-        mediaRepository.cleanupLyricsCache()
+        lyricsRepository.cleanupLyricsCache()
         offlineRepository.cleanupOrphans()
     }
 

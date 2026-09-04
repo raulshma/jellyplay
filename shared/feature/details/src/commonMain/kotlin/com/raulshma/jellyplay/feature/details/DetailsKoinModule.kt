@@ -50,7 +50,7 @@ val detailsModule: Module = module {
     single<DetailStrings> { detailStrings() }
     single { DetailStores(get(), get(), get(), get(), get()) }
     single { RemoteDiscoveryClients(get(), get(), get(), get()) }
-    single { PlaylistActions.Factory(get(), get()) }
+    single { PlaylistTargets.Factory(get(), get()) }
 
     // Wave 16C + the #147 download quick-actions merge: the
     // Collection/Person detail VMs gained MediaDownloadActions (core:data

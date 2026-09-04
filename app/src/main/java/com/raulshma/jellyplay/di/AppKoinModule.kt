@@ -117,7 +117,7 @@ fun androidAppModule(context: Context): Module = module {
     }
     single {
         CacheMaintenanceInitializer(
-            mediaRepository = get(),
+            lyricsRepository = get(),
             offlineRepository = get(),
             applicationScope = get(DatastoreQualifiers.applicationScope),
         )

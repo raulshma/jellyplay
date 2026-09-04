@@ -152,11 +152,12 @@ internal class FakePlaybackRepository : PlaybackRepository {
 
 internal class FakeLyricsRepository : LyricsRepository {
     private val fail = Result.failure<LyricsResult>(IllegalStateException("offline test"))
-    override suspend fun getLyrics(itemId: String) = fail
-    override suspend fun getLyricsWithFallback(itemId: String, artistName: String?, trackName: String?, duration: Double?) = fail
-    override suspend fun searchLyrics(query: String): Result<List<LrcLibTrack>> = Result.success(emptyList())
-    override suspend fun getLyricsById(lrcLibId: Long, itemId: String) = fail
-    override suspend fun cleanupLyricsCache() {}
+    override suspend fun getLyrics(itemId: String): Result<LyricsResult> = fail
+    override suspend fun getLyricsWithFallback(itemId: String, artistName: String?, trackName: String?, duration: Double?): Result<LyricsResult> = fail
+    override suspend fun searchLyrics(query: String): Result<List<LrcLibTrack>> =
+        Result.failure(IllegalStateException("offline test"))
+    override suspend fun getLyricsById(lrcLibId: Long, itemId: String): Result<LyricsResult> = fail
+    override suspend fun cleanupLyricsCache() = Unit
 }
 
 /** In-memory Room DAO twin — the real QueuePersistenceHelper runs on top of it. */

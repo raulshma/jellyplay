@@ -141,6 +141,7 @@ import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
 import com.raulshma.jellyplay.core.ui.animation.toTransition
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
+import com.raulshma.jellyplay.core.ui.navigation.navIcon
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
@@ -1008,7 +1009,7 @@ private fun TvContent(
                         } else {
                             activeTopLevelRoutes.getValue(route)
                         },
-                        icon = routeToIcon(route),
+                        icon = route.navIcon,
                     )
                 }
             }
@@ -1456,16 +1457,6 @@ private fun FullScreenContent(
         )    }
 }
 
-private fun routeToIcon(route: Route): ImageVector = when (route) {
-    Route.Home -> Tabler.Outline.Home
-    Route.Library -> Tabler.Outline.Stack2
-    Route.Search -> Tabler.Outline.Search
-    Route.LiveTv -> Tabler.Outline.DeviceTv
-    Route.MusicBrowse -> Tabler.Outline.Disc
-    Route.Shortcuts -> Tabler.Outline.Apps
-    else -> Tabler.Outline.Home
-}
-
 @Composable
 internal fun NavIcon(
     route: Route,
@@ -1480,7 +1471,7 @@ internal fun NavIcon(
         label = "iconScale",
     )
     Icon(
-        imageVector = routeToIcon(route),
+        imageVector = route.navIcon,
         contentDescription = label,
         tint = tint,
         modifier = androidx.compose.ui.Modifier

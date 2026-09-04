@@ -116,6 +116,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_audio_language
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_subtitle_language
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_subtitles_off
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalog
 
 
 
@@ -334,13 +335,7 @@ fun VideoPlayerScreen(
     }
 
     val localSubtitlePicker = rememberDocumentPicker(
-        mimeTypes = arrayOf(
-            "application/x-subrip",
-            "text/vtt",
-            "text/plain",
-            "text/x-ssa",
-            "application/ttml+xml",
-        ),
+        mimeTypes = SubtitleFormatCatalog.pickerMimeTypes,
     ) { uriString: String? ->
         if (uriString != null) {
             val fileName = pickedDocumentDisplayName(uriString) ?: "subtitle.srt"

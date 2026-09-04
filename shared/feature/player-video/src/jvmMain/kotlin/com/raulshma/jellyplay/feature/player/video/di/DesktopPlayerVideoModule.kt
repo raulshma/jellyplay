@@ -57,6 +57,7 @@ val desktopPlayerVideoModule: Module = module {
         VideoPlayerViewModel(
             platform = get(),
             mediaRepository = get(),
+            lyricsRepository = get(),
             playbackRepository = get(),
             subtitleProviderRepository = get(),
             streamingSubtitleStore = get(),

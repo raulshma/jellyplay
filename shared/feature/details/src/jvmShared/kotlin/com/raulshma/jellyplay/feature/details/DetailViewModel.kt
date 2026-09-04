@@ -19,10 +19,12 @@ import com.raulshma.jellyplay.core.model.DetailContext
 import com.raulshma.jellyplay.core.model.DetailOrigin
 import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
@@ -242,19 +244,18 @@ class DetailViewModel internal constructor(
         messages = _messages,
         strings = strings,
     )
-    private val playlistActions = actionFactories.playlists.create(
+    private val playlistTargets = actionFactories.playlists.create(
         scope = scope,
         session = _session,
         messages = _messages,
         strings = strings,
         mediaDetailProvider = mediaDetailProvider,
     )
-    private val collectionActions = CollectionActions(
+    private val collectionActions = AddToTargetActions(
         scope = scope,
         session = _session,
         messages = _messages,
-        strings = strings,
-        mediaRepository = mediaRepository,
+        adapter = CollectionAddTarget(strings, mediaRepository),
         mediaDetailProvider = mediaDetailProvider,
     )
     private val downloadLifecycleActions = actionFactories.downloads.create(
@@ -275,10 +276,13 @@ class DetailViewModel internal constructor(
     internal val downloads: DownloadLifecycleActions get() = downloadLifecycleActions
 
     /** Add-to-Playlist seam (picker + create dialog state and commands). */
-    internal val playlists: PlaylistActions get() = playlistActions
+    internal val playlists: AddToTargetActions<Playlist> get() = playlistTargets.picker
+
+    /** Watch-Later quick action (cached reserved playlist, no picker). */
+    internal val watchLater: WatchLaterActions get() = playlistTargets.watchLater
 
     /** Add-to-Collection seam (picker + create dialog state and commands). */
-    internal val collections: CollectionActions get() = collectionActions
+    internal val collections: AddToTargetActions<CollectionSummary> get() = collectionActions
 
     /** Resync / re-download / freshness-check seam. */
     internal val resync: ResyncActions get() = resyncActions

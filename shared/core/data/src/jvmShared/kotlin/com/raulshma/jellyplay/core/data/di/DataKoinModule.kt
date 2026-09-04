@@ -38,6 +38,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
+import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
@@ -406,10 +407,7 @@ val dataJvmModule: Module = module {
     single {
         MediaRepositoryImpl(
             apiClient = get(),
-            lrcLibApi = get(),
-            lyricsCacheDao = get(),
             homeSectionCacheDao = get(),
-            networkMonitor = get(),
             playedStateSync = get(),
             episodeCatalogue = get(),
             userDataRealtimeChannel = get(),
@@ -422,10 +420,18 @@ val dataJvmModule: Module = module {
     // Plan 08's module-internal cache-maintenance view (the former DataModule
     // bindMediaRepositoryCacheInvalidation @Binds): same single, narrow seam.
     single<MediaRepositoryCacheInvalidation> { get<MediaRepositoryImpl>() }
-    // The narrow ISP view the legacy DataModule provided by delegation
-    // (MediaRepository extends LyricsRepository) — same single, no second
-    // set of caches.
-    single<LyricsRepository> { get<MediaRepository>() }
+    // Lyrics engine: its own impl (the LRC/LRCLIB fetch-parse-cache chain)
+    // since the extraction from MediaRepositoryImpl — no longer a view of the
+    // media single.
+    single {
+        LyricsRepositoryImpl(
+            apiClient = get(),
+            lrcLibApi = get(),
+            lyricsCacheDao = get(),
+            networkMonitor = get(),
+        )
+    }
+    single<LyricsRepository> { get<LyricsRepositoryImpl>() }
 
     single {
         UserDataMutatorImpl(
