@@ -16,8 +16,18 @@ import java.util.Locale
  */
 object LocaleApplier {
 
-    private val _recreateSignal = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    // internal (not private) so module tests can await subscriptionCount
+    // before apply() — the SharedFlow has no replay, so an emission that
+    // lands before a collector subscribes would be silently dropped.
+    internal val _recreateSignal = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val recreateSignal: kotlinx.coroutines.flow.SharedFlow<Unit> = _recreateSignal
+
+    // Snapshot of the system locale at first use. apply() calls
+    // Locale.setDefault(), and LocaleList.getDefault() re-derives itself from
+    // the JVM default whenever it changed — so once a custom language is
+    // applied, LocaleList.getDefault() reports the custom locale and can no
+    // longer recover the system one.
+    private val systemLocale: Locale = LocaleList.getDefault()[0]
 
     /**
      * Returns the BCP-47 tag of the locale currently applied to [context],
@@ -25,8 +35,7 @@ object LocaleApplier {
      */
     fun currentLanguageTag(context: Context): String? {
         val locale = context.resources.configuration.locales[0]
-        val default = LocaleList.getDefault()[0]
-        return if (locale == default) null else locale.toLanguageTag()
+        return if (locale == systemLocale) null else locale.toLanguageTag()
     }
 
     /**
@@ -39,7 +48,7 @@ object LocaleApplier {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return
 
         val locale = language?.let { Locale.forLanguageTag(it) }
-            ?: LocaleList.getDefault()[0]
+            ?: systemLocale
         Locale.setDefault(locale)
         val config = android.content.res.Configuration(context.resources.configuration)
         config.setLocale(locale)

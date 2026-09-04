@@ -164,6 +164,9 @@ kotlin {
         val wasmJsTest by getting {
             dependencies {
                 implementation(kotlin("test"))
+                // runTest wrapper for the suspend controller/repository tests
+                // — kotlin.test rejects `suspend @Test` on wasmJs outright.
+                implementation(libs.coroutines.test)
             }
         }
     }

@@ -8,7 +8,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-class AudioVisualizerHelper {
+class AudioVisualizerHelper(
+    private val visualizerFactory: (Int) -> Visualizer = ::defaultVisualizer,
+) {
 
     private var visualizer: Visualizer? = null
     private var currentAudioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
@@ -35,7 +37,7 @@ class AudioVisualizerHelper {
         currentAudioSessionId = audioSessionId
 
         visualizer = try {
-            Visualizer(audioSessionId).apply {
+            visualizerFactory(audioSessionId).apply {
                 captureSize = Visualizer.getCaptureSizeRange()[0]
                 setDataCaptureListener(
                     object : Visualizer.OnDataCaptureListener {
@@ -112,6 +114,7 @@ class AudioVisualizerHelper {
     }
 
     companion object {
+        fun defaultVisualizer(audioSessionId: Int): Visualizer = Visualizer(audioSessionId)
         private const val TAG = "AudioVisualizerHelper"
     }
 }

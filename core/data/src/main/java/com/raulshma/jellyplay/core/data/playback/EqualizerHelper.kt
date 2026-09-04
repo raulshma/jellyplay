@@ -28,7 +28,9 @@ import com.raulshma.jellyplay.core.model.EqualizerSettings
  *
  * Safe to call [attach] multiple times — previous instances are released automatically.
  */
-class EqualizerHelper {
+class EqualizerHelper(
+    private val equalizerFactory: (Int) -> Equalizer = ::defaultEqualizer,
+) {
 
     private var equalizer: Equalizer? = null
     private var currentAudioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
@@ -53,7 +55,7 @@ class EqualizerHelper {
         currentAudioSessionId = audioSessionId
 
         equalizer = try {
-            Equalizer(0, audioSessionId).apply {
+            equalizerFactory(audioSessionId).apply {
                 applySettings(currentSettings)
                 enabled = isEnabled
             }
@@ -156,7 +158,7 @@ class EqualizerHelper {
         // construction. android.media.audiofx.* native objects are not GC'd
         // until release(); a throw between construct and release would leak it.
         return try {
-            val eq = Equalizer(0, audioSessionId)
+            val eq = equalizerFactory(audioSessionId)
             try {
                 val count = eq.numberOfBands.toInt()
                 (0 until count).map { eq.getCenterFreq(it.toShort()) / 1000 }
@@ -169,6 +171,7 @@ class EqualizerHelper {
     }
 
     companion object {
+        fun defaultEqualizer(audioSessionId: Int): Equalizer = Equalizer(0, audioSessionId)
         private const val TAG = "EqualizerHelper"
     }
 }

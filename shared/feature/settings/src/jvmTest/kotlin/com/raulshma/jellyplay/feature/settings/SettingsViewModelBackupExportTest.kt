@@ -17,6 +17,8 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.legacy.UserPreferences
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.cancel
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -105,16 +107,40 @@ class SettingsViewModelBackupExportTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(): SettingsViewModel = SettingsViewModel(
-        settingsBackupIo = settingsBackupIo,
-        preferencesStore = preferencesStore,
-        projections = projections,
-        authRepository = authRepository,
-        seerrRepository = seerrRepository,
-        adminRepository = adminRepository,
-        editor = editor,
-        recentsStore = recentsStore,
-    )
+    /** Every VM created here; all cancelled in [vmTest]'s finally (see below). */
+    private val createdViewModels = mutableListOf<SettingsViewModel>()
+
+    /**
+     * runTest wrapper that cancels every created VM in a `finally` INSIDE the
+     * coroutine — before runTest's completion drain. The session auto-refresh
+     * tests leave a live `while(true)` polling loop behind on a failed
+     * assertion; a bare runTest drain then drives that loop's 30-second beat
+     * for hundreds of thousands of virtual iterations (a near-permanent hang
+     * that also OOMs the worker through mockk's per-invocation bookkeeping).
+     */
+    private fun vmTest(block: suspend TestScope.() -> Unit): Unit = runTest(testDispatcher) {
+        try {
+            block()
+        } finally {
+            createdViewModels.forEach { it.viewModelScope.cancel() }
+            createdViewModels.clear()
+        }
+    }
+
+    private fun viewModel(): SettingsViewModel {
+        val vm = SettingsViewModel(
+            settingsBackupIo = settingsBackupIo,
+            preferencesStore = preferencesStore,
+            projections = projections,
+            authRepository = authRepository,
+            seerrRepository = seerrRepository,
+            adminRepository = adminRepository,
+            editor = editor,
+            recentsStore = recentsStore,
+        )
+        createdViewModels += vm
+        return vm
+    }
 
     private suspend fun TestScope.awaitUntil(description: String, condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + 5_000
@@ -137,7 +163,7 @@ class SettingsViewModelBackupExportTest {
     // ------------------------------------------------------------ export (v2)
 
     @Test
-    fun `exportSettings writes the v2 envelope to the sink and reports success`() = runTest(testDispatcher) {
+    fun `exportSettings writes the v2 envelope to the sink and reports success`() = vmTest {
         coEvery { preferencesStore.snapshotForBackup() } returns UserPreferencesStore.SettingsBackupSnapshot(
             slices = mapOf(BackupSliceKey.APPEARANCE to JsonPrimitive("stub-slice")),
             extras = AppRuntimeState(favoriteChannels = setOf("chan-1")),
@@ -161,7 +187,7 @@ class SettingsViewModelBackupExportTest {
     }
 
     @Test
-    fun `exportSettings surfaces a failure when the sink cannot be opened`() = runTest(testDispatcher) {
+    fun `exportSettings surfaces a failure when the sink cannot be opened`() = vmTest {
         coEvery { preferencesStore.snapshotForBackup() } returns UserPreferencesStore.SettingsBackupSnapshot(
             slices = emptyMap(),
             extras = AppRuntimeState(),
@@ -180,7 +206,7 @@ class SettingsViewModelBackupExportTest {
     }
 
     @Test
-    fun `exportSettings surfaces a snapshot failure instead of crashing`() = runTest(testDispatcher) {
+    fun `exportSettings surfaces a snapshot failure instead of crashing`() = vmTest {
         coEvery { preferencesStore.snapshotForBackup() } throws RuntimeException("store sealed")
         val vm = viewModel()
         advanceUntilIdle()
@@ -194,7 +220,7 @@ class SettingsViewModelBackupExportTest {
     // ------------------------------------------------------- confirm: v2 / v0
 
     @Test
-    fun `confirmImport on v2 fans to restoreV2 with the security gate forwarded`() = runTest(testDispatcher) {
+    fun `confirmImport on v2 fans to restoreV2 with the security gate forwarded`() = vmTest {
         val json = PreferencesJson.export.encodeToString(
             SettingsBackup.serializer(),
             SettingsBackup(slices = mapOf(BackupSliceKey.APPEARANCE to JsonPrimitive("stub-slice"))),
@@ -218,7 +244,7 @@ class SettingsViewModelBackupExportTest {
     }
 
     @Test
-    fun `confirmImport on v2 restores the device lock config only when opted in`() = runTest(testDispatcher) {
+    fun `confirmImport on v2 restores the device lock config only when opted in`() = vmTest {
         val json = PreferencesJson.export.encodeToString(
             SettingsBackup.serializer(),
             SettingsBackup(slices = emptyMap()),
@@ -238,7 +264,7 @@ class SettingsViewModelBackupExportTest {
     }
 
     @Test
-    fun `confirmImport on a bare v0 aggregate fans to the legacy restore path`() = runTest(testDispatcher) {
+    fun `confirmImport on a bare v0 aggregate fans to the legacy restore path`() = vmTest {
         val json = PreferencesJson.export.encodeToString(
             UserPreferences.serializer(),
             UserPreferences(showAdvancedSettings = true),
@@ -267,7 +293,7 @@ class SettingsViewModelBackupExportTest {
     // ------------------------------------------------- session auto-refresh
 
     @Test
-    fun `session auto-refresh polls on the 30-second beat`() = runTest(testDispatcher) {
+    fun `session auto-refresh polls on the 30-second beat`() = vmTest {
         coEvery { adminRepository.getSessions() } returns Result.success(emptyList())
         val vm = viewModel()
         advanceUntilIdle()
@@ -288,7 +314,7 @@ class SettingsViewModelBackupExportTest {
     }
 
     @Test
-    fun `stopSessionAutoRefresh cancels the polling loop`() = runTest(testDispatcher) {
+    fun `stopSessionAutoRefresh cancels the polling loop`() = vmTest {
         coEvery { adminRepository.getSessions() } returns Result.success(emptyList())
         val vm = viewModel()
         advanceUntilIdle()
@@ -306,7 +332,7 @@ class SettingsViewModelBackupExportTest {
     // ----------------------------------------------------- editor delegations
 
     @Test
-    fun `dream setters route through the editor`() = runTest(testDispatcher) {
+    fun `dream setters route through the editor`() = vmTest {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -320,7 +346,7 @@ class SettingsViewModelBackupExportTest {
     }
 
     @Test
-    fun `clearAllPreferences delegates to the editor reset`() = runTest(testDispatcher) {
+    fun `clearAllPreferences delegates to the editor reset`() = vmTest {
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -330,7 +356,7 @@ class SettingsViewModelBackupExportTest {
     }
 
     @Test
-    fun `clearBackupRestoreStatus resets the backup banner`() = runTest(testDispatcher) {
+    fun `clearBackupRestoreStatus resets the backup banner`() = vmTest {
         coEvery { preferencesStore.snapshotForBackup() } throws RuntimeException("boom")
         val vm = viewModel()
         advanceUntilIdle()

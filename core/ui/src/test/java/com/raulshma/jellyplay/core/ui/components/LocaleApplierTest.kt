@@ -39,7 +39,7 @@ class LocaleApplierTest {
         runBlocking {
             var signal = false
             val job = launch { LocaleApplier.recreateSignal.first(); signal = true }
-            LocaleApplier.recreateSignal.subscriptionCount.first { it > 0 }
+            LocaleApplier._recreateSignal.subscriptionCount.first { it > 0 }
             LocaleApplier.apply(context, language)
             withTimeout(2_000) { job.join() }
             assertEquals(true, signal)

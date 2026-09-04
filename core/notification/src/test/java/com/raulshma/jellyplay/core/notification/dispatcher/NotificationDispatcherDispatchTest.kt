@@ -82,7 +82,7 @@ class NotificationDispatcherDispatchTest {
     private fun libraryFolder(id: String) = LibraryFolder(id = id, name = "Library $id")
 
     private fun postedIds(): Set<Int> =
-        shadowOf(notificationManager).allNotifications.mapNotNull { it.id }.toSet()
+        shadowOf(notificationManager).activeNotifications.map { it.id }.toSet()
 
     // ── no-op gates ──────────────────────────────────────────────────────
 

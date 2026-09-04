@@ -22,6 +22,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.test.runTest
 
 /**
  * Browser-free unit cover for the web connect controller's DECISION logic
@@ -44,9 +45,10 @@ import kotlinx.coroutines.flow.flow
  *    with the shared "user_prefs" DataStore; reads AND fire-and-forget
  *    writes degrade silently when the store is broken.
  *
- * The tests are suspend functions (kotlin.test runs them on the Kotlin Node
- * runner's single JS thread, so the controller's sideEffectScope jobs
- * interleave exactly like in the page). Honesty note (extends
+ * The tests wrap their bodies in [runTest] (kotlin.test rejects `suspend`
+ * test functions on wasmJs; runTest's single-threaded dispatcher keeps the
+ * controller's sideEffectScope jobs on Dispatchers.Default interleaving
+ * against real time, which the polling helper awaits). Honesty note (extends
  * WebShellPureHelpersTest's): the transport-failure classifier
  * (`isLikelyCorsOrTransport`) and the friendly-error mappers stay out of
  * reach — they are private to WebConnectFlow.kt and main sources are
@@ -167,7 +169,7 @@ class WebConnectControllerTest {
     // ── logout: best-effort revoke + unconditional disconnect ──────────────
 
     @Test
-    suspend fun `logout reports success and disconnects after the revoke`() {
+    fun `logout reports success and disconnects after the revoke`() = runTest {
         val auth = FakeAuthApiClient()
         val controller = controller(auth = auth)
         assertTrue(controller.logout(), "a successful revoke must report true")
@@ -176,7 +178,7 @@ class WebConnectControllerTest {
     }
 
     @Test
-    suspend fun `logout degrades to false on a refused revoke but still disconnects`() {
+    fun `logout degrades to false on a refused revoke but still disconnects`() = runTest {
         val auth = FakeAuthApiClient()
         val controller = controller(auth = auth)
         auth.revokeResult = Result.failure(RuntimeException("server refused"))
@@ -186,7 +188,7 @@ class WebConnectControllerTest {
     }
 
     @Test
-    suspend fun `logout degrades to false on a throwing revoke but still disconnects`() {
+    fun `logout degrades to false on a throwing revoke but still disconnects`() = runTest {
         val auth = FakeAuthApiClient()
         val controller = controller(auth = auth)
         auth.revokeThrows = RuntimeException("transport exploded")
@@ -198,7 +200,7 @@ class WebConnectControllerTest {
     // ── capability declaration (sideEffectScope outcomes) ──────────────────
 
     @Test
-    suspend fun `failed capability declaration surfaces the exact connected-card note`() {
+    fun `failed capability declaration surfaces the exact connected-card note`() = runTest {
         val auth = FakeAuthApiClient()
         val controller = controller(auth = auth)
         auth.capabilitiesResult = Result.failure(RuntimeException("503"))
@@ -213,7 +215,7 @@ class WebConnectControllerTest {
     }
 
     @Test
-    suspend fun `a new declaration resets the note synchronously and success keeps it null`() {
+    fun `a new declaration resets the note synchronously and success keeps it null`() = runTest {
         val auth = FakeAuthApiClient()
         val controller = controller(auth = auth)
         auth.capabilitiesResult = Result.failure(RuntimeException("503"))
@@ -233,7 +235,7 @@ class WebConnectControllerTest {
     // ── last-server-url persistence (shared user_prefs DataStore) ──────────
 
     @Test
-    suspend fun `lastServerUrl reads the exact web_last_server_url storage key`() {
+    fun `lastServerUrl reads the exact web_last_server_url storage key`() = runTest {
         val key = stringPreferencesKey("web_last_server_url")
         val prefs: Preferences = emptyPreferences().toMutablePreferences().apply {
             this[key] = "http://media.example.com"
@@ -243,13 +245,13 @@ class WebConnectControllerTest {
     }
 
     @Test
-    suspend fun `lastServerUrl is null when nothing was persisted`() {
+    fun `lastServerUrl is null when nothing was persisted`() = runTest {
         val controller = controller()
         assertNull(controller.lastServerUrl())
     }
 
     @Test
-    suspend fun `lastServerUrl degrades to null when the store read fails`() {
+    fun `lastServerUrl degrades to null when the store read fails`() = runTest {
         val prefs = FakePrefsDataStore()
         prefs.failReads = true
         val controller = controller(prefs = prefs)
@@ -257,7 +259,7 @@ class WebConnectControllerTest {
     }
 
     @Test
-    suspend fun `rememberServerUrlLater persists the probed URL on the side-effect scope`() {
+    fun `rememberServerUrlLater persists the probed URL on the side-effect scope`() = runTest {
         val key = stringPreferencesKey("web_last_server_url")
         val prefs = FakePrefsDataStore()
         val controller = controller(prefs = prefs)
@@ -266,7 +268,7 @@ class WebConnectControllerTest {
     }
 
     @Test
-    suspend fun `rememberServerUrlLater swallows a broken store instead of crashing the scope`() {
+    fun `rememberServerUrlLater swallows a broken store instead of crashing the scope`() = runTest {
         val key = stringPreferencesKey("web_last_server_url")
         val prefs = FakePrefsDataStore()
         prefs.failWrites = true

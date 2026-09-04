@@ -234,6 +234,9 @@ class SubtitleProviderSettingsViewModelTest {
         viewModel.saveOpenSubtitlesCredentials(" user ", "   ")
         advanceUntilIdle()
 
+        verify(exactly = 1) {
+            preferencesStore.setCredentials(eq(SubtitleProviderKind.OPENSUBTITLES), capture(saved))
+        }
         val credentials = saved.captured as SubtitleProviderCredentials.OpenSubtitles
         assertEquals("user", credentials.username)
         assertNull(credentials.password, "a blank password must not be persisted as whitespace")
@@ -246,11 +249,14 @@ class SubtitleProviderSettingsViewModelTest {
         coEvery {
             subtitleProviderRepository.verifyCredentials(
                 SubtitleProviderKind.OPENSUBTITLES,
-                SubtitleProviderCredentials.OpenSubtitles(username = "user", password = "pw"),
+                SubtitleProviderCredentials.OpenSubtitles(username = "user", password = " pw "),
             )
         } returns ProviderSearchOutcome.Success(emptyList())
         val viewModel = viewModel()
 
+        // The username is trimmed for the probe; the password is deliberately
+        // passed through untrimmed (only blank -> null) — passwords may
+        // legitimately contain leading/trailing spaces.
         viewModel.testOpenSubtitlesCredentials(" user ", " pw ")
         advanceUntilIdle()
 

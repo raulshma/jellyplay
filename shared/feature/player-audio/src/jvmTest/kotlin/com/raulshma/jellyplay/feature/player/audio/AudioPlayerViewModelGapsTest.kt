@@ -128,6 +128,8 @@ class AudioPlayerViewModelGapsTest {
         every { projections.audioPlayerUiPreferences } returns MutableStateFlow(AudioPlayerUiPreferences())
         every { audioStore.audio } returns MutableStateFlow(AudioSlice())
         every { audioEffectsStore.audioEffects } returns MutableStateFlow(AudioEffectsSlice())
+        every { effectsManager.replayGainMode } returns MutableStateFlow(com.raulshma.jellyplay.core.model.AudioNormalizationMode.NONE)
+        every { effectsManager.replayGainPreAmpDb } returns MutableStateFlow(0.0f)
         every { queueManager.currentPlayingItemId } returns currentItemIdFlow
         every { queueManager.queue } returns queue
         every { queueManager.currentIndex } returns queueIndex
@@ -355,6 +357,8 @@ class AudioPlayerViewModelGapsTest {
     @Test
     fun addToPlaylist_failure_keepsPickerOpenAndSurfacesTheError() {
         currentItemIdFlow.value = "track-1"
+        coEvery { mediaRepository.getPlaylists(limit = 100) } returns Result.success(emptyList())
+        viewModel.openPlaylistPicker()
         val playlist = Playlist(id = "p1", name = "Road Trip", canEdit = true)
         coEvery { mediaRepository.addItemsToPlaylist(any(), any()) } returns
             Result.failure(RuntimeException("server rejected"))
@@ -408,8 +412,8 @@ class AudioPlayerViewModelGapsTest {
 
     @Test
     fun downloadCurrentTrack_completedDownload_redownloadsByDeletingFirst() {
-        currentItemIdFlow.value = "track-1"
         downloadFlows["track-1"] = MutableStateFlow(downloadItem("dl-1", DownloadStatus.COMPLETED))
+        currentItemIdFlow.value = "track-1"
 
         viewModel.downloadCurrentTrack()
 
@@ -454,8 +458,12 @@ class AudioPlayerViewModelGapsTest {
 
     @Test
     fun currentDownloadItem_mirror_followsThePlayingItem() {
-        currentItemIdFlow.value = "track-1"
+        // The per-item download flow must exist BEFORE the playing-item switch:
+        // the eager collector binds to getDownloadByMediaItemIdFlow("track-1")
+        // at the moment the itemId emission lands (getOrPut would otherwise
+        // create and bind a permanent null flow).
         downloadFlows["track-1"] = MutableStateFlow(downloadItem("dl-1", DownloadStatus.COMPLETED))
+        currentItemIdFlow.value = "track-1"
         assertEquals("dl-1", viewModel.currentDownloadItem.value?.id)
 
         // Moving to an item without a download clears the mirror (and the

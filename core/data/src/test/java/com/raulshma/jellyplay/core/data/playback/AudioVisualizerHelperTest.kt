@@ -3,20 +3,19 @@ package com.raulshma.jellyplay.core.data.playback
 import android.media.audiofx.Visualizer
 import io.mockk.every
 import io.mockk.just
-import io.mockk.mockkConstructor
+import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.runs
 import io.mockk.unmockkAll
 import io.mockk.verify
 import org.junit.After
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowSystemClock
 import java.time.Duration
@@ -33,6 +32,12 @@ import java.time.Duration
  *   changed frame is published, per stream (waveform / FFT independent).
  * - `setEnabled(false)` publishes empty arrays to both flows; `detach` does the
  *   same and releases the underlying Visualizer exactly once.
+ *
+ * The `Visualizer` is supplied through the helper's `visualizerFactory`
+ * constructor seam as a plain mock: `mockkConstructor` on Robolectric-shadowed
+ * framework classes intercepts unreliably (shadowed native methods such as
+ * `release()`/`setEnabled` bypass the mock, and `int`-returning setters clash
+ * with `just runs` stubs).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -40,28 +45,32 @@ class AudioVisualizerHelperTest {
 
     private var captureListener: Visualizer.OnDataCaptureListener? = null
 
+    private fun visualizer(): Visualizer {
+        val fx = mockk<Visualizer>(relaxed = true)
+        every { fx.setCaptureSize(any()) } answers { 0 }
+        every { fx.setDataCaptureListener(any(), any(), any(), any()) } answers {
+            captureListener = firstArg()
+            0
+        }
+        every { fx.setEnabled(any()) } answers { 0 }
+        every { fx.release() } just runs
+        return fx
+    }
+
     @Before
     fun setUp() {
         mockkStatic(Visualizer::class)
         every { Visualizer.getCaptureSizeRange() } returns intArrayOf(128, 1024)
         every { Visualizer.getMaxCaptureRate() } returns 20_000
-
-        mockkConstructor(Visualizer::class)
-        every { anyConstructed<Visualizer>().captureSize = any() } just runs
-        every { anyConstructed<Visualizer>().setDataCaptureListener(any(), any(), any(), any()) } answers {
-            captureListener = firstArg()
-            0
-        }
-        every { anyConstructed<Visualizer>().enabled = any() } just runs
-        every { anyConstructed<Visualizer>().release() } just runs
     }
 
     @After
     fun tearDown() {
         unmockkAll()
+        captureListener = null
     }
 
-    private fun helper() = AudioVisualizerHelper()
+    private fun helper(fx: Visualizer) = AudioVisualizerHelper(visualizerFactory = { fx })
 
     private fun waveform(bytes: ByteArray) =
         captureListener?.onWaveFormDataCapture(null, bytes, 1)
@@ -73,7 +82,8 @@ class AudioVisualizerHelperTest {
 
     @Test
     fun `attach with UNSET session never registers a listener`() {
-        val h = helper()
+        val fx = visualizer()
+        val h = helper(fx)
 
         h.attach(androidx.media3.common.C.AUDIO_SESSION_ID_UNSET)
 
@@ -82,21 +92,23 @@ class AudioVisualizerHelperTest {
 
     @Test
     fun `attach registers one listener at the minimum capture size`() {
-        val h = helper()
+        val fx = visualizer()
+        val h = helper(fx)
 
         h.attach(audioSessionId = 42)
 
-        assertTrue(captureListener != null)
-        verify(exactly = 1) { anyConstructed<Visualizer>().captureSize = 128 }
-        verify(exactly = 1) { anyConstructed<Visualizer>().setDataCaptureListener(any(), any(), true, true) }
+        assertNotNull(captureListener)
+        verify(exactly = 1) { fx.setCaptureSize(128) }
+        verify(exactly = 1) { fx.setDataCaptureListener(any(), any(), true, true) }
 
         h.attach(audioSessionId = 42)
-        verify(exactly = 1) { anyConstructed<Visualizer>().setDataCaptureListener(any(), any(), true, true) }
+        verify(exactly = 1) { fx.setDataCaptureListener(any(), any(), true, true) }
     }
 
     @Test
     fun `waveform frames inside the throttle window are dropped even when changed`() {
-        val h = helper()
+        val fx = visualizer()
+        val h = helper(fx)
         h.attach(audioSessionId = 42)
         advanceMs(40)
 
@@ -119,7 +131,8 @@ class AudioVisualizerHelperTest {
 
     @Test
     fun `fft frames throttle independently of waveform frames`() {
-        val h = helper()
+        val fx = visualizer()
+        val h = helper(fx)
         h.attach(audioSessionId = 42)
         advanceMs(40)
 
@@ -144,7 +157,8 @@ class AudioVisualizerHelperTest {
 
     @Test
     fun `null capture payloads are ignored`() {
-        val h = helper()
+        val fx = visualizer()
+        val h = helper(fx)
         h.attach(audioSessionId = 42)
         advanceMs(40)
 
@@ -156,8 +170,9 @@ class AudioVisualizerHelperTest {
     }
 
     @Test
-    fun `setEnabled(false) clears both flows`() {
-        val h = helper()
+    fun `setEnabled false clears both flows`() {
+        val fx = visualizer()
+        val h = helper(fx)
         h.attach(audioSessionId = 42)
         advanceMs(40)
         waveform(byteArrayOf(1))
@@ -167,19 +182,21 @@ class AudioVisualizerHelperTest {
 
         assertTrue(h.waveformData.value.isEmpty())
         assertTrue(h.fftData.value.isEmpty())
-        verify(exactly = 1) { anyConstructed<Visualizer>().enabled = false }
+        // attach applied isEnabled=false, then the explicit disable — 2 total.
+        verify(exactly = 2) { fx.setEnabled(false) }
     }
 
     @Test
     fun `detach releases the visualizer and clears the flows, then re-attach works`() {
-        val h = helper()
+        val fx = visualizer()
+        val h = helper(fx)
         h.attach(audioSessionId = 42)
         advanceMs(40)
         waveform(byteArrayOf(1))
 
         h.detach()
 
-        verify(exactly = 1) { anyConstructed<Visualizer>().release() }
+        verify(exactly = 1) { fx.release() }
         assertTrue(h.waveformData.value.isEmpty())
         assertTrue(h.fftData.value.isEmpty())
 

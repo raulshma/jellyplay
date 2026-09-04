@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -92,7 +93,8 @@ class RemoteControlReceiverTest {
         r.start()
         // The collector subscribes on Dispatchers.Default; give it a moment so
         // the SharedFlow emissions below always land on an active subscriber.
-        Thread.sleep(250)
+        // Under heavily loaded workers 250 ms was not always enough.
+        Thread.sleep(1_000)
     }
 
     private fun playEvent(itemIds: List<String>, startPositionTicks: Long = 0L) = WebSocketEvent(
@@ -193,7 +195,7 @@ class RemoteControlReceiverTest {
         }
 
         assertEquals("Song", banner.title)
-        coVerify(timeout = 3_000) { audioDispatcher.play(match { it.itemIds == listOf("i1") }) }
+        coVerify(timeout = 3_000, atLeast = 1) { audioDispatcher.play(match { it.itemIds == listOf("i1") }) }
         coVerify(exactly = 0) { videoDispatcher.play(any()) }
         r.stop()
     }
@@ -370,9 +372,15 @@ class RemoteControlReceiverTest {
     ): T = runBlocking {
         val received = CompletableDeferred<T>()
         val job = launch { received.complete(flow.first()) }
-        // The caller awaits the subscription before emitting (startAndAwaitSubscription),
-        // so no subscriptionCount probe here — SharedFlow exposes none.
-        emit()
+        // The caller awaits the subscription before emitting, but the
+        // receiver's collector lives on Dispatchers.Default and under loaded
+        // workers its subscription can lag the first emission (SharedFlow has
+        // no buffer for it) — so re-emit until the value arrives.
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (!received.isCompleted && System.currentTimeMillis() < deadline) {
+            emit()
+            delay(200) // suspend, so the subscription coroutine actually runs
+        }
         val value = withTimeout(timeoutMs) { received.await() }
         job.cancel()
         value

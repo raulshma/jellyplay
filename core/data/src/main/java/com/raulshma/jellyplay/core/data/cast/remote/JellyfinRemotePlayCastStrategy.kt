@@ -219,6 +219,7 @@ class JellyfinRemotePlayCastStrategy(
         _positionMs.value = 0L
         _durationMs.value = 0L
         _isPlaying.value = false
+        _volume.value = 1f
         _nowPlayingTitle.value = ""
         _nowPlayingSubtitle.value = ""
         _nowPlayingItemId.value = ""

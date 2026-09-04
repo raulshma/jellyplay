@@ -45,10 +45,18 @@ import kotlin.test.assertTrue
  * [runCurrent] / [advanceTimeBy] — never `advanceUntilIdle`, which would spin
  * forever on the rescheduling loops. The now-tick loop itself is not asserted:
  * it stamps the REAL clock (`Instant.now()`), not the virtual scheduler's.
- * Tests run on a bare `runTest` scope while the VM lives on the separate
- * `mainDispatcher` scheduler (pumped explicitly via
- * `mainDispatcher.scheduler`): sharing one scheduler would let runTest's
- * teardown spin forever on the VM's never-idle loops.
+ * Because `Dispatchers.setMain` installs a `TestDispatcher`, `runTest` ADOPTS
+ * its scheduler (verified: `testScheduler === mainDispatcher.scheduler`), so
+ * the VM's loops ride the same scheduler the tests pump — and every test runs
+ * through [vmTest], whose `finally` cancels the loops before runTest's
+ * completion drain (a bare trailing `stopLoops()` is skipped on a failed
+ * assertion and the drain would spin forever).
+ *
+ * Stub note: `getLiveTvGuide` has 4 parameters (2 with defaults), and the VM
+ * calls it with `limit = 100` named — a DIFFERENT default-arg mask than a
+ * 3-matcher recording (`limit` defaulted instead of `startIndex`), which the
+ * stub silently never matches. Every stub/verify therefore spells out all
+ * four matchers explicitly.
  */
 class EpgViewModelTest {
 
@@ -60,7 +68,7 @@ class EpgViewModelTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
-        coEvery { mediaRepository.getLiveTvGuide(any(), any(), any()) } returns Result.success(
+        coEvery { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) } returns Result.success(
             EpgGuide(channels = emptyList(), programs = emptyList())
         )
     }
@@ -73,9 +81,13 @@ class EpgViewModelTest {
     /** Runs the init loadGuide; the refresh/now-tick loops park on their delays. */
     private fun TestScope.createViewModel(): EpgViewModel {
         val vm = EpgViewModel(mediaRepository)
+        createdViewModels += vm
         testScheduler.runCurrent()
         return vm
     }
+
+    /** Every VM created by [createViewModel]; all cancelled in [vmTest]'s finally. */
+    private val createdViewModels = mutableListOf<EpgViewModel>()
 
     /**
      * Stops a VM's infinite auto-refresh/now-tick loops. Must run INSIDE the
@@ -84,6 +96,22 @@ class EpgViewModelTest {
      */
     private fun EpgViewModel.stopLoops() {
         viewModelScope.cancel()
+    }
+
+    /**
+     * runTest wrapper that cancels every created VM's loops in a `finally`
+     * INSIDE the coroutine — before runTest's completion drain. The trailing
+     * [stopLoops] calls alone are not enough: on a failed assertion they are
+     * skipped, and the drain then spins forever on the never-idling loops
+     * (the HomeViewModelTest 600s-hang lesson).
+     */
+    private fun vmTest(block: suspend TestScope.() -> Unit): Unit = runTest {
+        try {
+            block()
+        } finally {
+            createdViewModels.forEach { it.viewModelScope.cancel() }
+            createdViewModels.clear()
+        }
     }
 
     private fun program(
@@ -102,10 +130,10 @@ class EpgViewModelTest {
     // ── Guide-window math ────────────────────────────────────────────────────
 
     @Test
-    fun loadGuide_fetches_a_24h_window_looking_back_2h_with_limit_100() = runTest {
+    fun loadGuide_fetches_a_24h_window_looking_back_2h_with_limit_100() = vmTest {
         val starts = mutableListOf<String>()
         val ends = mutableListOf<String>()
-        coEvery { mediaRepository.getLiveTvGuide(capture(starts), capture(ends), 100) } returns
+        coEvery { mediaRepository.getLiveTvGuide(capture(starts), capture(ends), any(), 100) } returns
             Result.success(EpgGuide(channels = emptyList(), programs = emptyList()))
 
         createViewModel().let { vm ->
@@ -129,11 +157,11 @@ class EpgViewModelTest {
     }
 
     @Test
-    fun loadGuide_success_populates_channels_programs_and_the_grid_snapshot() = runTest {
+    fun loadGuide_success_populates_channels_programs_and_the_grid_snapshot() = vmTest {
         val now = Instant.now()
         val channel = LiveTvChannel(id = "chan-1", name = "CNN")
         val airing = program(id = "p1", start = now.minusSeconds(600), end = now.plusSeconds(1_200))
-        coEvery { mediaRepository.getLiveTvGuide(any(), any(), any()) } returns
+        coEvery { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) } returns
             Result.success(EpgGuide(channels = listOf(channel), programs = listOf(airing)))
 
         val vm = createViewModel()
@@ -148,8 +176,8 @@ class EpgViewModelTest {
     }
 
     @Test
-    fun loadGuide_failure_surfaces_the_error_and_keeps_the_previous_grid() = runTest {
-        coEvery { mediaRepository.getLiveTvGuide(any(), any(), any()) } returns
+    fun loadGuide_failure_surfaces_the_error_and_keeps_the_previous_grid() = vmTest {
+        coEvery { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) } returns
             Result.failure(RuntimeException("guide down"))
 
         val vm = createViewModel()
@@ -164,7 +192,7 @@ class EpgViewModelTest {
     // ── Record confirmation side effects ─────────────────────────────────────
 
     @Test
-    fun confirmRecord_success_flips_to_Success_and_reloads_the_guide() = runTest {
+    fun confirmRecord_success_flips_to_Success_and_reloads_the_guide() = vmTest {
         val vm = createViewModel()
         val p = program(id = "prog-1", name = "Evening News")
         vm.requestRecord(p)
@@ -181,12 +209,12 @@ class EpgViewModelTest {
         // (init load + confirm reload + the explicit loadGuide below = 3).
         vm.loadGuide()
         testScheduler.runCurrent()
-        coVerify(exactly = 3) { mediaRepository.getLiveTvGuide(any(), any(), any()) }
+        coVerify(exactly = 3) { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) }
         vm.stopLoops()
     }
 
     @Test
-    fun confirmRecord_failure_flips_to_Error_with_the_exception_message() = runTest {
+    fun confirmRecord_failure_flips_to_Error_with_the_exception_message() = vmTest {
         val vm = createViewModel()
         vm.requestRecord(program(id = "prog-1"))
         coEvery { mediaRepository.createTimer("prog-1") } returns Result.failure(RuntimeException("dvr busy"))
@@ -199,7 +227,7 @@ class EpgViewModelTest {
     }
 
     @Test
-    fun confirmRecord_failure_with_null_message_falls_back_to_the_literal() = runTest {
+    fun confirmRecord_failure_with_null_message_falls_back_to_the_literal() = vmTest {
         val vm = createViewModel()
         vm.requestRecord(program(id = "prog-1"))
         coEvery { mediaRepository.createTimer("prog-1") } returns
@@ -213,7 +241,7 @@ class EpgViewModelTest {
     }
 
     @Test
-    fun confirmRecord_without_a_pending_confirmation_is_a_no_op() = runTest {
+    fun confirmRecord_without_a_pending_confirmation_is_a_no_op() = vmTest {
         val vm = createViewModel()
 
         vm.confirmRecord()
@@ -225,7 +253,7 @@ class EpgViewModelTest {
     }
 
     @Test
-    fun confirmRecord_after_dismiss_is_a_no_op() = runTest {
+    fun confirmRecord_after_dismiss_is_a_no_op() = vmTest {
         val vm = createViewModel()
         vm.requestRecord(program(id = "prog-1"))
         vm.dismissRecordDialog()
@@ -241,32 +269,32 @@ class EpgViewModelTest {
     // ── Auto-refresh loop ────────────────────────────────────────────────────
 
     @Test
-    fun autoRefresh_refetches_the_guide_at_the_5_minute_mark_only() = runTest {
+    fun autoRefresh_refetches_the_guide_at_the_5_minute_mark_only() = vmTest {
         val vm = createViewModel()
-        coVerify(exactly = 1) { mediaRepository.getLiveTvGuide(any(), any(), any()) }
+        coVerify(exactly = 1) { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) }
 
         // 4:59.999 — not yet.
         mainDispatcher.scheduler.advanceTimeBy(4 * 60 * 1000L + 59_999L)
         mainDispatcher.scheduler.runCurrent()
-        coVerify(exactly = 1) { mediaRepository.getLiveTvGuide(any(), any(), any()) }
+        coVerify(exactly = 1) { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) }
 
         // The 5-minute boundary fires the next refresh.
         mainDispatcher.scheduler.advanceTimeBy(1L)
         mainDispatcher.scheduler.runCurrent()
-        coVerify(exactly = 2) { mediaRepository.getLiveTvGuide(any(), any(), any()) }
+        coVerify(exactly = 2) { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) }
 
         // And it keeps going on schedule.
         mainDispatcher.scheduler.advanceTimeBy(5 * 60 * 1000L)
         mainDispatcher.scheduler.runCurrent()
-        coVerify(exactly = 3) { mediaRepository.getLiveTvGuide(any(), any(), any()) }
+        coVerify(exactly = 3) { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) }
         vm.stopLoops()
     }
 
     @Test
-    fun autoRefresh_updates_the_window_and_grid_with_the_fresh_guide() = runTest {
+    fun autoRefresh_updates_the_window_and_grid_with_the_fresh_guide() = vmTest {
         val vm = createViewModel()
         val channel = LiveTvChannel(id = "chan-9", name = "Fresh")
-        coEvery { mediaRepository.getLiveTvGuide(any(), any(), any()) } returns
+        coEvery { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) } returns
             Result.success(EpgGuide(channels = listOf(channel), programs = emptyList()))
 
         mainDispatcher.scheduler.advanceTimeBy(5 * 60 * 1000L)

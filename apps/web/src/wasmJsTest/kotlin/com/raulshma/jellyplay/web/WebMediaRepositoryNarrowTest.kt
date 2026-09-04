@@ -21,6 +21,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlinx.coroutines.test.runTest
 
 /**
  * Browser-free unit cover for [WebMediaRepositoryNarrow] (wave 16C) — the web
@@ -124,7 +125,7 @@ class WebMediaRepositoryNarrowTest {
     // ── the one served member ──────────────────────────────────────────────
 
     @Test
-    suspend fun `findItemByProviderId forwards the provider pair and returns the client result`() {
+    fun `findItemByProviderId forwards the provider pair and returns the client result`() = runTest {
         val (repo, client) = repository()
         client.lookupResult = Result.success("jellyfin-item-7")
 
@@ -135,7 +136,7 @@ class WebMediaRepositoryNarrowTest {
     }
 
     @Test
-    suspend fun `findItemByProviderId passes a lookup failure through instead of crashing`() {
+    fun `findItemByProviderId passes a lookup failure through instead of crashing`() = runTest {
         val (repo, client) = repository()
         client.lookupResult = Result.failure(RuntimeException("no matching item"))
 
@@ -163,13 +164,13 @@ class WebMediaRepositoryNarrowTest {
     // ── the loud off-web throw contract, one member per super-interface ────
 
     @Test
-    suspend fun `off-web home-sections member throws loudly`() {
+    fun `off-web home-sections member throws loudly`() = runTest {
         val (repo, _) = repository()
         assertFailsWith<UnsupportedOperationException> { repo.getHomeSections(HomeSectionQuery(), force = false) }
     }
 
     @Test
-    suspend fun `off-web detail search browse and paging members throw loudly`() {
+    fun `off-web detail search browse and paging members throw loudly`() = runTest {
         val (repo, _) = repository()
         assertFailsWith<UnsupportedOperationException> { repo.getMediaDetail("item-1", force = false) }
         assertFailsWith<UnsupportedOperationException> { repo.search("query", LibraryFilters(), limit = 10, startIndex = 0) }
@@ -181,7 +182,7 @@ class WebMediaRepositoryNarrowTest {
     }
 
     @Test
-    suspend fun `off-web live-tv syncplay newsletter playlist and lyrics members throw loudly`() {
+    fun `off-web live-tv syncplay newsletter playlist and lyrics members throw loudly`() = runTest {
         val (repo, _) = repository()
         assertFailsWith<UnsupportedOperationException> {
             repo.getLiveTvChannels(0, 10, addCurrentProgram = false, enableFavoriteSorting = false, isFavorite = null)
@@ -193,7 +194,7 @@ class WebMediaRepositoryNarrowTest {
     }
 
     @Test
-    suspend fun `the thrown message names the escaped member and the one served member`() {
+    fun `the thrown message names the escaped member and the one served member`() = runTest {
         val (repo, _) = repository()
         val error = assertFailsWith<UnsupportedOperationException> {
             repo.getHomeSections(HomeSectionQuery(), force = false)

@@ -3,8 +3,7 @@ package com.raulshma.jellyplay.core.data.playback
 import android.media.audiofx.Equalizer
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import io.mockk.every
-import io.mockk.mockkConstructor
-import io.mockk.unmockkAll
+import io.mockk.mockk
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -29,9 +28,11 @@ import org.robolectric.annotation.Config
  * levels. Bands beyond the effect's `numberOfBands` are skipped, and the whole
  * overlay is a no-op without an attached effect.
  *
- * The `Equalizer` is intercepted via `mockkConstructor` (its real constructor
- * runs against Robolectric's `ShadowAudioEffect`), with a deterministic 3-band
- * / ±1500 mB geometry so the millibel values can be asserted exactly.
+ * The `Equalizer` is supplied through the helper's `equalizerFactory`
+ * constructor seam as a plain mock with a deterministic 3-band / ±1500 mB
+ * geometry so the millibel values can be asserted exactly (`mockkConstructor`
+ * on Robolectric-shadowed framework classes intercepts unreliably, and the
+ * real native-backed constructor spiralled the test worker into GC thrash).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -40,22 +41,28 @@ class EqualizerHelperBandOffsetsTest {
     /** Band → applied millibels, recording every `setBandLevel` in order. */
     private val applied = mutableListOf<Pair<Int, Int>>()
 
+    private fun equalizer(): Equalizer {
+        val fx = mockk<Equalizer>(relaxed = true)
+        every { fx.numberOfBands } returns 3
+        every { fx.bandLevelRange } returns shortArrayOf(-1500, 1500)
+        every { fx.setBandLevel(any(), any()) } answers {
+            applied += firstArg<Short>().toInt() to secondArg<Short>().toInt()
+            0 // AudioEffect.SUCCESS
+        }
+        every { fx.setEnabled(any()) } answers { 0 }
+        return fx
+    }
+
     private lateinit var helper: EqualizerHelper
 
     @Before
     fun setUp() {
-        mockkConstructor(Equalizer::class)
-        every { anyConstructed<Equalizer>().numberOfBands } returns 3
-        every { anyConstructed<Equalizer>().bandLevelRange } returns shortArrayOf(-1500, 1500)
-        every { anyConstructed<Equalizer>().setBandLevel(any(), any()) } answers {
-            applied += firstArg<Short>().toInt() to secondArg<Short>().toInt()
-        }
-        helper = EqualizerHelper()
+        helper = EqualizerHelper(equalizerFactory = { equalizer() })
     }
 
     @After
     fun tearDown() {
-        unmockkAll()
+        applied.clear()
     }
 
     private fun appliedFor(band: Int) = applied.last { it.first == band }.second

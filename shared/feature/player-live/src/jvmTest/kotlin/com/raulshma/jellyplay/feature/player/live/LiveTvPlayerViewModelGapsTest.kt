@@ -546,9 +546,10 @@ class LiveTvPlayerViewModelGapsTest {
         scheduler.advanceTimeBy(2_500L)
         scheduler.runCurrent()
         assertEquals(listOf("ContainerNotSupported"), vm.state.value.transcodeReasons)
-        assertEquals(listOf("ContainerNotSupported"), rendered)
 
         // Now the engine errors: raw detail + rendered reasons join as one block.
+        // The renderer runs at detail-build time (on the engine error), not at
+        // reason-landing time, so `rendered` only fills in below.
         engineErrorDetailFlow.value = "playback failed"
         engineErrorMessageFlow.value = "boom"
         engineStateFlow.value = LiveEngineState.ERROR
@@ -556,6 +557,7 @@ class LiveTvPlayerViewModelGapsTest {
 
         assertEquals("playback failed\n\nreason: ContainerNotSupported", vm.state.value.errorDetail)
         assertEquals(LivePlayerMessage.Raw("boom"), vm.state.value.errorMessage)
+        assertEquals(listOf("ContainerNotSupported"), rendered)
     }
 
     @Test

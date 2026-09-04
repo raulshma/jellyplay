@@ -8,7 +8,9 @@ import com.raulshma.jellyplay.core.model.EffectStrength
  * release-before-create / session-id-remember / enabled-flag skeleton lives
  * in [AudioFxHelper].
  */
-class BassBoostHelper : AudioFxHelper<BassBoost>(TAG) {
+open class BassBoostHelper(
+    private val effectFactory: (Int) -> BassBoost = ::defaultBassEffect,
+) : AudioFxHelper<BassBoost>(TAG) {
 
     var strength: EffectStrength = EffectStrength.MODERATE
         private set
@@ -34,9 +36,10 @@ class BassBoostHelper : AudioFxHelper<BassBoost>(TAG) {
         // Construct first, then configure inside createSafely so a throw during
         // setStrength still releases the native BassBoost handle — otherwise
         // the object never reaches `fx` and detach()/releaseFx() can't free it.
-        createSafely(audioSessionId, { BassBoost(0, it) }) { it.setStrength(strengthValue) }
+        createSafely(audioSessionId, effectFactory) { it.setStrength(strengthValue) }
 
     companion object {
+        fun defaultBassEffect(audioSessionId: Int): BassBoost = BassBoost(0, audioSessionId)
         private const val TAG = "BassBoostHelper"
     }
 }
