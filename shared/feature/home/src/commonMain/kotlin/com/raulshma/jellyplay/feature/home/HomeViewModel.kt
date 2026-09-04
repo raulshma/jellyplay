@@ -32,15 +32,11 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
-import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
-import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
-import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.home.toSectionPrefs
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
-import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
@@ -82,10 +78,8 @@ internal class HomeViewModel(
     private val offlineRepository: OfflineRepository,
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: NewsletterTriggerManager,
-    private val homeDiscoveryStore: HomeDiscoveryStore,
-    private val appearanceStore: AppearanceStore,
-    private val experimentalStore: ExperimentalStore,
-    private val playbackStore: PlaybackStore,
+    /** The four datastore stores bundled at construction — see [HomePrefsProviders]. */
+    private val prefs: HomePrefsProviders,
     private val preferencesEditor: PreferencesEditor,
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val seerrPreferencesStore: SeerrPreferencesStore,
@@ -302,9 +296,8 @@ internal class HomeViewModel(
      * series card — sheet state plus its four actions, behind one holder (see
      * [SeriesDeleteStateHolder]; the snapshot-before-dismiss invariant is
      * documented and pinned there). [state][SeriesDeleteStateHolder.state] is
-     * folded into [HomeUiState.seriesDelete] by the init collector; the four
-     * methods below are one-line delegates so the sheet's call sites are
-     * unchanged.
+     * folded into [HomeUiState.seriesDelete] by the init collector; [onEvent]
+     * routes the sheet's events straight to the holder's methods.
      */
     private val seriesDeleteStateHolder = SeriesDeleteStateHolder(scope, offlineRepository)
 
@@ -313,8 +306,8 @@ internal class HomeViewModel(
      * Download — the same `SeriesDownloadSheet` the media-detail screen hosts,
      * fed here from the [EpisodeCatalogue] seam instead of a detail session.
      * [state][SeriesDownloadStateHolder.state] is folded into
-     * [HomeUiState.seriesDownload] by the init collector; the methods below
-     * are one-line delegates for the sheet's callbacks.
+     * [HomeUiState.seriesDownload] by the init collector; [onEvent] routes
+     * the sheet's callbacks straight to the holder's methods.
      */
     private val seriesDownloadStateHolder = SeriesDownloadStateHolder(
         scope = scope,
@@ -420,10 +413,10 @@ internal class HomeViewModel(
         launch {
             var hasSeenHomePreferences = false
             combine(
-                homeDiscoveryStore.homeDiscovery,
-                appearanceStore.appearance,
-                experimentalStore.experimental,
-                playbackStore.playback,
+                prefs.homeDiscovery.homeDiscovery,
+                prefs.appearance.appearance,
+                prefs.experimental.experimental,
+                prefs.playback.playback,
             ) { home, appearance, experimental, playback ->
                 HomePrefs(home, appearance, experimental, playback)
             }.collect { prefs ->
@@ -605,18 +598,21 @@ internal class HomeViewModel(
 
     /**
      * The VM's single command surface: every user intent arrives here as a
-     * [HomeUiEvent] and is routed to a private handler below. The VM's other
-     * public members are flows and sync getters only — there is no per-action
-     * command method to keep in sync with the screen.
+     * [HomeUiEvent]. Pure-forwarding intents route straight to their owning
+     * holder's method (the series download/delete sheets, the search
+     * query/history edits, the sync drain) with no delegate function in
+     * between; intents carrying any VM-side logic keep a private handler
+     * below. The VM's other public members are flows and sync getters only —
+     * there is no per-action command method to keep in sync with the screen.
      */
     fun onEvent(event: HomeUiEvent) {
         when (event) {
             is HomeUiEvent.Refresh -> refresh()
             is HomeUiEvent.PullToRefresh -> pullToRefresh()
             is HomeUiEvent.ToggleOfflineMode -> toggleOfflineMode()
-            is HomeUiEvent.SyncNow -> syncNow()
-            is HomeUiEvent.UpdateSearchQuery -> updateSearchQuery(event.query)
-            is HomeUiEvent.ClearSearch -> clearSearch()
+            is HomeUiEvent.SyncNow -> syncStatus.syncNow()
+            is HomeUiEvent.UpdateSearchQuery -> searchStateHolder.updateSearchQuery(event.query)
+            is HomeUiEvent.ClearSearch -> searchStateHolder.clearSearch()
             is HomeUiEvent.SelectSeerrRequestItem -> selectSeerrRequestItem(event.item)
             is HomeUiEvent.RequestSeerrMedia -> requestSeerrMedia(event)
             is HomeUiEvent.ClearRequestResult -> clearRequestResult()
@@ -627,17 +623,17 @@ internal class HomeViewModel(
             is HomeUiEvent.MarkItemPlayed -> setItemPlayed(event.item, played = true)
             is HomeUiEvent.MarkItemUnplayed -> setItemPlayed(event.item, played = false)
             is HomeUiEvent.DeleteOfflineMedia -> deleteOfflineMedia(event.item)
-            is HomeUiEvent.RequestSeriesDownload -> requestSeriesDownload(event.series)
-            is HomeUiEvent.LoadSeriesDownloadEpisodes -> loadSeriesDownloadEpisodes(event.seasonId)
-            is HomeUiEvent.DownloadSeries -> downloadSeries(event.selectedEpisodes)
-            is HomeUiEvent.DismissSeriesDownload -> dismissSeriesDownload()
-            is HomeUiEvent.RequestSeriesDelete -> requestSeriesDelete(event.series)
-            is HomeUiEvent.DismissSeriesDelete -> dismissSeriesDelete()
-            is HomeUiEvent.DeleteOfflineEpisodes -> deleteOfflineEpisodes(event.episodeIds)
-            is HomeUiEvent.DeleteOfflineSeries -> deleteOfflineSeries(event.seriesId)
+            is HomeUiEvent.RequestSeriesDownload -> seriesDownloadStateHolder.requestSeriesDownload(event.series)
+            is HomeUiEvent.LoadSeriesDownloadEpisodes -> seriesDownloadStateHolder.loadSeasonEpisodes(event.seasonId)
+            is HomeUiEvent.DownloadSeries -> seriesDownloadStateHolder.downloadSeries(event.selectedEpisodes)
+            is HomeUiEvent.DismissSeriesDownload -> seriesDownloadStateHolder.dismiss()
+            is HomeUiEvent.RequestSeriesDelete -> seriesDeleteStateHolder.requestSeriesDelete(event.series)
+            is HomeUiEvent.DismissSeriesDelete -> seriesDeleteStateHolder.dismiss()
+            is HomeUiEvent.DeleteOfflineEpisodes -> seriesDeleteStateHolder.deleteOfflineEpisodes(event.episodeIds)
+            is HomeUiEvent.DeleteOfflineSeries -> seriesDeleteStateHolder.deleteOfflineSeries(event.seriesId)
             is HomeUiEvent.PrefetchSeerrDetails -> prefetchSeerrDetails(event.tmdbId, event.mediaType, event.onDone)
-            is HomeUiEvent.DeleteSearchHistoryItem -> deleteSearchHistoryItem(event.id)
-            is HomeUiEvent.ClearSearchHistory -> clearSearchHistory()
+            is HomeUiEvent.DeleteSearchHistoryItem -> searchStateHolder.deleteSearchHistoryItem(event.id)
+            is HomeUiEvent.ClearSearchHistory -> searchStateHolder.clearSearchHistory()
             is HomeUiEvent.SettingsResultClicked -> onSettingsResultClicked(event.item)
             is HomeUiEvent.SetSectionVisible -> setSectionVisible(event.type, event.visible)
             is HomeUiEvent.MoveSection -> moveSection(event.type, event.up)
@@ -730,22 +726,6 @@ internal class HomeViewModel(
         mediaDownloadActions.removeDownload(item)
     }
 
-    /** Opens the delete-episodes sheet for [series] — see [SeriesDeleteStateHolder.requestSeriesDelete]. */
-    private fun requestSeriesDelete(series: MediaItem) = seriesDeleteStateHolder.requestSeriesDelete(series)
-
-    /** Opens the series download sheet for [series] — see [SeriesDownloadStateHolder.requestSeriesDownload]. */
-    private fun requestSeriesDownload(series: MediaItem) = seriesDownloadStateHolder.requestSeriesDownload(series)
-
-    /** Lazily expands one season in the open series download sheet — see [SeriesDownloadStateHolder.loadSeasonEpisodes]. */
-    private fun loadSeriesDownloadEpisodes(seasonId: String) = seriesDownloadStateHolder.loadSeasonEpisodes(seasonId)
-
-    /** Queues the selected episodes and closes the sheet — see [SeriesDownloadStateHolder.downloadSeries]. */
-    private fun downloadSeries(selectedEpisodes: Map<String, List<String>>) =
-        seriesDownloadStateHolder.downloadSeries(selectedEpisodes)
-
-    /** Closes the series download sheet — see [SeriesDownloadStateHolder.dismiss]. */
-    private fun dismissSeriesDownload() = seriesDownloadStateHolder.dismiss()
-
     /**
      * Long-press Download from an online home card — non-series items only.
      * Series cards never reach this method: [homeQuickActionEffect]
@@ -776,21 +756,6 @@ internal class HomeViewModel(
             }
         }
     }
-
-    /** Closes the sheet — see [SeriesDeleteStateHolder.dismiss]. */
-    private fun dismissSeriesDelete() = seriesDeleteStateHolder.dismiss()
-
-    /**
-     * Deletes the selected episodes for the open sheet — see
-     * [SeriesDeleteStateHolder.deleteOfflineEpisodes]. The sheet snapshot is
-     * read BEFORE dismissal there (passed per call into the shared module), so
-     * the sheet can dismiss while the deletes run in background.
-     */
-    private fun deleteOfflineEpisodes(episodeIds: Set<String>) =
-        seriesDeleteStateHolder.deleteOfflineEpisodes(episodeIds)
-
-    /** Deletes the entire series and closes the sheet — see [SeriesDeleteStateHolder.deleteOfflineSeries]. */
-    private fun deleteOfflineSeries(seriesId: String) = seriesDeleteStateHolder.deleteOfflineSeries(seriesId)
 
 
     /**
@@ -855,9 +820,6 @@ internal class HomeViewModel(
         }
     }
 
-    /** Manually drain the playback outbox — see [SyncStatusStateHolder.syncNow]. */
-    private fun syncNow() = syncStatus.syncNow()
-
     /**
      * Switches the active user. The atomic session publish this triggers is
      * classified by [HomeSession] as a `UserSwitched` transition, and the
@@ -870,10 +832,6 @@ internal class HomeViewModel(
             authRepository.switchUser(userId)
         }
     }
-
-    private fun updateSearchQuery(query: String) = searchStateHolder.updateSearchQuery(query)
-
-    private fun clearSearch() = searchStateHolder.clearSearch()
 
     private fun selectSeerrRequestItem(item: SeerrSearchItem?) {
         _uiState.update { it.copy(seerrRequestState = it.seerrRequestState.copy(requestItem = item)) }
@@ -906,12 +864,6 @@ internal class HomeViewModel(
         seerrRequestStateHolder.prefetchDetails(tmdbId, mediaType, onDone)
     }
 
-    /** Deletes one history row (undo re-records it) — see [HomeSearchStateHolder.deleteSearchHistoryItem]. */
-    private fun deleteSearchHistoryItem(id: Long) = searchStateHolder.deleteSearchHistoryItem(id)
-
-    /** Clears the history (undo re-records the snapshot) — see [HomeSearchStateHolder.clearSearchHistory]. */
-    private fun clearSearchHistory() = searchStateHolder.clearSearchHistory()
-
     /**
      * Called when a settings search result is tapped from the home search bar.
      * If the target is an advanced setting that's currently hidden, enable
@@ -934,7 +886,7 @@ internal class HomeViewModel(
      * with no extra wiring.
      */
     private fun setSectionVisible(type: HomeSectionType, visible: Boolean) {
-        launch { homeDiscoveryStore.setSectionVisible(type, visible) }
+        launch { prefs.homeDiscovery.setSectionVisible(type, visible) }
     }
 
     /**
@@ -944,7 +896,7 @@ internal class HomeViewModel(
      * re-apply it on the next emission.
      */
     private fun moveSection(type: HomeSectionType, up: Boolean) {
-        launch { homeDiscoveryStore.moveSection(type, up) }
+        launch { prefs.homeDiscovery.moveSection(type, up) }
     }
 
     /**
@@ -953,7 +905,7 @@ internal class HomeViewModel(
      * route through the same store command.
      */
     private fun setLibrarySectionVisible(libraryId: String, type: HomeSectionType, visible: Boolean) {
-        launch { homeDiscoveryStore.setLibrarySectionVisible(libraryId, type, visible) }
+        launch { prefs.homeDiscovery.setLibrarySectionVisible(libraryId, type, visible) }
     }
 
     override fun onCleared() {

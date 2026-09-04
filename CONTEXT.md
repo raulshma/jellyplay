@@ -369,8 +369,11 @@ funnel: `onEvent(HomeUiEvent)`. Every user intent — quick actions (mark
 played/unplayed, delete download, inline download via `DownloadItem`, the
 series delete-episodes sheet), search-history edits, settings-result
 clicks, section-config sheet writes, user switching and the offline
-toggle — arrives as a `HomeUiEvent` (`HomeUiEvent.kt`) and is routed once
-to a private handler; there is no per-action command method to keep in sync
+toggle — arrives as a `HomeUiEvent` (`HomeUiEvent.kt`) and is routed once:
+pure-forwarding events go straight to their holder in the `when` (the
+series download/delete sheets, search query/history edits, sync — no
+one-line delegate stratum survives), anything with VM-side logic keeps a
+private handler; there is no per-action command method to keep in sync
 with the screen. The VM's remaining orchestration is folding
 `HomeRefresher.state` and `OfflineHomeGate.state` into `HomeUiState` (the
 refresher fold covers nine fields including `sections`, `isGoingOnline`
@@ -380,7 +383,11 @@ the refresher re-reads through read-only providers (`sectionPrefs`,
 `androidTvWatchNextEnabled` — ALL private mirrors owned by the prefs
 collectors; uiState's render fields are never a refresher input), and the
 scroll reset on manual refresh and identity changes (pure VM state the
-refresher cannot see).
+refresher cannot see). The four datastore stores (`homeDiscovery` /
+`appearance` / `experimental` / `playback`) arrive bundled as
+`HomePrefsProviders` (`HomePrefsProviders.kt`) — a construction-time seam,
+same move as `HomeRefresherFactory`, not a read-only narrowing (the VM
+still writes via `HomeDiscoveryStore` commands).
 
 `HomeUiState` embeds two value slices rather than mirroring fields:
 `appearance: AppearanceUiState` (the theme quintet — dynamicTheming, oled,

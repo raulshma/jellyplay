@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home.di
 
 import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolderFactory
+import com.raulshma.jellyplay.feature.home.HomePrefsProviders
 import com.raulshma.jellyplay.feature.home.HomeRefresherFactory
 import com.raulshma.jellyplay.feature.home.HomeViewModel
 import org.koin.compose.viewmodel.dsl.viewModel
@@ -61,10 +62,12 @@ val homeModule: Module = module {
             offlineRepository = get(),
             offlineModeManager = get(),
             newsletterTriggerManager = get(),
-            homeDiscoveryStore = get(),
-            appearanceStore = get(),
-            experimentalStore = get(),
-            playbackStore = get(),
+            prefs = HomePrefsProviders(
+                homeDiscovery = get(),
+                appearance = get(),
+                experimental = get(),
+                playback = get(),
+            ),
             preferencesEditor = get(),
             seerrRequestDelegate = get(),
             seerrPreferencesStore = get(),
