@@ -385,7 +385,7 @@ collectors; uiState's render fields are never a refresher input), and the
 scroll reset on manual refresh and identity changes (pure VM state the
 refresher cannot see). The four datastore stores (`homeDiscovery` /
 `appearance` / `experimental` / `playback`) arrive bundled as
-`HomePrefsProviders` (`HomePrefsProviders.kt`) — a construction-time seam,
+`HomeStores` (`HomeStores.kt`) — a construction-time seam,
 same move as `HomeRefresherFactory`, not a read-only narrowing (the VM
 still writes via `HomeDiscoveryStore` commands).
 

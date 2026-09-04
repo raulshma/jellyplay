@@ -55,9 +55,10 @@ internal fun homeRowChassis(section: HomeSection, hasOfflineContent: Boolean): H
 }
 
 /**
- * The section types that get the "See All" pill — the single source for the
- * two verbatim gates in [HomeContentList] (the offline mirror rows and the
- * online rows must agree on which sections carry the affordance).
+ * The section types that get the "See All" pill — the single source both
+ * poster rows (the offline mirror and the online row) read through the one
+ * hoisted gate in [HomeContentList], so they agree on which sections carry
+ * the affordance.
  */
 internal fun sectionHasSeeAll(sectionType: HomeSectionType): Boolean =
     sectionType == HomeSectionType.RECENTLY_ADDED || sectionType == HomeSectionType.LATEST_MEDIA
