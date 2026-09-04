@@ -1588,181 +1588,247 @@
 
 
 /* ═══════════════════════════════════════════════════
-   SCREENSHOTS SHOWCASE CAROUSEL
+   SCREENSHOTS SHOWCASE STAGE + FILMSTRIP
    ═══════════════════════════════════════════════════ */
 .screenshots {
   background: var(--jp-surface-dim);
 }
 
-/* Positioned wrapper so arrows track the carousel row, not the whole section */
-.carousel-stage {
-  position: relative;
-}
-
-.screenshot-carousel {
-  overflow-x: auto;
-  display: flex;
-  gap: 24px;
-  padding: 24px 0;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-.screenshot-carousel::-webkit-scrollbar {
-  display: none;
-}
-
-/* Custom Screenshot Card Styling */
-.screenshot-card {
-  flex: 0 0 auto;
-  width: 320px; /* Large, clear display size */
-  scroll-snap-align: center;
-  transition: transform 0.4s var(--jp-ease-spring), border-color 0.3s ease, box-shadow 0.3s ease;
-  border-radius: var(--md-sys-shape-lg);
-  overflow: hidden;
-  position: relative;
-  border: var(--card-border-width) solid var(--card-border-color);
-  box-shadow: 0 16px 40px var(--jp-black-alpha-60);
-  background: var(--jp-surface-container);
-  padding: 0;
-}
-
-.screenshot-card img {
-  width: 100%;
-  border-radius: var(--md-sys-shape-lg) var(--md-sys-shape-lg) 0 0;
-  display: block;
-  border: none;
-  border-bottom: 1px solid var(--jp-white-alpha-06);
-}
-
-.screenshot-card:hover {
-  transform: translateY(-8px) scale(1.02);
-  border-color: var(--jp-primary-alpha-30);
-  box-shadow: 0 24px 48px var(--jp-black-alpha-70), 0 0 24px var(--jp-primary-alpha-15);
-}
-
-.screenshot-card .screenshot-label {
-  display: block;
-  text-align: center;
-  padding: 10px 16px;
-  font-family: var(--font-body);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--jp-color-slate-100);
-  background: var(--jp-surface-container-high);
-}
-
-/* Wide screen mockup wrapper */
-.screenshot-wide {
-  position: relative;
-  border-radius: var(--md-sys-shape-lg);
-  overflow: hidden;
-  box-shadow: var(--jp-layered-shadow-lg);
-  border: var(--card-border-width) solid var(--card-border-color);
-  background: var(--jp-surface-container);
-  transition: transform 0.4s ease, border-color 0.3s ease;
-}
-
-.screenshot-wide:hover {
-  transform: scale(1.01);
-  border-color: var(--jp-primary-alpha-20);
-}
-
-.screenshot-wide img {
-  width: 100%;
-  border-radius: var(--md-sys-shape-lg) var(--md-sys-shape-lg) 0 0;
-  display: block;
-  border-bottom: 1px solid var(--jp-white-alpha-06);
-}
-
-.screenshot-wide .screenshot-label {
-  display: block;
-  text-align: center;
-  padding: 10px 16px;
-  font-family: var(--font-body);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--jp-color-slate-100);
-  background: var(--jp-surface-container-high);
-}
-
-.carousel-nav {
-  display: flex;
+.showcase {
+  display: grid;
+  grid-template-columns: auto minmax(0, 880px) auto;
+  align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-top: 24px;
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 0 12px;
 }
 
-.carousel-dot {
+.showcase-stage {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: var(--md-sys-shape-lg);
+}
+
+.showcase-stage:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 8px;
+}
+
+/* Device frame — phone bezel by default, wide bezel for landscape shots */
+.showcase-frame {
   position: relative;
-
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--jp-white-alpha-15);
-  transition: all 0.3s var(--jp-ease-spring);
-  cursor: pointer;
-  border: none;
-  padding: 0;
+  width: min(300px, 72vw);
+  padding: 10px;
+  background: var(--jp-mockup-frame);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 40px;
+  box-shadow: var(--jp-layered-shadow-lg), 0 0 60px var(--jp-primary-alpha-12);
+  transition: width 0.35s var(--jp-ease-spring), border-radius 0.35s var(--jp-ease-spring), opacity 0.2s ease;
 }
 
-.carousel-dot::before {
-  content: '';
+/* Dip-to-black for portrait<->landscape morphs: the swap happens invisible. */
+.showcase-frame.is-switching {
+  opacity: 0;
+}
+
+.showcase-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 30px;
+  background: var(--jp-mockup-bg);
+}
+
+/* Top crossfade layer: the incoming shot dissolves in over the outgoing
+   one (which stays put underneath) with a subtle settle zoom. */
+.showcase-frame .showcase-image-top {
   position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 24px; height: 24px;
+  top: 10px;
+  left: 10px;
+  width: calc(100% - 20px);
+  height: calc(100% - 20px);
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.02);
+  transition: opacity 0.45s ease, transform 0.7s var(--jp-ease-spring);
+  pointer-events: none;
 }
 
-.carousel-dot.active {
-  background: var(--md-sys-color-primary);
-  width: 24px;
+.showcase-frame .showcase-image-top.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.showcase-frame.is-landscape .showcase-image-top {
+  border-radius: 14px;
+}
+
+.showcase-frame.is-landscape {
+  width: min(780px, 100%);
+  border-radius: 24px;
+}
+
+.showcase-frame.is-landscape img {
+  border-radius: 14px;
+}
+
+.showcase-caption {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: min(560px, 100%);
+  margin-top: 24px;
+  min-height: 76px;
+  text-align: left;
+}
+
+.showcase-counter {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--md-sys-color-primary);
+  background: var(--jp-primary-alpha-10);
+  border: 1px solid var(--jp-primary-alpha-20);
   border-radius: 9999px;
+  padding: 6px 12px;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Edge fade hints + arrow buttons for the screenshot rail */
-.screenshot-carousel {
-  mask-image: linear-gradient(90deg, transparent 0, #000 48px, #000 calc(100% - 48px), transparent 100%);
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 48px, #000 calc(100% - 48px), transparent 100%);
+.showcase-caption-text {
+  flex: 1;
+  min-width: 0;
 }
 
-.carousel-arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 10;
-  width: 44px;
-  height: 44px;
+.showcase-caption-text h3 {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface);
+  margin: 0 0 4px 0;
+}
+
+.showcase-caption-text p {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--md-sys-color-on-surface-variant);
+  margin: 0;
+}
+
+.showcase-autoplay {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   border: 1px solid var(--jp-white-alpha-10);
   background: var(--jp-surface-container-high);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   color: var(--jp-color-slate-100);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background-color 0.25s var(--jp-ease-spring), color 0.25s var(--jp-ease-spring), border-color 0.25s var(--jp-ease-spring), transform 0.25s var(--jp-ease-spring);
-  box-shadow: var(--jp-layered-shadow-md);
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
-.carousel-arrow:hover {
+.showcase-autoplay:hover {
   background: var(--md-sys-color-primary);
   color: var(--md-sys-color-on-primary);
   border-color: transparent;
 }
 
-.carousel-prev { left: 20px; }
-.carousel-next { right: 20px; }
-
-@media (max-width: 1024px) {
-  .carousel-arrow { display: none; }
+.showcase-autoplay .material-symbols-outlined {
+  font-size: 20px;
 }
 
-.screenshot-wide-container {
-  margin-top: 32px;
+.showcase-arrow {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--jp-white-alpha-10);
+  background: var(--jp-surface-container-high);
+  color: var(--jp-color-slate-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.25s var(--jp-ease-spring), color 0.25s var(--jp-ease-spring), border-color 0.25s var(--jp-ease-spring);
+  box-shadow: var(--jp-layered-shadow-md);
+  flex-shrink: 0;
+}
+
+.showcase-arrow:hover {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  border-color: transparent;
+}
+
+/* Filmstrip */
+.showcase-filmstrip {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+  max-width: 880px;
+  margin: 28px auto 0 auto;
+  padding: 4px 12px 8px 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+@media (min-width: 900px) {
+  .showcase-filmstrip {
+    justify-content: center;
+  }
+}
+
+.showcase-thumb {
+  flex-shrink: 0;
+  width: 54px;
+  height: 76px;
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--jp-mockup-bg);
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s var(--jp-ease-spring), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.showcase-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.showcase-thumb:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+.showcase-thumb.active {
+  opacity: 1;
+  border-color: var(--md-sys-color-primary);
+  box-shadow: 0 0 0 1px var(--md-sys-color-primary), 0 6px 18px var(--jp-primary-alpha-25);
+}
+
+.showcase-thumb-wide {
+  width: 96px;
+}
+
+@media (max-width: 1024px) {
+  .showcase {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .showcase-arrow {
+    display: none;
+  }
 }
 
 
@@ -2290,8 +2356,9 @@
 
 /* Extra mobile responsive overrides */
 @media (max-width: 480px) {
-  .screenshot-card {
-    width: 260px;
+  .showcase-caption {
+    gap: 12px;
+    min-height: 88px;
   }
   .faq-trigger {
     padding: 16px;

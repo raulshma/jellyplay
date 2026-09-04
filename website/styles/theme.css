@@ -355,8 +355,9 @@ md-icon:not(:defined) {
   border-image: var(--card-border-color) 1;
 }
 [data-variant="synthwave"] .feature-card,
-[data-variant="synthwave"] .screenshot-card,
-[data-variant="synthwave"] .screenshot-wide,
+[data-variant="synthwave"] .showcase-frame,
+[data-variant="synthwave"] .showcase-frame img,
+[data-variant="synthwave"] .showcase-thumb,
 [data-variant="synthwave"] .download-modal-container,
 [data-variant="synthwave"] .faq-item,
 [data-variant="synthwave"] .download-dropdown-menu,
@@ -367,8 +368,8 @@ md-icon:not(:defined) {
 /* Vector Pop drops shadows entirely (0 elevation identity). */
 [data-variant="vector_pop"] .glass-card,
 [data-variant="vector_pop"] .feature-card,
-[data-variant="vector_pop"] .screenshot-card,
-[data-variant="vector_pop"] .screenshot-wide {
+[data-variant="vector_pop"] .showcase-frame,
+[data-variant="vector_pop"] .showcase-thumb {
   box-shadow: none;
 }
 

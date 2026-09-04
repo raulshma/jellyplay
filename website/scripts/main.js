@@ -138,126 +138,227 @@
     });
   }
 
-  // ============ SCREENSHOT CAROUSEL ============
-  function initCarousel() {
-    const carousel = document.getElementById('screenshot-carousel');
-    const navContainer = document.getElementById('carousel-nav');
-    if (!carousel || !navContainer) return;
+  // ============ SCREENSHOT SHOWCASE (stage + filmstrip) ============
+  function initShowcase() {
+    const stage = document.getElementById('showcase-stage');
+    const frame = document.getElementById('showcase-frame');
+    const image = document.getElementById('showcase-image');
+    const imageNext = document.getElementById('showcase-image-next');
+    const titleEl = document.getElementById('showcase-title');
+    const descEl = document.getElementById('showcase-desc');
+    const counterEl = document.getElementById('showcase-counter');
+    const strip = document.getElementById('showcase-filmstrip');
+    const prevBtn = document.getElementById('showcase-prev');
+    const nextBtn = document.getElementById('showcase-next');
+    const autoplayBtn = document.getElementById('showcase-autoplay');
+    const autoplayIcon = document.getElementById('showcase-autoplay-icon');
+    if (!stage || !frame || !image || !imageNext || !strip) return;
 
-    const cards = carousel.querySelectorAll('.screenshot-card');
-    const cardCount = cards.length;
-    if (!cardCount) return;
+    const thumbs = Array.from(strip.querySelectorAll('.showcase-thumb'));
+    const total = thumbs.length;
+    if (!total) return;
 
-    let activeIndex = 0;
-    let autoplayTimer = null;
+    // Read each thumb's data attributes once — render/showScreenshot/morphTo
+    // all share this Shot list instead of re-reading dataset per call site.
+    const shots = thumbs.map((thumb) => ({
+      full: thumb.dataset.full,
+      alt: thumb.dataset.alt || thumb.dataset.title || '',
+      title: thumb.dataset.title || '',
+      desc: thumb.dataset.desc || '',
+      landscape: thumb.dataset.landscape === 'true',
+    }));
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let index = 0;
+    let playing = !reduceMotion;
+    let timer = null;
+    let fadeTimer = null;
+    let promoteTimer = null;
+    let transitionId = 0;
     const intervalTime = 4000;
 
-    // Create dots
-    navContainer.innerHTML = '';
-    for (let i = 0; i < cardCount; i++) {
-      const dot = document.createElement('button');
-      dot.className = 'carousel-dot' + (i === 0 ? ' active' : '');
-      dot.setAttribute('aria-label', `Go to screenshot ${i + 1}`);
-      dot.addEventListener('click', () => {
-        activeIndex = i;
-        scrollCardIntoView(i);
-        resetAutoplay();
-      });
-      navContainer.appendChild(dot);
+    const twoDigits = (n) => String(n).padStart(2, '0');
+
+    // Shared preload-then-commit behind swapImage/morphTo: resolves on load,
+    // on error, or on a timeout fallback so a hung image never stalls.
+    function preloadImage(src, commit, timeoutMs) {
+      const pre = new Image();
+      pre.onload = commit;
+      pre.onerror = commit;
+      pre.src = src;
+      clearTimeout(fadeTimer);
+      fadeTimer = setTimeout(commit, timeoutMs);
     }
 
-    const dots = navContainer.querySelectorAll('.carousel-dot');
-
-    function scrollCardIntoView(index) {
-      const card = cards[index];
-      const carouselLeft = carousel.getBoundingClientRect().left;
-      const cardLeft = card.getBoundingClientRect().left;
-      const offset = cardLeft - carouselLeft + carousel.scrollLeft;
-      const centerOffset = offset - (carousel.clientWidth / 2) + (card.clientWidth / 2);
-      
-      carousel.scrollTo({
-        left: centerOffset,
-        behavior: 'smooth'
+    function render(i) {
+      const shot = shots[i];
+      titleEl.textContent = shot.title;
+      descEl.textContent = shot.desc;
+      counterEl.textContent = `${twoDigits(i + 1)} / ${twoDigits(total)}`;
+      thumbs.forEach((t, j) => {
+        const active = j === i;
+        t.classList.toggle('active', active);
+        t.setAttribute('aria-current', active ? 'true' : 'false');
       });
+      const activeThumb = thumbs[i];
+      if (activeThumb) {
+        ensureThumbVisible(activeThumb);
+      }
+    }
+
+    // Scroll the filmstrip itself only — never the page. scrollIntoView()
+    // would also scroll every scrollable ancestor, yanking the viewport
+    // (and the user's perceived focus) back to the gallery on each tick.
+    function ensureThumbVisible(thumb) {
+      const stripRect = strip.getBoundingClientRect();
+      const thumbRect = thumb.getBoundingClientRect();
+      if (thumbRect.left < stripRect.left) {
+        strip.scrollBy({ left: thumbRect.left - stripRect.left - 8, behavior: 'smooth' });
+      } else if (thumbRect.right > stripRect.right) {
+        strip.scrollBy({ left: thumbRect.right - stripRect.right + 8, behavior: 'smooth' });
+      }
+    }
+
+    function swapImage(src, alt) {
+      if (image.getAttribute('src') === src && imageNext.getAttribute('src') !== src) {
+        image.alt = alt;
+        return;
+      }
+      if (imageNext.getAttribute('src') === src) return;
+      // Preload, then dissolve the incoming shot in over the outgoing one.
+      // A generation counter supersedes stale loads when the user flips
+      // through shots faster than images arrive.
+      const id = ++transitionId;
+      const commit = () => {
+        if (id !== transitionId) return;
+        clearTimeout(fadeTimer);
+        imageNext.classList.remove('visible');
+        void imageNext.offsetWidth;
+        imageNext.src = src;
+        imageNext.alt = alt;
+        imageNext.classList.add('visible');
+        clearTimeout(promoteTimer);
+        promoteTimer = setTimeout(() => {
+          if (id !== transitionId) return;
+          image.src = src;
+          image.alt = alt;
+          imageNext.classList.remove('visible');
+          imageNext.removeAttribute('src');
+        }, 600);
+      };
+      preloadImage(src, commit, 1200);
+    }
+
+    function showScreenshot(i) {
+      index = (i + total) % total;
+      const shot = shots[index];
+      render(index);
+      // Same aspect: layered cross-dissolve. Aspect change: dip-to-black
+      // morph — crossfading across aspects would stretch/crop mid-flight.
+      if (frame.classList.contains('is-landscape') !== shot.landscape) {
+        morphTo(shot);
+      } else {
+        swapImage(shot.full, shot.alt);
+      }
+    }
+
+    // Fade the frame out, swap size + image while invisible, fade back in.
+    function morphTo(shot) {
+      const id = ++transitionId;
+      const src = shot.full;
+      const alt = shot.alt;
+      const landscape = shot.landscape;
+      clearTimeout(promoteTimer);
+      frame.classList.add('is-switching');
+      let settled = false;
+      const commit = () => {
+        if (settled || id !== transitionId) return;
+        settled = true;
+        clearTimeout(fadeTimer);
+        frame.classList.toggle('is-landscape', landscape);
+        image.src = src;
+        image.alt = alt;
+        imageNext.classList.remove('visible');
+        imageNext.removeAttribute('src');
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (id !== transitionId) return;
+          frame.classList.remove('is-switching');
+        }));
+      };
+      // Worst case: never trap the gallery invisible on a hung image.
+      preloadImage(src, commit, 600);
     }
 
     function startAutoplay() {
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      if (!autoplayTimer) {
-        autoplayTimer = setInterval(() => {
-          activeIndex = (activeIndex + 1) % cardCount;
-          scrollCardIntoView(activeIndex);
-        }, intervalTime);
-      }
+      if (reduceMotion || timer) return;
+      timer = setInterval(() => showScreenshot(index + 1), intervalTime);
     }
 
     function stopAutoplay() {
-      if (autoplayTimer) {
-        clearInterval(autoplayTimer);
-        autoplayTimer = null;
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
       }
     }
 
-    function resetAutoplay() {
+    function setPlaying(next) {
+      playing = next;
+      updateTimer();
+      if (autoplayIcon) autoplayIcon.textContent = playing ? 'pause' : 'play_arrow';
+      if (autoplayBtn) {
+        autoplayBtn.setAttribute('aria-pressed', playing ? 'true' : 'false');
+        autoplayBtn.setAttribute('aria-label', playing ? 'Pause slideshow' : 'Play slideshow');
+      }
+    }
+
+    // The timer runs only while the gallery is on screen and the user is
+    // not interacting with it — background ticks must never steal scroll.
+    let isHovering = false;
+    let isVisible = true;
+
+    function updateTimer() {
       stopAutoplay();
-      startAutoplay();
+      if (playing && isVisible && !isHovering) startAutoplay();
     }
 
-    // Update active dot on scroll
-    const carouselObserver = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const index = Array.from(cards).indexOf(entry.target);
-            activeIndex = index;
-            dots.forEach((d, i) => {
-              d.classList.toggle('active', i === index);
-            });
-          }
-        });
-      },
-      {
-        root: carousel,
-        threshold: 0.6,
-      }
-    );
+    // Pause while the user is interacting; resume after.
+    stage.addEventListener('mouseenter', () => { isHovering = true; updateTimer(); });
+    stage.addEventListener('mouseleave', () => { isHovering = false; updateTimer(); });
+    stage.addEventListener('focusin', () => { isHovering = true; updateTimer(); });
+    stage.addEventListener('focusout', () => { isHovering = false; updateTimer(); });
+    stage.addEventListener('touchstart', () => { isHovering = true; updateTimer(); }, { passive: true });
+    stage.addEventListener('touchend', () => { isHovering = false; updateTimer(); }, { passive: true });
 
-    cards.forEach((card) => carouselObserver.observe(card));
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(
+        (entries) => {
+          isVisible = entries.some((e) => e.isIntersecting);
+          updateTimer();
+        },
+        { threshold: 0.15 }
+      ).observe(stage);
+    }
 
-    // Pause autoplay on hover or touch
-    carousel.addEventListener('mouseenter', stopAutoplay);
-    carousel.addEventListener('mouseleave', startAutoplay);
-    carousel.addEventListener('touchstart', stopAutoplay, { passive: true });
-    carousel.addEventListener('touchend', startAutoplay, { passive: true });
+    if (prevBtn) prevBtn.addEventListener('click', () => showScreenshot(index - 1));
+    if (nextBtn) nextBtn.addEventListener('click', () => showScreenshot(index + 1));
+    if (autoplayBtn) autoplayBtn.addEventListener('click', () => setPlaying(!playing));
 
-    // Keyboard support
-    carousel.setAttribute('tabindex', '0');
-    carousel.addEventListener('keydown', (e) => {
-      const scrollAmount = 320;
+    thumbs.forEach((thumb, i) => {
+      thumb.addEventListener('click', () => showScreenshot(i));
+    });
+
+    stage.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowRight') {
-        carousel.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-        resetAutoplay();
+        e.preventDefault();
+        showScreenshot(index + 1);
       } else if (e.key === 'ArrowLeft') {
-        carousel.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
-        resetAutoplay();
+        e.preventDefault();
+        showScreenshot(index - 1);
       }
     });
 
-    // Arrow buttons
-    const prevBtn = document.getElementById('carousel-prev');
-    const nextBtn = document.getElementById('carousel-next');
-    const step = () => (cards[0] ? cards[0].clientWidth + 24 : 320);
-    if (prevBtn) prevBtn.addEventListener('click', () => {
-      carousel.scrollBy({ left: -step(), behavior: 'smooth' });
-      resetAutoplay();
-    });
-    if (nextBtn) nextBtn.addEventListener('click', () => {
-      carousel.scrollBy({ left: step(), behavior: 'smooth' });
-      resetAutoplay();
-    });
-
-    // Start autoplay
-    startAutoplay();
+    render(0);
+    setPlaying(playing);
   }
 
   // ============ FAQ ACCORDIONS ============
@@ -1124,7 +1225,7 @@
     initScrollAnimations();
     initMobileNav();
     initNavScrollEffect();
-    initCarousel();
+    initShowcase();
     initFAQs();
     initSmoothScroll();
     initHeroParallax();
