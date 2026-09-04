@@ -1,103 +1,160 @@
+/* ═══════════════════════════════════════════════════════════════
+   JellyPlay website — Material 3 design tokens, 1:1 with the app
+   (shared/core/designsystem). Static values below are the Standard
+   dark brand scheme; scripts/themes.js rewrites them per variant /
+   mode / accent / contrast / OLED, mirroring Theme.kt resolution.
+   ═══════════════════════════════════════════════════════════════ */
+
 :root {
-  /* ── Design System Color Tokens (Dark Theme Default) ── */
-  --md-sys-color-primary: #83D2E5;
-  --md-sys-color-on-primary: #00363F;
-  --md-sys-color-primary-container: #004E5B;
-  --md-sys-color-on-primary-container: #A6EEFF;
-  
-  --md-sys-color-secondary: #B2CBD2;
-  --md-sys-color-on-secondary: #1C3439;
-  --md-sys-color-secondary-container: #334A50;
-  --md-sys-color-on-secondary-container: #CDE7EE;
-  
-  --md-sys-color-tertiary: #BDC5EB;
-  --md-sys-color-on-tertiary: #272F4D;
-  
+  /* ── Material 3 color roles (Standard dark defaults; JS overrides) ── */
+  --md-sys-color-primary: #FFB4A6;
+  --md-sys-color-on-primary: #561E15;
+  --md-sys-color-primary-container: #733429;
+  --md-sys-color-on-primary-container: #FFDAD3;
+
+  --md-sys-color-secondary: #E7BDB5;
+  --md-sys-color-on-secondary: #442A24;
+  --md-sys-color-secondary-container: #5D3F3A;
+  --md-sys-color-on-secondary-container: #FFDAD3;
+
+  --md-sys-color-tertiary: #DDC48C;
+  --md-sys-color-on-tertiary: #3D2E04;
+  --md-sys-color-tertiary-container: #554519;
+  --md-sys-color-on-tertiary-container: #FAE0A6;
+
   --md-sys-color-error: #FFB4AB;
   --md-sys-color-on-error: #690005;
-  
-  --md-sys-color-surface: #0E1416;
-  --md-sys-color-on-surface: #DEE3E5;
-  
-  --md-sys-color-surface-variant: #3F484B;
-  --md-sys-color-on-surface-variant: #BFC8CB;
-  
-  --md-sys-color-surface-dim: #090F11;
-  --md-sys-color-surface-bright: #303637;
-  
-  --md-sys-color-surface-container-lowest: #090F11;
-  --md-sys-color-surface-container-low: #171D1E;
-  --md-sys-color-surface-container: #1B2122;
-  --md-sys-color-surface-container-high: #252B2D;
-  --md-sys-color-surface-container-highest: #303637;
+  --md-sys-color-error-container: #93000A;
+  --md-sys-color-on-error-container: #FFDAD6;
 
-  /* ── Typography Tokens ── */
-  --md-ref-typeface-brand: 'Outfit', sans-serif;
-  --md-ref-typeface-plain: 'Inter', sans-serif;
+  --md-sys-color-background: #1A1110;
+  --md-sys-color-on-background: #F1DFDB;
+  --md-sys-color-surface: #1A1110;
+  --md-sys-color-on-surface: #F1DFDB;
+  --md-sys-color-surface-variant: #534340;
+  --md-sys-color-on-surface-variant: #D8C2BE;
 
-  /* ── Custom Brand Properties ── */
+  --md-sys-color-surface-dim: #140C0B;
+  --md-sys-color-surface-bright: #3D3230;
+  --md-sys-color-surface-container-lowest: #140C0B;
+  --md-sys-color-surface-container-low: #231918;
+  --md-sys-color-surface-container: #271D1C;
+  --md-sys-color-surface-container-high: #322826;
+  --md-sys-color-surface-container-highest: #3D3230;
+
+  --md-sys-color-outline: #A08C89;
+  --md-sys-color-outline-variant: #534340;
+  --md-sys-color-inverse-surface: #E6E0E9;
+  --md-sys-color-inverse-on-surface: #313033;
+  --md-sys-color-inverse-primary: #D0BCFF;
+  --md-sys-color-surface-tint: #FFB4A6;
+
+  /* ── Typography (Type.kt families; JS swaps per variant) ── */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Roboto Flex', sans-serif;
+
+  /* ── Shape scale (Theme.kt Shapes per variant; JS overrides) ── */
+  --md-sys-shape-xs: 12px;
+  --md-sys-shape-sm: 14px;
+  --md-sys-shape-md: 20px;
+  --md-sys-shape-lg: 28px;
+  --md-sys-shape-xl: 36px;
+
+  /* Card chrome (ThemeVariant.cardBorder; JS overrides) */
+  --card-border-width: 1px;
+  --card-border-color: rgba(160, 140, 137, 0.3);
+
+  /* ── Type scale (JellyPlayTypography) ── */
+  --type-display-lg: 700 60px/64px var(--font-display);
+  --type-display-md: 700 48px/52px var(--font-display);
+  --type-display-sm: 700 40px/46px var(--font-display);
+  --type-headline-lg: 700 34px/42px var(--font-display);
+  --type-headline-md: 600 30px/38px var(--font-display);
+  --type-headline-sm: 600 26px/34px var(--font-display);
+  --type-title-lg: 700 24px/30px var(--font-display);
+  --type-title-md: 600 18px/24px var(--font-display);
+  --type-title-sm: 500 15px/20px var(--font-display);
+  --type-body-lg: 400 16px/24px var(--font-body);
+  --type-body-md: 400 14px/20px var(--font-body);
+  --type-body-sm: 400 12px/16px var(--font-body);
+  --type-label-lg: 600 14px/20px var(--font-body);
+  --type-label-md: 500 12px/16px var(--font-body);
+  --type-label-sm: 500 11px/16px var(--font-body);
+
+  /* ── Legacy shape token names ── */
+  --md-sys-shape-corner-extra-small: var(--md-sys-shape-xs);
+  --md-sys-shape-corner-small: var(--md-sys-shape-sm);
+  --md-sys-shape-corner-medium: var(--md-sys-shape-md);
+  --md-sys-shape-corner-large: var(--md-sys-shape-lg);
+  --md-sys-shape-corner-extra-large: var(--md-sys-shape-xl);
+  --md-sys-shape-corner-full: 9999px;
+
+  /* ── Motion (Easing.kt spirit) ── */
+  --jp-ease-spring: cubic-bezier(0.25, 1, 0.5, 1);
+  --jp-ease-snappy: cubic-bezier(0.17, 0.84, 0.44, 1);
+
+  --jp-noise-texture: url('data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjAwIDIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZmlsdGVyIGlkPSJub2lzZUZpbHRlciI+PGZlVHVyYnVsZW5jZSB0eXBlPSJmcmFjdGFsTm9pc2UiIGJhc2VGcmVxdWVuY3k9IjAuNjUiIG51bU9jdGF2ZXM9IjMiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWx0ZXI9InVybCgibm9pc2VGaWx0ZXIpIi8+PC9zdmc+');
+
+  /* ═════════════════════════════════════════════════════════
+     Compatibility aliases — the site was built on --jp-* tokens;
+     every one now derives from the live M3 roles above so all
+     eight app variants re-theme the whole page automatically.
+     ═════════════════════════════════════════════════════════ */
+
+  /* Brand / accent */
   --jp-gradient: var(--md-sys-color-primary);
   --jp-gradient-text: var(--md-sys-color-primary);
   --jp-gradient-accent: var(--md-sys-color-secondary);
-  
+  --jp-color-primary-hover: var(--md-sys-color-primary);
+  --jp-color-primary-active: var(--md-sys-color-primary);
+  --jp-color-primary-light: var(--md-sys-color-on-primary-container);
+  --jp-color-secondary-hover: var(--md-sys-color-secondary);
+  --jp-color-secondary-light: var(--md-sys-color-secondary);
+  --jp-color-violet-dark: var(--md-sys-color-primary-container);
+
+  /* Surfaces */
   --jp-surface: var(--md-sys-color-surface);
   --jp-surface-dim: var(--md-sys-color-surface-dim);
   --jp-surface-container: var(--md-sys-color-surface-container);
   --jp-surface-container-high: var(--md-sys-color-surface-container-high);
-  
-  --jp-glow-primary: rgba(131, 210, 229, 0.15);
-  --jp-glow-accent: rgba(178, 203, 210, 0.1);
-  --jp-glass-bg: rgba(14, 20, 22, 0.65);
-  --jp-glass-border: rgba(255, 255, 255, 0.04);
-
-  /* ── Consolidated Design Tokens ── */
-  --jp-glass-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 25px 50px -12px rgba(0, 0, 0, 0.4);
-  
-  /* ── New Layered Shadows & Easing ── */
-  --jp-layered-shadow-sm: 0 1px 2px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.1);
-  --jp-layered-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.2), 0 2px 4px -1px rgba(0,0,0,0.1);
-  --jp-layered-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.3), 0 4px 6px -2px rgba(0,0,0,0.15);
-  
-  --jp-ease-spring: cubic-bezier(0.25, 1, 0.5, 1);
-  --jp-ease-snappy: cubic-bezier(0.17, 0.84, 0.44, 1);
-  
-  --jp-noise-texture: url('data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjAwIDIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZmlsdGVyIGlkPSJub2lzZUZpbHRlciI+PGZlVHVyYnVsZW5jZSB0eXBlPSJmcmFjdGFsTm9pc2UiIGJhc2VGcmVxdWVuY3k9IjAuNjUiIG51bU9jdGF2ZXM9IjMiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWx0ZXI9InVybCgibm9pc2VGaWx0ZXIpIi8+PC9zdmc+');
-  
-  /* ── Shape Tokens ── */
-  --md-sys-shape-corner-none: 0px;
-  --md-sys-shape-corner-extra-small: 4px;
-  --md-sys-shape-corner-small: 8px;
-  --md-sys-shape-corner-medium: 12px;
-  --md-sys-shape-corner-large: 16px;
-  --md-sys-shape-corner-extra-large: 24px;
-  --md-sys-shape-corner-full: 9999px;
-
-  /* ── Neutral Absolute Tokens ── */
-  --jp-color-white: #ffffff;
-  --jp-color-absolute-white: #ffffff;
+  --jp-color-app-bg: var(--md-sys-color-background);
+  --jp-color-screen-black: #05040b;
   --jp-color-black: #000000;
+  --jp-color-white: var(--md-sys-color-on-surface);
+  --jp-color-absolute-white: #ffffff;
 
-  /* ── White Alpha (Opacity) Tokens ── */
-  --jp-white-alpha-02: rgba(255, 255, 255, 0.02);
-  --jp-white-alpha-03: rgba(255, 255, 255, 0.03);
-  --jp-white-alpha-04: rgba(255, 255, 255, 0.04);
-  --jp-white-alpha-05: rgba(255, 255, 255, 0.05);
-  --jp-white-alpha-06: rgba(255, 255, 255, 0.06);
-  --jp-white-alpha-08: rgba(255, 255, 255, 0.08);
-  --jp-white-alpha-10: rgba(255, 255, 255, 0.1);
-  --jp-white-alpha-12: rgba(255, 255, 255, 0.12);
-  --jp-white-alpha-15: rgba(255, 255, 255, 0.15);
-  --jp-white-alpha-20: rgba(255, 255, 255, 0.2);
-  --jp-white-alpha-24: rgba(255, 255, 255, 0.24);
-  --jp-white-alpha-30: rgba(255, 255, 255, 0.3);
-  --jp-white-alpha-35: rgba(255, 255, 255, 0.35);
-  --jp-white-alpha-40: rgba(255, 255, 255, 0.4);
-  --jp-white-alpha-45: rgba(255, 255, 255, 0.45);
-  --jp-white-alpha-50: rgba(255, 255, 255, 0.5);
-  --jp-white-alpha-85: rgba(255, 255, 255, 0.85);
-  --jp-white-alpha-90: rgba(255, 255, 255, 0.9);
+  /* Glass + glow */
+  --jp-glow-primary: color-mix(in srgb, var(--md-sys-color-primary) 15%, transparent);
+  --jp-glow-accent: color-mix(in srgb, var(--md-sys-color-secondary) 10%, transparent);
+  --jp-glass-bg: color-mix(in srgb, var(--md-sys-color-surface-container) 65%, transparent);
+  --jp-glass-border: var(--card-border-color);
+  --jp-glass-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+  --jp-layered-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1);
+  --jp-layered-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+  --jp-layered-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15);
 
-  /* ── Black Alpha (Opacity) Tokens ── */
+  /* White/on-surface alpha ramp */
+  --jp-white-alpha-02: color-mix(in srgb, var(--md-sys-color-on-surface) 2%, transparent);
+  --jp-white-alpha-03: color-mix(in srgb, var(--md-sys-color-on-surface) 3%, transparent);
+  --jp-white-alpha-04: color-mix(in srgb, var(--md-sys-color-on-surface) 4%, transparent);
+  --jp-white-alpha-05: color-mix(in srgb, var(--md-sys-color-on-surface) 5%, transparent);
+  --jp-white-alpha-06: color-mix(in srgb, var(--md-sys-color-on-surface) 6%, transparent);
+  --jp-white-alpha-08: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent);
+  --jp-white-alpha-10: color-mix(in srgb, var(--md-sys-color-on-surface) 10%, transparent);
+  --jp-white-alpha-12: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent);
+  --jp-white-alpha-15: color-mix(in srgb, var(--md-sys-color-on-surface) 15%, transparent);
+  --jp-white-alpha-20: color-mix(in srgb, var(--md-sys-color-on-surface) 20%, transparent);
+  --jp-white-alpha-24: color-mix(in srgb, var(--md-sys-color-on-surface) 24%, transparent);
+  --jp-white-alpha-25: color-mix(in srgb, var(--md-sys-color-on-surface) 25%, transparent);
+  --jp-white-alpha-30: color-mix(in srgb, var(--md-sys-color-on-surface) 30%, transparent);
+  --jp-white-alpha-35: color-mix(in srgb, var(--md-sys-color-on-surface) 35%, transparent);
+  --jp-white-alpha-40: color-mix(in srgb, var(--md-sys-color-on-surface) 40%, transparent);
+  --jp-white-alpha-45: color-mix(in srgb, var(--md-sys-color-on-surface) 45%, transparent);
+  --jp-white-alpha-50: color-mix(in srgb, var(--md-sys-color-on-surface) 50%, transparent);
+  --jp-white-alpha-85: color-mix(in srgb, var(--md-sys-color-on-surface) 85%, transparent);
+  --jp-white-alpha-90: color-mix(in srgb, var(--md-sys-color-on-surface) 90%, transparent);
+
+  /* Black alpha ramp (scrims/shadows stay black in every variant) */
   --jp-black-alpha-20: rgba(0, 0, 0, 0.2);
   --jp-black-alpha-30: rgba(0, 0, 0, 0.3);
   --jp-black-alpha-40: rgba(0, 0, 0, 0.4);
@@ -106,295 +163,161 @@
   --jp-black-alpha-70: rgba(0, 0, 0, 0.7);
   --jp-black-alpha-80: rgba(0, 0, 0, 0.8);
 
-  /* ── Brand State Variants ── */
-  --jp-color-primary-hover: #A6EEFF;
-  --jp-color-primary-active: #49B4CD;
-  --jp-color-primary-light: #CDE7EE;
-  --jp-color-secondary-hover: #CDE7EE;
-  --jp-color-secondary-light: #DFFAFF;
-  --jp-color-violet-dark: #00363F;
+  /* Primary / secondary alpha ramps */
+  --jp-primary-alpha-06: color-mix(in srgb, var(--md-sys-color-primary) 6%, transparent);
+  --jp-primary-alpha-10: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent);
+  --jp-primary-alpha-12: color-mix(in srgb, var(--md-sys-color-primary) 12%, transparent);
+  --jp-primary-alpha-15: color-mix(in srgb, var(--md-sys-color-primary) 15%, transparent);
+  --jp-primary-alpha-20: color-mix(in srgb, var(--md-sys-color-primary) 20%, transparent);
+  --jp-primary-alpha-25: color-mix(in srgb, var(--md-sys-color-primary) 25%, transparent);
+  --jp-primary-alpha-30: color-mix(in srgb, var(--md-sys-color-primary) 30%, transparent);
+  --jp-primary-alpha-35: color-mix(in srgb, var(--md-sys-color-primary) 35%, transparent);
+  --jp-secondary-alpha-00: color-mix(in srgb, var(--md-sys-color-secondary) 0%, transparent);
+  --jp-secondary-alpha-08: color-mix(in srgb, var(--md-sys-color-secondary) 8%, transparent);
+  --jp-secondary-alpha-12: color-mix(in srgb, var(--md-sys-color-secondary) 12%, transparent);
+  --jp-secondary-alpha-15: color-mix(in srgb, var(--md-sys-color-secondary) 15%, transparent);
+  --jp-secondary-alpha-20: color-mix(in srgb, var(--md-sys-color-secondary) 20%, transparent);
+  --jp-secondary-alpha-25: color-mix(in srgb, var(--md-sys-color-secondary) 25%, transparent);
+  --jp-secondary-alpha-30: color-mix(in srgb, var(--md-sys-color-secondary) 30%, transparent);
+  --jp-secondary-alpha-35: color-mix(in srgb, var(--md-sys-color-secondary) 35%, transparent);
+  --jp-secondary-alpha-40: color-mix(in srgb, var(--md-sys-color-secondary) 40%, transparent);
+  --jp-secondary-alpha-50: color-mix(in srgb, var(--md-sys-color-secondary) 50%, transparent);
+  --jp-secondary-alpha-70: color-mix(in srgb, var(--md-sys-color-secondary) 70%, transparent);
 
-  /* ── Primary Color Alpha Tokens ── */
-  --jp-primary-alpha-06: rgba(131, 210, 229, 0.06);
-  --jp-primary-alpha-10: rgba(131, 210, 229, 0.1);
-  --jp-primary-alpha-12: rgba(131, 210, 229, 0.12);
-  --jp-primary-alpha-15: rgba(131, 210, 229, 0.15);
-  --jp-primary-alpha-20: rgba(131, 210, 229, 0.2);
-  --jp-primary-alpha-25: rgba(131, 210, 229, 0.25);
-  --jp-primary-alpha-30: rgba(131, 210, 229, 0.3);
-  --jp-primary-alpha-35: rgba(131, 210, 229, 0.35);
+  /* Neutral text scale */
+  --jp-color-slate-100: var(--md-sys-color-on-surface);
+  --jp-color-slate-300: var(--md-sys-color-on-surface-variant);
+  --jp-color-slate-400: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 75%, var(--md-sys-color-surface));
+  --jp-color-slate-500: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 55%, var(--md-sys-color-surface));
+  --jp-color-slate-600: var(--md-sys-color-outline);
+  --jp-slate-100-alpha-80: color-mix(in srgb, var(--md-sys-color-on-surface) 80%, transparent);
 
-  /* ── Secondary Color Alpha Tokens ── */
-  --jp-secondary-alpha-08: rgba(178, 203, 210, 0.08);
-  --jp-secondary-alpha-12: rgba(178, 203, 210, 0.12);
-  --jp-secondary-alpha-15: rgba(178, 203, 210, 0.15);
-  --jp-secondary-alpha-20: rgba(178, 203, 210, 0.2);
-  --jp-secondary-alpha-25: rgba(178, 203, 210, 0.25);
-  --jp-secondary-alpha-30: rgba(178, 203, 210, 0.3);
-  --jp-secondary-alpha-35: rgba(178, 203, 210, 0.35);
-  --jp-secondary-alpha-40: rgba(178, 203, 210, 0.4);
-  --jp-secondary-alpha-50: rgba(178, 203, 210, 0.5);
-  --jp-secondary-alpha-70: rgba(178, 203, 210, 0.7);
+  /* Former "lavender" tinted text → on-surface-variant ramp */
+  --jp-color-lavender: var(--md-sys-color-on-surface-variant);
+  --jp-lavender-alpha-35: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 35%, transparent);
+  --jp-lavender-alpha-50: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 50%, transparent);
+  --jp-lavender-alpha-60: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 60%, transparent);
+  --jp-lavender-alpha-70: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 70%, transparent);
+  --jp-lavender-alpha-80: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 80%, transparent);
+  --jp-lavender-alpha-85: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 85%, transparent);
 
-  /* ── Slate / Gray Utility Scales ── */
-  --jp-color-slate-100: #f1f5f9;
-  --jp-color-slate-300: #cbd5e1;
-  --jp-color-slate-400: #94a3b8;
-  --jp-color-slate-500: #64748b;
-  --jp-color-slate-600: #475569;
-
-  /* ── Lavender Scales ── */
-  --jp-color-lavender: #e6e0f0;
-  --jp-lavender-alpha-35: rgba(230, 224, 240, 0.35);
-  --jp-lavender-alpha-50: rgba(230, 224, 240, 0.5);
-  --jp-lavender-alpha-60: rgba(230, 224, 240, 0.6);
-  --jp-lavender-alpha-70: rgba(230, 224, 240, 0.7);
-  --jp-lavender-alpha-80: rgba(230, 224, 240, 0.8);
-  --jp-lavender-alpha-85: rgba(230, 224, 240, 0.85);
-
-  /* ── Status Colors ── */
-  --jp-color-success: #10b981;
-  --jp-color-success-light: #34d399;
-  --jp-success-alpha-15: rgba(52, 211, 153, 0.15);
-  --jp-success-alpha-25: rgba(52, 211, 153, 0.25);
-  --jp-color-warning: #fbbf24;
-  --jp-warning-alpha-15: rgba(251, 191, 36, 0.15);
-  --jp-warning-alpha-25: rgba(251, 191, 36, 0.25);
-  --jp-color-error-light: #f87171;
-  --jp-error-alpha-15: rgba(248, 113, 113, 0.15);
-  --jp-error-alpha-25: rgba(248, 113, 113, 0.25);
-  --jp-color-green-accent: #52e5a4;
-
-  /* ── Semantic App Layout Colors ── */
-  --jp-color-app-bg: #0a0614;
+  /* Status colors (ExtendedColors.kt StatusColors) */
+  --jp-color-success: #4CAF50;
+  --jp-color-success-light: #81C784;
+  --jp-success-alpha-15: rgba(76, 175, 80, 0.15);
+  --jp-success-alpha-25: rgba(76, 175, 80, 0.25);
+  --jp-color-warning: #FF9800;
+  --jp-warning-alpha-15: rgba(255, 152, 0, 0.15);
+  --jp-warning-alpha-25: rgba(255, 152, 0, 0.25);
+  --jp-color-error-light: #EF5350;
+  --jp-error-alpha-15: rgba(239, 83, 80, 0.15);
+  --jp-error-alpha-25: rgba(239, 83, 80, 0.25);
+  --jp-color-green-accent: #4CAF50;
   --jp-color-android: #3ddc84;
-  --jp-color-blueviolet: #8a2be2;
-  --jp-color-purple: #a855f7;
 
-  /* ── Obsidian Space Colors ── */
-  --jp-color-obsidian-deep: #05030a;
-  --jp-color-obsidian-solid: #06040c;
-  --jp-color-obsidian-violet: #0d0a1d;
-  --jp-color-obsidian-card: #0f0927;
-  --jp-color-obsidian-border: #2e2055;
-  --jp-color-obsidian-deepviolet: #18103c;
-  --jp-color-obsidian-puredark: #0d0822;
-  --jp-obsidian-alpha-98: rgba(15, 12, 30, 0.98);
-  --jp-obsidian-card-alpha-85: rgba(10, 8, 16, 0.85);
+  /* Former accent utility colors → scheme roles */
+  --jp-color-blueviolet: var(--md-sys-color-tertiary);
+  --jp-color-purple: var(--md-sys-color-tertiary);
+  --jp-blueviolet-alpha-30: color-mix(in srgb, var(--md-sys-color-tertiary) 30%, transparent);
+  --jp-blueviolet-alpha-40: color-mix(in srgb, var(--md-sys-color-tertiary) 40%, transparent);
 
-  /* ── Surface Container Opacity Tokens ── */
-  --jp-surface-alpha-70: rgba(8, 6, 18, 0.7);
-  --jp-surface-alpha-85: rgba(8, 6, 18, 0.85);
-  --jp-surface-alpha-98: rgba(8, 6, 18, 0.98);
-  --jp-surface-container-alpha-40: rgba(14, 11, 31, 0.4);
-  --jp-surface-container-alpha-60: rgba(14, 11, 31, 0.6);
-  --jp-surface-container-alpha-70: rgba(14, 11, 31, 0.7);
-  --jp-surface-container-alpha-80: rgba(14, 11, 31, 0.8);
-  --jp-purple-container-alpha-40: rgba(10, 6, 20, 0.4);
-  --jp-purple-container-alpha-80: rgba(10, 6, 20, 0.8);
+  /* Former obsidian/purple container ramps → surface containers */
+  --jp-color-obsidian-deep: var(--md-sys-color-surface-container-low);
+  --jp-color-obsidian-solid: var(--md-sys-color-surface-container-lowest);
+  --jp-color-obsidian-violet: var(--md-sys-color-surface-container);
+  --jp-color-obsidian-card: var(--md-sys-color-surface-container-high);
+  --jp-color-obsidian-border: var(--md-sys-color-outline-variant);
+  --jp-color-obsidian-deepviolet: var(--md-sys-color-surface-container);
+  --jp-color-obsidian-puredark: var(--md-sys-color-surface-container-low);
+  --jp-obsidian-alpha-98: color-mix(in srgb, var(--md-sys-color-surface-container) 98%, transparent);
+  --jp-obsidian-card-alpha-85: color-mix(in srgb, var(--md-sys-color-surface-container-high) 85%, transparent);
+  --jp-surface-alpha-70: color-mix(in srgb, var(--md-sys-color-surface) 70%, transparent);
+  --jp-surface-alpha-85: color-mix(in srgb, var(--md-sys-color-surface) 85%, transparent);
+  --jp-surface-alpha-98: color-mix(in srgb, var(--md-sys-color-surface) 98%, transparent);
+  --jp-surface-container-alpha-40: color-mix(in srgb, var(--md-sys-color-surface-container) 40%, transparent);
+  --jp-surface-container-alpha-60: color-mix(in srgb, var(--md-sys-color-surface-container) 60%, transparent);
+  --jp-surface-container-alpha-70: color-mix(in srgb, var(--md-sys-color-surface-container) 70%, transparent);
+  --jp-surface-container-alpha-80: color-mix(in srgb, var(--md-sys-color-surface-container) 80%, transparent);
+  --jp-purple-container-alpha-40: color-mix(in srgb, var(--md-sys-color-primary-container) 40%, transparent);
+  --jp-purple-container-alpha-80: color-mix(in srgb, var(--md-sys-color-primary-container) 80%, transparent);
 
-  /* ── TV/Static Mockup Radial Colors ── */
+  /* TV/player mockups stay physical-device neutral */
   --jp-tv-radial-1: #050505;
   --jp-tv-radial-2: #1a1a1a;
   --jp-tv-radial-3: #080808;
   --jp-tv-radial-4: #151515;
-
-  /* ── Device Mockup Tokens ── */
   --jp-mockup-frame: #1e1e24;
   --jp-mockup-rim: #2d2d34;
   --jp-mockup-bg: #0f0f15;
-  --jp-color-screen-black: #05040b;
   --jp-tv-frame: #09090b;
   --jp-tv-stand-base: #18181b;
   --jp-tv-stand-neck: #27272a;
-  --jp-blueviolet-alpha-30: rgba(138, 43, 226, 0.3);
-  --jp-blueviolet-alpha-40: rgba(138, 43, 226, 0.4);
-  --jp-white-alpha-25: rgba(255, 255, 255, 0.25);
-  --jp-slate-100-alpha-80: rgba(241, 245, 249, 0.8);
-  --jp-secondary-alpha-00: rgba(244, 63, 94, 0);
 
-  /* ── Tooltip Tokens ── */
-  --jp-tooltip-bg: rgba(15, 12, 30, 0.98);
-  --jp-tooltip-text: #ffffff;
+  /* Tooltip */
+  --jp-tooltip-bg: var(--md-sys-color-inverse-surface);
+  --jp-tooltip-text: var(--md-sys-color-inverse-on-surface);
 }
 
-[data-theme="light"] {
-  --md-sys-color-primary: #006878;
-  --md-sys-color-on-primary: #FFFFFF;
-  --md-sys-color-primary-container: #A6EEFF;
-  --md-sys-color-on-primary-container: #004E5B;
-  
-  --md-sys-color-secondary: #4B6268;
-  --md-sys-color-on-secondary: #FFFFFF;
-  --md-sys-color-secondary-container: #CDE7EE;
-  --md-sys-color-on-secondary-container: #334A50;
-  
-  --md-sys-color-tertiary: #555D7E;
-  --md-sys-color-on-tertiary: #FFFFFF;
-  
-  --md-sys-color-error: #BA1A1A;
-  --md-sys-color-on-error: #FFFFFF;
-  
-  --md-sys-color-surface: #F5FAFC;
-  --md-sys-color-on-surface: #171D1E;
-  
-  --md-sys-color-surface-variant: #DBE4E7;
-  --md-sys-color-on-surface-variant: #3F484B;
-  
-  --md-sys-color-surface-dim: #FFFFFF;
-  --md-sys-color-surface-bright: #DEE3E5;
-  
-  --md-sys-color-surface-container-lowest: #FFFFFF;
-  --md-sys-color-surface-container-low: #EFF4F6;
-  --md-sys-color-surface-container: #E9EFF1;
-  --md-sys-color-surface-container-high: #E4E9EB;
-  --md-sys-color-surface-container-highest: #DEE3E5;
-
-  --jp-glow-primary: rgba(0, 104, 120, 0.15);
-  --jp-glow-accent: rgba(75, 98, 104, 0.1);
-  --jp-glass-bg: rgba(245, 250, 252, 0.65);
-  --jp-glass-border: rgba(0, 0, 0, 0.04);
-  
-  /* Invert text tokens for light mode */
-  --jp-color-white: #0F172A;
-  --jp-color-slate-500: #64748b;
-  --jp-color-slate-400: #475569;
-  --jp-color-slate-300: #334155;
-  --jp-color-slate-200: #1e293b;
-  --jp-color-slate-100: #0f172a;
-  --jp-color-lavender: #334155;
-  --jp-color-app-bg: var(--md-sys-color-surface);
-  
-  /* Brand State Variants for Light Mode */
-  --jp-color-primary-hover: #004E5B;
-  --jp-color-primary-active: #008296;
-  --jp-color-primary-light: #004E5B;
-  --jp-color-secondary-hover: #334A50;
-  --jp-color-secondary-light: #334A50;
-  
-  /* Invert lavender alphas for light mode */
-  --jp-lavender-alpha-35: rgba(51, 65, 85, 0.35);
-  --jp-lavender-alpha-50: rgba(51, 65, 85, 0.5);
-  --jp-lavender-alpha-60: rgba(51, 65, 85, 0.6);
-  --jp-lavender-alpha-70: rgba(51, 65, 85, 0.7);
-  --jp-lavender-alpha-80: rgba(51, 65, 85, 0.8);
-  --jp-lavender-alpha-85: rgba(51, 65, 85, 0.85);
-  
-  /* Invert alphas */
-  --jp-white-alpha-02: rgba(0, 0, 0, 0.02);
-  --jp-white-alpha-04: rgba(0, 0, 0, 0.04);
-  --jp-white-alpha-05: rgba(0, 0, 0, 0.05);
-  --jp-white-alpha-06: rgba(0, 0, 0, 0.06);
-  --jp-white-alpha-08: rgba(0, 0, 0, 0.08);
-  --jp-white-alpha-10: rgba(0, 0, 0, 0.1);
-  --jp-white-alpha-12: rgba(0, 0, 0, 0.12);
-  --jp-white-alpha-15: rgba(0, 0, 0, 0.15);
-  --jp-white-alpha-20: rgba(0, 0, 0, 0.2);
-  --jp-white-alpha-30: rgba(0, 0, 0, 0.3);
-  --jp-white-alpha-35: rgba(0, 0, 0, 0.35);
-  --jp-white-alpha-40: rgba(0, 0, 0, 0.4);
-  --jp-white-alpha-45: rgba(0, 0, 0, 0.45);
-  --jp-white-alpha-50: rgba(0, 0, 0, 0.5);
-  --jp-white-alpha-85: rgba(0, 0, 0, 0.85);
-  --jp-white-alpha-90: rgba(0, 0, 0, 0.9);
-  
-  /* Primary & Secondary Alphas for Light Mode */
-  --jp-primary-alpha-06: rgba(0, 104, 120, 0.06);
-  --jp-primary-alpha-10: rgba(0, 104, 120, 0.1);
-  --jp-primary-alpha-12: rgba(0, 104, 120, 0.12);
-  --jp-primary-alpha-15: rgba(0, 104, 120, 0.15);
-  --jp-primary-alpha-20: rgba(0, 104, 120, 0.2);
-  --jp-primary-alpha-25: rgba(0, 104, 120, 0.25);
-  --jp-primary-alpha-30: rgba(0, 104, 120, 0.3);
-  --jp-primary-alpha-35: rgba(0, 104, 120, 0.35);
-
-  --jp-secondary-alpha-08: rgba(75, 98, 104, 0.08);
-  --jp-secondary-alpha-12: rgba(75, 98, 104, 0.12);
-  --jp-secondary-alpha-15: rgba(75, 98, 104, 0.15);
-  --jp-secondary-alpha-20: rgba(75, 98, 104, 0.2);
-  --jp-secondary-alpha-25: rgba(75, 98, 104, 0.25);
-  --jp-secondary-alpha-30: rgba(75, 98, 104, 0.3);
-  --jp-secondary-alpha-35: rgba(75, 98, 104, 0.35);
-  --jp-secondary-alpha-40: rgba(75, 98, 104, 0.4);
-  --jp-secondary-alpha-50: rgba(75, 98, 104, 0.5);
-  --jp-secondary-alpha-70: rgba(75, 98, 104, 0.7);
-
-  /* ── Premium Light Mode Custom Overrides ── */
-  --jp-color-slate-600: #64748b;
-  --jp-color-green-accent: #10b981;
-  --jp-slate-100-alpha-80: rgba(15, 23, 42, 0.8);
-
-  /* Glassmorphism & Layout surface containers */
-  --jp-surface-alpha-70: rgba(245, 250, 252, 0.7);
-  --jp-surface-alpha-85: rgba(245, 250, 252, 0.85);
-  --jp-surface-alpha-98: rgba(245, 250, 252, 0.98);
-  --jp-surface-container-alpha-40: rgba(233, 239, 241, 0.4);
-  --jp-surface-container-alpha-60: rgba(233, 239, 241, 0.6);
-  --jp-surface-container-alpha-70: rgba(233, 239, 241, 0.7);
-  --jp-surface-container-alpha-80: rgba(233, 239, 241, 0.8);
-  --jp-purple-container-alpha-40: rgba(166, 238, 255, 0.25);
-  --jp-purple-container-alpha-80: rgba(166, 238, 255, 0.4);
-
-  /* Tooltip overrides */
-  --jp-tooltip-bg: #0F172A;
-  --jp-tooltip-text: #ffffff;
+/* ── Gradient-background variants (Synthwave, Aurora) ──
+   --app-bg-gradient is set by JS; falls back to plain background. */
+body {
+  background: var(--app-bg-gradient, var(--md-sys-color-background));
 }
 
-[data-theme="oled"] {
-  --md-sys-color-surface: #000000;
-  --md-sys-color-surface-dim: #000000;
-  --md-sys-color-surface-bright: #222222;
-  
-  --md-sys-color-surface-container-lowest: #000000;
-  --md-sys-color-surface-container-low: #0A0A0A;
-  --md-sys-color-surface-container: #111111;
-  --md-sys-color-surface-container-high: #1A1A1A;
-  --md-sys-color-surface-container-highest: #222222;
+/* ── Type utility classes (JellyPlayTypography) ── */
+.type-display-lg { font: var(--type-display-lg); letter-spacing: -0.25px; }
+.type-display-md { font: var(--type-display-md); letter-spacing: -0.25px; }
+.type-display-sm { font: var(--type-display-sm); }
+.type-headline-lg { font: var(--type-headline-lg); }
+.type-headline-md { font: var(--type-headline-md); }
+.type-headline-sm { font: var(--type-headline-sm); }
+.type-title-lg { font: var(--type-title-lg); }
+.type-title-md { font: var(--type-title-md); letter-spacing: 0.1px; }
+.type-title-sm { font: var(--type-title-sm); letter-spacing: 0.1px; }
+.type-body-lg { font: var(--type-body-lg); letter-spacing: 0.5px; }
+.type-body-md { font: var(--type-body-md); letter-spacing: 0.25px; }
+.type-body-sm { font: var(--type-body-sm); letter-spacing: 0.4px; }
+.type-label-lg { font: var(--type-label-lg); letter-spacing: 0.1px; }
+.type-label-md { font: var(--type-label-md); letter-spacing: 0.5px; }
+.type-label-sm { font: var(--type-label-sm); letter-spacing: 0.5px; }
 
-  --jp-glass-bg: rgba(0, 0, 0, 0.65);
-}
-
-
-
-/* ── Material Component Overrides ── */
+/* ── Material Web component overrides ── */
 md-filled-button {
   --md-filled-button-container-color: var(--md-sys-color-primary);
-  --md-filled-button-label-text-color: var(--jp-color-absolute-white);
+  --md-filled-button-label-text-color: var(--md-sys-color-on-primary);
   --md-filled-button-container-shape: 9999px;
-  --md-filled-button-label-text-font: 'Inter', sans-serif;
+  --md-filled-button-label-text-font: var(--font-body);
   --md-filled-button-label-text-weight: 600;
   --md-filled-button-hover-state-layer-color: var(--jp-white-alpha-08);
 }
 
 md-outlined-button {
-  --md-outlined-button-outline-color: var(--jp-white-alpha-20);
-  --md-sys-color-outline: var(--jp-white-alpha-20);
-  --md-outlined-button-label-text-color: var(--jp-color-slate-100);
+  --md-outlined-button-outline-color: var(--md-sys-color-outline-variant);
+  --md-sys-color-outline: var(--md-sys-color-outline-variant);
+  --md-outlined-button-label-text-color: var(--md-sys-color-on-surface);
   --md-outlined-button-container-shape: 9999px;
-  --md-outlined-button-label-text-font: 'Inter', sans-serif;
+  --md-outlined-button-label-text-font: var(--font-body);
 }
 
 md-assist-chip {
-  --md-assist-chip-container-color: var(--jp-surface-container);
-  --md-assist-chip-outline-color: var(--jp-white-alpha-12);
-  --md-assist-chip-label-text-color: var(--jp-color-slate-100);
-  --md-assist-chip-label-text-font: 500 0.8125rem/1.25rem 'Inter', sans-serif; /* Valid CSS font shorthand including size, weight, line-height, and family */
-  --md-assist-chip-container-shape: 9999px; /* Pill corners */
+  --md-assist-chip-container-color: var(--md-sys-color-surface-container);
+  --md-assist-chip-outline-color: var(--md-sys-color-outline-variant);
+  --md-assist-chip-label-text-color: var(--md-sys-color-on-surface);
+  --md-assist-chip-label-text-font: 500 0.8125rem/1.25rem var(--font-body);
+  --md-assist-chip-container-shape: 9999px;
   --md-assist-chip-hover-state-layer-color: var(--jp-white-alpha-08);
-
-  /* Enhanced dimensions and horizontal/vertical padding for premium spacing */
   --md-assist-chip-container-height: 40px;
   --md-assist-chip-leading-space: 18px;
   --md-assist-chip-trailing-space: 18px;
-  --md-assist-chip-icon-label-padding: 12px; /* Spacing handled natively by component tokens */
+  --md-assist-chip-icon-label-padding: 12px;
 }
 
 md-assist-chip [slot="icon"] {
-  margin-right: 8px; /* Clean spacing between leading icon and label text */
+  margin-right: 8px;
 }
 
 md-icon {
-  --md-icon-color: var(--jp-color-slate-300);
+  --md-icon-color: var(--md-sys-color-on-surface-variant);
   --md-icon-size: 24px;
   --md-icon-font: 'Material Symbols Outlined';
   display: inline-flex;
@@ -414,21 +337,46 @@ md-icon:not(:defined) {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Utility Classes ── */
+/* ── Utility classes ── */
 .glass-card {
   background: var(--jp-glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--jp-glass-border);
-  border-radius: var(--md-sys-shape-corner-extra-large);
+  border: var(--card-border-width) solid var(--card-border-color);
+  border-radius: var(--md-sys-shape-lg);
   box-shadow: var(--jp-glass-shadow);
+}
+
+/* Synthwave's gradient border — legal with border-image because the
+   variant's shape scale is 0px (corners are square anyway). */
+[data-variant="synthwave"] .glass-card,
+[data-variant="synthwave"] .feature-card {
+  border-style: solid;
+  border-image: var(--card-border-color) 1;
+}
+[data-variant="synthwave"] .feature-card,
+[data-variant="synthwave"] .screenshot-card,
+[data-variant="synthwave"] .screenshot-wide,
+[data-variant="synthwave"] .download-modal-container,
+[data-variant="synthwave"] .faq-item,
+[data-variant="synthwave"] .download-dropdown-menu,
+[data-variant="synthwave"] .theme-panel {
+  border-radius: 0;
+}
+
+/* Vector Pop drops shadows entirely (0 elevation identity). */
+[data-variant="vector_pop"] .glass-card,
+[data-variant="vector_pop"] .feature-card,
+[data-variant="vector_pop"] .screenshot-card,
+[data-variant="vector_pop"] .screenshot-wide {
+  box-shadow: none;
 }
 
 .gradient-text {
   color: var(--jp-gradient-text);
 }
 
-/* ── Custom Link Buttons ── */
+/* ── Buttons (M3 filled/tonal, app-style) ── */
 .btn-filled,
 .btn-outlined {
   display: inline-flex;
@@ -436,7 +384,7 @@ md-icon:not(:defined) {
   justify-content: center;
   height: 48px;
   border-radius: 9999px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.9375rem;
   font-weight: 600;
   text-decoration: none;
@@ -447,8 +395,8 @@ md-icon:not(:defined) {
 }
 
 .btn-filled {
-  background: var(--jp-gradient);
-  color: var(--jp-color-absolute-white) !important;
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary) !important;
   padding: 0 28px;
   border: none;
   box-shadow: 0 4px 20px var(--jp-primary-alpha-25);
@@ -456,8 +404,8 @@ md-icon:not(:defined) {
 
 .btn-filled:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px var(--jp-secondary-alpha-35);
-  opacity: 0.95;
+  box-shadow: 0 8px 30px var(--jp-primary-alpha-35);
+  filter: brightness(1.05);
 }
 
 .btn-filled:active {
@@ -466,21 +414,20 @@ md-icon:not(:defined) {
 
 .btn-filled md-icon {
   margin-right: 8px;
-  --md-icon-color: var(--jp-color-absolute-white);
+  --md-icon-color: var(--md-sys-color-on-primary);
   --md-icon-size: 20px;
 }
 
 .btn-outlined {
   background-color: var(--jp-white-alpha-03);
-  color: var(--jp-color-slate-100) !important;
+  color: var(--md-sys-color-on-surface) !important;
   padding: 0 28px;
-  border: 1px solid var(--jp-white-alpha-10);
+  border: 1px solid var(--md-sys-color-outline-variant);
 }
 
 .btn-outlined:hover {
   background-color: var(--jp-white-alpha-08);
-  border-color: var(--jp-white-alpha-25);
-  color: var(--jp-color-white) !important;
+  border-color: var(--md-sys-color-outline);
   transform: translateY(-2px);
 }
 
@@ -490,20 +437,38 @@ md-icon:not(:defined) {
 
 .btn-outlined md-icon {
   margin-right: 8px;
-  --md-icon-color: var(--jp-color-slate-300);
+  --md-icon-color: var(--md-sys-color-on-surface-variant);
   --md-icon-size: 20px;
 }
 
 .btn-filled.has-icon { padding-left: 20px; }
 .btn-outlined.has-icon { padding-left: 20px; }
 
-/* ── Split Material 3 Expressive Button ── */
+/* Compact button for nav bars */
+.btn-compact {
+  height: 38px;
+  padding: 0 18px;
+  font-size: 0.8125rem;
+}
+
+.btn-compact.has-icon { padding-left: 14px; }
+
+.btn-compact md-icon {
+  --md-icon-size: 18px;
+  margin-right: 6px;
+}
+
+@media (max-width: 768px) {
+  .btn-compact { display: none; }
+}
+
+/* ── Split download button (M3 expressive split) ── */
 .split-btn-group {
   display: inline-flex;
   position: relative;
-  gap: 2px; /* Thin gap, matching the image */
+  gap: 2px;
   align-items: center;
-  z-index: 110; /* Above hero devices but below top nav bar */
+  z-index: 110;
 }
 
 .btn-split-left {
@@ -512,23 +477,23 @@ md-icon:not(:defined) {
   justify-content: center;
   height: 48px;
   padding: 0 24px;
-  color: var(--jp-color-absolute-white) !important;
-  font-family: 'Inter', sans-serif;
+  color: var(--md-sys-color-on-primary) !important;
+  font-family: var(--font-body);
   font-size: 0.9375rem;
   font-weight: 600;
   text-decoration: none;
   border: none;
-  background: var(--jp-gradient);
-  border-radius: 24px 8px 8px 24px; /* Pill curved outer, slightly rounded inner */
+  background: var(--md-sys-color-primary);
+  border-radius: 24px 8px 8px 24px;
   box-shadow: 0 4px 15px var(--jp-primary-alpha-25);
   cursor: pointer;
   transition: all 0.25s var(--jp-ease-spring);
 }
 
 .btn-split-left:hover {
-  box-shadow: 0 8px 25px var(--jp-secondary-alpha-35);
+  box-shadow: 0 8px 25px var(--jp-primary-alpha-35);
   transform: translateY(-2px);
-  filter: brightness(1.08);
+  filter: brightness(1.05);
 }
 
 .btn-split-left:active {
@@ -538,7 +503,7 @@ md-icon:not(:defined) {
 
 .btn-split-left md-icon {
   margin-right: 8px;
-  --md-icon-color: var(--jp-color-absolute-white);
+  --md-icon-color: var(--md-sys-color-on-primary);
   --md-icon-size: 20px;
 }
 
@@ -548,19 +513,19 @@ md-icon:not(:defined) {
   justify-content: center;
   height: 48px;
   width: 48px;
-  color: var(--jp-color-absolute-white);
+  color: var(--md-sys-color-on-primary);
   border: none;
-  background: var(--jp-gradient);
-  border-radius: 8px 24px 24px 8px; /* Slightly rounded inner, pill curved outer */
+  background: var(--md-sys-color-primary);
+  border-radius: 8px 24px 24px 8px;
   box-shadow: 0 4px 15px var(--jp-primary-alpha-25);
   cursor: pointer;
   transition: all 0.25s var(--jp-ease-spring);
 }
 
 .btn-split-right:hover {
-  box-shadow: 0 8px 25px var(--jp-secondary-alpha-35);
+  box-shadow: 0 8px 25px var(--jp-primary-alpha-35);
   transform: translateY(-2px);
-  filter: brightness(1.08);
+  filter: brightness(1.05);
 }
 
 .btn-split-right:active {
@@ -569,20 +534,20 @@ md-icon:not(:defined) {
 }
 
 .btn-split-right md-icon {
-  --md-icon-color: var(--jp-color-absolute-white);
+  --md-icon-color: var(--md-sys-color-on-primary);
   --md-icon-size: 20px;
 }
 
-/* ── Dropdown Menu (Compact & Typographic) ── */
+/* ── Download dropdown ── */
 .download-dropdown-menu {
   position: absolute;
   top: 100%;
-  right: 0; /* Aligned with the right edge of the button group */
+  right: 0;
   margin-top: 6px;
   width: 260px;
-  background: var(--md-sys-color-surface-bright); /* Solid dark violet surface container */
-  border: 1px solid var(--jp-white-alpha-08);
-  border-radius: 12px;
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-sm);
   box-shadow: 0 12px 36px var(--jp-black-alpha-50);
   z-index: 1000;
   display: flex;
@@ -591,13 +556,12 @@ md-icon:not(:defined) {
   visibility: hidden;
   transform: translateY(-8px);
   transition: opacity 0.15s var(--jp-ease-spring), transform 0.15s var(--jp-ease-spring), visibility 0.15s;
-  padding: 6px 0; /* Vertical padding only, like standard menus */
+  padding: 6px 0;
   box-sizing: border-box;
   max-height: 200px;
   overflow-y: auto;
 }
 
-/* Custom Scrollbar for Dropdown Menu */
 .download-dropdown-menu::-webkit-scrollbar {
   width: 4px;
 }
@@ -626,7 +590,6 @@ md-icon:not(:defined) {
   flex-direction: column;
 }
 
-/* Compact Dropdown Item styling */
 .compact-dropdown-item {
   display: flex;
   align-items: center;
@@ -669,19 +632,19 @@ md-icon:not(:defined) {
 
 .compact-dropdown-item .android-icon {
   --md-icon-size: 18px;
-  --md-icon-color: var(--jp-color-android); /* Android green */
+  --md-icon-color: var(--jp-color-android);
   margin-right: 8px;
 }
 
 .dropdown-item-title {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--jp-white-alpha-90);
+  color: var(--md-sys-color-on-surface);
 }
 
 .dropdown-item-info {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.75rem;
   color: var(--jp-white-alpha-45);
   font-weight: 400;
@@ -698,19 +661,19 @@ md-icon:not(:defined) {
   }
 }
 
-/* ── GitHub Pill Badge for Nav Bar ── */
+/* ── GitHub badge ── */
 .github-badge {
   display: inline-flex;
   align-items: center;
   height: 36px;
   background: var(--jp-white-alpha-03);
-  border: 1px solid var(--jp-white-alpha-08);
+  border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: 9999px;
   text-decoration: none;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--jp-color-slate-300);
+  color: var(--md-sys-color-on-surface-variant);
   box-sizing: border-box;
   transition: all 0.25s var(--jp-ease-spring);
   overflow: hidden;
@@ -718,8 +681,8 @@ md-icon:not(:defined) {
 
 .github-badge:hover {
   background: var(--jp-white-alpha-08);
-  border-color: var(--jp-white-alpha-20);
-  color: var(--jp-color-absolute-white);
+  border-color: var(--md-sys-color-outline);
+  color: var(--md-sys-color-on-surface);
   transform: translateY(-1px);
   box-shadow: 0 4px 16px var(--jp-black-alpha-30);
 }
@@ -733,13 +696,13 @@ md-icon:not(:defined) {
 }
 
 .github-badge-logo svg {
-  color: var(--jp-color-absolute-white);
+  color: var(--md-sys-color-on-surface);
 }
 
 .github-badge-divider {
   width: 1px;
   height: 16px;
-  background-color: var(--jp-white-alpha-12);
+  background-color: var(--md-sys-color-outline-variant);
 }
 
 .github-badge-stars {
@@ -757,151 +720,231 @@ md-icon:not(:defined) {
 
 #github-stars-count {
   font-weight: 600;
-  color: var(--jp-color-slate-300);
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .github-badge:hover #github-stars-count {
-  color: var(--jp-color-absolute-white);
+  color: var(--md-sys-color-on-surface);
 }
-
 
 /* ═══════════════════════════════════════════════════
-   CSS HIGH-FIDELITY DEVICE MOCKUPS
+   APPEARANCE PANEL (mirrors the app's Appearance settings)
    ═══════════════════════════════════════════════════ */
-
-/* ── Portrait Smartphone Bezel ── */
-.phone-mockup {
-  position: relative;
-  width: 280px;
-  height: 560px;
-  background: var(--jp-mockup-bg);
-  border-radius: 40px;
-  box-shadow: 
-    0 0 0 10px var(--jp-mockup-frame), /* Frame */
-    0 0 0 12px var(--jp-mockup-rim), /* Outer Rim */
-    0 25px 60px -15px var(--jp-black-alpha-80),
-    0 0 30px var(--jp-primary-alpha-20);
-  padding: 0;
-  overflow: hidden;
-  box-sizing: content-box;
+.theme-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 12px;
+  width: 320px;
+  max-height: min(560px, calc(100vh - 100px));
+  overflow-y: auto;
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-md);
+  padding: 18px;
+  box-shadow: var(--jp-layered-shadow-lg);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition: opacity 0.2s var(--jp-ease-spring), transform 0.2s var(--jp-ease-spring), visibility 0.2s;
+  z-index: 100;
+  box-sizing: border-box;
 }
 
-/* Landscape Phone */
-.phone-mockup.landscape {
-  width: 500px;
-  height: 250px;
-  border-radius: 30px;
-  box-shadow: 
-    0 0 0 8px var(--jp-mockup-frame), 
-    0 0 0 10px var(--jp-mockup-rim), 
-    0 20px 50px -12px var(--jp-black-alpha-80);
+.theme-switcher-wrapper.active .theme-panel {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
-.phone-screen {
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
-  overflow: hidden;
-  position: relative;
-  background: var(--jp-color-screen-black);
+.theme-panel::-webkit-scrollbar {
+  width: 4px;
 }
 
-.phone-screen img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.theme-panel::-webkit-scrollbar-thumb {
+  background: var(--jp-white-alpha-12);
+  border-radius: 9999px;
+}
+
+.theme-panel-group {
+  margin-bottom: 18px;
+}
+
+.theme-panel-group:last-child {
+  margin-bottom: 0;
+}
+
+.theme-panel-label {
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--md-sys-color-on-surface-variant);
+  margin-bottom: 10px;
   display: block;
 }
 
-/* Glare highlight */
-.phone-mockup::after {
+.style-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.style-chip {
+  font-family: var(--font-body);
+  font-size: 0.78125rem;
+  font-weight: 500;
+  padding: 7px 12px;
+  border-radius: 9999px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+  transition: all 0.2s var(--jp-ease-spring);
+}
+
+.style-chip:hover {
+  background: var(--jp-white-alpha-06);
+  color: var(--md-sys-color-on-surface);
+}
+
+.style-chip.active {
+  background: var(--md-sys-color-secondary-container);
+  border-color: transparent;
+  color: var(--md-sys-color-on-secondary-container);
+  font-weight: 600;
+}
+
+.accent-dot-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.accent-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--dot-color);
+  cursor: pointer;
+  transition: transform 0.2s var(--jp-ease-spring), border-color 0.2s ease, box-shadow 0.2s ease;
+  padding: 0;
+}
+
+.accent-dot:hover {
+  transform: scale(1.15);
+}
+
+.accent-dot.active {
+  border-color: var(--md-sys-color-on-surface);
+  box-shadow: 0 0 0 3px var(--md-sys-color-surface-container-high), 0 0 0 5px var(--md-sys-color-primary);
+}
+
+.theme-panel-segmented {
+  display: flex;
+  gap: 2px;
+  background: var(--jp-white-alpha-04);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 9999px;
+  padding: 3px;
+}
+
+.theme-panel-segmented input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.theme-panel-segmented label {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 0.78125rem;
+  font-weight: 500;
+  padding: 6px 4px;
+  border-radius: 9999px;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+  transition: all 0.2s var(--jp-ease-spring);
+  white-space: nowrap;
+}
+
+.theme-panel-segmented label:hover {
+  color: var(--md-sys-color-on-surface);
+}
+
+.theme-panel-segmented input:checked + label {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  font-weight: 600;
+}
+
+.theme-panel-segmented input:disabled + label {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.theme-panel-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface);
+}
+
+.theme-panel-switch input[type="checkbox"] {
+  appearance: none;
+  width: 44px;
+  height: 26px;
+  border-radius: 9999px;
+  background: var(--jp-white-alpha-08);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.theme-panel-switch input[type="checkbox"]::after {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, var(--jp-white-alpha-06) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0) 100%);
-  z-index: 10;
-  pointer-events: none;
-  border-radius: inherit;
-}
-
-/* Dynamic Island/Punch hole camera */
-.phone-camera {
-  position: absolute;
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 56px;
-  height: 18px;
-  background: var(--jp-color-black);
-  border-radius: 12px;
-  z-index: 15;
-}
-
-.phone-mockup.landscape .phone-camera {
-  top: 50%;
-  left: 12px;
-  transform: translateY(-50%);
+  top: 3px;
+  left: 3px;
   width: 18px;
   height: 18px;
   border-radius: 50%;
+  background: var(--md-sys-color-on-surface-variant);
+  transition: transform 0.2s var(--jp-ease-spring), background-color 0.2s ease;
 }
 
-/* ── Smart TV Bezel ── */
-.tv-mockup {
-  position: relative;
-  width: 100%;
-  max-width: 680px;
-  margin: 0 auto;
+.theme-panel-switch input[type="checkbox"]:checked {
+  background: var(--md-sys-color-primary);
+  border-color: var(--md-sys-color-primary);
 }
 
-.tv-frame {
-  position: relative;
-  aspect-ratio: 16/9;
-  background: var(--jp-tv-frame);
-  border: 10px solid var(--jp-tv-stand-base);
-  border-radius: 12px;
-  box-shadow: 
-    0 20px 50px -10px var(--jp-black-alpha-80),
-    0 0 40px var(--jp-secondary-alpha-15);
-  overflow: hidden;
+.theme-panel-switch input[type="checkbox"]:checked::after {
+  transform: translateX(18px);
+  background: var(--md-sys-color-on-primary);
 }
 
-.tv-screen {
-  width: 100%;
-  height: 100%;
-  background: var(--jp-color-screen-black);
+.theme-panel-note {
+  font-family: var(--font-body);
+  font-size: 0.71875rem;
+  color: var(--md-sys-color-on-surface-variant);
+  background: var(--jp-white-alpha-04);
+  border-radius: var(--md-sys-shape-xs);
+  padding: 8px 10px;
+  margin-top: 8px;
 }
-
-.tv-screen img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.tv-stand-neck {
-  width: 60px;
-  height: 32px;
-  background: var(--jp-tv-stand-base);
-  margin: 0 auto;
-  border-bottom: 1px solid var(--jp-tv-stand-neck);
-}
-
-.tv-stand-base {
-  width: 220px;
-  height: 8px;
-  background: linear-gradient(180deg, var(--jp-tv-stand-neck) 0%, var(--jp-tv-frame) 100%);
-  margin: 0 auto;
-  border-radius: 4px 4px 0 0;
-  box-shadow: 0 4px 12px var(--jp-black-alpha-60);
-}
-
 
 /* ═══════════════════════════════════════════════════
-   COMPARISON MATRIX SECTION
+   COMPARISON MATRIX
    ═══════════════════════════════════════════════════ */
 .comparison-section {
   position: relative;
@@ -910,8 +953,8 @@ md-icon:not(:defined) {
 .comparison-wrapper {
   overflow-x: auto;
   width: 100%;
-  border-radius: var(--md-sys-shape-corner-extra-large);
-  border: 1px solid var(--jp-white-alpha-06);
+  border-radius: var(--md-sys-shape-lg);
+  border: var(--card-border-width) solid var(--card-border-color);
   background: var(--jp-surface-container-alpha-40);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -924,19 +967,19 @@ md-icon:not(:defined) {
   min-width: 600px;
 }
 
-.comparison-table th, 
+.comparison-table th,
 .comparison-table td {
   padding: 18px 24px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.9375rem;
-  border-bottom: 1px solid var(--jp-white-alpha-05);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
 }
 
 .comparison-table th {
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.0625rem;
-  color: var(--jp-color-white);
+  color: var(--md-sys-color-on-surface);
   background: var(--jp-surface-container-alpha-80);
   letter-spacing: 0.5px;
 }
@@ -946,7 +989,7 @@ md-icon:not(:defined) {
 }
 
 .comparison-table td {
-  color: var(--jp-slate-100-alpha-80);
+  color: var(--md-sys-color-on-surface-variant);
   vertical-align: middle;
 }
 
@@ -956,23 +999,23 @@ md-icon:not(:defined) {
 
 .comparison-table tr:hover td {
   background: var(--jp-white-alpha-02);
-  color: var(--jp-color-white);
+  color: var(--md-sys-color-on-surface);
 }
 
 .comparison-feature-title {
   font-weight: 600;
-  color: var(--jp-color-white);
+  color: var(--md-sys-color-on-surface);
 }
 
 .comparison-feature-desc {
   display: block;
   font-size: 0.75rem;
-  color: var(--jp-color-slate-400);
+  color: var(--md-sys-color-on-surface-variant);
   margin-top: 4px;
 }
 
 .check-icon {
-  color: var(--jp-color-success); /* Green */
+  color: var(--jp-color-success);
   font-weight: bold;
   display: inline-flex;
   align-items: center;
@@ -980,28 +1023,42 @@ md-icon:not(:defined) {
 }
 
 .cross-icon {
-  color: var(--md-sys-color-secondary); /* Coral/Rose */
+  color: var(--md-sys-color-on-surface-variant);
   font-weight: bold;
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
+.warn-icon {
+  color: var(--jp-color-warning);
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.check-icon .material-symbols-outlined,
+.cross-icon .material-symbols-outlined,
+.warn-icon .material-symbols-outlined {
+  font-size: 16px;
+  line-height: 1;
+}
+
 .highlight-col {
   background: var(--jp-primary-alpha-06);
-  color: var(--jp-color-white) !important;
+  color: var(--md-sys-color-on-surface) !important;
   font-weight: 600;
-  border-left: 1px solid var(--jp-primary-alpha-10);
-  border-right: 1px solid var(--jp-primary-alpha-10);
+  border-left: 1px solid var(--md-sys-color-outline-variant);
+  border-right: 1px solid var(--md-sys-color-outline-variant);
 }
 
 th.highlight-col {
   background: var(--jp-primary-alpha-15) !important;
 }
 
-
 /* ═══════════════════════════════════════════════════
-   FAQ ACCORDION SECTION
+   FAQ ACCORDION
    ═══════════════════════════════════════════════════ */
 .faq-grid {
   max-width: 800px;
@@ -1012,20 +1069,20 @@ th.highlight-col {
 }
 
 .faq-item {
-  border: 1px solid var(--jp-white-alpha-05);
+  border: 1px solid var(--md-sys-color-outline-variant);
   background: var(--jp-surface-container-alpha-40);
-  border-radius: 16px;
+  border-radius: var(--md-sys-shape-md);
   overflow: hidden;
   transition: all 0.3s var(--jp-ease-spring);
 }
 
 .faq-item:hover {
-  border-color: var(--jp-primary-alpha-20);
+  border-color: var(--md-sys-color-outline);
   background: var(--jp-surface-container-alpha-60);
 }
 
 .faq-item.active {
-  border-color: var(--jp-primary-alpha-30);
+  border-color: var(--md-sys-color-outline);
   background: var(--jp-surface-container-alpha-70);
   box-shadow: 0 10px 30px var(--jp-black-alpha-20);
 }
@@ -1044,10 +1101,10 @@ th.highlight-col {
 }
 
 .faq-question {
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-display);
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--jp-color-white);
+  color: var(--md-sys-color-on-surface);
   margin: 0;
 }
 
@@ -1068,9 +1125,9 @@ th.highlight-col {
 
 .faq-answer {
   padding: 0 24px 24px 24px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.9375rem;
   line-height: 1.6;
-  color: var(--jp-color-slate-300);
+  color: var(--md-sys-color-on-surface-variant);
   margin: 0;
 }

@@ -46,7 +46,7 @@ If you self-host Jellyfin and want a truly native, beautiful, capable client —
 | 💬 **Full subtitle system** | **ASS/SSA** & **VTT** parsing, external subtitle loading & download, full styling, delay offset, **live sync preview** with cue stack & ±30 s offset slider, **multi-provider search** (Jellyfin, Wyzie, OpenSubtitles), **per-series role memory**, and consistent track labels & badges across engines. |
 | 📱 **Native on every screen** | Phone, tablet, foldable, **Android TV**, and **Fire TV** with D-pad navigation, a Leanback launcher, and adaptive Material 3 layouts — plus an early **Windows desktop** build from the same Kotlin Multiplatform codebase. |
 | 🎵 **Rich audio player** | Synced lyrics via LRCLIB, 10-band equalizer, Night Mode & Dialogue Boost, ambient visualizer, mood playlists, and gapless playback. |
-| ⬇️ **Offline downloads** | Download movies and series with HTTP Range resumption, background workers, and a dedicated offline library for travel. |
+| ⬇️ **Offline downloads & sync** | WorkManager-backed downloads with HTTP Range resumption, multi-connection acceleration, bundled subtitles & trickplay tiles, dedicated offline library, and durable watch-progress sync outbox. |
 | 📡 **Seerr + Arr integration** | Discover and request via **Jellyseerr/Overseerr**, manage **Radarr/Sonarr** queues, and track an upcoming-releases calendar — all in-app. |
 | 👯 **SyncPlay & Play On** | Real-time watch parties with speed/skip-to-sync correction and in-player chat, plus cast-to and control other Jellyfin sessions. |
 | 🛠️ **Server admin dashboard** | System health, active sessions, scheduled tasks, server logs, user stats, and stale-media cleanup — without leaving the app. |
@@ -98,14 +98,39 @@ on every screen — phone, tablet, foldable, Android TV, and Amazon Fire TV.
 - **Self-hosted first.** No accounts, no telemetry, no cloud dependency.
   Multi-server, multi-user support with Quick Connect and token-based auth.
   Automatic **server address failover** across primary/alternate URLs keeps you
-  connected whether you're on LAN or remote. **Offline downloads** with HTTP
-  Range resumption for travel.
+  connected whether you're on LAN or remote.
+- **Extensive offline & watch-progress sync.** Take your library anywhere with
+  WorkManager-backed background downloads, multi-connection byte-range
+  acceleration, HTTP Range resumption, and bundled subtitles, trickplay preview
+  tiles, and intro/outro skip markers. A durable **playback outbox** records
+  progress and watched states offline, automatically syncing back to your server
+  with latest-wins reconciliation on reconnect. **Selective freshness resync**
+  refreshes changed metadata or artwork without re-downloading media files.
 - **Beyond streaming.** **SyncPlay** watch parties, **Jellyseerr / Overseerr**
   requests with **Radarr/Sonarr queue management**, an **upcoming releases
   calendar**, a full **metadata editor**, an in-app **server admin dashboard**,
   **Play On** casting to other Jellyfin sessions, synchronized lyrics via LRCLIB,
   10-band equalizer with night mode, and a weekly **newsletter digest** of your
   library activity.
+
+### Comparison with Official Jellyfin Clients
+
+| Capability | Official Jellyfin Clients (`jellyfin-android` / `jellyfin-androidtv`) | JellyPlay |
+| :--- | :--- | :--- |
+| **Native UI Architecture** | ❌ Cordova WebView (Mobile) / Leanback (TV) | ✅ **100% Jetpack Compose** (Unified across all devices) |
+| **Playback Engines** | ❌ ExoPlayer only | ✅ **3 switchable engines** (Media3 / ExoPlayer, libmpv, LibVLC) |
+| **Complex Subtitles (ASS/SSA)** | ❌ Server transcoding required | ✅ **Client-side styled rendering** via libmpv (Direct Play) |
+| **Adaptive Form Factors** | ❌ Split across 2 separate apps | ✅ **Single unified adaptive app** (Phone, Tablet, TV, Foldable) |
+| **Material You & Theming** | ❌ Web / static themes only | ✅ **Material 3 Expressive** with dynamic artwork palette (8 themes + OLED) |
+| **Offline Downloads** | ⚠️ Basic browser save (Mobile only, no TV, no background queue) | ✅ **WorkManager Engine** (HTTP Range, multi-connection, bundled subtitles & trickplay) |
+| **Watch-Progress Sync** | ❌ No offline progress tracking or sync | ✅ **Durable Outbox** (Captures progress offline; auto-reconciles on reconnect) |
+| **Freshness Resync** | ❌ Full re-download required | ✅ **Selective SHA-256 hash diff** (Refreshes metadata/artwork/subs with zero media download) |
+| **SyncPlay (Watch Parties)** | ⚠️ Web-based SyncPlay only (limited on TV) | ✅ **Native multi-screen sync** (Real-time speed/skip sync, in-player chat, Mobile + TV) |
+| **Rich Music Player & DSP** | ❌ Basic web audio playback | ✅ **Full audio DSP suite** (10-band EQ, LRCLIB lyrics, ReplayGain, visualizer) |
+| **Seerr & *Arr Integration** | ❌ Not supported | ✅ **Jellyseerr / Overseerr** with Sonarr/Radarr queues & release calendar |
+| **Server Administration** | ⚠️ Web UI (Mobile only, not on TV) | ✅ **Native dashboard** (Mobile, Tablet, and TV with D-pad navigation) |
+| **Metadata Editor** | ⚠️ Web UI (Mobile only, not on TV) | ✅ **Native editor** for titles, posters, and tags (Mobile, Tablet, TV) |
+| **Connection Failover** | ❌ Single server URL (manual switching) | ✅ **Automatic LAN/WAN address failover** without session loss |
 
 > If you're looking for a Kodi alternative, a Plex alternative, or a
 > self-hosted media player for Android & Android TV — give JellyPlay a try.

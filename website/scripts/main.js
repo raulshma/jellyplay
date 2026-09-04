@@ -6,47 +6,8 @@
 (function () {
   'use strict';
 
-  // ============ THEME SWITCHER ============
-  function initThemeSwitcher() {
-    const btn = document.getElementById('theme-switcher-btn');
-    const menu = document.getElementById('theme-menu');
-    const wrapper = document.querySelector('.theme-switcher-wrapper');
-    const options = document.querySelectorAll('.theme-option');
-    
-    if (!btn || !menu || !wrapper) return;
-    
-    const savedTheme = localStorage.getItem('jellyplay_theme') || 'dark';
-    applyTheme(savedTheme);
-    
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      wrapper.classList.toggle('active');
-    });
-    
-    document.addEventListener('click', (e) => {
-      if (!wrapper.contains(e.target)) {
-        wrapper.classList.remove('active');
-      }
-    });
-    
-    options.forEach(opt => {
-      opt.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const theme = opt.dataset.value;
-        applyTheme(theme);
-        wrapper.classList.remove('active');
-      });
-    });
-    
-    function applyTheme(theme) {
-      document.documentElement.setAttribute('data-theme', theme);
-      localStorage.setItem('jellyplay_theme', theme);
-      
-      options.forEach(opt => {
-        opt.classList.toggle('active', opt.dataset.value === theme);
-      });
-    }
-  }
+  // Theming lives in scripts/themes.js (app design-system port).
+  // This file handles page interactions only.
 
   // ============ SCROLL ANIMATIONS (IntersectionObserver) ============
   function initScrollAnimations() {
@@ -125,6 +86,55 @@
         });
         ticking = true;
       }
+    });
+  }
+
+  // ============ SCROLLSPY (active nav link) ============
+  function initScrollSpy() {
+    const navAnchors = document.querySelectorAll('.nav-links ul a[href^="#"]');
+    if (!navAnchors.length) return;
+
+    const sectionToLink = new Map();
+    navAnchors.forEach((anchor) => {
+      const section = document.querySelector(anchor.getAttribute('href'));
+      if (section) sectionToLink.set(section, anchor);
+    });
+    if (!sectionToLink.size) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            navAnchors.forEach((a) => a.classList.remove('active'));
+            const link = sectionToLink.get(entry.target);
+            if (link) link.classList.add('active');
+          }
+        });
+      },
+      { rootMargin: '-40% 0px -55% 0px' }
+    );
+
+    sectionToLink.forEach((_, section) => observer.observe(section));
+  }
+
+  // ============ BACK TO TOP ============
+  function initBackToTop() {
+    const btn = document.getElementById('back-to-top');
+    if (!btn) return;
+
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          btn.classList.toggle('visible', window.scrollY > 600);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    }, { passive: true });
+
+    btn.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   }
 
@@ -231,6 +241,19 @@
         carousel.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
         resetAutoplay();
       }
+    });
+
+    // Arrow buttons
+    const prevBtn = document.getElementById('carousel-prev');
+    const nextBtn = document.getElementById('carousel-next');
+    const step = () => (cards[0] ? cards[0].clientWidth + 24 : 320);
+    if (prevBtn) prevBtn.addEventListener('click', () => {
+      carousel.scrollBy({ left: -step(), behavior: 'smooth' });
+      resetAutoplay();
+    });
+    if (nextBtn) nextBtn.addEventListener('click', () => {
+      carousel.scrollBy({ left: step(), behavior: 'smooth' });
+      resetAutoplay();
     });
 
     // Start autoplay
@@ -908,7 +931,6 @@
 
   // ============ INITIALIZE ============
   function init() {
-    initThemeSwitcher();
     initScrollAnimations();
     initMobileNav();
     initNavScrollEffect();
@@ -924,6 +946,8 @@
     initTVSimulator();
     initSyncPlaySimulator();
     initMinorWidgets();
+    initScrollSpy();
+    initBackToTop();
   }
 
   if (document.readyState === 'loading') {

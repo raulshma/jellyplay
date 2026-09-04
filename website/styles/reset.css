@@ -18,9 +18,9 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   background: var(--jp-color-app-bg);
-  color: var(--jp-color-lavender);
+  color: var(--md-sys-color-on-surface);
   position: relative;
 }
 
@@ -74,4 +74,40 @@ h6 {
 #root,
 #__next {
   isolation: isolate;
+}
+
+/* ── Focus & Selection ── */
+
+::selection {
+  background: var(--jp-primary-alpha-30);
+  color: var(--jp-color-white);
+}
+
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* ── Reduced Motion ── */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .animate-on-scroll {
+    opacity: 1;
+    transform: none;
+  }
 }
