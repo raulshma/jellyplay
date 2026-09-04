@@ -66,7 +66,6 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
-import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
@@ -199,31 +198,6 @@ internal data class HomeContentCallbacks(
 )
 
 /**
- * One implementation of the CW / NEXT_UP click routing, shared by the online
- * and offline rows — only the sinks differ per source. CONTINUE_WATCHING
- * honors [ContinueWatchingClickBehavior]; NEXT_UP always opens details. Every
- * sink lands in the same unified MediaDetail / player tree: it renders remote
- * and downloaded items alike, so no source-specific routing is needed.
- */
-private fun <T> continueWatchingRowItemClick(
-    sectionType: HomeSectionType,
-    behavior: ContinueWatchingClickBehavior,
-    onDetails: (T) -> Unit,
-    onPlay: (T) -> Unit,
-    onAsk: (T) -> Unit,
-): (T) -> Unit = { item ->
-    if (sectionType == HomeSectionType.CONTINUE_WATCHING) {
-        when (behavior) {
-            ContinueWatchingClickBehavior.DETAILS -> onDetails(item)
-            ContinueWatchingClickBehavior.PLAY -> onPlay(item)
-            ContinueWatchingClickBehavior.ASK -> onAsk(item)
-        }
-    } else {
-        onDetails(item)
-    }
-}
-
-/**
  * Re-resolves an offline-derived section's [HomeSection.items] back to their
  * [OfflineMediaItem] originals by id (the shared [OfflineHomeContent.itemsById]
  * lookup) so the row cards render local artwork and clicks route offline.
@@ -266,7 +240,20 @@ internal fun HomeContentList(
     }
     val discoverRowWidth = discoverScreenWidth - state.contentPad * 2
     val discoverSpacing = adaptiveInfo.itemSpacing(isTv)
-    val discoverPattern = if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) COMPACT_DISCOVER_PATTERN else EXPANDED_DISCOVER_PATTERN
+    val discoverPattern = discoverPatternFor(adaptiveInfo.windowSizeClass)
+    // The nine SeerrDiscoverRow arguments the discover and *arr rows share,
+    // bundled once so both call sites pass only what differs (DiscoverRowSlot).
+    val discoverSlotArgs = DiscoverRowSlotArgs(
+        rowHorizontalPadding = state.contentPad,
+        spacing = discoverSpacing,
+        backgroundColor = state.backgroundColor,
+        homeBackdropEnabled = state.homeBackdropEnabled,
+        clippingEnabled = state.experimentalCardClippingEnabled,
+        seerrCardLoadingState = seerrCardLoadingState,
+        seerrPrefetch = callbacks.seerrPrefetch,
+        onSeerrItemClick = callbacks.onSeerrItemClick,
+        onSeerrRequest = callbacks.onSeerrRequest,
+    )
 
     var askContinueItem by remember { mutableStateOf<MediaItem?>(null) }
 
@@ -481,49 +468,47 @@ internal fun HomeContentList(
                     } else null
                 }
 
-                // While the offline feed renders, every non-wide section is
-                // offline-derived (generic DOWNLOADED rows or cached-layout
-                // mirror rows typed as their online counterparts — #147), so
-                // they all render through the offline poster-card row with
-                // local artwork. Online, only a DOWNLOADED section could ever
-                // hit this branch (defensive — the online feed has none).
-                if (section.type == HomeSectionType.DOWNLOADED ||
-                    (offlineContent != null && section.type != HomeSectionType.CONTINUE_WATCHING && section.type != HomeSectionType.NEXT_UP)
-                ) {
-                    // Offline-derived section (see buildOfflineHomeSections):
-                    // re-resolve the offline originals by id (shared lookup
-                    // above) so the cards render local artwork; clicks go to
-                    // the unified detail tree like any online item.
-                    val byId = currentOfflineById
-                    val offlineItems = remember(section, byId) { offlineSectionItems(section, byId) }
-                    OfflineHomeMediaRow(
-                        title = sectionTitle,
-                        items = offlineItems,
-                        onItemClick = remember(callbacks) {
-                            { item -> callbacks.onItemClick(item.id) }
-                        },
-                        modifier = sectionModifier,
-                        focusRequester = rowFocusRequesters[index],
-                        onRowFocused = { homeFocusRow = index },
-                        clippingEnabled = state.experimentalCardClippingEnabled,
-                        // Mirrored rows keep their online counterparts'
-                        // long-press configure affordance (configurable types
-                        // only — same gate as the online branch).
-                        onSectionLongClick = sectionLongClick,
-                        // Mirrored RECENTLY_ADDED / LATEST_MEDIA rows keep the
-                        // online "See All" pill and play overlay (#147).
-                        onSeeAllClick = remember(callbacks, section.type, section.libraryId, section.collectionType, sectionTitle) {
-                            if (section.type == HomeSectionType.RECENTLY_ADDED || section.type == HomeSectionType.LATEST_MEDIA) {
-                                { callbacks.onSeeAllClick(section.type, section.libraryId, section.collectionType, sectionTitle) }
-                            } else null
-                        },
-                        onPlayClick = remember(callbacks) {
-                            { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) }
-                        },
-                        onFocusedItemChange = callbacks.onFocusedMediaItem,
-                    )
-                } else if (section.type == HomeSectionType.CONTINUE_WATCHING || section.type == HomeSectionType.NEXT_UP) {
-                    if (offlineContent != null) {
+                // Which row renders is the chassis dispatch's decision (see
+                // homeRowChassis): the offline-mirror rule (#147) and the
+                // wide-row source split live in one pure, pinned place, so
+                // this `when` is exhaustive and decides nothing. The branches
+                // render exactly what the former if/else chain rendered.
+                when (homeRowChassis(section, offlineContent != null)) {
+                    is HomeRowChassis.OfflinePoster -> {
+                        // Offline-derived section (see buildOfflineHomeSections):
+                        // re-resolve the offline originals by id (shared lookup
+                        // above) so the cards render local artwork; clicks go to
+                        // the unified detail tree like any online item.
+                        val byId = currentOfflineById
+                        val offlineItems = remember(section, byId) { offlineSectionItems(section, byId) }
+                        OfflineHomeMediaRow(
+                            title = sectionTitle,
+                            items = offlineItems,
+                            onItemClick = remember(callbacks) {
+                                { item -> callbacks.onItemClick(item.id) }
+                            },
+                            modifier = sectionModifier,
+                            focusRequester = rowFocusRequesters[index],
+                            onRowFocused = { homeFocusRow = index },
+                            clippingEnabled = state.experimentalCardClippingEnabled,
+                            // Mirrored rows keep their online counterparts'
+                            // long-press configure affordance (configurable types
+                            // only — same gate as the online branch).
+                            onSectionLongClick = sectionLongClick,
+                            // Mirrored RECENTLY_ADDED / LATEST_MEDIA rows keep the
+                            // online "See All" pill and play overlay (#147).
+                            onSeeAllClick = remember(callbacks, section.type, section.libraryId, section.collectionType, sectionTitle) {
+                                if (sectionHasSeeAll(section.type)) {
+                                    { callbacks.onSeeAllClick(section.type, section.libraryId, section.collectionType, sectionTitle) }
+                                } else null
+                            },
+                            onPlayClick = remember(callbacks) {
+                                { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) }
+                            },
+                            onFocusedItemChange = callbacks.onFocusedMediaItem,
+                        )
+                    }
+                    is HomeRowChassis.OfflineWide -> {
                         // Offline-derived Continue Watching / Next Up (see
                         // buildOfflineHomeSections): same wide-card row and the
                         // same Resume-vs-Details click behavior as the online
@@ -538,12 +523,13 @@ internal fun HomeContentList(
                         val rowItemClick: (OfflineMediaItem) -> Unit = remember(
                             section.type, state.continueWatchingClickBehavior, callbacks,
                         ) {
-                            continueWatchingRowItemClick(
+                            cwRowClick(
                                 sectionType = section.type,
                                 behavior = state.continueWatchingClickBehavior,
-                                onDetails = { item -> callbacks.mediaOnItemClick(item.toMediaItem()) },
-                                onPlay = { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) },
-                                onAsk = { item -> askContinueItem = item.toMediaItem() },
+                                toMediaItem = { it.toMediaItem() },
+                                onDetails = callbacks.mediaOnItemClick,
+                                onPlay = callbacks.mediaOnPlayClick,
+                                onAsk = { askContinueItem = it },
                             )
                         }
                         ContinueWatchingRow(
@@ -564,16 +550,18 @@ internal fun HomeContentList(
                             onSectionLongClick = sectionLongClick,
                             onFocusedItemChange = callbacks.onFocusedMediaItem,
                         )
-                    } else {
+                    }
+                    is HomeRowChassis.OnlineWide -> {
                         val rowItemClick: (MediaItem) -> Unit = remember(
                             section.type, state.continueWatchingClickBehavior, callbacks.mediaOnItemClick, callbacks.mediaOnPlayClick,
                         ) {
-                            continueWatchingRowItemClick(
+                            cwRowClick(
                                 sectionType = section.type,
                                 behavior = state.continueWatchingClickBehavior,
+                                toMediaItem = { it },
                                 onDetails = callbacks.mediaOnItemClick,
                                 onPlay = callbacks.mediaOnPlayClick,
-                                onAsk = { item -> askContinueItem = item },
+                                onAsk = { askContinueItem = it },
                             )
                         }
                         ContinueWatchingRow(
@@ -592,30 +580,31 @@ internal fun HomeContentList(
                             onFocusedItemChange = callbacks.onFocusedMediaItem,
                         )
                     }
-                } else {
-                    HomeMediaRow(
-                        title = sectionTitle,
-                        items = section.items,
-                        imageUrlBuilder = callbacks.mediaImageUrlBuilder,
-                        fallbackImageUrlBuilder = callbacks.fallbackImageUrlBuilder,
-                        onItemClick = callbacks.mediaOnItemClick,
-                        onPlayClick = callbacks.mediaOnPlayClick,
-                        modifier = sectionModifier,
-                        photoFolderChildUrlsFor = callbacks.photoFolderChildUrlsFor,
-                        focusRequester = rowFocusRequesters[index],
-                        onRowFocused = { homeFocusRow = index },
-                        clippingEnabled = state.experimentalCardClippingEnabled,
-                        showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
-                        onSectionLongClick = sectionLongClick,
-                        onSeeAllClick = remember(callbacks, section.type, section.libraryId, section.collectionType, sectionTitle) {
-                            if (section.type == HomeSectionType.RECENTLY_ADDED || section.type == HomeSectionType.LATEST_MEDIA) {
-                                { callbacks.onSeeAllClick(section.type, section.libraryId, section.collectionType, sectionTitle) }
-                            } else null
-                        },
-                        onFocusedItemChange = callbacks.onFocusedMediaItem,
-                        seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
-                        seriesBackdropResolver = remember(callbacks.getBackdropUrl) { { id: String -> callbacks.getBackdropUrl(id) } },
-                    )
+                    is HomeRowChassis.OnlinePoster -> {
+                        HomeMediaRow(
+                            title = sectionTitle,
+                            items = section.items,
+                            imageUrlBuilder = callbacks.mediaImageUrlBuilder,
+                            fallbackImageUrlBuilder = callbacks.fallbackImageUrlBuilder,
+                            onItemClick = callbacks.mediaOnItemClick,
+                            onPlayClick = callbacks.mediaOnPlayClick,
+                            modifier = sectionModifier,
+                            photoFolderChildUrlsFor = callbacks.photoFolderChildUrlsFor,
+                            focusRequester = rowFocusRequesters[index],
+                            onRowFocused = { homeFocusRow = index },
+                            clippingEnabled = state.experimentalCardClippingEnabled,
+                            showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
+                            onSectionLongClick = sectionLongClick,
+                            onSeeAllClick = remember(callbacks, section.type, section.libraryId, section.collectionType, sectionTitle) {
+                                if (sectionHasSeeAll(section.type)) {
+                                    { callbacks.onSeeAllClick(section.type, section.libraryId, section.collectionType, sectionTitle) }
+                                } else null
+                            },
+                            onFocusedItemChange = callbacks.onFocusedMediaItem,
+                            seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
+                            seriesBackdropResolver = remember(callbacks.getBackdropUrl) { { id: String -> callbacks.getBackdropUrl(id) } },
+                        )
+                    }
                 }
             }
 
@@ -634,23 +623,11 @@ internal fun HomeContentList(
                     key = { rowIndex -> "seerr_row_${state.discoverRows[rowIndex].firstOrNull()?.id ?: 0}" },
                     contentType = { "seerrRow" },
                 ) { rowIndex ->
-                    val rowItems = state.discoverRows[rowIndex]
-                    val targetSize = discoverPattern[rowIndex % discoverPattern.size]
-                    val itemWidth = remember(discoverRowWidth, discoverSpacing, targetSize) {
-                        (discoverRowWidth - discoverSpacing * (targetSize - 1)) / targetSize.toFloat()
-                    }
-                    SeerrDiscoverRow(
-                        items = rowItems,
-                        itemWidth = itemWidth,
-                        rowHorizontalPadding = state.contentPad,
-                        spacing = discoverSpacing,
-                        backgroundColor = state.backgroundColor,
-                        homeBackdropEnabled = state.homeBackdropEnabled,
-                        clippingEnabled = state.experimentalCardClippingEnabled,
-                        seerrCardLoadingState = seerrCardLoadingState,
-                        seerrPrefetch = callbacks.seerrPrefetch,
-                        onSeerrItemClick = callbacks.onSeerrItemClick,
-                        onSeerrRequest = callbacks.onSeerrRequest,
+                    DiscoverRowSlot(
+                        items = state.discoverRows[rowIndex],
+                        targetSize = discoverPattern[rowIndex % discoverPattern.size],
+                        rowWidth = discoverRowWidth,
+                        args = discoverSlotArgs,
                     )
                 }
             }
@@ -669,22 +646,11 @@ internal fun HomeContentList(
                     )
                 }
                 item(key = "arr_recently_grabbed_row") {
-                    val targetSize = discoverPattern[0]
-                    val itemWidth = remember(discoverRowWidth, discoverSpacing, targetSize) {
-                        (discoverRowWidth - discoverSpacing * (targetSize - 1)) / targetSize.toFloat()
-                    }
-                    SeerrDiscoverRow(
+                    DiscoverRowSlot(
                         items = state.recentlyGrabbed,
-                        itemWidth = itemWidth,
-                        rowHorizontalPadding = state.contentPad,
-                        spacing = discoverSpacing,
-                        backgroundColor = state.backgroundColor,
-                        homeBackdropEnabled = state.homeBackdropEnabled,
-                        clippingEnabled = state.experimentalCardClippingEnabled,
-                        seerrCardLoadingState = seerrCardLoadingState,
-                        seerrPrefetch = callbacks.seerrPrefetch,
-                        onSeerrItemClick = callbacks.onSeerrItemClick,
-                        onSeerrRequest = callbacks.onSeerrRequest,
+                        targetSize = discoverPattern[0],
+                        rowWidth = discoverRowWidth,
+                        args = discoverSlotArgs,
                     )
                 }
             }

@@ -503,6 +503,25 @@ notice row (optional Retry), and `HomeResultTile` is the search result
 row's one lead tile (the extracted subtitle builders stay as the
 Jellyfin/Seerr adapter mapping).
 
+The chassis decision itself is data too: `HomeRowChassis` + the pure
+`homeRowChassis(section, hasOfflineContent)` (`HomeRowChassis.kt`) replace
+HomeContentList's former ~130-line if/else — four variants (`OfflinePoster`,
+`OfflineWide`, `OnlineWide`, `OnlinePoster`, each carrying only the
+section), with the offline-mirror predicate (DOWNLOADED wins outright, then
+the offline feed claims every non-wide section) pinned by
+`HomeRowChassisTest` instead of living only in the render site, whose `when`
+is now exhaustive and decides nothing. `sectionHasSeeAll` is the one See-All
+gate (RECENTLY_ADDED / LATEST_MEDIA) for both the online and mirrored rows,
+and `cwRowClick` is the one CW/NEXT_UP click routing the online and offline
+wide rows share end-to-end — sites differ only in the item mapper, and the
+ASK branch maps before the sink, so the Resume-vs-Details dialog wiring
+cannot drift. On the discover side, `DiscoverRowSlot` +
+`discoverPatternFor`/`discoverItemWidth` (`HomeDiscoverSection.kt`) write
+the 12-arg `SeerrDiscoverRow` invocation once: the nine shared arguments
+ride a `DiscoverRowSlotArgs` bundle built at composable scope, and the
+discover and *arr rows pass only items, pattern-derived target size, and row
+width, with the lazy keys/contentTypes staying at the call sites.
+
 **`HomeQuickActionEffect`** (`HomeQuickActions.kt`) is the quick-action
 routing table as data: the pure `homeQuickActionEffect(item, action,
 onOpenDetail)` decides series-vs-movie (Download → series sheet vs inline
