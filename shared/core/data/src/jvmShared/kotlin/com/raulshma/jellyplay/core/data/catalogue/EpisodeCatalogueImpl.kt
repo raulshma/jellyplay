@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.catalogue
 
+import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
@@ -8,11 +9,8 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -26,21 +24,29 @@ import java.util.concurrent.atomic.AtomicLong
  * snapshot. See [EpisodeCatalogue] for the dependency direction and the
  * "offline-ness is a parameter" contract.
  *
- * ## Concurrency model (ported from `MediaRepositoryImpl`)
+ * ## Concurrency model
  *
- * Every load is single-flight + epoch-guarded, exact replica of the detail
- * pattern:
- *  - a `Mutex` guards an in-flight `Deferred` map keyed `"${source}::$seriesId"`;
- *  - the first caller for a series launches the fetch on its own coroutine
- *    scope and every concurrent caller awaits the same `Deferred`;
+ * Every `loadSeriesEpisodes` is single-flight + epoch-guarded via
+ * [SingleFlightFetcher] (extracted from the pattern this class and
+ * `MediaRepositoryImpl` used to duplicate inline):
+ *  - concurrent loads of one series await the same in-flight fetch, keyed
+ *    `"${source}::$seriesId"` so an online and an offline load never share
+ *    a result;
  *  - an `AtomicLong epoch` is bumped on every invalidation; a fetch captures
  *    the epoch at start and **skips the cache write** if it changed by
  *    completion — otherwise a slow fetch could re-insert a pre-mutation
- *    snapshot after a concurrent invalidation, pinning stale user-data for the
- *    full TTL;
- *  - if the shared `Deferred`'s originator is cancelled, its awaiters re-fetch
+ *    snapshot after a concurrent invalidation, pinning stale user-data for
+ *    the full TTL. The epoch is also threaded into the snapshot itself
+ *    ([EpisodeCatalogueSnapshot.epoch]) and guards the per-season fan-out
+ *    collection;
+ *  - if the shared flight's originator is cancelled, its awaiters re-fetch
  *    on their own scope (a single cancelled caller can't take down unrelated
  *    awaiters).
+ *
+ * The merge paths (`loadSeasonEpisodes`'s season merge, `updateSeasonEpisodes`'
+ * rewrite) serialize on [mergeMutex] rather than the fetcher's internal lock:
+ * like the pre-extraction code, they guard merge-vs-merge only — flight
+ * cache writes land outside that lock and stay epoch-guarded.
  *
  * ## Online vs offline
  *
@@ -94,12 +100,15 @@ class EpisodeCatalogueImpl(
         sessionCacheRegistry.registerAction("episode-catalogue") { invalidateAll() }
     }
 
-    // Single-flight coordination — the in-flight Deferred map + epoch, keyed by
-    // "online/offline::seriesId" so an online and an offline load for the same
-    // series can't share a result.
-    private val inFlightMutex = Mutex()
-    private val inFlight = mutableMapOf<String, Deferred<Result<EpisodeCatalogueSnapshot>>>()
+    // Single-flight coordination: the fetcher owns the in-flight dedup over
+    // [cache]; [epoch] is shared so the merge paths and the per-season fan-out
+    // below guard against the same invalidation stream the fetcher bumps.
     private val epoch = AtomicLong(0L)
+    private val fetcher = SingleFlightFetcher(cache, epoch)
+
+    // Serializes the merge paths (season merge + optimistic season rewrite)
+    // against each other — see the class KDoc's concurrency model.
+    private val mergeMutex = Mutex()
 
     // Bounds the per-season fan-out fallback when the batched call fails.
     private val seasonSemaphore = Semaphore(MAX_PARALLEL_SEASON_FETCHES)
@@ -109,73 +118,14 @@ class EpisodeCatalogueImpl(
         offline: Boolean,
     ): Result<EpisodeCatalogueSnapshot> {
         val identity = homeSession.cacheIdentity()
-        val cacheKey = cacheKey(seriesId)
-        cache.get(identity, cacheKey)?.let { return Result.success(it) }
-        return coroutineScope {
-            val deferred = inFlightMutex.withLock {
-                // Re-check under the lock: a concurrent completion may have
-                // populated the cache between the unlocked read above and here.
-                cache.get(identity, cacheKey)?.let { return@coroutineScope Result.success(it) }
-                val epochAtStart = epoch.get()
-                val flightKey = flightKey(offline, seriesId)
-                inFlight.getOrPut(flightKey) {
-                    async {
-                        try {
-                            loadAndCache(identity, cacheKey, seriesId, offline, epochAtStart)
-                        } finally {
-                            inFlightMutex.withLock { inFlight.remove(flightKey) }
-                        }
-                    }
-                }
-            }
-            awaitFlight(deferred, offline, seriesId, cacheKey)
-        }
-    }
-
-    /**
-     * Online/offline load + epoch-guarded cache write. The single shape both
-     * the in-flight originator and the cancellation-retry path run.
-     */
-    private suspend fun loadAndCache(
-        identity: CacheIdentity,
-        cacheKey: String,
-        seriesId: String,
-        offline: Boolean,
-        epochAtStart: Long,
-    ): Result<EpisodeCatalogueSnapshot> {
-        val result = if (offline) {
-            loadOffline(seriesId, epochAtStart)
-        } else {
-            loadOnline(seriesId, epochAtStart)
-        }
-        result.onSuccess { snapshot ->
-            writeCacheIfNotStale(identity, cacheKey, snapshot, epochAtStart)
-        }
-        return result
-    }
-
-    /**
-     * Awaits the shared in-flight `Deferred`. If its originator was cancelled
-     * (navigated away mid-fetch), the `Deferred` is cancelled and every
-     * concurrent awaiter would fail too — so re-fetch on THIS caller's scope
-     * when the interruption came from the originator rather than this caller.
-     * Verbatim port of `MediaRepositoryImpl.getMediaDetail`'s cancellation path.
-     */
-    private suspend fun awaitFlight(
-        deferred: Deferred<Result<EpisodeCatalogueSnapshot>>,
-        offline: Boolean,
-        seriesId: String,
-        cacheKey: String,
-    ): Result<EpisodeCatalogueSnapshot> {
-        val identity = homeSession.cacheIdentity()
-        return try {
-            deferred.await()
-        } catch (ce: kotlinx.coroutines.CancellationException) {
-            val job = coroutineContext[Job]
-            if (job?.isCancelled == true) throw ce
-            // Originator was cancelled — re-fetch on this still-alive caller.
-            loadAndCache(identity, cacheKey, seriesId, offline, epoch.get())
-        }
+        return fetcher.getOrFetch(
+            identity = identity,
+            key = cacheKey(seriesId),
+            flightKey = flightKey(offline, seriesId),
+            fetch = { epochAtStart ->
+                if (offline) loadOffline(seriesId, epochAtStart) else loadOnline(seriesId, epochAtStart)
+            },
+        )
     }
 
     override suspend fun loadSeasonEpisodes(
@@ -209,8 +159,8 @@ class EpisodeCatalogueImpl(
     }
 
     /**
-     * Merges a freshly-fetched season into the shared series snapshot under the
-     * single-flight lock so two near-simultaneous per-season completions can't
+     * Merges a freshly-fetched season into the shared series snapshot under
+     * [mergeMutex] so two near-simultaneous per-season completions can't
      * read the same `current` map and clobber each other (the bug
      * `MediaRepositoryImpl.getEpisodes` merge-under-mutex fixed).
      */
@@ -223,7 +173,7 @@ class EpisodeCatalogueImpl(
         epochAtStart: Long,
     ) {
         if (epoch.get() != epochAtStart) return
-        inFlightMutex.withLock {
+        mergeMutex.withLock {
             if (epoch.get() != epochAtStart) return@withLock
             val current = cache.get(identity, cacheKey)
             val updated = if (current == null) {
@@ -245,7 +195,7 @@ class EpisodeCatalogueImpl(
         val identity = homeSession.cacheIdentity()
         val cacheKey = cacheKey(seriesId)
         var rewritten: EpisodeCatalogueSnapshot? = null
-        inFlightMutex.withLock {
+        mergeMutex.withLock {
             val current = cache.get(identity, cacheKey) ?: return@withLock
             val episodes = current.episodesBySeason[seasonId] ?: return@withLock
             val updated = transform(episodes)
@@ -259,23 +209,11 @@ class EpisodeCatalogueImpl(
     }
 
     override fun invalidateSeries(seriesId: String) {
-        epoch.incrementAndGet()
-        cache.remove(homeSession.cacheIdentitySnapshot(), cacheKey(seriesId))
+        fetcher.invalidate(homeSession.cacheIdentitySnapshot(), cacheKey(seriesId))
     }
 
     override fun invalidateAll() {
-        epoch.incrementAndGet()
-        cache.clear()
-    }
-
-    private fun writeCacheIfNotStale(
-        identity: CacheIdentity,
-        cacheKey: String,
-        snapshot: EpisodeCatalogueSnapshot,
-        epochAtStart: Long,
-    ) {
-        if (epoch.get() != epochAtStart) return
-        cache.put(identity, cacheKey, snapshot)
+        fetcher.invalidateAll()
     }
 
     // ── online assemble ─────────────────────────────────────────────────

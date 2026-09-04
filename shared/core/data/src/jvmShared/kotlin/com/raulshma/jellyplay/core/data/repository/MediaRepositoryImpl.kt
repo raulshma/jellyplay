@@ -45,16 +45,12 @@ import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
-import kotlinx.coroutines.Deferred
+import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.merge
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
 
@@ -424,92 +420,21 @@ class MediaRepositoryImpl(
     // notification, cast handshake, download resume). Two near-simultaneous
     // entries previously fired two full getItem round-trips (and, for series,
     // two full episode storms) because TtlCache's get-check-put is not atomic.
-    // The Mutex guards the in-flight map; the Deferred is awaited by all
-    // concurrent callers for the same key so the fetch runs exactly once.
-    // The async is launched on the caller's coroutine scope (via coroutineScope)
-    // so the fetch inherits the caller's dispatcher — important for tests
-    // (runTest's test dispatcher) and for cancellation semantics.
-    private val detailInFlightMutex = Mutex()
-    private val detailInFlight = mutableMapOf<String, Deferred<Result<MediaDetail>>>()
-    // Bumped on every detail-cache invalidation. An in-flight fetch captures
-    // the epoch at start and skips re-caching if it changed by completion —
-    // otherwise a slow fetch could re-insert a pre-mutation snapshot after a
-    // concurrent markPlayed/favorite/played invalidation, pinning stale
-    // user-data for the full TTL. AtomicLong so concurrent invalidations never
-    // lose an increment (a lost update would weaken the stale-snapshot guard).
+    // The fetch semantics (caller-scope async, lock-scope re-check, epoch
+    // guard, cancellation ladder) live in [detailFetcher]; the epoch it shares
+    // with the album-tracks/similar-items write guards below is
+    // [detailCacheEpoch].
     private val detailCacheEpoch = AtomicLong(0L)
+    private val detailFetcher = SingleFlightFetcher(detailCache, detailCacheEpoch)
 
     override suspend fun getMediaDetail(itemId: String, force: Boolean): Result<MediaDetail> {
         // Freshness lever: drop the cached entry first — verbatim the
         // invalidate-then-read sequence callers used to run by hand. The
-        // detailCacheEpoch bump below also guards a racing fetch from
-        // re-inserting the stale snapshot.
+        // detailCacheEpoch bump inside invalidateDetailCache also guards a
+        // racing fetch from re-inserting the stale snapshot.
         if (force) invalidateDetailCache(itemId)
-        val identity = homeSession.cacheIdentity()
-        // Fast path: serve from cache without entering coroutineScope, avoiding
-        // the scope-creation overhead on the (common) cached read. The authoritative
-        // single-flight coordination still happens below under the mutex.
-        detailCache.get(identity, itemId)?.let { return Result.success(it) }
-        return coroutineScope {
-            // Single-flight: if another caller already started this fetch, await
-            // its result instead of issuing a duplicate request. The cache read is
-            // captured inside the lock so a concurrent fetch that completes while
-            // we waited is observed exactly once.
-            val cachedOrDeferred: Any = detailInFlightMutex.withLock {
-                detailCache.get(identity, itemId)?.let { return@withLock it }
-                val epochAtStart = detailCacheEpoch.get()
-                detailInFlight.getOrPut(itemId) {
-                    // async on the current coroutineScope so the fetch runs on
-                    // the caller's dispatcher (not a fixed background scope).
-                    async {
-                        try {
-                            apiClient.getMediaDetail(itemId).also { result ->
-                                // Only cache the result if no invalidation landed
-                                // while the fetch was in flight; otherwise the
-                                // freshly fetched snapshot could be stale relative
-                                // to a concurrent user-data mutation.
-                                if (detailCacheEpoch.get() == epochAtStart) {
-                                    result.getOrNull()?.let { detail -> detailCache.put(identity, itemId, detail) }
-                                }
-                            }
-                        } finally {
-                            // Clear the in-flight marker. Guarded so a concurrent
-                            // awaiter that already grabbed the Deferred still sees
-                            // the completed value, but a later caller re-fetches.
-                            detailInFlightMutex.withLock { detailInFlight.remove(itemId) }
-                        }
-                    }
-                }
-            }
-            @Suppress("UNCHECKED_CAST")
-            when (cachedOrDeferred) {
-                is MediaDetail -> Result.success(cachedOrDeferred)
-                else -> {
-                    val deferred = cachedOrDeferred as Deferred<Result<MediaDetail>>
-                    try {
-                        deferred.await()
-                    } catch (ce: kotlinx.coroutines.CancellationException) {
-                        // The shared in-flight Deferred is a child of its
-                        // originator's coroutineScope: if that caller was
-                        // cancelled (e.g. navigated away mid-fetch), the
-                        // Deferred is cancelled and every concurrent awaiter
-                        // would fail too. Re-fetch directly on this caller's
-                        // scope so a single originator's cancellation can't
-                        // take down unrelated awaiters. Re-throw only if THIS
-                        // caller was itself cancelled (its Job is marked so);
-                        // otherwise the interruption came from the originator
-                        // and a fresh fetch on this still-alive caller is safe.
-                        val job = coroutineContext[kotlinx.coroutines.Job]
-                        if (job?.isCancelled == true) throw ce
-                        val epochAtRetry = detailCacheEpoch.get()
-                        apiClient.getMediaDetail(itemId).also { result ->
-                            if (detailCacheEpoch.get() == epochAtRetry) {
-                                result.getOrNull()?.let { detail -> detailCache.put(identity, itemId, detail) }
-                            }
-                        }
-                    }
-                }
-            }
+        return detailFetcher.getOrFetch(homeSession.cacheIdentity(), itemId) {
+            apiClient.getMediaDetail(itemId)
         }
     }
 
