@@ -863,7 +863,19 @@
   }
 
   // Public API (also used for the FOUC bootstrap path)
-  window.JellyPlayThemes = { VARIANTS, applyTheme, resolveState, refresh };
+  window.JellyPlayThemes = {
+    VARIANTS,
+    applyTheme,
+    resolveState,
+    refresh,
+    getCurrentVariant: () => current.variant,
+    setVariant: (id) => {
+      if (!VARIANTS[id]) return false;
+      current.variant = id;
+      refresh();
+      return true;
+    },
+  };
 
   function boot() {
     applyTheme(current);

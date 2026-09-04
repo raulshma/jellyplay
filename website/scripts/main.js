@@ -354,6 +354,8 @@
     const modalVersionEl = document.getElementById('modal-release-version');
     const phoneList = document.getElementById('phone-download-list');
     const tvList = document.getElementById('tv-download-list');
+    const desktopList = document.getElementById('desktop-download-list');
+    const heroDownloadLeft = document.getElementById('hero-download-btn-left');
     
     // Dropdown selectors
     const dropdownList = document.getElementById('dropdown-list');
@@ -442,11 +444,19 @@
     // Populate fallback downloads list initially so clicking triggers actual files instantly
     const fallbackData = getFallbackData();
     populateDownloads(fallbackData);
+    if (desktopList) {
+      desktopList.innerHTML = `<p style="color: var(--jp-white-alpha-40); text-align: center; font-size: 0.8125rem; padding: 12px 0;">Checking preview builds… <a href="https://github.com/raulshma/JellyPlay/releases" target="_blank" rel="noopener noreferrer" class="inline-link">Browse releases</a></p>`;
+    }
 
     // --- 3. Fetch Release Data asynchronously in background ---
+    // Stable lane (/releases/latest) carries the Android APKs; the desktop
+    // MSI/DEB/DMG installers ship on the KMP alpha pre-release channel, so
+    // scan the recent releases (including pre-releases) for desktop assets.
     const cacheKey = 'jellyplay_latest_release';
+    const desktopCacheKey = 'jellyplay_latest_desktop';
     const cacheDuration = 3600000; // 1 hour
     let releaseData = null;
+    let desktopData = null;
 
     try {
       const cached = sessionStorage.getItem(cacheKey);
@@ -467,6 +477,7 @@
           const data = await response.json();
           releaseData = {
             tag: data.tag_name,
+            url: data.html_url,
             assets: data.assets.map(a => ({
               name: a.name,
               url: a.browser_download_url,
@@ -490,10 +501,65 @@
       populateDownloads(releaseData);
     }
 
+    // Desktop preview installers (alpha pre-release channel) — best effort.
+    try {
+      const cachedDesktop = sessionStorage.getItem(desktopCacheKey);
+      if (cachedDesktop) {
+        const parsed = JSON.parse(cachedDesktop);
+        if (Date.now() - parsed.timestamp < cacheDuration) {
+          desktopData = parsed.data;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to read desktop release cache', e);
+    }
+
+    if (!desktopData) {
+      try {
+        const response = await fetch('https://api.github.com/repos/raulshma/JellyPlay/releases?per_page=10');
+        if (response.ok) {
+          const releases = await response.json();
+          for (const rel of releases) {
+            const desktopAssets = (rel.assets || []).filter(a =>
+              /\.(msi|exe|deb|rpm|dmg|zip)$/i.test(a.name) && /desktop/i.test(a.name)
+            );
+            if (desktopAssets.length) {
+              desktopData = {
+                tag: rel.tag_name,
+                url: rel.html_url,
+                assets: desktopAssets.map(a => ({
+                  name: a.name,
+                  url: a.browser_download_url,
+                  size: a.size
+                }))
+              };
+              try {
+                sessionStorage.setItem(desktopCacheKey, JSON.stringify({
+                  data: desktopData,
+                  timestamp: Date.now()
+                }));
+              } catch (e) {}
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch desktop release from GitHub API', e);
+      }
+    }
+
+    if (desktopData) {
+      populateDesktopDownloads(desktopData);
+    } else if (desktopList) {
+      desktopList.innerHTML = `<p style="color: var(--jp-white-alpha-40); text-align: center; font-size: 0.8125rem; padding: 12px 0;">No preview builds published yet — <a href="https://github.com/raulshma/JellyPlay/releases" target="_blank" rel="noopener noreferrer" class="inline-link">browse releases</a></p>`;
+    }
+
     function populateDownloads(data) {
       navVersionEl.textContent = data.tag;
       modalVersionEl.textContent = data.tag;
       navBadge.style.display = 'inline-flex';
+      if (data.url) navBadge.setAttribute('href', data.url);
+      syncSoftwareVersion(data.tag);
 
       phoneList.innerHTML = '';
       tvList.innerHTML = '';
@@ -502,6 +568,7 @@
       let phoneCount = 0;
       let tvCount = 0;
       let dropdownCount = 0;
+      let recommendedUrl = null;
 
       data.assets.forEach(asset => {
         if (asset.name.endsWith('.apk')) {
@@ -509,6 +576,9 @@
           if (asset.name.includes('-phone-')) {
             phoneList.insertAdjacentHTML('beforeend', modalHtml);
             phoneCount++;
+            if (!recommendedUrl && asset.name.includes('universal')) {
+              recommendedUrl = asset.url;
+            }
           } else if (asset.name.includes('-tv-')) {
             tvList.insertAdjacentHTML('beforeend', modalHtml);
             tvCount++;
@@ -522,6 +592,14 @@
         }
       });
 
+      if (!recommendedUrl) {
+        const firstApk = data.assets.find(a => a.name.endsWith('.apk'));
+        if (firstApk) recommendedUrl = firstApk.url;
+      }
+      if (recommendedUrl && heroDownloadLeft) {
+        heroDownloadLeft.setAttribute('href', recommendedUrl);
+      }
+
       if (phoneCount === 0) {
         phoneList.innerHTML = `<p style="color: var(--jp-white-alpha-40); text-align: center; font-size: 0.8125rem; padding: 12px 0;">No phone APKs found.</p>`;
       }
@@ -530,6 +608,35 @@
       }
       if (dropdownCount === 0 && dropdownList) {
         dropdownList.innerHTML = `<p style="color: var(--jp-white-alpha-40); text-align: center; font-size: 0.8125rem; padding: 12px 0;">No downloads found.</p>`;
+      }
+    }
+
+    function populateDesktopDownloads(data) {
+      if (!desktopList) return;
+      desktopList.innerHTML = '';
+
+      let count = 0;
+      data.assets.forEach(asset => {
+        desktopList.insertAdjacentHTML('beforeend', createDesktopItemHTML(asset, data));
+        count++;
+      });
+
+      if (count === 0) {
+        desktopList.innerHTML = `<p style="color: var(--jp-white-alpha-40); text-align: center; font-size: 0.8125rem; padding: 12px 0;">No desktop builds in this release.</p>`;
+      }
+    }
+
+    // Keep the SoftwareApplication structured data on the fetched version so
+    // search results never go stale between site edits.
+    function syncSoftwareVersion(tag) {
+      try {
+        const el = document.getElementById('ld-software');
+        if (!el) return;
+        const json = JSON.parse(el.textContent);
+        json.softwareVersion = String(tag).replace(/^v/, '');
+        el.textContent = JSON.stringify(json);
+      } catch (e) {
+        console.warn('Failed to sync structured-data version', e);
       }
     }
   }
@@ -607,8 +714,42 @@
     `;
   }
 
+  function createDesktopItemHTML(asset, release) {
+    let platformLabel = 'Desktop';
+    let platformDesc = asset.name;
+    const lower = asset.name.toLowerCase();
+    if (lower.includes('windows')) {
+      platformLabel = 'Windows';
+      platformDesc = lower.includes('.msi') ? 'Installer (MSI, x64)' : 'Windows build';
+    } else if (lower.includes('linux')) {
+      platformLabel = 'Linux';
+      platformDesc = lower.includes('.deb') ? 'Debian package' : lower.includes('.rpm') ? 'RPM package' : 'Linux build';
+    } else if (lower.includes('macos') || lower.endsWith('.dmg')) {
+      platformLabel = 'macOS';
+      platformDesc = 'Disk image (untested)';
+    }
+
+    const sizeStr = asset.size ? ` • ${formatBytes(asset.size)}` : '';
+    const versionNote = release && release.tag ? ` • ${release.tag}` : '';
+
+    return `
+      <div class="download-item">
+        <div class="download-item-info">
+          <div class="download-item-name">
+            ${platformLabel}
+            <span class="download-item-name-rec">Preview</span>
+          </div>
+          <div class="download-item-meta">${platformDesc}${sizeStr}${versionNote}</div>
+        </div>
+        <a href="${asset.url}" class="download-item-btn" aria-label="Download ${platformLabel} preview build" download>
+          <span class="material-symbols-outlined">download</span>
+        </a>
+      </div>
+    `;
+  }
+
   function getFallbackData() {
-    const fallbackVersion = 'v0.5.8';
+    const fallbackVersion = 'v0.10.7';
     const architectures = ['universal', 'arm64-v8a', 'x86_64'];
     const types = ['phone', 'tv'];
     const assets = [];
@@ -626,6 +767,7 @@
     
     return {
       tag: fallbackVersion,
+      url: `https://github.com/raulshma/JellyPlay/releases/tag/${fallbackVersion}`,
       assets: assets
     };
   }
@@ -929,6 +1071,54 @@
     }
   }
 
+  // ============ THEME SHOWCASE (live style preview) ============
+  function initThemeShowcase() {
+    const row = document.getElementById('theme-showcase-row');
+    const note = document.getElementById('theme-showcase-note');
+    if (!row || !window.JellyPlayThemes) return;
+
+    const chips = Array.from(row.querySelectorAll('[data-theme-variant]'));
+    if (!chips.length) return;
+
+    const labelFor = (id) => {
+      const chip = chips.find((c) => c.dataset.themeVariant === id);
+      return chip ? chip.textContent.trim() : id;
+    };
+
+    function syncActive() {
+      const current = window.JellyPlayThemes.getCurrentVariant
+        ? window.JellyPlayThemes.getCurrentVariant()
+        : document.documentElement.getAttribute('data-variant');
+      chips.forEach((c) => {
+        const active = c.dataset.themeVariant === current;
+        c.classList.toggle('active', active);
+        c.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      if (note && current) {
+        note.innerHTML = `You are previewing <strong></strong> — your choice is saved on this device only.`;
+        note.querySelector('strong').textContent = labelFor(current);
+      }
+    }
+
+    chips.forEach((chip) => {
+      chip.addEventListener('click', () => {
+        window.JellyPlayThemes.setVariant(chip.dataset.themeVariant);
+        syncActive();
+      });
+    });
+
+    // Stay in sync when the nav palette panel changes the style.
+    const observer = new MutationObserver(syncActive);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-variant'] });
+    syncActive();
+  }
+
+  // ============ FOOTER YEAR ============
+  function initFooterYear() {
+    const el = document.getElementById('footer-year');
+    if (el) el.textContent = String(new Date().getFullYear());
+  }
+
   // ============ INITIALIZE ============
   function init() {
     initScrollAnimations();
@@ -948,6 +1138,8 @@
     initMinorWidgets();
     initScrollSpy();
     initBackToTop();
+    initThemeShowcase();
+    initFooterYear();
   }
 
   if (document.readyState === 'loading') {

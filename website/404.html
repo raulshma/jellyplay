@@ -4,8 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Page Not Found — JellyPlay</title>
+  <meta name="description" content="The page you're looking for doesn't exist. Head back to the JellyPlay home page — the open-source Jellyfin client for Android, TV, desktop, and web.">
   <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0E1416" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#F5FAFC" media="(prefers-color-scheme: light)">
   <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
+  <script>
+    (function() {
+      try {
+        var bg = localStorage.getItem('jp_theme_bg');
+        if (bg) {
+          document.documentElement.style.background = bg;
+        }
+      } catch (e) {}
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Outfit:wght@700;800&display=swap" rel="stylesheet">
@@ -74,6 +87,12 @@
       margin-bottom: 32px;
       max-width: 400px;
     }
+    .error-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
   </style>
 </head>
 <body>
@@ -82,11 +101,18 @@
       <div class="error-code">404</div>
       <h1 class="error-title">Page not found</h1>
       <p class="error-description">The page you're looking for doesn't exist or has been moved.</p>
-      <a href="index.html" class="btn-filled has-icon">
-        <md-icon>home</md-icon>
-        Back to Home
-      </a>
+      <div class="error-actions">
+        <a href="index.html" class="btn-filled has-icon">
+          <md-icon>home</md-icon>
+          Back to Home
+        </a>
+        <a href="https://github.com/raulshma/JellyPlay/releases" class="btn-outlined has-icon">
+          <md-icon>download</md-icon>
+          Downloads
+        </a>
+      </div>
     </div>
   </div>
+  <script src="scripts/themes.js" defer></script>
 </body>
 </html>

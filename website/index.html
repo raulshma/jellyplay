@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JellyPlay — Modern Jellyfin Client for Android & Android TV</title>
-  <meta name="description" content="JellyPlay is a premium, open-source Jellyfin client for Android, Android TV & Fire TV. Native Kotlin & Jetpack Compose (Material 3). Multi-engine playback (ExoPlayer, libmpv, LibVLC), SyncPlay watch parties, offline downloads, Seerr requests.">
-  <meta name="keywords" content="JellyPlay, Jellyfin client, Jellyfin Android, Jellyfin Android TV, Android TV, Fire TV, Jellyfin music player, open source, ExoPlayer, libmpv, LibVLC, SyncPlay, watch party, Jellyseerr, Overseerr, Seerr, Material 3, Material 3 Expressive, media player, self-hosted streaming, self-hosted, homelab, offline downloads, IPTV, live TV, DVR, Kodi alternative, Plex alternative, Emby alternative, jetpack compose, kotlin">
+  <title>JellyPlay — Modern Jellyfin Client for Android, Android TV, Desktop & Web</title>
+  <meta name="description" content="JellyPlay is a premium, open-source Jellyfin client for Android, Android TV & Fire TV, with a Windows desktop preview and experimental web build. Native Kotlin & Jetpack Compose (Material 3 Expressive). Multi-engine playback (ExoPlayer, libmpv, LibVLC), SyncPlay watch parties, offline downloads, Seerr requests.">
+  <meta name="keywords" content="JellyPlay, Jellyfin client, Jellyfin Android, Jellyfin Android TV, Android TV, Fire TV, Jellyfin Windows, Jellyfin web client, Jellyfin music player, open source, ExoPlayer, libmpv, LibVLC, SyncPlay, watch party, Jellyseerr, Overseerr, Seerr, Material 3, Material 3 Expressive, media player, self-hosted streaming, self-hosted, homelab, offline downloads, live TV, DVR, Kodi alternative, Plex alternative, Emby alternative, jetpack compose, kotlin, kotlin multiplatform, compose multiplatform">
   <meta name="author" content="raulshma">
   <meta name="robots" content="index, follow, max-image-preview:large">
   <meta name="theme-color" content="#0E1416" media="(prefers-color-scheme: dark)">
@@ -35,9 +35,10 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="JellyPlay">
-  <meta property="og:title" content="JellyPlay — Modern Jellyfin Client for Android & Android TV">
-  <meta property="og:description" content="A premium, open-source Jellyfin client. Stream movies, music, and live TV with Material 3 dynamic color theming, offline downloads, SyncPlay, and multi-engine playback (ExoPlayer, libmpv, LibVLC).">
-  <meta property="og:image" content="assets/og-banner.png">
+  <meta property="og:title" content="JellyPlay — Modern Jellyfin Client for Android, TV, Desktop & Web">
+  <meta property="og:description" content="A premium, open-source Jellyfin client. Stream movies, music, and live TV with Material 3 dynamic color theming, offline downloads, SyncPlay, and multi-engine playback (ExoPlayer, libmpv, LibVLC). Windows desktop preview and experimental web build included.">
+  <meta property="og:image" content="https://raulshma.github.io/jellyplay/assets/og-banner.png">
+  <meta property="og:image:secure_url" content="https://raulshma.github.io/jellyplay/assets/og-banner.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="JellyPlay — Modern Jellyfin client for Android and Android TV. Native Kotlin and Jetpack Compose Material 3.">
@@ -46,9 +47,9 @@
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="JellyPlay — Modern Jellyfin Client for Android & Android TV">
+  <meta name="twitter:title" content="JellyPlay — Modern Jellyfin Client for Android, TV, Desktop & Web">
   <meta name="twitter:description" content="Stream movies, music, and live TV with a beautiful Material 3 interface. Features offline downloads, SyncPlay watch parties, and multi-engine playback (ExoPlayer, libmpv, LibVLC).">
-  <meta name="twitter:image" content="assets/og-banner.png">
+  <meta name="twitter:image" content="https://raulshma.github.io/jellyplay/assets/og-banner.png">
   <meta name="twitter:image:alt" content="JellyPlay — Modern Jellyfin client for Android and Android TV">
 
   <!-- Favicon -->
@@ -80,7 +81,7 @@
   </script>
 
   <!-- JSON-LD Structured Data -->
-  <script type="application/ld+json">
+  <script type="application/ld+json" id="ld-software">
     {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
@@ -88,7 +89,7 @@
       "operatingSystem": "Android 9.0 (API 28) or later",
       "applicationCategory": "MultimediaApplication",
       "applicationSubCategory": "Media Player",
-      "description": "JellyPlay is a premium, modern, open-source Jellyfin client for Android, Android TV & Fire TV featuring offline downloads, SyncPlay watch parties, metadata editing, Seerr/Jellyseerr integration, an integrated server admin dashboard, and multi-engine playback (ExoPlayer/Media3, libmpv, LibVLC).",
+      "description": "JellyPlay is a premium, modern, open-source Jellyfin client for Android, Android TV & Fire TV — with a Windows desktop preview and experimental web build — featuring offline downloads, SyncPlay watch parties, metadata editing, Seerr/Jellyseerr integration, an integrated server admin dashboard, and multi-engine playback (ExoPlayer/Media3, libmpv, LibVLC).",
       "offers": {
         "@type": "Offer",
         "price": "0",
@@ -112,16 +113,18 @@
       "license": "https://www.gnu.org/licenses/gpl-3.0.html",
       "url": "https://raulshma.github.io/jellyplay/",
       "downloadUrl": "https://github.com/raulshma/jellyplay/releases",
-      "softwareVersion": "0.6.7",
-      "softwareRequirements": "Android 9.0+",
+      "softwareVersion": "0.10.7",
+      "softwareRequirements": "Android 9.0+ (API 28); Windows 10+ for the desktop preview",
       "featureList": [
         "Native Jetpack Compose UI",
+        "Kotlin Multiplatform shared core",
         "Material 3 Expressive animations",
+        "8 theme variants with OLED mode",
         "ExoPlayer / Media3 video engine",
         "libmpv video engine",
         "LibVLC video engine",
         "SyncPlay watch parties",
-        "Offline downloads",
+        "Offline downloads with watch-progress sync",
         "Jellyseerr / Overseerr integration",
         "Multi-server Jellyfin support",
         "Live TV & DVR",
@@ -129,6 +132,8 @@
         "10-band equalizer with night mode",
         "Adaptive layouts for phone, tablet, foldable, and TV",
         "Android TV Leanback launcher",
+        "Windows desktop preview (libmpv)",
+        "Experimental web (wasmJs) build",
         "In-app metadata editor",
         "Server admin dashboard",
         "Material You dynamic theming"
@@ -253,6 +258,14 @@
         },
         {
           "@type": "Question",
+          "name": "Is there a Windows or web version?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "A Windows desktop preview (Compose Multiplatform with bundled libmpv) already runs browsing, search, details, music, and in-player video, and an experimental WebAssembly build signs in and plays video in the browser. Both ship from the same shared Kotlin codebase; treat them as preview and experimental respectively."
+          }
+        },
+        {
+          "@type": "Question",
           "name": "Does JellyPlay collect any data?",
           "acceptedAnswer": {
             "@type": "Answer",
@@ -284,12 +297,24 @@
         {
           "@type": "ListItem",
           "position": 3,
+          "name": "Platforms",
+          "item": "https://raulshma.github.io/jellyplay/#platforms"
+        },
+        {
+          "@type": "ListItem",
+          "position": 4,
           "name": "Screenshots",
           "item": "https://raulshma.github.io/jellyplay/#screenshots"
         },
         {
           "@type": "ListItem",
-          "position": 4,
+          "position": 5,
+          "name": "Get Started",
+          "item": "https://raulshma.github.io/jellyplay/#get-started"
+        },
+        {
+          "@type": "ListItem",
+          "position": 6,
           "name": "Download",
           "item": "https://github.com/raulshma/jellyplay/releases"
         }
@@ -325,6 +350,7 @@
       <nav class="nav-links hide-mobile" aria-label="Main navigation">
         <ul>
           <li><a href="#features">Features</a></li>
+          <li><a href="#platforms">Platforms</a></li>
           <li><a href="#comparison">Compare</a></li>
           <li><a href="#screenshots">Screenshots</a></li>
           <li><a href="#faq">FAQ</a></li>
@@ -409,6 +435,7 @@
     <nav aria-label="Mobile navigation">
       <ul>
         <li><a href="#features" class="mobile-link">Features</a></li>
+        <li><a href="#platforms" class="mobile-link">Platforms</a></li>
         <li><a href="#comparison" class="mobile-link">Compare</a></li>
         <li><a href="#screenshots" class="mobile-link">Screenshots</a></li>
         <li><a href="#faq" class="mobile-link">FAQ</a></li>
@@ -455,10 +482,10 @@
             </a>
           </div>
           <h1 class="hero-title">
-            Your Jellyfin server,<br>re-imagined for <span class="accent">Android</span>
+            Your Jellyfin server,<br>re-imagined for <span class="accent">every screen</span>
           </h1>
           <p class="hero-description">
-            JellyPlay is a high-fidelity, open-source media player for Jellyfin. Built using Kotlin and Jetpack Compose, it features dynamic color theming, offline downloads, and multi-engine playback tailored for modern media enthusiasts.
+            JellyPlay is a high-fidelity, open-source media player for Jellyfin. Built with Kotlin and Jetpack Compose, it features dynamic color theming, offline downloads, and multi-engine playback — on phones, tablets, foldables, Android TV &amp; Fire TV, with a Windows desktop preview and an experimental web build from the same shared codebase.
           </p>
           <div class="hero-actions">
             <div class="split-btn-group" id="hero-download-split-btn">
@@ -488,8 +515,8 @@
               <span class="stat-label">ExoPlayer, mpv, VLC</span>
             </div>
             <div class="hero-stat">
-              <span class="stat-value">Android TV</span>
-              <span class="stat-label">Full D-Pad support</span>
+              <span class="stat-value">8 Themes</span>
+              <span class="stat-label">Expressive + OLED</span>
             </div>
             <div class="hero-stat">
               <span class="stat-value">GPL-3.0</span>
@@ -714,21 +741,14 @@
             <div class="feature-icon">
               <md-icon>download_for_offline</md-icon>
             </div>
-            <h3 class="feature-title">Offline Downloads &amp; Sync</h3>
-            <p class="feature-description">WorkManager-backed transfers with multi-connection chunking, HTTP Range resumption, and bundled subtitles, trickplay tiles, &amp; intro skip markers. Features a durable <strong>watch-progress sync outbox</strong> that auto-syncs playback states back to your server on reconnect.</p>
+            <h3 class="feature-title">Offline &amp; Sync</h3>
+            <p class="feature-description">Take media offline with multi-connection downloads and HTTP Range resumption. A durable outbox syncs watch progress on reconnect.</p>
             <div class="micro-widget-download">
               <div class="download-info">
                 <span>The Matrix.mp4</span>
                 <span id="dl-percentage">78%</span>
               </div>
               <div class="download-bar-bg"><div class="download-bar-fill" id="dl-bar" style="width: 78%"></div></div>
-              <div class="download-sync-status" style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; font-size: 0.6875rem; color: var(--jp-lavender-alpha-85);">
-                <span style="display: flex; align-items: center; gap: 4px; color: var(--jp-color-success);">
-                  <span class="material-symbols-outlined" style="font-size: 13px;">sync</span>
-                  Watch-Progress Outbox
-                </span>
-                <span style="opacity: 0.85;">Auto-sync on reconnect</span>
-              </div>
             </div>
           </div>
 
@@ -786,6 +806,122 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PLATFORMS ============ -->
+    <section class="platforms section" id="platforms">
+      <div class="container">
+        <div class="section-header animate-on-scroll">
+          <span class="section-eyebrow">Platforms</span>
+          <h2 class="section-title">One app, <span class="gradient-text">every screen</span></h2>
+          <p class="section-subtitle">A shared Kotlin Multiplatform core with native shells — stable on Android, preview on desktop, experimental on web.</p>
+        </div>
+
+        <div class="platform-grid">
+          <div class="platform-card glass-card animate-on-scroll">
+            <div class="platform-card-top">
+              <div class="feature-icon"><md-icon>phone_android</md-icon></div>
+              <span class="platform-pill stable">Stable</span>
+            </div>
+            <h3 class="feature-title">Android</h3>
+            <p class="feature-description">Phones, tablets, and foldables with adaptive Material 3 Expressive layouts, edge-to-edge immersion, widgets, shortcuts, and Picture-in-Picture. Requires Android 9.0 (API 28) or later.</p>
+          </div>
+
+          <div class="platform-card glass-card animate-on-scroll">
+            <div class="platform-card-top">
+              <div class="feature-icon"><md-icon>tv</md-icon></div>
+              <span class="platform-pill stable">Stable</span>
+            </div>
+            <h3 class="feature-title">Android TV &amp; Fire TV</h3>
+            <p class="feature-description">Dedicated TV flavor with a Leanback launcher, D-pad navigation, Watch Next rows, and a Daydream screensaver. Sideload-friendly APKs for Fire TV Stick, Cube, Shield, and Google TV.</p>
+          </div>
+
+          <div class="platform-card glass-card animate-on-scroll">
+            <div class="platform-card-top">
+              <div class="feature-icon"><md-icon>computer</md-icon></div>
+              <span class="platform-pill preview">Preview</span>
+            </div>
+            <h3 class="feature-title">Windows Desktop</h3>
+            <p class="feature-description">Compose Multiplatform shell with bundled libmpv — browsing, search, details, music with the full effect stack, in-player video, keyboard media keys, and frame capture. Packaged MSI ships with releases when available.</p>
+          </div>
+
+          <div class="platform-card glass-card animate-on-scroll">
+            <div class="platform-card-top">
+              <div class="feature-icon"><md-icon>language</md-icon></div>
+              <span class="platform-pill experimental">Experimental</span>
+            </div>
+            <h3 class="feature-title">Web</h3>
+            <p class="feature-description">WebAssembly build that signs in, renders artwork, plays video in-browser, and runs requests, calendar, and Seerr screens against a live server. Player polish is still landing.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ THEMES ============ -->
+    <section class="themes section" id="themes">
+      <div class="container">
+        <div class="section-header animate-on-scroll">
+          <span class="section-eyebrow">Theming</span>
+          <h2 class="section-title">Make it <span class="gradient-text">yours</span></h2>
+          <p class="section-subtitle">8 theme variants, 9 accent swatches, 3 contrast levels, and OLED mode — 390+ settings in all. Tap a style to preview it live on this page, or open the palette in the nav bar for accents.</p>
+        </div>
+
+        <div class="theme-showcase glass-card animate-on-scroll">
+          <div class="theme-chip-row" id="theme-showcase-row" role="group" aria-label="Preview a theme style">
+            <button type="button" class="theme-chip" data-theme-variant="standard">Standard</button>
+            <button type="button" class="theme-chip" data-theme-variant="synthwave">Synthwave</button>
+            <button type="button" class="theme-chip" data-theme-variant="soothing">Soothing</button>
+            <button type="button" class="theme-chip" data-theme-variant="monochrome">Monochrome</button>
+            <button type="button" class="theme-chip" data-theme-variant="vivid">Vivid</button>
+            <button type="button" class="theme-chip" data-theme-variant="aurora">Aurora</button>
+            <button type="button" class="theme-chip" data-theme-variant="sakura">Sakura</button>
+            <button type="button" class="theme-chip" data-theme-variant="vector_pop">Vector Pop</button>
+          </div>
+          <p class="theme-showcase-note" id="theme-showcase-note">You are previewing <strong>Standard</strong> — your choice is saved on this device only.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ GETTING STARTED ============ -->
+    <section class="get-started section" id="get-started">
+      <div class="container">
+        <div class="section-header animate-on-scroll">
+          <span class="section-eyebrow">Get started</span>
+          <h2 class="section-title">Up and running in <span class="gradient-text">minutes</span></h2>
+          <p class="section-subtitle">All you need is a Jellyfin server — the app handles the rest.</p>
+        </div>
+
+        <div class="steps-grid">
+          <div class="step-card glass-card animate-on-scroll">
+            <span class="step-number">1</span>
+            <div class="feature-icon"><md-icon>dns</md-icon></div>
+            <h3 class="feature-title">Run Jellyfin</h3>
+            <p class="feature-description">Install the free <a href="https://jellyfin.org/downloads" target="_blank" rel="noopener noreferrer" class="inline-link">Jellyfin server</a> on your NAS, PC, or VPS and add your media libraries.</p>
+          </div>
+          <div class="step-card glass-card animate-on-scroll">
+            <span class="step-number">2</span>
+            <div class="feature-icon"><md-icon>download</md-icon></div>
+            <h3 class="feature-title">Install JellyPlay</h3>
+            <p class="feature-description"><a href="#" class="inline-link trigger-download-modal">Download the APK</a> for your device — pick Universal if you are unsure of the architecture. TV users can sideload the TV build.</p>
+          </div>
+          <div class="step-card glass-card animate-on-scroll">
+            <span class="step-number">3</span>
+            <div class="feature-icon"><md-icon>qr_code_2</md-icon></div>
+            <h3 class="feature-title">Sign in</h3>
+            <p class="feature-description">Enter your server address or approve via Quick Connect, then pick a video engine. LAN/WAN failover keeps you connected at home and away.</p>
+          </div>
+        </div>
+
+        <div class="docs-row animate-on-scroll">
+          <span class="docs-row-label">Guides:</span>
+          <a href="https://github.com/raulshma/JellyPlay/blob/main/docs/setup.md" target="_blank" rel="noopener noreferrer" class="docs-link">Setup</a>
+          <a href="https://github.com/raulshma/JellyPlay/blob/main/docs/android-tv-setup.md" target="_blank" rel="noopener noreferrer" class="docs-link">Android TV &amp; Fire TV</a>
+          <a href="https://github.com/raulshma/JellyPlay/blob/main/docs/player-engines.md" target="_blank" rel="noopener noreferrer" class="docs-link">Player engines</a>
+          <a href="https://github.com/raulshma/JellyPlay/blob/main/docs/offline-downloads.md" target="_blank" rel="noopener noreferrer" class="docs-link">Offline downloads</a>
+          <a href="https://github.com/raulshma/JellyPlay/blob/main/docs/syncplay-guide.md" target="_blank" rel="noopener noreferrer" class="docs-link">SyncPlay</a>
+          <a href="https://github.com/raulshma/JellyPlay/blob/main/docs/jellyseerr-integration.md" target="_blank" rel="noopener noreferrer" class="docs-link">Seerr integration</a>
         </div>
       </div>
     </section>
@@ -915,6 +1051,14 @@
               </tr>
               <tr>
                 <td>
+                  <span class="comparison-feature-title">Desktop &amp; web</span>
+                  <span class="comparison-feature-desc">Windows preview and experimental WebAssembly build from one shared codebase</span>
+                </td>
+                <td><span class="cross-icon"><span class="material-symbols-outlined">close</span>Mobile &amp; TV only</span></td>
+                <td class="highlight-col"><span class="check-icon"><span class="material-symbols-outlined">check</span>Windows preview + web experimental</span></td>
+              </tr>
+              <tr>
+                <td>
                   <span class="comparison-feature-title">Connection failover</span>
                   <span class="comparison-feature-desc">Seamless automatic switching between LAN and WAN/VPN URLs</span>
                 </td>
@@ -1008,20 +1152,29 @@
           <md-assist-chip label="Kotlin">
             <md-icon slot="icon">code</md-icon>
           </md-assist-chip>
+          <md-assist-chip label="Kotlin Multiplatform">
+            <md-icon slot="icon">layers</md-icon>
+          </md-assist-chip>
           <md-assist-chip label="Jetpack Compose">
             <md-icon slot="icon">widgets</md-icon>
           </md-assist-chip>
-          <md-assist-chip label="Material 3">
+          <md-assist-chip label="Compose Multiplatform">
+            <md-icon slot="icon">devices</md-icon>
+          </md-assist-chip>
+          <md-assist-chip label="Material 3 Expressive">
             <md-icon slot="icon">palette</md-icon>
           </md-assist-chip>
           <md-assist-chip label="Media3 / ExoPlayer">
             <md-icon slot="icon">play_circle</md-icon>
           </md-assist-chip>
-          <md-assist-chip label="Hilt">
+          <md-assist-chip label="Koin">
             <md-icon slot="icon">hub</md-icon>
           </md-assist-chip>
           <md-assist-chip label="Room Database">
             <md-icon slot="icon">storage</md-icon>
+          </md-assist-chip>
+          <md-assist-chip label="DataStore">
+            <md-icon slot="icon">settings</md-icon>
           </md-assist-chip>
           <md-assist-chip label="Coil">
             <md-icon slot="icon">image</md-icon>
@@ -1051,10 +1204,34 @@
         <div class="section-header animate-on-scroll">
           <span class="section-eyebrow">FAQ</span>
           <h2 class="section-title">Frequently Asked Questions</h2>
-          <p class="section-subtitle">Common questions about server connections, format decoding, and download configurations.</p>
+          <p class="section-subtitle">Everything from server setup and supported devices to engines, downloads, and privacy.</p>
         </div>
 
         <div class="faq-grid animate-on-scroll">
+          <div class="faq-item">
+            <button class="faq-trigger" aria-expanded="false">
+              <span class="faq-question">What is JellyPlay?</span>
+              <span class="material-symbols-outlined faq-icon">expand_more</span>
+            </button>
+            <div class="faq-content">
+              <p class="faq-answer">
+                JellyPlay is a free, open-source Jellyfin client for Android phones, tablets, foldables, Android TV, and Fire TV — with a Windows desktop preview and an experimental web build. It is written natively in Kotlin and Jetpack Compose with Material 3 Expressive, not a web wrapper like the official Android app.
+              </p>
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-trigger" aria-expanded="false">
+              <span class="faq-question">Is JellyPlay free to use?</span>
+              <span class="material-symbols-outlined faq-icon">expand_more</span>
+            </button>
+            <div class="faq-content">
+              <p class="faq-answer">
+                Yes. JellyPlay is licensed under the GNU GPL v3.0 — free to download, use, modify, and redistribute. No ads, no in-app purchases, no telemetry, and no accounts required.
+              </p>
+            </div>
+          </div>
+
           <div class="faq-item">
             <button class="faq-trigger" aria-expanded="false">
               <span class="faq-question">Why should I use JellyPlay instead of the official client?</span>
@@ -1081,6 +1258,30 @@
 
           <div class="faq-item">
             <button class="faq-trigger" aria-expanded="false">
+              <span class="faq-question">Does JellyPlay support SyncPlay watch parties?</span>
+              <span class="material-symbols-outlined faq-icon">expand_more</span>
+            </button>
+            <div class="faq-content">
+              <p class="faq-answer">
+                Yes. Create or join a watch group, stay in real-time sync with friends, and use the in-player group chat. Server-time synchronization plus speed and skip-to-sync correction keep everyone in frame — try the interactive demo in the features section above.
+              </p>
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-trigger" aria-expanded="false">
+              <span class="faq-question">Does JellyPlay support Jellyseerr / Overseerr media requests?</span>
+              <span class="material-symbols-outlined faq-icon">expand_more</span>
+            </button>
+            <div class="faq-content">
+              <p class="faq-answer">
+                Yes. Connect Jellyseerr or Overseerr to browse trending, popular, and upcoming content, request movies and shows via Radarr/Sonarr, and track request status with admin approve/decline actions — all without leaving the app.
+              </p>
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-trigger" aria-expanded="false">
               <span class="faq-question">How do offline downloads work?</span>
               <span class="material-symbols-outlined faq-icon">expand_more</span>
             </button>
@@ -1099,6 +1300,30 @@
             <div class="faq-content">
               <p class="faq-answer">
                 Yes! JellyPlay compiles separate architectures specifically optimized for big screens. The TV builds feature a dedicated Leanback UI tailored for standard D-pad TV remotes, letting you navigate your movie library grids on Fire OS, Android TV, or Chromecast with Google TV without touch emulators.
+              </p>
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-trigger" aria-expanded="false">
+              <span class="faq-question">Is there a Windows or web version?</span>
+              <span class="material-symbols-outlined faq-icon">expand_more</span>
+            </button>
+            <div class="faq-content">
+              <p class="faq-answer">
+                A Windows desktop preview (Compose Multiplatform + bundled libmpv) already runs browsing, search, details, music, and in-player video — treat it as a preview, not a release. An experimental WebAssembly build signs in and plays video in the browser. Both ship from the same shared Kotlin codebase; check the Platforms section above and the release notes for current status.
+              </p>
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-trigger" aria-expanded="false">
+              <span class="faq-question">Does JellyPlay collect any data?</span>
+              <span class="material-symbols-outlined faq-icon">expand_more</span>
+            </button>
+            <div class="faq-content">
+              <p class="faq-answer">
+                No. JellyPlay is fully self-hosted: no analytics, no tracking, no phone-home, no cloud dependency. Your library, server connection, and viewing history stay between you and your Jellyfin server. Optional PIN/biometric lock and Kids Mode keep shared devices safe.
               </p>
             </div>
           </div>
@@ -1145,9 +1370,23 @@
           <h3 class="footer-title">Navigation</h3>
           <div class="footer-col-links">
             <a href="#features">Features</a>
+            <a href="#platforms">Platforms</a>
+            <a href="#themes">Themes</a>
             <a href="#comparison">Client Comparison</a>
             <a href="#screenshots">Screenshots</a>
+            <a href="#get-started">Get Started</a>
             <a href="#faq">FAQ</a>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="footer-title">Guides</h3>
+          <div class="footer-col-links">
+            <a href="https://github.com/raulshma/JellyPlay/blob/main/docs/setup.md" target="_blank" rel="noopener noreferrer">Setup</a>
+            <a href="https://github.com/raulshma/JellyPlay/blob/main/docs/android-tv-setup.md" target="_blank" rel="noopener noreferrer">Android TV &amp; Fire TV</a>
+            <a href="https://github.com/raulshma/JellyPlay/blob/main/docs/player-engines.md" target="_blank" rel="noopener noreferrer">Player engines</a>
+            <a href="https://github.com/raulshma/JellyPlay/blob/main/docs/offline-downloads.md" target="_blank" rel="noopener noreferrer">Offline downloads</a>
+            <a href="https://github.com/raulshma/JellyPlay/blob/main/docs/syncplay-guide.md" target="_blank" rel="noopener noreferrer">SyncPlay parties</a>
           </div>
         </div>
 
@@ -1163,7 +1402,7 @@
       </div>
 
       <div class="footer-bottom">
-        <p>© 2026 JellyPlay. Free and open source software. Not affiliated with the official Jellyfin Project.</p>
+        <p>© <span id="footer-year">2026</span> JellyPlay. Free and open source software. Not affiliated with the official Jellyfin Project.</p>
         <p>Created by raulshma and community volunteers.</p>
       </div>
     </div>
@@ -1177,7 +1416,8 @@
       </button>
       
       <div class="download-modal-header">
-        <h2 id="modal-title" class="download-modal-title">Download JellyPlay <span id="modal-release-version">v0.5.8</span></h2>
+        <h2 id="modal-title" class="download-modal-title">Download JellyPlay <span id="modal-release-version">v0.10.7</span></h2>
+        <p class="download-modal-subtitle">Android APKs below — Windows preview builds appear here when attached to a release.</p>
       </div>
 
       <div class="download-grid">
@@ -1191,6 +1431,13 @@
         <div class="download-column">
           <h3 class="column-title"><span class="material-symbols-outlined">tv</span> Android TV &amp; Fire TV</h3>
           <div class="download-list" id="tv-download-list">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <div class="download-column download-column-wide">
+          <h3 class="column-title"><span class="material-symbols-outlined">computer</span> Windows Desktop <span class="platform-pill preview">Preview</span></h3>
+          <div class="download-list" id="desktop-download-list">
             <!-- Dynamically populated -->
           </div>
         </div>
