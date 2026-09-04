@@ -117,9 +117,8 @@ class EpisodeCatalogueImpl(
         seriesId: String,
         offline: Boolean,
     ): Result<EpisodeCatalogueSnapshot> {
-        val identity = homeSession.cacheIdentity()
         return fetcher.getOrFetch(
-            identity = identity,
+            identity = { homeSession.cacheIdentity() },
             key = cacheKey(seriesId),
             flightKey = flightKey(offline, seriesId),
             fetch = { epochAtStart ->

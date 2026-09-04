@@ -468,6 +468,16 @@ internal fun HomeContentList(
                     } else null
                 }
 
+                // "See All" pill for the poster rows: both the offline-mirrored
+                // and the online branch render it (#147), so the gate + click
+                // lambda is built once above the chassis dispatch and handed to
+                // whichever poster row runs.
+                val seeAllClick = remember(callbacks, section.type, section.libraryId, section.collectionType, sectionTitle) {
+                    if (sectionHasSeeAll(section.type)) {
+                        { callbacks.onSeeAllClick(section.type, section.libraryId, section.collectionType, sectionTitle) }
+                    } else null
+                }
+
                 // Which row renders is the chassis dispatch's decision (see
                 // homeRowChassis): the offline-mirror rule (#147) and the
                 // wide-row source split live in one pure, pinned place, so
@@ -497,11 +507,7 @@ internal fun HomeContentList(
                             onSectionLongClick = sectionLongClick,
                             // Mirrored RECENTLY_ADDED / LATEST_MEDIA rows keep the
                             // online "See All" pill and play overlay (#147).
-                            onSeeAllClick = remember(callbacks, section.type, section.libraryId, section.collectionType, sectionTitle) {
-                                if (sectionHasSeeAll(section.type)) {
-                                    { callbacks.onSeeAllClick(section.type, section.libraryId, section.collectionType, sectionTitle) }
-                                } else null
-                            },
+                            onSeeAllClick = seeAllClick,
                             onPlayClick = remember(callbacks) {
                                 { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) }
                             },
@@ -595,11 +601,7 @@ internal fun HomeContentList(
                             clippingEnabled = state.experimentalCardClippingEnabled,
                             showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
                             onSectionLongClick = sectionLongClick,
-                            onSeeAllClick = remember(callbacks, section.type, section.libraryId, section.collectionType, sectionTitle) {
-                                if (sectionHasSeeAll(section.type)) {
-                                    { callbacks.onSeeAllClick(section.type, section.libraryId, section.collectionType, sectionTitle) }
-                                } else null
-                            },
+                            onSeeAllClick = seeAllClick,
                             onFocusedItemChange = callbacks.onFocusedMediaItem,
                             seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
                             seriesBackdropResolver = remember(callbacks.getBackdropUrl) { { id: String -> callbacks.getBackdropUrl(id) } },

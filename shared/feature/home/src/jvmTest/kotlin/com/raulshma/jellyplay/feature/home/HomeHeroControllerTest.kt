@@ -280,48 +280,48 @@ class HomeHeroControllerTest {
         assertNull(controller.backdropUrl)
     }
 
-    // --- rotation cadence policy (rotationDelayMs / shouldTickNow) ---
+    // --- rotation cadence policy (rotationCadence / shouldTickNow) ---
 
     @Test
-    fun heroController_rotationDelayMs_emptyCandidates_returnsNull() {
+    fun heroController_rotationCadence_emptyCandidates_returnsNone() {
         val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
 
         // All four gates precede any timing, for both scroll states.
-        assertNull(controller.rotationDelayMs(isScrolling = false, lifecycleResumed = true))
-        assertNull(controller.rotationDelayMs(isScrolling = true, lifecycleResumed = true))
+        assertEquals(RotationCadence.None, controller.rotationCadence(isScrolling = false, lifecycleResumed = true))
+        assertEquals(RotationCadence.None, controller.rotationCadence(isScrolling = true, lifecycleResumed = true))
     }
 
     @Test
-    fun heroController_rotationDelayMs_autoRotateDisabled_returnsNull() {
+    fun heroController_rotationCadence_autoRotateDisabled_returnsNone() {
         val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = false)
         controller.updateCandidates(listOf(item("m1", MediaType.MOVIE)))
 
-        assertNull(controller.rotationDelayMs(isScrolling = false, lifecycleResumed = true))
-        assertNull(controller.rotationDelayMs(isScrolling = true, lifecycleResumed = true))
+        assertEquals(RotationCadence.None, controller.rotationCadence(isScrolling = false, lifecycleResumed = true))
+        assertEquals(RotationCadence.None, controller.rotationCadence(isScrolling = true, lifecycleResumed = true))
     }
 
     @Test
-    fun heroController_rotationDelayMs_focusOutsideHero_returnsNull() {
+    fun heroController_rotationCadence_focusOutsideHero_returnsNone() {
         val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
         controller.updateCandidates(listOf(item("m1", MediaType.MOVIE)))
 
         controller.onFocusChange(false)
 
-        assertNull(controller.rotationDelayMs(isScrolling = false, lifecycleResumed = true))
-        assertNull(controller.rotationDelayMs(isScrolling = true, lifecycleResumed = true))
+        assertEquals(RotationCadence.None, controller.rotationCadence(isScrolling = false, lifecycleResumed = true))
+        assertEquals(RotationCadence.None, controller.rotationCadence(isScrolling = true, lifecycleResumed = true))
     }
 
     @Test
-    fun heroController_rotationDelayMs_lifecycleNotResumed_returnsNull() {
+    fun heroController_rotationCadence_lifecycleNotResumed_returnsNone() {
         val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
         controller.updateCandidates(listOf(item("m1", MediaType.MOVIE)))
 
-        assertNull(controller.rotationDelayMs(isScrolling = false, lifecycleResumed = false))
-        assertNull(controller.rotationDelayMs(isScrolling = true, lifecycleResumed = false))
+        assertEquals(RotationCadence.None, controller.rotationCadence(isScrolling = false, lifecycleResumed = false))
+        assertEquals(RotationCadence.None, controller.rotationCadence(isScrolling = true, lifecycleResumed = false))
     }
 
     @Test
-    fun heroController_rotationDelayMs_scrollingDefersRecheck_idleTicks() {
+    fun heroController_rotationCadence_scrollingDefersRecheck_idleTicks() {
         val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
         controller.updateCandidates(
             listOf(
@@ -331,8 +331,8 @@ class HomeHeroControllerTest {
         )
 
         // The cadence values are pinned: 2s defer while scrolling, 8s tick when idle.
-        assertEquals(2000L, controller.rotationDelayMs(isScrolling = true, lifecycleResumed = true))
-        assertEquals(8000L, controller.rotationDelayMs(isScrolling = false, lifecycleResumed = true))
+        assertEquals(RotationCadence.RecheckAfter(2000L), controller.rotationCadence(isScrolling = true, lifecycleResumed = true))
+        assertEquals(RotationCadence.TickAfter(8000L), controller.rotationCadence(isScrolling = false, lifecycleResumed = true))
     }
 
     @Test
@@ -350,7 +350,7 @@ class HomeHeroControllerTest {
         controller.toggleSurprise()
 
         assertFalse(controller.shouldTickNow())
-        assertNull(controller.rotationDelayMs(isScrolling = false, lifecycleResumed = true))
+        assertEquals(RotationCadence.None, controller.rotationCadence(isScrolling = false, lifecycleResumed = true))
     }
 
     @Test

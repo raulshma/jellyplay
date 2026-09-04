@@ -99,7 +99,7 @@ internal fun rememberHeroHeight(): Dp {
  * Owns the hero rotation state and its effects: the featured-item index, the
  * "Surprise Me" pick, auto-rotation while idle, and snapping the list back to
  * the top when the hero receives focus (TV). All policy lives on
- * [HeroController] — [HeroController.rotationDelayMs] (cadence + gates),
+ * [HeroController] — [HeroController.rotationCadence] (cadence + gates),
  * [HeroController.shouldTickNow] (post-delay re-check) and
  * [HeroController.onFocusEffect] (first-emission snap skip) are Compose-free
  * and synchronously testable — so this composable only constructs the
@@ -158,22 +158,23 @@ internal fun rememberHeroController(
     val isTv = LocalTvMode.current
     val lifecycleOwner = LocalLifecycleOwner.current
     // Cadence shell: every decision (gates, delays, post-delay re-check) is the
-    // controller's [HeroController.rotationDelayMs]/[shouldTickNow]; this is
+    // controller's [HeroController.rotationCadence]/[shouldTickNow]; this is
     // just the collector — collectLatest cancels a pending delay on any
     // scroll-state change. Effect keys preserved from the inline implementation.
     LaunchedEffect(featuredCandidates, listState, controller.autoRotateEnabled) {
         snapshotFlow { listState.isScrollInProgress }
             .collectLatest { isScrolling ->
                 when (
-                    val delayMs = controller.rotationDelayMs(
+                    val cadence = controller.rotationCadence(
                         isScrolling = isScrolling,
                         lifecycleResumed = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED),
                     )
                 ) {
-                    null -> Unit
-                    else -> {
-                        delay(delayMs)
-                        if (delayMs == HeroController.IDLE_ROTATION_DELAY_MS && controller.shouldTickNow()) {
+                    RotationCadence.None -> Unit
+                    is RotationCadence.RecheckAfter -> delay(cadence.delayMs)
+                    is RotationCadence.TickAfter -> {
+                        delay(cadence.delayMs)
+                        if (controller.shouldTickNow()) {
                             controller.rotationTick()
                         }
                     }
@@ -190,6 +191,22 @@ internal fun rememberHeroController(
     }
 
     return controller
+}
+
+/**
+ * What the cadence collector should do after [HeroController.rotationCadence]
+ * decides. Carrying the decision kind (not a bare delay) keeps the collector
+ * from re-deriving the branch by comparing delay constants.
+ */
+internal sealed interface RotationCadence {
+    /** No delay may be scheduled; the collector does nothing this emission. */
+    data object None : RotationCadence
+
+    /** A pure re-check wait: `collectLatest` restarts it on the next scroll-state change. */
+    data class RecheckAfter(val delayMs: Long) : RotationCadence
+
+    /** Wait, then tick the featured index if [HeroController.shouldTickNow] still passes. */
+    data class TickAfter(val delayMs: Long) : RotationCadence
 }
 
 @Stable
@@ -259,18 +276,24 @@ internal class HeroController(
     /**
      * The rotation-cadence decision behind the composable's snapshotFlow
      * collector — the whole policy, Compose-free and synchronously testable.
-     * Returns `null` when no delay may be scheduled (no candidates, rotation
-     * disabled, focus outside the hero, or lifecycle below RESUMED — the same
-     * gates the inline implementation applied, here re-evaluated on every
-     * scroll emission); [SCROLL_DEFER_DELAY_MS] while scrolling (a pure
-     * re-check wait: `collectLatest` cancels it on the next scroll-state
-     * change); or [IDLE_ROTATION_DELAY_MS] when idle — the tick decision. The
-     * caller re-consults [shouldTickNow] after the delay, mirroring the inline
-     * implementation's post-delay re-check.
+     * Returns [RotationCadence.None] when no delay may be scheduled (no
+     * candidates, rotation disabled, focus outside the hero, or lifecycle
+     * below RESUMED — the same gates the inline implementation applied, here
+     * re-evaluated on every scroll emission); [RotationCadence.RecheckAfter]
+     * while scrolling (a pure re-check wait: `collectLatest` cancels it on the
+     * next scroll-state change); or [RotationCadence.TickAfter] when idle —
+     * the tick decision, whose completion the caller gates on
+     * [shouldTickNow], mirroring the inline implementation's post-delay
+     * re-check. The decision carries its kind, so the collector dispatches on
+     * the sealed type instead of comparing raw delay constants.
      */
-    internal fun rotationDelayMs(isScrolling: Boolean, lifecycleResumed: Boolean): Long? {
-        if (candidates.isEmpty() || !autoRotateEnabled || !focusInHero || !lifecycleResumed) return null
-        return if (isScrolling) SCROLL_DEFER_DELAY_MS else IDLE_ROTATION_DELAY_MS
+    internal fun rotationCadence(isScrolling: Boolean, lifecycleResumed: Boolean): RotationCadence {
+        if (candidates.isEmpty() || !autoRotateEnabled || !focusInHero || !lifecycleResumed) return RotationCadence.None
+        return if (isScrolling) {
+            RotationCadence.RecheckAfter(SCROLL_DEFER_DELAY_MS)
+        } else {
+            RotationCadence.TickAfter(IDLE_ROTATION_DELAY_MS)
+        }
     }
 
     /**

@@ -18,7 +18,7 @@ import kotlin.coroutines.coroutineContext
  * invalidation is returned to its callers but never written back into the
  * cache.
  *
- * Extracted verbatim from the pattern `MediaRepositoryImpl.getMediaDetail`
+ * Extracted from the pattern `MediaRepositoryImpl.getMediaDetail`
  * and `EpisodeCatalogueImpl` each hand-rolled (a `Mutex`-guarded in-flight
  * `Deferred` map + an `AtomicLong` epoch + a cancellation ladder). The
  * contract below is that pattern's load-bearing semantics — changing any
@@ -45,7 +45,10 @@ import kotlin.coroutines.coroutineContext
  *    awaiter would fail too. An awaiter whose `await()` throws
  *    [CancellationException] re-throws only when its own [Job] is cancelled;
  *    otherwise the interruption came from the originator and the awaiter
- *    re-fetches on its own (still-alive) scope with a fresh epoch capture.
+ *    re-fetches on its own (still-alive) scope with a fresh epoch capture
+ *    and a fresh identity capture (the await-time re-read
+ *    `EpisodeCatalogueImpl.awaitFlight` had; a session switch that landed
+ *    mid-flight must not write the retry's result under the stale identity).
  *  - **Flight-key scope.** In-flight entries are keyed by
  *    `(identity, flightKey)` — a caller under a different [CacheIdentity]
  *    never joins another identity's flight, matching the cache's
@@ -68,24 +71,29 @@ class SingleFlightFetcher<T : Any>(
     private val inFlight = mutableMapOf<Pair<CacheIdentity, String>, Deferred<Result<T>>>()
 
     /**
-     * Serves [key] for [identity] from the cache, or runs [fetch] exactly
-     * once for all concurrent callers. [fetch] receives the epoch captured at
+     * Serves [key] for the identity supplied by [identity] from the cache, or
+     * runs [fetch] exactly once for all concurrent callers. [identity] is a
+     * supplier, not a captured value: it is read once at entry for the cache
+     * read and flight join, and re-read on the cancellation-retry path so a
+     * session switch that lands mid-flight can't write the retry's result
+     * under the stale identity. [fetch] receives the epoch captured at
      * flight start; its result is written to the cache only if no
      * invalidation landed while it ran (and it succeeded).
      */
     suspend fun getOrFetch(
-        identity: CacheIdentity,
+        identity: suspend () -> CacheIdentity,
         key: String,
         flightKey: String = key,
         fetch: suspend (epochAtStart: Long) -> Result<T>,
     ): Result<T> {
-        cache.get(identity, key)?.let { return Result.success(it) }
+        val startIdentity = identity()
+        cache.get(startIdentity, key)?.let { return Result.success(it) }
         return coroutineScope {
             val deferred: Deferred<Result<T>> = inFlightMutex.withLock {
                 // Re-check under the lock: a concurrent completion may have
                 // populated the cache between the unlocked read above and here.
-                cache.get(identity, key)?.let { return@coroutineScope Result.success(it) }
-                val flightId = identity to flightKey
+                cache.get(startIdentity, key)?.let { return@coroutineScope Result.success(it) }
+                val flightId = startIdentity to flightKey
                 inFlight.getOrPut(flightId) {
                     val epochAtStart = epoch.get()
                     // async on the current coroutineScope so the fetch runs on
@@ -94,7 +102,7 @@ class SingleFlightFetcher<T : Any>(
                         try {
                             fetch(epochAtStart).also { result ->
                                 if (epoch.get() == epochAtStart) {
-                                    result.getOrNull()?.let { cache.put(identity, key, it) }
+                                    result.getOrNull()?.let { cache.put(startIdentity, key, it) }
                                 }
                             }
                         } finally {
@@ -113,12 +121,14 @@ class SingleFlightFetcher<T : Any>(
                 val job = coroutineContext[Job]
                 // Re-throw only if THIS caller was itself cancelled; otherwise
                 // the originator was cancelled and a fresh fetch on this
-                // still-alive caller is safe.
+                // still-alive caller is safe — under a re-read identity and a
+                // fresh epoch capture.
                 if (job?.isCancelled == true) throw ce
+                val retryIdentity = identity()
                 val epochAtRetry = epoch.get()
                 fetch(epochAtRetry).also { result ->
                     if (epoch.get() == epochAtRetry) {
-                        result.getOrNull()?.let { cache.put(identity, key, it) }
+                        result.getOrNull()?.let { cache.put(retryIdentity, key, it) }
                     }
                 }
             }

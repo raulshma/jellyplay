@@ -41,7 +41,7 @@ class SingleFlightFetcherTest {
 
         val callers = (1..5).map {
             async {
-                fetcher.getOrFetch(identity, "k") {
+                fetcher.getOrFetch({ identity }, "k") {
                     fetches++
                     fetchStarted.complete(Unit)
                     releaseFetch.await()
@@ -61,8 +61,8 @@ class SingleFlightFetcherTest {
         var fetches = 0
         val fetcher = SingleFlightFetcher(cache, epoch)
 
-        fetcher.getOrFetch(identity, "k") { fetches++; Result.success("v1") }
-        val second = fetcher.getOrFetch(identity, "k") { fetches++; Result.success("v2") }
+        fetcher.getOrFetch({ identity }, "k") { fetches++; Result.success("v1") }
+        val second = fetcher.getOrFetch({ identity }, "k") { fetches++; Result.success("v2") }
 
         assertEquals("v1", second.getOrNull())
         assertEquals(1, fetches)
@@ -76,7 +76,7 @@ class SingleFlightFetcherTest {
         val fetcher = SingleFlightFetcher(cache, epoch)
 
         val online = async {
-            fetcher.getOrFetch(identity, key = "k", flightKey = "online::k") {
+            fetcher.getOrFetch({ identity }, key = "k", flightKey = "online::k") {
                 fetches++
                 onlineStarted.complete(Unit)
                 releaseOnline.await()
@@ -85,7 +85,7 @@ class SingleFlightFetcherTest {
         }
         onlineStarted.await()
         val offline = async {
-            fetcher.getOrFetch(identity, key = "k", flightKey = "offline::k") {
+            fetcher.getOrFetch({ identity }, key = "k", flightKey = "offline::k") {
                 fetches++
                 Result.success("offline")
             }
@@ -108,7 +108,7 @@ class SingleFlightFetcherTest {
 
         val awaiterResult = coroutineScope {
             val originator = async {
-                fetcher.getOrFetch(identity, "k") {
+                fetcher.getOrFetch({ identity }, "k") {
                     fetches++
                     fetchStarted.complete(Unit)
                     releaseFetch.await()
@@ -116,7 +116,7 @@ class SingleFlightFetcherTest {
                 }
             }
             val awaiter = async {
-                fetcher.getOrFetch(identity, "k") {
+                fetcher.getOrFetch({ identity }, "k") {
                     fetches++
                     fetchStarted.complete(Unit)
                     releaseFetch.await()
@@ -139,6 +139,47 @@ class SingleFlightFetcherTest {
     }
 
     @Test
+    fun `retry after originator cancellation re-reads identity and writes under the fresh one`() = runTest {
+        val fetchStarted = CompletableDeferred<Unit>()
+        val releaseFetch = CompletableDeferred<Unit>()
+        var currentIdentity = identity
+        var fetches = 0
+        val fetcher = SingleFlightFetcher(cache, epoch)
+
+        val awaiterResult = coroutineScope {
+            val originator = async {
+                fetcher.getOrFetch({ currentIdentity }, "k") {
+                    fetches++
+                    fetchStarted.complete(Unit)
+                    releaseFetch.await()
+                    Result.success("v")
+                }
+            }
+            val awaiter = async {
+                fetcher.getOrFetch({ currentIdentity }, "k") {
+                    fetches++
+                    fetchStarted.complete(Unit)
+                    releaseFetch.await()
+                    Result.success("v")
+                }
+            }
+
+            fetchStarted.await()
+            // Session switch lands mid-flight: the retry must not write under
+            // the identity captured at entry.
+            currentIdentity = otherIdentity
+            originator.cancel()
+            releaseFetch.complete(Unit)
+
+            awaiter.await()
+        }
+
+        assertTrue(awaiterResult.isSuccess)
+        assertEquals("v", cache.get(otherIdentity, "k"), "the retry caches under the re-read identity")
+        assertNull(cache.get(identity, "k"), "never under the stale entry-time identity")
+    }
+
+    @Test
     fun `cancelled awaiter rethrows and triggers no retry fetch`() = runTest {
         val fetchStarted = CompletableDeferred<Unit>()
         val releaseFetch = CompletableDeferred<Unit>()
@@ -146,7 +187,7 @@ class SingleFlightFetcherTest {
         val fetcher = SingleFlightFetcher(cache, epoch)
 
         val caller = launch {
-            fetcher.getOrFetch(identity, "k") {
+            fetcher.getOrFetch({ identity }, "k") {
                 fetches++
                 fetchStarted.complete(Unit)
                 releaseFetch.await()
@@ -158,7 +199,7 @@ class SingleFlightFetcherTest {
 
         assertEquals(1, fetches, "a cancelled caller must not run the retry path's fetch")
         // The in-flight entry was cleaned up; a later caller re-fetches.
-        val later = fetcher.getOrFetch(identity, "k") { fetches++; Result.success("v2") }
+        val later = fetcher.getOrFetch({ identity }, "k") { fetches++; Result.success("v2") }
         assertEquals("v2", later.getOrNull())
         assertEquals(2, fetches)
     }
@@ -173,7 +214,7 @@ class SingleFlightFetcherTest {
         val fetcher = SingleFlightFetcher(cache, epoch)
 
         val first = async {
-            fetcher.getOrFetch(identity, "k") {
+            fetcher.getOrFetch({ identity }, "k") {
                 fetches++
                 fetchStarted.complete(Unit)
                 releaseFetch.await()
@@ -187,7 +228,7 @@ class SingleFlightFetcherTest {
         assertEquals("v1", first.await().getOrNull(), "the racing fetch's result is still returned")
         assertNull(cache.get(identity, "k"), "but must not be written back into the cache")
 
-        val second = fetcher.getOrFetch(identity, "k") { fetches++; Result.success("v2") }
+        val second = fetcher.getOrFetch({ identity }, "k") { fetches++; Result.success("v2") }
         assertEquals("v2", second.getOrNull())
         assertEquals(2, fetches)
     }
@@ -197,15 +238,15 @@ class SingleFlightFetcherTest {
         var fetches = 0
         val fetcher = SingleFlightFetcher(cache, epoch)
 
-        fetcher.getOrFetch(identity, "k") { fetches++; Result.success("v") }
-        fetcher.getOrFetch(otherIdentity, "k") { fetches++; Result.success("v-other") }
+        fetcher.getOrFetch({ identity }, "k") { fetches++; Result.success("v") }
+        fetcher.getOrFetch({ otherIdentity }, "k") { fetches++; Result.success("v-other") }
         fetcher.invalidateAll()
 
         assertNull(cache.get(identity, "k"))
         assertNull(cache.get(otherIdentity, "k"))
         assertEquals(1L, epoch.get())
 
-        val reloaded = fetcher.getOrFetch(identity, "k") { fetches++; Result.success("v2") }
+        val reloaded = fetcher.getOrFetch({ identity }, "k") { fetches++; Result.success("v2") }
         assertEquals("v2", reloaded.getOrNull())
         assertEquals(3, fetches)
     }
@@ -220,7 +261,7 @@ class SingleFlightFetcherTest {
         val fetcher = SingleFlightFetcher(cache, epoch)
 
         val first = async {
-            fetcher.getOrFetch(identity, "k") {
+            fetcher.getOrFetch({ identity }, "k") {
                 fetches++
                 firstStarted.complete(Unit)
                 releaseFirst.await()
@@ -230,7 +271,7 @@ class SingleFlightFetcherTest {
         firstStarted.await()
         // A caller under a different identity must NOT join the first flight.
         val second = async {
-            fetcher.getOrFetch(otherIdentity, "k") { fetches++; Result.success("theirs") }
+            fetcher.getOrFetch({ otherIdentity }, "k") { fetches++; Result.success("theirs") }
         }
 
         assertEquals("theirs", second.await().getOrNull())
@@ -248,11 +289,11 @@ class SingleFlightFetcherTest {
         var fetches = 0
         val fetcher = SingleFlightFetcher(ttlCache, epoch)
 
-        fetcher.getOrFetch(identity, "k") { fetches++; Result.success("v1") }
+        fetcher.getOrFetch({ identity }, "k") { fetches++; Result.success("v1") }
         assertEquals("v1", ttlCache.get(identity, "k"))
 
         now = 101
-        val second = fetcher.getOrFetch(identity, "k") { fetches++; Result.success("v2") }
+        val second = fetcher.getOrFetch({ identity }, "k") { fetches++; Result.success("v2") }
 
         assertEquals("v2", second.getOrNull())
         assertEquals(2, fetches)

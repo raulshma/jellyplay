@@ -433,7 +433,7 @@ class MediaRepositoryImpl(
         // detailCacheEpoch bump inside invalidateDetailCache also guards a
         // racing fetch from re-inserting the stale snapshot.
         if (force) invalidateDetailCache(itemId)
-        return detailFetcher.getOrFetch(homeSession.cacheIdentity(), itemId) {
+        return detailFetcher.getOrFetch({ homeSession.cacheIdentity() }, itemId) {
             apiClient.getMediaDetail(itemId)
         }
     }
