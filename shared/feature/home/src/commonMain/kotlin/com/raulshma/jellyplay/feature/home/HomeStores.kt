@@ -16,7 +16,7 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
  * including the [HomeDiscoveryStore] command writes from the section-config
  * sheet ([HomeDiscoveryStore.setSectionVisible] and friends).
  */
-internal class HomePrefsProviders(
+internal class HomeStores(
     val homeDiscovery: HomeDiscoveryStore,
     val appearance: AppearanceStore,
     val experimental: ExperimentalStore,

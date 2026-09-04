@@ -99,11 +99,20 @@ class LibraryApiClientImpl @Inject constructor(
      */
     private val homeSectionsFetcher = HomeSectionsFetcher(
         sources = this,
-        cacheIdentity = {
-            val session = engine.session.value
-            session?.let { CacheIdentity.ofOrNull(it.server.id, it.user.id) }
-        },
+        cacheIdentity = { currentHomeCacheIdentity() },
     )
+
+    /**
+     * The current cache identity from ONE atomic session snapshot — never two
+     * separate StateFlow reads, which could observe a synthetic
+     * (newServer, oldUser) pair mid-switch. [CacheIdentity.UNKNOWN] before
+     * login never leaks into another user's entry: a wrong identity is a
+     * guaranteed miss.
+     */
+    private fun currentHomeCacheIdentity(): CacheIdentity {
+        val session = engine.session.value
+        return CacheIdentity.ofOrNull(session?.server?.id, session?.user?.id)
+    }
 
     override suspend fun getHomeSections(
         query: HomeSectionQuery,
@@ -917,12 +926,7 @@ class LibraryApiClientImpl @Inject constructor(
         val userId = engine.currentUser.value?.id
             ?: throw IllegalStateException("Not authenticated")
         val uuid = itemId.toUUID()
-        // The current (serverId, userId) from the atomic session flow — never
-        // two separate StateFlow snapshots, which could observe a synthetic
-        // (newServer, oldUser) mid-switch. UNKNOWN before login never leaks.
-        val identity = engine.session.value
-            ?.let { CacheIdentity.ofOrNull(it.server.id, it.user.id) }
-            ?: CacheIdentity.UNKNOWN
+        val identity = currentHomeCacheIdentity()
         val cacheKey = uuid.toString()
         val cached = favoriteCache.get(identity, cacheKey)
         val isFavorite = currentIsFavorite ?: cached ?: run {
@@ -963,9 +967,7 @@ class LibraryApiClientImpl @Inject constructor(
             )
         }
         favoriteCache.put(
-            engine.session.value
-                ?.let { CacheIdentity.ofOrNull(it.server.id, it.user.id) }
-                ?: CacheIdentity.UNKNOWN,
+            currentHomeCacheIdentity(),
             uuid.toString(),
             isFavorite,
         )

@@ -344,12 +344,12 @@ internal class HomeSectionsFetcher(
 
     /** Resolves the items for a single pinned section using its source type. */
     private suspend fun getPinnedSectionItems(pinned: PinnedHomeSection): List<MediaItem> = when (pinned.type) {
-        PinnedSectionType.COLLECTION -> sources.getCollectionItems(pinned.sourceId, startIndex = 0, limit = 20)
-            .getOrNull()?.items.orEmpty()
         // Playlists and collections are both parent-scoped item queries; reusing
         // getCollectionItems avoids excluding episode items (getMediaItems drops
         // seasons/episodes), which matters for video playlists.
-        PinnedSectionType.PLAYLIST -> sources.getCollectionItems(pinned.sourceId, startIndex = 0, limit = 20)
+        PinnedSectionType.COLLECTION,
+        PinnedSectionType.PLAYLIST,
+        -> sources.getCollectionItems(pinned.sourceId, startIndex = 0, limit = 20)
             .getOrNull()?.items.orEmpty()
         PinnedSectionType.FAVORITES -> sources.getFavorites(mediaTypes = null, limit = 20, startIndex = 0)
             .getOrNull()?.items.orEmpty()

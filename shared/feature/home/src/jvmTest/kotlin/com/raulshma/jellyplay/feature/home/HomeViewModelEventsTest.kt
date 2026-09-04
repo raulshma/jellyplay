@@ -261,7 +261,7 @@ class HomeViewModelEventsTest {
         offlineRepository = offlineRepository,
         offlineModeManager = offlineModeManager,
         newsletterTriggerManager = newsletterTriggerManager,
-        prefs = HomePrefsProviders(
+        prefs = HomeStores(
             homeDiscovery = homeDiscoveryStore,
             appearance = appearanceStore,
             experimental = experimentalStore,

@@ -78,8 +78,8 @@ internal class HomeViewModel(
     private val offlineRepository: OfflineRepository,
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: NewsletterTriggerManager,
-    /** The four datastore stores bundled at construction — see [HomePrefsProviders]. */
-    private val prefs: HomePrefsProviders,
+    /** The four datastore stores bundled at construction — see [HomeStores]. */
+    private val prefs: HomeStores,
     private val preferencesEditor: PreferencesEditor,
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val seerrPreferencesStore: SeerrPreferencesStore,
