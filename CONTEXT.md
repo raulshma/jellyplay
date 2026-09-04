@@ -476,12 +476,30 @@ preserved; RESUMED passed as an argument), and the focus-keyed snap effect.
 **Section ordering.** The pure `HomeSectionsAssembler`
 (`shared/core/network/src/commonMain/kotlin/.../library/HomeSectionsAssembler.kt`)
 backs BOTH production paths — the wasm client and
-`LibraryApiClientImpl.getHomeSections` (the client keeps the fetch fan-out,
-semaphore bounds, TTL sub-caches and the suggestions pre-fetch condition,
-and supplies `HomeSectionsAssemblyInputs`). The section-ordering policy
-(CW → Next Up → per-folder Latest → Recently-Added-insert-after-last-latest
-→ Recommendations/suggestions → pinned) is pinned ONCE for both paths by
-`HomeSectionsAssemblerTest`.
+`LibraryApiClientImpl.getHomeSections` (both fetch through
+`HomeSectionsFetcher`, which supplies `HomeSectionsAssemblyInputs`). The
+section-ordering policy (CW → Next Up → per-folder Latest →
+Recently-Added-insert-after-last-latest → Recommendations/suggestions →
+pinned) is pinned ONCE for both paths by `HomeSectionsAssemblerTest`.
+
+**`HomeSectionsFetcher`**
+(`shared/core/network/src/commonMain/kotlin/.../library/HomeSectionsFetcher.kt`)
+is the fetch half of the same split: ONE commonMain orchestrator owning the
+sub-call schedule, the semaphore bounds (4 for the latest/pinned fan-outs, 3
+for similar-items), the recommendations chain and the two
+`NETWORK_SUBCALL_TTL_MS` TTL sub-caches — it decides what/when is fetched,
+while the assembler decides what the fetched data becomes. Its
+`HomeSectionSources` port (the ten client sub-calls; parameter defaults
+omitted because Kotlin forbids duplicate defaults across super-interfaces)
+is satisfied by `LibraryApiClientImpl` and `KtorWasmLibraryApiClient` for
+free via their common `LibraryApiClient` supertype. The fetcher's
+suggestions pre-fetch condition (recommendations succeeded but empty) is the
+SAME predicate the assembler's fallback branch renders on — the two are
+pinned together by `HomeSectionsFetcherTest`. Both platforms now memoise
+under `CacheIdentity.UNKNOWN` pre-login (the wasm twin previously skipped
+caching there), and the wasm-only `WasmTtlCache` was deleted — the
+favorite-flag cache migrated to the shared commonMain `TtlCache`
+(access-order LRU eviction, vs the old twin's insertion order).
 
 **`HomeSectionPrefs`** (`shared/core/model/src/commonMain/kotlin/.../HomeSectionPrefs.kt`,
 beside `HomeSectionType`) is the section-prefs write algebra: the prefs

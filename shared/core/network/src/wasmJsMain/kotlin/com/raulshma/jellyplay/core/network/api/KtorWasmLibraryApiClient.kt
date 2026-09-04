@@ -1,12 +1,10 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.Genre
-import com.raulshma.jellyplay.core.model.HomeFreshness
-import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
-import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.ItemKindFilter
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.LibraryFolder
@@ -15,27 +13,24 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.LyricsWord
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.PinnedHomeSection
-import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.PlayedStatus
-import com.raulshma.jellyplay.core.model.RecommendationResult
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
-import com.raulshma.jellyplay.core.model.descriptor
+import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.network.library.BaseItemDtoWire
 import com.raulshma.jellyplay.core.network.library.BaseItemQueryResultDtoWire
 import com.raulshma.jellyplay.core.network.library.CreatePlaylistRequestDtoWire
-import com.raulshma.jellyplay.core.network.library.HomeSectionsAssemblyInputs
+import com.raulshma.jellyplay.core.network.library.HomeSectionSources
+import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
 import com.raulshma.jellyplay.core.network.library.IdResultDtoWire
 import com.raulshma.jellyplay.core.network.library.LyricsDtoWire
 import com.raulshma.jellyplay.core.network.library.ThemeMediaResultDtoWire
 import com.raulshma.jellyplay.core.network.library.UpdatePlaylistRequestDtoWire
 import com.raulshma.jellyplay.core.network.library.WasmClock
-import com.raulshma.jellyplay.core.network.library.assembleHomeSections
 import com.raulshma.jellyplay.core.network.library.buildItemImageUrl
 import com.raulshma.jellyplay.core.network.library.filterByParentalRating
 import com.raulshma.jellyplay.core.network.library.parseItemSortList
@@ -50,10 +45,6 @@ import com.raulshma.jellyplay.core.network.library.toPlaylistItem
 import com.raulshma.jellyplay.core.network.library.toStudio
 import com.raulshma.jellyplay.core.network.library.toWireItemKind
 import io.ktor.client.HttpClient
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 
 /**
  * Fields the detail mapper reads from the item DTO — mirrors the jvmShared
@@ -85,18 +76,23 @@ private const val FAVORITE_CACHE_TTL_MS = 15 * 60_000L
  * OkHttp). Endpoint paths, query parameters (including the SDK's non-null
  * `enableTotalRecordCount=true`/`enableImages=true` defaults on `/Items`)
  * and DTO mapping semantics mirror the JVM implementation request-for-
- * request, field-for-field; the home-sections fan-out/ordering logic is
- * shared with it via the pure `assembleHomeSections` extractor.
+ * request, field-for-field; the home-sections fetch choreography (fan-out,
+ * semaphore bounds, TTL sub-caches, recommendations chain) is shared with it
+ * via the commonMain `HomeSectionsFetcher` — this class only satisfies
+ * [HomeSectionSources] (for free, via the common [LibraryApiClient]
+ * supertype) and supplies the atomic-session cache identity.
  *
  * wasm v1 deltas vs the JVM impl (documented, none affect JVM):
  *  - No failover router: every request derives its base URL from the shared
  *    atomic session's current server address (chunk 1 probes alternates only
  *    at `selectReachableAddress` time).
- *  - The jvmShared-only `core.model.TtlCache`/`lruMapOf` helpers are not
- *    compiled for wasm; the home sub-call caches, favorite-flag cache and
- *    empty-fallback LRU use small local equivalents with the same TTLs,
- *    bounds and identity scoping (promote when TtlCache moves to
- *    commonMain).
+ *  - The home sub-call caches live in the shared fetcher (commonMain
+ *    `TtlCache`, `CacheIdentity`-keyed — the same class the JVM client
+ *    already used, now compiled for wasm too). The favorite-flag cache uses
+ *    that shared `TtlCache` directly as well; its eviction is the shared
+ *    class's access-order LRU rather than the former local twin's
+ *    insertion-order eviction. Only the empty-fallback LRU
+ *    (see [emptyFallbackLibraries]) remains a local wasm equivalent.
  *  - Date-typed fields (premiere/created/lastPlayed, nextUpDateCutoff input
  *    excluded) keep the raw wire strings instead of the SDK's zone-shifted
  *    re-formatting; `nextUpDateCutoff` is computed from the JS clock +
@@ -106,7 +102,7 @@ class KtorWasmLibraryApiClient(
     httpClient: HttpClient,
     sessionState: AtomicSessionState,
     identity: WasmClientIdentity,
-) : WasmApiSupport(httpClient, sessionState, identity), LibraryApiClient {
+) : WasmApiSupport(httpClient, sessionState, identity), LibraryApiClient, HomeSectionSources {
 
     private val currentUser get() = sessionState.currentUser.value
     private val currentServer get() = sessionState.currentServer.value
@@ -134,205 +130,37 @@ class KtorWasmLibraryApiClient(
         return true
     }
 
-    // ── Home hot-path sub-call caches (same policy as the JVM impl) ────────
-
-    private val homeLatestMediaCache = WasmTtlCache<List<com.raulshma.jellyplay.core.model.MediaItem>>(
-        ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS,
-    )
-    private val homeSimilarCache = WasmTtlCache<List<com.raulshma.jellyplay.core.model.MediaItem>>(
-        ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS,
-    )
-    private val favoriteCache = WasmTtlCache<Boolean>(
-        ttlMs = FAVORITE_CACHE_TTL_MS,
-        maxEntries = FAVORITE_CACHE_MAX_ENTRIES,
-    )
+    // ── Home feed + favorite-flag caches ───────────────────────────────────
 
     /**
-     * The current `(serverId, userId)` cache identity, read from the ATOMIC
-     * session flow (never the two separate flows — the atomic-session rule:
-     * two snapshots could observe a synthetic `(newServer, oldUser)` and key
-     * caches under an identity that never existed). Null before login.
+     * The home feed's fetch choreography (sub-call fan-out, semaphore bounds,
+     * TTL sub-caches, recommendations chain) lives in the commonMain
+     * [HomeSectionsFetcher]; this client merely supplies the transport via
+     * [HomeSectionSources] (satisfied for free — the same overrides serve
+     * [LibraryApiClient]) and its atomic-session cache identity. Note the
+     * unified pre-login semantics: the fetcher memoises under
+     * [CacheIdentity.UNKNOWN] when no session exists (this client's twin
+     * caches previously skipped caching pre-login) — nothing cached under
+     * that sentinel can leak across users.
      */
-    private fun cacheIdentity(): String? {
-        val session = sessionState.session.value ?: return null
-        return "${session.server.id}_${session.user.id}"
-    }
+    private val homeSectionsFetcher = HomeSectionsFetcher(
+        sources = this,
+        cacheIdentity = {
+            val session = sessionState.session.value
+            session?.let { CacheIdentity.ofOrNull(it.server.id, it.user.id) }
+        },
+    )
 
-    private suspend fun cachedHomeSubCall(
-        cache: WasmTtlCache<List<com.raulshma.jellyplay.core.model.MediaItem>>,
-        keyPart: String,
-        limit: Int,
-        force: Boolean,
-        fetch: suspend () -> Result<List<com.raulshma.jellyplay.core.model.MediaItem>>,
-    ): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> {
-        val identity = cacheIdentity() ?: return fetch()
-        val cacheKey = "${keyPart}_$limit"
-        if (!force) {
-            cache.get(identity, cacheKey)?.let { return Result.success(it) }
-        }
-        return fetch().also { result ->
-            result.getOrNull()?.let { cache.put(identity, cacheKey, it) }
-        }
-    }
+    private val favoriteCache = TtlCache<Boolean>(
+        maxSize = FAVORITE_CACHE_MAX_ENTRIES,
+        ttlMs = FAVORITE_CACHE_TTL_MS,
+    )
 
     override suspend fun getHomeSections(
         query: HomeSectionQuery,
         force: Boolean,
     ): Result<HomeSectionsResult> = apiResultWithRetry {
-        coroutineScope {
-            val enabledSections = query.enabledSections
-
-            val continueWatchingDeferred = async {
-                if (HomeSectionType.CONTINUE_WATCHING in enabledSections) getContinueWatching()
-                else Result.success(emptyList())
-            }
-            val nextUpDeferred = async {
-                if (HomeSectionType.NEXT_UP in enabledSections) getNextUp(
-                    enableRewatching = query.nextUpRewatching,
-                    maxDays = query.nextUpMaxDays,
-                )
-                else Result.success(emptyList())
-            }
-            val foldersDeferred = async {
-                if (HomeSectionType.LATEST_MEDIA in enabledSections || HomeSectionType.RECENTLY_ADDED in enabledSections) {
-                    getLibraryFolders()
-                } else {
-                    Result.success(emptyList())
-                }
-            }
-            // Kick off pinned-section fetches concurrently with the standard
-            // sections so they add no extra wall-clock latency to home loading.
-            val pinnedDeferred = async { fetchPinnedSections(query.pinnedSections) }
-
-            val continueWatchingResult = continueWatchingDeferred.await()
-            val nextUpResult = nextUpDeferred.await()
-            val foldersResult = foldersDeferred.await()
-
-            // Launch the recommendations chain now: it depends only on the
-            // Continue Watching / Next Up seeds above (already resolved), not
-            // on the per-folder latest-media fan-out below — overlapping the
-            // two chains turns home-load wall clock from
-            // latestChain + recommendationsChain into max(...).
-            val recommendationsDeferred = if (HomeSectionType.RECOMMENDATIONS in enabledSections) {
-                val recommendationSeeds =
-                    continueWatchingResult.getOrDefault(emptyList()) + nextUpResult.getOrDefault(emptyList())
-                async { getRecommendationsInternal(limit = 20, seeds = recommendationSeeds, force = force) }
-            } else {
-                null
-            }
-
-            // Latest-media fan-out: one /Items/Latest per non-music folder,
-            // semaphore-bounded at 4 like the JVM impl, collected in folder
-            // order for the assembler.
-            var latestPerFolder: List<Pair<LibraryFolder, Result<List<com.raulshma.jellyplay.core.model.MediaItem>>>> = emptyList()
-            if (HomeSectionType.LATEST_MEDIA in enabledSections || HomeSectionType.RECENTLY_ADDED in enabledSections) {
-                foldersResult.onSuccess { folders ->
-                    val filteredFolders = folders.filter { it.collectionType != "music" }
-                    val semaphore = Semaphore(4)
-                    latestPerFolder = filteredFolders.map { folder ->
-                        async {
-                            semaphore.withPermit {
-                                folder to getLatestMediaForHome(folder.id, limit = 16, force = force)
-                            }
-                        }
-                    }.map { it.await() }
-                }
-            }
-
-            val recommendationsResult = recommendationsDeferred?.await()
-            // Suggestions fallback fetched only when recommendations succeeded
-            // but produced no items (same condition the JVM impl fetches on).
-            val suggestions = recommendationsResult
-                ?.getOrNull()
-                ?.takeIf { it.items.isEmpty() }
-                ?.let { getSearchSuggestions(limit = 20).getOrNull()?.items.orEmpty() }
-                .orEmpty()
-
-            val output = assembleHomeSections(
-                HomeSectionsAssemblyInputs(
-                    query = query,
-                    continueWatchingResult = continueWatchingResult,
-                    nextUpResult = nextUpResult,
-                    foldersResult = foldersResult,
-                    latestPerFolder = latestPerFolder,
-                    recommendationsResult = recommendationsResult,
-                    suggestions = suggestions,
-                    pinnedSections = pinnedDeferred.await(),
-                ),
-            )
-            if (output.result.sections.isEmpty() && output.firstError != null) {
-                throw output.firstError!!
-            }
-            output.result
-        }
-    }
-
-    /**
-     * Home-path wrapper around [getLatestMedia] consulting
-     * [homeLatestMediaCache] — see the JVM twin's KDoc (60s home refresh
-     * cadence vs 2-minute TTL; force bypasses the read but still memoises).
-     */
-    private suspend fun getLatestMediaForHome(
-        parentId: String,
-        limit: Int,
-        force: Boolean = false,
-    ): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
-        cachedHomeSubCall(homeLatestMediaCache, parentId, limit, force) { getLatestMedia(parentId, limit) }
-
-    /** Home-path wrapper around [getSimilarItems] consulting [homeSimilarCache]. */
-    private suspend fun getSimilarItemsForHome(
-        seedId: String,
-        limit: Int,
-        force: Boolean = false,
-    ): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
-        cachedHomeSubCall(homeSimilarCache, seedId, limit, force) { getSimilarItems(seedId, limit) }
-
-    private suspend fun fetchPinnedSections(
-        pinnedSections: List<PinnedHomeSection>,
-    ): List<HomeSection> {
-        if (pinnedSections.isEmpty()) return emptyList()
-        val semaphore = Semaphore(4)
-        return coroutineScope {
-            val deferred = pinnedSections.map { pinned ->
-                async {
-                    semaphore.withPermit {
-                        val items = getPinnedSectionItems(pinned)
-                        if (items.isNotEmpty()) {
-                            HomeSection(
-                                id = HomeSectionType.PINNED.descriptor.idFor(pinned.id),
-                                title = pinned.title,
-                                type = HomeSectionType.PINNED,
-                                items = items,
-                            )
-                        } else {
-                            null
-                        }
-                    }
-                }
-            }
-            deferred.map { deferred ->
-                // A single failing pin (e.g. deleted collection) must not
-                // break the whole home screen; just drop that row.
-                runCatching { deferred.await() }.getOrNull()
-            }.filterNotNull()
-        }
-    }
-
-    /** Resolves the items for a single pinned section using its source type. */
-    private suspend fun getPinnedSectionItems(pinned: PinnedHomeSection): List<com.raulshma.jellyplay.core.model.MediaItem> = when (pinned.type) {
-        PinnedSectionType.COLLECTION -> getCollectionItems(pinned.sourceId, limit = 20)
-            .getOrNull()?.items.orEmpty()
-        // Playlists and collections are both parent-scoped item queries; reusing
-        // getCollectionItems avoids excluding episode items (getMediaItems drops
-        // seasons/episodes), which matters for video playlists.
-        PinnedSectionType.PLAYLIST -> getCollectionItems(pinned.sourceId, limit = 20)
-            .getOrNull()?.items.orEmpty()
-        PinnedSectionType.FAVORITES -> getFavorites(limit = 20)
-            .getOrNull()?.items.orEmpty()
-        PinnedSectionType.GENRE -> getItemsByGenre(pinned.sourceId, limit = 20)
-            .getOrNull()?.items.orEmpty()
-        PinnedSectionType.STUDIO -> getItemsByStudio(pinned.sourceId, limit = 20)
-            .getOrNull()?.items.orEmpty()
+        homeSectionsFetcher.fetch(query, force)
     }
 
     // ── Item list endpoints ────────────────────────────────────────────────
@@ -761,56 +589,6 @@ class KtorWasmLibraryApiClient(
             response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
         }
 
-    override suspend fun getRecommendations(
-        limit: Int,
-        seeds: List<com.raulshma.jellyplay.core.model.MediaItem>,
-    ): Result<RecommendationResult> = getRecommendationsInternal(limit, seeds, force = false)
-
-    /**
-     * Force-aware core of [getRecommendations] (the home path passes its
-     * force flag through so pull-to-refresh also bypasses the similar-items
-     * sub-cache); mirrors the JVM private overload incl. the runCatching-only
-     * (no retry) wrapper.
-     */
-    private suspend fun getRecommendationsInternal(
-        limit: Int,
-        seeds: List<com.raulshma.jellyplay.core.model.MediaItem>,
-        force: Boolean,
-    ): Result<RecommendationResult> = runCatching {
-        // Reuse caller-supplied seeds when available (the home screen has
-        // already fetched Continue Watching + Next Up) to avoid duplicate
-        // /UserItems/Resume and /Shows/NextUp round-trips in the same load.
-        val seedItems = if (seeds.isNotEmpty()) {
-            seeds.distinctBy { it.id }.take(5)
-        } else {
-            val continueWatching = getContinueWatching(limit = 5).getOrDefault(emptyList())
-            val nextUp = getNextUp(limit = 5).getOrDefault(emptyList())
-            (continueWatching + nextUp).distinctBy { it.id }.take(5)
-        }
-
-        if (seedItems.isEmpty()) return@runCatching RecommendationResult(emptyList(), null)
-
-        val seedIds = seedItems.map { it.id }.toSet()
-        val semaphore = Semaphore(3)
-        val allSimilar = coroutineScope {
-            seedItems.map { seed ->
-                async {
-                    semaphore.withPermit {
-                        val perSeedLimit = limit / seedItems.size + 2
-                        getSimilarItemsForHome(seed.id, perSeedLimit, force).getOrDefault(emptyList())
-                    }
-                }
-            }.flatMap { it.await() }
-        }
-
-        val recommendations = allSimilar
-            .filter { it.id !in seedIds }
-            .distinctBy { it.id }
-            .take(limit)
-
-        RecommendationResult(recommendations, seedItems.firstOrNull())
-    }
-
     override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
         apiResultWithRetry {
             val server = requireConnectedServer()
@@ -1148,15 +926,19 @@ class KtorWasmLibraryApiClient(
         apiResultWithRetry {
             val server = requireConnectedServer()
             val userId = requireCurrentUser().id
-            val identity = cacheIdentity()
+            // Identity from the ATOMIC session flow; UNKNOWN before login never
+            // collides with a real identity (mirrors the JVM impl's keying).
+            val identity = sessionState.session.value
+                ?.let { CacheIdentity.ofOrNull(it.server.id, it.user.id) }
+                ?: CacheIdentity.UNKNOWN
             val cacheKey = itemId
-            val cached = identity?.let { favoriteCache.get(it, cacheKey) }
+            val cached = favoriteCache.get(identity, cacheKey)
             val isFavorite = currentIsFavorite ?: cached ?: run {
                 val fetched = getJson<BaseItemDtoWire>(
                     url = apiUrl(server.address, "/Items/$itemId"),
                     accessToken = currentToken(),
                 ).userData?.isFavorite == true
-                identity?.let { favoriteCache.put(it, cacheKey, fetched) }
+                favoriteCache.put(identity, cacheKey, fetched)
                 fetched
             }
             if (isFavorite) {
@@ -1165,7 +947,7 @@ class KtorWasmLibraryApiClient(
                     accessToken = currentToken(),
                     query = listOf("userId" to userId),
                 )
-                identity?.let { favoriteCache.put(it, cacheKey, false) }
+                favoriteCache.put(identity, cacheKey, false)
                 false
             } else {
                 postStatusOnly(
@@ -1173,7 +955,7 @@ class KtorWasmLibraryApiClient(
                     accessToken = currentToken(),
                     query = listOf("userId" to userId),
                 )
-                identity?.let { favoriteCache.put(it, cacheKey, true) }
+                favoriteCache.put(identity, cacheKey, true)
                 true
             }
         }
@@ -1194,7 +976,13 @@ class KtorWasmLibraryApiClient(
                 query = listOf("userId" to userId),
             )
         }
-        cacheIdentity()?.let { favoriteCache.put(it, itemId, isFavorite) }
+        favoriteCache.put(
+            sessionState.session.value
+                ?.let { CacheIdentity.ofOrNull(it.server.id, it.user.id) }
+                ?: CacheIdentity.UNKNOWN,
+            itemId,
+            isFavorite,
+        )
     }
 
     // ── Image URL builders (pure; ported verbatim) ─────────────────────────
@@ -1291,37 +1079,3 @@ class KtorWasmLibraryApiClient(
     }
 }
 
-/**
- * Minimal TTL cache for the wasm client's home sub-call / favorite-flag
- * memoization — the jvmShared-only `core.model.TtlCache` is not compiled for
- * wasmJs, so this local twin keeps the same contract (identity+key scoped,
- * TTL expiry, bounded size) with insertion-order eviction instead of strict
- * LRU and no `synchronized` (single-threaded JS event loop). Promote to the
- * shared TtlCache when it moves to commonMain.
- */
-internal class WasmTtlCache<V>(
-    private val ttlMs: Long,
-    private val maxEntries: Int = 64,
-) {
-    private val map = LinkedHashMap<String, Pair<Long, V>>()
-
-    fun get(identity: String, key: String): V? {
-        val compositeKey = "$identity|$key"
-        val entry = map[compositeKey] ?: return null
-        return if (entry.first + ttlMs < nowMillis()) {
-            map.remove(compositeKey)
-            null
-        } else {
-            entry.second
-        }
-    }
-
-    fun put(identity: String, key: String, value: V) {
-        map["$identity|$key"] = nowMillis() to value
-        while (map.size > maxEntries) {
-            map.remove(map.keys.first())
-        }
-    }
-
-    private fun nowMillis(): Long = WasmClock.nowMillis()
-}
