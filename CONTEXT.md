@@ -527,6 +527,21 @@ FocusManager. The data half (query, results, history, undo) stays on the
 VM's `HomeSearchStateHolder`; `isSearchFocused` folds
 `state.isSearchActive || session.isExpanded`.
 
+**`HomeDialogSession`** (`HomeDialogSession.kt`) is the open-side twin of
+that session: one stateless module (constructed over `onEvent`; dialog
+state itself stays in `HomeUiState`) owning the dialog event cascades —
+opening the Seerr request dialog fires `LoadSeerrServiceDetails` +
+`LoadTvSeasons` (TV-only, case-insensitive), dismissing fires
+`SelectSeerrRequestItem(null)` then `ClearRequestResult` in that order, and
+the sync sheet's while-open `EnsurePendingItemDetails` mapping lives there
+too (empty list included; sheet-visibility gating stays in the screen) —
+sequences that were untested `LaunchedEffect` bodies in `HomeScreen`, now
+pinned by `HomeDialogSessionTest`. The music fallback-art chain
+(AUDIO/MUSIC → parent art → first artist art) and the photo-folder
+prefetch narrowing are pure Compose-free functions in `HomeMediaRows.kt`
+(`fallbackImageUrls`, `photoFolderPrefetchTargets`), pinned in
+`HomeMediaRowsTest`.
+
 The home dock is bundled, not flat: **`HomeDockState`** +
 **`HomeDockCallbacks`** (`HomeAppBar.kt`) carry the dock's whole data +
 interaction surface, so a dock feature edits the two bundles and the dock

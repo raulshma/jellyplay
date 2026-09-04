@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
+import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
@@ -562,6 +563,45 @@ fun HomeMediaRow(
         }
     }
 }
+
+/**
+ * Music fallback-art candidates for a home card: an AUDIO/MUSIC track's own
+ * primary image is usually blank, so the card falls back to its parent
+ * (album) artwork first, then to the first listed artist's artwork —
+ * [PosterCard] tries the candidates in order. Non-audio items carry no
+ * fallback chain (empty list). Pure and Compose-free — pinned by
+ * [HomeMediaRowsTest]; HomeScreen's rememberFallbackUrls is only a remembered
+ * wrapper over this (keeps the builder's remember(viewModel) stability there).
+ * Lives beside the row code because it is the card-slot's image policy (this
+ * file is the module's Compose-free pure-helper home, alongside
+ * hideWatchedFilter/posterScrim).
+ */
+internal fun fallbackImageUrls(
+    item: MediaItem,
+    getImageUrl: (String) -> String,
+): List<String> =
+    if (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC) {
+        listOfNotNull(
+            item.parentId?.let(getImageUrl),
+            item.artistItems.firstOrNull()?.id?.let(getImageUrl),
+        )
+    } else {
+        emptyList()
+    }
+
+/**
+ * The photo-folder prefetch input ([HomeUiEvent.PrefetchPhotoFolderChildUrls]):
+ * only photo-folder cards consume child-image URLs, so the screen narrows each
+ * sections emission to the PHOTO_FOLDER items across all sections — keeping
+ * both the per-emission allocation and the prefetch LaunchedEffect key
+ * proportional to the number of photo folders rather than to every item on
+ * home. Order preserved (folders keep their section order). Pure and
+ * Compose-free — pinned by [HomeMediaRowsTest]; lives with the other
+ * MediaItem-collection policies in this file rather than inside the
+ * HomeScreen orchestrator.
+ */
+internal fun photoFolderPrefetchTargets(sections: List<HomeSection>): List<MediaItem> =
+    sections.asSequence().flatMap { it.items }.filter { it.mediaType == MediaType.PHOTO_FOLDER }.toList()
 
 /**
  * THE home row title — one implementation for every row-ish header in the

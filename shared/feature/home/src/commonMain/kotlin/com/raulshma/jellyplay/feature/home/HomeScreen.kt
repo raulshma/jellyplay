@@ -427,9 +427,7 @@ private fun MainHomeContent(
     // PHOTO_FOLDER internally), so narrow the list to those items. This keeps
     // both the per-emission allocation and the effect-key proportional to the
     // number of photo folders rather than every item across all sections.
-    val photoFolderItems = remember(state.sections) {
-        state.sections.asSequence().flatMap { it.items }.filter { it.mediaType == MediaType.PHOTO_FOLDER }.toList()
-    }
+    val photoFolderItems = remember(state.sections) { photoFolderPrefetchTargets(state.sections) }
     // Structural fingerprint so the effect only re-runs when the photo-folder
     // set actually changes, not on every partial-load emission that produces a
     // new list instance with the same ids. Computed once per sections change
@@ -457,6 +455,12 @@ private fun MainHomeContent(
     val closeSearch = remember(searchSession) { { searchSession.close { focusManager.clearFocus() } } }
     val currentState by rememberUpdatedState(state)
     val isSearchFocused by remember { derivedStateOf { currentState.isSearchActive || searchSession.isExpanded } }
+
+    // The dialog SESSION (Seerr request dialog open/dismiss cascades, the sync
+    // sheet's while-open details loading) — see HomeDialogSession. The dialog
+    // state itself stays in the VM (it must survive config change); the session
+    // owns only the event sequences around it.
+    val dialogSession = remember(viewModel) { HomeDialogSession(viewModel::onEvent) }
 
     // Inline section-config sheet target — set by long-pressing a configurable
     // section title. Hoisted here (not in the LazyColumn item) so opening the
@@ -789,10 +793,7 @@ private fun MainHomeContent(
 
     state.seerrRequestState.requestItem?.let { item ->
         androidx.compose.runtime.LaunchedEffect(item.id) {
-            viewModel.onEvent(HomeUiEvent.LoadSeerrServiceDetails(item.mediaType))
-            if (item.mediaType.equals("tv", ignoreCase = true)) {
-                viewModel.onEvent(HomeUiEvent.LoadTvSeasons(item.id))
-            }
+            dialogSession.openSeerrRequest(item)
         }
 
         SeerrRequestDialog(
@@ -801,10 +802,7 @@ private fun MainHomeContent(
             onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
                 viewModel.onEvent(HomeUiEvent.RequestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags))
             },
-            onDismiss = {
-                viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(null))
-                viewModel.onEvent(HomeUiEvent.ClearRequestResult)
-            },
+            onDismiss = { dialogSession.dismissSeerrRequest() },
         )
     }
 
@@ -823,9 +821,10 @@ private fun MainHomeContent(
         val itemDetails by viewModel.pendingItemDetails.collectAsStateWithLifecycle()
         // Resolve media metadata (offline-first) for the sheet's rows while it's
         // open — keeps the map pruned to the currently-queued ids and avoids any
-        // lookup cost when the sheet is closed.
+        // lookup cost when the sheet is closed. The event shape/mapping lives in
+        // the dialog session (pinned by HomeDialogSessionTest).
         LaunchedEffect(entries) {
-            viewModel.onEvent(HomeUiEvent.EnsurePendingItemDetails(entries.map { it.itemId }))
+            dialogSession.syncSheetOpened(entries)
         }
         SyncDetailsSheet(
             entries = entries,
@@ -1075,18 +1074,19 @@ private fun HomeTopDockScrim(
     } // end Box(fillMaxSize) wrapper providing BoxScope for align()
 }
 
+/**
+ * The card-image fallback-URL builder the rows consume — a thin remember over
+ * the pure [fallbackImageUrls] (the policy lives there; see HomeMediaRows.kt).
+ * Keyed on the VM so the builder identity is stable and the rows don't see a
+ * new lambda per recomposition.
+ */
 @Composable
 private fun rememberFallbackUrls(
     viewModel: HomeViewModel,
 ): (com.raulshma.jellyplay.core.model.MediaItem) -> List<String> {
     return remember(viewModel) {
         { item: com.raulshma.jellyplay.core.model.MediaItem ->
-            if (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC) {
-                listOfNotNull(
-                    item.parentId?.let { viewModel.getImageUrl(it) },
-                    item.artistItems.firstOrNull()?.id?.let { viewModel.getImageUrl(it) },
-                )
-            } else emptyList()
+            fallbackImageUrls(item, viewModel::getImageUrl)
         }
     }
 }
