@@ -280,6 +280,142 @@ class HomeHeroControllerTest {
         assertNull(controller.backdropUrl)
     }
 
+    // --- rotation cadence policy (rotationDelayMs / shouldTickNow) ---
+
+    @Test
+    fun heroController_rotationDelayMs_emptyCandidates_returnsNull() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+
+        // All four gates precede any timing, for both scroll states.
+        assertNull(controller.rotationDelayMs(isScrolling = false, lifecycleResumed = true))
+        assertNull(controller.rotationDelayMs(isScrolling = true, lifecycleResumed = true))
+    }
+
+    @Test
+    fun heroController_rotationDelayMs_autoRotateDisabled_returnsNull() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = false)
+        controller.updateCandidates(listOf(item("m1", MediaType.MOVIE)))
+
+        assertNull(controller.rotationDelayMs(isScrolling = false, lifecycleResumed = true))
+        assertNull(controller.rotationDelayMs(isScrolling = true, lifecycleResumed = true))
+    }
+
+    @Test
+    fun heroController_rotationDelayMs_focusOutsideHero_returnsNull() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        controller.updateCandidates(listOf(item("m1", MediaType.MOVIE)))
+
+        controller.onFocusChange(false)
+
+        assertNull(controller.rotationDelayMs(isScrolling = false, lifecycleResumed = true))
+        assertNull(controller.rotationDelayMs(isScrolling = true, lifecycleResumed = true))
+    }
+
+    @Test
+    fun heroController_rotationDelayMs_lifecycleNotResumed_returnsNull() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        controller.updateCandidates(listOf(item("m1", MediaType.MOVIE)))
+
+        assertNull(controller.rotationDelayMs(isScrolling = false, lifecycleResumed = false))
+        assertNull(controller.rotationDelayMs(isScrolling = true, lifecycleResumed = false))
+    }
+
+    @Test
+    fun heroController_rotationDelayMs_scrollingDefersRecheck_idleTicks() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        controller.updateCandidates(
+            listOf(
+                item("m1", MediaType.MOVIE),
+                item("m2", MediaType.MOVIE),
+            ),
+        )
+
+        // The cadence values are pinned: 2s defer while scrolling, 8s tick when idle.
+        assertEquals(2000L, controller.rotationDelayMs(isScrolling = true, lifecycleResumed = true))
+        assertEquals(8000L, controller.rotationDelayMs(isScrolling = false, lifecycleResumed = true))
+    }
+
+    @Test
+    fun heroController_shouldTickNow_falseAfterAutoRotateFlipsOffMidDelay() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        controller.updateCandidates(
+            listOf(
+                item("m1", MediaType.MOVIE),
+                item("m2", MediaType.MOVIE),
+            ),
+        )
+        assertTrue(controller.shouldTickNow())
+
+        // Mid-delay flip: the user taps "Surprise Me", which disables rotation.
+        controller.toggleSurprise()
+
+        assertFalse(controller.shouldTickNow())
+        assertNull(controller.rotationDelayMs(isScrolling = false, lifecycleResumed = true))
+    }
+
+    @Test
+    fun heroController_shouldTickNow_falseWhenFocusLeavesHero() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        controller.updateCandidates(
+            listOf(
+                item("m1", MediaType.MOVIE),
+                item("m2", MediaType.MOVIE),
+            ),
+        )
+
+        controller.onFocusChange(false)
+
+        assertFalse(controller.shouldTickNow())
+    }
+
+    // --- TV snap-to-top policy (onFocusEffect) ---
+
+    @Test
+    fun heroController_onFocusEffect_firstInvocationConsumesSkipRegardlessOfArgs() {
+        for ((focused, isTv) in listOf(true to true, true to false, false to true, false to false)) {
+            val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+
+            // The first emission of the focus effect only settles the skip,
+            // never snaps — whatever the focus/TV state.
+            assertFalse(controller.onFocusEffect(focused = focused, isTv = isTv))
+            assertTrue(controller.focusSnapSettled)
+        }
+    }
+
+    @Test
+    fun heroController_onFocusEffect_snapsOnlyWhenFocusedOnTv() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+
+        assertFalse(controller.onFocusEffect(focused = true, isTv = true)) // skip consumed
+        assertTrue(controller.onFocusEffect(focused = true, isTv = true))
+        assertFalse(controller.onFocusEffect(focused = false, isTv = true))
+        assertFalse(controller.onFocusEffect(focused = true, isTv = false))
+        // The settle flag persists, so a later focused+TV call still snaps.
+        assertTrue(controller.onFocusEffect(focused = true, isTv = true))
+    }
+
+    // --- composition-write pin: repeated identical updateCandidates calls ---
+
+    @Test
+    fun heroController_updateCandidates_repeatedIdenticalCallsPreserveIndex() {
+        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val candidates = listOf(
+            item("m1", MediaType.MOVIE),
+            item("m2", MediaType.MOVIE),
+            item("m3", MediaType.MOVIE),
+        )
+        controller.updateCandidates(candidates)
+        controller.rotationTick()
+        assertEquals("m2", controller.featuredItem?.id)
+
+        // The composition-write re-runs whenever the remember key re-fires;
+        // identical content must never reset the rotation index.
+        controller.updateCandidates(candidates)
+        controller.updateCandidates(candidates.map { it })
+        assertEquals("m2", controller.featuredItem?.id)
+        assertEquals("url/m2", controller.backdropUrl)
+    }
+
     private fun item(id: String, type: MediaType) = MediaItem(
         id = id,
         name = id,

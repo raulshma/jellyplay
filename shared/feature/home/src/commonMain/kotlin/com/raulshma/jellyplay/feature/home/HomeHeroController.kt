@@ -98,18 +98,21 @@ internal fun rememberHeroHeight(): Dp {
 /**
  * Owns the hero rotation state and its effects: the featured-item index, the
  * "Surprise Me" pick, auto-rotation while idle, and snapping the list back to
- * the top when the hero receives focus (TV). The [HeroController] class holds
- * all state and transitions; this composable only constructs it once and
- * dispatches the effects (candidate updates, the launch-shortcut arm, the idle
- * rotation cadences, and the TV snap-to-top). All cadences (8s idle / 2s while
- * scrolling) and the `isAtLeast(RESUMED)` gate are preserved from the inline
- * implementation previously in `MainHomeContent`.
+ * the top when the hero receives focus (TV). All policy lives on
+ * [HeroController] — [HeroController.rotationDelayMs] (cadence + gates),
+ * [HeroController.shouldTickNow] (post-delay re-check) and
+ * [HeroController.onFocusEffect] (first-emission snap skip) are Compose-free
+ * and synchronously testable — so this composable only constructs the
+ * controller once and runs the dumb collector shells: the candidate
+ * composition-write, the launch-shortcut arm, the snapshotFlow/collectLatest
+ * cadence collector (8s idle / 2s while scrolling, the `isAtLeast(RESUMED)`
+ * gate passed as an argument, keys preserved from the inline implementation
+ * previously in `MainHomeContent`), and the focus-keyed snap effect.
  */
 @Composable
 internal fun rememberHeroController(
     featuredCandidates: List<MediaItem>,
     listState: LazyListState,
-    heroFocusRequester: androidx.compose.ui.focus.FocusRequester,
     getBackdropUrl: (String) -> String,
 ): HeroController {
     // Conveyor transform: the legacy Context.isTv() (UI_MODE check on
@@ -154,29 +157,34 @@ internal fun rememberHeroController(
 
     val isTv = LocalTvMode.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    // Cadence shell: every decision (gates, delays, post-delay re-check) is the
+    // controller's [HeroController.rotationDelayMs]/[shouldTickNow]; this is
+    // just the collector — collectLatest cancels a pending delay on any
+    // scroll-state change. Effect keys preserved from the inline implementation.
     LaunchedEffect(featuredCandidates, listState, controller.autoRotateEnabled) {
-        if (featuredCandidates.isEmpty() || !controller.autoRotateEnabled || !controller.focusInHero) return@LaunchedEffect
         snapshotFlow { listState.isScrollInProgress }
             .collectLatest { isScrolling ->
-                if (!lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@collectLatest
-                if (!isScrolling) {
-                    delay(8000)
-                    if (controller.autoRotateEnabled && controller.focusInHero) {
-                        controller.rotationTick()
+                when (
+                    val delayMs = controller.rotationDelayMs(
+                        isScrolling = isScrolling,
+                        lifecycleResumed = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED),
+                    )
+                ) {
+                    null -> Unit
+                    else -> {
+                        delay(delayMs)
+                        if (delayMs == HeroController.IDLE_ROTATION_DELAY_MS && controller.shouldTickNow()) {
+                            controller.rotationTick()
+                        }
                     }
-                } else {
-                    delay(2000)
                 }
             }
     }
 
-    // When the hero actually receives focus, snap the list back to the top so
-    // the full hero is visible. The first emission is skipped so a freshly
-    // (re)composed Home doesn't snap before per-row focus restoration runs.
+    // TV snap-to-top shell: the first-emission skip and the focused+TV decision
+    // live in [HeroController.onFocusEffect]; key and firing occasions preserved.
     LaunchedEffect(controller.focusInHero) {
-        if (!controller.focusSnapSettled) {
-            controller.focusSnapSettled = true
-        } else if (controller.focusInHero && isTv) {
+        if (controller.onFocusEffect(controller.focusInHero, isTv)) {
             listState.scrollToItem(0, 0)
         }
     }
@@ -200,7 +208,7 @@ internal class HeroController(
     var focusInHero: Boolean by mutableStateOf(true)
         private set
 
-    /** First-emission skip flag for the composable's snap-to-top effect. */
+    /** First-emission skip flag, consumed once by [onFocusEffect]. */
     internal var focusSnapSettled: Boolean by mutableStateOf(false)
 
     val featuredItem: MediaItem? get() = candidates.getOrNull(featuredIndex)
@@ -246,6 +254,57 @@ internal class HeroController(
 
     fun rotationTick() {
         if (candidates.isNotEmpty()) featuredIndex = (featuredIndex + 1) % candidates.size
+    }
+
+    /**
+     * The rotation-cadence decision behind the composable's snapshotFlow
+     * collector — the whole policy, Compose-free and synchronously testable.
+     * Returns `null` when no delay may be scheduled (no candidates, rotation
+     * disabled, focus outside the hero, or lifecycle below RESUMED — the same
+     * gates the inline implementation applied, here re-evaluated on every
+     * scroll emission); [SCROLL_DEFER_DELAY_MS] while scrolling (a pure
+     * re-check wait: `collectLatest` cancels it on the next scroll-state
+     * change); or [IDLE_ROTATION_DELAY_MS] when idle — the tick decision. The
+     * caller re-consults [shouldTickNow] after the delay, mirroring the inline
+     * implementation's post-delay re-check.
+     */
+    internal fun rotationDelayMs(isScrolling: Boolean, lifecycleResumed: Boolean): Long? {
+        if (candidates.isEmpty() || !autoRotateEnabled || !focusInHero || !lifecycleResumed) return null
+        return if (isScrolling) SCROLL_DEFER_DELAY_MS else IDLE_ROTATION_DELAY_MS
+    }
+
+    /**
+     * Post-delay re-check for the idle cadence branch, faithful to the inline
+     * implementation's guard right before the tick: state flipped while the
+     * delay ran (e.g. "Surprise Me" disabled rotation, or focus left the hero)
+     * suppresses the tick.
+     */
+    internal fun shouldTickNow(): Boolean = autoRotateEnabled && focusInHero
+
+    /**
+     * The TV snap-to-top decision behind the composable's focus effect,
+     * absorbing the first-emission skip: the first invocation ever (per
+     * controller instance, regardless of arguments) only advances
+     * [focusSnapSettled] and returns `false` — a freshly (re)composed Home
+     * must not snap before per-row focus restoration runs. Every later
+     * invocation returns whether to scroll the list back to the top now: only
+     * when the hero actually has focus and we are on TV. Compose-free; the
+     * composable stays a dumb collector.
+     */
+    internal fun onFocusEffect(focused: Boolean, isTv: Boolean): Boolean {
+        if (!focusSnapSettled) {
+            focusSnapSettled = true
+            return false
+        }
+        return focused && isTv
+    }
+
+    internal companion object {
+        /** Idle auto-rotation cadence: idle time before a featured-index tick. */
+        internal const val IDLE_ROTATION_DELAY_MS = 8_000L
+
+        /** Scroll-defer cadence: re-check wait while the list is scrolling. */
+        internal const val SCROLL_DEFER_DELAY_MS = 2_000L
     }
 
     /** Notifies the controller that hero focus changed (used to drive the snap-to-top). */

@@ -295,7 +295,6 @@ private fun MainHomeContent(
     val heroController = rememberHeroController(
         featuredCandidates = featuredCandidates,
         listState = listState,
-        heroFocusRequester = heroFocusRequester,
         getBackdropUrl = heroBackdropUrlBuilder,
     )
 

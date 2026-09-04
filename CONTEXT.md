@@ -455,6 +455,24 @@ their single writer. The hero backdrop resolver keys on id+path triples
 rotation) but reads the lookup through a `rememberUpdatedState` wrapper, so
 its content is always the aggregate's fresh `itemsById`.
 
+**`HeroController`** (`HomeHeroController.kt`) owns all hero policy as
+Compose-free, synchronously testable methods: `rotationDelayMs(isScrolling,
+lifecycleResumed)` is the whole rotation-cadence decision (`null` = no
+scheduling when candidates are empty, rotation off, focus outside the hero,
+or lifecycle below RESUMED; 2s re-check wait while scrolling; 8s idle tick
+decision), `shouldTickNow()` is the post-delay re-check (state flipped
+mid-delay — e.g. "Surprise Me" disabling rotation — suppresses the tick),
+and `onFocusEffect(focused, isTv)` absorbs the TV snap-to-top policy (the
+first invocation ever only settles the skip flag, so a freshly recomposed
+Home doesn't snap before per-row focus restoration; later invocations
+return whether to `scrollToItem(0, 0)` — focused+TV only).
+`rememberHeroController` is a dumb collector shell: the composition-time
+candidate sync (the deliberate snapshot write + its no-derivation
+invariant, pinned by a repeated-identical-inputs test), the surprise-launch
+arm, the `snapshotFlow(isScrollInProgress)`/`collectLatest` cadence
+collector (keys `featuredCandidates`/`listState`/`autoRotateEnabled`
+preserved; RESUMED passed as an argument), and the focus-keyed snap effect.
+
 **Section ordering.** The pure `HomeSectionsAssembler`
 (`shared/core/network/src/commonMain/kotlin/.../library/HomeSectionsAssembler.kt`)
 backs BOTH production paths — the wasm client and
