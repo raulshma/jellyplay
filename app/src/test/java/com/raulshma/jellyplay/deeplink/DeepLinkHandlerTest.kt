@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.deeplink
 
 import android.content.Intent
 import android.net.Uri
+import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -15,8 +16,8 @@ import org.robolectric.annotation.Config
  * `https://raulshma.github.io/jellyplay/...` equivalent must resolve to the
  * matching [Route], rejected inputs (unknown hosts, malformed ids, foreign
  * schemes/hosts) must yield null rather than a partial route, and every
- * `createXLink` builder must round-trip through [DeepLinkHandler.parse] to
- * the route it was built for — the widgets/notifications/shortcuts jump
+ * [DeepLinkGrammar] builder must round-trip through [DeepLinkHandler.parse]
+ * to the route it was built for — the widgets/notifications/shortcuts jump
  * path depends on that symmetry.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -180,23 +181,23 @@ class DeepLinkHandlerTest {
     fun `every builder round-trips to its expected route`() {
         assertEquals(
             Route.MediaDetail("xyz"),
-            parse(DeepLinkHandler.createMediaLink("xyz")),
+            parse(DeepLinkGrammar.mediaLink("xyz")),
         )
         assertEquals(
             Route.MediaDetail("xyz"),
-            parse(DeepLinkHandler.createWebMediaLink("xyz")),
+            parse(DeepLinkGrammar.webMediaLink("xyz")),
         )
         assertEquals(
             Route.NewsletterSectionList("CONTINUE_WATCHING"),
-            parse(DeepLinkHandler.createContinueWatchingLink()),
+            parse(DeepLinkGrammar.continueWatchingLink()),
         )
         assertEquals(
             Route.SeerrDetail(7, "tv"),
-            parse(DeepLinkHandler.createSeerrLink(7, "tv")),
+            parse(DeepLinkGrammar.seerrLink(7, "tv")),
         )
-        assertEquals(Route.Search, parse(DeepLinkHandler.createSearchLink()))
-        assertEquals(Route.Settings, parse(DeepLinkHandler.createSettingsLink()))
-        assertEquals(Route.Downloads, parse(DeepLinkHandler.createDownloadsLink()))
-        assertEquals(Route.Library, parse(DeepLinkHandler.createLibraryLink()))
+        assertEquals(Route.Search, parse(DeepLinkGrammar.searchLink()))
+        assertEquals(Route.Settings, parse(DeepLinkGrammar.settingsLink()))
+        assertEquals(Route.Downloads, parse(DeepLinkGrammar.downloadsLink()))
+        assertEquals(Route.Library, parse(DeepLinkGrammar.libraryLink()))
     }
 }

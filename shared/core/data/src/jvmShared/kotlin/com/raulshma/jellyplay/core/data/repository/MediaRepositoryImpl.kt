@@ -1002,8 +1002,11 @@ class MediaRepositoryImpl(
     }
 
     override suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int): List<String> =
-        // The one non-Result fetch: wrapped, because the old inline copy cached
-        // the list unconditionally — put-on-success reproduces that exactly.
+        // The one non-Result fetch, riding the Result-shaped seam — the cache
+        // module deliberately has no fourth (non-Result) shape. The wrap is
+        // pure shape: if the call throws, the lambda unwinds before any Result
+        // exists (nothing is cached, the exception propagates), so the
+        // trailing getOrThrow can only ever unwrap a stored success.
         photoFolderChildUrlCache.getOrFetch({ homeSession.cacheIdentity() }, folderId) {
             Result.success(apiClient.getChildItemImageUrls(folderId, limit))
         }.getOrThrow()

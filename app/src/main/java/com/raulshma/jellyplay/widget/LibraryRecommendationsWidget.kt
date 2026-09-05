@@ -149,15 +149,7 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
                 }
             }
 
-            val openAppIntent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val openApp = PendingIntent.getActivity(
-                context,
-                REQUEST_CODE_HEADER,
-                openAppIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
+            val openApp = openAppPendingIntent(context, REQUEST_CODE_HEADER)
             views.setOnClickPendingIntent(R.id.lr_widget_header_text_container, openApp)
             views.setOnClickPendingIntent(R.id.lr_widget_empty, openApp)
 

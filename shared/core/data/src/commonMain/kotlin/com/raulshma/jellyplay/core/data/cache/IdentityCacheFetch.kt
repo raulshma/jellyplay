@@ -69,8 +69,12 @@ import com.raulshma.jellyplay.core.model.TtlCache
  * a hit cannot slide the persisted snapshot's timestamp forward.
  */
 
-/** The one miss-path engine the public shapes funnel into (file-private). */
-private suspend fun <V : Any> TtlCache<V>.fetchThrough(
+/**
+ * The one miss-path engine the public shapes funnel into (module-internal;
+ * @PublishedApi only because the inline typed shape must reach it).
+ */
+@PublishedApi
+internal suspend fun <V : Any> TtlCache<V>.fetchThrough(
     identity: CacheIdentity,
     key: String,
     currentEpoch: (() -> Long)?,
@@ -139,11 +143,18 @@ suspend fun <V : Any> TtlCache<V>.getOrFetchGuarded(
 suspend inline fun <reified V : Any> TtlCache<Any>.getOrFetchTyped(
     identity: suspend () -> CacheIdentity,
     key: String,
-    fetch: suspend () -> Result<V>,
+    noinline fetch: suspend () -> Result<V>,
 ): Result<V> {
     val startIdentity = identity()
     (get(startIdentity, key) as? V)?.let { return Result.success(it) }
-    val result = fetch()
-    result.getOrNull()?.let { put(startIdentity, key, it) }
-    return result
+    // The cache is keyed on Any, so the funnel cast is erased at runtime —
+    // safe because the hit-check above just verified the stored type is V.
+    @Suppress("UNCHECKED_CAST")
+    return (this as TtlCache<V>).fetchThrough(
+        identity = startIdentity,
+        key = key,
+        currentEpoch = null,
+        onFetched = null,
+        fetch = fetch,
+    )
 }

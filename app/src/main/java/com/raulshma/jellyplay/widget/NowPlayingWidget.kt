@@ -434,11 +434,6 @@ class NowPlayingWidget : AppWidgetProvider() {
                 )
             }
 
-        private fun openAppIntent(context: Context): Intent =
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-
         private fun cachedBroadcastPending(
             context: Context,
             action: String,

@@ -144,8 +144,15 @@ class CastManager(
         ): Boolean {
             ensureGoogleSessionListener()
             externalListener?.let { castPlayer?.removeListener(it) }
+            val player = ensureCastPlayer()
+            if (player == null) {
+                // Nothing was attached: recording the listener would let the
+                // session-unavailable callback fire a phantom STATE_ENDED on
+                // a load that never started.
+                externalListener = null
+                return false
+            }
             externalListener = listener
-            val player = ensureCastPlayer() ?: return false
             player.addListener(listener)
             // Apply the user's track / quality selections to the stream URL so the
             // receiving Chromecast requests the right variants from the server.

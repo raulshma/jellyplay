@@ -188,6 +188,10 @@ class CastManagerTest {
         castPreference.value = SyncPlayCastSlice(defaultCastingStrategy = CastingStrategy.PREFER_DLNA)
         val manager = manager()
         every { dlnaCastStrategy.loadMedia(any(), any(), any(), any()) } returns true
+        // relaxUnitFun covers only Unit members; the handoff gate reads this
+        // val after any successful transport load — production DLNA uses the
+        // CastStrategy default (false, the transport never owns the listener).
+        every { dlnaCastStrategy.ownsExternalListener } returns false
         val item = MediaItem.Builder().setMediaId("id").setUri("http://server/Videos/1/stream").build()
 
         manager.loadMedia(item, 0L, mockk())

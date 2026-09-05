@@ -8,9 +8,11 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 
 /**
  * Android Intent/Uri glue over the pure [DeepLinkGrammar]. Every link shape
- * is built and parsed by the grammar, so :app and the modules that cannot
- * depend on it (core:data, core:notification, shared:feature:details) emit
- * and read exactly the same URLs.
+ * is built and parsed by the grammar — the [DeepLinkGrammar] companion is the
+ * single emission surface (widgets/notifications/shortcuts call it directly),
+ * so :app and the modules that cannot depend on it (core:data,
+ * core:notification, shared:feature:details) emit and read exactly the same
+ * URLs. This class only routes parsed [DeepLinkTarget]s to [Route]s.
  */
 class DeepLinkHandler {
 
@@ -54,34 +56,5 @@ class DeepLinkHandler {
             DeepLinkTarget.Library -> Route.Library
             null -> null
         }
-    }
-
-    companion object {
-        const val SCHEME_CUSTOM = DeepLinkGrammar.SCHEME_CUSTOM
-        const val SCHEME_HTTPS = DeepLinkGrammar.SCHEME_HTTPS
-        const val HOST_WEB = DeepLinkGrammar.HOST_WEB
-        const val PATH_PREFIX = DeepLinkGrammar.PATH_PREFIX
-
-        fun createMediaLink(itemId: String): String {
-            return DeepLinkGrammar.mediaLink(itemId)
-        }
-
-        fun createWebMediaLink(itemId: String): String {
-            return DeepLinkGrammar.webMediaLink(itemId)
-        }
-
-        fun createContinueWatchingLink(): String {
-            return DeepLinkGrammar.continueWatchingLink()
-        }
-
-        fun createSeerrLink(tmdbId: Int, mediaType: String): String {
-            return DeepLinkGrammar.seerrLink(tmdbId, mediaType)
-        }
-
-        /** Deep-link builders for the argument-less top-level destinations. */
-        fun createSearchLink(): String = DeepLinkGrammar.searchLink()
-        fun createSettingsLink(): String = DeepLinkGrammar.settingsLink()
-        fun createDownloadsLink(): String = DeepLinkGrammar.downloadsLink()
-        fun createLibraryLink(): String = DeepLinkGrammar.libraryLink()
     }
 }

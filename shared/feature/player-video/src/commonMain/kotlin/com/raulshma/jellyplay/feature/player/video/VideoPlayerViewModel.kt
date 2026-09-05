@@ -2278,7 +2278,10 @@ class VideoPlayerViewModel(
                 canSkipToNext = autoplayController.canSkipToNext(state.episodes.nextEpisode),
                 segments = SegmentSnapshot(
                     activeType = seg?.type,
-                    activeEndTicks = seg?.let { _uiState.value.segmentEndTicks(it) },
+                    // Resolved against the same snapshot the active segment
+                    // came from — a fresh _uiState read could pair one
+                    // read's segment with another read's end ticks.
+                    activeEndTicks = seg?.let { state.segmentEndTicks(it) },
                     introEndTicks = state.introSegmentEndTicks,
                     creditEndTicks = state.creditSegmentEndTicks,
                 ),

@@ -73,25 +73,26 @@ class InstantMixStateHolder(
      * clears any prior error, runs the [startMix] seam, then folds the
      * outcome — Started sets the first-track one-shot, EmptyMix/Failed land
      * on [InstantMixState.error], Suppressed stays silent. The flag is
-     * always lowered once the seam returns, including on failure outcomes.
+     * always lowered once the seam returns or throws, including on failure
+     * outcomes (the `finally` owns it; the fold never touches it).
      */
     fun start(seedItemId: String, fallbackName: String?) {
         scope.launch {
             _state.update { it.copy(isStarting = true, error = null) }
-            when (val outcome = startMix(seedItemId, fallbackName)) {
-                is InstantMixOutcome.Started ->
-                    _state.update { it.copy(isStarting = false, firstTrackId = outcome.firstTrackId) }
-                InstantMixOutcome.EmptyMix ->
-                    _state.update { it.copy(isStarting = false, error = InstantMixError.EmptyMix) }
-                InstantMixOutcome.Suppressed ->
-                    _state.update { it.copy(isStarting = false) }
-                is InstantMixOutcome.Failed ->
-                    _state.update {
-                        it.copy(
-                            isStarting = false,
-                            error = InstantMixError.Failed(outcome.cause.message),
-                        )
-                    }
+            try {
+                when (val outcome = startMix(seedItemId, fallbackName)) {
+                    is InstantMixOutcome.Started ->
+                        _state.update { it.copy(firstTrackId = outcome.firstTrackId) }
+                    InstantMixOutcome.EmptyMix ->
+                        _state.update { it.copy(error = InstantMixError.EmptyMix) }
+                    InstantMixOutcome.Suppressed -> Unit
+                    is InstantMixOutcome.Failed ->
+                        _state.update {
+                            it.copy(error = InstantMixError.Failed(outcome.cause.message))
+                        }
+                }
+            } finally {
+                _state.update { it.copy(isStarting = false) }
             }
         }
     }

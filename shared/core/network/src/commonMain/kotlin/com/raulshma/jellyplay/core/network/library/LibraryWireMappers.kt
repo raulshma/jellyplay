@@ -407,9 +407,15 @@ internal fun LyricsDtoWire.toLyricsResult(): LyricsResult {
         } else startMs
         val text = line.text
         val words = line.cues?.map { cue ->
+            // Wire cue offsets are server-authored and not trusted: clamp
+            // both ends into the line text (end below start degrades to an
+            // empty slice) instead of letting substring throw on out-of-
+            // range positions.
+            val start = cue.position.coerceIn(0, text.length)
+            val end = cue.endPosition.coerceIn(start, text.length)
             LyricsWord(
                 timeMs = cue.start / 10_000,
-                text = text.substring(cue.position, cue.endPosition.coerceAtMost(text.length)),
+                text = text.substring(start, end),
                 durationMs = ((cue.end ?: cue.start) - cue.start) / 10_000,
             )
         }.orEmpty()
