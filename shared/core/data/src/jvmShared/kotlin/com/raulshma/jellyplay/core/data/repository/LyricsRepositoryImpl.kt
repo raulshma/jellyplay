@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
@@ -30,6 +31,16 @@ class LyricsRepositoryImpl(
     private val lrcLibApi: LrcLibApi,
     private val lyricsCacheDao: LyricsCacheDao,
     private val networkMonitor: NetworkMonitor,
+    /**
+     * Clock seam for this repo's wall-clock reads — the once-per-hour
+     * eviction throttle in [cacheLyrics], the [cleanupLyricsCache] cutoff and
+     * the persisted rows' `fetchedAt` stamp (wall-clock on purpose: the stamp
+     * must survive a reboot). Same discipline as `MediaRepositoryImpl`'s
+     * injected [TimeSource] (a `SystemTimeSource` Koin single in
+     * `dataJvmModule`), injectable here so the eviction throttle is
+     * unit-testable with a fake.
+     */
+    private val timeSource: TimeSource,
 ) : LyricsRepository {
 
     override suspend fun getLyrics(itemId: String): Result<LyricsResult> = apiClient.getLyrics(itemId)
@@ -197,7 +208,7 @@ class LyricsRepositoryImpl(
         // user opens lyrics for a new track) was walking & re-locking the whole
         // lyrics_cache table unnecessarily. Eviction semantics (rows older than
         // 30 days eventually removed) preserved.
-        val now = System.currentTimeMillis()
+        val now = timeSource.nowEpochMillis()
         if (now - lastLyricsEvictionMs > 60L * 60 * 1000) {
             lastLyricsEvictionMs = now
             try {
@@ -210,7 +221,7 @@ class LyricsRepositoryImpl(
 
     override suspend fun cleanupLyricsCache() {
         try {
-            lyricsCacheDao.deleteOlderThan(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000)
+            lyricsCacheDao.deleteOlderThan(timeSource.nowEpochMillis() - 30L * 24 * 60 * 60 * 1000)
         } catch (e: Exception) {
             Log.d("LyricsRepo", "Failed to cleanup lyrics cache", e)
         }
@@ -238,7 +249,7 @@ class LyricsRepositoryImpl(
         plainLyrics = plainLyrics,
         duration = duration,
         lrcLibId = lrcLibId,
-        fetchedAt = System.currentTimeMillis(),
+        fetchedAt = timeSource.nowEpochMillis(),
     )
 
     private fun cachedSource(provider: String?): LyricsSource =

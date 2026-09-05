@@ -1,72 +1,76 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
-import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
-import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
-import com.raulshma.jellyplay.core.model.LyricsLine
-import com.raulshma.jellyplay.core.model.LyricsResult
-import com.raulshma.jellyplay.core.model.LyricsSource
-import com.raulshma.jellyplay.core.model.LrcLibTrack
+import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import com.raulshma.jellyplay.core.data.network.NetworkMonitor
-import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.util.SystemTimeSource
-import com.raulshma.jellyplay.core.network.LrcLibApi
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
+import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.util.SystemTimeSource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
+/**
+ * Port of the orphaned legacy `:core:data` suite of the same name (the legacy
+ * module's test source set stopped compiling when MediaRepositoryImpl moved to
+ * :shared:core:data with its 8-arg constructor and lyrics were extracted into
+ * LyricsRepositoryImpl). The lyrics tests live in LyricsRepositoryImplTest now;
+ * everything here targets the current MediaRepositoryImpl constructor wiring.
+ */
 class MediaRepositoryImplTest {
 
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
-    private val lrcLibApi: LrcLibApi = mockk(relaxed = true)
-    private val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
     private val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true)
-    private val networkMonitor: NetworkMonitor = mockk(relaxed = true)
     private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
+    private val userDataRealtimeChannel: UserDataRealtimeChannel = mockk(relaxed = true)
 
     private lateinit var repository: MediaRepositoryImpl
 
-    @Before
+    @BeforeTest
     fun setup() {
-        every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
         // Real (permanently-null) session flow behind the shared HomeSession
         // identity detector — this suite never switches identity, so
         // CacheIdentity.UNKNOWN is the expected key surface.
         every { apiClient.session } returns MutableStateFlow(null)
+        // User-data mutations fan out through PlayedStateSync now (the repo
+        // only owns cache invalidation around the write) — pin the mock's
+        // write results so the invalidation wrappers see a successful write.
+        coEvery { playedStateSync.flip(any(), any()) } returns Result.success(Unit)
+        coEvery { playedStateSync.toggleFavorite(any()) } returns Result.success(true)
         // The repository delegates getSeasons/getEpisodes/getAllEpisodesGrouped
         // to a real EpisodeCatalogueImpl, which in turn calls back into the
         // mocked apiClient — so the existing series/episodes stubs keep working
         // end-to-end through the catalogue transplant.
-        val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(
+        val homeSession = HomeSession(
             apiClient,
-            kotlinx.coroutines.CoroutineScope(
-                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
-            ),
+            CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
-        val sessionCacheRegistry = com.raulshma.jellyplay.core.data.session.SessionCacheRegistry(
+        val sessionCacheRegistry = SessionCacheRegistry(
             homeSession,
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob()),
+            CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
-        val episodeCatalogue = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl(
+        val episodeCatalogue = EpisodeCatalogueImpl(
             apiClient,
             offlineRepository,
             homeSession,
@@ -74,38 +78,14 @@ class MediaRepositoryImplTest {
         )
         repository = MediaRepositoryImpl(
             apiClient,
-            lrcLibApi,
-            lyricsCacheDao,
             homeSectionCacheDao,
-            networkMonitor,
             playedStateSync,
             episodeCatalogue,
-            mockk<UserDataRealtimeChannel>(relaxed = true),
+            userDataRealtimeChannel,
             SystemTimeSource(),
             homeSession,
             sessionCacheRegistry,
         )
-    }
-
-    @Test
-    fun `getLyricsWithFallback returns cached synced lyrics`() = runTest {
-        val cachedEntity = LyricsCacheEntity(
-            itemId = "item-1",
-            provider = "LRCLIB",
-            syncedLyrics = "[00:05.000]Hello\n[00:10.000]World",
-        )
-        coEvery { lyricsCacheDao.getByItemId("item-1") } returns cachedEntity
-
-        val result = repository.getLyricsWithFallback("item-1", "Artist", "Track", null)
-
-        assertTrue(result.isSuccess)
-        val lyrics = result.getOrNull()!!
-        assertEquals(2, lyrics.lines.size)
-        assertEquals("Hello", lyrics.lines[0].text)
-        assertEquals(5000L, lyrics.lines[0].timeMs)
-        assertEquals("World", lyrics.lines[1].text)
-        assertEquals(10000L, lyrics.lines[1].timeMs)
-        assertEquals(LyricsSource.LRCLIB, lyrics.source)
     }
 
     @Test
@@ -131,118 +111,6 @@ class MediaRepositoryImplTest {
 
         assertTrue(result.isSuccess)
         assertTrue(result.getOrNull().isNullOrEmpty())
-    }
-
-    @Test
-    fun `getLyricsWithFallback returns cached plain lyrics when synced is null`() = runTest {
-        val cachedEntity = LyricsCacheEntity(
-            itemId = "item-1",
-            provider = "LRCLIB",
-            syncedLyrics = null,
-            plainLyrics = "Line 1\nLine 2\n\nLine 3",
-        )
-        coEvery { lyricsCacheDao.getByItemId("item-1") } returns cachedEntity
-
-        val result = repository.getLyricsWithFallback("item-1", "Artist", "Track", null)
-
-        assertTrue(result.isSuccess)
-        val lyrics = result.getOrNull()!!
-        assertEquals(3, lyrics.lines.size)
-        assertEquals("Line 1", lyrics.lines[0].text)
-        assertEquals(0L, lyrics.lines[0].timeMs)
-        assertEquals("Line 3", lyrics.lines[2].text)
-    }
-
-    @Test
-    fun `getLyricsWithFallback falls back to Jellyfin API when no cache`() = runTest {
-        coEvery { lyricsCacheDao.getByItemId("item-1") } returns null
-        coEvery { apiClient.getLyrics("item-1") } returns Result.success(
-            LyricsResult(
-                lines = listOf(
-                    LyricsLine(timeMs = 1000L, text = "From API"),
-                ),
-                source = LyricsSource.EMBEDDED,
-            )
-        )
-
-        val result = repository.getLyricsWithFallback("item-1", "Artist", "Track", null)
-
-        assertTrue(result.isSuccess)
-        assertEquals("From API", result.getOrNull()!!.lines[0].text)
-        coVerify { lyricsCacheDao.upsert(any()) }
-    }
-
-    @Test
-    fun `getLyricsWithFallback falls back to LrcLib when Jellyfin returns empty`() = runTest {
-        coEvery { lyricsCacheDao.getByItemId("item-1") } returns null
-        coEvery { apiClient.getLyrics("item-1") } returns Result.success(
-            LyricsResult(lines = emptyList(), source = LyricsSource.UNKNOWN)
-        )
-        coEvery { lrcLibApi.getBestMatch("Artist", "Track", null) } returns Result.success(
-            LrcLibTrack(
-                id = 1L,
-                trackName = "Track",
-                artistName = "Artist",
-                syncedLyrics = "[00:03.500]LrcLib Line",
-            )
-        )
-
-        val result = repository.getLyricsWithFallback("item-1", "Artist", "Track", null)
-
-        assertTrue(result.isSuccess)
-        assertEquals("LrcLib Line", result.getOrNull()!!.lines[0].text)
-        assertEquals(LyricsSource.LRCLIB, result.getOrNull()!!.source)
-    }
-
-    @Test
-    fun `getLyricsWithFallback returns empty when no artist or track name`() = runTest {
-        coEvery { lyricsCacheDao.getByItemId("item-1") } returns null
-        coEvery { apiClient.getLyrics("item-1") } returns Result.success(
-            LyricsResult(lines = emptyList(), source = LyricsSource.UNKNOWN)
-        )
-
-        val result = repository.getLyricsWithFallback("item-1", null, null, null)
-
-        assertTrue(result.isSuccess)
-        assertEquals(0, result.getOrNull()!!.lines.size)
-    }
-
-    @Test
-    fun `getLyricsWithFallback handles instrumental track from LrcLib`() = runTest {
-        coEvery { lyricsCacheDao.getByItemId("item-1") } returns null
-        coEvery { apiClient.getLyrics("item-1") } returns Result.success(
-            LyricsResult(lines = emptyList(), source = LyricsSource.UNKNOWN)
-        )
-        coEvery { lrcLibApi.getBestMatch("Artist", "Track", null) } returns Result.success(
-            LrcLibTrack(
-                id = 1L,
-                trackName = "Track",
-                artistName = "Artist",
-                instrumental = true,
-            )
-        )
-
-        val result = repository.getLyricsWithFallback("item-1", "Artist", "Track", null)
-
-        assertTrue(result.isSuccess)
-        assertEquals(0, result.getOrNull()!!.lines.size)
-        assertEquals(LyricsSource.LRCLIB, result.getOrNull()!!.source)
-    }
-
-    @Test
-    fun `getLyricsWithFallback skips LrcLib in Local mode`() = runTest {
-        every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Local)
-        coEvery { lyricsCacheDao.getByItemId("item-1") } returns null
-        coEvery { apiClient.getLyrics("item-1") } returns Result.success(
-            LyricsResult(lines = emptyList(), source = LyricsSource.UNKNOWN)
-        )
-
-        val result = repository.getLyricsWithFallback("item-1", "Artist", "Track", null)
-
-        assertTrue(result.isSuccess)
-        assertEquals(0, result.getOrNull()!!.lines.size)
-        assertEquals(LyricsSource.UNKNOWN, result.getOrNull()!!.source)
-        coVerify(exactly = 0) { lrcLibApi.getBestMatch(any(), any(), any()) }
     }
 
     @Test
@@ -379,7 +247,6 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getSimilarItems("item-1", any()) } returns Result.success(
             listOf(mediaItem("s1"))
         )
-        coEvery { apiClient.markPlayed("item-1") } returns Result.success(Unit)
 
         // Populate caches for two different limits (detail screen = 12, widget = 9).
         repository.getSimilarItems("item-1", limit = 12)
@@ -433,7 +300,6 @@ class MediaRepositoryImplTest {
             listOf(seasonItem("s1"))
         )
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
-        coEvery { apiClient.markUnplayed("series-1") } returns Result.success(Unit)
 
         repository.getMediaDetail("series-1")
         repository.getSeasons("series-1")
@@ -486,7 +352,6 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(
             listOf(episodeItem("e1", seriesId = "series-1", seasonId = "season-1"))
         )
-        coEvery { apiClient.markUnplayed("episode-1") } returns Result.success(Unit)
 
         repository.getMediaDetail("episode-1")
         repository.getAllEpisodesGrouped("series-1")
@@ -562,7 +427,6 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(
             listOf(episodeItem("episode-1", seriesId = "series-1", seasonId = "season-1"))
         )
-        coEvery { apiClient.markPlayed("episode-1") } returns Result.success(Unit)
 
         // Populate: detail (episode) + seasons + grouped episodes for the series.
         repository.getMediaDetail("episode-1")
@@ -588,7 +452,6 @@ class MediaRepositoryImplTest {
         )
         coEvery { apiClient.getSeasons("series-1") } returns Result.success(listOf(seasonItem("s1")))
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
-        coEvery { apiClient.markPlayed("series-1") } returns Result.success(Unit)
 
         repository.getMediaDetail("series-1")
         repository.getSeasons("series-1")
@@ -607,7 +470,6 @@ class MediaRepositoryImplTest {
         )
         coEvery { apiClient.getSeasons("series-1") } returns Result.success(listOf(seasonItem("s1")))
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
-        coEvery { apiClient.markPlayed("movie-1") } returns Result.success(Unit)
 
         repository.getMediaDetail("movie-1")
         repository.getSeasons("series-1")
@@ -689,7 +551,7 @@ class MediaRepositoryImplTest {
     @Test
     fun `getCollections delegates to apiClient`() = runTest {
         val collections = listOf(
-            com.raulshma.jellyplay.core.model.CollectionSummary(id = "c1", name = "Marvel", itemCount = 4),
+            CollectionSummary(id = "c1", name = "Marvel", itemCount = 4),
         )
         coEvery { apiClient.getCollections(100) } returns Result.success(collections)
 
@@ -754,7 +616,6 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getMediaDetail("series-1") } returns Result.success(
             MediaDetail(item = MediaItem(id = "series-1", name = "Show", mediaType = MediaType.SERIES))
         )
-        coEvery { apiClient.markPlayed("series-1") } returns Result.success(Unit)
         repository.getMediaDetail("series-1")
         repository.markPlayed("series-1")
         releaseFetch.complete(Unit)
@@ -815,7 +676,6 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getMediaDetail("series-1") } returns Result.success(
             MediaDetail(item = MediaItem(id = "series-1", name = "Show", mediaType = MediaType.SERIES))
         )
-        coEvery { apiClient.markPlayed("series-1") } returns Result.success(Unit)
         repository.getMediaDetail("series-1")
         repository.markPlayed("series-1")
         releaseFetch.complete(Unit)
@@ -894,7 +754,6 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getMediaDetail("movie-1") } returns Result.success(
             MediaDetail(item = mediaItem("movie-1"))
         )
-        coEvery { apiClient.toggleFavorite("movie-1") } returns Result.success(true)
 
         repository.getMediaDetail("movie-1")
         repository.toggleFavorite("movie-1")
@@ -908,7 +767,6 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getMediaDetail("movie-1") } returns Result.success(
             MediaDetail(item = mediaItem("movie-1"))
         )
-        coEvery { apiClient.markUnplayed("movie-1") } returns Result.success(Unit)
 
         repository.getMediaDetail("movie-1")
         repository.markUnplayed("movie-1")
@@ -973,40 +831,6 @@ class MediaRepositoryImplTest {
         coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 100) }
     }
 
-    @Test
-    fun `parseLrc parses single timestamp correctly`() {
-        val lrc = "[00:01.500]Hello World"
-        val lines = parseLrc(lrc)
-        assertEquals(1, lines.size)
-        assertEquals(1500L, lines[0].timeMs)
-        assertEquals("Hello World", lines[0].text)
-    }
-
-    @Test
-    fun `parseLrc sorts lines by time`() {
-        val lrc = "[00:10.000]Second\n[00:05.000]First\n[00:15.000]Third"
-        val lines = parseLrc(lrc)
-        assertEquals(3, lines.size)
-        assertEquals("First", lines[0].text)
-        assertEquals("Second", lines[1].text)
-        assertEquals("Third", lines[2].text)
-    }
-
-    @Test
-    fun `parseLrc handles empty lines`() {
-        val lrc = "[00:01.000]\n[00:05.000]Hello"
-        val lines = parseLrc(lrc)
-        assertEquals(2, lines.size)
-        assertEquals("", lines[0].text)
-        assertEquals(1000L, lines[0].timeMs)
-    }
-
-    @Test
-    fun `parseLrc returns empty list for invalid input`() {
-        val lines = parseLrc("no timestamps here")
-        assertEquals(0, lines.size)
-    }
-
     // ------------------------------------------------------------------
     // Plan 08 step 0 — characterization pins for self-invalidation
     // (docs/architecture/plans/08-mediarepository-self-invalidation.md).
@@ -1029,7 +853,6 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(
             listOf(episodeItem("e1", seriesId = "series-1", seasonId = "season-1"))
         )
-        coEvery { apiClient.markPlayed("season-1") } returns Result.success(Unit)
 
         repository.getSeasons("series-1")
         repository.markSeasonPlayed("season-1", seriesId = "series-1")
@@ -1040,10 +863,12 @@ class MediaRepositoryImplTest {
 
     @Test
     fun `markSeasonUnplayed drops the series detail so re-entry re-fetches`() = runTest {
+        // The season-aware mutation routes the composite invalidation through
+        // the series id (the caller-supplied hint doubles as the evicted item
+        // id), so both the series' cached detail and its catalogue drop.
         coEvery { apiClient.getMediaDetail("series-1") } returns Result.success(
             MediaDetail(item = MediaItem(id = "series-1", name = "Show", mediaType = MediaType.SERIES))
         )
-        coEvery { apiClient.markUnplayed("season-1") } returns Result.success(Unit)
 
         repository.getMediaDetail("series-1")
         repository.markSeasonUnplayed("season-1", seriesId = "series-1")
@@ -1267,27 +1092,3 @@ private fun episodeItem(
     seriesId = seriesId,
     seasonId = seasonId,
 )
-
-private val TIME_REGEX = Regex("""\[(\d{1,2}):(\d{2}\.\d{2,3})]""")
-
-private fun parseLrc(lrcContent: String): List<LyricsLine> {
-    val lines = mutableListOf<LyricsLine>()
-    lrcContent.lineSequence().forEach { rawLine ->
-        val line = rawLine.trim()
-        if (line.isEmpty()) return@forEach
-        val times = TIME_REGEX.findAll(line).map { match ->
-            val minutes = match.groupValues[1].toLong()
-            val seconds = match.groupValues[2].toDouble()
-            minutes * 60_000 + (seconds * 1000).toLong()
-        }.toList()
-        if (times.isEmpty()) return@forEach
-        val textStart = line.lastIndexOf(']') + 1
-        val text = line.substring(textStart).trim()
-        if (text.isEmpty()) {
-            times.forEach { timeMs -> lines.add(LyricsLine(timeMs = timeMs, text = "")) }
-        } else {
-            times.forEach { timeMs -> lines.add(LyricsLine(timeMs = timeMs, text = text)) }
-        }
-    }
-    return lines.sortedBy { it.timeMs }
-}

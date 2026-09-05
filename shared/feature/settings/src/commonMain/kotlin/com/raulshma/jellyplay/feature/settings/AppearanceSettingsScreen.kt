@@ -14,10 +14,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -1066,14 +1064,13 @@ fun AppearanceSettingsScreen(
                     )
 
                     val homeSectionOrder = remember { mutableStateListOf<HomeSectionType>().apply { addAll(preferences.homeSectionOrder) } }
-                    val itemHeights = remember { mutableStateMapOf<HomeSectionType, Int>() }
-                    var draggingSection by remember { mutableStateOf<HomeSectionType?>(null) }
-                    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+                    val reorder = remember { ReorderState<HomeSectionType>().apply { submitOrder(preferences.homeSectionOrder) } }
 
                     LaunchedEffect(preferences.homeSectionOrder) {
-                        if (draggingSection == null) {
+                        if (!reorder.isDragging) {
                             homeSectionOrder.clear()
                             homeSectionOrder.addAll(preferences.homeSectionOrder)
+                            reorder.submitOrder(preferences.homeSectionOrder)
                         }
                     }
 
@@ -1081,43 +1078,6 @@ fun AppearanceSettingsScreen(
                         val currentOrder = homeSectionOrder.toList()
                         if (currentOrder != preferences.homeSectionOrder) {
                             viewModel.setHomeSectionOrder(currentOrder)
-                        }
-                    }
-
-                    fun moveSection(type: HomeSectionType, deltaY: Float) {
-                        if (draggingSection != type) return
-                        dragOffsetY += deltaY
-
-                        while (true) {
-                            val currentIndex = homeSectionOrder.indexOf(type)
-                            if (currentIndex == -1) return
-
-                            val draggedHeight = itemHeights[type] ?: return
-
-                            if (dragOffsetY > 0f && currentIndex < homeSectionOrder.lastIndex) {
-                                val nextType = homeSectionOrder[currentIndex + 1]
-                                val nextHeight = itemHeights[nextType] ?: draggedHeight
-                                val threshold = (draggedHeight + nextHeight) / 2f
-                                if (dragOffsetY > threshold) {
-                                    homeSectionOrder.removeAt(currentIndex)
-                                    homeSectionOrder.add(currentIndex + 1, type)
-                                    dragOffsetY -= nextHeight.toFloat()
-                                    continue
-                                }
-                            }
-
-                            if (dragOffsetY < 0f && currentIndex > 0) {
-                                val prevType = homeSectionOrder[currentIndex - 1]
-                                val prevHeight = itemHeights[prevType] ?: draggedHeight
-                                val threshold = (draggedHeight + prevHeight) / 2f
-                                if (-dragOffsetY > threshold) {
-                                    homeSectionOrder.removeAt(currentIndex)
-                                    homeSectionOrder.add(currentIndex - 1, type)
-                                    dragOffsetY += prevHeight.toFloat()
-                                    continue
-                                }
-                            }
-                            break
                         }
                     }
 
@@ -1130,13 +1090,18 @@ fun AppearanceSettingsScreen(
                             checked = enabled,
                             index = index,
                             count = homeSectionOrder.size,
-                            modifier = Modifier.onSizeChanged { itemHeights[sectionType] = it.height },
+                            modifier = Modifier.onSizeChanged { reorder.recordHeight(sectionType, it.height) },
                             onCheckedChange = { checked ->
                                 viewModel.setSectionVisible(sectionType, checked)
                             },
-                            onDrag = { delta -> moveSection(sectionType, delta) },
-                            onDragStart = { draggingSection = sectionType; dragOffsetY = 0f },
-                            onDragEnd = { draggingSection = null; persistHomeSectionOrder() },
+                            onDrag = { delta ->
+                                if (reorder.drag(sectionType, delta)) {
+                                    homeSectionOrder.clear()
+                                    homeSectionOrder.addAll(reorder.order)
+                                }
+                            },
+                            onDragStart = { reorder.beginDrag(sectionType) },
+                            onDragEnd = { reorder.endDrag(); persistHomeSectionOrder() },
                         )
                     }
                 }
@@ -1231,14 +1196,13 @@ fun AppearanceSettingsScreen(
                     initiallyExpanded = highlightSettingId in NEWSLETTER_GROUP_IDS,
                 ) {
                     val newsletterSections = remember { mutableStateListOf<NewsletterSectionType>().apply { addAll(preferences.newsletterSectionOrder) } }
-                    val itemHeights = remember { mutableStateMapOf<NewsletterSectionType, Int>() }
-                    var draggingSection by remember { mutableStateOf<NewsletterSectionType?>(null) }
-                    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+                    val reorder = remember { ReorderState<NewsletterSectionType>().apply { submitOrder(preferences.newsletterSectionOrder) } }
 
                     LaunchedEffect(preferences.newsletterSectionOrder) {
-                        if (draggingSection == null) {
+                        if (!reorder.isDragging) {
                             newsletterSections.clear()
                             newsletterSections.addAll(preferences.newsletterSectionOrder)
+                            reorder.submitOrder(preferences.newsletterSectionOrder)
                         }
                     }
 
@@ -1246,43 +1210,6 @@ fun AppearanceSettingsScreen(
                         val currentOrder = newsletterSections.toList()
                         if (currentOrder != preferences.newsletterSectionOrder) {
                             viewModel.setNewsletterSectionOrder(currentOrder)
-                        }
-                    }
-
-                    fun moveSection(type: NewsletterSectionType, deltaY: Float) {
-                        if (draggingSection != type) return
-                        dragOffsetY += deltaY
-
-                        while (true) {
-                            val currentIndex = newsletterSections.indexOf(type)
-                            if (currentIndex == -1) return
-
-                            val draggedHeight = itemHeights[type] ?: return
-
-                            if (dragOffsetY > 0f && currentIndex < newsletterSections.lastIndex) {
-                                val nextType = newsletterSections[currentIndex + 1]
-                                val nextHeight = itemHeights[nextType] ?: draggedHeight
-                                val threshold = (draggedHeight + nextHeight) / 2f
-                                if (dragOffsetY > threshold) {
-                                    newsletterSections.removeAt(currentIndex)
-                                    newsletterSections.add(currentIndex + 1, type)
-                                    dragOffsetY -= nextHeight.toFloat()
-                                    continue
-                                }
-                            }
-
-                            if (dragOffsetY < 0f && currentIndex > 0) {
-                                val prevType = newsletterSections[currentIndex - 1]
-                                val prevHeight = itemHeights[prevType] ?: draggedHeight
-                                val threshold = (draggedHeight + prevHeight) / 2f
-                                if (-dragOffsetY > threshold) {
-                                    newsletterSections.removeAt(currentIndex)
-                                    newsletterSections.add(currentIndex - 1, type)
-                                    dragOffsetY += prevHeight.toFloat()
-                                    continue
-                                }
-                            }
-                            break
                         }
                     }
 
@@ -1355,15 +1282,20 @@ fun AppearanceSettingsScreen(
                                 checked = enabled,
                                 index = index + 2,
                                 count = newsletterSections.size + 2,
-                                modifier = Modifier.onSizeChanged { itemHeights[sectionType] = it.height },
+                                modifier = Modifier.onSizeChanged { reorder.recordHeight(sectionType, it.height) },
                                 onCheckedChange = { checked ->
                                     val current = preferences.enabledNewsletterSections.toMutableSet()
                                     if (checked) current.add(sectionType) else current.remove(sectionType)
                                     viewModel.setEnabledNewsletterSections(current)
                                 },
-                                onDrag = { delta -> moveSection(sectionType, delta) },
-                                onDragStart = { draggingSection = sectionType; dragOffsetY = 0f },
-                                onDragEnd = { draggingSection = null; persistNewsletterSectionOrder() },
+                                onDrag = { delta ->
+                                    if (reorder.drag(sectionType, delta)) {
+                                        newsletterSections.clear()
+                                        newsletterSections.addAll(reorder.order)
+                                    }
+                                },
+                                onDragStart = { reorder.beginDrag(sectionType) },
+                                onDragEnd = { reorder.endDrag(); persistNewsletterSectionOrder() },
                             )
                         }
                     }

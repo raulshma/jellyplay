@@ -1,30 +1,35 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
-import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
-import com.raulshma.jellyplay.core.data.network.NetworkMonitor
-import com.raulshma.jellyplay.core.data.util.SystemTimeSource
 import com.raulshma.jellyplay.core.model.MediaDetail
-import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import com.raulshma.jellyplay.core.network.LrcLibApi
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
+import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.util.SystemTimeSource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
-import org.junit.Test
+import kotlin.test.Test
 
 /**
  * Regression tests: [MediaRepositoryImpl] must invalidate its TTL caches when the
  * active server or user changes so that the next user doesn't see the previous user's data
  * (privacy + correctness).
+ *
+ * Port of the orphaned legacy `:core:data` suite of the same name onto the
+ * shared module's 8-arg MediaRepositoryImpl constructor.
  *
  * The cache-invalidation observer runs on `Dispatchers.Default` (a real dispatcher, not the
  * test dispatcher), so tests use [runBlocking] + a short [delay] to let the collector process
@@ -36,33 +41,25 @@ class MediaRepositoryCacheInvalidationTest {
     // detector — one value per identity step (see JellyfinApiEngine.session).
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
-    private val networkMonitor: NetworkMonitor = mockk(relaxed = true)
 
     private fun buildRepository(): MediaRepositoryImpl {
         every { apiClient.session } returns sessionFlow
         coEvery { apiClient.getMediaDetail(any()) } returns Result.success(mockk<MediaDetail>(relaxed = true))
-        every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
-        val lrcLibApi: LrcLibApi = mockk(relaxed = true)
-        val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
         val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true)
         val playedStateSync: PlayedStateSync = mockk(relaxed = true)
         val offlineRepository: OfflineRepository = mockk(relaxed = true)
-        val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(
+        val homeSession = HomeSession(
             apiClient,
-            kotlinx.coroutines.CoroutineScope(
-                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
-            ),
+            CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
         // Real registry on a real dispatcher — the invalidation chain the
         // suite pins (session emission → transition → cache drop) runs on
         // Dispatchers.Default exactly like the per-repo observers it replaced.
-        val sessionCacheRegistry = com.raulshma.jellyplay.core.data.session.SessionCacheRegistry(
+        val sessionCacheRegistry = SessionCacheRegistry(
             homeSession,
-            kotlinx.coroutines.CoroutineScope(
-                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
-            ),
+            CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
-        val episodeCatalogue = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl(
+        val episodeCatalogue = EpisodeCatalogueImpl(
             apiClient,
             offlineRepository,
             homeSession,
@@ -70,10 +67,7 @@ class MediaRepositoryCacheInvalidationTest {
         )
         return MediaRepositoryImpl(
             apiClient,
-            lrcLibApi,
-            lyricsCacheDao,
             homeSectionCacheDao,
-            networkMonitor,
             playedStateSync,
             episodeCatalogue,
             mockk<UserDataRealtimeChannel>(relaxed = true),

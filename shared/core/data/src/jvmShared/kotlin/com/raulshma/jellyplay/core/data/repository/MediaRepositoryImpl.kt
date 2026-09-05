@@ -45,6 +45,8 @@ import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
+import com.raulshma.jellyplay.core.data.cache.getOrFetch
+import com.raulshma.jellyplay.core.data.cache.getOrFetchGuarded
 import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
@@ -293,26 +295,21 @@ class MediaRepositoryImpl(
         query: HomeSectionQuery,
         force: Boolean,
     ): Result<HomeSectionsResult> {
-        val identity = homeSession.cacheIdentity()
         val cacheKey = query.cacheKey()
-        // Freshness lever: drop this query's cached snapshot first — the
-        // invalidate-then-read sequence the home screen's manual refresh used
-        // to run as a global cache drop (plan 08).
-        if (force) homeSectionsCache.remove(identity, cacheKey)
-        homeSectionsCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        // The query value object crosses the repo → network seam intact; force
-        // propagates so the network layer's sub-call caches are bypassed too.
-        return apiClient.getHomeSections(query, force).also { result ->
-            result.getOrNull()?.let { homeResult ->
-                homeSectionsCache.put(identity, cacheKey, homeResult)
-                // Persist the snapshot for stale-while-revalidate on cold open.
-                // The in-memory cache above is lost on process death; this row lets
-                // getCachedHomeSections() render instantly next launch while a
-                // network refresh runs. Identity-keyed (serverId, userId) so a
-                // user switch never serves another user's payload — cleared by
-                // clearHomeSectionsForIdentity() from the registry's identity action above.
-                persistHomeSectionsSnapshot(cacheKey, homeResult)
-            }
+        return homeSectionsCache.getOrFetch(
+            { homeSession.cacheIdentity() },
+            cacheKey,
+            force = force,
+            // SWR persist: the fetch-path-only write hook — persists the
+            // snapshot for stale-while-revalidate on cold open (the in-memory
+            // cache is lost on process death) after the in-memory put, and
+            // never on a cache hit, so a hit cannot slide the persisted row's
+            // fetchedAt forward and defeat the 24h SWR staleness ceiling below.
+            onFetched = { persistHomeSectionsSnapshot(cacheKey, it) },
+        ) {
+            // The query value object crosses the repo → network seam intact; force
+            // propagates so the network layer's sub-call caches are bypassed too.
+            apiClient.getHomeSections(query, force)
         }
     }
 
@@ -378,26 +375,18 @@ class MediaRepositoryImpl(
         }
     }
 
-    override suspend fun getLibraryFolders(force: Boolean): Result<List<LibraryFolder>> {
-        val identity = homeSession.cacheIdentity()
-        if (force) libraryFoldersCache.remove(identity, "folders")
-        libraryFoldersCache.get(identity, "folders")?.let { return Result.success(it) }
-        return apiClient.getLibraryFolders().also { result ->
-            result.getOrNull()?.let { libraryFoldersCache.put(identity, "folders", it) }
+    override suspend fun getLibraryFolders(force: Boolean): Result<List<LibraryFolder>> =
+        libraryFoldersCache.getOrFetch({ homeSession.cacheIdentity() }, "folders", force = force) {
+            apiClient.getLibraryFolders()
         }
-    }
 
     override suspend fun getLatestMedia(
         parentId: String,
         limit: Int,
-    ): Result<List<MediaItem>> {
-        val identity = homeSession.cacheIdentity()
-        val cacheKey = "latest_${parentId}_$limit"
-        latestMediaCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        return apiClient.getLatestMedia(parentId = parentId, limit = limit).also { result ->
-            result.getOrNull()?.let { latestMediaCache.put(identity, cacheKey, it) }
+    ): Result<List<MediaItem>> =
+        latestMediaCache.getOrFetch({ homeSession.cacheIdentity() }, "latest_${parentId}_$limit") {
+            apiClient.getLatestMedia(parentId = parentId, limit = limit)
         }
-    }
 
     override suspend fun getMediaItems(
         parentId: String?,
@@ -521,24 +510,17 @@ class MediaRepositoryImpl(
         },
     ).flow
 
-    override suspend fun getGenres(parentId: String?, force: Boolean): Result<List<Genre>> {
-        val identity = homeSession.cacheIdentity()
-        val cacheKey = "genres_${parentId ?: "root"}"
-        if (force) genresCache.remove(identity, cacheKey)
-        genresCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        return apiClient.getGenres(parentId).also { result ->
-            result.getOrNull()?.let { genresCache.put(identity, cacheKey, it) }
+    override suspend fun getGenres(parentId: String?, force: Boolean): Result<List<Genre>> =
+        genresCache.getOrFetch({ homeSession.cacheIdentity() }, "genres_${parentId ?: "root"}", force = force) {
+            apiClient.getGenres(parentId)
         }
-    }
 
-    override suspend fun getStudios(parentId: String?): Result<List<Studio>> {
-        val identity = homeSession.cacheIdentity()
-        val cacheKey = "studios_${parentId ?: "root"}"
-        studiosCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        return apiClient.getStudios(parentId).also { result ->
-            result.getOrNull()?.let { studiosCache.put(identity, cacheKey, it) }
+    // No force lever: unlike getGenres, getStudios never grew the freshness
+    // parameter, and the plain shape keeps exactly that behaviour.
+    override suspend fun getStudios(parentId: String?): Result<List<Studio>> =
+        studiosCache.getOrFetch({ homeSession.cacheIdentity() }, "studios_${parentId ?: "root"}") {
+            apiClient.getStudios(parentId)
         }
-    }
 
     override suspend fun getItemsByStudio(
         studioId: String,
@@ -550,20 +532,17 @@ class MediaRepositoryImpl(
     override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getArtistAlbums(artistId, limit)
 
-    override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> {
-        val identity = homeSession.cacheIdentity()
-        val cacheKey = "tracks_$albumId"
-        albumTracksCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        val epochAtStart = detailCacheEpoch.get()
-        return apiClient.getAlbumTracks(albumId).also { result ->
-            // Skip the cache write if a user-data invalidation landed while the
-            // fetch was in flight — otherwise this (now stale) snapshot would be
-            // pinned for the full TTL. See [detailCacheEpoch] for the rationale.
-            if (detailCacheEpoch.get() == epochAtStart) {
-                result.getOrNull()?.let { albumTracksCache.put(identity, cacheKey, it) }
-            }
+    override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> =
+        // Epoch-guarded write: a user-data invalidation landing mid-fetch must
+        // not pin the (now stale) snapshot for the full TTL — the epoch is
+        // captured after the miss and compared at completion. See [detailCacheEpoch].
+        albumTracksCache.getOrFetchGuarded(
+            { homeSession.cacheIdentity() },
+            "tracks_$albumId",
+            currentEpoch = { detailCacheEpoch.get() },
+        ) {
+            apiClient.getAlbumTracks(albumId)
         }
-    }
 
     override suspend fun getMusicVideos(parentId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getMediaItems(
@@ -572,22 +551,18 @@ class MediaRepositoryImpl(
             limit = limit,
         ).map { it.items }
 
-    override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> {
-        val identity = homeSession.cacheIdentity()
+    override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
         // Key includes the limit so a call with a different limit doesn't serve
-        // a stale truncated list.
-        val cacheKey = "similar_${itemId}_$limit"
-        similarCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        val epochAtStart = detailCacheEpoch.get()
-        return apiClient.getSimilarItems(itemId, limit).also { result ->
-            // Skip the cache write if a user-data invalidation landed while the
-            // fetch was in flight; otherwise a pre-mutation similar-items list
-            // (e.g. before a favorite toggle) would be pinned for the full TTL.
-            if (detailCacheEpoch.get() == epochAtStart) {
-                result.getOrNull()?.let { similarCache.put(identity, cacheKey, it) }
-            }
+        // a stale truncated list. Epoch-guarded write — a user-data invalidation
+        // landing mid-fetch (e.g. a favorite toggle) must not pin the
+        // pre-mutation list for the full TTL. See [detailCacheEpoch].
+        similarCache.getOrFetchGuarded(
+            { homeSession.cacheIdentity() },
+            "similar_${itemId}_$limit",
+            currentEpoch = { detailCacheEpoch.get() },
+        ) {
+            apiClient.getSimilarItems(itemId, limit)
         }
-    }
 
     override suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getInstantMix(itemId, limit)
@@ -621,14 +596,13 @@ class MediaRepositoryImpl(
         collectionId: String,
         startIndex: Int,
         limit: Int,
-    ): Result<SearchResult> {
-        val identity = homeSession.cacheIdentity()
-        val cacheKey = "collection_${collectionId}_$startIndex" + "_$limit"
-        collectionItemsCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        return apiClient.getCollectionItems(collectionId, startIndex, limit).also { result ->
-            result.getOrNull()?.let { collectionItemsCache.put(identity, cacheKey, it) }
+    ): Result<SearchResult> =
+        collectionItemsCache.getOrFetch(
+            { homeSession.cacheIdentity() },
+            "collection_${collectionId}_$startIndex" + "_$limit",
+        ) {
+            apiClient.getCollectionItems(collectionId, startIndex, limit)
         }
-    }
 
     override suspend fun getCollections(limit: Int): Result<List<CollectionSummary>> =
         // Not cached: the picker refetches on every open so a freshly-created
@@ -1021,11 +995,10 @@ class MediaRepositoryImpl(
         private const val LATEST_CACHE_TTL_MS = 2 * 60 * 1000L
     }
 
-    override suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int): List<String> {
-        val identity = homeSession.cacheIdentity()
-        photoFolderChildUrlCache.get(identity, folderId)?.let { return it }
-        val urls = apiClient.getChildItemImageUrls(folderId, limit)
-        photoFolderChildUrlCache.put(identity, folderId, urls)
-        return urls
-    }
+    override suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int): List<String> =
+        // The one non-Result fetch: wrapped, because the old inline copy cached
+        // the list unconditionally — put-on-success reproduces that exactly.
+        photoFolderChildUrlCache.getOrFetch({ homeSession.cacheIdentity() }, folderId) {
+            Result.success(apiClient.getChildItemImageUrls(folderId, limit))
+        }.getOrThrow()
 }

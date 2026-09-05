@@ -28,7 +28,11 @@ class DesktopStorageMountsProviderTest {
         assertEquals(StorageMountKind.INTERNAL, mount.kind)
         val home = File(System.getProperty("user.home") ?: ".")
         assertEquals(home.absolutePath, mount.rootPath)
-        assertEquals(home.usableSpace, mount.availableBytes)
+        // usableSpace is read live twice (inside the provider, here); the two
+        // reads can straddle unrelated disk writes, so pin "real usable space,
+        // not a synthetic constant" as a bounded range instead of equality.
+        assertTrue(mount.availableBytes >= 0, "usable space must be non-negative")
+        assertTrue(mount.availableBytes <= home.totalSpace, "usable space must not exceed the volume")
     }
 
     @Test

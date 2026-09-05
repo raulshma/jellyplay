@@ -429,6 +429,7 @@ val dataJvmModule: Module = module {
             lrcLibApi = get(),
             lyricsCacheDao = get(),
             networkMonitor = get(),
+            timeSource = get(),
         )
     }
     single<LyricsRepository> { get<LyricsRepositoryImpl>() }

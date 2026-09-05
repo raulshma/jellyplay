@@ -1,9 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
-import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
-import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -12,32 +10,39 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import com.raulshma.jellyplay.core.network.LrcLibApi
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
+import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Test
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 /**
  * Covers the in-memory home-sections cache in [MediaRepositoryImpl], which was
  * previously a hand-rolled `@Volatile` triple with zero test coverage and is
- * now a single-entry identity-keyed [TtlCache].
+ * now a single-entry identity-keyed [com.raulshma.jellyplay.core.model.TtlCache].
+ *
+ * Port of the orphaned legacy `:core:data` suite of the same name onto the
+ * shared module's 8-arg MediaRepositoryImpl constructor (the lyrics deps the
+ * old wiring carried are gone — lyrics own LyricsRepositoryImpl now).
  *
  * The headline case is the cross-user leak that motivated refactor C9: a wrong
  * identity must be a guaranteed cache miss by construction. The cache-invalidation
@@ -52,12 +57,11 @@ import java.time.ZoneId
 class MediaRepositoryHomeSectionsCacheTest {
 
     // Atomic (server, user) session flow — what the shared HomeSession
-    // detector consumes (see JellyfinApiEngine.session). One value per
+    // identity detector consumes (see JellyfinApiEngine.session). One value per
     // identity step, replacing the separate server/user flows the repo's own
     // observer used to combine.
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
-    private val networkMonitor: NetworkMonitor = mockk(relaxed = true)
     private val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true) {
         coEvery { get(any(), any(), any()) } returns null
     }
@@ -67,27 +71,20 @@ class MediaRepositoryHomeSectionsCacheTest {
 
     private fun buildRepository(): MediaRepositoryImpl {
         every { apiClient.session } returns sessionFlow
-        every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
-        val lrcLibApi: LrcLibApi = mockk(relaxed = true)
-        val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
         val playedStateSync: PlayedStateSync = mockk(relaxed = true)
         val offlineRepository: OfflineRepository = mockk(relaxed = true)
-        val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(
+        val homeSession = HomeSession(
             apiClient,
-            kotlinx.coroutines.CoroutineScope(
-                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
-            ),
+            CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
         // Real registry on a real dispatcher — the identity chain the suite
         // pins (session emission → transition → cache drop) runs on
         // Dispatchers.Default exactly like the per-repo observers it replaced.
-        val sessionCacheRegistry = com.raulshma.jellyplay.core.data.session.SessionCacheRegistry(
+        val sessionCacheRegistry = SessionCacheRegistry(
             homeSession,
-            kotlinx.coroutines.CoroutineScope(
-                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
-            ),
+            CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
-        val episodeCatalogue = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl(
+        val episodeCatalogue = EpisodeCatalogueImpl(
             apiClient,
             offlineRepository,
             homeSession,
@@ -95,10 +92,7 @@ class MediaRepositoryHomeSectionsCacheTest {
         )
         return MediaRepositoryImpl(
             apiClient,
-            lrcLibApi,
-            lyricsCacheDao,
             homeSectionCacheDao,
-            networkMonitor,
             playedStateSync,
             episodeCatalogue,
             mockk<UserDataRealtimeChannel>(relaxed = true),
@@ -196,7 +190,6 @@ class MediaRepositoryHomeSectionsCacheTest {
         val repository = buildRepository()
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
-        coEvery { apiClient.toggleFavorite(any()) } returns Result.success(true)
 
         repository.getHomeSections(HomeSectionQuery())
         repository.toggleFavorite("item-1")
@@ -262,7 +255,7 @@ class MediaRepositoryHomeSectionsCacheTest {
         val cached = repository.getCachedHomeSections(HomeSectionQuery())
 
         assertNotNull(cached)
-        assertEquals(1, cached?.sections?.size)
+        assertEquals(1, cached.sections.size)
     }
 
     /** Arbitrary fixed epoch the SWR tests measure fetchedAt against. */

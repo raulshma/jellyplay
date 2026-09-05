@@ -697,7 +697,19 @@ The identity-keyed-cache policy: an in-memory cache holding user-scoped
 data uses the `TtlCache` identity overloads (`get`/`put`/`remove(identity,
 key)` with a `CacheIdentity`) so a wrong identity is a guaranteed miss by
 construction — no parallel invalidation channel. core:data caches get the
-identity from `HomeSession.cacheIdentity()`/`cacheIdentitySnapshot()`.
+identity from `HomeSession.cacheIdentity()`/`cacheIdentitySnapshot()`. The
+get→fetch→put choreography around those reads is **`IdentityCacheFetch`**
+(`shared/core/data/src/commonMain/kotlin/.../cache/IdentityCacheFetch.kt`):
+`TtlCache.getOrFetch` (plain, plus the `force` freshness lever and the SWR
+`onFetched` hook), `getOrFetchGuarded` (epoch captured after the miss; the
+write lands only if the epoch is unchanged), and `getOrFetchTyped` (the
+`as? V` cast-checked shape over a heterogeneous `TtlCache<Any>` that Seerr's
+detail getters need). `MediaRepositoryImpl` and `SeerrRepositoryImpl` go
+through it instead of hand-rolling the block; two preserved drifts are
+deliberate (studios has no force lever; library folders' force does not
+reach its network call). `PlaybackRepositoryImpl`'s segments cache stays
+inline — it caches a transformed fallback with conditional caching, a
+different shape, and no fourth variant was invented for it.
 Below that layer, shared/core/network cannot depend on shared/core/data, so
 `LibraryApiClientImpl` keys off the engine's atomic session read directly
 (`currentHomeCacheIdentity()`); its favorite-flag cache is an
@@ -719,13 +731,24 @@ persisted identity is the stable source there, and logout clears both.
 owns the whole LRC/LRCLIB fetch-parse-cache chain (cache read → Jellyfin
 endpoint → LRCLIB best-match, skipped on Local networks → negative-result
 caching, plus the hour-throttled eviction) with its own private deps
-(`LrcLibApi`, `LyricsCacheDao`, `NetworkMonitor`). `MediaRepository` does
+(`LrcLibApi`, `LyricsCacheDao`, `NetworkMonitor`) and an injected
+`TimeSource` for its clock reads — throttle, cleanup cutoff, `fetchedAt`
+stamps (same seam as `MediaRepositoryImpl`). `MediaRepository` does
 NOT extend `LyricsRepository`: `AudioLyricsManager` and
 `VideoPlayerViewModel` inject the narrow type directly, the app's
 `CacheMaintenanceInitializer` injects it instead of the union, and the wasm
 `WebMediaRepositoryNarrow` drops the lyrics section (web never served it).
 `DataKoinModule` binds `LyricsRepositoryImpl` as its own single;
 `DataKoinModulesTest` pins resolution.
+
+`MediaRepositoryImpl`'s test surface lives beside it in
+`shared/core/data/src/jvmTest/.../repository/`: `MediaRepositoryImplTest`
+(SWR staleness ceilings, identity-keyed misses, mutation double-evicts),
+`MediaRepositoryHomeSectionsCacheTest`, `MediaRepositoryCacheInvalidationTest`,
+and `LyricsRepositoryImplTest` (the lyrics chain + eviction throttle on a
+fake clock) — ported from the legacy `core/data` suite the KMP move had
+stranded non-compiling on the wrong side of the seam (no CI lane compiled
+it, which is how the breakage stayed invisible; the legacy files are gone).
 
 ## Navigation destinations
 
@@ -797,6 +820,23 @@ the 257 catalog rows × 3 resource slots (title/subtitle/category
 `StringResource` accessors) = 771 reads over 528 distinct resources — the
 dedup happens at the generated-accessor level, so the prewarmer warms the
 528 distinct entries and the count is pinned by the catalog test.
+
+**Drag-to-reorder.** `ReorderState<T>`
+(`shared/feature/settings/src/commonMain/kotlin/.../ReorderState.kt`) is
+the drag-reorder policy module: the working order, the per-item height
+table, and the whole crossing decision live inside `drag(item, deltaY)`
+(strict half-height midpoint, neighbour's height charged against the
+accumulated offset — which accrues even before the row's height is
+measured — end-clamping, unmeasured neighbour borrowing the dragged
+height); it returns `true` exactly when the order changed, which is the
+composables' mirror-resync + write-on-diff persist signal. `submitOrder`
+is the stored-prefs resync, `recordHeight`/`beginDrag`/`endDrag` the rest
+of the small interface. The three former inline copies (Appearance home
+sections, Appearance newsletter sections, `NavigationCustomizationGroup`)
+drive it; `resolveOrder` there is the generalized stored-order-vs-known-
+items merge (append-missing). Pinned by `ReorderStateTest` +
+`ResolveOrderTest` (jvmTest): sub-threshold drags are no-ops, so persist
+stays silent when nothing moved.
 
 ## Theme variants
 
@@ -886,8 +926,8 @@ Recorded with evidence so future reviews don't re-suggest them.
 Designed but deliberately not landed — recorded so future work neither
 re-derives the designs nor lands them casually.
 
-- **Audio playback snapshots**: `AudioPlaybackManager`'s 52 StateFlow
-  members fold into now-playing / queue / effects / connection snapshots
+- **Audio playback snapshots**: `AudioPlaybackManager`'s 54 flow members
+  fold into now-playing / queue / effects / connection snapshots
   per the `SeerrRequestStateHolder` pattern. Deferred because ten consumer
   files across app/widgets/tile rewrite onto it at once and nothing pins
   current behaviour — do it when audio/cast churn resumes, tests first.
@@ -907,8 +947,11 @@ re-derives the designs nor lands them casually.
   2213-line file whose regressions are visual-only — deserves a session
   with screenshot verification.
 - **`MediaRepository` union shrink**: the interface still extends
-  LiveTv/SyncPlay/Newsletter/Playlist repositories (91 members, ~50
-  one-line passthroughs). Design: drop the supertypes, consumers inject the
+  LiveTv/SyncPlay/Newsletter/Playlist repositories (86 members after the
+  lyrics supertype quietly left with the lyrics extraction, ~52 pure
+  one-line passthroughs; the wasm `WebMediaRepositoryNarrow` overrides all
+  86 to throw so ONE member — `findItemByProviderId` — can exist, ~325
+  throw lines). Design: drop the supertypes, consumers inject the
   existing family interfaces (the impl already delegates — DI splits,
   bodies don't move). Deferred for its own compiler-guided sweep (every
   consumer of a dropped member re-types its injected dependency across
