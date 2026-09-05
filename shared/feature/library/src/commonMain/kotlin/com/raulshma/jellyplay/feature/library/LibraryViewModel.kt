@@ -473,11 +473,13 @@ class LibraryViewModel(
         // don't overwrite the folder's saved default sort order (which is what
         // a regular filter change via updateFilters persists). On the next visit
         // the user's chosen sort (e.g. Recently Added) is restored as expected.
-        _browserState.set(_browserState.value.copy(filters = _browserState.value.filters.copy(sortBy = SortOption.RANDOM)))
+        _browserState.set(_browserState.value.copy(filters = _browserState.value.filters.withSortBy(SortOption.RANDOM)))
     }
 
     fun clearFilters() {
-        _browserState.set(LibraryBrowserReducer.updateFilters(_browserState.value, LibraryFilters()))
+        _browserState.set(
+            LibraryBrowserReducer.updateFilters(_browserState.value, _browserState.value.filters.cleared())
+        )
     }
 
     /**

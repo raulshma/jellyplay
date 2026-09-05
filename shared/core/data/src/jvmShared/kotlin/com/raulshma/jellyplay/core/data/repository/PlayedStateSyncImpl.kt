@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync.ComputeResult
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync.ReconcileOutcome
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
@@ -43,6 +44,12 @@ class PlayedStateSyncImpl(
      * helper, never the impl, so this edge is acyclic — Lazy keeps it defensive).
      */
     private val downloadRepository: Lazy<DownloadRepository>,
+    /**
+     * Clock seam for reconcile's server-vs-local ladder: the future-dated
+     * sanity guard compares the server stamp against NOW, so an injected fake
+     * pins the whole ladder (server-newer wins vs local-newer wins) in tests.
+     */
+    private val timeSource: TimeSource,
 ) : PlayedStateSync {
 
     override suspend fun flip(itemId: String, played: Boolean): Result<Unit> {
@@ -204,7 +211,7 @@ class PlayedStateSyncImpl(
         // OffsetDateTime.now().toString(). `parseIsoToEpochMillis` accepts
         // both shapes so the comparison is zone-correct regardless of source.
         val serverMillis = parseIsoToEpochMillis(serverItem.lastPlayedDate) ?: return ReconcileOutcome.NoChange
-        if (serverMillis > System.currentTimeMillis()) {
+        if (serverMillis > timeSource.nowEpochMillis()) {
             // Sanity guard against future-dated server clocks.
             return ReconcileOutcome.NoChange
         }

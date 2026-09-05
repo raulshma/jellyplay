@@ -178,7 +178,7 @@ class ProgramsViewModelTest {
 
         advanceUntilIdle()
 
-        assertEquals(RecordDialogState.Success, viewModel.uiState.value.recordDialog)
+        assertEquals(RecordDialogState.Success(), viewModel.uiState.value.recordDialog)
         // load() re-ran after the success (2× on-now query: init + reload).
         coVerify(exactly = 2) {
             mediaRepository.getRecommendedPrograms(match<ProgramFilters> { it.isAiring == true }, any())
@@ -230,7 +230,7 @@ class ProgramsViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.cancelSeriesTimer("st-9") }
-        assertEquals(RecordDialogState.Success, viewModel.uiState.value.recordDialog)
+        assertEquals(RecordDialogState.Success(), viewModel.uiState.value.recordDialog)
     }
 
     @Test

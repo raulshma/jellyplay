@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.model.ItemPlaybackPreference
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
@@ -351,6 +352,221 @@ internal class TrackSelectionHelper(
         pendingServerSubtitleAttempts = 0
     }
 
+    /**
+     * The per-type deltas of the twin restore ladders in
+     * [updateTracksFromEngine]. The shared choreography — pending server index
+     * (-1 = placeholder, else resolve by server stream index) → held-selection
+     * guard → stored per-item index (-1 = placeholder, else resolve by stream
+     * index + an offline fallback) → the language/preference ladder (null =
+     * placeholder) — runs ONCE in [TrackSelectionHelper.runRestoreLadder];
+     * everything that genuinely differs between audio and subtitles is a field
+     * here:
+     *
+     *  - [resolvePendingMatch] — audio always resolves through
+     *    [TrackSelectionPolicy.resolveByStreamIndex] (its null-targetStream
+     *    label fallback included); subtitles guard on a non-null target stream
+     *    and, with no server streams left (offline), resolve the pending index
+     *    by the `"offline:${index}"` side-load id instead.
+     *  - [resolveStoredOfflineFallback] — what a stored index falls back to
+     *    when the stream-index resolution missed and no server streams remain
+     *    (offline): audio the engine positional index; subtitles the offline
+     *    id first, then the positional index.
+     *  - [resolvePreferenceMatch] — audio's [TrackSelectionPolicy.resolveAudio]
+     *    (audio-description preference, unconditional remembered-memory
+     *    hydration) vs subtitles' [TrackSelectionPolicy.resolveSubtitle] (the
+     *    subtitleDisabled short-circuit, forcedOnly gating of the memory).
+     *    Returning null selects the type's placeholder in both ladders.
+     */
+    private class TrackRestoreLadder(
+        /** Server [MediaStream] type the target streams are looked up by. */
+        val streamType: StreamType,
+        val pendingIndex: () -> Int?,
+        val clearPendingIndex: () -> Unit,
+        val isSelectionHeld: () -> Boolean,
+        val storedIndexIn: (MediaStreamSelection?) -> Int?,
+        /** Applies an auto (non-user) selection: engine select + held latch + persist. */
+        val select: (TrackOption) -> Unit,
+        val resolvePendingMatch: (tracks: List<TrackOption>, streamIndex: Int, streams: List<MediaStream>) -> TrackOption?,
+        val resolveStoredOfflineFallback: (tracks: List<TrackOption>, streamIndex: Int) -> TrackOption?,
+        val resolvePreferenceMatch: (tracks: List<TrackOption>, streams: List<MediaStream>, sub: SubtitleSlice) -> TrackOption?,
+    )
+
+    // The two per-type delta instances. Declared as vals whose lambdas defer
+    // every read (pending indices, held flags, remembered memory, resolver
+    // value) to invocation time.
+    private val audioRestoreLadder = TrackRestoreLadder(
+        streamType = StreamType.AUDIO,
+        pendingIndex = { pendingAudioStreamIndex },
+        clearPendingIndex = { pendingAudioStreamIndex = null },
+        isSelectionHeld = { audioSelectionHeld },
+        storedIndexIn = { it?.audioStreamIndex },
+        select = { selectAudioTrack(it, isUserOverride = false) },
+        resolvePendingMatch = { tracks, streamIndex, streams ->
+            val targetStream = streams.firstOrNull {
+                it.type == StreamType.AUDIO && it.index == streamIndex
+            }
+            // The pending index is a server/Jellyfin stream index, so match it
+            // against the engine track's container stream index (mpv ff-index)
+            // — NOT the engine track id, which is unrelated to the server
+            // index. Fall back to label for engines/tracks without one.
+            trackSelectionPolicy.resolveByStreamIndex(tracks, streamIndex, targetStream)
+        },
+        resolveStoredOfflineFallback = { tracks, streamIndex ->
+            // Offline (no server streams): the engine positional index is the
+            // only remaining handle.
+            tracks.firstOrNull { it.index == streamIndex }
+        },
+        resolvePreferenceMatch = { tracks, streams, sub ->
+            // Per-item then per-series language rule overrides the
+            // global preferred audio language when set.
+            val resolvedLang = playbackPreferenceResolver.resolved.value?.audioLanguage
+                ?: sub.preferredAudioLanguage ?: "eng"
+            // The full precedence ladder — G5 scoring pre-pass →
+            // audio-description preference → language match — lives in
+            // TrackSelectionPolicy now. Returns null when no match
+            // exists; we then select the Default placeholder.
+            hydrateRememberedAudioTrack()
+            trackSelectionPolicy.resolveAudio(
+                AudioResolutionArgs(
+                    tracks = tracks,
+                    streams = streams,
+                    resolvedLang = resolvedLang,
+                    preferAudioDescription = sub.preferAudioDescription,
+                    remembered = rememberedAudioTrack,
+                ),
+            )
+        },
+    )
+
+    private val subtitleRestoreLadder = TrackRestoreLadder(
+        streamType = StreamType.SUBTITLE,
+        pendingIndex = { pendingSubtitleStreamIndex },
+        clearPendingIndex = { pendingSubtitleStreamIndex = null },
+        isSelectionHeld = { subtitleSelectionHeld },
+        storedIndexIn = { it?.subtitleStreamIndex },
+        select = { selectSubtitleTrack(it, isUserOverride = false) },
+        resolvePendingMatch = { tracks, streamIndex, streams ->
+            val targetStream = streams.firstOrNull {
+                it.type == StreamType.SUBTITLE && it.index == streamIndex
+            }
+            if (targetStream != null) {
+                // Prefer the container stream index (mpv ff-index == the
+                // server's MediaStream.index) — robust against blank/dup/
+                // translated titles. Fall back to label only for engines or
+                // side-loaded tracks that don't expose a stream index.
+                trackSelectionPolicy.resolveByStreamIndex(tracks, streamIndex, targetStream)
+            } else if (streams.isEmpty()) {
+                // Offline: server mediaStreams is empty, so the pending
+                // index is the original server stream index stamped onto the
+                // side-loaded subtitle as id == "offline:${index}". Resolve
+                // by that id; if the engine hasn't propagated it (e.g. the
+                // sub hasn't side-loaded yet) the next availableTracks
+                // emission re-runs the restore path and picks it up.
+                trackSelectionPolicy.resolveByOfflineSubtitleId(tracks, streamIndex)
+            } else {
+                null
+            }
+        },
+        resolveStoredOfflineFallback = { tracks, streamIndex ->
+            // Offline (no server streams) resolves the side-loaded subtitle by
+            // its `"offline:${index}"` id (both ExoPlayer and mpv propagate it
+            // into TrackOption.id), then falls back to a positional-index
+            // match for legacy tracks without it.
+            trackSelectionPolicy.resolveByOfflineSubtitleId(tracks, streamIndex)
+                ?: tracks.firstOrNull { it.index == streamIndex }
+        },
+        resolvePreferenceMatch = { tracks, streams, sub ->
+            val resolvedPref = playbackPreferenceResolver.resolved.value
+            // An explicit "subtitles off" intent (item scope over series)
+            // short-circuits the matcher: force Off and skip the language
+            // ladder entirely, mirroring how a stored -1 works for the
+            // per-item stream-index override. Returning null selects Off.
+            if (resolvedPref?.subtitleDisabled == true) {
+                null
+            } else {
+                // Per-item then per-series preference overrides the global
+                // preferred subtitle language when set.
+                val resolvedLang = resolvedPref?.subtitleLanguage
+                    ?: sub.preferredSubtitleLanguage ?: "eng"
+                val forcedOnly = sub.subtitlesForcedOnly
+                // The full precedence ladder — G5 scoring pre-pass (non-forced
+                // only) → forced-only stream pick → tiered SubtitleTrackMatcher
+                // → null — lives in TrackSelectionPolicy now. Returns null when
+                // no same-language track exists; we then select Off.
+                if (!forcedOnly) {
+                    hydrateRememberedSubtitleTrack()
+                }
+                trackSelectionPolicy.resolveSubtitle(
+                    SubtitleResolutionArgs(
+                        tracks = tracks,
+                        streams = streams,
+                        lang = resolvedLang,
+                        forcedOnly = forcedOnly,
+                        forced = resolvedPref?.subtitleForced,
+                        hearingImpaired = resolvedPref?.subtitleHearingImpaired,
+                        remembered = if (forcedOnly) null else rememberedSubtitleTrack,
+                    ),
+                )
+            }
+        },
+    )
+
+    /**
+     * The one restore choreography both ladders run against their rebuilt
+     * picker rows. Stage order — pending server index → held-selection guard →
+     * stored per-item index → language/preference ladder — is behaviour-pinned
+     * by TrackSelectionHelperTest; the per-type deltas live on [TrackRestoreLadder].
+     */
+    private fun runRestoreLadder(
+        ladder: TrackRestoreLadder,
+        tracks: List<TrackOption>,
+        streams: List<MediaStream>,
+    ) {
+        val pending = ladder.pendingIndex()
+        if (pending != null) {
+            ladder.clearPendingIndex()
+            if (pending == -1) {
+                tracks.firstOrNull { it.index < 0 }?.let(ladder.select)
+            } else {
+                ladder.resolvePendingMatch(tracks, pending, streams)?.let(ladder.select)
+            }
+        } else if (!ladder.isSelectionHeld()) {
+            // Re-resolve stored/per-item/series/global preference — but only
+            // when no selection has been applied for this item yet. Once a
+            // track is selected (auto or manual) we leave it alone; the
+            // re-assert block at the top of updateTracksFromEngine keeps it
+            // sticky across track-list republishes. Without this guard, every
+            // availableTracks emission re-ran the resolution, and on offline
+            // playback (empty mediaStreams) the stored-index lookup returned
+            // null → the next emission dropped the selection back to
+            // Default/Off — the classic "subtitle flashes then resets" bug.
+            val itemId = getCurrentItemId() ?: return
+            val stored = engineStore.playerEngine.value.mediaStreamSelections[itemId]
+            val sub = subtitleStore.subtitle.value
+            val storedIndex = ladder.storedIndexIn(stored)
+            if (storedIndex != null) {
+                if (storedIndex == -1) {
+                    tracks.firstOrNull { it.index < 0 }?.let(ladder.select)
+                } else {
+                    val targetStream = streams.firstOrNull {
+                        it.type == ladder.streamType && it.index == storedIndex
+                    }
+                    // Prefer container stream index (mpv ff-index == stored
+                    // server index); fall back to label for engines/side-loaded
+                    // tracks that don't expose one. When nothing matched and no
+                    // server streams remain (offline), the ladder's offline
+                    // fallback applies.
+                    val match = trackSelectionPolicy.resolveByStreamIndex(tracks, storedIndex, targetStream)
+                        ?: if (streams.isEmpty()) ladder.resolveStoredOfflineFallback(tracks, storedIndex) else null
+                    match?.let(ladder.select)
+                }
+            } else {
+                ladder.resolvePreferenceMatch(tracks, streams, sub)?.let(ladder.select)
+                    ?: tracks.firstOrNull { it.index < 0 }?.let(ladder.select)
+            }
+        }
+    }
+
     fun updateTracksFromEngine() {
         val engine = getEngine() ?: return
         val streams = getMediaStreams()
@@ -474,194 +690,12 @@ internal class TrackSelectionHelper(
 
         _state.update { it.copy(audioTracks = audioTracks, subtitleTracks = subtitleTracks) }
 
-        val pendingAudio = pendingAudioStreamIndex
-        if (pendingAudio != null) {
-            pendingAudioStreamIndex = null
-            if (pendingAudio == -1) {
-                audioTracks.firstOrNull { it.index < 0 }?.let { selectAudioTrack(it, isUserOverride = false) }
-            } else {
-                val targetStream = streams.firstOrNull {
-                    it.type == StreamType.AUDIO && it.index == pendingAudio
-                }
-                // pendingAudio is a server/Jellyfin stream index, so match it
-                // against the engine track's container stream index (mpv ff-index)
-                // — NOT the engine track id, which is unrelated to the server
-                // index. Fall back to label for engines/tracks without one.
-                trackSelectionPolicy.resolveByStreamIndex(audioTracks, pendingAudio, targetStream)
-                    ?.let { selectAudioTrack(it, isUserOverride = false) }
-            }
-        } else if (!audioSelectionHeld) {
-            // Re-resolve stored/per-item/series/global preference — but only when
-            // no selection has been applied for this item yet. Once a track is
-            // selected (auto or manual) we leave it alone; the re-assert block
-            // above keeps it sticky across track-list republishes. Without this
-            // guard, every availableTracks emission re-ran this block, and on
-            // offline playback (empty mediaStreams) resolveMediaStreamIndex
-            // returned null → the next emission dropped audio back to default.
-            val itemId = getCurrentItemId()
-            if (itemId != null) {
-                val engine = engineStore.playerEngine.value
-                val sub = subtitleStore.subtitle.value
-                val stored = engine.mediaStreamSelections[itemId]
-                val audioIdx = stored?.audioStreamIndex
-                val prefAudioLang = sub.preferredAudioLanguage ?: "eng"
-                if (audioIdx != null) {
-                    if (audioIdx == -1) {
-                        audioTracks.firstOrNull { it.index < 0 }?.let { selectAudioTrack(it, isUserOverride = false) }
-                    } else {
-                        val targetStream = streams.firstOrNull {
-                            it.type == StreamType.AUDIO && it.index == audioIdx
-                        }
-                        // Prefer container stream index (mpv ff-index == stored
-                        // server index); fall back to label for engines/side-loaded
-                        // tracks that don't expose one. Offline (no server streams)
-                        // falls through to the engine positional index.
-                        val resolved = trackSelectionPolicy.resolveByStreamIndex(audioTracks, audioIdx, targetStream)
-                        if (resolved != null) {
-                            selectAudioTrack(resolved, isUserOverride = false)
-                        } else if (streams.isEmpty()) {
-                            audioTracks.firstOrNull { it.index == audioIdx }
-                                ?.let { selectAudioTrack(it, isUserOverride = false) }
-                        }
-                    }
-                } else {
-                    // Per-item then per-series language rule overrides the
-                    // global preferred audio language when set.
-                    val resolvedAudioLang = playbackPreferenceResolver.resolved.value?.audioLanguage
-                        ?: prefAudioLang
-                    // The full precedence ladder — G5 scoring pre-pass →
-                    // audio-description preference → language match — lives in
-                    // TrackSelectionPolicy now. Returns null when no match
-                    // exists; we then select the Default placeholder.
-                    hydrateRememberedAudioTrack()
-                    val match = trackSelectionPolicy.resolveAudio(
-                        AudioResolutionArgs(
-                            tracks = audioTracks,
-                            streams = streams,
-                            resolvedLang = resolvedAudioLang,
-                            preferAudioDescription = sub.preferAudioDescription,
-                            remembered = rememberedAudioTrack,
-                        ),
-                    )
-                    if (match != null) {
-                        selectAudioTrack(match, isUserOverride = false)
-                    } else {
-                        audioTracks.firstOrNull { it.index < 0 }?.let { selectAudioTrack(it, isUserOverride = false) }
-                    }
-                }
-            }
-        }
-
-        val pending = pendingSubtitleStreamIndex
-        if (pending != null) {
-            pendingSubtitleStreamIndex = null
-            if (pending == -1) {
-                subtitleTracks.firstOrNull { it.index < 0 }?.let { selectSubtitleTrack(it, isUserOverride = false) }
-            } else {
-                val subStreams = getMediaStreams()
-                val targetStream = subStreams.firstOrNull { it.type == StreamType.SUBTITLE && it.index == pending }
-                if (targetStream != null) {
-                    // Prefer the container stream index (mpv ff-index == the
-                    // server's MediaStream.index) — robust against blank/dup/
-                    // translated titles. Fall back to label only for engines or
-                    // side-loaded tracks that don't expose a stream index.
-                    val match = trackSelectionPolicy.resolveByStreamIndex(subtitleTracks, pending, targetStream)
-                    if (match != null) {
-                        selectSubtitleTrack(match, isUserOverride = false)
-                    }
-                } else if (subStreams.isEmpty()) {
-                    // Offline: server mediaStreams is empty, so the pending
-                    // index is the original server stream index stamped onto the
-                    // side-loaded subtitle as id == "offline:${pending}". Resolve
-                    // by that id; if the engine hasn't propagated it (e.g. the
-                    // sub hasn't side-loaded yet) the next availableTracks
-                    // emission re-runs the restore path and picks it up.
-                    trackSelectionPolicy.resolveByOfflineSubtitleId(subtitleTracks, pending)
-                        ?.let { selectSubtitleTrack(it, isUserOverride = false) }
-                }
-            }
-        } else if (!subtitleSelectionHeld) {
-            // Re-resolve stored/preference only while no selection is held for
-            // this item. The classic "subtitle flashes then resets" bug on
-            // offline playback: user picks a sub → persistStreamSelectionFromPlayer
-            // stores null (resolveMediaStreamIndex fails on empty mediaStreams)
-            // → the next availableTracks emission re-entered this block → no
-            // stored index, language-preference match against empty streams
-            // failed → fell through to selectSubtitleTrack(Off), wiping the
-            // override the user just set. Guarding it keeps the held selection.
-            val itemId = getCurrentItemId()
-            if (itemId != null) {
-                val engine = engineStore.playerEngine.value
-                val sub = subtitleStore.subtitle.value
-                val stored = engine.mediaStreamSelections[itemId]
-                val subIdx = stored?.subtitleStreamIndex
-                val prefSubLang = sub.preferredSubtitleLanguage ?: "eng"
-                if (subIdx != null) {
-                    if (subIdx == -1) {
-                        subtitleTracks.firstOrNull { it.index < 0 }?.let { selectSubtitleTrack(it, isUserOverride = false) }
-                    } else {
-                        val targetStream = streams.firstOrNull {
-                            it.type == StreamType.SUBTITLE && it.index == subIdx
-                        }
-                        // Prefer the container stream index (mpv ff-index), which
-                        // equals the stored server index; fall back to label for
-                        // engines/side-loaded tracks without one. Offline (no
-                        // server streams) resolves the side-loaded subtitle by
-                        // its `"offline:${index}"` id (both ExoPlayer and mpv
-                        // propagate it into TrackOption.id), then falls back to
-                        // a positional-index match for legacy tracks without it.
-                        val resolved = trackSelectionPolicy.resolveByStreamIndex(subtitleTracks, subIdx, targetStream)
-                        if (resolved != null) {
-                            selectSubtitleTrack(resolved, isUserOverride = false)
-                        } else if (streams.isEmpty()) {
-                            trackSelectionPolicy.resolveByOfflineSubtitleId(subtitleTracks, subIdx)
-                                ?.let { selectSubtitleTrack(it, isUserOverride = false) }
-                                ?: subtitleTracks.firstOrNull { it.index == subIdx }
-                                    ?.let { selectSubtitleTrack(it, isUserOverride = false) }
-                        }
-                    }
-                } else {
-                    // Per-item then per-series preference overrides the global
-                    // preferred subtitle language when set.
-                    val resolvedPref = playbackPreferenceResolver.resolved.value
-                    // An explicit "subtitles off" intent (item scope over series)
-                    // short-circuits the matcher: force Off and skip the language
-                    // ladder entirely, mirroring how subIdx == -1 works above for
-                    // the per-item stream-index override.
-                    if (resolvedPref?.subtitleDisabled == true) {
-                        subtitleTracks.firstOrNull { it.index < 0 }
-                            ?.let { selectSubtitleTrack(it, isUserOverride = false) }
-                    } else {
-                        val resolvedSubLang = resolvedPref?.subtitleLanguage
-                            ?: prefSubLang
-                        val forcedOnly = sub.subtitlesForcedOnly
-                        // The full precedence ladder — G5 scoring pre-pass (non-forced
-                        // only) → forced-only stream pick → tiered SubtitleTrackMatcher
-                        // → null — lives in TrackSelectionPolicy now. Returns null when
-                        // no same-language track exists; we then select Off.
-                        if (!forcedOnly) {
-                            hydrateRememberedSubtitleTrack()
-                        }
-                        val match = trackSelectionPolicy.resolveSubtitle(
-                            SubtitleResolutionArgs(
-                                tracks = subtitleTracks,
-                                streams = streams,
-                                lang = resolvedSubLang,
-                                forcedOnly = forcedOnly,
-                                forced = resolvedPref?.subtitleForced,
-                                hearingImpaired = resolvedPref?.subtitleHearingImpaired,
-                                remembered = if (forcedOnly) null else rememberedSubtitleTrack,
-                            ),
-                        )
-                        if (match != null) {
-                            selectSubtitleTrack(match, isUserOverride = false)
-                        } else {
-                            subtitleTracks.firstOrNull { it.index < 0 }?.let { selectSubtitleTrack(it, isUserOverride = false) }
-                        }
-                    }
-                }
-            }
-        }
+        // The two restore ladders — pending server index → held-selection
+        // guard → stored per-item index → per-item/series preference — are ONE
+        // choreography run twice, parameterised by the per-type deltas carried
+        // by the ladder instances (see [TrackRestoreLadder]).
+        runRestoreLadder(audioRestoreLadder, audioTracks, streams)
+        runRestoreLadder(subtitleRestoreLadder, subtitleTracks, streams)
 
         // A pending post-download selection consumes the rebuilt list last so
         // it wins over the auto-resolution ladder above.

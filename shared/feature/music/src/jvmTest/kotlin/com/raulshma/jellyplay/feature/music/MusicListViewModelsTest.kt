@@ -10,9 +10,9 @@ import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.feature.music.albums.AlbumsViewModel
-import com.raulshma.jellyplay.feature.music.albums.MusicSortOption
 import com.raulshma.jellyplay.feature.music.artists.ArtistsViewModel
 import com.raulshma.jellyplay.feature.music.browse.MusicBrowseViewModel
+import com.raulshma.jellyplay.feature.music.collection.MusicSortOption
 import com.raulshma.jellyplay.feature.music.genres.GenresViewModel
 import com.raulshma.jellyplay.feature.music.playlists.PlaylistDialogState
 import com.raulshma.jellyplay.feature.music.playlists.PlaylistsViewModel
@@ -466,11 +466,11 @@ class ArtistsViewModelTest {
 
     @Test
     fun defaultSortIsName_andSetSortUpdatesSelection() {
-        assertEquals(MusicSortOption.NAME, viewModel.selectedSort)
+        assertEquals(MusicSortOption.NAME, viewModel.selectedSort.value)
 
         viewModel.setSort(MusicSortOption.DATE_ADDED)
 
-        assertEquals(MusicSortOption.DATE_ADDED, viewModel.selectedSort)
+        assertEquals(MusicSortOption.DATE_ADDED, viewModel.selectedSort.value)
     }
 
     @Test

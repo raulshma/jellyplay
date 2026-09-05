@@ -23,7 +23,7 @@ import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStoreImpl
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepositoryImpl
-import com.raulshma.jellyplay.core.data.util.DesktopImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.ImageUrlProviderImpl
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.DataBuildFlags
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
@@ -75,7 +75,9 @@ fun desktopDataModule(dataDir: Path): Module {
         }
 
         single<ImageUrlProvider> {
-            DesktopImageUrlProvider(
+            // The shared jvmShared impl — the desktop twin (DesktopImageUrlProvider)
+            // was deleted once the policy lived in one class next to the interface.
+            ImageUrlProviderImpl(
                 playbackRepository = get(),
                 appearanceStore = get(),
             )

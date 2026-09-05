@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.log.Log
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.database.dao.AuditLogDao
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
 import com.raulshma.jellyplay.core.database.entity.MediaAuditLogEntity
@@ -61,6 +62,12 @@ class AdminStatisticsRepositoryImpl constructor(
      * precedent).
      */
     private val labels: AdminStatisticsLabelProvider,
+    /**
+     * Clock seam for the audit-log retention window (the 90-day
+     * `deleteOlderThan` cutoff) and the cleanup-entry `timestamp` stamp —
+     * injectable so a fake clock pins the retention decision in tests.
+     */
+    private val timeSource: TimeSource,
 ) : AdminStatisticsRepository {
 
     /**
@@ -80,7 +87,7 @@ class AdminStatisticsRepositoryImpl constructor(
 
     private suspend fun cleanupOldAuditLogs() {
         try {
-            val ninetyDaysAgo = System.currentTimeMillis() - 90L * 24 * 60 * 60 * 1000
+            val ninetyDaysAgo = timeSource.nowEpochMillis() - 90L * 24 * 60 * 60 * 1000
             auditLogDao.deleteOlderThan(ninetyDaysAgo)
         } catch (e: Exception) {
             Log.d("AdminStats", "Failed to cleanup old audit logs", e)
@@ -713,7 +720,7 @@ class AdminStatisticsRepositoryImpl constructor(
 
         val entry = AuditLogEntry(
             id = java.util.UUID.randomUUID().toString(),
-            timestamp = System.currentTimeMillis(),
+            timestamp = timeSource.nowEpochMillis(),
             adminUserId = adminId,
             adminUserName = adminName,
             actionType = actionType,

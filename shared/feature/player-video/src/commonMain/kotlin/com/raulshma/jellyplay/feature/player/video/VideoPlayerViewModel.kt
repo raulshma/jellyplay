@@ -30,7 +30,6 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.PlaybackMode
-import com.raulshma.jellyplay.core.model.PlaybackPrefScope
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamType
@@ -1058,22 +1057,25 @@ class VideoPlayerViewModel(
         },
         playbackPreferenceResolver = playbackPreferenceResolver,
         persistRememberedTrack = { type, track ->
-            val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId ?: return@TrackSelectionHelper
-            launch {
-                itemPlaybackPreferenceRepository.saveRememberedTrack(
-                    scope = PlaybackPrefScope.SERIES,
-                    key = seriesId,
-                    type = type,
-                    track = track,
-                )
-                // Re-resolve per-item/series preferences so the next track
-                // resolution sees the just-persisted remembered track. Call the
-                // resolver directly — trackSelectionHelper is still being built
-                // here (its refreshPlaybackPreferences() only delegates to it).
-                playbackPreferenceResolver.refresh()
-            }
+            // Forwards into the write-side twin declared below — the lambda
+            // only runs long after construction, so its (lazy) read of the
+            // writer is safe.
+            playbackPreferenceWriter.rememberTrack(type, track)
         },
         scope = scope,
+    )
+    // The write-side twin of the resolver above: one owner of the save/clear +
+    // mandatory-refresh choreography (see its KDoc). The explicit type is
+    // load-bearing: this declaration sits after trackSelectionHelper (whose
+    // persistRememberedTrack lambda reads it) while its own wiring reads that
+    // helper back — without the annotation, property type inference would
+    // recurse.
+    private val playbackPreferenceWriter: ItemPlaybackPreferenceWriter = ItemPlaybackPreferenceWriter(
+        repository = itemPlaybackPreferenceRepository,
+        getCurrentSeriesId = { playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId },
+        getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
+        scope = scope,
+        onPreferencesChanged = { trackSelectionHelper.refreshPlaybackPreferences() },
     )
 
     /**
@@ -1722,21 +1724,7 @@ class VideoPlayerViewModel(
      * No-op when the current item has no series (e.g. a standalone movie).
      */
     fun setSeriesAudioLanguagePreference(language: String?) {
-        val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId ?: return
-        launch {
-            // null = "forget": use the explicit clear so save()'s "null ⇒ preserve"
-            // semantics don't silently keep the old language forever.
-            if (language == null) {
-                itemPlaybackPreferenceRepository.clearAudioLanguage(PlaybackPrefScope.SERIES, seriesId)
-            } else {
-                itemPlaybackPreferenceRepository.save(
-                    scope = PlaybackPrefScope.SERIES,
-                    key = seriesId,
-                    audioLanguage = language,
-                )
-            }
-            trackSelectionHelper.refreshPlaybackPreferences()
-        }
+        playbackPreferenceWriter.setSeriesAudioLanguage(language)
     }
 
     /**
@@ -1752,23 +1740,7 @@ class VideoPlayerViewModel(
         forced: Boolean? = null,
         hearingImpaired: Boolean? = null,
     ) {
-        val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId ?: return
-        launch {
-            // null = "forget": use the explicit clear so save()'s "null ⇒ preserve"
-            // semantics don't silently keep the old language forever.
-            if (language == null) {
-                itemPlaybackPreferenceRepository.clearSubtitleLanguage(PlaybackPrefScope.SERIES, seriesId)
-            } else {
-                itemPlaybackPreferenceRepository.save(
-                    scope = PlaybackPrefScope.SERIES,
-                    key = seriesId,
-                    subtitleLanguage = language,
-                    subtitleForced = forced,
-                    subtitleHearingImpaired = hearingImpaired,
-                )
-            }
-            trackSelectionHelper.refreshPlaybackPreferences()
-        }
+        playbackPreferenceWriter.setSeriesSubtitlePreference(language, forced, hearingImpaired)
     }
 
     /**
@@ -1780,11 +1752,7 @@ class VideoPlayerViewModel(
      * enabling one clears the other's row fields.
      */
     fun setSeriesSubtitleDisabled(disabled: Boolean) {
-        val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId ?: return
-        launch {
-            itemPlaybackPreferenceRepository.setSubtitleDisabled(PlaybackPrefScope.SERIES, seriesId, disabled)
-            trackSelectionHelper.refreshPlaybackPreferences()
-        }
+        playbackPreferenceWriter.setSeriesSubtitleDisabled(disabled)
     }
     // -----------------------------------------------------------------------
 
@@ -1894,23 +1862,9 @@ class VideoPlayerViewModel(
             )
         }
         updateConfigWithUiState()
-        launch {
-            val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId
-            val itemId = playerSessionManager.sessionState.value.currentItemId
-            // Prefer SERIES scope (applies to all episodes), fall back to ITEM.
-            val scopeKey = seriesId ?: itemId ?: return@launch
-            val prefScope = if (seriesId != null) PlaybackPrefScope.SERIES else PlaybackPrefScope.ITEM
-            if (strength == com.raulshma.jellyplay.core.model.EffectStrength.NONE) {
-                itemPlaybackPreferenceRepository.clearDialogueBoostStrength(prefScope, scopeKey)
-            } else {
-                itemPlaybackPreferenceRepository.save(
-                    scope = prefScope,
-                    key = scopeKey,
-                    dialogueBoostStrength = strength,
-                )
-            }
-            trackSelectionHelper.refreshPlaybackPreferences()
-        }
+        // Persists per SERIES-then-ITEM scope (the writer's choreography: NONE
+        // means the explicit clear, and the resolver refresh always fires).
+        playbackPreferenceWriter.setDialogueBoostStrength(strength)
     }
 
     /**
@@ -2110,6 +2064,21 @@ class VideoPlayerViewModel(
     }
 
     /**
+     * The error-dialog dismissal write: all three fields move together (flag
+     * down, error + retryable nulled) — one home for the triple instead of a
+     * hand-copied `copy(...)` at each dismissal site.
+     */
+    private fun clearPlaybackErrorState() {
+        _uiState.update {
+            it.copy(
+                showPlaybackErrorDialog = false,
+                playerError = null,
+                playerErrorRetryable = false,
+            )
+        }
+    }
+
+    /**
      * Switch-engine retry (backs the error dialog's engine picker). The
      * error-dialog clear is a synchronous ui-state write and stays here;
      * everything from the reporter cancel to the engine swap and
@@ -2117,13 +2086,9 @@ class VideoPlayerViewModel(
      * ([PlaybackSession.retryWithEngine]).
      */
     fun retryWithEngine(playerType: PlayerType) {
+        clearPlaybackErrorState()
         _uiState.update {
-            it.copy(
-                showPlaybackErrorDialog = false,
-                playerError = null,
-                playerErrorRetryable = false,
-                preferredPlayerType = playerType,
-            )
+            it.copy(preferredPlayerType = playerType)
         }
         playbackSession.retryWithEngine(
             playerType = playerType,
@@ -2140,13 +2105,7 @@ class VideoPlayerViewModel(
      * (Decoder, Drm) only offer switch-engine.
      */
     fun retryPlayback() {
-        _uiState.update {
-            it.copy(
-                showPlaybackErrorDialog = false,
-                playerError = null,
-                playerErrorRetryable = false,
-            )
-        }
+        clearPlaybackErrorState()
         playbackSession.retryPlayback(
             playbackSpeed = _uiState.value.playbackSpeed,
             streamingQuality = _uiState.value.uiPrefs.streamingQuality,
@@ -2155,13 +2114,7 @@ class VideoPlayerViewModel(
     }
 
     fun dismissPlaybackError() {
-        _uiState.update {
-            it.copy(
-                showPlaybackErrorDialog = false,
-                playerError = null,
-                playerErrorRetryable = false,
-            )
-        }
+        clearPlaybackErrorState()
     }
 
     fun setFrameRateMatching(enabled: Boolean) {
@@ -2583,6 +2536,64 @@ class VideoPlayerViewModel(
     ) = mediaSessionController.createForItem(itemId, title, subtitle)
 
     /**
+     * The item-switch uiState rebuild, declared once: the surviving leaves are
+     * exactly the constructor arguments here — everything else resets to its
+     * slice default. Each listed slice is rebuilt FRESH (not a `.copy`),
+     * mirroring the old flat reset whitelist where unlisted leaves took slice
+     * defaults.
+     */
+    private fun VideoPlayerUiState.keepAcrossItems(): VideoPlayerUiState = VideoPlayerUiState(
+        preferredPlayerType = preferredPlayerType,
+        // uiPrefs: the prefs-mirror leaves carry across an item switch
+        // (orientation, controls timeout, metadata/clock/time-remaining
+        // visibility, keep-screen-on); the per-item / runtime leaves
+        // (stats overlay, pass-out hours, trickplay info + toggles,
+        // quality, ABR, playback mode, lock/PIN flags) reset to defaults.
+        uiPrefs = PlayerUiPrefsState(
+            defaultOrientation = uiPrefs.defaultOrientation,
+            controlsTimeoutMs = uiPrefs.controlsTimeoutMs,
+            showPlaybackMetadata = uiPrefs.showPlaybackMetadata,
+            showClock = uiPrefs.showClock,
+            showTimeRemaining = uiPrefs.showTimeRemaining,
+            keepScreenOnDuringVideo = uiPrefs.keepScreenOnDuringVideo,
+        ),
+        // gestures: the prefs-mirror leaves carry across an item switch
+        // (seek window, gesture toggle, default speed, swipe cap,
+        // brightness flag + level); the runtime leaves (hold-speed
+        // toggle/multiplier/active flag, indicator side, frame-rate
+        // matching, refresh-rate mode) reset to defaults. Fresh slice —
+        // same tight semantics as uiPrefs above.
+        gestures = GesturePrefsState(
+            seekDurationMs = gestures.seekDurationMs,
+            gesturesEnabled = gestures.gesturesEnabled,
+            defaultSpeed = gestures.defaultSpeed,
+            swipeSeekMaxMs = gestures.swipeSeekMaxMs,
+            rememberBrightness = gestures.rememberBrightness,
+            brightnessLevel = gestures.brightnessLevel,
+        ),
+        // segmentState: only the behaviors carry across an item switch —
+        // the per-item segment list resets to default (empty).
+        segmentState = SegmentState(
+            segmentBehaviors = segmentState.segmentBehaviors,
+        ),
+        // episodes resets through the navigator's seam right after this
+        // update: only the browser feature toggle carries across an
+        // item switch — adjacency, season/episode lists, season id and
+        // the loading flag are per-item and reset to defaults.
+        // videoFx: only the TV zoom carries across an item switch —
+        // the per-item effects and both aspect fields reset to defaults.
+        videoFx = VideoFxState(tvZoomModePercent = videoFx.tvZoomModePercent),
+        subtitleStyle = subtitleStyle,
+        // Reset per-item dialogue boost so it doesn't bleed into the next
+        // item before the resolver re-applies the per-item rule. (The one
+        // per-item exception in the former effects whitelist; dialogue
+        // boost stays resolver-driven session state — see
+        // VideoEffectsController's KDoc.)
+        dialogueBoostEnabled = false,
+        dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.NONE,
+    )
+
+    /**
      * The ViewModel-owned half of the per-item/full teardown (B3 split of the
      * old `releaseInternals`). The session-owned half — in-flight load cancel,
      * reporter jobs, media-session release, PSM release, seek-latch clear —
@@ -2634,61 +2645,9 @@ class VideoPlayerViewModel(
         // Residual reset: session + prefs-mirror fields only. Everything that
         // reset implicitly (track lists, subtitle search, sleep timer, audio
         // effects, SyncPlay display, A/B repeat) is now reset — or deliberately
-        // not reset — by its owning controller above.
-        _uiState.update { currentState ->
-            VideoPlayerUiState(
-                preferredPlayerType = currentState.preferredPlayerType,
-                // uiPrefs: the prefs-mirror leaves carry across an item switch
-                // (orientation, controls timeout, metadata/clock/time-remaining
-                // visibility, keep-screen-on); the per-item / runtime leaves
-                // (stats overlay, pass-out hours, trickplay info + toggles,
-                // quality, ABR, playback mode, lock/PIN flags) reset to
-                // defaults. A FRESH slice (not a .copy) mirrors the old flat
-                // constructor: unlisted leaves take slice defaults.
-                uiPrefs = PlayerUiPrefsState(
-                    defaultOrientation = currentState.uiPrefs.defaultOrientation,
-                    controlsTimeoutMs = currentState.uiPrefs.controlsTimeoutMs,
-                    showPlaybackMetadata = currentState.uiPrefs.showPlaybackMetadata,
-                    showClock = currentState.uiPrefs.showClock,
-                    showTimeRemaining = currentState.uiPrefs.showTimeRemaining,
-                    keepScreenOnDuringVideo = currentState.uiPrefs.keepScreenOnDuringVideo,
-                ),
-                // gestures: the prefs-mirror leaves carry across an item switch
-                // (seek window, gesture toggle, default speed, swipe cap,
-                // brightness flag + level); the runtime leaves (hold-speed
-                // toggle/multiplier/active flag, indicator side, frame-rate
-                // matching, refresh-rate mode) reset to defaults. Fresh slice —
-                // same tight semantics as uiPrefs above.
-                gestures = GesturePrefsState(
-                    seekDurationMs = currentState.gestures.seekDurationMs,
-                    gesturesEnabled = currentState.gestures.gesturesEnabled,
-                    defaultSpeed = currentState.gestures.defaultSpeed,
-                    swipeSeekMaxMs = currentState.gestures.swipeSeekMaxMs,
-                    rememberBrightness = currentState.gestures.rememberBrightness,
-                    brightnessLevel = currentState.gestures.brightnessLevel,
-                ),
-                // segmentState: only the behaviors carry across an item switch —
-                // the per-item segment list resets to default (empty).
-                segmentState = SegmentState(
-                    segmentBehaviors = currentState.segmentState.segmentBehaviors,
-                ),
-                // episodes resets through the navigator's seam right after this
-                // update: only the browser feature toggle carries across an
-                // item switch — adjacency, season/episode lists, season id and
-                // the loading flag are per-item and reset to defaults.
-                // videoFx: only the TV zoom carries across an item switch —
-                // the per-item effects and both aspect fields reset to defaults.
-                videoFx = VideoFxState(tvZoomModePercent = currentState.videoFx.tvZoomModePercent),
-                subtitleStyle = currentState.subtitleStyle,
-                // Reset per-item dialogue boost so it doesn't bleed into the next
-                // item before the resolver re-applies the per-item rule. (The one
-                // per-item exception in the former effects whitelist; dialogue
-                // boost stays resolver-driven session state — see
-                // VideoEffectsController's KDoc.)
-                dialogueBoostEnabled = false,
-                dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.NONE,
-            )
-        }
+        // not reset — by its owning controller above. The surviving leaves are
+        // declared in [keepAcrossItems].
+        _uiState.update { it.keepAcrossItems() }
         // The episode-slice reset goes through the navigator's seam — it is
         // the slice's single writer (CONTEXT.md).
         episodeNavigator.resetForItemSwitch()

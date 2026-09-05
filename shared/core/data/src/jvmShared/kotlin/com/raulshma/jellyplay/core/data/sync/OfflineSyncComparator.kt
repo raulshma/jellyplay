@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.sync
 
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSource
@@ -64,7 +65,14 @@ data class SyncBaseline(
  * segments are not part of [MediaDetail] and are only compared when a caller
  * passes a freshly fetched list (see [diff]).
  */
-class OfflineSyncComparator() {
+class OfflineSyncComparator(
+    /**
+     * Clock seam for the [OfflineSyncState.lastCheckedAt] stamp written on
+     * every diff — injectable so a fake clock pins the "check happened at"
+     * projection in tests.
+     */
+    private val timeSource: TimeSource,
+) {
 
     companion object {
         /**
@@ -278,7 +286,7 @@ class OfflineSyncComparator() {
                 trickplayChanged = trickplayChanged,
                 segmentsChanged = segmentsChanged,
                 mediaFileChanged = mediaFileChanged,
-                lastCheckedAt = System.currentTimeMillis(),
+                lastCheckedAt = timeSource.nowEpochMillis(),
             ),
         )
     }

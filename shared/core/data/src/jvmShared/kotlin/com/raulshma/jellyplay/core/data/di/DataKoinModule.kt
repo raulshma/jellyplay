@@ -204,7 +204,7 @@ val dataJvmModule: Module = module {
     single { PhotoFolderPrefetcher(get()) }
 
     // JellyfinApiClient resolves from :shared:core:network's networkJvmModule.
-    single { ServerHealthMonitor(get()) }
+    single { ServerHealthMonitor(get(), get()) }
 
     single { RemoteNavigationBridge() }
 
@@ -229,6 +229,7 @@ val dataJvmModule: Module = module {
             tokenCipher = get(),
             json = get(),
             externalScope = get(DatastoreQualifiers.applicationScope),
+            timeSource = get(),
         )
     }
     single<AuthRepository> { get<AuthRepositoryImpl>() }
@@ -239,10 +240,10 @@ val dataJvmModule: Module = module {
     single { ServerDiscoveryRepositoryImpl(get()) }
     single<ServerDiscoveryRepository> { get<ServerDiscoveryRepositoryImpl>() }
 
-    single { SearchHistoryRepositoryImpl(get()) }
+    single { SearchHistoryRepositoryImpl(get(), get()) }
     single<SearchHistoryRepository> { get<SearchHistoryRepositoryImpl>() }
 
-    single { ItemPlaybackPreferenceRepositoryImpl(get(), get()) }
+    single { ItemPlaybackPreferenceRepositoryImpl(get(), get(), get()) }
     single<ItemPlaybackPreferenceRepository> { get<ItemPlaybackPreferenceRepositoryImpl>() }
 
     single { MetadataEditorRepositoryImpl(get()) }
@@ -257,12 +258,12 @@ val dataJvmModule: Module = module {
     single { OfflineRepositoryImpl(get(), get(), get(), get(), get()) }
     single<OfflineRepository> { get<OfflineRepositoryImpl>() }
 
-    single { PlaybackOutboxRepositoryImpl(get()) }
+    single { PlaybackOutboxRepositoryImpl(get(), get()) }
     single<PlaybackOutboxRepository> { get<PlaybackOutboxRepositoryImpl>() }
 
     single { SmartPlaylistRepository(get(), get()) }
 
-    single { MoodPlaylistRepository(get(), get()) }
+    single { MoodPlaylistRepository(get(), get(), get()) }
 
     // The byte-cap rule previously built by DataModule.provideStoragePolicy —
     // same stores, same DAO-backed suspend aggregate.
@@ -352,7 +353,7 @@ val dataJvmModule: Module = module {
         )
     }
 
-    single { OfflineSyncComparator() }
+    single { OfflineSyncComparator(get()) }
 
     // V3 downloads conveyor: OfflineSyncManager flipped from the interim
     // direct-construction DataModule provider to a Koin single (C4 flip
@@ -379,6 +380,7 @@ val dataJvmModule: Module = module {
             offlineModeManager = get(),
             playbackRepository = get(),
             appScope = get(DatastoreQualifiers.applicationScope),
+            timeSource = get(),
         )
     }
 
@@ -404,6 +406,7 @@ val dataJvmModule: Module = module {
             mediaRepository = lazy { get<MediaRepository>() },
             downloadsStore = lazy { get<DownloadsStore>() },
             downloadRepository = lazy { get<DownloadRepository>() },
+            timeSource = get(),
         )
     }
     single<PlayedStateSync> { get<PlayedStateSyncImpl>() }
@@ -591,6 +594,7 @@ val dataJvmModule: Module = module {
             syncComparator = get(),
             progressNotifier = get<DownloadProgressNotifier>(),
             imagePreloader = get<OfflineImagePreloader>(),
+            timeSource = get(),
         )
     }
     single<DownloadRepository> { get<DownloadRepositoryImpl>() }
@@ -706,6 +710,7 @@ val dataJvmModule: Module = module {
             json = get(),
             scope = get(DatastoreQualifiers.applicationScope),
             labels = get<AdminStatisticsLabelProvider>(),
+            timeSource = get(),
         )
     }
     single<AdminStatisticsRepository> { get<AdminStatisticsRepositoryImpl>() }

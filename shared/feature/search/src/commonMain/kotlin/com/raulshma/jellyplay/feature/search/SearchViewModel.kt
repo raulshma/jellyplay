@@ -279,21 +279,17 @@ class SearchViewModel(
     }
 
     fun toggleMediaType(mediaType: MediaType) {
-        _filters.update { current ->
-            val types = current.mediaTypes
-            current.copy(
-                mediaTypes = if (mediaType in types) types - mediaType else types + mediaType,
-            )
-        }
+        _filters.update { it.withMediaTypeToggled(mediaType) }
         persistFilters(_filters.value)
     }
 
     /**
-     * Single-select sort setter (mirrors [LibraryViewModel.updateFilters]' sort
-     * handling). Persists the new sort option so it survives navigation/restart.
+     * Single-select sort setter — writes through the [LibraryFilters] algebra
+     * (the same [LibraryFilters.withSortBy] policy the library's Sort sheet
+     * uses). Persists the new sort option so it survives navigation/restart.
      */
     fun setSortBy(sortBy: SortOption) {
-        _filters.update { it.copy(sortBy = sortBy) }
+        _filters.update { it.withSortBy(sortBy) }
         persistFilters(_filters.value)
     }
 
@@ -302,7 +298,7 @@ class SearchViewModel(
      * Persists the new status so it survives navigation/restart.
      */
     fun setPlayedStatus(status: PlayedStatus) {
-        _filters.update { it.copy(playedStatus = status) }
+        _filters.update { it.withPlayedStatus(status) }
         persistFilters(_filters.value)
     }
 
@@ -311,7 +307,7 @@ class SearchViewModel(
     }
 
     fun clearFilters() {
-        _filters.set(LibraryFilters())
+        _filters.update { it.cleared() }
         launch { runCatching { searchFiltersStore.clearSearchFilters() } }
     }
 

@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
@@ -78,6 +79,12 @@ class OfflineSyncManager(
     private val offlineModeManager: OfflineModeManager,
     private val playbackRepository: PlaybackRepository,
     private val appScope: CoroutineScope,
+    /**
+     * Clock seam for the freshness decisions: the [SYNC_TTL_MS] gate compares
+     * the persisted `lastSyncedAt` against NOW, and the post-resync baseline
+     * write stamps the same clock — a fake pins the TTL ladder in tests.
+     */
+    private val timeSource: TimeSource,
 ) {
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -118,7 +125,7 @@ class OfflineSyncManager(
             return ResyncCheckResult(itemId, OfflineSyncState(SyncStatus.UNKNOWN))
         }
 
-        val now = System.currentTimeMillis()
+        val now = timeSource.nowEpochMillis()
         val lastSynced = baseline.lastSyncedAt
         if (!force && lastSynced != null && now - lastSynced < SYNC_TTL_MS) {
             return ResyncCheckResult(itemId, baseline.toOfflineSyncState())
@@ -392,7 +399,7 @@ class OfflineSyncManager(
                     mediaSourceId = freshBaseline.mediaSourceId,
                     mediaSizeBytes = freshBaseline.mediaSizeBytes,
                     state = recheck.state,
-                    lastSyncedAt = System.currentTimeMillis(),
+                    lastSyncedAt = timeSource.nowEpochMillis(),
                     error = false,
                 )
             )

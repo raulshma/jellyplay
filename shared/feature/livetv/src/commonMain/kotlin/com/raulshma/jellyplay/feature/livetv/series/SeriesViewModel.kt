@@ -4,6 +4,8 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.livetv.components.RecordActions
+import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
 
 @Immutable
 data class SeriesUiState(
@@ -25,6 +27,22 @@ class SeriesViewModel(
     private val _uiState = stateFlow(SeriesUiState())
     val uiState get() = _uiState.flow
 
+    /**
+     * The shared record choreography ([RecordActions]) for the cancel action;
+     * this tab's adaptation closes the detail sheet and reloads on success,
+     * and surfaces the raw failure on the tab's error field (sheet kept open).
+     */
+    private val recordActions = RecordActions(mediaRepository, scope) { outcome ->
+        when (outcome) {
+            is RecordOutcome.Success -> {
+                _uiState.update { it.copy(selectedTimer = null) }
+                load()
+            }
+            is RecordOutcome.Error -> _uiState.update { it.copy(error = outcome.message) }
+            is RecordOutcome.Requesting, RecordOutcome.Idle -> Unit
+        }
+    }
+
     init { load() }
 
     fun load() {
@@ -40,10 +58,6 @@ class SeriesViewModel(
     fun dismissDetail() { _uiState.update { it.copy(selectedTimer = null) } }
 
     fun cancelSeries(timerId: String) {
-        launch {
-            mediaRepository.cancelSeriesTimer(timerId)
-                .onSuccess { _uiState.update { it.copy(selectedTimer = null) }; load() }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
-        }
+        recordActions.cancelSeries(timerId)
     }
 }

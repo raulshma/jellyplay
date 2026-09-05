@@ -297,13 +297,12 @@ fun LibraryScreen(
     var openFilterSheet by remember { mutableStateOf<FilterSheetKind?>(null) }
     var showPosterSizeSheet by remember { mutableStateOf(false) }
     var showGroupBySheet by remember { mutableStateOf(false) }
+    // The canonical fold on [LibraryFilters] — the same one the search screen
+    // reads. Previously this hand-rolled copy omitted years/tags/minRating/
+    // sort/resumable, so the badge and BackHandler guard under-reported the
+    // active set.
     val hasActiveFilters by remember {
-        derivedStateOf {
-            browser.filters.mediaTypes.isNotEmpty() ||
-                browser.filters.genres.isNotEmpty() ||
-                browser.filters.playedStatus != PlayedStatus.ALL ||
-                browser.filters.isDownloaded == true
-        }
+        derivedStateOf { browser.filters.hasActiveFilters() }
     }
     val isAnySheetOpen = openFilterSheet != null || showPosterSizeSheet || showGroupBySheet
     val backHandlerEnabled = showFilters || isAnySheetOpen || resetDialogVisible || (!inSectionMode && hasActiveFilters)

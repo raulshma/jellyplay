@@ -12,7 +12,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Pins [DesktopImageUrlProvider]'s memoisation + perf-mode clamping:
+ * Pins [ImageUrlProviderImpl]'s memoisation + perf-mode clamping (the single
+ * jvmShared implementation that replaced the android/desktop twins):
  *  1. poster / backdrop / chapter URLs are memoised per (item, effective
  *     width) — a repeated read costs no repository call;
  *  2. performance mode clamps the effective width to 300 (default 400);
@@ -22,11 +23,11 @@ import kotlin.test.assertEquals
  *     must be able to start producing URLs);
  *  5. poster/backdrop/chapter cache keys never collide.
  */
-class DesktopImageUrlProviderTest {
+class ImageUrlProviderImplTest {
 
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var appearanceStore: AppearanceStore
-    private lateinit var provider: DesktopImageUrlProvider
+    private lateinit var provider: ImageUrlProviderImpl
 
     private val appearance = MutableStateFlow(AppearanceSlice())
 
@@ -35,7 +36,7 @@ class DesktopImageUrlProviderTest {
         playbackRepository = mockk()
         appearanceStore = mockk()
         every { appearanceStore.appearance } returns appearance
-        provider = DesktopImageUrlProvider(playbackRepository, appearanceStore)
+        provider = ImageUrlProviderImpl(playbackRepository, appearanceStore)
     }
 
     @Test

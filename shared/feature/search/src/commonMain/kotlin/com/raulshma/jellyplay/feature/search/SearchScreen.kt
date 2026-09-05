@@ -207,17 +207,11 @@ fun SearchScreen(
         networkStatus = networkStatus,
     )
 
-    // Active-filter detection covers every dimension (parity with the Library
-    // filter chip row) so the badge, BackHandler guard, and "Clear all" affordance
-    // all reflect the full filter set — not just mediaTypes/genres.
-    val hasNonDefaultSort = filters.sortBy != SortOption.YEAR_DESC
-    val hasActiveFilters = filters.mediaTypes.isNotEmpty() ||
-        filters.genres.isNotEmpty() ||
-        filters.years.isNotEmpty() ||
-        filters.tags.isNotEmpty() ||
-        filters.minRating > 0f ||
-        filters.playedStatus != PlayedStatus.ALL ||
-        hasNonDefaultSort
+    // Active-filter detection is the canonical [LibraryFilters.hasActiveFilters]
+    // fold — the exact predicate the Library screen reads, so the badge,
+    // BackHandler guard, and "Clear all" affordance all reflect the full
+    // filter set and the two screens can't drift apart again.
+    val hasActiveFilters = filters.hasActiveFilters()
 
     // Which immediate-apply single-select sheet is open (Sort / Status). The full
     // multi-dimension sheet is still driven by [showFilters] below; these are the
@@ -438,7 +432,7 @@ fun SearchScreen(
                 ) {
                     GlassFilterChip(
                         label = filters.sortBy.displayName,
-                        selected = hasNonDefaultSort,
+                        selected = filters.sortBy != SortOption.YEAR_DESC,
                         onClick = { openSortSheet = true },
                     )
                     GlassFilterChip(

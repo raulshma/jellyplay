@@ -18,9 +18,8 @@ data class RecordingsUiState(
 
 /**
  * Recordings tab — mirrors jellyfin-web `livetvrecordings.js`: fetches the
- * latest recordings list, gated by the same 5-minute full-render throttle the
- * web app applies. (Recording folders are intentionally omitted — Jellyfin's
- * web client no longer exposes them.)
+ * latest recordings list. (Recording folders are intentionally omitted —
+ * Jellyfin's web client no longer exposes them.)
  */
 class RecordingsViewModel(
     private val mediaRepository: LiveTvRepository,

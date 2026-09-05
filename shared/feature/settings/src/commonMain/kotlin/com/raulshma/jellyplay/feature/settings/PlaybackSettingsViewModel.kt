@@ -33,10 +33,11 @@ class PlaybackSettingsViewModel(
     /** Playback-screen slice — recomposes this screen only on playback-field writes. */
     val preferences: StateFlow<PlaybackPreferences> = projections.playbackPreferences
 
-    val showAdvancedSettings: StateFlow<Boolean> = appearanceStore.showAdvancedSettings
+    private val advancedSettings = AdvancedSettingsGate(appearanceStore, editor)
 
-    fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { appearance.setShowAdvancedSettings(enabled) }
+    val showAdvancedSettings: StateFlow<Boolean> = advancedSettings.showAdvancedSettings
+
+    fun setShowAdvancedSettings(enabled: Boolean) = advancedSettings.setShowAdvancedSettings(enabled)
 
     fun setVideoGesturesEnabled(enabled: Boolean) = editor.setVideoGesturesEnabled(enabled)
     fun setVideoHoldSpeedEnabled(enabled: Boolean) =

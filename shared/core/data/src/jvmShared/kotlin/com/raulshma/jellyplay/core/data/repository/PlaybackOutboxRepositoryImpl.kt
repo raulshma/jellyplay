@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.database.dao.PlaybackOutboxDao
 import com.raulshma.jellyplay.core.database.entity.PlaybackOutboxEntity
 import com.raulshma.jellyplay.core.model.PlayMethod
@@ -13,6 +14,8 @@ import java.util.UUID
 
 class PlaybackOutboxRepositoryImpl constructor(
     private val dao: PlaybackOutboxDao,
+    /** Clock seam for the outbox rows' `recordedAt`/`createdAt` stamps. */
+    private val timeSource: TimeSource,
 ) : PlaybackOutboxRepository {
 
     // Serialises the read-modify-write coalescence so concurrent PROGRESS
@@ -22,7 +25,7 @@ class PlaybackOutboxRepositoryImpl constructor(
     // Every caller already runs inside `withContext(Dispatchers.IO)`; wrapping a
     // non-blocking wall-clock read in its own dispatcher handoff was a redundant
     // reschedule on the playback-progress path (called every ~10s + on release).
-    private fun nowMillis(): Long = System.currentTimeMillis()
+    private fun nowMillis(): Long = timeSource.nowEpochMillis()
 
     override suspend fun enqueueStart(
         itemId: String,

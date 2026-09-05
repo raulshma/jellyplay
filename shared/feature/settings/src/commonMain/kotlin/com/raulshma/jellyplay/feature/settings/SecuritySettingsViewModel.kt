@@ -18,10 +18,11 @@ class SecuritySettingsViewModel(
     /** Security preference slice — recomposes this screen only on security-key writes. */
     val securityPreferences: StateFlow<SecurityPreferences> = projections.securityPreferences
 
-    val showAdvancedSettings: StateFlow<Boolean> = appearanceStore.showAdvancedSettings
+    private val advancedSettings = AdvancedSettingsGate(appearanceStore, editor)
 
-    fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { appearance.setShowAdvancedSettings(enabled) }
+    val showAdvancedSettings: StateFlow<Boolean> = advancedSettings.showAdvancedSettings
+
+    fun setShowAdvancedSettings(enabled: Boolean) = advancedSettings.setShowAdvancedSettings(enabled)
 
     fun setPinLockEnabled(enabled: Boolean) = editor.setPinLockEnabled(enabled)
 

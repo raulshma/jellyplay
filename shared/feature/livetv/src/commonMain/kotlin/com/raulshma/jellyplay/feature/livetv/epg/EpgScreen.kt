@@ -24,14 +24,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
-import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -59,8 +56,6 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
-import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
-import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
@@ -78,22 +73,13 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import org.jetbrains.compose.resources.stringResource
+import com.raulshma.jellyplay.feature.livetv.components.RecordDialog
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_cancel
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_done
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_ok
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_channel
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_epg_title
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_live
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_no_guide_available
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_once
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_program_prompt
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_schedule_failed
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_single_timer_note
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_success
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_recording_in_progress
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_scheduling_timer
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_will_be_recorded
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -170,62 +156,11 @@ fun EpgScreen(
     viewModel.recordDialog?.let { state ->
         RecordDialog(
             state = state,
-            onConfirm = { viewModel.confirmRecord() },
+            onRecordOnce = { viewModel.confirmRecord() },
+            onRecordSeries = {},
+            onCancelTimer = {},
+            onCancelSeries = {},
             onDismiss = { viewModel.dismissRecordDialog() },
-        )
-    }
-}
-
-@Composable
-private fun RecordDialog(
-    state: RecordDialogState,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    when (state) {
-        is RecordDialogState.Confirm -> ConfirmDialog(
-            title = stringResource(Res.string.livetv_record_program_prompt),
-            message = state.program.name,
-            confirmText = stringResource(Res.string.livetv_record_once),
-            dismissText = stringResource(Res.string.livetv_action_cancel),
-            tone = ConfirmTone.NEUTRAL,
-            onConfirm = onConfirm,
-            onDismiss = onDismiss,
-            content = {
-                state.program.episodeTitle?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Text(
-                    stringResource(Res.string.livetv_record_single_timer_note),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-        )
-        is RecordDialogState.Requesting -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(stringResource(Res.string.livetv_recording_in_progress)) },
-            text = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    JellyPlayLoadingIndicator()
-                    Spacer(Modifier.width(12.dp))
-                    Text(stringResource(Res.string.livetv_scheduling_timer))
-                }
-            },
-            confirmButton = {},
-            dismissButton = {},
-        )
-        is RecordDialogState.Success -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(stringResource(Res.string.livetv_record_success)) },
-            text = { Text(stringResource(Res.string.livetv_will_be_recorded, state.programName)) },
-            confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.livetv_action_done)) } },
-        )
-        is RecordDialogState.Error -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(stringResource(Res.string.livetv_record_schedule_failed)) },
-            text = { Text(state.message) },
-            confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.livetv_action_ok)) } },
         )
     }
 }

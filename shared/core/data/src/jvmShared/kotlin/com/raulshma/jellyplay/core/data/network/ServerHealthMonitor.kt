@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.network
 
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.CoroutineDispatcher
@@ -24,6 +25,8 @@ import kotlinx.coroutines.launch
  */
 class ServerHealthMonitor(
     private val apiClient: JellyfinApiClient,
+    /** Clock seam for the per-check latency measurement (start/delta pair). */
+    private val timeSource: TimeSource,
 ) {
     // The monitor loop runs on [Dispatchers.IO] in production. Unit tests swap
     // this for their virtual-time test dispatcher (see [useDispatcherForTest])
@@ -110,9 +113,9 @@ class ServerHealthMonitor(
 
         _serverHealth.value = ServerHealth.Checking
 
-        val startTime = System.currentTimeMillis()
+        val startTime = timeSource.nowEpochMillis()
         val result = apiClient.getServerInfo(serverAddress)
-        val latency = System.currentTimeMillis() - startTime
+        val latency = timeSource.nowEpochMillis() - startTime
 
         _serverHealth.value = if (result.isSuccess) {
             ServerHealth.Healthy(latencyMs = latency)

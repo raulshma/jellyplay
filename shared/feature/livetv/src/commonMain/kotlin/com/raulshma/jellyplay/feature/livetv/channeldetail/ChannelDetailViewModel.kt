@@ -4,6 +4,9 @@ import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.livetv.components.RecordAction
+import com.raulshma.jellyplay.feature.livetv.components.RecordActions
+import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -113,62 +116,39 @@ class ChannelDetailViewModel(
     }
 
     // ── Recording actions ──
-    // Each schedules/cancels a timer then re-fetches today's program window so
-    // the Record ↔ Cancel button state follows the server's timer-state, and
-    // emits a one-shot message via [messageChannel] (matches the Programs tab).
+    // The shared [RecordActions] choreography, adapted to this tab's feedback
+    // surface: one-shot messages on [messageChannel] (success/canceled, Raw
+    // failure with the legacy fallback literals) and a re-fetch of today's
+    // program window after every successful action so the timer-state on each
+    // [LiveTvProgram] (and the Record ↔ Cancel button on the hero) follows the
+    // server.
+
+    private val recordActions = RecordActions(mediaRepository, scope) { outcome ->
+        when (outcome) {
+            is RecordOutcome.Success -> {
+                messageChannel.trySend(outcome.request.action.successMessage())
+                launch { refreshPrograms(_uiState.value.channelId) }
+            }
+            is RecordOutcome.Error ->
+                messageChannel.trySend(LiveTvUserMessage.Raw(outcome.message ?: outcome.request.action.failureFallback()))
+            is RecordOutcome.Requesting, RecordOutcome.Idle -> Unit
+        }
+    }
 
     fun recordProgram(program: LiveTvProgram) {
-        launch {
-            mediaRepository.createTimer(program.id)
-                .onSuccess {
-                    messageChannel.trySend(LiveTvUserMessage.RecordSuccess)
-                    refreshPrograms(_uiState.value.channelId)
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LiveTvUserMessage.Raw(e.message ?: "Failed to set recording"))
-                }
-        }
+        recordActions.recordOnce(program)
     }
 
     fun recordSeries(program: LiveTvProgram) {
-        launch {
-            mediaRepository.createSeriesTimer(program.id)
-                .onSuccess {
-                    messageChannel.trySend(LiveTvUserMessage.RecordSuccess)
-                    refreshPrograms(_uiState.value.channelId)
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LiveTvUserMessage.Raw(e.message ?: "Failed to set recording"))
-                }
-        }
+        recordActions.recordSeries(program)
     }
 
     fun cancelTimer(program: LiveTvProgram) {
-        val timerId = program.timerId ?: return
-        launch {
-            mediaRepository.cancelTimer(timerId)
-                .onSuccess {
-                    messageChannel.trySend(LiveTvUserMessage.RecordCanceled)
-                    refreshPrograms(_uiState.value.channelId)
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LiveTvUserMessage.Raw(e.message ?: "Failed to cancel recording"))
-                }
-        }
+        recordActions.cancelTimer(program)
     }
 
     fun cancelSeries(program: LiveTvProgram) {
-        val seriesTimerId = program.seriesTimerId ?: return
-        launch {
-            mediaRepository.cancelSeriesTimer(seriesTimerId)
-                .onSuccess {
-                    messageChannel.trySend(LiveTvUserMessage.RecordCanceled)
-                    refreshPrograms(_uiState.value.channelId)
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LiveTvUserMessage.Raw(e.message ?: "Failed to cancel recording"))
-                }
-        }
+        recordActions.cancelSeries(program)
     }
 
     /**
@@ -187,3 +167,19 @@ class ChannelDetailViewModel(
         }
     }
 }
+
+/** Timer creations announce success; cancels announce cancellation. */
+private fun RecordAction.successMessage(): LiveTvUserMessage =
+    if (this == RecordAction.RECORD_ONCE || this == RecordAction.RECORD_SERIES) {
+        LiveTvUserMessage.RecordSuccess
+    } else {
+        LiveTvUserMessage.RecordCanceled
+    }
+
+/** The failure fallback literals, kept byte-identical from the legacy bus call sites. */
+private fun RecordAction.failureFallback(): String =
+    if (this == RecordAction.RECORD_ONCE || this == RecordAction.RECORD_SERIES) {
+        "Failed to set recording"
+    } else {
+        "Failed to cancel recording"
+    }

@@ -90,6 +90,11 @@ class DownloadRepositoryImplResumeTest {
         syncComparator = syncComparator,
         progressNotifier = progressNotifier,
         imagePreloader = imagePreloader,
+        timeSource = object : com.raulshma.jellyplay.core.data.util.TimeSource {
+            override fun nowEpochMillis(): Long = System.currentTimeMillis()
+            override fun nowElapsedRealtimeMillis(): Long = System.currentTimeMillis()
+            override fun today(zone: java.time.ZoneId): java.time.LocalDate = java.time.LocalDate.now(zone)
+        },
     )
 
     @Test

@@ -41,6 +41,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import com.raulshma.jellyplay.core.data.util.TimeSource
+import java.time.LocalDate
+import java.time.ZoneId
 
 class AuthRepositoryImplTest {
 
@@ -111,6 +114,7 @@ class AuthRepositoryImplTest {
             tokenCipher = tokenCipher,
             json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true },
             externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+            timeSource = FakeTimeSource(),
         )
     }
 
@@ -517,6 +521,7 @@ class AuthRepositoryImplTest {
             tokenCipher = tokenCipher,
             json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true },
             externalScope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+            timeSource = FakeTimeSource(),
         )
 
         val states = mutableListOf<Boolean>()
@@ -850,4 +855,15 @@ class AuthRepositoryImplTest {
 
     private suspend fun <T> kotlinx.coroutines.flow.Flow<T>.first(): T? =
         firstOrNull()
+
+    /**
+     * Controllable [TimeSource] — same shape as the fake in
+     * LyricsRepositoryImplTest (core:data deliberately hosts no shared test
+     * fakes; see TimeSource's KDoc).
+     */
+    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
+        override fun nowEpochMillis(): Long = nowMs
+        override fun nowElapsedRealtimeMillis(): Long = nowMs
+        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
+    }
 }

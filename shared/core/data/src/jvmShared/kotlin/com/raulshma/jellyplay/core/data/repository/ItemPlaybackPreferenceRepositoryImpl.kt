@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.repository.withTransaction
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.ItemPlaybackPreferenceDao
 import com.raulshma.jellyplay.core.database.entity.ItemPlaybackPreferenceEntity
@@ -12,6 +13,8 @@ import com.raulshma.jellyplay.core.model.TrackType
 class ItemPlaybackPreferenceRepositoryImpl constructor(
     private val dao: ItemPlaybackPreferenceDao,
     private val database: JellyPlayDatabase,
+    /** Clock seam for the persisted `updatedAt` stamps (last-write-wins merge). */
+    private val timeSource: TimeSource,
 ) : ItemPlaybackPreferenceRepository {
 
     override suspend fun get(scope: PlaybackPrefScope, key: String): ItemPlaybackPreference? =
@@ -64,7 +67,7 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
                     subtitleForced = mergedForced,
                     subtitleHearingImpaired = mergedSdh,
                     dialogueBoostStrength = mergedBoost?.name,
-                    updatedAt = System.currentTimeMillis(),
+                    updatedAt = timeSource.nowEpochMillis(),
                 )
             )
         }
@@ -78,7 +81,7 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
             // Nothing left to remember — remove the row entirely.
             dao.deleteByKey(scope.name, key)
         } else {
-            dao.upsert(existing.copy(audioLanguage = null, updatedAt = System.currentTimeMillis()))
+            dao.upsert(existing.copy(audioLanguage = null, updatedAt = timeSource.nowEpochMillis()))
         }
     }
 
@@ -97,7 +100,7 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
                     subtitleLanguage = null,
                     subtitleForced = null,
                     subtitleHearingImpaired = null,
-                    updatedAt = System.currentTimeMillis(),
+                    updatedAt = timeSource.nowEpochMillis(),
                 )
             )
         }
@@ -115,19 +118,19 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
                         key = key,
                         audioLanguage = null,
                         subtitleLanguage = null,
-                        updatedAt = System.currentTimeMillis(),
+                        updatedAt = timeSource.nowEpochMillis(),
                     )).copy(
                         subtitleLanguage = null,
                         subtitleForced = null,
                         subtitleHearingImpaired = null,
                         subtitleDisabled = true,
-                        updatedAt = System.currentTimeMillis(),
+                        updatedAt = timeSource.nowEpochMillis(),
                     )
                 )
             } else {
                 // Clearing the disabled intent: drop the row if nothing else is set.
                 val row = existing ?: return@withTransaction
-                val cleared = row.copy(subtitleDisabled = null, updatedAt = System.currentTimeMillis())
+                val cleared = row.copy(subtitleDisabled = null, updatedAt = timeSource.nowEpochMillis())
                 val hasNothingElse = cleared.audioLanguage == null &&
                     cleared.subtitleLanguage == null &&
                     cleared.dialogueBoostStrength == null
@@ -147,7 +150,7 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
         ) {
             dao.deleteByKey(scope.name, key)
         } else {
-            dao.upsert(existing.copy(dialogueBoostStrength = null, updatedAt = System.currentTimeMillis()))
+            dao.upsert(existing.copy(dialogueBoostStrength = null, updatedAt = timeSource.nowEpochMillis()))
         }
     }
 
@@ -183,7 +186,7 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
             if (hasNothingElse) {
                 dao.deleteByKey(scope.name, key)
             } else {
-                dao.upsert(cleared.copy(updatedAt = System.currentTimeMillis()))
+                dao.upsert(cleared.copy(updatedAt = timeSource.nowEpochMillis()))
             }
             return
         }
@@ -192,7 +195,7 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
             key = key,
             audioLanguage = null,
             subtitleLanguage = null,
-            updatedAt = System.currentTimeMillis(),
+            updatedAt = timeSource.nowEpochMillis(),
         )
         val updated = when (type) {
             TrackType.AUDIO -> base.copy(
@@ -206,7 +209,7 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
                 rememberedSubtitleIndex = track.indexWithinLanguage,
             )
         }
-        dao.upsert(updated.copy(updatedAt = System.currentTimeMillis()))
+        dao.upsert(updated.copy(updatedAt = timeSource.nowEpochMillis()))
     }
 
     override suspend fun delete(scope: PlaybackPrefScope, key: String) {

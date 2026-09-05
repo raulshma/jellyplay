@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
@@ -124,29 +123,19 @@ fun NavigationCustomizationGroup(
         )
 
         // ── Reorderable item list ──
-        // The reorder module owns the threshold-swap arithmetic; the local
-        // snapshot list mirrors it for Compose. The mirror is re-seeded
-        // whenever the stored order or the available nav items change —
-        // persistence itself only fires at drag end, so the stored order
-        // never changes mid-drag (mirrors the Home Screen Layout reorder
-        // pattern).
-        val reorder = remember(preferences.navItemOrder, navItems) {
-            ReorderState<String>().apply {
-                submitOrder(resolveOrder(preferences.navItemOrder, navItems.map { it.key }))
-            }
-        }
-        val navItemOrder = remember(reorder) { reorder.order.toMutableStateList() }
-
-        fun persistOrder() {
-            val currentOrder = navItemOrder.toList()
-            if (currentOrder != preferences.navItemOrder) {
-                viewModel.setNavItemOrder(currentOrder)
-            }
-        }
+        // The shared reorderable-list holder owns the mirror/resync/persist
+        // choreography around ReorderState (same shape as the Appearance
+        // reorder lists); this site is just content: known nav items for the
+        // resolveOrder seed and the persist write.
+        val navOrder = rememberReorderableOrderedList(
+            storedOrder = preferences.navItemOrder,
+            knownOrder = navItems.map { it.key },
+            onPersist = viewModel::setNavItemOrder,
+        )
 
         Spacer(Modifier.height(8.dp))
 
-        navItemOrder.forEachIndexed { index, key ->
+        navOrder.items.forEachIndexed { index, key ->
             val descriptor = navItems.first { it.key == key }
             val enabled = key !in preferences.hiddenNavItems
             SettingReorderableToggleItem(
@@ -155,21 +144,16 @@ fun NavigationCustomizationGroup(
                 subtitle = stringResource(descriptor.subtitleRes),
                 checked = enabled,
                 index = index,
-                count = navItemOrder.size,
-                modifier = Modifier.onSizeChanged { reorder.recordHeight(key, it.height) },
+                count = navOrder.items.size,
+                modifier = Modifier.onSizeChanged { navOrder.recordHeight(key, it.height) },
                 onCheckedChange = { checked ->
                     val current = preferences.hiddenNavItems.toMutableSet()
                     if (checked) current.remove(key) else current.add(key)
                     viewModel.setHiddenNavItems(current)
                 },
-                onDrag = { delta ->
-                    if (reorder.drag(key, delta)) {
-                        navItemOrder.clear()
-                        navItemOrder.addAll(reorder.order)
-                    }
-                },
-                onDragStart = { reorder.beginDrag(key) },
-                onDragEnd = { reorder.endDrag(); persistOrder() },
+                onDrag = { delta -> navOrder.onDrag(key, delta) },
+                onDragStart = { navOrder.onDragStart(key) },
+                onDragEnd = navOrder::onDragEnd,
             )
         }
         }

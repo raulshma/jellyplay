@@ -1,15 +1,32 @@
 package com.raulshma.jellyplay.core.data.util
 
-import android.util.LruCache
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
+import com.raulshma.jellyplay.core.model.lruMapOf
+import java.util.Collections
 
 /**
- * Android implementation of the [ImageUrlProvider] seam (C4 part 2): body
- * moved verbatim from the legacy `:core:data` `ImageUrlProviderImpl` — the
- * Hilt annotations were stripped (Koin's
- * [com.raulshma.jellyplay.core.data.di.androidDataModule] constructs it;
- * consumers resolve the same single straight from Koin).
+ * The single JVM-side (android + desktop) implementation of the [ImageUrlProvider]
+ * seam (C4 part 2): the android body lived verbatim in the legacy `:core:data`
+ * `ImageUrlProviderImpl` and the desktop twin re-implemented the identical
+ * policy over a hand-rolled access-order [java.util.LinkedHashMap]; the policy
+ * now lives ONCE here, and both platform DI modules
+ * ([com.raulshma.jellyplay.core.data.di.androidDataModule] /
+ * [com.raulshma.jellyplay.core.data.di.desktopDataModule]) construct this class.
+ *
+ * Policy: image URLs are built per visible card per recomposition (poster
+ * grids, CW rows, search results). Each build runs UUID parsing + string
+ * assembly inside the Jellyfin SDK (imageApi.getItemImageUrl) — not a network
+ * call, but non-trivial at O(items × recompositions). The URL string is a pure
+ * function of (itemId, effectiveWidth, tag), so it is memoised in a bounded
+ * access-order LRU ([lruMapOf]'s JVM actual + a synchronized wrapper — the
+ * exact historical construction on both platforms), keyed with the effective
+ * width (which embeds the performance-mode decision) so a perf-mode toggle
+ * produces a distinct, correct entry rather than serving a stale width.
+ * Performance mode lowers the width to [PERF_MAX_WIDTH]; null caller widths
+ * (original-resolution requests, e.g. the full-screen photo viewer) bypass
+ * BOTH the clamp and the cache. Empty repository URLs are never cached, so a
+ * later login/server change can start producing URLs.
  */
 class ImageUrlProviderImpl(
     private val playbackRepository: PlaybackRepository,
@@ -22,15 +39,10 @@ class ImageUrlProviderImpl(
     private val performanceMode: Boolean get() =
         appearanceStore.appearance.value.performanceMode
 
-    // Image URLs are built per visible card per recomposition (poster grids,
-    // CW rows, search results). Each build runs UUID parsing + string assembly
-    // inside the Jellyfin SDK (imageApi.getItemImageUrl) — not a network call,
-    // but non-trivial at O(items × recompositions). The URL string is a pure
-    // function of (itemId, effectiveWidth, tag), so memoise it. Bounded LRU
-    // self-evicts; synchronized internally. Keyed with the width (which embeds
-    // the performance-mode decision) so a perf-mode toggle produces a distinct,
-    // correct entry rather than serving a stale width.
-    private val urlCache = object : LruCache<String, String>(URL_CACHE_MAX_ENTRIES) {}
+    // Bounded access-order LRU, synchronized per call (android.util.LruCache's
+    // internal locking / the desktop twin's synchronized-wrapper semantics).
+    private val urlCache: MutableMap<String, String> =
+        Collections.synchronizedMap(lruMapOf(URL_CACHE_MAX_ENTRIES))
 
     override fun getImageUrl(itemId: String, maxWidth: Int?): String {
         // Original-resolution requests (null) bypass performance mode: callers
@@ -45,17 +57,17 @@ class ImageUrlProviderImpl(
         val effectiveWidth = if (performanceMode) PERF_MAX_WIDTH
         else ImageUrlProvider.DEFAULT_MAX_WIDTH
         val key = "p_$itemId|$effectiveWidth"
-        urlCache.get(key)?.let { return it }
+        urlCache[key]?.let { return it }
         val url = playbackRepository.getImageUrl(itemId, maxWidth = effectiveWidth)
-        if (url.isNotEmpty()) urlCache.put(key, url)
+        if (url.isNotEmpty()) urlCache[key] = url
         return url
     }
 
     override fun getBackdropUrl(itemId: String, maxWidth: Int): String {
         val key = "b_$itemId|$maxWidth"
-        urlCache.get(key)?.let { return it }
+        urlCache[key]?.let { return it }
         val url = playbackRepository.getBackdropUrl(itemId, maxWidth = maxWidth)
-        if (url.isNotEmpty()) urlCache.put(key, url)
+        if (url.isNotEmpty()) urlCache[key] = url
         return url
     }
 
@@ -65,9 +77,9 @@ class ImageUrlProviderImpl(
         val effectiveWidth = if (performanceMode) PERF_MAX_WIDTH
         else ImageUrlProvider.DEFAULT_MAX_WIDTH
         val key = "c_$itemId|$imageIndex|${tag ?: ""}"
-        urlCache.get(key)?.let { return it }
+        urlCache[key]?.let { return it }
         val url = playbackRepository.getChapterImageUrl(itemId, imageIndex, tag, maxWidth = effectiveWidth)
-        if (url.isNotEmpty()) urlCache.put(key, url)
+        if (url.isNotEmpty()) urlCache[key] = url
         return url
     }
 

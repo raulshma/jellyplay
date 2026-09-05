@@ -502,42 +502,18 @@ private fun MainContent(
     }
 
     // Consume remote "Play" / "Playstate" / "GeneralCommand" navigation requests
-    // emitted by the WebSocket receiver.
+    // emitted by the WebSocket receiver. The target→route mapping and the
+    // multi-back-stack player pop live in RemoteNavigationRouting.kt (pure,
+    // pinned by RemoteNavigationRoutingTest).
     LaunchedEffect(infra.remoteNavigationBridge) {
         infra.remoteNavigationBridge.targets.collect { target ->
-            when (target) {
-                is com.raulshma.jellyplay.core.data.remote.NavigationTarget.ClosePlayer -> {
-                    // Pop any active player entries from every back stack so the
-                    // player UI actually disappears (not just hidden behind a tab
-                    // switch). This matches Jellyfin web's "Stop" semantics.
-                    navigationState.backStacks.values.forEach { stack ->
-                        while (stack.isNotEmpty()) {
-                            val last = stack.last()
-                            if (last is Route.VideoPlayer ||
-                                last is Route.AudioPlayer ||
-                                last is Route.LiveTvChannelPlayer
-                            ) {
-                                stack.removeLastOrNull()
-                            } else {
-                                break
-                            }
-                        }
-                    }
-                }
-                else -> navigator.navigate(
-                    when (target) {
-                        is com.raulshma.jellyplay.core.data.remote.NavigationTarget.OpenVideoPlayer -> Route.VideoPlayer(
-                            itemId = target.itemId,
-                            mediaSourceId = target.mediaSourceId,
-                            startPositionTicks = target.startPositionTicks,
-                            audioStreamIndex = target.audioStreamIndex,
-                            subtitleStreamIndex = target.subtitleStreamIndex,
-                        )
-                        is com.raulshma.jellyplay.core.data.remote.NavigationTarget.OpenAudioPlayer -> Route.AudioPlayer(target.itemId)
-                        is com.raulshma.jellyplay.core.data.remote.NavigationTarget.OpenMediaDetail -> Route.MediaDetail(target.itemId)
-                        else -> Route.Home
-                    }
-                )
+            if (target is com.raulshma.jellyplay.core.data.remote.NavigationTarget.ClosePlayer) {
+                // Pop any active player entries from every back stack so the
+                // player UI actually disappears (not just hidden behind a tab
+                // switch). This matches Jellyfin web's "Stop" semantics.
+                popPlayerRoutes(navigationState.backStacks.values)
+            } else {
+                routeForNavigationTarget(target)?.let(navigator::navigate)
             }
         }
     }

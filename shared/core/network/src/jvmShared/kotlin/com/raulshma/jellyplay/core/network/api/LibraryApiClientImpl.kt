@@ -12,7 +12,6 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.lruMapOf
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.PersonInfo
@@ -21,8 +20,16 @@ import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.network.LyricsApi
+import com.raulshma.jellyplay.core.network.library.DETAIL_PROJECTION_FIELDS
+import com.raulshma.jellyplay.core.network.library.EmptyLibraryFallback
+import com.raulshma.jellyplay.core.network.library.FavoriteFlagCache
 import com.raulshma.jellyplay.core.network.library.HomeSectionSources
 import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
+import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_FIELDS
+import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
+import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_SORT_BY
+import com.raulshma.jellyplay.core.network.library.emptyFallbackTotalCount
+import com.raulshma.jellyplay.core.network.library.libraryExcludeKinds
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CreatePlaylistDto
 import org.jellyfin.sdk.model.api.ImageType
@@ -40,36 +47,28 @@ import javax.inject.Singleton
 import java.util.UUID
 
 /**
- * Fields the detail mapper ([getMediaDetail]) reads from the BaseItemDto.
- * Projected explicitly because [org.jellyfin.sdk.api.operations.UserLibraryApi.getItem]
- * accepts no `fields` parameter and several of these (notably TRICKPLAY, used
- * for scrub preview and download) come back null without an explicit request.
+ * Fields the detail mapper ([getMediaDetail]) reads from the BaseItemDto,
+ * resolved from the shared commonMain wire projection
+ * ([DETAIL_PROJECTION_FIELDS] — see it for why the projection is explicit).
  */
-private val DETAIL_ITEM_FIELDS = listOf(
-    ItemFields.PEOPLE,
-    ItemFields.CHAPTERS,
-    ItemFields.MEDIA_SOURCES,
-    ItemFields.TRICKPLAY,
-    ItemFields.EXTERNAL_URLS,
-    ItemFields.ORIGINAL_TITLE,
-    ItemFields.PRODUCTION_LOCATIONS,
-    ItemFields.STUDIOS,
-    ItemFields.GENRES,
-    ItemFields.OVERVIEW,
-    ItemFields.PROVIDER_IDS,
-    ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-)
+private val DETAIL_ITEM_FIELDS = DETAIL_PROJECTION_FIELDS.map { name ->
+    requireNotNull(ItemFields.entries.firstOrNull { it.serialName == name }) {
+        "ItemFields has no serial name '$name' — SDK drift vs the shared projection"
+    }
+}
 
-/** LRU bound of the favorite-flag cache (the old `LruCache(200)` size). */
-private const val FAVORITE_CACHE_MAX_ENTRIES = 200
+/** The jellyfin-web useSearchSuggestions shape, resolved against the SDK enums. */
+private val SEARCH_SUGGESTIONS_SORT = SEARCH_SUGGESTIONS_SORT_BY.map { token ->
+    ItemSortBy.entries.first { it.serialName == token }
+}
 
-/**
- * TTL of the favorite-flag cache — generous (the flags only seed a toggle's
- * "current" value until the first real read refreshes them), and the
- * identity-keyed composite key already guarantees a switched user never sees
- * the previous user's flags within any window.
- */
-private const val FAVORITE_CACHE_TTL_MS = 15 * 60_000L
+private val SEARCH_SUGGESTIONS_KINDS = SEARCH_SUGGESTIONS_ITEM_TYPES.map { token ->
+    BaseItemKind.entries.first { it.serialName == token }
+}
+
+private val SEARCH_SUGGESTIONS_PROJECTION = SEARCH_SUGGESTIONS_FIELDS.map { token ->
+    ItemFields.entries.first { it.serialName == token }
+}
 
 @Singleton
 class LibraryApiClientImpl @Inject constructor(
@@ -85,10 +84,34 @@ class LibraryApiClientImpl @Inject constructor(
      */
     private val emptyFallbackLibraries = lruMapOf<String, Unit>(32)
 
-    private fun rememberEmptyFallback(parentId: String) {
-        // Main-dispatcher-safe: confined to the apiResultWithRetry IO block.
-        synchronized(emptyFallbackLibraries) { emptyFallbackLibraries[parentId] = Unit }
-    }
+    /**
+     * The shared commonMain empty-library fallback ladder
+     * ([EmptyLibraryFallback]); this client supplies its synchronized LRU
+     * memo (runs inside the apiResultWithRetry IO block, so every access
+     * holds the map's monitor — the `containsKey` probe deliberately does not
+     * refresh access order, the historical shape) and the SDK
+     * getLatestMedia transport.
+     */
+    private val emptyLibraryFallback = EmptyLibraryFallback(
+        isKnownEmpty = { parentId ->
+            synchronized(emptyFallbackLibraries) { emptyFallbackLibraries.containsKey(parentId) }
+        },
+        rememberEmpty = { parentId ->
+            // Main-dispatcher-safe: confined to the apiResultWithRetry IO block.
+            synchronized(emptyFallbackLibraries) { emptyFallbackLibraries[parentId] = Unit }
+        },
+        fetchLatest = { parentId, limit ->
+            engine.requireApi().userLibraryApi.getLatestMedia(
+                parentId = parentId.toUUID(),
+                limit = limit,
+                fields = listOf(
+                    ItemFields.OVERVIEW,
+                    ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                    ItemFields.GENRES,
+                ),
+            ).content ?: emptyList()
+        },
+    )
 
     /**
      * The home feed's fetch choreography (sub-call fan-out, semaphore bounds,
@@ -219,15 +242,17 @@ class LibraryApiClientImpl @Inject constructor(
         }
         // includeItemTypes / excludeItemTypes: resolve the requested kinds once,
         // then drop SEASON/EPISODE from the exclude list when they were
-        // explicitly included. Jellyfin would otherwise receive contradictory
-        // include+exclude for the same kind (e.g. section mode for a TV library
-        // includes EPISODE to match /Items/Latest) and return an empty result.
+        // explicitly included (the shared [libraryExcludeKinds] policy —
+        // Jellyfin would otherwise receive contradictory include+exclude for
+        // the same kind and return an empty result).
         val mediaTypes = filters.mediaTypes.takeIf { it.isNotEmpty() }
         val includeKinds = mediaTypes?.mapNotNull { it.toBaseItemKind() }.orEmpty()
-        val excludeKinds = buildList {
-            if (BaseItemKind.SEASON !in includeKinds) add(BaseItemKind.SEASON)
-            if (!kindFilter.includeEpisodes && BaseItemKind.EPISODE !in includeKinds) add(BaseItemKind.EPISODE)
-        }
+        val excludeKinds = libraryExcludeKinds(
+            seasonKind = BaseItemKind.SEASON,
+            episodeKind = BaseItemKind.EPISODE,
+            includeKinds = includeKinds,
+            includeEpisodes = kindFilter.includeEpisodes,
+        )
         val response = engine.requireApi().itemsApi.getItems(
             parentId = parentId?.let { it.toUUID() },
             includeItemTypes = includeKinds.takeIf { it.isNotEmpty() },
@@ -250,34 +275,17 @@ class LibraryApiClientImpl @Inject constructor(
                 ItemFields.GENRES,
             ),
         ).content
-        val rawItems = if (response.items.isEmpty() && parentId != null && searchTerm.isNullOrBlank()) {
-            // Skip the doubled request for libraries already known to be
-            // genuinely empty (primary query empty AND fallback empty) — a
-            // visit to an empty library previously paid both requests every
-            // time. Bounded LRU: once the library gains content the primary
-            // query returns items and the fallback is never reached, so the
-            // memo cannot serve a stale non-empty state.
-            if (synchronized(emptyFallbackLibraries) { emptyFallbackLibraries.containsKey(parentId) }) {
-                emptyList()
-            } else {
-                val fallback = runCatching {
-                    engine.requireApi().userLibraryApi.getLatestMedia(
-                        parentId = parentId.toUUID(),
-                        limit = if (limit > 0) limit else 50,
-                        fields = listOf(
-                            ItemFields.OVERVIEW,
-                            ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                            ItemFields.GENRES,
-                        ),
-                    ).content
-                }.getOrNull() ?: emptyList()
-                if (fallback.isEmpty()) rememberEmptyFallback(parentId)
-                fallback
-            }
-        } else {
-            response.items
-        }
-        val totalCount = if (response.items.isEmpty() && rawItems.isNotEmpty()) rawItems.size else response.totalRecordCount
+        val rawItems = emptyLibraryFallback.resolve(
+            primaryItems = response.items,
+            parentId = parentId,
+            searchTerm = searchTerm,
+            limit = limit,
+        )
+        val totalCount = emptyFallbackTotalCount(
+            primaryCount = response.items.size,
+            resolvedCount = rawItems.size,
+            serverTotal = response.totalRecordCount,
+        )
         SearchResult(
             items = engine.run { rawItems.toFilteredMediaItems() },
             totalRecordCount = totalCount,
@@ -427,24 +435,14 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun getSearchSuggestions(limit: Int): Result<SearchResult> = engine.apiResultWithRetry {
-        // Mirrors jellyfin-web's useSearchSuggestions: getItems sorted by
-        // [IsFavoriteOrLiked, Random] over Movies, Series and MusicArtists.
-        // Unlike the web client (which disables images for the cheap empty
-        // state) we keep images on so we can render poster cards that match the
-        // rest of the app's design language.
+        // The jellyfin-web useSearchSuggestions shape, held once in commonMain
+        // (SEARCH_SUGGESTIONS_* and resolved above against the SDK enums).
         val response = engine.requireApi().itemsApi.getItems(
-            sortBy = listOf(ItemSortBy.IS_FAVORITE_OR_LIKED, ItemSortBy.RANDOM),
-            includeItemTypes = listOf(
-                BaseItemKind.MOVIE,
-                BaseItemKind.SERIES,
-                BaseItemKind.MUSIC_ARTIST,
-            ),
+            sortBy = SEARCH_SUGGESTIONS_SORT,
+            includeItemTypes = SEARCH_SUGGESTIONS_KINDS,
             limit = limit,
             recursive = true,
-            fields = listOf(
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                ItemFields.GENRES,
-            ),
+            fields = SEARCH_SUGGESTIONS_PROJECTION,
         ).content
         SearchResult(
             items = engine.run { response.items.toFilteredMediaItems() },
@@ -926,29 +924,25 @@ class LibraryApiClientImpl @Inject constructor(
         val userId = engine.currentUser.value?.id
             ?: throw IllegalStateException("Not authenticated")
         val uuid = itemId.toUUID()
-        val identity = currentHomeCacheIdentity()
-        val cacheKey = uuid.toString()
-        val cached = favoriteCache.get(identity, cacheKey)
-        val isFavorite = currentIsFavorite ?: cached ?: run {
-            val fetched = engine.requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
-            favoriteCache.put(identity, cacheKey, fetched)
-            fetched
-        }
-        if (isFavorite) {
-            engine.requireApi().userLibraryApi.unmarkFavoriteItem(
-                userId = userId.toUUID(),
-                itemId = uuid,
-            )
-            favoriteCache.put(identity, cacheKey, false)
-            false
-        } else {
-            engine.requireApi().userLibraryApi.markFavoriteItem(
-                userId = userId.toUUID(),
-                itemId = uuid,
-            )
-            favoriteCache.put(identity, cacheKey, true)
-            true
-        }
+        favoriteFlags.toggle(
+            cacheKey = uuid.toString(),
+            currentIsFavorite = currentIsFavorite,
+            fetchCurrent = {
+                engine.requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
+            },
+            markOnServer = {
+                engine.requireApi().userLibraryApi.markFavoriteItem(
+                    userId = userId.toUUID(),
+                    itemId = uuid,
+                )
+            },
+            unmarkOnServer = {
+                engine.requireApi().userLibraryApi.unmarkFavoriteItem(
+                    userId = userId.toUUID(),
+                    itemId = uuid,
+                )
+            },
+        )
     }
 
     override suspend fun setFavorite(itemId: String, isFavorite: Boolean): Result<Unit> = engine.apiResultWithRetry {
@@ -966,26 +960,16 @@ class LibraryApiClientImpl @Inject constructor(
                 itemId = uuid,
             )
         }
-        favoriteCache.put(
-            currentHomeCacheIdentity(),
-            uuid.toString(),
-            isFavorite,
-        )
+        favoriteFlags.put(uuid.toString(), isFavorite)
         Unit
     }
 
     /**
-     * Last-known favorite flags, keyed by the current [CacheIdentity] (read
-     * from the atomic [JellyfinApiEngine.session] flow) so a user/server
-     * switch misses by construction — the previous identity's entries can
-     * never resolve, and they expire on their own instead of being evicted by
-     * a cross-module clear on disconnect (the old `clearFavoriteCache`
-     * hand-off from `AuthApiClientImpl`).
+     * The shared commonMain favorite-flag cache-aside choreography
+     * ([FavoriteFlagCache]); this client supplies the atomic-session identity
+     * (see [currentHomeCacheIdentity]) and the SDK transport calls.
      */
-    private val favoriteCache = TtlCache<Boolean>(
-        maxSize = FAVORITE_CACHE_MAX_ENTRIES,
-        ttlMs = FAVORITE_CACHE_TTL_MS,
-    )
+    private val favoriteFlags = FavoriteFlagCache { currentHomeCacheIdentity() }
 
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?, imageIndex: Int?, tag: String?): String {
         val api = engine.api ?: return ""

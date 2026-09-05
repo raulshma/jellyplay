@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.data.repository.withTransaction
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -45,6 +46,8 @@ class AuthRepositoryImpl constructor(
      * `ServerIdentityStore`; never cancelled for this singleton).
      */
     private val externalScope: CoroutineScope,
+    /** Clock seam for the persisted `lastConnected` stamps. */
+    private val timeSource: TimeSource,
 ) : AuthRepository, RealtimeConnection {
 
     private companion object {
@@ -133,8 +136,8 @@ class AuthRepositoryImpl constructor(
             }
             serverIdentityStore.setActiveSession(serverId, userEntity.userId)
             database.withTransaction {
-                serverDao.updateServer(serverEntity.copy(lastConnected = System.currentTimeMillis()))
-                userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))
+                serverDao.updateServer(serverEntity.copy(lastConnected = timeSource.nowEpochMillis()))
+                userDao.updateUser(userEntity.copy(lastConnected = timeSource.nowEpochMillis()))
             }
         }
     }
@@ -467,12 +470,12 @@ class AuthRepositoryImpl constructor(
         }
         serverIdentityStore.setActiveSession(server.id, userId)
         database.withTransaction {
-            userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))
+            userDao.updateUser(userEntity.copy(lastConnected = timeSource.nowEpochMillis()))
             serverDao.updateServer(
                 server.copy(
                     userId = userId,
                     accessToken = userEntity.accessToken,
-                    lastConnected = System.currentTimeMillis(),
+                    lastConnected = timeSource.nowEpochMillis(),
                 )
             )
         }
@@ -535,7 +538,7 @@ class AuthRepositoryImpl constructor(
             isAdmin = user.isAdmin,
             canDeleteContent = user.canDeleteContent,
             enabledFolderIds = json.encodeToString(user.enabledFolderIds),
-            lastConnected = System.currentTimeMillis(),
+            lastConnected = timeSource.nowEpochMillis(),
         )
         database.withTransaction {
             userDao.insertUser(userEntity)
@@ -546,7 +549,7 @@ class AuthRepositoryImpl constructor(
                     address = server.address,
                     userId = user.id,
                     accessToken = tokenCipher.encrypt(user.accessToken),
-                    lastConnected = System.currentTimeMillis(),
+                    lastConnected = timeSource.nowEpochMillis(),
                     alternateAddresses = preservedAlternateAddresses,
                 )
             )

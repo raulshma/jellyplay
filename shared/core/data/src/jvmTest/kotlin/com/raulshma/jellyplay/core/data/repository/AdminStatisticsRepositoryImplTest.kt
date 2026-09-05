@@ -35,6 +35,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.Test
 import kotlin.test.assertTrue
+import com.raulshma.jellyplay.core.data.util.TimeSource
+import java.time.ZoneId
 
 /**
  * Exercises [AdminStatisticsRepositoryImpl]'s real decision logic against a
@@ -75,6 +77,7 @@ class AdminStatisticsRepositoryImplTest {
         json = json,
         scope = backgroundScope,
         labels = DesktopAdminStatisticsLabels,
+        timeSource = FakeTimeSource(),
     )
 
     private val user = UserInfo(id = "u1", name = "Admin", serverAddress = "http://server", accessToken = "t", isAdmin = true)
@@ -343,5 +346,18 @@ class AdminStatisticsRepositoryImplTest {
             repository.getScanResultJson("scan-1"),
         )
         assertEquals(null, repository.getScanResultJson("missing"))
+    }
+
+    /**
+     * Controllable [TimeSource] whose default NOW tracks the real wall clock
+     * (same shape as the fake in LyricsRepositoryImplTest): the fixtures stamp
+     * audit rows with `System.currentTimeMillis()` deltas (100 vs 10 days
+     * ago), so the 90-day prune cutoff must compare against a now in the same
+     * epoch-millis regime.
+     */
+    private class FakeTimeSource(var nowMs: Long = System.currentTimeMillis()) : TimeSource {
+        override fun nowEpochMillis(): Long = nowMs
+        override fun nowElapsedRealtimeMillis(): Long = nowMs
+        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 }

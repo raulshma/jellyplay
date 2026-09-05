@@ -1,34 +1,18 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy
@@ -36,7 +20,6 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.ChannelMixMode
-import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -46,8 +29,6 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
-import com.raulshma.jellyplay.core.ui.components.SheetHeader
-import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -59,7 +40,6 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_apply
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_auto_play_next
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_auto_play_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_auto_play_on
@@ -93,7 +73,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_bala
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_balance_right
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_bass_boost
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_bass_boost_strength
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cancel
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_channel_mix_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_channel_mixing
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_channel_mixing_off
@@ -155,11 +134,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volu
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_boost_gain_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_normalization
 
-sealed class AudioSettingsDialog {
-    object None : AudioSettingsDialog()
-    object EqualizerEditor : AudioSettingsDialog()
-}
-
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun AudioSettingsScreen(
@@ -171,7 +145,10 @@ fun AudioSettingsScreen(
     val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    var activeDialog by remember { mutableStateOf<AudioSettingsDialog>(AudioSettingsDialog.None) }
+    // The one remaining dialog slot (beside the activePicker): the co-located
+    // EqualizerEditorSheet. The former sealed AudioSettingsDialog identity tag
+    // carried a single real variant.
+    var showEqualizerEditor by remember { mutableStateOf(false) }
     var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
     val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
@@ -480,7 +457,7 @@ fun AudioSettingsScreen(
                             checked = preferences.equalizerEnabled,
                             highlighted = highlightSettingId == "equalizer",
                             onCheckedChange = { viewModel.setEqualizerEnabled(it) },
-                            onClick = { activeDialog = AudioSettingsDialog.EqualizerEditor },
+                            onClick = { showEqualizerEditor = true },
                         )
                         if (preferences.equalizerEnabled) {
                             val equalizerPresetTitle = stringResource(Res.string.settings_equalizer_preset)
@@ -864,62 +841,15 @@ fun AudioSettingsScreen(
         }
     }
 
-    if (activeDialog is AudioSettingsDialog.EqualizerEditor) {
-        val bandLevels = remember(preferences.equalizerSettings.bandLevels) {
-            mutableStateListOf<Int>().apply { addAll(preferences.equalizerSettings.bandLevels) }
-        }
-        TvSafeSheet(onDismissRequest = { activeDialog = AudioSettingsDialog.None }) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 32.dp),
-            ) {
-                SheetHeader(title = stringResource(Res.string.settings_equalizer), icon = Tabler.Outline.WaveSine)
-                LazyColumn(
-                    // KMP replacement for the Android-only LocalConfiguration.screenHeightDp:
-                    // the window container height in dp (shared/core/ui WindowSizeClass pattern).
-                    modifier = Modifier.heightIn(
-                        max = with(LocalDensity.current) {
-                            LocalWindowInfo.current.containerSize.height.toDp() * 0.5f
-                        },
-                    ),
-                ) {
-                    items(EqualizerSettings.BAND_FREQUENCIES.size, key = { it }, contentType = { "band" }) { i ->
-                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                            Text(
-                                "${EqualizerSettings.BAND_FREQUENCIES[i]} Hz",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("-15", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(28.dp))
-                                Slider(
-                                    value = (bandLevels[i] + 15).toFloat(),
-                                    onValueChange = { bandLevels[i] = (it - 15).toInt() },
-                                    valueRange = 0f..30f,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Text("+15", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(28.dp))
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    TextButton(onClick = { activeDialog = AudioSettingsDialog.None }) { Text(stringResource(Res.string.settings_cancel)) }
-                    Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = {
-                        viewModel.setEqualizerSettings(EqualizerSettings(bandLevels.toList()))
-                        activeDialog = AudioSettingsDialog.None
-                    }) { Text(stringResource(Res.string.settings_apply)) }
-                }
-            }
-        }
-    }
+    EqualizerEditorSheet(
+        visible = showEqualizerEditor,
+        bandLevels = preferences.equalizerSettings.bandLevels,
+        onApply = {
+            viewModel.setEqualizerSettings(it)
+            showEqualizerEditor = false
+        },
+        onDismiss = { showEqualizerEditor = false },
+    )
 
     SettingsPickerDialog(
         state = activePicker,

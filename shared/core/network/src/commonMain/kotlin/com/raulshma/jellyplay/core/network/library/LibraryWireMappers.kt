@@ -6,6 +6,10 @@ import com.raulshma.jellyplay.core.model.ExternalUrl
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.ImageBlurHashes
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.LyricsLine
+import com.raulshma.jellyplay.core.model.LyricsResult
+import com.raulshma.jellyplay.core.model.LyricsSource
+import com.raulshma.jellyplay.core.model.LyricsWord
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -308,8 +312,9 @@ internal fun BaseItemDtoWire.toCollectionSummary() = CollectionSummary(
 )
 
 /**
- * The engine's rating→age table, verbatim (`JellyfinApiEngine.ratingToAge`);
- * unknown ratings map to null = "no opinion".
+ * The canonical rating→age table (unknown ratings map to null = "no
+ * opinion"). `JellyfinApiEngine.ratingToAge` delegates here; formerly a
+ * verbatim twin lived in the engine.
  */
 internal fun parentalRatingAge(rating: String): Int? = when (rating.uppercase()) {
     "G", "TV-Y", "TV-G" -> 0
@@ -383,4 +388,38 @@ private val ITEM_SORT_BY_TOKENS: Map<String, String> = buildMap {
         }
         put(enumName.lowercase(), serial)
     }
+}
+
+/**
+ * Maps the wire lyric DTO to [LyricsResult]: per-line start/end times derived
+ * from the next line (clamped non-negative), per-word cues sliced out of the
+ * line text, and [LyricsSource.UNKNOWN] exactly when no lines parsed. Formerly
+ * a private twin of this exact body inside `KtorWasmLibraryApiClient`; the
+ * jvmShared `LyricsApi` keeps its own SDK-typed copy because its input is the
+ * deserialized `org.jellyfin.sdk.model.api.LyricDto`, which commonMain cannot
+ * see.
+ */
+internal fun LyricsDtoWire.toLyricsResult(): LyricsResult {
+    val lines = lyrics.mapIndexedNotNull { idx, line ->
+        val startMs = line.start?.let { it / 10_000 } ?: 0L
+        val nextStartMs = if (idx + 1 < lyrics.size) {
+            lyrics[idx + 1].start?.div(10_000) ?: startMs
+        } else startMs
+        val text = line.text
+        val words = line.cues?.map { cue ->
+            LyricsWord(
+                timeMs = cue.start / 10_000,
+                text = text.substring(cue.position, cue.endPosition.coerceAtMost(text.length)),
+                durationMs = ((cue.end ?: cue.start) - cue.start) / 10_000,
+            )
+        }.orEmpty()
+        LyricsLine(
+            timeMs = startMs,
+            text = text,
+            durationMs = (nextStartMs - startMs).coerceAtLeast(0L),
+            words = words,
+        )
+    }
+    val source = if (lines.isEmpty()) LyricsSource.UNKNOWN else LyricsSource.EXTERNAL
+    return LyricsResult(lines = lines, source = source)
 }

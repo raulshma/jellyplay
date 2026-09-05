@@ -85,6 +85,7 @@ import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.feature.music.feedback.DesktopMusicMessageBus
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
+import com.raulshma.jellyplay.feature.shell.AdminRefreshGate
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellSectionRegistry
 import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
@@ -357,24 +358,29 @@ private fun DesktopNavScaffold(
 
     // Admin gate + logout — the Android shell's MainViewModel duties,
     // inlined for desktop (no desktop MainViewModel exists). isAdmin maps
-    // the shared currentUser flow; refreshAdminStatus de-dupes to one
-    // server call per 30 s with an in-flight flag, the same contract
-    // AdminRouteContainer gets on Android (MainViewModel.refreshAdminStatus).
+    // the shared currentUser flow; refreshAdminStatus dedupes through the
+    // shared AdminRefreshGate (30 s window + in-flight guard) — the same
+    // contract AdminRouteContainer gets on Android
+    // (MainViewModel.refreshAdminStatus).
     val authRepository: AuthRepository = koinInject()
     var isAdmin by remember { mutableStateOf(false) }
     var isRefreshingAdmin by remember { mutableStateOf(false) }
-    var lastAdminRefreshAt by remember { mutableStateOf(0L) }
+    val adminRefreshGate = remember {
+        AdminRefreshGate(
+            isRefreshInFlight = { isRefreshingAdmin },
+            nowMs = { System.currentTimeMillis() },
+        )
+    }
     LaunchedEffect(authRepository) {
         authRepository.currentUser.collect { user -> isAdmin = user?.isAdmin == true }
     }
     val refreshAdminStatus = {
-        val now = System.currentTimeMillis()
-        if (!isRefreshingAdmin && now - lastAdminRefreshAt >= ADMIN_REFRESH_INTERVAL_MS) {
+        if (adminRefreshGate.shouldStart()) {
             isRefreshingAdmin = true
             scope.launch {
                 try {
                     authRepository.refreshCurrentUser()
-                    lastAdminRefreshAt = System.currentTimeMillis()
+                    adminRefreshGate.onRefreshCompleted()
                 } finally {
                     isRefreshingAdmin = false
                 }
@@ -748,7 +754,3 @@ private fun DesktopRailItem(
         label = { Text(label) },
     )
 }
-
-
-/** Admin-status re-validation window, matching MainViewModel's 30 s dedup. */
-private const val ADMIN_REFRESH_INTERVAL_MS = 30_000L

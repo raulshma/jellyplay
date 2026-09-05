@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -17,6 +18,8 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -49,6 +52,7 @@ class PlayedStateSyncImplTest {
     private lateinit var mediaRepository: MediaRepository
     private lateinit var downloadsStore: DownloadsStore
     private lateinit var downloadRepository: DownloadRepository
+    private val fakeTimeSource = FakeTimeSource()
     private lateinit var sync: PlayedStateSyncImpl
 
     @BeforeTest
@@ -70,6 +74,7 @@ class PlayedStateSyncImplTest {
             mediaRepository = lazy { mediaRepository },
             downloadsStore = lazy { downloadsStore },
             downloadRepository = lazy { downloadRepository },
+            timeSource = fakeTimeSource,
         )
         // Defaults; individual tests override.
         every { offlineModeManager.isOffline } returns false
@@ -369,6 +374,71 @@ class PlayedStateSyncImplTest {
         assertEquals(PlayedStateSync.ReconcileOutcome.NoChange, sync.reconcileOfflineRow(ITEM_ID))
     }
 
+    // ── reconcile ladder on the injected clock ───────────────────────────────
+    // The server-vs-local ladder used to read the raw wall clock, so its
+    // ordering branches were only testable by luck of the current date. With
+    // the [TimeSource] seam the fake clock pins all three arms.
+
+    @Test
+    fun `a server stamp in the future of the injected clock is ignored as clock skew`() = runTest {
+        // Fake now sits one minute BEFORE the server stamp — the sanity guard
+        // must reject it instead of mirroring an impossible "future watch".
+        fakeTimeSource.nowMs = epochMillis("2024-06-15T10:29:00Z")
+        coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem(lastPlayedDate = "2024-01-01T00:00:00Z")
+        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+            Result.success(
+                detail(
+                    isPlayed = false,
+                    lastPlayedDate = "2024-06-15T10:30:00Z",
+                    playbackPositionTicks = 30_000_000L,
+                ),
+            )
+
+        assertEquals(PlayedStateSync.ReconcileOutcome.NoChange, sync.reconcileOfflineRow(ITEM_ID))
+        coVerify(exactly = 0) { offlineRepository.updatePlaybackProgress(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a newer server stamp past the injected now updates the resume point`() = runTest {
+        fakeTimeSource.nowMs = epochMillis("2024-06-15T10:31:00Z")
+        coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns
+            offlineItem(lastPlayedDate = "2024-01-01T00:00:00Z", runTimeTicks = 100_000_000L)
+        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+            Result.success(
+                detail(
+                    isPlayed = false,
+                    lastPlayedDate = "2024-06-15T10:30:00Z",
+                    playbackPositionTicks = 30_000_000L,
+                ),
+            )
+
+        assertEquals(
+            PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.POSITION_UPDATED),
+            sync.reconcileOfflineRow(ITEM_ID),
+        )
+    }
+
+    @Test
+    fun `a local row newer than the server stamp wins (NoChange) regardless of the wall clock`() = runTest {
+        // Same server stamp, but the local row watched LATER — even though the
+        // real wall clock (2026+) is newer than both, the ladder must compare
+        // the two stamps against each other, not against now.
+        fakeTimeSource.nowMs = epochMillis("2024-06-15T10:31:00Z")
+        coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns
+            offlineItem(lastPlayedDate = "2024-06-15T12:00:00Z")
+        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+            Result.success(
+                detail(
+                    isPlayed = false,
+                    lastPlayedDate = "2024-06-15T10:30:00Z",
+                    playbackPositionTicks = 30_000_000L,
+                ),
+            )
+
+        assertEquals(PlayedStateSync.ReconcileOutcome.NoChange, sync.reconcileOfflineRow(ITEM_ID))
+        coVerify(exactly = 0) { offlineRepository.updatePlaybackProgress(any(), any(), any(), any()) }
+    }
+
     // ── parseIsoToEpochMillis ────────────────────────────────────────────────
 
     @Test
@@ -442,5 +512,21 @@ class PlayedStateSyncImplTest {
     private companion object {
         const val ITEM_ID = "item-1"
         const val DOWNLOAD_ID = "dl-1"
+
+        fun epochMillis(iso: String): Long =
+            java.time.OffsetDateTime.parse(iso).toInstant().toEpochMilli()
+    }
+
+    /**
+     * Controllable [TimeSource] for the reconcile ladder — same shape as the
+     * fake in LyricsRepositoryImplTest (core:data deliberately hosts no shared
+     * test fakes; see TimeSource's KDoc). The default now sits one minute
+     * after the fixture server stamp ("2024-06-15T10:30:00Z") so the ladder
+     * tests that don't care about now still pass the skew guard.
+     */
+    private class FakeTimeSource(var nowMs: Long = epochMillis("2024-06-15T10:31:00Z")) : TimeSource {
+        override fun nowEpochMillis(): Long = nowMs
+        override fun nowElapsedRealtimeMillis(): Long = nowMs
+        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2024, 6, 15)
     }
 }

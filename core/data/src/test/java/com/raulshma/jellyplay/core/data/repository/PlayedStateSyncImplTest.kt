@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -58,6 +59,11 @@ class PlayedStateSyncImplTest {
             lazyMedia,
             lazyStore,
             lazyDownloads,
+            object : TimeSource {
+                override fun nowEpochMillis(): Long = System.currentTimeMillis()
+                override fun nowElapsedRealtimeMillis(): Long = System.currentTimeMillis()
+                override fun today(zone: java.time.ZoneId): java.time.LocalDate = java.time.LocalDate.now(zone)
+            },
         )
     }
 

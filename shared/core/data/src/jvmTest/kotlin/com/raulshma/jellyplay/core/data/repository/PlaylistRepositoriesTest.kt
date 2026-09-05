@@ -19,6 +19,9 @@ import kotlin.test.assertEquals
 import kotlin.test.Test
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.raulshma.jellyplay.core.data.util.TimeSource
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Exercises [SmartPlaylistRepository] and [MoodPlaylistRepository] against a
@@ -40,7 +43,7 @@ class PlaylistRepositoriesTest {
             .setDriver(BundledSQLiteDriver())
             .build()
         smart = SmartPlaylistRepository(database.smartPlaylistDao(), json)
-        mood = MoodPlaylistRepository(database.moodPlaylistDao(), json)
+        mood = MoodPlaylistRepository(database.moodPlaylistDao(), json, FakeTimeSource())
     }
 
     @AfterTest
@@ -249,5 +252,16 @@ class PlaylistRepositoriesTest {
         assertEquals(setOf("m1", "m2"), mood.getAllPreferences().map { it.playlistId }.toSet())
         assertEquals(setOf("m1", "m2"), mood.observePreferences().first().map { it.playlistId }.toSet())
         assertEquals(false, mood.getAllPreferences().first { it.playlistId == "m2" }.isEnabled)
+    }
+
+    /**
+     * Controllable [TimeSource] — same shape as the fake in
+     * LyricsRepositoryImplTest (core:data deliberately hosts no shared test
+     * fakes; see TimeSource's KDoc).
+     */
+    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
+        override fun nowEpochMillis(): Long = nowMs
+        override fun nowElapsedRealtimeMillis(): Long = nowMs
+        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 }

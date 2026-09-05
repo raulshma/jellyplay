@@ -15,7 +15,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -1063,25 +1062,12 @@ fun AppearanceSettingsScreen(
                         onClick = { navActions.onNavigate(Route.LibraryHomeSections(if (highlightSettingId == "configure_libraries") "configure_libraries" else null)) },
                     )
 
-                    val homeSectionOrder = remember { mutableStateListOf<HomeSectionType>().apply { addAll(preferences.homeSectionOrder) } }
-                    val reorder = remember { ReorderState<HomeSectionType>().apply { submitOrder(preferences.homeSectionOrder) } }
+                    val homeSections = rememberReorderableOrderedList(
+                        storedOrder = preferences.homeSectionOrder,
+                        onPersist = viewModel::setHomeSectionOrder,
+                    )
 
-                    LaunchedEffect(preferences.homeSectionOrder) {
-                        if (!reorder.isDragging) {
-                            homeSectionOrder.clear()
-                            homeSectionOrder.addAll(preferences.homeSectionOrder)
-                            reorder.submitOrder(preferences.homeSectionOrder)
-                        }
-                    }
-
-                    fun persistHomeSectionOrder() {
-                        val currentOrder = homeSectionOrder.toList()
-                        if (currentOrder != preferences.homeSectionOrder) {
-                            viewModel.setHomeSectionOrder(currentOrder)
-                        }
-                    }
-
-                    homeSectionOrder.forEachIndexed { index, sectionType ->
+                    homeSections.items.forEachIndexed { index, sectionType ->
                         val enabled = sectionType in preferences.enabledHomeSectionTypes
                         SettingReorderableToggleItem(
                             icon = homeSectionIcon(sectionType),
@@ -1089,19 +1075,14 @@ fun AppearanceSettingsScreen(
                             subtitle = sectionType.description,
                             checked = enabled,
                             index = index,
-                            count = homeSectionOrder.size,
-                            modifier = Modifier.onSizeChanged { reorder.recordHeight(sectionType, it.height) },
+                            count = homeSections.items.size,
+                            modifier = Modifier.onSizeChanged { homeSections.recordHeight(sectionType, it.height) },
                             onCheckedChange = { checked ->
                                 viewModel.setSectionVisible(sectionType, checked)
                             },
-                            onDrag = { delta ->
-                                if (reorder.drag(sectionType, delta)) {
-                                    homeSectionOrder.clear()
-                                    homeSectionOrder.addAll(reorder.order)
-                                }
-                            },
-                            onDragStart = { reorder.beginDrag(sectionType) },
-                            onDragEnd = { reorder.endDrag(); persistHomeSectionOrder() },
+                            onDrag = { delta -> homeSections.onDrag(sectionType, delta) },
+                            onDragStart = { homeSections.onDragStart(sectionType) },
+                            onDragEnd = homeSections::onDragEnd,
                         )
                     }
                 }
@@ -1195,25 +1176,12 @@ fun AppearanceSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in NEWSLETTER_GROUP_IDS,
                 ) {
-                    val newsletterSections = remember { mutableStateListOf<NewsletterSectionType>().apply { addAll(preferences.newsletterSectionOrder) } }
-                    val reorder = remember { ReorderState<NewsletterSectionType>().apply { submitOrder(preferences.newsletterSectionOrder) } }
+                    val newsletterSections = rememberReorderableOrderedList(
+                        storedOrder = preferences.newsletterSectionOrder,
+                        onPersist = viewModel::setNewsletterSectionOrder,
+                    )
 
-                    LaunchedEffect(preferences.newsletterSectionOrder) {
-                        if (!reorder.isDragging) {
-                            newsletterSections.clear()
-                            newsletterSections.addAll(preferences.newsletterSectionOrder)
-                            reorder.submitOrder(preferences.newsletterSectionOrder)
-                        }
-                    }
-
-                    fun persistNewsletterSectionOrder() {
-                        val currentOrder = newsletterSections.toList()
-                        if (currentOrder != preferences.newsletterSectionOrder) {
-                            viewModel.setNewsletterSectionOrder(currentOrder)
-                        }
-                    }
-
-                    SettingsItemList(total = newsletterSections.size + 2) {
+                    SettingsItemList(total = newsletterSections.items.size + 2) {
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Mail,
@@ -1249,53 +1217,25 @@ fun AppearanceSettingsScreen(
                     )
 
                     if (preferences.newsletterEnabled) {
-                        newsletterSections.forEachIndexed { index, sectionType ->
+                        newsletterSections.items.forEachIndexed { index, sectionType ->
                             val enabled = sectionType in preferences.enabledNewsletterSections
-                            val displayName = when (sectionType) {
-                                NewsletterSectionType.RECENTLY_ADDED -> stringResource(Res.string.settings_newsletter_recently_added)
-                                NewsletterSectionType.ACTIVITY_DIGEST -> stringResource(Res.string.settings_newsletter_activity_log)
-                                NewsletterSectionType.LIBRARY_STATS -> stringResource(Res.string.settings_newsletter_library_stats)
-                                NewsletterSectionType.CONTINUE_WATCHING -> stringResource(Res.string.settings_newsletter_continue_watching)
-                                NewsletterSectionType.NEXT_UP -> stringResource(Res.string.settings_newsletter_next_up)
-                                NewsletterSectionType.CURATED_PICKS -> stringResource(Res.string.settings_newsletter_curated_picks)
-                            }
-                            val sectionDesc = when (sectionType) {
-                                NewsletterSectionType.RECENTLY_ADDED -> stringResource(Res.string.settings_newsletter_recently_added_desc)
-                                NewsletterSectionType.ACTIVITY_DIGEST -> stringResource(Res.string.settings_newsletter_activity_log_desc)
-                                NewsletterSectionType.LIBRARY_STATS -> stringResource(Res.string.settings_newsletter_library_stats_desc)
-                                NewsletterSectionType.CONTINUE_WATCHING -> stringResource(Res.string.settings_newsletter_continue_watching_desc)
-                                NewsletterSectionType.NEXT_UP -> stringResource(Res.string.settings_newsletter_next_up_desc)
-                                NewsletterSectionType.CURATED_PICKS -> stringResource(Res.string.settings_newsletter_curated_picks_desc)
-                            }
 
                             SettingReorderableToggleItem(
-                                icon = when (sectionType) {
-                                    NewsletterSectionType.CONTINUE_WATCHING -> Tabler.Outline.PlayerPlay
-                                    NewsletterSectionType.NEXT_UP -> Tabler.Outline.PlayerSkipForward
-                                    NewsletterSectionType.RECENTLY_ADDED -> Tabler.Outline.Clock
-                                    NewsletterSectionType.LIBRARY_STATS -> Tabler.Outline.LayersLinked
-                                    NewsletterSectionType.CURATED_PICKS -> Tabler.Outline.Wand
-                                    NewsletterSectionType.ACTIVITY_DIGEST -> Tabler.Outline.Folder
-                                },
-                                title = displayName,
-                                subtitle = sectionDesc,
+                                icon = newsletterSectionIcon(sectionType),
+                                title = stringResource(sectionType.labelRes),
+                                subtitle = stringResource(sectionType.descriptionRes),
                                 checked = enabled,
                                 index = index + 2,
-                                count = newsletterSections.size + 2,
-                                modifier = Modifier.onSizeChanged { reorder.recordHeight(sectionType, it.height) },
+                                count = newsletterSections.items.size + 2,
+                                modifier = Modifier.onSizeChanged { newsletterSections.recordHeight(sectionType, it.height) },
                                 onCheckedChange = { checked ->
                                     val current = preferences.enabledNewsletterSections.toMutableSet()
                                     if (checked) current.add(sectionType) else current.remove(sectionType)
                                     viewModel.setEnabledNewsletterSections(current)
                                 },
-                                onDrag = { delta ->
-                                    if (reorder.drag(sectionType, delta)) {
-                                        newsletterSections.clear()
-                                        newsletterSections.addAll(reorder.order)
-                                    }
-                                },
-                                onDragStart = { reorder.beginDrag(sectionType) },
-                                onDragEnd = { reorder.endDrag(); persistNewsletterSectionOrder() },
+                                onDrag = { delta -> newsletterSections.onDrag(sectionType, delta) },
+                                onDragStart = { newsletterSections.onDragStart(sectionType) },
+                                onDragEnd = newsletterSections::onDragEnd,
                             )
                         }
                     }

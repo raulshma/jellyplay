@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
+import com.raulshma.jellyplay.core.network.library.parentalRatingAge
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -203,14 +204,8 @@ class JellyfinApiEngine @Inject constructor(
     val currentMaxParentalRating: Int?
         get() = _currentUser.value?.maxParentalAgeRating
 
-    fun ratingToAge(rating: String): Int? = when (rating.uppercase()) {
-        "G", "TV-Y", "TV-G" -> 0
-        "PG", "TV-Y7", "TV-PG" -> 7
-        "PG-13", "TV-14" -> 13
-        "R", "TV-MA" -> 17
-        "NC-17" -> 18
-        else -> null
-    }
+    /** Delegates to the canonical commonMain table ([parentalRatingAge]). */
+    fun ratingToAge(rating: String): Int? = parentalRatingAge(rating)
 
     /**
      * Selector-based parental-rating filter applied on raw values (e.g. DTOs)

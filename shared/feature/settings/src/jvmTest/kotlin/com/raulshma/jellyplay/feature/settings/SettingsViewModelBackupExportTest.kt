@@ -135,6 +135,7 @@ class SettingsViewModelBackupExportTest {
             authRepository = authRepository,
             seerrRepository = seerrRepository,
             adminRepository = adminRepository,
+            appearanceStore = mockk(relaxed = true),
             editor = editor,
             recentsStore = recentsStore,
         )

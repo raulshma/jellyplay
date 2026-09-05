@@ -24,10 +24,11 @@ class AudioSettingsViewModel(
     /** Audio-screen slice — recomposes this screen only on audio-field writes. */
     val preferences: StateFlow<AudioPreferences> = projections.audioPreferences
 
-    val showAdvancedSettings: StateFlow<Boolean> = appearanceStore.showAdvancedSettings
+    private val advancedSettings = AdvancedSettingsGate(appearanceStore, editor)
 
-    fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { appearance.setShowAdvancedSettings(enabled) }
+    val showAdvancedSettings: StateFlow<Boolean> = advancedSettings.showAdvancedSettings
+
+    fun setShowAdvancedSettings(enabled: Boolean) = advancedSettings.setShowAdvancedSettings(enabled)
 
     fun setAudioAutoplayNext(enabled: Boolean) = editor.setAudioAutoplayNext(enabled)
     fun setAudioVisualizerEnabled(enabled: Boolean) =

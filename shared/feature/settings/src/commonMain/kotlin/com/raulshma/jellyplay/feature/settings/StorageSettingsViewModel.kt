@@ -71,7 +71,9 @@ class StorageSettingsViewModel(
         }
     }
 
-    val showAdvancedSettings: StateFlow<Boolean> = appearanceStore.showAdvancedSettings
+    private val advancedSettings = AdvancedSettingsGate(appearanceStore, editor)
+
+    val showAdvancedSettings: StateFlow<Boolean> = advancedSettings.showAdvancedSettings
 
     var cacheSizeMb by composeState(0L)
         private set
@@ -82,8 +84,7 @@ class StorageSettingsViewModel(
     var cacheError by composeState<String?>(null)
         private set
 
-    fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { appearance.setShowAdvancedSettings(enabled) }
+    fun setShowAdvancedSettings(enabled: Boolean) = advancedSettings.setShowAdvancedSettings(enabled)
 
     /**
      * Recomputes the cache / downloads / image-cache sizes from disk via the

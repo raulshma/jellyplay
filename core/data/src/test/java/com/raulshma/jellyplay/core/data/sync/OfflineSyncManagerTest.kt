@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
@@ -58,7 +59,7 @@ class OfflineSyncManagerTest {
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
     private val writer = RecordingWriter()
 
-    private val comparator = OfflineSyncComparator()
+    private val comparator = OfflineSyncComparator(RealTimeSource())
     private lateinit var manager: OfflineSyncManager
     private lateinit var tempDir: File
 
@@ -96,7 +97,15 @@ class OfflineSyncManagerTest {
             offlineModeManager = offlineModeManager,
             playbackRepository = playbackRepository,
             appScope = TestScope(),
+            timeSource = RealTimeSource(),
         )
+    }
+
+    /** Wall-clock pass-through; these pins don't assert on clock values. */
+    private class RealTimeSource : TimeSource {
+        override fun nowEpochMillis(): Long = System.currentTimeMillis()
+        override fun nowElapsedRealtimeMillis(): Long = System.currentTimeMillis()
+        override fun today(zone: java.time.ZoneId): java.time.LocalDate = java.time.LocalDate.now(zone)
     }
 
     @After

@@ -4,6 +4,9 @@ import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.livetv.components.RecordActions
+import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
+import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -14,18 +17,6 @@ private const val NOW_TICK_INTERVAL_MS: Long = 30 * 1000L
 private const val GUIDE_LOOKBACK_HOURS: Long = 2L
 /** Total span of the guide window. Matches the 24h timeline used by the jellyfin-web guide. */
 private const val GUIDE_WINDOW_HOURS: Long = 24L
-
-/** State of the "Record program" confirmation dialog driven from the EPG grid. */
-sealed interface RecordDialogState {
-    /** A program is selected and awaiting the user's confirm/cancel decision. */
-    data class Confirm(val program: LiveTvProgram) : RecordDialogState
-    /** Recording request is in flight. */
-    data object Requesting : RecordDialogState
-    /** The timer was created successfully. */
-    data class Success(val programName: String) : RecordDialogState
-    /** Creating the timer failed. */
-    data class Error(val message: String) : RecordDialogState
-}
 
 class EpgViewModel(
     private val mediaRepository: LiveTvRepository,
@@ -53,6 +44,24 @@ class EpgViewModel(
 
     private val _recordDialog = composeState<RecordDialogState?>(null)
     val recordDialog: RecordDialogState? get() = _recordDialog.value
+
+    /**
+     * The shared record choreography ([RecordActions]); this tab surfaces the
+     * outcome through the record dialog (Success carries the program name) and
+     * reloads the guide on success so timer badges reflect the new timer.
+     */
+    private val recordActions = RecordActions(mediaRepository, scope) { outcome ->
+        when (outcome) {
+            is RecordOutcome.Requesting -> _recordDialog.value = RecordDialogState.Requesting
+            is RecordOutcome.Success -> {
+                _recordDialog.value = RecordDialogState.Success(outcome.request.program?.name)
+                loadGuide()
+            }
+            is RecordOutcome.Error ->
+                _recordDialog.value = RecordDialogState.Error(outcome.message ?: "Failed to create recording")
+            RecordOutcome.Idle -> Unit
+        }
+    }
 
     /**
      * Cached grid snapshot. Rebuilt only when the source channels/programs or
@@ -115,17 +124,7 @@ class EpgViewModel(
     /** Confirm creating a timer for the program currently awaiting confirmation. */
     fun confirmRecord() {
         val pending = (_recordDialog.value as? RecordDialogState.Confirm)?.program ?: return
-        _recordDialog.value = RecordDialogState.Requesting
-        launch {
-            mediaRepository.createTimer(pending.id)
-                .onSuccess {
-                    _recordDialog.value = RecordDialogState.Success(pending.name)
-                    loadGuide()
-                }
-                .onFailure { e ->
-                    _recordDialog.value = RecordDialogState.Error(e.message ?: "Failed to create recording")
-                }
-        }
+        recordActions.recordOnce(pending)
     }
 
     fun dismissRecordDialog() { _recordDialog.value = null }

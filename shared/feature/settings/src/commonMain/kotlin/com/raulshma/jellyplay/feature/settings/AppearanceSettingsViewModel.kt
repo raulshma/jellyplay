@@ -36,10 +36,11 @@ class AppearanceSettingsViewModel(
     val navigationCustomizationPreferences: StateFlow<NavigationCustomizationPreferences> =
         projections.navigationCustomizationPreferences
 
-    val showAdvancedSettings: StateFlow<Boolean> = appearanceStore.showAdvancedSettings
+    private val advancedSettings = AdvancedSettingsGate(appearanceStore, editor)
 
-    fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { appearance.setShowAdvancedSettings(enabled) }
+    val showAdvancedSettings: StateFlow<Boolean> = advancedSettings.showAdvancedSettings
+
+    fun setShowAdvancedSettings(enabled: Boolean) = advancedSettings.setShowAdvancedSettings(enabled)
 
     fun setThemeMode(mode: ThemeMode) = editor.setThemeMode(mode)
     fun setDynamicTheming(enabled: Boolean) = editor.setDynamicTheming(enabled)

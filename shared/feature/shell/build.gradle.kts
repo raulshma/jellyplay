@@ -82,5 +82,9 @@ kotlin {
             // in the consuming shells / feature modules.
             implementation(libs.navigation3.runtime)
         }
+        // AdminRefreshGate policy pins (settings/core-data precedent).
+        getByName("jvmTest").dependencies {
+            implementation(kotlin("test"))
+        }
     }
 }

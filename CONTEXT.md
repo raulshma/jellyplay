@@ -136,6 +136,41 @@ controllers must stay free of `VideoPlayerUiState` code references (the
 ratchet test strips comments before counting, so KDoc prose is exempt —
 `EpisodeNavigator`'s doc mentions the type).
 
+**`ItemPlaybackPreferenceWriter`**
+(`shared/feature/player-video/src/commonMain/kotlin/.../ItemPlaybackPreferenceWriter.kt`)
+is the write side of the per-item/series playback-language preferences — the
+command twin of `ItemPlaybackPreferenceResolver` (the read side). Its five
+commands (`setSeriesAudioLanguage`, `setSeriesSubtitlePreference`,
+`setSeriesSubtitleDisabled`, `setDialogueBoostStrength`, `rememberTrack`)
+each internalize the whole write choreography: resolve the write key from
+session state per the command's explicit `ScopePolicy` (`SERIES_ONLY` for
+language/remembered-track — a standalone movie has nothing to remember onto;
+`SERIES_THEN_ITEM` for dialogue boost, whose SERIES→ITEM fallback is
+declared, not accidental), write through `ItemPlaybackPreferenceRepository`
+where null means FORGET and issues the explicit `clear*` call (save()'s
+"null ⇒ preserve" convention must never silently keep the old language),
+then fire `onPreferencesChanged` — the resolver refresh the restore ladder
+and sheet toggles read. In the VM the writer sits after
+`trackSelectionHelper` with a load-bearing explicit type annotation (each
+declaration's wiring lambda reads the other). Pinned by
+`ItemPlaybackPreferenceWriterTest`.
+
+`TrackSelectionHelper.updateTracksFromEngine`'s twin restore ladders are one
+choreography now: a private `TrackRestoreLadder` delta value carries the four
+genuine per-type divergences (subtitle's `offline:` id route + target-stream
+null-guard vs audio's unconditional `resolveByStreamIndex`; the stored-index
+offline fallback positional vs offline-id→positional; the preference ladder
+`resolveAudio`/preferAudioDescription vs `resolveSubtitle`/
+subtitleDisabled-short-circuit/forcedOnly) while `runRestoreLadder()` runs
+the shared pending → held-selection guard → stored index → preference
+sequence once. Pinned by `TrackSelectionHelperTest` UNMODIFIED — the dedup
+landed only because the untouched suite passes. Two VM residues collapsed
+with it: the error-dialog dismissal triple is `clearPlaybackErrorState()`,
+and the item-switch uiState rebuild in `releaseInternalsVmPart` is the
+declared builder `VideoPlayerUiState.keepAcrossItems()` (the surviving
+leaves are its constructor arguments, everything else resets to slice
+defaults); the god-count ratchet still counts exactly 3.
+
 ## Playback source resolution
 
 - **`SessionLoadPipeline`** (`shared/feature/player-video/src/commonMain/kotlin/.../SessionLoadPipeline.kt`)
@@ -642,6 +677,53 @@ ordering; `HomeSectionConfigSheetTest` pins the production
 subtitle/target-colour functions, not local copies; `HomeUiStateTest` pins
 only the state-class defaults.
 
+## Library & search filters
+
+`LibraryFilters` carries its write algebra beside the value (the
+`HomeSectionPrefs` precedent): `withMediaTypeToggled` / `withGenreToggled` /
+`withTagToggled` / `withYears` / `withMinRating` / `withSortBy` /
+`withPlayedStatus` / `withResumableToggled` / `withDownloadedToggled` /
+`cleared`, plus one canonical `hasActiveFilters` fold covering every field
+(non-default sort counts as active; tri-state booleans only when `true`).
+`LibraryViewModel` and `SearchViewModel` mutators delegate to it (persistence
+and public surface unchanged), and both screens' badge/BackHandler guards
+read the same fold — fixing library's drift where years/tags/minRating/sort
+silently under-reported the active set. Pinned by `LibraryFiltersAlgebraTest`
+(core/model commonTest).
+
+## Live TV recording & music collections
+
+**`RecordActions`** (`shared/feature/livetv/src/commonMain/kotlin/.../components/RecordActions.kt`)
+is the one recording choreography behind every Live TV tab, constructed over
+`LiveTvRepository` and the owning ViewModel's scope. Commands
+`recordOnce`/`recordSeries`/`cancelTimer`/`cancelSeries` (program-based;
+String-id cancels for Schedule/Series) all run the same sequence —
+synchronous `RecordOutcome.Requesting`, one repository call, then
+`Success`/`Error` carrying the `RecordRequest` identity — surfaced as a
+`StateFlow<RecordOutcome>` PLUS a synchronous `onOutcome` callback so the
+dialog flip lands in the tap frame. Tabs are adapters mapping outcomes onto
+their own refresh and feedback channel (Programs → the shared
+`RecordDialogState` + reload; Channel Detail → its `messages` flow +
+program-window refresh; EPG → dialog (`Success` carries the program name) +
+`loadGuide`; Schedule/Series → sheet-dismiss + reload vs error field).
+Absorbs the twelve per-ViewModel mutation blocks and the EPG's duplicate
+`RecordDialogState` + private renderer; the single renderer lives in
+`RecordManager.kt`. `RecordingsViewModel.deleteRecording` stays put — a
+composite choreography (best-effort series-timer cancel before delete, an
+`isDeleting` dismissal block), not a RecordActions command. Pinned by
+`RecordActionsTest` plus the per-tab suites.
+
+**`SortedPagedCollection`** (`shared/feature/music/src/commonMain/kotlin/.../collection/SortedPagedCollection.kt`)
+is the one sorted paged music collection: the `MusicSortOption` `StateFlow`
+(the shared enum relocated here from `AlbumsViewModel`), `setSort`, and a
+paged `items` flow re-running
+`getMediaItemsPaged(LibraryFilters(mediaTypes = listOf(mediaType), sortBy = …))`
+per sort change, `cachedIn` the owner's scope. Artists/Albums/Tracks
+ViewModels and the browse screen's three pagers are thin adapters exposing
+`selectedSort`/`items` under their own names; screens collect `selectedSort`
+as state (the Artists/Tracks hand-synced duplicate-state drift is gone).
+Pinned by `MusicListViewModelsTest`.
+
 ## Session identity
 
 **`HomeSession`** (`shared/core/data/src/jvmShared/kotlin/com/raulshma/jellyplay/core/data/session/HomeSession.kt`)
@@ -769,6 +851,48 @@ fake clock) — ported from the legacy `core/data` suite the KMP move had
 stranded non-compiling on the wrong side of the seam (no CI lane compiled
 it, which is how the breakage stayed invisible; the legacy files are gone).
 
+The data layer's clock reads go through the injected **`TimeSource`**
+(jvmShared `util/TimeSource.kt`, the Koin-single `SystemTimeSource`): every
+behaviour-bearing decision — `PlayedStateSyncImpl`'s server-vs-local
+reconcile guard, `OfflineSyncManager`'s SYNC_TTL gate,
+`OfflineSyncComparator`'s `lastCheckedAt` stamp,
+`AdminStatisticsRepositoryImpl`'s 90-day prune — plus the stamp-only writers
+(`AuthRepositoryImpl` lastConnected, `ItemPlaybackPreferenceRepositoryImpl`,
+`SearchHistoryRepositoryImpl`, `PlaybackOutboxRepositoryImpl`,
+`ServerHealthMonitor`, `MoodPlaylistRepository`, `DownloadRepositoryImpl`'s
+baseline seed) now take the seam in their constructors;
+`PlayedStateSyncImplTest` pins the reconcile ladder on a fake clock.
+`SeenMediaRepository` keeps its wall-clock default argument (an interface
+default consumed outside the data layer). **`ImageUrlProviderImpl`** moved
+to jvmShared beside the `ImageUrlProvider` interface: one memoisation
+implementation (perf-mode 300/400 clamp, `p_|b_|c_` key grammar,
+put-only-on-non-empty, null-width bypass, 512-entry bound) bound by both the
+Android and desktop DI modules — the `android.util.LruCache` and desktop
+`LinkedHashMap` twins are gone, pinned by `ImageUrlProviderImplTest`.
+
+## Library client policy (network)
+
+**`LibraryRequestPolicy`** (`shared/core/network/src/commonMain/kotlin/.../library/LibraryRequestPolicy.kt`)
+is the one home for the request-level policies the `LibraryApiClient` twins
+(`LibraryApiClientImpl`, `KtorWasmLibraryApiClient`) used to ship hand-copied
+per source set: the 12-field detail projection (`DETAIL_PROJECTION_FIELDS`),
+the jellyfin-web search-suggestions shape, the SEASON/EPISODE exclude-drop,
+the empty-library fallback ladder (`EmptyLibraryFallback` + the known-empty
+memo probe and `emptyFallbackTotalCount`), and the favorite-flag cache-aside
+toggle (`FavoriteFlagCache` over an identity-keyed `TtlCache`, 200 entries /
+15 min). Each client resolves the shared wire names against its own
+enum/wire dialect and supplies only transport lambdas plus its platform
+memo/threading regime (JVM: synchronized access-order LRU probed with
+`containsKey`; wasm: lock-free remove+reinsert — a documented divergence,
+not a copy). `JellyfinApiEngine.ratingToAge` and
+`JellyfinDtoMappers.parseItemSortList` delegate to the canonical commonMain
+tables (`parentalRatingAge` / the sort-token parser) instead of carrying
+"verbatim" twins, and the wasm lyrics DTO mapping lives in
+`LibraryWireMappers` (the SDK-typed jvmShared mapper stays — its input type
+is invisible to commonMain). Both clients compile against the single policy
+in `:shared:core:network:jvmTest`; the wasm client has no test lane of its
+own, which is exactly why the policies must not live there.
+
 ## Navigation destinations
 
 The **`NavDestination` registry** (core/ui `NavKey.kt`) is the single home
@@ -800,6 +924,22 @@ stays per-shell (Android: `MainViewModel`; desktop: inlined) — it was
 deliberately NOT absorbed into the hooks: one consumer per policy, and
 forcing it through would drag `AuthRepository` into a "shared" module for
 one shell's sake.
+
+The shells share the platform-free shell policy in `shared/feature/shell`:
+**`AdminRefreshGate`** is the admin-status dedupe (30 s window + in-flight
+guard, success-only `onRefreshCompleted` stamping — a failed refresh must
+not push the next attempt a full window out) constructed over each shell's
+own in-flight flag (read through a lambda) and a wall-clock lambda; Android's
+`MainViewModel.refreshAdminStatus` and the desktop scaffold's lambda both
+arbitrate through it, and the duplicated `ADMIN_REFRESH_INTERVAL_MS`
+constant is gone. The rendered in-flight/admin state stays per-shell as
+recorded. In `:app`, `RemoteNavigationRouting.kt` holds the remote-target
+decisions as pure functions: `routeForNavigationTarget(target)` (exhaustive
+`when` — a new server-emitted target is a compile-time decision, not a
+silent `Route.Home` fall-through) and `popPlayerRoutes(backStacks)` (the
+Jellyfin-web "Stop" semantics: contiguous player entries popped off the top
+of every back stack). Pinned by `AdminRefreshGateTest` (shell jvmTest) and
+`RemoteNavigationRoutingTest` (app unit test).
 
 ## Settings search
 
@@ -873,6 +1013,35 @@ drive it; `resolveOrder` there is the generalized stored-order-vs-known-
 items merge (append-missing). Pinned by `ReorderStateTest` +
 `ResolveOrderTest` (jvmTest): sub-threshold drags are no-ops, so persist
 stays silent when nothing moved.
+
+**`ReorderableOrderedListState`**
+(`shared/feature/settings/src/commonMain/kotlin/.../ReorderableOrderedList.kt`)
+is the choreography owner around the `ReorderState<T>` arithmetic: the
+observable mirror list, the store-emission resync, the write-on-diff persist
+and the drag callbacks live here once — the three former hand copies
+(Appearance home sections, Appearance newsletter sections,
+`NavigationCustomizationGroup`, whose remember-keys reseed had already
+drifted from the guarded-resync majority) are now content:
+`rememberReorderableOrderedList(storedOrder, onPersist, knownOrder)` + row
+slots. Pinned semantic: store emissions apply only while idle (mid-drag
+emissions are ignored, never queued — the drag's final order wins), the diff
+base is the last seeded or persisted order, and persistence fires once at
+drag end. `ReorderState` itself is unchanged; `ReorderableOrderedListTest`
+pins the decisions beside `ReorderStateTest`/`ResolveOrderTest`.
+
+`NewsletterSectionPresentation.kt` (beside `AppearanceSettingsScreen`) is
+`NewsletterSectionType`'s presentation vocabulary — exhaustive
+`labelRes`/`descriptionRes` + `newsletterSectionIcon()`, Compose resources
+resolved at render time, kept in feature/settings because the only renderer
+lives here (the `HomeSectionType` precedent's shape, not its letter — that
+descriptor hardcodes English strings on the model). The equalizer editor is
+`EqualizerEditorSheet.kt` behind one boolean slot — the last per-screen
+dialog hierarchy `PickerState` missed (deliberately not a `PickerState`
+variant: a multi-slider editor with an Apply step is not a payload picker).
+`AdvancedSettingsGate` is the single implementation of the advanced-gate
+pair nine settings ViewModels hand-copied verbatim; each VM keeps its
+public members and delegates (the settings-root `SettingsViewModel` receives
+the store via its constructor + Koin def).
 
 ## Theme variants
 

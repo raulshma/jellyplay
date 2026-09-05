@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.worker.awaitResponse
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
@@ -120,6 +121,8 @@ class DownloadRepositoryImpl(
     private val syncComparator: OfflineSyncComparator,
     private val progressNotifier: DownloadProgressNotifier,
     private val imagePreloader: OfflineImagePreloader,
+    /** Clock seam for the baseline-seeding `lastSyncedAt` stamp. */
+    private val timeSource: TimeSource,
 ) : DownloadRepository {
 
     // Caps the number of episodes processed concurrently when queueing a series
@@ -1095,7 +1098,7 @@ class DownloadRepositoryImpl(
                     syncedSegmentsSignature = null,
                     syncedMediaSourceId = baseline.mediaSourceId,
                     syncedMediaSizeBytes = baseline.mediaSizeBytes,
-                    lastSyncedAt = System.currentTimeMillis(),
+                    lastSyncedAt = timeSource.nowEpochMillis(),
                 ),
             )
         }

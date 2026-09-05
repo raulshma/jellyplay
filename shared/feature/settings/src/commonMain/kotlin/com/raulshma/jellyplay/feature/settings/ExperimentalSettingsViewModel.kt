@@ -17,10 +17,11 @@ class ExperimentalSettingsViewModel(
     /** Experimental-screen slice — recomposes this screen only when enabled features change. */
     val preferences: StateFlow<ExperimentalPreferences> = projections.experimentalPreferences
 
-    val showAdvancedSettings: StateFlow<Boolean> = appearanceStore.showAdvancedSettings
+    private val advancedSettings = AdvancedSettingsGate(appearanceStore, editor)
 
-    fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { appearance.setShowAdvancedSettings(enabled) }
+    val showAdvancedSettings: StateFlow<Boolean> = advancedSettings.showAdvancedSettings
+
+    fun setShowAdvancedSettings(enabled: Boolean) = advancedSettings.setShowAdvancedSettings(enabled)
 
     fun setExperimentalFeatureEnabled(feature: ExperimentalFeature, enabled: Boolean) {
         val current = preferences.value.enabledExperimentalFeatures

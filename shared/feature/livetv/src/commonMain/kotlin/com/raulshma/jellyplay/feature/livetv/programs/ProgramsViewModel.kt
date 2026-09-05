@@ -6,7 +6,9 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
+import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
@@ -43,6 +45,25 @@ class ProgramsViewModel(
 
     private val _uiState = stateFlow(ProgramsUiState())
     val uiState get() = _uiState.flow
+
+    /**
+     * The shared record choreography ([RecordActions]); this tab's adaptation
+     * maps the outcome onto the dialog in [ProgramsUiState] and re-runs [load]
+     * after a success so timer badges reflect the server state.
+     */
+    private val recordActions = RecordActions(mediaRepository, scope) { outcome ->
+        _uiState.update {
+            it.copy(
+                recordDialog = when (outcome) {
+                    is RecordOutcome.Requesting -> RecordDialogState.Requesting
+                    is RecordOutcome.Success -> RecordDialogState.Success()
+                    is RecordOutcome.Error -> RecordDialogState.Error(outcome.message ?: "Failed")
+                    RecordOutcome.Idle -> it.recordDialog
+                },
+            )
+        }
+        if (outcome is RecordOutcome.Success) load()
+    }
 
     @Volatile private var lastFullRender: Long = 0L
 
@@ -132,47 +153,21 @@ class ProgramsViewModel(
     fun getImageUrl(itemId: String, imageTag: String?): String =
         if (imageTag != null) imageUrlProvider.getImageUrl(itemId) else ""
 
-    // ── Recording flow (shared RecordDialog) ──
+    // ── Recording flow (shared RecordDialog, choreography in RecordActions) ──
     fun requestRecord(program: LiveTvProgram) {
         _uiState.update { it.copy(recordDialog = RecordDialogState.AwaitingChoice(program)) }
     }
 
-    fun recordOnce(program: LiveTvProgram) {
-        _uiState.update { s -> s.copy(recordDialog = RecordDialogState.Requesting) }
-        launch {
-            mediaRepository.createTimer(program.id)
-                .onSuccess { _uiState.update { s -> s.copy(recordDialog = RecordDialogState.Success) }; load() }
-                .onFailure { e -> _uiState.update { s -> s.copy(recordDialog = RecordDialogState.Error(e.message ?: "Failed")) } }
-        }
-    }
+    fun recordOnce(program: LiveTvProgram) = recordActions.recordOnce(program)
 
-    fun recordSeries(program: LiveTvProgram) {
-        _uiState.update { s -> s.copy(recordDialog = RecordDialogState.Requesting) }
-        launch {
-            mediaRepository.createSeriesTimer(program.id)
-                .onSuccess { _uiState.update { s -> s.copy(recordDialog = RecordDialogState.Success) }; load() }
-                .onFailure { e -> _uiState.update { s -> s.copy(recordDialog = RecordDialogState.Error(e.message ?: "Failed")) } }
-        }
-    }
+    fun recordSeries(program: LiveTvProgram) = recordActions.recordSeries(program)
 
     fun cancelTimer(program: LiveTvProgram) {
-        val timerId = program.timerId ?: return dismissRecordDialog()
-        _uiState.update { s -> s.copy(recordDialog = RecordDialogState.Requesting) }
-        launch {
-            mediaRepository.cancelTimer(timerId)
-                .onSuccess { _uiState.update { s -> s.copy(recordDialog = RecordDialogState.Success) }; load() }
-                .onFailure { e -> _uiState.update { s -> s.copy(recordDialog = RecordDialogState.Error(e.message ?: "Failed")) } }
-        }
+        if (!recordActions.cancelTimer(program)) dismissRecordDialog()
     }
 
     fun cancelSeries(program: LiveTvProgram) {
-        val seriesTimerId = program.seriesTimerId ?: return dismissRecordDialog()
-        _uiState.update { s -> s.copy(recordDialog = RecordDialogState.Requesting) }
-        launch {
-            mediaRepository.cancelSeriesTimer(seriesTimerId)
-                .onSuccess { _uiState.update { s -> s.copy(recordDialog = RecordDialogState.Success) }; load() }
-                .onFailure { e -> _uiState.update { s -> s.copy(recordDialog = RecordDialogState.Error(e.message ?: "Failed")) } }
-        }
+        if (!recordActions.cancelSeries(program)) dismissRecordDialog()
     }
 
     fun dismissRecordDialog() {

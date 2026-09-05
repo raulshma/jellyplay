@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
+import com.raulshma.jellyplay.feature.shell.AdminRefreshGate
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.shell.SessionCoordinator
@@ -166,14 +167,16 @@ class MainViewModel(
     val isRefreshingAdmin = _isRefreshingAdmin.flow
 
     /**
-     * Wall-clock millis of the last successful [refreshAdminStatus]. Prevents
-     * every admin screen from re-fetching the policy on rapid back/forward
-     * navigation within the admin area. Read/written only on the Main thread
-     * (all callers run via [launch] on the viewModelScope's Main dispatcher),
-     * so a plain non-volatile field is safe here.
+     * The admin refresh dedupe policy (the shared [AdminRefreshGate]: 30 s
+     * window + in-flight guard). The in-flight state itself stays here —
+     * [MainViewModel.isRefreshingAdmin] is the flow the
+     * [com.raulshma.jellyplay.feature.admin.navigation.AdminRouteContainer]
+     * guard renders from.
      */
-    private var lastAdminRefreshAt = 0L
-    private val adminRefreshIntervalMs = 30_000L
+    private val adminRefreshGate = AdminRefreshGate(
+        isRefreshInFlight = { _isRefreshingAdmin.value },
+        nowMs = { System.currentTimeMillis() },
+    )
 
     /**
      * Preferences read by the app-shell composables (MainActivity +
@@ -226,24 +229,24 @@ class MainViewModel(
     /**
      * Re-validates the current user's admin status against the server. Called
      * by [com.raulshma.jellyplay.feature.admin.navigation.AdminRouteContainer]
-     * on entering any admin screen, but de-duplicated to at most once per
-     * [adminRefreshIntervalMs] so navigation between admin screens doesn't
-     * hammer the server. Failures other than access-denied are swallowed
-     * (the cached value is kept) — see [AuthRepository.refreshCurrentUser].
+     * on entering any admin screen, but de-duplicated by the shared
+     * [AdminRefreshGate] (at most once per 30 s window) so navigation between
+     * admin screens doesn't hammer the server. Failures other than
+     * access-denied are swallowed (the cached value is kept) — see
+     * [AuthRepository.refreshCurrentUser].
      */
     fun refreshAdminStatus() {
         // Early-out synchronously (before launch) to guard against the window
         // where two admin entries compose simultaneously during a transition
         // and both fire LaunchedEffect. The in-flight flag serializes genuine
-        // concurrent entries; the timestamp bounds re-fetches to one per window.
-        if (_isRefreshingAdmin.value) return
-        val now = System.currentTimeMillis()
-        if (now - lastAdminRefreshAt < adminRefreshIntervalMs) return
+        // concurrent entries; the gate's timestamp bounds re-fetches to one
+        // per window.
+        if (!adminRefreshGate.shouldStart()) return
         launch {
             _isRefreshingAdmin.set(true)
             try {
                 authRepository.refreshCurrentUser()
-                lastAdminRefreshAt = System.currentTimeMillis()
+                adminRefreshGate.onRefreshCompleted()
             } finally {
                 _isRefreshingAdmin.set(false)
             }
