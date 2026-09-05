@@ -64,6 +64,21 @@ internal fun segmentEndSeekTarget(endTicks: Long?): SegmentSkipTarget =
     }
 
 /**
+ * The segment facts the skip ladder consults, snapshotted together by the
+ * ViewModel from the position-aware uiState: which segment (if any) is
+ * active and its pre-resolved end ticks, plus the per-kind end-ticks
+ * fallbacks ([introEndTicks] / [creditEndTicks]). One type instead of four
+ * travelling params — the fields all derive from the same segment state and
+ * arrive from the same read.
+ */
+internal class SegmentSnapshot(
+    val activeType: MediaSegmentType?,
+    val activeEndTicks: Long?,
+    val introEndTicks: Long?,
+    val creditEndTicks: Long?,
+)
+
+/**
  * The skip-button decision ladder. Precedence, verbatim from the inline
  * ladders this replaces (skipIntro / skipCredits):
  *
@@ -74,45 +89,43 @@ internal fun segmentEndSeekTarget(endTicks: Long?): SegmentSkipTarget =
  *     ([isOutroNearEnd]) and autoplay can advance ([canSkipToNext]), the
  *     press jumps straight to the next episode — even over an active OUTRO
  *     segment.
- *  3. An active segment of the pressed kind ([activeSegmentType]) seeks to
- *     its pre-resolved end ticks ([activeSegmentEndTicks] — the ViewModel
- *     resolves the API-matched end via `segmentEndTicks`). Winning this rung
- *     with an invalid ticks value is a no-op: it does NOT fall through to
- *     rung 4, preserving the original early return.
- *  4. Otherwise the kind's end-ticks fallback ([introEndTicks] /
- *     [creditEndTicks]) seeks, if known and positive. (With the current
- *     `SegmentCalculator` wiring this rung is unreachable —
+ *  3. An active segment of the pressed kind ([SegmentSnapshot.activeType])
+ *     seeks to its pre-resolved end ticks
+ *     ([SegmentSnapshot.activeEndTicks] — the ViewModel resolves the
+ *     API-matched end via `segmentEndTicks`). Winning this rung with an
+ *     invalid ticks value is a no-op: it does NOT fall through to rung 4,
+ *     preserving the original early return.
+ *  4. Otherwise the kind's end-ticks fallback ([SegmentSnapshot.introEndTicks] /
+ *     [SegmentSnapshot.creditEndTicks]) seeks, if known and positive. (With
+ *     the current `SegmentCalculator` wiring this rung is unreachable —
  *     `segmentEndTicksForType` is only non-null while the active segment is
  *     of that type, which already won rung 3 — but it is preserved verbatim
  *     rather than silently dropped.)
  *
- * All tick parameters are Jellyfin ticks (1 ms == 10_000 ticks). The inputs
- * are plain values snapshotted by the ViewModel from the position-aware
- * uiState (plus the pre-evaluated [canSkipToNext] from `AutoPlayController`);
- * the returned target's effects — the seek latches, the next-episode load,
- * the session's cinema advance — stay on the ViewModel / session side.
+ * All tick fields are Jellyfin ticks (1 ms == 10_000 ticks). The inputs are
+ * plain values snapshotted by the ViewModel (plus the pre-evaluated
+ * [canSkipToNext] from `AutoPlayController`); the returned target's effects —
+ * the seek latches, the next-episode load, the session's cinema advance —
+ * stay on the ViewModel / session side.
  */
 internal fun segmentSkipTarget(
     kind: SegmentSkipKind,
     cinemaIntroActive: Boolean,
     isOutroNearEnd: Boolean,
     canSkipToNext: Boolean,
-    activeSegmentType: MediaSegmentType?,
-    activeSegmentEndTicks: Long?,
-    introEndTicks: Long?,
-    creditEndTicks: Long?,
+    segments: SegmentSnapshot,
 ): SegmentSkipTarget {
     val fallbackEndTicks = when (kind) {
-        SegmentSkipKind.INTRO -> introEndTicks
-        SegmentSkipKind.CREDITS -> creditEndTicks
+        SegmentSkipKind.INTRO -> segments.introEndTicks
+        SegmentSkipKind.CREDITS -> segments.creditEndTicks
     }
     return when {
         kind == SegmentSkipKind.INTRO && cinemaIntroActive ->
             SegmentSkipTarget.AdvanceCinemaIntro
         kind == SegmentSkipKind.CREDITS && isOutroNearEnd && canSkipToNext ->
             SegmentSkipTarget.SkipToNextEpisode
-        activeSegmentType == kind.segmentType ->
-            segmentEndSeekTarget(activeSegmentEndTicks)
+        segments.activeType == kind.segmentType ->
+            segmentEndSeekTarget(segments.activeEndTicks)
         else ->
             segmentEndSeekTarget(fallbackEndTicks)
     }

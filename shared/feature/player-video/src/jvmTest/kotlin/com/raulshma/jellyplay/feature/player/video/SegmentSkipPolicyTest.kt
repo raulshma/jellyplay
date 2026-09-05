@@ -28,10 +28,12 @@ class SegmentSkipLadderTest {
         cinemaIntroActive = cinemaIntroActive,
         isOutroNearEnd = isOutroNearEnd,
         canSkipToNext = canSkipToNext,
-        activeSegmentType = activeSegmentType,
-        activeSegmentEndTicks = activeSegmentEndTicks,
-        introEndTicks = introEndTicks,
-        creditEndTicks = creditEndTicks,
+        segments = SegmentSnapshot(
+            activeType = activeSegmentType,
+            activeEndTicks = activeSegmentEndTicks,
+            introEndTicks = introEndTicks,
+            creditEndTicks = creditEndTicks,
+        ),
     )
 
     // ── Cinema-intro escape ───────────────────────────────────────────────

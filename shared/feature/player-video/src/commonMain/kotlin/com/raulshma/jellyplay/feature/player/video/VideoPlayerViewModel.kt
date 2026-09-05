@@ -2276,10 +2276,12 @@ class VideoPlayerViewModel(
                 cinemaIntroActive = state.cinemaIntroState != null,
                 isOutroNearEnd = state.isOutroNearEnd,
                 canSkipToNext = autoplayController.canSkipToNext(state.episodes.nextEpisode),
-                activeSegmentType = seg?.type,
-                activeSegmentEndTicks = seg?.let { _uiState.value.segmentEndTicks(it) },
-                introEndTicks = state.introSegmentEndTicks,
-                creditEndTicks = state.creditSegmentEndTicks,
+                segments = SegmentSnapshot(
+                    activeType = seg?.type,
+                    activeEndTicks = seg?.let { _uiState.value.segmentEndTicks(it) },
+                    introEndTicks = state.introSegmentEndTicks,
+                    creditEndTicks = state.creditSegmentEndTicks,
+                ),
             ),
         )
     }

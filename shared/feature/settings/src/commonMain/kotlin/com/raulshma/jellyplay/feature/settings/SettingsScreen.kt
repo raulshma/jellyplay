@@ -1874,7 +1874,7 @@ private fun SettingsProfileBanner(
                 )
                 SettingsIconButton(
                     onClick = onNewsletterClick,
-                    icon = Tabler.Outline.Sparkles,
+                    icon = Tabler.Outline.News,
                     contentDescription = stringResource(Res.string.settings_newsletter_cd),
                     iconSize = 19.dp,
                 )
@@ -1941,12 +1941,12 @@ private fun PowerUserModeCard(
                 confirmHaptic()
                 onCheckedChange(!checked)
             }
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(30.dp)
                 .clip(ShapeCache.smooth12)
                 .background(iconTileColor),
             contentAlignment = Alignment.Center,
@@ -1955,22 +1955,22 @@ private fun PowerUserModeCard(
                 imageVector = Tabler.Outline.AdjustmentsHorizontal,
                 contentDescription = null,
                 tint = iconTint,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(17.dp),
             )
         }
 
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = stringResource(Res.string.settings_power_user_mode),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(1.dp))
             Text(
                 text = stringResource(Res.string.settings_power_user_mode_desc),
                 style = MaterialTheme.typography.bodySmall,

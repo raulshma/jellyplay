@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.widget
 
+import com.raulshma.jellyplay.core.ui.components.formatDurationMsNoHours
+
 /**
  * The Now Playing widget's pure render and seek decisions — everything that
  * is computed from plain numbers, split out of `NowPlayingWidget` so it is
@@ -79,21 +81,9 @@ internal fun responsiveNowPlayingLayout(widthDp: Int, heightDp: Int): NowPlaying
  */
 internal fun formatPosition(positionMs: Long, durationMs: Long, isPlaying: Boolean): String {
     if (durationMs <= 0L) return "—"
-    val cur = formatMs(positionMs)
-    val total = formatMs(durationMs)
+    val cur = formatDurationMsNoHours(positionMs)
+    val total = formatDurationMsNoHours(durationMs)
     return if (isPlaying) "$cur / $total" else "Paused · $cur / $total"
-}
-
-/**
- * m:ss formatting: seconds zero-padded to two digits, minutes unpadded, no
- * hour branch (durations past an hour render as plain minutes, e.g.
- * `61:01`), and negative inputs clamp to `0:00`.
- */
-internal fun formatMs(ms: Long): String {
-    val totalSec = (ms / 1000L).coerceAtLeast(0L)
-    val m = totalSec / 60
-    val s = totalSec % 60
-    return "%d:%02d".format(m, s)
 }
 
 /**

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.widget
 
+import com.raulshma.jellyplay.core.ui.components.formatDurationMsNoHours
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -135,35 +136,35 @@ class NowPlayingWidgetPolicyTest {
 
     @Test
     fun `milliseconds floor to whole seconds`() {
-        assertEquals("0:00", formatMs(0L))
-        assertEquals("0:00", formatMs(999L))
-        assertEquals("0:01", formatMs(1_000L))
-        assertEquals("0:01", formatMs(1_999L))
+        assertEquals("0:00", formatDurationMsNoHours(0L))
+        assertEquals("0:00", formatDurationMsNoHours(999L))
+        assertEquals("0:01", formatDurationMsNoHours(1_000L))
+        assertEquals("0:01", formatDurationMsNoHours(1_999L))
     }
 
     @Test
     fun `seconds zero-pad to two digits while minutes stay unpadded`() {
-        assertEquals("0:05", formatMs(5_000L))
-        assertEquals("0:59", formatMs(59_999L))
-        assertEquals("9:59", formatMs(599_999L))
-        assertEquals("10:00", formatMs(600_000L))
+        assertEquals("0:05", formatDurationMsNoHours(5_000L))
+        assertEquals("0:59", formatDurationMsNoHours(59_999L))
+        assertEquals("9:59", formatDurationMsNoHours(599_999L))
+        assertEquals("10:00", formatDurationMsNoHours(600_000L))
     }
 
     @Test
     fun `exactly sixty seconds rolls into the minutes place`() {
-        assertEquals("1:00", formatMs(60_000L))
+        assertEquals("1:00", formatDurationMsNoHours(60_000L))
     }
 
     @Test
     fun `durations past an hour render as plain minutes`() {
         // No hour branch — 61 minutes 1 second, not 1:01:01.
-        assertEquals("61:01", formatMs(3_661_000L))
+        assertEquals("61:01", formatDurationMsNoHours(3_661_000L))
     }
 
     @Test
     fun `negative input clamps to zero`() {
-        assertEquals("0:00", formatMs(-1L))
-        assertEquals("0:00", formatMs(-61_000L))
+        assertEquals("0:00", formatDurationMsNoHours(-1L))
+        assertEquals("0:00", formatDurationMsNoHours(-61_000L))
     }
 
     // ── formatPosition ───────────────────────────────────────────────────
