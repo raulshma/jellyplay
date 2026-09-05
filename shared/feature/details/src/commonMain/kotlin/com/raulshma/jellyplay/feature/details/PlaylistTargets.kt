@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaType
@@ -28,9 +28,9 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_playlis
  */
 internal class PlaylistAddTarget(
     private val strings: DetailStrings,
-    private val mediaRepository: MediaRepository,
+    private val playlistRepository: PlaylistRepository,
 ) : AddTargetAdapter<Playlist> {
-    override suspend fun fetchTargets(): Result<List<Playlist>> = mediaRepository.getPlaylists(limit = 100)
+    override suspend fun fetchTargets(): Result<List<Playlist>> = playlistRepository.getPlaylists(limit = 100)
 
     override fun filterFetched(targets: List<Playlist>): List<Playlist> = targets.filter { it.canEdit }
 
@@ -39,14 +39,14 @@ internal class PlaylistAddTarget(
     override fun idOf(target: Playlist): String = target.id
 
     override suspend fun addToTarget(targetId: String, ids: List<String>): Result<Unit> =
-        mediaRepository.addItemsToPlaylist(targetId, ids)
+        playlistRepository.addItemsToPlaylist(targetId, ids)
 
     override suspend fun createTarget(
         name: String,
         overview: String?,
         ids: List<String>,
         itemType: MediaType,
-    ): Result<Unit> = mediaRepository.createPlaylist(
+    ): Result<Unit> = playlistRepository.createPlaylist(
         name = name,
         overview = overview,
         itemIds = ids,
@@ -79,7 +79,7 @@ internal class PlaylistAddTarget(
  */
 internal class WatchLaterActions(
     private val strings: DetailStrings,
-    private val mediaRepository: MediaRepository,
+    private val playlistRepository: PlaylistRepository,
     private val appRuntimeStateStore: AppRuntimeStateStore,
     private val playlistPicker: AddToTargetActions<Playlist>,
 ) {
@@ -99,11 +99,11 @@ internal class WatchLaterActions(
                 return@launch
             }
             if (cachedId != null) {
-                mediaRepository.addItemsToPlaylist(cachedId, ids)
+                playlistRepository.addItemsToPlaylist(cachedId, ids)
                     .onSuccess { messages(Res.string.detail_msg_added_to_watch_later) }
                     .onFailure { messages(Res.string.detail_msg_couldnt_add_to_playlist) }
             } else {
-                mediaRepository.createPlaylist(
+                playlistRepository.createPlaylist(
                     name = strings.get(Res.string.detail_playlist_watch_later),
                     overview = null,
                     itemIds = ids,
@@ -135,7 +135,7 @@ internal class PlaylistTargets(
     val watchLater: WatchLaterActions,
 ) {
     class Factory constructor(
-        private val mediaRepository: MediaRepository,
+        private val playlistRepository: PlaylistRepository,
         private val appRuntimeStateStore: AppRuntimeStateStore,
     ) {
         fun create(
@@ -149,14 +149,14 @@ internal class PlaylistTargets(
                 scope = scope,
                 session = session,
                 messages = messages,
-                adapter = PlaylistAddTarget(strings, mediaRepository),
+                adapter = PlaylistAddTarget(strings, playlistRepository),
                 mediaDetailProvider = mediaDetailProvider,
             )
             return PlaylistTargets(
                 picker = picker,
                 watchLater = WatchLaterActions(
                     strings = strings,
-                    mediaRepository = mediaRepository,
+                    playlistRepository = playlistRepository,
                     appRuntimeStateStore = appRuntimeStateStore,
                     playlistPicker = picker,
                 ),

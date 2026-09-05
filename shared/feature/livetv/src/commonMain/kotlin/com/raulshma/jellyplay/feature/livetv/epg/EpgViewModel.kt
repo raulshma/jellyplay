@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv.epg
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -28,7 +28,7 @@ sealed interface RecordDialogState {
 }
 
 class EpgViewModel(
-    private val mediaRepository: MediaRepository,
+    private val mediaRepository: LiveTvRepository,
 ) : JellyPlayViewModel() {
 
     private val _channels = composeState<List<LiveTvChannel>>(emptyList())

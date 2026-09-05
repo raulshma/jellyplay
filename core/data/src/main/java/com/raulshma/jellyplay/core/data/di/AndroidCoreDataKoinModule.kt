@@ -76,6 +76,7 @@ fun androidCoreDataModule(context: Context): Module = module {
         AudioPlaybackManager(
             context = context,
             mediaRepository = get(),
+            playlistRepository = get(),
             playbackRepository = get(),
             imageUrlProvider = get(),
             downloadRepository = get(),

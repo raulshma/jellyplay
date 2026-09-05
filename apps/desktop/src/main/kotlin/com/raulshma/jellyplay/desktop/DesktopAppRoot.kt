@@ -40,7 +40,6 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.navigation3.runtime.NavKey
-import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import androidx.savedstate.serialization.SavedStateConfiguration
@@ -81,34 +80,16 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.applyNavCustomization
 import com.raulshma.jellyplay.core.ui.navigation.navKey
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
-import com.raulshma.jellyplay.feature.admin.navigation.adminSection
-import com.raulshma.jellyplay.feature.arrqueue.navigation.arrQueueSection
-import com.raulshma.jellyplay.feature.auth.navigation.authSection
-import com.raulshma.jellyplay.feature.calendar.navigation.calendarSection
-import com.raulshma.jellyplay.feature.details.navigation.detailsSection
-import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
-import com.raulshma.jellyplay.feature.editor.navigation.editorSection
-import com.raulshma.jellyplay.feature.home.navigation.homeSection
-import com.raulshma.jellyplay.feature.insights.navigation.insightsSection
-import com.raulshma.jellyplay.feature.library.navigation.librarySection
-import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
-import com.raulshma.jellyplay.feature.music.musichome.MusicHomeScreen
-import com.raulshma.jellyplay.feature.music.navigation.musicSection
-import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
-import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
-import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
-import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
 import com.raulshma.jellyplay.feature.player.video.DesktopPlayerKeyBridge
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.feature.music.feedback.DesktopMusicMessageBus
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
+import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
+import com.raulshma.jellyplay.feature.shell.navigation.ShellSectionRegistry
+import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
 import com.raulshma.jellyplay.desktop.player.DesktopAudioQueueManager
 import com.raulshma.jellyplay.desktop.player.MpvSoftwareSurfaceSupport
-import com.raulshma.jellyplay.feature.search.navigation.searchSection
-import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
-import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
-import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
 import kotlin.reflect.KClass
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -126,9 +107,9 @@ import java.util.concurrent.atomic.AtomicReference
  * with its cut-list); a live session renders the NavigationRail + NavDisplay
  * scaffold below.
  *
- * What is deliberately NOT wired yet (each omission is guarded by
- * [isDesktopDeadEndRoute] so a shared screen pushing the route shows a
- * snackbar instead of crashing NavDisplay with an unregistered entry):
+ * What is deliberately NOT wired yet (each omission dead-ends in the
+ * registration-ledger guard below, so a shared screen pushing the route sees
+ * a snackbar instead of crashing NavDisplay with an unregistered entry):
  *  - LiveTvChannelPlayer — the live-TV surface has no desktop engine host;
  *  - SubtitleTester — androidMain-only, no commonMain section at all.
  *
@@ -328,8 +309,9 @@ private fun DesktopNavScaffold(
     }
 
     // Wave 12B: wire the software-surface prober before any route guard reads
-    // it (the Route.VideoPlayer entry registration + isDesktopDeadEndRoute both
-    // ask below in this same composition). The probe itself is lazy and cached
+    // it (the Route.VideoPlayer entry registration below asks it while the
+    // entry provider graph is built; the guard derives the same predicate
+    // from the graph's ledger). The probe itself is lazy and cached
     // inside MpvSoftwareSurfaceSupport — the first VideoPlayer-guard read pays
     // the one-time libmpv/sw-context smoke test; any failure degrades to
     // "unsupported", never crashes boot.
@@ -432,18 +414,26 @@ private fun DesktopNavScaffold(
     // Dead-end guard (runtime safety, not polish): NavDisplay with an
     // unregistered top-of-stack entry is a crash hazard, and the shared
     // screens freely push routes that have no desktop section (see class
-    // KDoc). Intercept those here and surface them as a snackbar — the
-    // desktop twin of the Android shell's PlaybackHostRouter navigateFilter.
-    val guardedNavigator = remember(navigation) {
+    // KDoc). The decision is DERIVED, not enumerated: sectionRegistry is the
+    // shell-owned ledger the entry provider built below re-attaches on every
+    // rebuild, so a route is a dead end exactly when no shellEntryProvider
+    // section registered it — LiveTvChannelPlayer/SubtitleTester because
+    // their builders are Android-only, VideoPlayer wherever the surface
+    // probe fails (its registration flows through the same extraSections
+    // slot). The former hand-kept three-route mirror is gone. Unregistered
+    // routes surface as a snackbar — the desktop twin of the Android shell's
+    // PlaybackHostRouter navigateFilter.
+    val sectionRegistry = remember { ShellSectionRegistry() }
+    val guardedNavigator = remember(navigation, sectionRegistry) {
         Navigator(navigation) { route ->
-            if (route.isDesktopDeadEndRoute()) {
+            if (sectionRegistry.isRegistered(route)) {
+                true
+            } else {
                 val name = route::class.simpleName ?: route.toString()
                 scope.launch {
                     snackbarHostState.showSnackbar("$name is not available on desktop yet.")
                 }
                 false
-            } else {
-                true
             }
         }
     }
@@ -490,74 +480,52 @@ private fun DesktopNavScaffold(
         "no back stack for top-level route $currentTopLevel"
     }
 
-    // Remember the entry provider graph so the ~13 section builders aren't
-    // re-invoked (allocating fresh lambdas + entry objects) on every
+    // Shell-supplied surface behind the shared section graph (ShellHostHooks):
+    // the now-playing/ambient lambdas read the desktop audio core
+    // (DesktopAudioQueueManager) at click time, and the settings/admin seams
+    // wrap the inlined MainViewModel duties above — the same values, same
+    // lazy reads the old inline entryProvider captured. Remembered on the
+    // values the hooks capture, so the graph rebuilds only when they change.
+    val shellHost = remember(guardedNavigator, homeMode) {
+        ShellHostHooks(
+            homeMode = homeMode,
+            onHomeModeChange = onHomeModeChange,
+            onNowPlayingClick = {
+                audioQueueManager.currentPlayingItemId.value?.let { itemId ->
+                    guardedNavigator.navigate(Route.AudioPlayer(itemId))
+                }
+            },
+            onAmbientClick = {
+                guardedNavigator.navigate(
+                    Route.Ambient(
+                        imageUrl = audioQueueManager.albumArtUrl.value.ifEmpty { null },
+                        title = audioQueueManager.title.value,
+                        artist = audioQueueManager.artist.value,
+                    ),
+                )
+            },
+            onLogout = onLogout,
+            onCheckForUpdates = onCheckForUpdates,
+            // Lazy reads — admin refreshes don't rebuild the graph.
+            isAdmin = { isAdmin },
+            isRefreshingAdmin = { isRefreshingAdmin },
+            onRefreshAdmin = { refreshAdminStatus() },
+        )
+    }
+
+    // Remember the entry provider graph so the ~20 shared section builders
+    // aren't re-invoked (allocating fresh lambdas + entry objects) on every
     // recomposition of this scaffold (same memoization the Android shell
-    // applies to its sharedEntryProvider).
-    val entryProvider = remember(guardedNavigator, homeMode) {
-        entryProvider {
-            // Home, live since the wave 8B desktop wiring: every HomeViewModel
-            // ctor dep resolves (the four WorkManager/widget seams are no-op
-            // desktop defs in desktopDataModule; the data layer is Koin-native).
-            // The music pane renders the shared MusicHomeScreen (MusicHomeVM
-            // from musicModule, same as the Music rail section); every pushed
-            // route below is registered — Artists/Albums/Tracks/Genres/
-            // Playlists/AlbumDetail by musicSection, MediaDetail by
-            // detailsSection, AudioPlayer/Ambient by audioPlayerSection. The
-            // Play On redirect stays null (Android shell cast surface). Home's
-            // process-lifecycle refresher seam is a jvm no-op, so sections
-            // refresh on their own flows (resumes, downloads, watch progress)
-            // rather than on a process start/stop signal.
-            homeSection(
-                navigator = guardedNavigator,
-                homeMode = homeMode,
-                onModeChange = onHomeModeChange,
-                musicContent = {
-                    MusicHomeScreen(
-                        onItemClick = { itemId -> guardedNavigator.navigate(Route.MediaDetail(itemId)) },
-                        onAlbumClick = { albumId -> guardedNavigator.navigate(Route.AlbumDetail(albumId)) },
-                        onArtistsClick = { guardedNavigator.navigate(Route.Artists) },
-                        onAlbumsClick = { guardedNavigator.navigate(Route.Albums) },
-                        onTracksClick = { guardedNavigator.navigate(Route.Tracks) },
-                        onGenresClick = { guardedNavigator.navigate(Route.Genres) },
-                        onPlaylistsClick = { guardedNavigator.navigate(Route.Playlists) },
-                        onNowPlayingClick = {
-                            audioQueueManager.currentPlayingItemId.value?.let { itemId ->
-                                guardedNavigator.navigate(Route.AudioPlayer(itemId))
-                            }
-                        },
-                        onAmbientClick = {
-                            guardedNavigator.navigate(
-                                Route.Ambient(
-                                    imageUrl = audioQueueManager.albumArtUrl.value.ifEmpty { null },
-                                    title = audioQueueManager.title.value,
-                                    artist = audioQueueManager.artist.value,
-                                ),
-                            )
-                        },
-                    )
-                },
-            )
-            searchSection(guardedNavigator)
-            librarySection(guardedNavigator)
-            // Details, live since the details conveyor flip: every VM ctor
-            // dep resolves on desktop (data layer Koin-native, platform seams
-            // from desktopDetailsPlatformModule, AudioQueueFacade from the
-            // wave-9B DefaultAudioQueueFacade binding). Details is drill-in
-            // only — no rail entry; shared screens push
-            // Route.MediaDetail/SeerrDetail/PersonDetail/etc. The edit push
-            // lands in the live editorSection below (wave 18B); VideoPlayer
-            // is live on Windows and the audio play push routes through the
-            // live audioPlayerSection (wave 9B).
-            detailsSection(guardedNavigator)
-            // Metadata editor, live since the wave 18B store promotion: the
-            // file-backed StreamingSubtitleStore binds in desktopDataModule,
-            // so the shared EditorViewModel's whole ctor graph resolves here.
-            // Drill-in only — the details screen's edit action pushes
-            // Route.MetadataEditor (admin-gated in the screen itself, like
-            // Android); the download-provider-subtitle row persists to the
-            // appdata streaming-subtitles subtree.
-            editorSection(guardedNavigator)
+    // applies). The graph — and with it the sectionRegistry the guard above
+    // reads — is the shared appSections canonical order (nav3 resolves by
+    // key, so the former per-shell ordering was never routing behaviour)
+    // plus the one desktop-side registration below.
+    val shellSections = remember(guardedNavigator, shellHost) {
+        shellEntryProvider(
+            navigator = guardedNavigator,
+            host = shellHost,
+            registry = sectionRegistry,
+        ) {
             // …player-video, wave 9A conveyor — live where a surface story
             // exists: the commonMain VideoPlayerScreen renders the wave-12B
             // software-render pane wherever its probe smoke-passed (primary —
@@ -565,9 +533,8 @@ private fun DesktopNavScaffold(
             // work), falling back to the SwingPanel/HWND mpv surface, and the
             // per-session engine resolves through PlayerEngineFactory
             // (desktopPlayerModule). OSes with neither story keep the
-            // dead-end guard below.
-            // The subtitle-tester overlay stays Android-only: its push target
-            // remains in the dead-end list.
+            // dead-end guard above. The subtitle-tester overlay stays
+            // Android-only: its push target dead-ends in the guard above.
             if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported ||
                 DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported
             ) {
@@ -582,60 +549,6 @@ private fun DesktopNavScaffold(
                     )
                 }
             }
-            // Auth cluster drill-ins, live since the auth conveyor flip: the
-            // settings Server/UserManagement screens push AddServer/ServerList
-            // into these entries. Signed-OUT users never reach this scaffold —
-            // DesktopSignedOutAuthHost registers the same authSection as the
-            // sign-in flow; onAuthenticated = goBack, the Android wiring
-            // (JellyPlayApp) — here a completed server-management step pops
-            // back instead of swapping the shell (only the observer flip does
-            // that, and it can't fire mid-session).
-            authSection(guardedNavigator) { guardedNavigator.goBack() }
-            liveTvSection(guardedNavigator)
-            // Music, live since Wave wC and fully playable since wave 9B: the
-            // full section (browse/albums/artists/genres/mood+smart
-            // playlists/playlist details) renders; play/enqueue/instant-mix
-            // resolve AudioQueueFacade to the shared DefaultAudioQueueFacade
-            // over the desktop DesktopAudioQueueManager (real playback).
-            // Track clicks push Route.AudioPlayer — registered by the
-            // audioPlayerSection entries below (which also own Route.Ambient,
-            // the player's immersive overlay, and route ArtistDetail into the
-            // live music section).
-            musicSection(guardedNavigator)
-            // Audio player, live since wave 9B real audio: Route.AudioPlayer
-            // (the music track-click target) + Route.Ambient. The VM's whole
-            // ctor graph resolves — queue/effects/engine over the
-            // DesktopAudioQueueManager single, cast over the never-connected
-            // desktop no-op, the rest from the shared data/datastore graph.
-            audioPlayerSection(guardedNavigator)
-            downloadsSection(guardedNavigator)
-            syncPlaySection(guardedNavigator)
-            newsletterSection(guardedNavigator)
-            insightsSection(guardedNavigator)
-            calendarSection(guardedNavigator)
-            requestsSection(guardedNavigator)
-            shortcutsSection(guardedNavigator)
-            arrQueueSection(guardedNavigator)
-            onboardingSection { guardedNavigator.goBack() }
-            // Settings + admin, live since the admin repositories' Koin flip
-            // (Wave wB) — every settings/admin VM ctor dep resolves on
-            // desktop now (AdminRepository/AdminStatisticsRepository from
-            // dataJvmModule, platform seams from desktopSettingsPlatform
-            // Module). The About update-check row is live since the AppUpdate
-            // split (Wave xB): it hits the real AppUpdateRepository single and
-            // surfaces the result via the snackbar above.
-            settingsSection(
-                navigator = guardedNavigator,
-                onLogout = onLogout,
-                onSetupWizard = { guardedNavigator.navigate(Route.Onboarding) },
-                onCheckForUpdates = onCheckForUpdates,
-            )
-            adminSection(
-                navigator = guardedNavigator,
-                isAdmin = { isAdmin },
-                isRefreshingAdmin = { isRefreshingAdmin },
-                onRefreshAdmin = { refreshAdminStatus() },
-            )
         }
     }
 
@@ -757,7 +670,7 @@ private fun DesktopNavScaffold(
                     backStack = backStack,
                     onBack = { guardedNavigator.goBack() },
                     entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator()),
-                    entryProvider = entryProvider,
+                    entryProvider = shellSections.entryProvider,
                 )
                 SnackbarHost(
                     hostState = snackbarHostState,
@@ -834,38 +747,6 @@ private fun DesktopRailItem(
         icon = { Icon(icon, contentDescription = label) },
         label = { Text(label) },
     )
-}
-
-/**
- * Routes pushed by the registered shared sections but backed by NO desktop
- * entry — navigation must swallow these instead of letting them reach
- * NavDisplay (unregistered top-of-stack = crash). Keep in sync with the
- * entryProvider block above: everything a registered section pushes must
- * either be registered itself or listed here. Route.VideoPlayer is
- * conditionally registered (Windows only) and guarded on the other OSes;
- * every branch of that when must mirror the entryProvider's conditions.
- */
-private fun NavKey.isDesktopDeadEndRoute(): Boolean = when (this) {
-    // Players. VideoPlayer is live since wave 9A on WINDOWS and, since wave
-    // 12B, wherever the mpv software-render surface smoke-passes: its entry
-    // composes the commonMain screen (SwingPanel/HWND surface or the
-    // DesktopSoftwareVideoPane) and is registered exactly under this same
-    // bridge predicate pair the entry above registers under; OSes with
-    // neither story dead-end it.
-    // Route.AudioPlayer left this list with wave 9B's real audio
-    // (audioPlayerSection registers it; audio needs no surface host — the
-    // audio-only engine runs with vo=null) and is now the music section's
-    // track-click target.
-    // Route.LiveTvChannelPlayer is pushed by livetv but has no desktop home,
-    // so its clicks surface the snackbar instead.
-    is Route.VideoPlayer ->
-        !(DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported ||
-            DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported)
-    is Route.LiveTvChannelPlayer -> true
-    // LanguageSettings pushes this from the now-live settings cluster; the
-    // subtitle-tester feature is androidMain-only (no commonMain section).
-    Route.SubtitleTester -> true
-    else -> false
 }
 
 

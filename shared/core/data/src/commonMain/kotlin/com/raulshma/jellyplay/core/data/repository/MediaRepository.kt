@@ -15,7 +15,7 @@ import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.UserDataChange
 import kotlinx.coroutines.flow.Flow
 
-interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepository, PlaylistRepository {
+interface MediaRepository {
 
     /**
      * The home screen's section payload. Pass [force] to bypass the in-memory

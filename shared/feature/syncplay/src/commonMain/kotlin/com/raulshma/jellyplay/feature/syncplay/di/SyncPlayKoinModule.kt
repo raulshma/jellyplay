@@ -21,7 +21,7 @@ import org.koin.dsl.module
 val syncPlayModule: Module = module {
     viewModel {
         SyncPlayViewModel(
-            mediaRepository = get(),
+            syncPlayRepository = get(),
             syncPlayManager = get(),
             syncPlayCastStore = get(),
         )

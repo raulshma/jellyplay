@@ -44,6 +44,7 @@ val playerAudioModule: Module = module {
             audioStore = get(),
             audioEffectsStore = get(),
             mediaRepository = get(),
+            playlistRepository = get(),
             userDataMutator = get(),
             downloadRepository = get(),
             downloadIntake = get(),

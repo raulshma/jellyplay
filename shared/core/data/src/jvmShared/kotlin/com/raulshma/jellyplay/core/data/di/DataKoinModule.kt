@@ -37,6 +37,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
@@ -47,6 +48,7 @@ import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl
@@ -60,6 +62,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSyncImpl
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepositoryImpl
@@ -73,6 +76,7 @@ import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.StoragePolicy
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.repository.UserDataMutatorImpl
@@ -420,6 +424,14 @@ val dataJvmModule: Module = module {
     // Plan 08's module-internal cache-maintenance view (the former DataModule
     // bindMediaRepositoryCacheInvalidation @Binds): same single, narrow seam.
     single<MediaRepositoryCacheInvalidation> { get<MediaRepositoryImpl>() }
+    // Family-repository views (same single, narrow seam — same pattern as the
+    // MediaRepositoryCacheInvalidation binding above): MediaRepositoryImpl
+    // implements each family directly, and single-family consumers now inject
+    // the family type instead of the 86-member MediaRepository union.
+    single<LiveTvRepository> { get<MediaRepositoryImpl>() }
+    single<SyncPlayRepository> { get<MediaRepositoryImpl>() }
+    single<NewsletterRepository> { get<MediaRepositoryImpl>() }
+    single<PlaylistRepository> { get<MediaRepositoryImpl>() }
     // Lyrics engine: its own impl (the LRC/LRCLIB fetch-parse-cache chain)
     // since the extraction from MediaRepositoryImpl — no longer a view of the
     // media single.

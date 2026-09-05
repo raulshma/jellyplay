@@ -2,7 +2,7 @@
 
 package com.raulshma.jellyplay.feature.livetv.epg
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -62,7 +62,7 @@ class EpgViewModelTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaRepository: LiveTvRepository
 
     @BeforeTest
     fun setUp() {

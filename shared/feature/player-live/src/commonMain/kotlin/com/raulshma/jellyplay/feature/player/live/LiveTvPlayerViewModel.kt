@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -67,7 +66,7 @@ private const val LIVE_BUFFERING_TIMEOUT_MS = 20_000L
 
 /**
  * Owns Live TV playback end to end: loads the channel list from
- * [MediaRepository] (which implements [LiveTvRepository]), resolves the
+ * [LiveTvRepository], resolves the
  * live stream URL via [PlaybackRepository.resolvePlayback], drives a
  * [LivePlayerEngine], and surfaces UI state for the zap list + now/next
  * overlay + rebuffer spinner.
@@ -75,11 +74,6 @@ private const val LIVE_BUFFERING_TIMEOUT_MS = 20_000L
  * Channel switching is in-player: [channelUp] / [channelDown] re-resolve and
  * call [LivePlayerEngine.load] on the same instance. The last-watched channel
  * is persisted via [LastChannelStore].
- *
- * Note: we inject [MediaRepository] rather than the narrower [LiveTvRepository]
- * because the legacy DI graph only bound the former (the latter is a
- * super-interface of `MediaRepository`); the VM only uses the
- * [LiveTvRepository] surface.
  *
  * Player-live conveyor (wave 7B): the ViewModel moved to commonMain over
  * four seams — [LiveEngineFactory] (platform engine construction), the
@@ -99,7 +93,7 @@ private const val LIVE_BUFFERING_TIMEOUT_MS = 20_000L
  * (SKIP = channel zap) and tears it all down in [stop] — see [PipController].
  */
 class LiveTvPlayerViewModel(
-    private val mediaRepository: MediaRepository,
+    private val liveTvRepository: LiveTvRepository,
     private val playbackRepository: PlaybackRepository,
     private val appRuntimeStateStore: AppRuntimeStateStore,
     private val playbackStore: PlaybackStore,
@@ -112,8 +106,6 @@ class LiveTvPlayerViewModel(
         TranscodeReasonsRenderer { emptyList() },
     private val pip: PipController? = null,
 ) : ViewModel() {
-
-    private val liveTvRepository: LiveTvRepository = mediaRepository
 
     private val _state = MutableStateFlow(LiveTvPlayerUiState())
     val state: StateFlow<LiveTvPlayerUiState> = _state.asStateFlow()
@@ -354,7 +346,7 @@ class LiveTvPlayerViewModel(
     fun recordCurrentProgramOnce() {
         val program = _state.value.currentProgram ?: return
         viewModelScope.launch {
-            mediaRepository.createTimer(program.id)
+            liveTvRepository.createTimer(program.id)
                 .onSuccess {
                     messageChannel.trySend(LivePlayerMessage.Resource(Res.string.live_record_success))
                     refreshProgramsForCurrentChannel()
@@ -369,7 +361,7 @@ class LiveTvPlayerViewModel(
     fun recordCurrentProgramSeries() {
         val program = _state.value.currentProgram ?: return
         viewModelScope.launch {
-            mediaRepository.createSeriesTimer(program.id)
+            liveTvRepository.createSeriesTimer(program.id)
                 .onSuccess {
                     messageChannel.trySend(LivePlayerMessage.Resource(Res.string.live_record_success))
                     refreshProgramsForCurrentChannel()
@@ -385,7 +377,7 @@ class LiveTvPlayerViewModel(
         val program = _state.value.currentProgram ?: return
         val timerId = program.timerId ?: return
         viewModelScope.launch {
-            mediaRepository.cancelTimer(timerId)
+            liveTvRepository.cancelTimer(timerId)
                 .onSuccess {
                     messageChannel.trySend(LivePlayerMessage.Resource(Res.string.live_record_canceled))
                     refreshProgramsForCurrentChannel()
@@ -401,7 +393,7 @@ class LiveTvPlayerViewModel(
         val program = _state.value.currentProgram ?: return
         val seriesTimerId = program.seriesTimerId ?: return
         viewModelScope.launch {
-            mediaRepository.cancelSeriesTimer(seriesTimerId)
+            liveTvRepository.cancelSeriesTimer(seriesTimerId)
                 .onSuccess {
                     messageChannel.trySend(LivePlayerMessage.Resource(Res.string.live_record_canceled))
                     refreshProgramsForCurrentChannel()

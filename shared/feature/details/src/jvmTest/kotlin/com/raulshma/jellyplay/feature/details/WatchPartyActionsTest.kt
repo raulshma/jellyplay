@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -26,7 +26,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_watch_p
 
 class WatchPartyActionsTest {
 
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val mediaRepository: SyncPlayRepository = mockk(relaxed = true)
     private val syncPlayManager: SyncPlayManager = mockk(relaxed = true)
 
     private val strings = fakeDetailStrings()
@@ -52,7 +52,7 @@ class WatchPartyActionsTest {
         session = session,
         messages = messages.flow,
         strings = strings,
-        mediaRepository = mediaRepository,
+        syncPlayRepository = mediaRepository,
         syncPlayManager = syncPlayManager,
     )
 

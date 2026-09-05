@@ -169,6 +169,12 @@ dependencies {
     // Route.VideoPlayer dead-end-guarded.
     implementation(project(":shared:feature:player-video"))
 
+    // Shared shell graph (shared appSections): one entryProvider behind both
+    // shells — DesktopAppRoot supplies the desktop ShellHostHooks and the
+    // conditional VideoPlayer registration; the dead-end guard derives from
+    // the same graph's registration ledger.
+    implementation(project(":shared:feature:shell"))
+
 
     // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime; wave 9A also resolves

@@ -114,7 +114,12 @@ class MediaRepositoryImpl(
      * bespoke collector or long-lived scope of its own.
      */
     private val sessionCacheRegistry: SessionCacheRegistry,
-) : MediaRepository, MediaRepositoryCacheInvalidation {
+) : MediaRepository,
+    LiveTvRepository,
+    SyncPlayRepository,
+    NewsletterRepository,
+    PlaylistRepository,
+    MediaRepositoryCacheInvalidation {
 
     private val detailCache = TtlCache<MediaDetail>(
         maxSize = DETAIL_CACHE_MAX_ENTRIES,

@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -39,7 +39,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_playlis
  */
 class PlaylistTargetsTest {
 
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val playlistRepository: PlaylistRepository = mockk(relaxed = true)
     private val appRuntimeStateStore: AppRuntimeStateStore = mockk(relaxed = true)
     private val mediaDetailProvider: MediaDetailProvider = mockk(relaxed = true)
 
@@ -70,7 +70,7 @@ class PlaylistTargetsTest {
         coEvery { mediaDetailProvider.canonicalEpisodeIds(any()) } coAnswers {
             canonicalEpisodeIds(firstArg())
         }
-        return PlaylistTargets.Factory(mediaRepository, appRuntimeStateStore).create(
+        return PlaylistTargets.Factory(playlistRepository, appRuntimeStateStore).create(
             scope = scope,
             session = MutableStateFlow(
                 DetailSession(
@@ -90,7 +90,7 @@ class PlaylistTargetsTest {
     fun `openPicker with a movie sets showPicker and loads editable playlists`() = runTest {
         val editable = Playlist(id = "p1", name = "Favs", canEdit = true)
         val readOnly = Playlist(id = "p2", name = "Read Only", canEdit = false)
-        coEvery { mediaRepository.getPlaylists(any()) } returns Result.success(listOf(editable, readOnly))
+        coEvery { playlistRepository.getPlaylists(any()) } returns Result.success(listOf(editable, readOnly))
         val a = targets(this).picker
 
         a.openPicker()
@@ -104,7 +104,7 @@ class PlaylistTargetsTest {
 
     @Test
     fun `openPicker with an audio detail is a no-op`() = runTest {
-        coEvery { mediaRepository.getPlaylists(any()) } returns Result.success(emptyList())
+        coEvery { playlistRepository.getPlaylists(any()) } returns Result.success(emptyList())
         val a = targets(this, detail = audioDetail).picker
 
         a.openPicker()
@@ -113,13 +113,13 @@ class PlaylistTargetsTest {
         assertFalse(a.state.value.showPicker)
         assertTrue(a.state.value.targets.isEmpty())
         // The audio type is ineligible, so the list should never be fetched.
-        coVerify(exactly = 0) { mediaRepository.getPlaylists(any()) }
+        coVerify(exactly = 0) { playlistRepository.getPlaylists(any()) }
     }
 
     @Test
     fun `openPicker with a series sets showPicker and loads playlists`() = runTest {
         val editable = Playlist(id = "p1", name = "Favs", canEdit = true)
-        coEvery { mediaRepository.getPlaylists(any()) } returns Result.success(listOf(editable))
+        coEvery { playlistRepository.getPlaylists(any()) } returns Result.success(listOf(editable))
         val a = targets(this, detail = seriesDetail).picker
 
         a.openPicker()
@@ -137,12 +137,12 @@ class PlaylistTargetsTest {
         advanceUntilIdle()
 
         assertFalse(a.state.value.showPicker)
-        coVerify(exactly = 0) { mediaRepository.getPlaylists(any()) }
+        coVerify(exactly = 0) { playlistRepository.getPlaylists(any()) }
     }
 
     @Test
     fun `dismissPicker clears the picker flag`() = runTest {
-        coEvery { mediaRepository.getPlaylists(any()) } returns Result.success(emptyList())
+        coEvery { playlistRepository.getPlaylists(any()) } returns Result.success(emptyList())
         val a = targets(this).picker
         a.openPicker()
         advanceUntilIdle()
@@ -155,7 +155,7 @@ class PlaylistTargetsTest {
 
     @Test
     fun `openCreateDialog closes the picker and opens the dialog`() = runTest {
-        coEvery { mediaRepository.getPlaylists(any()) } returns Result.success(emptyList())
+        coEvery { playlistRepository.getPlaylists(any()) } returns Result.success(emptyList())
         val a = targets(this).picker
         a.openPicker()
         advanceUntilIdle()
@@ -182,7 +182,7 @@ class PlaylistTargetsTest {
     // region addTo
     @Test
     fun `addTo success emits the added-to-playlist message`() = runTest {
-        coEvery { mediaRepository.addItemsToPlaylist(any(), any()) } returns Result.success(Unit)
+        coEvery { playlistRepository.addItemsToPlaylist(any(), any()) } returns Result.success(Unit)
         val playlist = Playlist(id = "p1", name = "Favs", canEdit = true)
         val a = targets(this).picker
 
@@ -196,7 +196,7 @@ class PlaylistTargetsTest {
         )
         assertFalse(a.state.value.isAdding)
         assertFalse(a.state.value.showPicker)
-        coVerify { mediaRepository.addItemsToPlaylist("p1", listOf("m1")) }
+        coVerify { playlistRepository.addItemsToPlaylist("p1", listOf("m1")) }
     }
 
     @Test
@@ -219,13 +219,13 @@ class PlaylistTargetsTest {
             )
         )
         // Nothing should be queued against an empty resolution.
-        coVerify(exactly = 0) { mediaRepository.addItemsToPlaylist(any(), any()) }
+        coVerify(exactly = 0) { playlistRepository.addItemsToPlaylist(any(), any()) }
         assertFalse(a.state.value.isAdding)
     }
 
     @Test
     fun `addTo for a series resolves ids from sorted episodes over a cold load`() = runTest {
-        coEvery { mediaRepository.addItemsToPlaylist(any(), any()) } returns Result.success(Unit)
+        coEvery { playlistRepository.addItemsToPlaylist(any(), any()) } returns Result.success(Unit)
         val playlist = Playlist(id = "p1", name = "Favs", canEdit = true)
         val ep1 = MediaItem(id = "ep1", name = "E1", mediaType = MediaType.EPISODE)
         val ep2 = MediaItem(id = "ep2", name = "E2", mediaType = MediaType.EPISODE)
@@ -244,13 +244,13 @@ class PlaylistTargetsTest {
         advanceUntilIdle()
 
         // Sorted episodes win; the cold-load fallback must not fire.
-        coVerify { mediaRepository.addItemsToPlaylist("p1", listOf("ep1", "ep2")) }
+        coVerify { playlistRepository.addItemsToPlaylist("p1", listOf("ep1", "ep2")) }
         assertEquals(0, coldLoads)
     }
 
     @Test
     fun `addTo for a series falls back to canonicalEpisodeIds when the snapshot is empty`() = runTest {
-        coEvery { mediaRepository.addItemsToPlaylist(any(), any()) } returns Result.success(Unit)
+        coEvery { playlistRepository.addItemsToPlaylist(any(), any()) } returns Result.success(Unit)
         val playlist = Playlist(id = "p1", name = "Favs", canEdit = true)
         val a = targets(
             this,
@@ -262,12 +262,12 @@ class PlaylistTargetsTest {
         a.addTo(playlist)
         advanceUntilIdle()
 
-        coVerify { mediaRepository.addItemsToPlaylist("p1", listOf("cold-1", "cold-2")) }
+        coVerify { playlistRepository.addItemsToPlaylist("p1", listOf("cold-1", "cold-2")) }
     }
 
     @Test
     fun `addTo repository failure emits couldnt-add message`() = runTest {
-        coEvery { mediaRepository.addItemsToPlaylist(any(), any()) } returns Result.failure(RuntimeException("server"))
+        coEvery { playlistRepository.addItemsToPlaylist(any(), any()) } returns Result.failure(RuntimeException("server"))
         val a = targets(this).picker
 
         a.addTo(Playlist(id = "p1", name = "Favs", canEdit = true))
@@ -288,8 +288,8 @@ class PlaylistTargetsTest {
     fun `addToWatchLater with cached id reuses it and adds the items`() = runTest {
         every { appRuntimeStateStore.state } returns
             MutableStateFlow(AppRuntimeState(watchLaterPlaylistId = "wl-1"))
-        coEvery { mediaRepository.getPlaylists(any()) } returns Result.success(emptyList())
-        coEvery { mediaRepository.addItemsToPlaylist(any(), any()) } returns Result.success(Unit)
+        coEvery { playlistRepository.getPlaylists(any()) } returns Result.success(emptyList())
+        coEvery { playlistRepository.addItemsToPlaylist(any(), any()) } returns Result.success(Unit)
         val t = targets(this)
         val a = t.watchLater
 
@@ -303,8 +303,8 @@ class PlaylistTargetsTest {
         advanceUntilIdle()
 
         // Reuses the cached Watch Later id; never creates a new playlist.
-        coVerify { mediaRepository.addItemsToPlaylist("wl-1", listOf("m1")) }
-        coVerify(exactly = 0) { mediaRepository.createPlaylist(any(), any(), any(), any()) }
+        coVerify { playlistRepository.addItemsToPlaylist("wl-1", listOf("m1")) }
+        coVerify(exactly = 0) { playlistRepository.createPlaylist(any(), any(), any(), any()) }
         assertTrue(
             messages.recorded.contains(
                 DetailMessage.Text(strings.get(Res.string.detail_msg_added_to_watch_later))
@@ -320,7 +320,7 @@ class PlaylistTargetsTest {
         every { appRuntimeStateStore.state } returns
             MutableStateFlow(AppRuntimeState(watchLaterPlaylistId = null))
         coEvery {
-            mediaRepository.createPlaylist(any(), any(), any(), any())
+            playlistRepository.createPlaylist(any(), any(), any(), any())
         } returns Result.success("wl-new")
 
         val a = targets(this).watchLater
@@ -329,7 +329,7 @@ class PlaylistTargetsTest {
 
         // Creates the Watch Later playlist seeded with the item and caches its id.
         coVerify {
-            mediaRepository.createPlaylist(
+            playlistRepository.createPlaylist(
                 strings.get(Res.string.detail_playlist_watch_later),
                 null,
                 listOf("m1"),
@@ -337,7 +337,7 @@ class PlaylistTargetsTest {
             )
         }
         coVerify { appRuntimeStateStore.setWatchLaterPlaylistId("wl-new") }
-        coVerify(exactly = 0) { mediaRepository.addItemsToPlaylist(any(), any()) }
+        coVerify(exactly = 0) { playlistRepository.addItemsToPlaylist(any(), any()) }
         assertTrue(
             messages.recorded.contains(
                 DetailMessage.Text(strings.get(Res.string.detail_msg_added_to_watch_later))
@@ -364,7 +364,7 @@ class PlaylistTargetsTest {
                 DetailMessage.Text(strings.get(Res.string.detail_msg_no_episodes_queued))
             )
         )
-        coVerify(exactly = 0) { mediaRepository.addItemsToPlaylist(any(), any()) }
+        coVerify(exactly = 0) { playlistRepository.addItemsToPlaylist(any(), any()) }
     }
     // endregion
 
@@ -372,7 +372,7 @@ class PlaylistTargetsTest {
     @Test
     fun `createAndAdd success creates the playlist and closes the dialog`() = runTest {
         coEvery {
-            mediaRepository.createPlaylist(any(), any(), any(), any())
+            playlistRepository.createPlaylist(any(), any(), any(), any())
         } returns Result.success("pl-new")
         val a = targets(this).picker
         a.openCreateDialog()
@@ -383,7 +383,7 @@ class PlaylistTargetsTest {
 
         // Name is trimmed; overview passes through; dialog closes on success.
         coVerify {
-            mediaRepository.createPlaylist("My List", "overview text", listOf("m1"), MediaType.MOVIE)
+            playlistRepository.createPlaylist("My List", "overview text", listOf("m1"), MediaType.MOVIE)
         }
         assertTrue(
             messages.recorded.contains(
@@ -402,7 +402,7 @@ class PlaylistTargetsTest {
         a.createAndAdd("   ", "")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.createPlaylist(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { playlistRepository.createPlaylist(any(), any(), any(), any()) }
         // Dialog stays open; the guard fired before any state mutation.
         assertTrue(a.state.value.showCreateDialog)
     }
@@ -414,19 +414,19 @@ class PlaylistTargetsTest {
         a.createAndAdd("Name", "")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.createPlaylist(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { playlistRepository.createPlaylist(any(), any(), any(), any()) }
     }
 
     @Test
     fun `createAndAdd with blank overview passes null overview`() = runTest {
-        coEvery { mediaRepository.createPlaylist(any(), any(), any(), any()) } returns Result.success("pl-new")
+        coEvery { playlistRepository.createPlaylist(any(), any(), any(), any()) } returns Result.success("pl-new")
         val a = targets(this).picker
 
         a.createAndAdd("Name", "   ")
         advanceUntilIdle()
 
         // A blank overview is normalized to null.
-        coVerify { mediaRepository.createPlaylist("Name", null, listOf("m1"), MediaType.MOVIE) }
+        coVerify { playlistRepository.createPlaylist("Name", null, listOf("m1"), MediaType.MOVIE) }
     }
 
     @Test
@@ -450,7 +450,7 @@ class PlaylistTargetsTest {
                 DetailMessage.Text(strings.get(Res.string.detail_msg_no_episodes_queued))
             )
         )
-        coVerify(exactly = 0) { mediaRepository.createPlaylist(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { playlistRepository.createPlaylist(any(), any(), any(), any()) }
         assertFalse(a.state.value.showCreateDialog)
         assertFalse(a.state.value.isAdding)
     }

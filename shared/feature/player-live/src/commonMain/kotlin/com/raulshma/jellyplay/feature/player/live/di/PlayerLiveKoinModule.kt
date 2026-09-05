@@ -11,7 +11,7 @@ import org.koin.dsl.module
  * plan.md §Phase V3, player-live conveyor). The HiltViewModel/@Inject
  * annotations were stripped at the move — Koin is the single constructor
  * owner (one framework per type). Ctor deps split three ways:
- *  - MediaRepository/PlaybackRepository/ImageUrlProvider are Koin-native
+ *  - LiveTvRepository/PlaybackRepository/ImageUrlProvider are Koin-native
  *    (dataJvmModule, both platforms — the MediaRepository cluster flip
  *    already landed); the three stores are Koin-native in the shared
  *    datastore graph;
@@ -37,7 +37,7 @@ import org.koin.dsl.module
 val playerLiveModule: Module = module {
     viewModel {
         LiveTvPlayerViewModel(
-            mediaRepository = get(),
+            liveTvRepository = get(),
             playbackRepository = get(),
             appRuntimeStateStore = get(),
             playbackStore = get(),

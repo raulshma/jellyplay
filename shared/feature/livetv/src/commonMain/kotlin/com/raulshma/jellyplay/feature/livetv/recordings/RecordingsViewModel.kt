@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.livetv.recordings
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -23,7 +23,7 @@ data class RecordingsUiState(
  * web client no longer exposes them.)
  */
 class RecordingsViewModel(
-    private val mediaRepository: MediaRepository,
+    private val mediaRepository: LiveTvRepository,
     private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 

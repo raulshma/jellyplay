@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.music.browse
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 @OptIn(ExperimentalCoroutinesApi::class)
 class MusicBrowseViewModel(
     private val mediaRepository: MediaRepository,
+    private val playlistRepository: PlaylistRepository,
     private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 
@@ -71,7 +73,7 @@ class MusicBrowseViewModel(
                 .onSuccess { _genres.set(it) }
         }
         launch {
-            mediaRepository.getPlaylists()
+            playlistRepository.getPlaylists()
                 .onSuccess { _playlists.set(it) }
         }
     }

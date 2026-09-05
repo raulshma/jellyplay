@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv.programs
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.ProgramFilters
@@ -32,7 +32,7 @@ class ProgramsViewModelTest {
     // has no access to that module (search/music conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaRepository: LiveTvRepository
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var viewModel: ProgramsViewModel
 

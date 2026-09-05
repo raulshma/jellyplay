@@ -13,7 +13,6 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
-import com.raulshma.jellyplay.core.model.RecommendationResult
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
@@ -32,8 +31,9 @@ import kotlinx.coroutines.test.runTest
  *    and the client's Result comes back untouched, success AND failure alike
  *    (the VM's best-effort "Available" cross-link depends on getting the
  *    failure, never a crash).
- *  - OFF-WEB MEMBERS THROW LOUDLY: members across ALL SIX super-interfaces
- *    (MediaRepository, LiveTv, SyncPlay, Newsletter, Playlist, Lyrics) throw
+ *  - OFF-WEB MEMBERS THROW LOUDLY: MediaRepository members (the ONLY
+ *    super-interface since the union shrink — the family seams LiveTv/SyncPlay/
+ *    Newsletter/Playlist are separate Koin types now) throw
  *    [UnsupportedOperationException] carrying the member name — the "never a
  *    silently-wrong answer" contract.
  *  - CONSTRUCTION IS SIDE-EFFECT FREE: the userDataChanges getter must throw
@@ -89,7 +89,6 @@ class WebMediaRepositoryNarrowTest {
         override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> = unused()
         override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> = unused()
         override suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>> = unused()
-        override suspend fun getRecommendations(limit: Int, seeds: List<MediaItem>): Result<RecommendationResult> = unused()
         override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> = unused()
         override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> = unused()
         override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> = unused()
@@ -182,15 +181,9 @@ class WebMediaRepositoryNarrowTest {
     }
 
     @Test
-    fun `off-web live-tv syncplay newsletter playlist and lyrics members throw loudly`() = runTest {
+    fun `off-web folders member throws loudly`() = runTest {
         val (repo, _) = repository()
-        assertFailsWith<UnsupportedOperationException> {
-            repo.getLiveTvChannels(0, 10, addCurrentProgram = false, enableFavoriteSorting = false, isFavorite = null)
-        }
-        assertFailsWith<UnsupportedOperationException> { repo.getSyncPlayGroups() }
-        assertFailsWith<UnsupportedOperationException> { repo.getNewsletterData("2026-01-01", 5) }
-        assertFailsWith<UnsupportedOperationException> { repo.getPlaylists(limit = 10) }
-        assertFailsWith<UnsupportedOperationException> { repo.getLyrics("item-1") }
+        assertFailsWith<UnsupportedOperationException> { repo.getLibraryFolders() }
     }
 
     @Test

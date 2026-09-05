@@ -343,6 +343,10 @@ dependencies {
     implementation(project(":shared:feature:shortcuts"))
     implementation(project(":shared:feature:arrqueue"))
     implementation(project(":shared:feature:calendar"))
+    // Shared shell graph: appSections registers this module's own *Section
+    // builders once for both shells (JellyPlayApp passes the Android
+    // ShellHostHooks; the androidMain-only sections stay inline below it).
+    implementation(project(":shared:feature:shell"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

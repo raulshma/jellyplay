@@ -4,6 +4,7 @@ import androidx.media3.common.MediaItem as Media3Item
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -37,6 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class AudioLibraryBrowserTest {
 
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val playlistRepository: PlaylistRepository = mockk(relaxed = true)
     private val downloadRepository: DownloadRepository = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
     private val playbackSourceResolver: PlaybackSourceResolver = mockk(relaxed = true)
@@ -50,6 +52,7 @@ class AudioLibraryBrowserTest {
     private fun browser() = AudioLibraryBrowser(
         scope = scope,
         mediaRepository = mediaRepository,
+        playlistRepository = playlistRepository,
         downloadRepository = downloadRepository,
         playbackRepository = playbackRepository,
         playbackSourceResolver = playbackSourceResolver,

@@ -15,6 +15,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -30,6 +31,7 @@ import kotlinx.coroutines.sync.withPermit
 class AudioLibraryBrowser(
     private val scope: CoroutineScope,
     private val mediaRepository: MediaRepository,
+    private val playlistRepository: PlaylistRepository,
     private val downloadRepository: DownloadRepository,
     private val playbackRepository: PlaybackRepository,
     private val playbackSourceResolver: PlaybackSourceResolver,
@@ -128,7 +130,7 @@ class AudioLibraryBrowser(
                         }
                     }
                     parentId == "PLAYLISTS" -> {
-                        val result = mediaRepository.getPlaylists(limit = pageSize).getOrNull()
+                        val result = playlistRepository.getPlaylists(limit = pageSize).getOrNull()
                         result?.forEach { playlist ->
                             list.add(mapPlaylistToMediaItem(playlist))
                         }
@@ -172,7 +174,7 @@ class AudioLibraryBrowser(
                     }
                     parentId.startsWith("PLAYLIST_|") -> {
                         val playlistId = parentId.removePrefix("PLAYLIST_|")
-                        val playlistItems = mediaRepository.getPlaylistItems(playlistId, startIndex = page * pageSize, limit = pageSize).getOrNull() ?: emptyList()
+                        val playlistItems = playlistRepository.getPlaylistItems(playlistId, startIndex = page * pageSize, limit = pageSize).getOrNull() ?: emptyList()
                         playlistItems.forEach { pi ->
                             list.add(mapPlaylistItemToPlayableMediaItem(pi))
                         }
@@ -256,7 +258,7 @@ class AudioLibraryBrowser(
                         }
                         mediaId.startsWith("PLAYLIST_|") -> {
                             val playlistId = mediaId.removePrefix("PLAYLIST_|")
-                            val playlistItems = mediaRepository.getPlaylistItems(playlistId).getOrNull() ?: emptyList()
+                            val playlistItems = playlistRepository.getPlaylistItems(playlistId).getOrNull() ?: emptyList()
                             resolvedList.addAll(mapConcurrently(playlistItems) { pi ->
                                 buildPlayableMediaItem(pi.id)
                             })

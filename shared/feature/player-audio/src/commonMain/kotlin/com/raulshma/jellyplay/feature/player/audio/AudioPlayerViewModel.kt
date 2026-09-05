@@ -46,6 +46,7 @@ class AudioPlayerViewModel(
     private val audioStore: AudioStore,
     private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
     private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
+    private val playlistRepository: com.raulshma.jellyplay.core.data.repository.PlaylistRepository,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
     private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
     private val downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake,
@@ -708,7 +709,7 @@ class AudioPlayerViewModel(
         if (currentPlayingItemId == null) return
         _uiState.update { it.copy(showPlaylistPicker = true, isLoadingPlaylists = true) }
         launch {
-            mediaRepository.getPlaylists(limit = 100)
+            playlistRepository.getPlaylists(limit = 100)
                 .onSuccess { all ->
                     val editable = all.filter { it.canEdit }
                     _uiState.update {
@@ -732,7 +733,7 @@ class AudioPlayerViewModel(
         val itemId = currentPlayingItemId ?: return
         _uiState.update { it.copy(isAddingToPlaylist = true) }
         launch {
-            mediaRepository.addItemsToPlaylist(playlist.id, listOf(itemId))
+            playlistRepository.addItemsToPlaylist(playlist.id, listOf(itemId))
                 .onSuccess {
                     _uiState.update {
                         it.copy(

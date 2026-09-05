@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.live
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -84,7 +84,7 @@ class LiveTvPlayerViewModelGapsTest {
      */
     private val scheduler = TestCoroutineScheduler()
 
-    private lateinit var liveTvRepo: MediaRepository
+    private lateinit var liveTvRepo: LiveTvRepository
     private lateinit var playbackRepo: PlaybackRepository
     private lateinit var appRuntimeStateStore: AppRuntimeStateStore
     private lateinit var playbackStore: PlaybackStore
@@ -165,7 +165,7 @@ class LiveTvPlayerViewModelGapsTest {
         pip: PipController? = null,
         renderer: TranscodeReasonsRenderer = TranscodeReasonsRenderer { emptyList() },
     ): LiveTvPlayerViewModel = LiveTvPlayerViewModel(
-        mediaRepository = liveTvRepo,
+        liveTvRepository = liveTvRepo,
         playbackRepository = playbackRepo,
         appRuntimeStateStore = appRuntimeStateStore,
         playbackStore = playbackStore,

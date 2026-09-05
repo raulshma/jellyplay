@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.LiveTvRecording
@@ -26,7 +26,7 @@ class LiveTvOverviewViewModelTest {
     // has no access to that module (search/music conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaRepository: LiveTvRepository
 
     @BeforeTest
     fun setUp() {

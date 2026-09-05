@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.live
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -47,7 +47,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveTvPlayerViewModelTest {
 
-    private lateinit var liveTvRepo: MediaRepository
+    private lateinit var liveTvRepo: LiveTvRepository
     private lateinit var playbackRepo: PlaybackRepository
     private lateinit var appRuntimeStateStore: AppRuntimeStateStore
     private lateinit var playbackStore: PlaybackStore
@@ -65,7 +65,7 @@ class LiveTvPlayerViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        liveTvRepo = mockk<MediaRepository>(relaxed = true)
+        liveTvRepo = mockk<LiveTvRepository>(relaxed = true)
         playbackRepo = mockk(relaxed = true)
         appRuntimeStateStore = mockk(relaxed = true)
         playbackStore = mockk(relaxed = true)
@@ -695,7 +695,7 @@ class LiveTvPlayerViewModelTest {
     }
 
     private fun createVm(pip: PipController? = null): LiveTvPlayerViewModel = LiveTvPlayerViewModel(
-        mediaRepository = liveTvRepo,
+        liveTvRepository = liveTvRepo,
         playbackRepository = playbackRepo,
         appRuntimeStateStore = appRuntimeStateStore,
         playbackStore = playbackStore,

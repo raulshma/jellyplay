@@ -10,7 +10,9 @@ remainder — `core:data`, `core:ui` (shim files), `core:notification`,
 DI is Koin-only repo-wide. Player code lives in two shared modules:
 `shared/core/player-contract` (the engine-agnostic `MediaEngine` contract and
 engine-shared machinery) and `shared/feature/player-video` (the VOD player
-screen, ViewModel, and session collaborators). Paths below are relative to the
+screen, ViewModel, and session collaborators). The two desktop-and-Android shells register their nav sections through one
+aggregator module, `shared/feature/shell` (`appSections` + `ShellHostHooks` +
+a registration ledger the desktop dead-end guard derives from). Paths below are relative to the
 repo root.
 
 ## Engine layer
@@ -741,6 +743,23 @@ NOT extend `LyricsRepository`: `AudioLyricsManager` and
 `DataKoinModule` binds `LyricsRepositoryImpl` as its own single;
 `DataKoinModulesTest` pins resolution.
 
+**`MediaRepository` union shrink (landed)**: `MediaRepository` no longer
+extends `LiveTvRepository` / `SyncPlayRepository` / `NewsletterRepository` /
+`PlaylistRepository` — its interface is its own 42 members (the former
+86-member union forced every media consumer to learn four unrelated
+families). `MediaRepositoryImpl` implements all five interfaces explicitly
+and `DataKoinModule` binds the SAME single under each family type (the
+`MediaRepositoryCacheInvalidation` same-single-narrow-view pattern), so the
+family seams now have two adapters each: the production single and test
+doubles. Single-family consumers inject the narrow type (the livetv VMs,
+`LiveTvPlayerViewModel`, `NewsletterViewModel`, `SyncPlayViewModel`,
+`WatchPartyActions`, `PlaylistTargets`); mixed consumers inject BOTH
+`MediaRepository` and `PlaylistRepository` (music browse/playlist VMs,
+`AudioPlayerViewModel`, `LibraryLayoutViewModel`, `AudioLibraryBrowser`) —
+same instance behind the seam, no body moved. The wasm
+`WebMediaRepositoryNarrow` implements `MediaRepository` only (42 overrides,
+~196 lines, down from 86/358 — the family throw stubs are gone).
+
 `MediaRepositoryImpl`'s test surface lives beside it in
 `shared/core/data/src/jvmTest/.../repository/`: `MediaRepositoryImplTest`
 (SWR staleness ceilings, identity-keyed misses, mutation double-evicts),
@@ -764,6 +783,23 @@ context-specific ("Browse" on the music bar vs "Music" on the rail) and
 their ORDER is per-mode. `NavDestinationRegistryTest` (core/ui `jvmTest`)
 pins coverage, key/navKey agreement, uniqueness and per-route icon
 resolution.
+
+**Shell section graph** (`shared/feature/shell`, the star-topology
+aggregator): `appSections(scope, host: ShellHostHooks)` registers the 20
+shared feature sections in ONE canonical order (Android's), with
+`MusicHomeScreen`'s 9 nav lambdas wired once (the 7 identical one-liners
+inside the module; the 2 audio-source reads supplied by `host`). The shells
+keep only their source-set-conditional entries inline (Android:
+`livePlayerSection`, `subtitleTesterSection`, `Route.PlayOnCompanion`;
+desktop: the bridge-probed `Route.VideoPlayer`). `ShellSectionRegistry` is
+a registration ledger: `shellEntryProvider` stamps a sentinel contentKey on
+its fallback entry, so `isRegistered(route)` is a derived test — the
+desktop dead-end guard is routes-minus-registered, and the hand-kept
+"keep in sync" three-route mirror is gone. Admin/logout/homeMode policy
+stays per-shell (Android: `MainViewModel`; desktop: inlined) — it was
+deliberately NOT absorbed into the hooks: one consumer per policy, and
+forcing it through would drag `AuthRepository` into a "shared" module for
+one shell's sake.
 
 ## Settings search
 
@@ -946,16 +982,6 @@ re-derives the designs nor lands them casually.
   the shared modules. Deferred: ~15 composable-signature changes through a
   2213-line file whose regressions are visual-only — deserves a session
   with screenshot verification.
-- **`MediaRepository` union shrink**: the interface still extends
-  LiveTv/SyncPlay/Newsletter/Playlist repositories (86 members after the
-  lyrics supertype quietly left with the lyrics extraction, ~52 pure
-  one-line passthroughs; the wasm `WebMediaRepositoryNarrow` overrides all
-  86 to throw so ONE member — `findItemByProviderId` — can exist, ~325
-  throw lines). Design: drop the supertypes, consumers inject the
-  existing family interfaces (the impl already delegates — DI splits,
-  bodies don't move). Deferred for its own compiler-guided sweep (every
-  consumer of a dropped member re-types its injected dependency across
-  features + Koin + test harnesses).
 - **`SideloadedTrackIdRegistry`**: the side-load id grammar
   (`external:`/`offline:`/`provider:`/`local:`) is constructed in
   `PlayerSessionManager`/`SubtitleManager`, matched in
@@ -966,13 +992,3 @@ re-derives the designs nor lands them casually.
   Deferred: the three implementations live in androidMain where no unit
   test can reach them — land it together with an engine-harness seam, tests
   first.
-- **Shared `appSections` nav graph**: the ordered section list (~22
-  builders) is restated per shell (`JellyPlayApp.kt` vs `DesktopAppRoot.kt`;
-  `MusicHomeScreen` wired with 10 identical lambdas at both sites; the
-  desktop dead-end guard is a hand-maintained "keep in sync" mirror;
-  `MainViewModel`'s admin-refresh/logout duties are inlined verbatim on
-  desktop). Design: one `appSections(navigator, host: ShellHostHooks)`
-  module in a NEW shell-aggregator Gradle module (it must depend on every
-  feature — the star topology has no existing home), dead-end list derived
-  as routes-minus-registered. Deferred: new-module + two-shell rewiring
-  deserves an un-rushed session.

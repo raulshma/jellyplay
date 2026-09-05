@@ -19,6 +19,7 @@ import androidx.media3.session.MediaSession
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -60,6 +61,7 @@ import kotlin.math.pow
 class AudioPlaybackManager(
     private val context: Context,
     private val mediaRepository: MediaRepository,
+    private val playlistRepository: PlaylistRepository,
     private val playbackRepository: PlaybackRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
@@ -103,6 +105,7 @@ class AudioPlaybackManager(
     private val libraryBrowser = AudioLibraryBrowser(
         scope = scope,
         mediaRepository = mediaRepository,
+        playlistRepository = playlistRepository,
         downloadRepository = downloadRepository,
         playbackRepository = playbackRepository,
         playbackSourceResolver = playbackSourceResolver,

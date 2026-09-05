@@ -4,6 +4,7 @@ import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -49,7 +50,7 @@ class PlaylistsViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: MediaRepository = mockk()
+    private val playlistRepository: PlaylistRepository = mockk()
 
     private lateinit var viewModel: PlaylistsViewModel
 
@@ -61,8 +62,8 @@ class PlaylistsViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        coEvery { mediaRepository.getPlaylists(100) } returns Result.success(playlists)
-        viewModel = PlaylistsViewModel(mediaRepository)
+        coEvery { playlistRepository.getPlaylists(100) } returns Result.success(playlists)
+        viewModel = PlaylistsViewModel(playlistRepository)
     }
 
     @AfterTest
@@ -81,7 +82,7 @@ class PlaylistsViewModelTest {
 
     @Test
     fun load_failure_setsError() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.getPlaylists(100) } returns Result.failure(RuntimeException("boom"))
+        coEvery { playlistRepository.getPlaylists(100) } returns Result.failure(RuntimeException("boom"))
 
         viewModel.load()
         advanceUntilIdle()
@@ -116,19 +117,19 @@ class PlaylistsViewModelTest {
         viewModel.createPlaylist("   ", "overview")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.createPlaylist(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { playlistRepository.createPlaylist(any(), any(), any(), any()) }
     }
 
     @Test
     fun createPlaylist_success_closesDialogAndReloads() = runTest(mainDispatcher) {
         advanceUntilIdle()
-        coEvery { mediaRepository.createPlaylist("New", null, any(), any()) } returns Result.success("id1")
+        coEvery { playlistRepository.createPlaylist("New", null, any(), any()) } returns Result.success("id1")
 
         viewModel.openCreateDialog()
         viewModel.createPlaylist("New", "  ")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.createPlaylist("New", null, any(), any()) }
+        coVerify(exactly = 1) { playlistRepository.createPlaylist("New", null, any(), any()) }
         assertEquals(PlaylistDialogState.None, viewModel.dialogState)
         assertFalse(viewModel.isMutating)
     }
@@ -136,7 +137,7 @@ class PlaylistsViewModelTest {
     @Test
     fun createPlaylist_failure_setsFallbackErrorAndKeepsDialogOpen() = runTest(mainDispatcher) {
         advanceUntilIdle()
-        coEvery { mediaRepository.createPlaylist("New", null, any(), any()) } returns
+        coEvery { playlistRepository.createPlaylist("New", null, any(), any()) } returns
             Result.failure(RuntimeException())
 
         viewModel.openCreateDialog()
@@ -182,13 +183,13 @@ class PlaylistsViewModelTest {
     @Test
     fun deletePlaylist_success_closesDialogAndReloads() = runTest(mainDispatcher) {
         advanceUntilIdle()
-        coEvery { mediaRepository.deletePlaylist("pl1") } returns Result.success(Unit)
+        coEvery { playlistRepository.deletePlaylist("pl1") } returns Result.success(Unit)
 
         viewModel.openDeleteDialog(playlists[0])
         viewModel.deletePlaylist(playlists[0])
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.deletePlaylist("pl1") }
+        coVerify(exactly = 1) { playlistRepository.deletePlaylist("pl1") }
         assertEquals(PlaylistDialogState.None, viewModel.dialogState)
         assertFalse(viewModel.isMutating)
     }
@@ -196,7 +197,7 @@ class PlaylistsViewModelTest {
     @Test
     fun deletePlaylist_failure_setsFallbackError() = runTest(mainDispatcher) {
         advanceUntilIdle()
-        coEvery { mediaRepository.deletePlaylist("pl1") } returns Result.failure(RuntimeException("locked"))
+        coEvery { playlistRepository.deletePlaylist("pl1") } returns Result.failure(RuntimeException("locked"))
 
         viewModel.deletePlaylist(playlists[0])
         advanceUntilIdle()
@@ -214,20 +215,20 @@ class PlaylistsViewModelTest {
         viewModel.updatePlaylist("pl1", "   ", "overview")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.updatePlaylist(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { playlistRepository.updatePlaylist(any(), any(), any(), any()) }
     }
 
     @Test
     fun updatePlaylist_success_trimsWritesClosesDialogAndReloads() = runTest(mainDispatcher) {
         advanceUntilIdle()
-        coEvery { mediaRepository.updatePlaylist("pl1", "Renamed", null, any()) } returns Result.success(Unit)
+        coEvery { playlistRepository.updatePlaylist("pl1", "Renamed", null, any()) } returns Result.success(Unit)
 
         viewModel.openEditDialog(playlists[0])
         viewModel.updatePlaylist("pl1", "  Renamed  ", "   ")
         advanceUntilIdle()
 
         // Blank overview collapses to null; the dialog closes and the list reloads.
-        coVerify(exactly = 1) { mediaRepository.updatePlaylist("pl1", "Renamed", null, any()) }
+        coVerify(exactly = 1) { playlistRepository.updatePlaylist("pl1", "Renamed", null, any()) }
         assertEquals(PlaylistDialogState.None, viewModel.dialogState)
         assertFalse(viewModel.isMutating)
     }
@@ -235,7 +236,7 @@ class PlaylistsViewModelTest {
     @Test
     fun updatePlaylist_failure_setsFallbackError() = runTest(mainDispatcher) {
         advanceUntilIdle()
-        coEvery { mediaRepository.updatePlaylist(any(), any(), any(), any()) } returns
+        coEvery { playlistRepository.updatePlaylist(any(), any(), any(), any()) } returns
             Result.failure(RuntimeException())
 
         viewModel.updatePlaylist("pl1", "Renamed", "")
@@ -266,6 +267,7 @@ class MusicBrowseViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private val mediaRepository: MediaRepository = mockk()
+    private val playlistRepository: PlaylistRepository = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
 
     private lateinit var viewModel: MusicBrowseViewModel
@@ -277,8 +279,8 @@ class MusicBrowseViewModelTest {
             flowOf(PagingData.empty<MediaItem>())
         coEvery { mediaRepository.getGenres() } returns
             Result.success(listOf(Genre(id = "g1", name = "Rock")))
-        coEvery { mediaRepository.getPlaylists() } returns Result.success(emptyList())
-        viewModel = MusicBrowseViewModel(mediaRepository, imageUrlProvider)
+        coEvery { playlistRepository.getPlaylists() } returns Result.success(emptyList())
+        viewModel = MusicBrowseViewModel(mediaRepository, playlistRepository, imageUrlProvider)
     }
 
     @AfterTest

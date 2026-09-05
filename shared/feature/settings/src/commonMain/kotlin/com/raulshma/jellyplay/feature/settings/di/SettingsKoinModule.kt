@@ -265,6 +265,7 @@ val settingsModule: Module = module {
             homeDiscoveryStore = get(),
             editor = get(),
             mediaRepository = get(),
+            playlistRepository = get(),
         )
     }
     viewModel {

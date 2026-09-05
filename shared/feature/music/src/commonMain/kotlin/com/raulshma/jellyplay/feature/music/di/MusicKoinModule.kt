@@ -68,6 +68,7 @@ val musicModule: Module = module {
     viewModel {
         MusicBrowseViewModel(
             mediaRepository = get(),
+            playlistRepository = get(),
             imageUrlProvider = get(),
         )
     }
@@ -102,12 +103,13 @@ val musicModule: Module = module {
     }
     viewModel {
         PlaylistsViewModel(
-            mediaRepository = get(),
+            playlistRepository = get(),
         )
     }
     viewModel {
         PlaylistDetailViewModel(
             mediaRepository = get(),
+            playlistRepository = get(),
             audioQueueFacade = get(),
         )
     }

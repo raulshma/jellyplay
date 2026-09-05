@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.newsletter
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
@@ -44,7 +44,7 @@ class NewsletterViewModelErrorFallbackTest {
     // has no access to that module (NewsletterViewModelTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaRepository: NewsletterRepository
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var notificationStore: NotificationStore
     private lateinit var authRepository: AuthRepository
@@ -73,7 +73,7 @@ class NewsletterViewModelErrorFallbackTest {
     }
 
     private fun createViewModel(): NewsletterViewModel = NewsletterViewModel(
-        mediaRepository = mediaRepository,
+        newsletterRepository = mediaRepository,
         imageUrlProvider = imageUrlProvider,
         notificationStore = notificationStore,
         authRepository = authRepository,

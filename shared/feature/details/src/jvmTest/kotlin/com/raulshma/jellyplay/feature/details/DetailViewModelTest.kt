@@ -11,9 +11,11 @@ import com.raulshma.jellyplay.core.data.repository.DetailLoadError
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
@@ -206,11 +208,11 @@ class DetailViewModelTest {
                 downloadIntake = mockk(relaxed = true),
             ),
             playlists = PlaylistTargets.Factory(
-                mediaRepository = mediaRepository,
+                playlistRepository = mockk<PlaylistRepository>(relaxed = true),
                 appRuntimeStateStore = mockk<AppRuntimeStateStore>(relaxed = true),
             ),
             watchParty = WatchPartyActions.Factory(
-                mediaRepository = mediaRepository,
+                syncPlayRepository = mockk<SyncPlayRepository>(relaxed = true),
                 syncPlayManager = mockk<SyncPlayManager>(relaxed = true),
             ),
         )

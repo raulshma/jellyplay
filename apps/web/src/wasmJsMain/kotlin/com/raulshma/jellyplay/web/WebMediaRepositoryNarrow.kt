@@ -2,37 +2,18 @@ package com.raulshma.jellyplay.web
 
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
-import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
-import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.model.CollectionSummary
-import com.raulshma.jellyplay.core.model.DvrSeriesTimer
-import com.raulshma.jellyplay.core.model.DvrTimer
-import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
-import com.raulshma.jellyplay.core.model.GuideInfo
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.ItemKindFilter
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.LibraryFolder
-import com.raulshma.jellyplay.core.model.LiveTvChannel
-import com.raulshma.jellyplay.core.model.LiveTvProgram
-import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.NewsletterData
-import com.raulshma.jellyplay.core.model.Playlist
-import com.raulshma.jellyplay.core.model.PlaylistItem
-import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
-import com.raulshma.jellyplay.core.model.SyncPlayGroup
-import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
-import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
-import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import kotlinx.coroutines.flow.Flow
@@ -60,11 +41,7 @@ import kotlinx.coroutines.flow.Flow
  */
 internal class WebMediaRepositoryNarrow(
     private val libraryApiClient: LibraryApiClient,
-) : MediaRepository,
-    LiveTvRepository,
-    SyncPlayRepository,
-    NewsletterRepository,
-    PlaylistRepository {
+) : MediaRepository {
 
     private fun offWeb(member: String): Nothing = throw UnsupportedOperationException(
         "MediaRepository on web serves only findItemByProviderId (SeerrDetail cross-link); " +
@@ -200,144 +177,6 @@ internal class WebMediaRepositoryNarrow(
     override suspend fun markSeasonUnplayed(seasonId: String, seriesId: String): Result<Unit> = offWeb("markSeasonUnplayed")
 
     override suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int): List<String> = offWeb("getPhotoFolderChildImageUrls")
-
-    // ── LiveTvRepository ───────────────────────────────────────────────────
-
-    override suspend fun getLiveTvChannels(
-        startIndex: Int,
-        limit: Int,
-        addCurrentProgram: Boolean,
-        enableFavoriteSorting: Boolean,
-        isFavorite: Boolean?,
-    ): Result<List<LiveTvChannel>> = offWeb("getLiveTvChannels")
-
-    override suspend fun getRecommendedPrograms(
-        filters: ProgramFilters,
-        limit: Int,
-    ): Result<List<LiveTvProgram>> = offWeb("getRecommendedPrograms")
-
-    override suspend fun getLiveTvPrograms(
-        channelId: String,
-        startDateUtc: String?,
-        endDateUtc: String?,
-    ): Result<List<LiveTvProgram>> = offWeb("getLiveTvPrograms")
-
-    override suspend fun getPrograms(
-        channelIds: List<String>,
-        startDateUtc: String,
-        endDateUtc: String,
-    ): Result<List<LiveTvProgram>> = offWeb("getPrograms")
-
-    override suspend fun getLiveTvGuide(
-        startDateUtc: String,
-        endDateUtc: String,
-        startIndex: Int,
-        limit: Int,
-    ): Result<EpgGuide> = offWeb("getLiveTvGuide")
-
-    override suspend fun getGuideInfo(): Result<GuideInfo> = offWeb("getGuideInfo")
-
-    override suspend fun getRecordings(limit: Int?, isInProgress: Boolean?): Result<List<LiveTvRecording>> = offWeb("getRecordings")
-
-    override suspend fun deleteRecording(recordingId: String): Result<Unit> = offWeb("deleteRecording")
-
-    override suspend fun getTimers(isActive: Boolean?, isScheduled: Boolean?): Result<List<DvrTimer>> = offWeb("getTimers")
-
-    override suspend fun getSeriesTimers(sortBy: String?): Result<List<DvrSeriesTimer>> = offWeb("getSeriesTimers")
-
-    override suspend fun getDefaultTimer(programId: String): Result<DvrSeriesTimer> = offWeb("getDefaultTimer")
-
-    override suspend fun createTimer(programId: String): Result<Unit> = offWeb("createTimer")
-
-    override suspend fun createSeriesTimer(programId: String): Result<Unit> = offWeb("createSeriesTimer")
-
-    override suspend fun cancelTimer(timerId: String): Result<Unit> = offWeb("cancelTimer")
-
-    override suspend fun cancelSeriesTimer(seriesTimerId: String): Result<Unit> = offWeb("cancelSeriesTimer")
-
-    // ── SyncPlayRepository ─────────────────────────────────────────────────
-
-    override suspend fun getSyncPlayGroups(): Result<List<SyncPlayGroup>> = offWeb("getSyncPlayGroups")
-
-    override suspend fun joinSyncPlayGroup(groupId: String): Result<Unit> = offWeb("joinSyncPlayGroup")
-
-    override suspend fun leaveSyncPlayGroup(): Result<Unit> = offWeb("leaveSyncPlayGroup")
-
-    override suspend fun createSyncPlayGroup(groupName: String): Result<Unit> = offWeb("createSyncPlayGroup")
-
-    override suspend fun getSyncPlayInfo(groupId: String?): Result<SyncPlayGroupInfo> = offWeb("getSyncPlayInfo")
-
-    override suspend fun syncPlayReady(
-        positionTicks: Long,
-        isPlaying: Boolean,
-        playlistItemId: String?,
-    ): Result<Unit> = offWeb("syncPlayReady")
-
-    override suspend fun syncPlayPause(): Result<Unit> = offWeb("syncPlayPause")
-
-    override suspend fun syncPlayUnpause(): Result<Unit> = offWeb("syncPlayUnpause")
-
-    override suspend fun syncPlaySeek(positionTicks: Long): Result<Unit> = offWeb("syncPlaySeek")
-
-    override suspend fun syncPlayStop(): Result<Unit> = offWeb("syncPlayStop")
-
-    override suspend fun syncPlayNextItem(playlistItemId: String): Result<Unit> = offWeb("syncPlayNextItem")
-
-    override suspend fun syncPlayPreviousItem(playlistItemId: String): Result<Unit> = offWeb("syncPlayPreviousItem")
-
-    override suspend fun syncPlaySetRepeatMode(mode: SyncPlayRepeatMode): Result<Unit> = offWeb("syncPlaySetRepeatMode")
-
-    override suspend fun syncPlaySetShuffleMode(mode: SyncPlayShuffleMode): Result<Unit> = offWeb("syncPlaySetShuffleMode")
-
-    override suspend fun syncPlaySetNewQueue(
-        itemIds: List<String>,
-        playingItemId: String,
-        mediaSourceId: String?,
-        startPositionTicks: Long,
-    ): Result<Unit> = offWeb("syncPlaySetNewQueue")
-
-    override suspend fun syncPlaySetIgnoreWait(ignore: Boolean): Result<Unit> = offWeb("syncPlaySetIgnoreWait")
-
-    override suspend fun syncPlayRemoveFromPlaylist(playlistItemId: String): Result<Unit> = offWeb("syncPlayRemoveFromPlaylist")
-
-    override suspend fun syncPlayMovePlaylistItem(playlistItemId: String, newIndex: Int): Result<Unit> = offWeb("syncPlayMovePlaylistItem")
-
-    // ── NewsletterRepository ───────────────────────────────────────────────
-
-    override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> = offWeb("getNewsletterData")
-
-    override suspend fun sendNewsletter(): Result<Unit> = offWeb("sendNewsletter")
-
-    override suspend fun sendTestNewsletter(): Result<Unit> = offWeb("sendTestNewsletter")
-
-    // ── PlaylistRepository ─────────────────────────────────────────────────
-
-    override suspend fun getPlaylists(limit: Int): Result<List<Playlist>> = offWeb("getPlaylists")
-
-    override suspend fun getPlaylistItems(playlistId: String, startIndex: Int, limit: Int): Result<List<PlaylistItem>> = offWeb("getPlaylistItems")
-
-    override suspend fun createPlaylist(
-        name: String,
-        overview: String?,
-        itemIds: List<String>,
-        mediaType: MediaType,
-    ): Result<String> = offWeb("createPlaylist")
-
-    override suspend fun updatePlaylist(
-        playlistId: String,
-        name: String?,
-        overview: String?,
-        isPublic: Boolean?,
-    ): Result<Unit> = offWeb("updatePlaylist")
-
-    override suspend fun deletePlaylist(playlistId: String): Result<Unit> = offWeb("deletePlaylist")
-
-    override suspend fun addItemsToPlaylist(playlistId: String, itemIds: List<String>): Result<Unit> = offWeb("addItemsToPlaylist")
-
-    override suspend fun removeItemsFromPlaylist(playlistId: String, entryIds: List<String>): Result<Unit> = offWeb("removeItemsFromPlaylist")
-
-    override suspend fun movePlaylistItem(playlistId: String, entryId: String, newIndex: Int): Result<Unit> = offWeb("movePlaylistItem")
-
 }
 
 

@@ -360,11 +360,12 @@ fun main() {
             // desktop halves — so there is no
             // commonMain Koin module to register. The shared settings-search
             // row for Route.SubtitleTester stays unreachable on desktop
-            // (LanguageSettings' push is intercepted by the guard); desktop's
-            // navigateFilter intercepts the un-registered routes a shared
-            // screen pushes TODAY — the guard list is hand-enumerated
-            // (isDesktopDeadEndRoute in DesktopAppRoot) and must be kept
-            // in sync when features gain or change pushed routes.
+            // (LanguageSettings' push is intercepted by the guard); the
+            // guard's dead-end set is DERIVED from the shared shell graph's
+            // registration ledger (ShellSectionRegistry in DesktopAppRoot) —
+            // a route dead-ends exactly when no registered section owns it,
+            // so there is no hand-kept list to sync when features gain or
+            // change pushed routes.
 
         )
     }

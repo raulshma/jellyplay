@@ -156,28 +156,10 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
-import com.raulshma.jellyplay.feature.admin.navigation.adminSection
-import com.raulshma.jellyplay.feature.details.navigation.detailsSection
-import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
-import com.raulshma.jellyplay.feature.editor.navigation.editorSection
 import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
-import com.raulshma.jellyplay.feature.home.navigation.homeSection
-import com.raulshma.jellyplay.feature.insights.navigation.insightsSection
-import com.raulshma.jellyplay.feature.library.navigation.librarySection
-import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
-import com.raulshma.jellyplay.feature.music.navigation.musicSection
-import com.raulshma.jellyplay.feature.music.musichome.MusicHomeScreen
-import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
 import com.raulshma.jellyplay.feature.player.live.navigation.livePlayerSection
-import com.raulshma.jellyplay.feature.search.navigation.searchSection
-import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
-import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
-import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
-import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
-import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
-import com.raulshma.jellyplay.feature.arrqueue.navigation.arrQueueSection
-import com.raulshma.jellyplay.feature.calendar.navigation.calendarSection
-import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
+import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
+import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
 import com.raulshma.jellyplay.feature.subtitle.tester.navigation.subtitleTesterSection
 import com.raulshma.jellyplay.update.AppUpdateSheet
 import com.raulshma.jellyplay.shell.ShellInfra
@@ -1585,8 +1567,13 @@ private fun MainNavDisplay(
 
     // Remember the entry provider graph so the ~25 section builders aren't
     // re-invoked (allocating fresh lambdas + entry objects) on every
-    // MainNavDisplay recomposition. Re-key on the values it captures.
-    val sharedEntryProvider = remember(
+    // MainNavDisplay recomposition. The 20 shared sections are the shell
+    // module's appSections (one canonical graph behind both shells); this
+    // shell adds only what cannot leave Android — the androidMain-only
+    // livePlayer/subtitleTester builders and the inline PlayOnCompanion
+    // entry — through shellEntryProvider's extraSections slot, which the
+    // shared registration ledger sees too.
+    val shellHost = remember(
         navigator,
         homeMode,
         onModeChange,
@@ -1595,69 +1582,36 @@ private fun MainNavDisplay(
         onLogout,
         playOnStrategy,
     ) {
-        entryProvider {
-            homeSection(
-                navigator = navigator,
-                homeMode = homeMode,
-                onModeChange = onModeChange,
-                // The shared home module narrows the Play-On surface to its
-                // HomePlayOnRedirect seam (the concrete cast strategy is
-                // Android-bound); adapt the real strategy here — probe +
-                // fling, exactly the inline shape the legacy homeSection had.
-                playOnStrategy = playOnStrategy?.let { strategy ->
-                    HomePlayOnRedirect { itemId, startPositionMs ->
-                        strategy.isConnected.value.also { connected ->
-                            if (connected) {
-                                strategy.loadMedia(itemId = itemId, startPositionMs = startPositionMs)
-                            }
+        ShellHostHooks(
+            homeMode = homeMode,
+            onHomeModeChange = onModeChange,
+            onNowPlayingClick = onNowPlayingClick,
+            onAmbientClick = onAmbientClick,
+            onLogout = onLogout,
+            onCheckForUpdates = { mainViewModel.updateCoordinator.manualCheckForUpdate() },
+            // Lazy .value reads — admin refreshes don't rebuild the graph.
+            isAdmin = { isAdminState.value },
+            isRefreshingAdmin = { isRefreshingAdminState.value },
+            onRefreshAdmin = { mainViewModel.refreshAdminStatus() },
+            // The shared home module narrows the Play-On surface to its
+            // HomePlayOnRedirect seam (the concrete cast strategy is
+            // Android-bound); adapt the real strategy here — probe +
+            // fling, exactly the inline shape the legacy homeSection had.
+            playOnRedirect = playOnStrategy?.let { strategy ->
+                HomePlayOnRedirect { itemId, startPositionMs ->
+                    strategy.isConnected.value.also { connected ->
+                        if (connected) {
+                            strategy.loadMedia(itemId = itemId, startPositionMs = startPositionMs)
                         }
                     }
-                },
-                surpriseRequests = surpriseRequests,
-                musicContent = {
-                    MusicHomeScreen(
-                        onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
-                        onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
-                        onArtistsClick = { navigator.navigate(Route.Artists) },
-                        onAlbumsClick = { navigator.navigate(Route.Albums) },
-                        onTracksClick = { navigator.navigate(Route.Tracks) },
-                        onGenresClick = { navigator.navigate(Route.Genres) },
-                        onPlaylistsClick = { navigator.navigate(Route.Playlists) },
-                        onNowPlayingClick = onNowPlayingClick,
-                        onAmbientClick = onAmbientClick,
-                    )
-                },
-            )
-            librarySection(navigator)
-            searchSection(navigator)
-            liveTvSection(navigator)
-            detailsSection(navigator)
-            editorSection(navigator)
+                }
+            },
+            surpriseRequests = surpriseRequests,
+        )
+    }
+    val shellSections = remember(navigator, shellHost) {
+        shellEntryProvider(navigator = navigator, host = shellHost) {
             livePlayerSection(navigator)
-            audioPlayerSection(navigator)
-            downloadsSection(navigator)
-            authSection(navigator) { navigator.goBack() }
-            settingsSection(
-                navigator = navigator,
-                onLogout = onLogout,
-                onSetupWizard = { navigator.navigate(Route.Onboarding) },
-                onCheckForUpdates = { mainViewModel.updateCoordinator.manualCheckForUpdate() },
-            )
-            adminSection(
-                navigator = navigator,
-                isAdmin = { isAdminState.value },
-                isRefreshingAdmin = { isRefreshingAdminState.value },
-                onRefreshAdmin = { mainViewModel.refreshAdminStatus() },
-            )
-            musicSection(navigator)
-            syncPlaySection(navigator)
-            onboardingSection { navigator.goBack() }
-            newsletterSection(navigator)
-            insightsSection(navigator)
-            requestsSection(navigator)
-            arrQueueSection(navigator)
-            calendarSection(navigator)
-            shortcutsSection(navigator)
             subtitleTesterSection(navigator)
             // Play On companion — full-screen remote-control surface reached by
             // tapping the persistent PlayOnMiniBar. Reuses the activity-scoped
@@ -1690,7 +1644,7 @@ private fun MainNavDisplay(
             val initialRoute = initialState.entries.lastOrNull()?.contentKey as? Route
             resolveTransition(targetRoute, initialRoute, NavDirection.PREDICTIVE_POP)
         },
-        entryProvider = sharedEntryProvider,
+        entryProvider = shellSections.entryProvider,
         modifier = modifier,
     )
 }
